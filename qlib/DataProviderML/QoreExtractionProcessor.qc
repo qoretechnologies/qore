@@ -41,7 +41,7 @@ QoreExtractionProcessor proc({
     @endcode
 
 */
-public class QoreExtractionProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreExtractionProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -286,9 +286,9 @@ public class QoreExtractionProcessor inherits DataProvider::AbstractDataProvider
         return result;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

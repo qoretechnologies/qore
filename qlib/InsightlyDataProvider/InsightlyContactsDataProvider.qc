@@ -96,7 +96,7 @@ public class InsightlyContactsDataProvider inherits InsightlyDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return runListSearch("Contacts", where_cond, search_options);
     }

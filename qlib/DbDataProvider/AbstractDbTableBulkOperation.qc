@@ -47,6 +47,11 @@ public class AbstractDbTableBulkOperation inherits AbstractDataProviderBulkOpera
         bulk.queueData(records);
     }
 
+    #! Queues shaped data in the buffer
+    queueData(auto records) {
+        bulk.queueData(records);
+    }
+
     #! Flushes any remaining data to the data provider
     /** This method should always be called before committing the transaction (if the data provider supports
         transaction management) or destroying the object

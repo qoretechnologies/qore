@@ -1,0 +1,51 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlOnnxDataFrameVectorColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires dataframe
+%requires DataProviderML
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlOnnxDataFrameVectorColumns {
+    constructor() {
+        string model_path = OnnxBench::sklearnModelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("dataproviderml_onnx_dataframe_vector_columns: skipped "
+                "(ONNX Runtime or sklearn test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_onnx_dataframe_vector_columns");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        DataFrame::DataFrame frame;
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": model_path,
+            "fields": ("sepal_length", "sepal_width", "petal_length", "petal_width"),
+            "window_size": rows,
+            "output_mode": "columns",
+        });
+
+        r.setup = sub () {
+            frame = OnnxBench::makeSklearnFrame(rows);
+            r.bytes_processed = OnnxBench::approxSklearnBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame result = proc.processRecordsShape(frame, DataProviderShape::DataFrameBlock);
+            OnnxBench::verifyProcessorVectorFrame("dataproviderml_onnx_dataframe_vector_columns",
+                result, rows);
+        };
+
+        exit(r.run());
+    }
+}

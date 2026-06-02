@@ -4,8 +4,9 @@
 %modern
 %no-child-restrictions
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
 
 %requires reflection
 
@@ -94,8 +95,25 @@ class CTestComplex {
     constructor(hash<auto> h) {}
 }
 
+class TypeMemberPseudoTest {
+    public {
+        Type type = BoolType;
+    }
+}
+
+public enum ShortStringPseudoEnum : string {
+    Input = "Input",
+}
+
 int sub ftest(int i, ...) {
     return 1;
+}
+
+int sub named_reflection_target(int alpha, *string beta = NOTHING) {
+    return 1;
+}
+
+nothing sub named_reflection_varargs_only(...) {
 }
 
 class ReflectionTest inherits QUnit::Test {
@@ -105,13 +123,17 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("type tests", \typeTests());
         addTestCase("typed code tests", \typedCodeTests());
         addTestCase("union type tests", \unionTypeTests());
+        addTestCase("generic reflection tests", \genericReflectionTests());
         addTestCase("pgm tests", \pgmTests());
         addTestCase("issue 3145", \issue3145Test());
         addTestCase("issue 3141", \issue3141Test());
         addTestCase("issue 3035", \issue3035Test());
         addTestCase("reflection tests", \reflectionTests());
+        addTestCase("named-call reflection tests", \namedCallReflectionTests());
+        addTestCase("plugin registry reflection tests", \pluginRegistryReflectionTests());
         addTestCase("sandbox tests", \sandboxTests());
         addTestCase("pseudo-class tests", \pseudoClassTests());
+        addTestCase("type member pseudo-method dispatch", \typeMemberPseudoMethodDispatchTest());
         addTestCase("program tests", \programTests());
         addTestCase("cross-module namespace test", \crossModuleNamespaceTest());
         set_return_value(main());
@@ -119,6 +141,1726 @@ class ReflectionTest inherits QUnit::Test {
 
     nsPathTest() {
         assertEq("Qore::Reflection::AbstractVariant", Class::forName("AbstractVariant").getPathName());
+    }
+
+    pluginRegistryReflectionTests() {
+        PluginRegistry process_registry = PluginRegistry::getProcessRegistry();
+        list<string> process_modules = process_registry.getProcessModules();
+
+        PluginRegistry program_registry = PluginRegistry::get();
+        list<string> active_modules = program_registry.getActiveModules();
+        foreach string mod_name in (active_modules) {
+            bool found = False;
+            foreach string process_mod_name in (process_modules) {
+                if (process_mod_name == mod_name) {
+                    found = True;
+                    break;
+                }
+            }
+            assertTrue(found);
+        }
+
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.getActiveModules();
+        });
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.resolveOperation(IntType, IntType, "add");
+        });
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.getRecentFallbackSites();
+        });
+        assertThrows("PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE", sub() {
+            process_registry.clearFallbackSites();
+        });
+        assertEq(NOTHING, program_registry.resolveOperation(IntType, IntType, "missing-plugin-registry-test-op"));
+        assertEq((), program_registry.getRecentFallbackSites());
+        program_registry.clearFallbackSites();
+        assertThrows("PLUGIN-REGISTRY-MODULE-NOT-LOADED", sub() {
+            process_registry.getTypes("missing-plugin-registry-test-module");
+        });
+        assertThrows("PLUGIN-REGISTRY-MODULE-NOT-LOADED", sub() {
+            process_registry.getOperations("missing-plugin-registry-test-module");
+        });
+    }
+
+    assertNamedCallableVariantCount(string name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach FunctionVariant v in (Function::forName(name).getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
+    assertNamedPseudoMethodVariantCount(PseudoClass cls, string name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach AbstractMethodVariant v in (cls.getMethod(name).getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
+    assertNamedClassMethodVariantCount(string class_name, string name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach AbstractMethodVariant v in (Class::forName(class_name).getMethod(name).getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
+    assertNamedClassStaticMethodVariantCount(string class_name, string name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach AbstractMethodVariant v in (Class::forName(class_name).getStaticMethod(name).getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
+    assertNamedConstructorVariantCount(string class_name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach AbstractMethodVariant v in (Class::forName(class_name).getConstructorMethod().getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
+    namedCallReflectionTests() {
+        FunctionVariant uv = Function::forName("named_reflection_target").getVariants()[0];
+        assertTrue(uv.isNamedCallable());
+        assertEq(("alpha", "beta"), uv.getNamedParameterNames());
+
+        FunctionVariant vargv = Function::forName("named_reflection_varargs_only").getVariants()[0];
+        assertFalse(vargv.isNamedCallable());
+        assertEq((), vargv.getNamedParameterNames());
+
+        FunctionVariant typev = Function::forName("type").getVariants()[0];
+        assertEq(("value",), typev.getParamNames());
+        assertTrue(typev.isNamedCallable());
+        assertEq(("value",), typev.getNamedParameterNames());
+
+        bool found_int_with_base = False;
+        foreach FunctionVariant v in (Function::forName("int").getVariants()) {
+            if (v.getParamNames() == ("value", "base")) {
+                found_int_with_base = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("value", "base"), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("value",)) {
+                assertTrue(v.isNamedCallable());
+                assertEq(("value",), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_int_with_base);
+
+        bool found_hash_keys_values = False;
+        foreach FunctionVariant v in (Function::forName("hash").getVariants()) {
+            if (v.getParamNames() == ("keys", "values")) {
+                found_hash_keys_values = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("keys", "values"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_hash_keys_values);
+
+        bool found_two_arg_substr = False;
+        bool found_three_arg_substr = False;
+        foreach FunctionVariant v in (Function::forName("substr").getVariants()) {
+            if (v.getParamNames() == ("str", "start")) {
+                found_two_arg_substr = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str", "start"), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("str", "start", "len")) {
+                found_three_arg_substr = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str", "start", "len"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_two_arg_substr);
+        assertTrue(found_three_arg_substr);
+
+        bool found_binary_substr = False;
+        foreach FunctionVariant v in (Function::forName("substr").getVariants()) {
+            if (v.getParamNames() == ("bin", "start", "len")) {
+                found_binary_substr = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("bin", "start", "len"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_binary_substr);
+
+        bool found_length_str = False;
+        bool found_length_bin = False;
+        foreach FunctionVariant v in (Function::forName("length").getVariants()) {
+            if (v.getParamNames() == ("str",)) {
+                found_length_str = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str",), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("bin",)) {
+                found_length_bin = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("bin",), v.getNamedParameterNames());
+            } else if (!v.numParams()) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_length_str);
+        assertTrue(found_length_bin);
+
+        bool found_regex_subst_replacement = False;
+        bool found_regex_subst_callback = False;
+        foreach FunctionVariant v in (Function::forName("regex_subst").getVariants()) {
+            if (v.getParamNames() == ("str", "pattern", "replacement", "options")) {
+                found_regex_subst_replacement = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str", "pattern", "replacement", "options"), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("str", "pattern", "callback", "options")) {
+                found_regex_subst_callback = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str", "pattern", "callback", "options"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_regex_subst_replacement);
+        assertTrue(found_regex_subst_callback);
+
+        foreach string name in (("chomp",)) {
+            assertNamedCallableVariantCount(name, ("str",), 2);
+        }
+
+        foreach string name in (("trim", "ltrim", "rtrim")) {
+            assertNamedCallableVariantCount(name, ("str", "chars"), 2);
+        }
+
+        foreach string name in (("vprintf", "f_vprintf")) {
+            assertNamedCallableVariantCount(name, ("format", "values"));
+        }
+
+        bool found_abs = False;
+        foreach FunctionVariant v in (Function::forName("abs").getVariants()) {
+            if (v.getParamNames() == ("value",)) {
+                found_abs = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("value",), v.getNamedParameterNames());
+            } else if (!v.numParams()) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_abs);
+
+        FunctionVariant powv = Function::forName("pow").getVariant(IntType, IntType);
+        assertTrue(powv.isNamedCallable());
+        assertEq(("base", "exponent"), powv.getNamedParameterNames());
+
+        int found_round = 0;
+        foreach FunctionVariant v in (Function::forName("round").getVariants()) {
+            if (v.getParamNames() == ("value", "precision")) {
+                ++found_round;
+                assertTrue(v.isNamedCallable());
+                assertEq(("value", "precision"), v.getNamedParameterNames());
+            } else if (!v.numParams()) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        assertEq(3, found_round);
+
+        FunctionVariant getenvv = Function::forName("getenv").getVariant(StringType);
+        assertTrue(getenvv.isNamedCallable());
+        assertEq(("name",), getenvv.getNamedParameterNames());
+
+        bool found_setenv = False;
+        foreach FunctionVariant v in (Function::forName("setenv").getVariants()) {
+            if (v.getParamNames() == ("name", "value")) {
+                found_setenv = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("name", "value"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_setenv);
+
+        FunctionVariant unsetenvv = Function::forName("unsetenv").getVariant(StringType);
+        assertTrue(unsetenvv.isNamedCallable());
+        assertEq(("name",), unsetenvv.getNamedParameterNames());
+
+        FunctionVariant parse_dsv = Function::forName("Qore::SQL::parse_datasource").getVariant(StringType);
+        assertTrue(parse_dsv.isNamedCallable());
+        assertEq(("datasource",), parse_dsv.getNamedParameterNames());
+
+        bool found_make_ds = False;
+        foreach FunctionVariant v in (Function::forName("Qore::SQL::make_datasource_string").getVariants()) {
+            if (v.getParamNames() == ("config",)) {
+                found_make_ds = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("config",), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_make_ds);
+
+        foreach string name in (("Qore::SQL::dbi_get_driver_capability_list", "Qore::SQL::dbi_get_driver_capabilities",
+                "Qore::SQL::dbi_get_driver_options")) {
+            FunctionVariant v = Function::forName(name).getVariant(StringType);
+            assertTrue(v.isNamedCallable());
+            assertEq(("driver",), v.getNamedParameterNames());
+        }
+
+        FunctionVariant cx_valuev = Function::forName("cx_value").getVariant(StringType);
+        assertTrue(cx_valuev.isNamedCallable());
+        assertEq(("key",), cx_valuev.getNamedParameterNames());
+
+        bool found_ws_encode = False;
+        foreach FunctionVariant v in (Function::forName("ws_encode_frame").getVariants()) {
+            if (v.getParamNames() == ("message", "opcode", "masked", "fin", "rsv_bits")) {
+                found_ws_encode = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("message", "opcode", "masked", "fin", "rsv_bits"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_ws_encode);
+
+        FunctionVariant ws_unmaskv = Function::forName("ws_unmask_data").getVariant(BinaryType, BinaryType);
+        assertTrue(ws_unmaskv.isNamedCallable());
+        assertEq(("data", "mask"), ws_unmaskv.getNamedParameterNames());
+
+        foreach string name in (("sort", "sort_descending", "sort_stable", "sort_descending_stable", "min", "max")) {
+            bool found_values = False;
+            bool found_comparator = False;
+            foreach FunctionVariant v in (Function::forName(name).getVariants()) {
+                if (v.getParamNames() == ("values",)) {
+                    found_values = True;
+                    assertTrue(v.isNamedCallable());
+                    assertEq(("values",), v.getNamedParameterNames());
+                } else if (v.getParamNames() == ("values", "comparator")) {
+                    found_comparator = True;
+                    assertTrue(v.isNamedCallable());
+                    assertEq(("values", "comparator"), v.getNamedParameterNames());
+                } else if (!v.numParams() || v.getParamNames() == ("arg",) || v.getParamNames() == ("...",)
+                        || v.getParamNames() == ("l",) || v.getParamNames() == ("l", "func")
+                        || v.getParamNames() == ("l", "f")) {
+                    assertFalse(v.isNamedCallable());
+                    assertEq((), v.getNamedParameterNames());
+                }
+            }
+            assertTrue(found_values);
+            assertTrue(found_comparator);
+        }
+
+        int found_range = 0;
+        foreach FunctionVariant v in (Function::forName("range").getVariants()) {
+            if (v.getParamNames() == ("stop",)) {
+                ++found_range;
+                assertTrue(v.isNamedCallable());
+                assertEq(("stop",), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("start", "stop", "step")) {
+                ++found_range;
+                assertTrue(v.isNamedCallable());
+                assertEq(("start", "stop", "step"), v.getNamedParameterNames());
+            }
+        }
+        assertEq(2, found_range);
+
+        FunctionVariant reversev = Function::forName("reverse").getVariant(new Type("list<auto>"));
+        assertTrue(reversev.isNamedCallable());
+        assertEq(("values",), reversev.getNamedParameterNames());
+
+        foreach string name in (("inlist", "inlist_hard")) {
+            bool found_values = False;
+            foreach FunctionVariant v in (Function::forName(name).getVariants()) {
+                if (v.getParamNames() == ("value", "values")) {
+                    found_values = True;
+                    assertTrue(v.isNamedCallable());
+                    assertEq(("value", "values"), v.getNamedParameterNames());
+                } else {
+                    assertFalse(v.isNamedCallable());
+                    assertEq((), v.getNamedParameterNames());
+                }
+            }
+            assertTrue(found_values);
+        }
+
+        foreach string name in (("getpwuid", "getpwuid2")) {
+            FunctionVariant v = Function::forName(name).getVariant(SoftIntType);
+            assertTrue(v.isNamedCallable());
+            assertEq(("uid",), v.getNamedParameterNames());
+        }
+
+        foreach string name in (("getgrgid", "getgrgid2")) {
+            FunctionVariant v = Function::forName(name).getVariant(SoftIntType);
+            assertTrue(v.isNamedCallable());
+            assertEq(("gid",), v.getNamedParameterNames());
+        }
+
+        foreach string name in (("getpwnam", "getpwnam2", "getgrnam", "getgrnam2")) {
+            FunctionVariant v = Function::forName(name).getVariant(StringType);
+            assertTrue(v.isNamedCallable());
+            assertEq(("name",), v.getNamedParameterNames());
+        }
+
+        foreach string name in (("compress", "gzip", "deflate_raw", "bzip2", "zstd")) {
+            assertNamedCallableVariantCount(name, ("data", "level"), 2);
+        }
+
+        assertNamedCallableVariantCount("brotli", ("data", "quality"), 2);
+        assertNamedCallableVariantCount("lz4", ("data", "acceleration"), 2);
+
+        foreach string name in (("uncompress_to_binary", "gunzip_to_binary", "inflate_raw_to_binary",
+                "bunzip2_to_binary", "unbrotli_to_binary", "unzstd_to_binary")) {
+            assertNamedCallableVariantCount(name, ("compressed_data",));
+        }
+
+        foreach string name in (("uncompress_to_string", "gunzip_to_string", "inflate_raw_to_string",
+                "bunzip2_to_string", "unbrotli_to_string", "unzstd_to_string")) {
+            assertNamedCallableVariantCount(name, ("compressed_data", "encoding"));
+        }
+
+        assertNamedCallableVariantCount("unlz4_to_binary", ("compressed_data", "max_output_size"));
+        assertNamedCallableVariantCount("unlz4_to_string", ("compressed_data", "max_output_size", "encoding"));
+        assertNamedCallableVariantCount("get_compressor", ("algorithm", "level"));
+        assertNamedCallableVariantCount("get_decompressor", ("algorithm",));
+
+        assertNamedCallableVariantCount("date", ("value",), 2);
+        assertNamedCallableVariantCount("date", ("date_string",));
+        assertNamedCallableVariantCount("date", ("date_string", "mask"));
+        assertNamedCallableVariantCount("date", ("seconds",), 2);
+        assertNamedCallableVariantCount("date_ms", ("milliseconds",));
+        assertNamedCallableVariantCount("date_us", ("microseconds",));
+        assertNamedCallableVariantCount("format_date", ("format", "date_value"));
+
+        foreach string name in (("localtime", "gmtime")) {
+            assertNamedCallableVariantCount(name, ("seconds", "microseconds"));
+            assertNamedCallableVariantCount(name, ("date_value",));
+        }
+
+        foreach string name in (("timegm", "mktime", "date_info", "is_date_relative", "is_date_absolute",
+                "get_epoch_seconds", "get_epoch_milliseconds", "get_epoch_microseconds", "get_years", "get_months",
+                "get_days", "get_hours", "get_minutes", "get_seconds", "get_milliseconds", "get_microseconds",
+                "get_midnight", "get_day_number", "get_day_of_week", "get_iso_day_of_week", "get_iso_week_hash",
+                "get_iso_week_string", "get_duration_seconds", "get_duration_milliseconds",
+                "get_duration_microseconds", "get_duration_seconds_f")) {
+            assertNamedCallableVariantCount(name, ("date_value",));
+        }
+
+        foreach string name in (("years", "months", "days", "hours", "minutes", "seconds")) {
+            assertNamedCallableVariantCount(name, (name,));
+        }
+
+        assertNamedCallableVariantCount("milliseconds", ("milliseconds",));
+        assertNamedCallableVariantCount("microseconds", ("microseconds",));
+        assertNamedCallableVariantCount("get_date_from_iso_week", ("year", "week", "day"));
+
+        assertNamedCallableVariantCount("get_method_list", ("object_value",));
+        assertNamedCallableVariantCount("call_object_method_args", ("object_value", "method", "arguments"));
+        assertNamedCallableVariantCount("call_static_method_args", ("class_name", "method", "arguments"));
+        assertNamedCallableVariantCount("call_pseudo_args", ("value", "method", "arguments"));
+        assertNamedCallableVariantCount("create_object_args", ("class_name", "arguments"));
+
+        assertNamedCallableVariantCount("set_signal_handler", ("signal", "handler"));
+        assertNamedCallableVariantCount("remove_signal_handler", ("signal",));
+        assertNamedCallableVariantCount("set_async_io_logger", ("logger",));
+        assertNamedCallableVariantCount("backquote", ("command", "return_code"));
+        assertNamedCallableVariantCount("call_function_args", ("name", "arguments"));
+        assertNamedCallableVariantCount("call_function_args", ("callable", "arguments"));
+        assertNamedCallableVariantCount("call_builtin_function_args", ("name", "arguments"));
+        assertNamedCallableVariantCount("parse", ("code", "label", "warning_mask", "source", "offset", "format_label"));
+
+        foreach string name in (("exists_function", "function_type", "reload_module")) {
+            assertNamedCallableVariantCount(name, ("name",));
+        }
+
+        assertNamedCallableVariantCount("load_module", ("name", "warning_mask"));
+        assertNamedCallableVariantCount("load_module_warn", ("name", "warning_mask"));
+        assertNamedCallableVariantCount("load_user_module_with_program", ("name", "program"));
+
+        foreach string name in (("html_encode", "html_decode")) {
+            assertNamedCallableVariantCount(name, ("str",));
+        }
+
+        assertNamedCallableVariantCount("decode_url", ("url",));
+        assertNamedCallableVariantCount("encode_url", ("url", "encode_all"));
+        assertNamedCallableVariantCount("decode_uri_request", ("uri",));
+        assertNamedCallableVariantCount("encode_uri_request", ("url",));
+        assertNamedCallableVariantCount("parse_url", ("url", "keep_brackets"));
+        assertNamedCallableVariantCount("parse_url", ("url", "options"));
+        assertNamedCallableVariantCount("parseURL", ("url", "keep_brackets"));
+        assertNamedCallableVariantCount("get_safe_url", ("url",));
+
+        assertNamedCallableVariantCount("get_class_name", ("object_value",));
+        assertNamedCallableVariantCount("has_key", ("container", "key"), 2);
+        assertNamedCallableVariantCount("hash_values", ("hash_value",));
+        assertNamedCallableVariantCount("get_byte", ("data", "offset"), 2);
+
+        foreach string name in (("get_word_16", "get_word_32", "get_word_64", "get_word_16_lsb",
+                "get_word_32_lsb", "get_word_64_lsb")) {
+            assertNamedCallableVariantCount(name, ("data", "offset"), 2);
+        }
+
+        assertNamedCallableVariantCount("make_base64_string", ("data", "max_line_length"), 2);
+        assertNamedCallableVariantCount("make_base64_url_string", ("data",), 2);
+        assertNamedCallableVariantCount("parse_base64_string", ("base64_string",));
+        assertNamedCallableVariantCount("parse_base64_string_to_string", ("base64_string", "encoding"));
+        assertNamedCallableVariantCount("parse_base64_url_string", ("base64_url_string",));
+        assertNamedCallableVariantCount("parse_base64_url_string_to_string", ("base64_url_string", "encoding"));
+        assertNamedCallableVariantCount("make_hex_string", ("data",), 2);
+        assertNamedCallableVariantCount("parse_hex_string", ("hex_string",));
+        assertNamedCallableVariantCount("hextoint", ("hex_string",));
+        assertNamedCallableVariantCount("strtoint", ("value", "base"));
+
+        assertNamedCallableVariantCount("splice", ("value", "start"), 2);
+        assertNamedCallableVariantCount("splice", ("value", "start", "length"));
+        assertNamedCallableVariantCount("splice", ("value", "start", "length", "replacement"), 2);
+        assertNamedCallableVariantCount("set_return_value", ("value",));
+        assertNamedCallableVariantCount("get_ex_pos", ("exception_info",));
+        assertNamedCallableVariantCount("get_local_vars", ("frame",));
+        assertNamedCallableVariantCount("set_local_var_value", ("frame", "name", "value"));
+        assertNamedCallableVariantCount("set_global_var_value", ("name", "value"));
+        assertNamedCallableVariantCount("get_module_option", ("module", "option"));
+        assertNamedCallableVariantCount("set_module_option", ("module", "option", "value"));
+        assertNamedCallableVariantCount("set_app_registry", ("key", "value"));
+        assertNamedCallableVariantCount("get_app_registry", ("key",));
+        assertNamedCallableVariantCount("get_call_reference", ("identifier",));
+        assertNamedCallableVariantCount("get_value_byte_size", ("value",));
+
+        foreach string name in (("MD2", "MD4", "MD5", "SHA", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512",
+                "DSS", "DSS1", "MDC2", "RIPEMD160", "MD2_bin", "MD4_bin", "MD5_bin", "SHA_bin", "SHA1_bin",
+                "SHA224_bin", "SHA256_bin", "SHA384_bin", "SHA512_bin", "DSS_bin", "DSS1_bin", "MDC2_bin",
+                "RIPEMD160_binary")) {
+            assertNamedCallableVariantCount(name, ("data",));
+        }
+
+        foreach string name in (("MD2_hmac", "MD4_hmac", "MD5_hmac", "SHA_hmac", "SHA1_hmac", "SHA224_hmac",
+                "SHA256_hmac", "SHA384_hmac", "SHA512_hmac", "DSS_hmac", "DSS1_hmac", "MDC2_hmac",
+                "RIPEMD160_hmac")) {
+            assertNamedCallableVariantCount(name, ("data", "key"));
+        }
+
+        foreach string name in (("blowfish_encrypt_cbc", "des_encrypt_cbc", "des_ede_encrypt_cbc",
+                "des_ede3_encrypt_cbc", "desx_encrypt_cbc", "rc4_encrypt", "rc2_encrypt_cbc",
+                "cast5_encrypt_cbc", "rc5_encrypt_cbc", "blowfish_decrypt_cbc", "des_decrypt_cbc",
+                "des_ede_decrypt_cbc", "des_ede3_decrypt_cbc", "desx_decrypt_cbc", "rc4_decrypt",
+                "rc2_decrypt_cbc", "cast5_decrypt_cbc", "rc5_decrypt_cbc")) {
+            assertNamedCallableVariantCount(name, ("data", "key", "iv"));
+        }
+
+        foreach string name in (("blowfish_decrypt_cbc_to_string", "des_decrypt_cbc_to_string",
+                "des_ede_decrypt_cbc_to_string", "des_ede3_decrypt_cbc_to_string", "desx_decrypt_cbc_to_string",
+                "rc4_decrypt_to_string", "rc2_decrypt_cbc_to_string", "cast5_decrypt_cbc_to_string",
+                "rc5_decrypt_cbc_to_string")) {
+            assertNamedCallableVariantCount(name, ("data", "key", "iv", "encoding"));
+        }
+
+        assertNamedCallableVariantCount("digest", ("digest", "data"));
+        assertNamedCallableVariantCount("hmac", ("digest", "data", "key"));
+        assertNamedCallableVariantCount("get_encryptor", ("algorithm", "key", "iv", "mac", "mac_size", "aad"));
+        assertNamedCallableVariantCount("get_decryptor", ("algorithm", "key", "iv", "mac", "aad"));
+        assertNamedCallableVariantCount("encrypt", ("algorithm", "data", "key", "iv", "mac", "mac_size", "aad"));
+        assertNamedCallableVariantCount("decrypt_to_binary", ("algorithm", "data", "key", "iv", "mac", "aad"));
+        assertNamedCallableVariantCount("decrypt_to_string",
+            ("algorithm", "data", "key", "iv", "mac", "aad", "encoding"));
+        assertNamedCallableVariantCount("get_cipher_info", ("cipher",));
+        assertNamedCallableVariantCount("has_digest", ("digest",));
+        assertNamedCallableVariantCount("pbkdf2", ("digest", "password", "salt", "iterations", "key_length"));
+        assertNamedCallableVariantCount("get_random_bytes", ("size",));
+
+        foreach string name in (("absolute_path", "absolute_path_unix", "absolute_path_windows", "chdir",
+                "hlstat", "hstat", "is_bdev", "is_cdev", "is_dev", "is_dir", "is_executable", "is_file",
+                "is_link", "is_pipe", "is_readable", "is_socket", "is_writable", "is_writeable", "lstat",
+                "readlink", "realpath", "rmdir", "stat", "statvfs", "unlink")) {
+            assertNamedCallableVariantCount(name, ("path",));
+        }
+        assertNamedCallableVariantCount("glob", ("pattern",));
+
+        foreach string name in (("chmod", "mkfifo")) {
+            assertNamedCallableVariantCount(name, ("path", "mode"));
+        }
+
+        foreach string name in (("chown", "lchown")) {
+            assertNamedCallableVariantCount(name, ("path", "owner", "group"));
+        }
+
+        foreach string name in (("mkdir", "mkdir_ex")) {
+            assertNamedCallableVariantCount(name, ("path", "mode", "parents"));
+        }
+
+        assertNamedCallableVariantCount("rename", ("source_path", "target_path"));
+        assertNamedCallableVariantCount("symlink", ("target_path", "link_path"));
+        assertNamedCallableVariantCount("umask", ("mask",));
+
+        assertNamedConstructorVariantCount("Dir", ("encoding",));
+        assertNamedClassMethodVariantCount("Dir", "chdir", ("path",));
+        assertNamedClassMethodVariantCount("Dir", "create", ("mode",));
+        assertNamedClassMethodVariantCount("Dir", "chmod", ("mode",));
+        assertNamedClassMethodVariantCount("Dir", "chown", ("owner",), 2);
+        assertNamedClassMethodVariantCount("Dir", "chgrp", ("group",), 2);
+        assertNamedClassMethodVariantCount("Dir", "mkdir", ("subdir", "mode"));
+        assertNamedClassMethodVariantCount("Dir", "rmdir", ("subdir",));
+        foreach string name in (("list", "listFiles", "listDirs")) {
+            assertNamedClassMethodVariantCount("Dir", name, ("full",));
+            assertNamedClassMethodVariantCount("Dir", name, ("regex", "regex_options", "full"));
+        }
+        assertNamedClassMethodVariantCount("Dir", "openFile", ("filename", "flags", "mode", "encoding"));
+        assertNamedClassMethodVariantCount("Dir", "openDir", ("subdir", "encoding"));
+        assertNamedClassMethodVariantCount("Dir", "removeFile", ("filename",));
+
+        assertNamedConstructorVariantCount("File", ("encoding",));
+        assertNamedClassMethodVariantCount("File", "open", ("path", "flags", "mode", "encoding"));
+        assertNamedClassMethodVariantCount("File", "open2", ("path", "flags", "mode", "encoding"));
+        assertNamedClassMethodVariantCount("File", "write", ("data",), 2);
+        assertNamedClassMethodVariantCount("File", "print", ("data",));
+        foreach string name in (("writei1", "writei2", "writei4", "writei8", "writei2LSB", "writei4LSB",
+                "writei8LSB")) {
+            assertNamedClassMethodVariantCount("File", name, ("value",));
+        }
+        assertNamedClassMethodVariantCount("File", "vprintf", ("format", "values"));
+        assertNamedClassMethodVariantCount("File", "f_vprintf", ("format", "values"));
+        assertNamedClassMethodVariantCount("File", "setCharset", ("encoding",));
+        assertNamedClassMethodVariantCount("File", "lock", ("lock_type", "start", "length", "whence"));
+        assertNamedClassMethodVariantCount("File", "lockBlocking", ("lock_type", "start", "length", "whence"));
+        assertNamedClassMethodVariantCount("File", "chown", ("owner", "group"));
+        assertNamedClassMethodVariantCount("File", "getTerminalAttributes", ("termios",));
+        assertNamedClassMethodVariantCount("File", "setTerminalAttributes", ("action", "termios"));
+        assertNamedClassMethodVariantCount("File", "redirect", ("target_file",));
+        foreach string name in (("printf", "f_printf")) {
+            foreach AbstractMethodVariant v in (Class::forName("File").getMethod(name).getVariants()) {
+                if (v.getParamNames() == ("fmt", "...")) {
+                    assertFalse(v.isNamedCallable());
+                    assertEq((), v.getNamedParameterNames());
+                }
+            }
+        }
+
+        foreach string name in (("basename", "dirname")) {
+            assertNamedCallableVariantCount(name, ("path",));
+        }
+
+        assertNamedCallableVariantCount("exit", ("status",));
+        assertNamedCallableVariantCount("exec", ("command",));
+        assertNamedCallableVariantCount("system", ("command",));
+        assertNamedCallableVariantCount("setgroups", ("group_ids",));
+        assertNamedCallableVariantCount("sleep", ("seconds",));
+        assertNamedCallableVariantCount("usleep", ("microseconds",));
+        assertNamedCallableVariantCount("usleep", ("duration",));
+        assertNamedCallableVariantCount("kill", ("pid", "signal"));
+        assertNamedCallableVariantCount("srand", ("seed",));
+        assertNamedCallableVariantCount("strerror", ("error_number",));
+
+        foreach string name in (("setuid", "seteuid")) {
+            assertNamedCallableVariantCount(name, ("uid",));
+        }
+
+        foreach string name in (("setgid", "setegid")) {
+            assertNamedCallableVariantCount(name, ("gid",));
+        }
+
+        foreach string name in (("gethostbyname", "gethostbyname_long")) {
+            assertNamedCallableVariantCount(name, ("hostname",));
+        }
+
+        foreach string name in (("gethostbyaddr", "gethostbyaddr_long")) {
+            assertNamedCallableVariantCount(name, ("address", "family"));
+        }
+
+        assertNamedCallableVariantCount("getaddrinfo", ("node", "service", "family", "flags"));
+        assertNamedCallableVariantCount("getaddrinfo_async",
+            ("node", "service", "family", "flags", "socktype", "protocol", "timeout"));
+        assertNamedCallableVariantCount("getnameinfo_async", ("address", "family", "port", "timeout"));
+        assertNamedCallableVariantCount("close_all_fd", ("standard_fds",));
+        assertNamedCallableVariantCount("qore_set_library_options", ("options",));
+        assertNamedCallableVariantCount("set_global_http2_mode", ("mode",), 2);
+        assertNamedCallableVariantCount("qore_add_module_to_blacklist", ("name", "message"));
+        assertNamedCallableVariantCount("qore_add_module_to_blacklist_ex", ("name", "message"));
+
+        assertNamedCallableVariantCount("save_thread_data", ("data",));
+        assertNamedCallableVariantCount("save_thread_data", ("key", "value"));
+        assertNamedCallableVariantCount("delete_thread_data", ("key_list",));
+        assertNamedCallableVariantCount("remove_thread_data", ("key_list",));
+        assertNamedCallableVariantCount("get_thread_data", ("key",));
+        assertNamedCallableVariantCount("get_parent_caller_location", ("offset",));
+        assertNamedCallableVariantCount("set_thread_init", ("callback",));
+        assertNamedCallableVariantCount("set_thread_tz", ("timezone",));
+        assertNamedCallableVariantCount("set_thread_resource", ("resource",));
+        assertNamedCallableVariantCount("set_thread_resource", ("resource", "argument"));
+        assertNamedCallableVariantCount("remove_thread_resource", ("resource",), 2);
+        assertNamedCallableVariantCount("set_default_thread_stack_size", ("stack_size",));
+        assertNamedCallableVariantCount("set_thread_name", ("name",));
+        assertNamedCallableVariantCount("cancel_thread", ("thread_id", "reason"));
+        assertNamedCallableVariantCount("parallel_map", ("callable", "items", "thread_count"));
+        assertNamedCallableVariantCount("parallel_foreach", ("callable", "items", "thread_count"));
+        assertNamedCallableVariantCount("channel_select", ("cases", "timeout"));
+        assertNamedClassMethodVariantCount("Breakpoint", "setEnabled", ("enabled",));
+        assertNamedClassMethodVariantCount("Breakpoint", "setPolicy", ("policy",));
+        assertNamedClassMethodVariantCount("Breakpoint", "assignProgram", ("program",));
+        assertNamedClassMethodVariantCount("Breakpoint", "assignStatement", ("statement_id",));
+        assertNamedClassMethodVariantCount("Breakpoint", "unassignStatement", ("statement_id",));
+        assertNamedClassMethodVariantCount("Breakpoint", "setThreadIds", ("thread_ids",));
+        assertNamedClassMethodVariantCount("Breakpoint", "addThreadId", ("thread_id",));
+        assertNamedClassMethodVariantCount("Breakpoint", "removeThreadId", ("thread_id",));
+        assertNamedClassMethodVariantCount("Breakpoint", "isThreadId", ("thread_id",));
+        assertNamedClassStaticMethodVariantCount("Breakpoint", "resolveBreakpointId", ("breakpoint_id",));
+        assertNamedClassMethodVariantCount("DebugProgram", "addProgram", ("program",));
+        assertNamedClassMethodVariantCount("DebugProgram", "removeProgram", ("program",));
+        assertNamedClassMethodVariantCount("DebugProgram", "breakProgram", ("program",));
+        assertNamedClassMethodVariantCount("DebugProgram", "breakProgramThread", ("program", "thread_id"));
+        assertNamedClassMethodVariantCount("DebugProgram", "onAttach",
+            ("program", "run_state", "run_to_statement_id"));
+        assertNamedClassMethodVariantCount("DebugProgram", "onDetach",
+            ("program", "run_state", "run_to_statement_id"));
+        assertNamedClassMethodVariantCount("DebugProgram", "onStep",
+            ("program", "block_statement_id", "statement_id", "breakpoint_id", "flow", "run_state",
+                "run_to_statement_id"));
+        assertNamedClassMethodVariantCount("DebugProgram", "onFunctionEnter",
+            ("program", "statement_id", "run_state", "run_to_statement_id"));
+        assertNamedClassMethodVariantCount("DebugProgram", "onFunctionExit",
+            ("program", "statement_id", "return_value", "run_state", "run_to_statement_id"));
+        assertNamedClassMethodVariantCount("DebugProgram", "onException",
+            ("program", "statement_id", "exception", "dismiss", "run_state", "run_to_statement_id"));
+        assertNamedClassMethodVariantCount("DebugProgram", "onExit",
+            ("program", "statement_id", "return_value", "run_state", "run_to_statement_id"));
+        assertNamedClassMethodVariantCount("SandboxManager", "setMemoryLimit", ("max_bytes",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setCPUTimeLimit", ("max_cpu_time_ms",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setWallTimeLimit", ("max_wall_time_ms",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setMaxThreads", ("max_threads",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setMaxRecursionDepth", ("max_depth",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addFilesystemAllowedPath",
+            ("path", "access_modes"));
+        assertNamedClassMethodVariantCount("SandboxManager", "addFilesystemDeniedPath", ("path",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setFilesystemSandboxRoot", ("path",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setFilesystemDefaultPolicy", ("allow",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkAllowedHost", ("host_pattern",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkAllowedIPRange", ("cidr",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkDeniedIPRange", ("cidr",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkAllowedPort", ("port", "protocol"));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkAllowedPortRange",
+            ("start_port", "end_port", "protocol"));
+        assertNamedClassMethodVariantCount("SandboxManager", "setNetworkDefaultPolicy", ("allow",));
+        assertNamedClassStaticMethodVariantCount("ProgramControl", "resolveProgramId", ("program_id",));
+        assertNamedClassMethodVariantCount("ProgramControl", "isDefined", ("parse_define",));
+        assertNamedClassMethodVariantCount("ProgramControl", "getDefine", ("parse_define",));
+        assertNamedClassMethodVariantCount("ProgramControl", "existsFunction", ("function_name",));
+        assertNamedClassMethodVariantCount("ProgramControl", "getGlobalVariable", ("variable_name", "found"));
+        assertNamedClassMethodVariantCount("ProgramControl", "setGlobalVarValue", ("variable_name", "value"));
+        assertNamedClassMethodVariantCount("ProgramControl", "assignBreakpoint", ("breakpoint",));
+        assertNamedClassMethodVariantCount("ProgramControl", "getStatementIdInfo",
+            ("statement_id", "list_breakpoints"));
+        assertNamedClassMethodVariantCount("ProgramControl", "findStatementId", ("file", "line"));
+        assertNamedClassMethodVariantCount("ProgramControl", "findFunctionStatementId",
+            ("function_name", "params"));
+        assertNamedClassMethodVariantCount("ProgramControl", "findFunctionVariants", ("function_name",));
+        assertNamedConstructorVariantCount("Program", ("parse_options", "independent"), 2);
+        assertNamedClassMethodVariantCount("Program", "parse",
+            ("code", "label", "warning_mask", "source", "offset", "format_label"));
+        assertNamedClassMethodVariantCount("Program", "parsePending",
+            ("code", "label", "warning_mask", "source", "offset", "format_label"));
+        assertNamedClassMethodVariantCount("Program", "parseCommit", ("warning_mask",));
+        assertNamedClassMethodVariantCount("Program", "callFunctionArgs", ("function_name", "arguments"));
+        assertNamedClassMethodVariantCount("Program", "callStaticMethodArgs",
+            ("class_name", "method_name", "arguments"));
+        assertNamedClassMethodVariantCount("Program", "existsFunction", ("function_name",));
+        assertNamedClassMethodVariantCount("Program", "importFunction", ("function_name",));
+        assertNamedClassMethodVariantCount("Program", "importFunction",
+            ("function_name", "import_as", "inject"));
+        assertNamedClassMethodVariantCount("Program", "importGlobalVariable", ("variable_name", "readonly"));
+        assertNamedClassMethodVariantCount("Program", "importGlobalVariable",
+            ("variable_name", "import_as", "readonly"));
+        assertNamedClassMethodVariantCount("Program", "importClass",
+            ("class_name", "import_as", "inject", "module_visibility", "reexport"));
+        assertNamedClassMethodVariantCount("Program", "importHashDecl",
+            ("hashdecl_name", "import_as", "reexport"));
+        assertNamedClassMethodVariantCount("Program", "setParseOptions", ("parse_options",), 2);
+        assertNamedClassMethodVariantCount("Program", "disableParseOptions", ("parse_options",), 2);
+        assertNamedClassMethodVariantCount("Program", "replaceParseOptions", ("parse_options",));
+        assertNamedClassMethodVariantCount("Program", "setScriptPath", ("path",));
+        assertNamedClassMethodVariantCount("Program", "getGlobalVariable", ("variable_name", "found"));
+        assertNamedClassMethodVariantCount("Program", "setTimeZoneRegion", ("region",));
+        assertNamedClassMethodVariantCount("Program", "setTimeZoneUTCOffset", ("seconds_east",));
+        assertNamedClassMethodVariantCount("Program", "setTimeZone", ("zone",));
+        assertNamedClassMethodVariantCount("Program", "setSandboxManager", ("sandbox_manager",));
+        assertNamedClassMethodVariantCount("Program", "setExecMode", ("mode",));
+        assertNamedClassMethodVariantCount("Program", "define", ("parse_define", "value"));
+        assertNamedClassMethodVariantCount("Program", "undefine", ("parse_define",));
+        assertNamedClassMethodVariantCount("Program", "isDefined", ("parse_define",));
+        assertNamedClassMethodVariantCount("Program", "getDefine", ("parse_define",));
+        assertNamedClassMethodVariantCount("Program", "loadModule", ("module_name", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadModuleWarn", ("module_name", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadUserModuleWithProgram",
+            ("module_name", "program", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadUserModuleWithProgramWarn",
+            ("module_name", "program", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadApplyToUserModule",
+            ("module_name", "reinject", "warning_mask", "reexport"));
+        assertNamedClassMethodVariantCount("Program", "loadApplyToUserModuleWarn",
+            ("module_name", "reinject", "warning_mask", "reexport"));
+        assertNamedClassMethodVariantCount("Program", "loadApplyToPrivateUserModule",
+            ("module_name", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadApplyToPrivateUserModuleWarn",
+            ("module_name", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "setThreadInit", ("callback",));
+        assertNamedClassMethodVariantCount("Program", "setGlobalVarValue", ("variable_name", "value"));
+        assertNamedClassMethodVariantCount("Program", "findFunctionVariants", ("function_name",));
+        assertNamedClassMethodVariantCount("Program", "issueModuleCmd", ("module_name", "command"));
+        assertNamedClassMethodVariantCount("Program", "getCallReference", ("identifier",));
+        assertNamedClassMethodVariantCount("Program", "getExpression", ("source", "label"));
+        assertNamedClassStaticMethodVariantCount("Program", "getCallerCapabilityMask", ("frame_offset",));
+        assertNamedClassStaticMethodVariantCount("Program", "issueModuleCmd", ("module_name", "command"));
+        assertNamedClassStaticMethodVariantCount("Program", "hasParseOption", ("name",));
+        foreach AbstractMethodVariant v in (Class::forName("Program").getMethod("callFunction").getVariants()) {
+            if (v.getParamNames() == ("name", "...")) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        foreach AbstractMethodVariant v in (Class::forName("Program").getMethod("callStaticMethod").getVariants()) {
+            if (v.getParamNames() == ("class_name", "method", "...")) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        assertNamedConstructorVariantCount("Expression", ("program", "source", "label"));
+
+        assertNamedConstructorVariantCount("AutoGate", ("gate",));
+        assertNamedConstructorVariantCount("AutoLock", ("mutex",));
+        assertNamedConstructorVariantCount("AutoReadLock", ("lock",));
+        assertNamedConstructorVariantCount("AutoWriteLock", ("lock",));
+        assertNamedConstructorVariantCount("AutoSemaphore", ("semaphore",));
+        assertNamedClassMethodVariantCount("AutoSemaphore", "acquire", ("timeout_ms",));
+        assertNamedConstructorVariantCount("Channel", ("capacity",));
+        assertNamedClassMethodVariantCount("Channel", "send", ("value", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Channel", "recv", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Channel", "trySend", ("value",));
+        assertNamedConstructorVariantCount("ChannelIterator", ("channel",));
+        assertNamedClassMethodVariantCount("Condition", "wait", ("lock", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Condition", "wait", ("lock", "timeout_date"));
+        assertNamedClassMethodVariantCount("Condition", "wait_count", ("lock",));
+        assertNamedConstructorVariantCount("Counter", ("initial_value",));
+        assertNamedClassMethodVariantCount("Counter", "waitForZero", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("WaitGroup", "add", ("count",));
+        assertNamedClassMethodVariantCount("WaitGroup", "wait", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Mutex", "lock", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Gate", "enter", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("RWLock", "readLock", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("RWLock", "writeLock", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Promise", "set", ("value",));
+        assertNamedClassMethodVariantCount("Promise", "setError", ("error", "description", "argument"));
+        assertNamedClassMethodVariantCount("Future", "get", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("FutureImpl", "get", ("timeout_ms",));
+        assertNamedConstructorVariantCount("ThreadPool",
+            ("max_threads", "min_idle_threads", "max_idle_threads", "idle_release_timeout"));
+        assertNamedClassMethodVariantCount("ThreadPool", "submit", ("task", "cancel_callback"));
+        assertNamedConstructorVariantCount("AbstractConnectionPool", ("options",));
+        assertNamedClassMethodVariantCount("AbstractConnectionPool", "destroyResource", ("resource",));
+        assertNamedClassMethodVariantCount("AbstractConnectionPool", "resetResource", ("resource",));
+        assertNamedClassMethodVariantCount("AbstractConnectionPool", "setWarningCallback",
+            ("warning_ms", "callback", "argument"));
+        assertNamedClassMethodVariantCount("EventLoop", "add", ("socket", "events"));
+        assertNamedClassMethodVariantCount("EventLoop", "add", ("file", "events"));
+        assertNamedClassMethodVariantCount("EventLoop", "add", ("notifier", "events"));
+        assertNamedClassMethodVariantCount("EventLoop", "modify", ("socket", "events"));
+        assertNamedClassMethodVariantCount("EventLoop", "del", ("socket",));
+        assertNamedClassMethodVariantCount("EventLoop", "del", ("file",));
+        assertNamedClassMethodVariantCount("EventLoop", "del", ("notifier",));
+        assertNamedClassMethodVariantCount("EventLoop", "poll", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("EventLoop", "addTimer", ("deadline", "user_data"));
+        assertNamedClassMethodVariantCount("EventLoop", "cancelTimer", ("timer_id",));
+        assertNamedClassMethodVariantCount("Socket", "startPollConnect", ("target",));
+        assertNamedClassMethodVariantCount("Socket", "startPollConnectSsl", ("target",));
+        assertNamedClassMethodVariantCount("Socket", "startPollSend", ("data",), 2);
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvString", ("size",));
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvBinary", ("size",));
+        assertNamedClassMethodVariantCount("Socket", "startPollReadHttpBody",
+            ("content_length", "chunked", "connection_close"));
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvUntilBytesString", ("pattern",));
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvUntilBytesBinary", ("pattern",));
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvFrom", ("max_size",));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendTo", ("host", "port", "data", "family"));
+        assertNamedClassMethodVariantCount("Socket", "connect", ("target", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "connectINET",
+            ("host", "service", "timeout_ms", "family", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "connectUNIX", ("path", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "connectSSL", ("target", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "connectINETSSL",
+            ("host", "service", "timeout_ms", "family", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "connectUNIXSSL", ("path", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "bind", ("target", "reuse_address"));
+        assertNamedClassMethodVariantCount("Socket", "bind", ("port", "reuse_address"));
+        assertNamedClassMethodVariantCount("Socket", "bindUNIX", ("path", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "bindINET",
+            ("bind_address", "service", "reuse_address", "family", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "accept", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Socket", "acceptSSL", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Socket", "listen", ("backlog",));
+        foreach string name in ("send", "sendBinary", "send2", "sendBinary2") {
+            assertNamedClassMethodVariantCount("Socket", name, ("data", "timeout_ms"), 2);
+        }
+        assertNamedClassMethodVariantCount("Socket", "sendFromInputStream",
+            ("input_stream", "size", "timeout_ms"));
+        foreach string name in ("sendi1", "sendi2", "sendi4", "sendi8", "sendi2LSB", "sendi4LSB",
+                "sendi8LSB") {
+            assertNamedClassMethodVariantCount("Socket", name, ("value", "timeout_ms"));
+        }
+        assertNamedClassMethodVariantCount("Socket", "recv", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "recvBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "recvToOutputStream",
+            ("output_stream", "size", "timeout_ms"));
+        foreach string name in ("recvi1", "recvi2", "recvi4", "recvi8", "recvi2LSB", "recvi4LSB",
+                "recvi8LSB", "recvu1", "recvu2", "recvu4", "recvu2LSB", "recvu4LSB") {
+            assertNamedClassMethodVariantCount("Socket", name, ("timeout_ms",));
+        }
+        foreach string name in ("setSendTimeout", "setRecvTimeout", "isDataAvailable", "isWriteFinished",
+                "upgradeClientToSSL", "upgradeServerToSSL") {
+            assertNamedClassMethodVariantCount("Socket", name, ("timeout_ms",));
+        }
+        foreach string name in ("setEncoding", "setCharset") {
+            assertNamedClassMethodVariantCount("Socket", name, ("encoding",));
+        }
+        assertNamedClassMethodVariantCount("Socket", "setAlpnProtocols", ("protocols",));
+        assertNamedClassMethodVariantCount("Socket", "setCertificate", ("certificate",));
+        assertNamedClassMethodVariantCount("Socket", "setCertificate", ("pem",));
+        assertNamedClassMethodVariantCount("Socket", "setCertificate", ("der",));
+        assertNamedClassMethodVariantCount("Socket", "setPrivateKey", ("private_key",));
+        assertNamedClassMethodVariantCount("Socket", "setPrivateKey", ("pem", "password"));
+        assertNamedClassMethodVariantCount("Socket", "setPrivateKey", ("der",));
+        assertNamedClassMethodVariantCount("Socket", "setCertificateAndPrivateKey",
+            ("certificate", "private_key"));
+        assertNamedClassMethodVariantCount("Socket", "setEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("Socket", "setNoDelay", ("enabled",));
+        assertNamedClassMethodVariantCount("Socket", "setUserTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Socket", "getPeerInfo", ("host_lookup",));
+        assertNamedClassMethodVariantCount("Socket", "getSocketInfo", ("host_lookup",));
+        assertNamedClassMethodVariantCount("Socket", "setWarningQueue",
+            ("warning_ms", "warning_bytes", "queue", "argument", "min_ms"));
+        assertNamedClassMethodVariantCount("Socket", "setSslVerifyMode", ("mode",));
+        assertNamedClassMethodVariantCount("Socket", "acceptAllCertificates", ("accept_all",));
+        assertNamedClassMethodVariantCount("Socket", "captureRemoteCertificates", ("enabled",));
+        assertNamedClassMethodVariantCount("Socket", "setMaxChunkedBodySize", ("max_body_size",));
+        assertNamedClassMethodVariantCount("Socket", "setHttp2MaxRequestBodySize", ("max_request_body_size",));
+        assertNamedClassStaticMethodVariantCount("Socket", "resolveAddrInfo",
+            ("node", "service", "family", "flags", "socket_type", "protocol", "timeout_ms"));
+        assertNamedClassStaticMethodVariantCount("Socket", "parseServerSentEvent", ("event_text",));
+        assertNamedClassStaticMethodVariantCount("Socket", "poll", ("items", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponse",
+            ("status_code", "status_description", "http_version", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponseAndReadHeader",
+            ("status_code", "status_description", "http_version", "headers", "body", "idle_timeout"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponseWithStreamAndReadHeader",
+            ("status_code", "status_description", "http_version", "headers", "body", "content_length",
+                "idle_timeout"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpChunkedResponseAndReadHeader",
+            ("status_code", "status_description", "http_version", "headers", "body", "idle_timeout"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponseWithStream",
+            ("status_code", "status_description", "http_version", "headers", "body", "content_length"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpChunkedResponseWithStream",
+            ("status_code", "status_description", "http_version", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPMessage",
+            ("method", "path", "http_version", "headers", "body", "info", "timeout_ms"), 2);
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPMessageWithCallback",
+            ("send_callback", "method", "path", "http_version", "headers", "info", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPResponse",
+            ("status_code", "status_description", "http_version", "headers", "body", "info", "timeout_ms"), 2);
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPResponse",
+            ("status_code", "status_description", "http_version", "headers", "input_stream", "max_chunk_size",
+                "info", "timeout_ms", "trailers_callback"));
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPResponseWithCallback",
+            ("send_callback", "status_code", "status_description", "http_version", "headers", "info",
+                "timeout_ms"));
+        int socket_response_no_info_count = 0;
+        foreach AbstractMethodVariant v in (Class::forName("Socket").getMethod("sendHTTPResponse").getVariants()) {
+            if (v.getParamNames()
+                    == ("status_code", "status_description", "http_version", "headers", "body", "timeout_ms")) {
+                ++socket_response_no_info_count;
+                assertFalse(v.isNamedCallable());
+            }
+        }
+        assertEq(2, socket_response_no_info_count);
+        int socket_response_callback_no_info_count = 0;
+        foreach AbstractMethodVariant v in (
+                Class::forName("Socket").getMethod("sendHTTPResponseWithCallback").getVariants()) {
+            if (v.getParamNames()
+                    == ("send_callback", "status_code", "status_description", "http_version", "headers",
+                        "timeout_ms")) {
+                ++socket_response_callback_no_info_count;
+                assertFalse(v.isNamedCallable());
+            }
+        }
+        assertEq(1, socket_response_callback_no_info_count);
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPChunkedBodyFromInputStream",
+            ("input_stream", "max_chunk_size", "timeout_ms", "trailers_callback"));
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPChunkedBodyTrailer", ("trailer", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readHTTPHeader", ("timeout_ms", "info"));
+        foreach string name in ("readHTTPHeaderString", "readHTTPChunkedBody", "readHTTPChunkedBodyBinary",
+                "readHTTPChunk") {
+            assertNamedClassMethodVariantCount("Socket", name, ("timeout_ms",));
+        }
+        assertNamedClassMethodVariantCount("Socket", "readHTTPChunkedBodyToOutputStream",
+            ("output_stream", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readHTTPChunkedBodyWithCallback",
+            ("receive_callback", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readHTTPChunkedBodyBinaryWithCallback",
+            ("receive_callback", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readServerSentEvent", ("content_encoding", "timeout_ms"));
+        foreach AbstractMethodVariant v in (Class::forName("Socket").getMethod("readServerSentEvent").getVariants()) {
+            if (v.getParamNames() == ("timeout_ms",)) {
+                assertFalse(v.isNamedCallable());
+            }
+        }
+        assertNamedClassMethodVariantCount("Socket", "startPollReadHttp2Request", ("options",));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttp2Response",
+            ("stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttp2StreamingResponse",
+            ("stream_id", "status_code", "headers", "body", "chunk_size"));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2PushPromise",
+            ("stream_id", "path", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2Response",
+            ("stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "setHttp2ConnectProtocolEnabled", ("enabled",));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2ConnectResponse",
+            ("stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttp2ConnectResponse",
+            ("stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "waitForHttp2StreamDrain", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2StreamingResponseHeaders",
+            ("stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "sendHttp2StreamData", ("stream_id", "data", "end_stream"));
+        assertNamedClassMethodVariantCount("Socket", "sendHttp2Trailers", ("stream_id", "trailers"));
+        assertNamedClassMethodVariantCount("Socket", "cleanupHttp2Stream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Socket", "resetHttp2Stream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2StreamingResponseWithStream",
+            ("stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2Request", ("headers", "body", "streaming"));
+        assertNamedClassMethodVariantCount("Socket", "cancelHttp2Stream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Socket", "startPollQuicConnect", ("host", "port", "family"));
+        assertNamedClassMethodVariantCount("Socket", "startPollQuicAccept", ("options",));
+        assertNamedClassMethodVariantCount("Socket", "startPollQuicSendResponse",
+            ("session_id", "stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicRequest",
+            ("method", "path", "headers", "body", "suppress_wake"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicRequestStreaming",
+            ("method", "path", "headers", "suppress_wake"));
+        assertNamedClassMethodVariantCount("Socket", "sendQuicClientStreamData",
+            ("stream_id", "body", "end_stream"));
+        assertNamedClassMethodVariantCount("Socket", "waitForQuicClientStreamDrain",
+            ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "cancelQuicStream", ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicResponse",
+            ("session_id", "stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicShutdownNotice", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicShutdown", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "getQuicSessionGoawayState", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "isQuicGoawayReceived", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "getQuicPeerCertificate", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "startPollQuicSendStreamingResponse",
+            ("session_id", "stream_id", "status_code", "headers", "body", "chunk_size"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicResponseStreaming",
+            ("session_id", "stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicStreamData",
+            ("session_id", "stream_id", "body", "end_stream"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicStreamingResponseWithStream",
+            ("session_id", "stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "waitForQuicStreamDrain",
+            ("session_id", "stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicConnectResponse",
+            ("session_id", "stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "readQuicConnectStreamData",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "readQuicStreamDataBlock",
+            ("session_id", "stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "isQuicStreamComplete", ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "cleanupQuicStream", ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "registerQuicConnectStreamQueue",
+            ("session_id", "stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Socket", "deregisterQuicConnectStreamQueue",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "registerQuicConnectStreamFrameState",
+            ("session_id", "stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Socket", "deregisterQuicConnectStreamFrameState",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "resetQuicStream", ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicDatagram",
+            ("session_id", "stream_id", "data"));
+        assertNamedClassMethodVariantCount("Socket", "readQuicDatagram",
+            ("session_id", "stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "registerQuicDatagramQueue",
+            ("session_id", "stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Socket", "unregisterQuicDatagramQueue",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "getQuicMaxDatagramSize",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "isQuicDatagramSupported", ("session_id",));
+        assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "waitForReady", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "registerReadyNotifier", ("notifier",));
+        assertNamedClassMethodVariantCount("HttpClientConnectionBase", "waitForReadyOrError", ("timeout_ms",));
+        assertNamedConstructorVariantCount("Http1Connection", ("target_host", "target_port", "ssl_required"));
+        assertNamedClassMethodVariantCount("Http1Connection", "waitForReady", ("timeout_ms",));
+        assertNamedConstructorVariantCount("HttpKeepAlivePollOperationBase", ("socket", "timeout_ms"));
+        assertNamedConstructorVariantCount("HttpIdlePollOperationBase", ("socket", "timeout_ms"));
+        assertNamedConstructorVariantCount("HttpClientPingPollOperationBase",
+            ("operation", "min_status", "max_status", "error_code", "header_name", "header_prefix",
+                "websocket_key"));
+        assertNamedConstructorVariantCount("HttpAcceptPollOperationBase",
+            ("listener", "accept_operation", "ssl_required", "certificate", "private_key", "ssl_verify_flags",
+                "accept_all_certificates", "http_version", "perform_ssl_handshake"));
+        assertNamedConstructorVariantCount("Http2PollOperationBase",
+            ("socket", "initial_read_operation", "headers_only"));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "injectSendOp", ("send_operation",));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "injectReadOp", ("read_operation",));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "registerStreamQueue",
+            ("stream_id", "queue", "notifier"));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "registerStreamFrameState",
+            ("stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "onStreamData", ("stream_id",));
+        assertNamedConstructorVariantCount("Http1ClientPollOperationBase",
+            ("socket", "connect_target", "target_host", "target_port", "ssl_required", "proxy_tunnel",
+                "plain_proxy", "connection"));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "setIdleTimeout",
+            ("idle_timeout_ms",));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "setProtocolSwitchedListener",
+            ("listener",));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "submitRequest",
+            ("method", "path", "headers", "body", "promise", "max_streams"));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "submitRequestWithNotifier",
+            ("method", "path", "headers", "body", "promise", "notifier", "max_streams"));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "submitRequestStreaming",
+            ("method", "path", "headers", "body", "channel", "max_streams", "streaming", "body_streaming",
+                "notifier", "sse_install_eligible"));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "pushSendData", ("data",));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "setTrailers", ("trailers",));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "submitRequestSse",
+            ("method", "path", "headers", "body", "queue", "max_streams", "notifier"));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "cancelStream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "installSseState",
+            ("stream_id", "queue", "notifier", "initial_body"));
+        assertNamedConstructorVariantCount("Http2ClientPollOperationBase",
+            ("socket", "connect_target", "target_host", "target_port", "ssl_required", "proxy_tunnel",
+                "connection"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "setIdleTimeout",
+            ("idle_timeout_ms",));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "setPingInterval",
+            ("ping_interval_ms",));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "submitRequest",
+            ("method", "path", "headers", "body", "promise", "max_streams"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "submitRequestWithNotifier",
+            ("method", "path", "headers", "body", "promise", "notifier", "max_streams"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "submitRequestStreaming",
+            ("method", "path", "headers", "body", "channel", "max_streams", "streaming", "notifier",
+                "sse_install_eligible"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "submitRequestSse",
+            ("method", "path", "headers", "body", "queue", "max_streams", "notifier"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "cancelStream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "sendStreamData",
+            ("stream_id", "data", "end_stream"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "registerStreamQueue",
+            ("stream_id", "queue", "notifier"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "installFrameState",
+            ("stream_id", "message_queue"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "installSseState",
+            ("stream_id", "queue", "notifier", "initial_body"));
+        assertNamedConstructorVariantCount("Http3ClientPollOperationBase",
+            ("socket", "host", "port", "connection", "family", "connect_timeout"));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "setQuicStreamLimit",
+            ("stream_limit",));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "checkCapacity",
+            ("max_streams",));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "endSubmitOk", ("stream_id",));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "setStreamStreaming",
+            ("stream_id",));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "registerStreamWithPromise",
+            ("stream_id", "promise"));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase",
+            "registerStreamWithPromiseAndNotifier", ("stream_id", "promise", "notifier"));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "registerStreamWithChannel",
+            ("stream_id", "channel", "notifier", "sse_install_eligible"));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "registerStreamWithQueue",
+            ("stream_id", "queue", "notifier"));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "cancelStream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "waitStreamCapacity",
+            ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "setSubmitError",
+            ("error_code", "description"));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "registerStreamNotify",
+            ("stream_id",));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "installFrameState",
+            ("stream_id", "message_queue"));
+        assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "installSseState",
+            ("stream_id", "queue", "notifier", "initial_body"));
+        assertNamedConstructorVariantCount("Http3ServerPollOperation",
+            ("socket", "drain_timeout", "headers_only", "max_request_body_size"));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "startSendResponse",
+            ("status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "startSendStreamingResponse",
+            ("status_code", "headers", "body", "chunk_size"));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "shutdown", ("session_id",));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "reloadCertificate",
+            ("certificate", "private_key"));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "setCompletionContext",
+            ("controller", "listener", "target", "owner"));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "setConnectionCompletionContext",
+            ("controller", "connection_unique_hash", "state"));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "onComplete", ("result",));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "registerStreamQueue",
+            ("session_id", "stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "registerStreamListener",
+            ("session_id", "stream_id", "listener"));
+        assertNamedClassMethodVariantCount("Http3ServerPollOperation", "onStreamData", ("stream_key",));
+        assertNamedConstructorVariantCount("WebSocketClientPollOperationBase", ("socket",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "sendText", ("text",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "sendBinary", ("data",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "sendPing", ("payload",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "sendPong", ("payload",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "sendRawFrame", ("frame_data",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "sendClose", ("code", "reason"));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "getReceivedFrameBlocking",
+            ("timeout_ms",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "setHasExtensions", ("enabled",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "setHeartbeat",
+            ("heartbeat_interval_ms",));
+        assertNamedClassMethodVariantCount("WebSocketClientPollOperationBase", "setIdleTimeout",
+            ("idle_timeout_ms",));
+        assertNamedConstructorVariantCount("HttpWebSocketPollOperationBase", ("socket",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "sendText", ("text",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "sendBinary", ("data",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "sendPing", ("payload",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "sendClose", ("code", "reason"));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "setMaxFrameSize",
+            ("max_frame_size",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "sendRawFrame", ("frame_data",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "setFrameCallback", ("callback",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "setSendTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "setHeartbeat",
+            ("heartbeat_interval_ms",));
+        assertNamedClassMethodVariantCount("HttpWebSocketPollOperationBase", "setEchoMode", ("enabled",));
+        assertNamedConstructorVariantCount("PollPipeline", ("socket",));
+        assertNamedConstructorVariantCount("PollPipeline", ("goal",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addConnect", ("target",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addConnectSsl", ("target",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addSend", ("payload",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addReadHttpBody", ("method",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addDelegate", ("operation",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addRecvExact", ("byte_count", "as_string"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addRecvUntilBytes", ("pattern", "as_string"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addRecvData", ("as_string",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addValidateHeaderPrefix",
+            ("header_name", "expected_prefix", "error_code"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addExtractOutputField", ("field_name",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addValidateWebSocketAccept",
+            ("websocket_key", "error_code"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addValidateStatus",
+            ("min_status", "max_status", "error_code"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addBranchOnStatus",
+            ("min_status", "max_status", "true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addSendFromContext", ("context_key",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addRecvLineResponse",
+            ("code_key", "text_key", "error_code"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addBranchOnContextKey",
+            ("context_key", "true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addBranchOnContextValue",
+            ("context_key", "value", "true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addSetContextValue", ("context_key", "value"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addSetContextBinary", ("context_key", "value"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addCheckContains",
+            ("source_key", "substring", "result_key"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addValidateResponsePrefix",
+            ("expected_prefix", "error_code"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addMakePop3ApopCommand",
+            ("command_key", "present_key", "username", "password"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addSetContextBool", ("context_key", "value"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addSelectContextValue",
+            ("result_key", "condition_key", "true_source_key", "false_source_key"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addContextOr", ("result_key", "key_a", "key_b"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addGoto", ("target_step",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addPushQueue", ("queue_id",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addDrainQueueSend", ("queue_id",));
+        assertNamedClassMethodVariantCount("PollPipeline", "addYield", ("resume_step",));
+        assertNamedClassMethodVariantCount("PollPipeline", "setStepTarget",
+            ("step_index", "true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addWsControlFrameHandler",
+            ("send_queue_id", "client_mask"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addBranchOnWsControlFrame",
+            ("true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addBranchOnWsClosed", ("true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addBranchOnWsClosingDone",
+            ("true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addBranchOnEof", ("true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addBranchOnHasFrame", ("true_step", "false_step"));
+        assertNamedClassMethodVariantCount("PollPipeline", "getQueueItem", ("queue_id",));
+        assertNamedClassMethodVariantCount("PollPipeline", "getQueueItemBlocking", ("queue_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("PollPipeline", "pushQueueItem", ("queue_id", "item"));
+        assertNamedClassMethodVariantCount("PollPipeline", "queueHasItems", ("queue_id",));
+        assertNamedClassMethodVariantCount("PollPipeline", "getQueueSize", ("queue_id",));
+        assertNamedClassMethodVariantCount("PollPipeline", "setResultPromise", ("promise",));
+        assertNamedClassMethodVariantCount("PollPipeline", "setResultChannel", ("channel",));
+        assertNamedConstructorVariantCount("AsyncIoController", ("auto_stop",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "submit",
+            ("operation_info", "replace_existing"));
+        assertNamedClassMethodVariantCount("AsyncIoController", "exec",
+            ("operation_info", "replace_existing"));
+        assertNamedClassMethodVariantCount("AsyncIoController", "cancel", ("io_object",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "cancelAndClose", ("io_object",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "cancelByKey", ("key",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "cancelByOwner", ("owner",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "wakeSocket", ("io_object",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "flushCallbacksByOwner", ("owner",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "waitReady", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "waitForProcessing", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "setAutostop", ("auto_stop",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "setLogger", ("logger",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "addTimer", ("deadline", "user_data"));
+        assertNamedClassMethodVariantCount("AsyncIoController", "cancelTimer", ("timer_id",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "setTimerCallback", ("callback",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "submitTask", ("task", "cancel_callback"));
+        assertNamedClassMethodVariantCount("AsyncIoController", "setMaxCallbackWorkers", ("max_workers",));
+        assertNamedClassMethodVariantCount("AsyncIoController", "setMaxIoThreads", ("max_threads",));
+        assertNamedClassMethodVariantCount("AbstractPollOperation", "onComplete", ("result",));
+        assertNamedConstructorVariantCount("DelegatingPollOperation", ("operation", "on_complete", "done_counter"));
+        assertNamedClassMethodVariantCount("DelegatingPollOperation", "onComplete", ("result",));
+        assertNamedConstructorVariantCount("FilePollOperation", ("file", "path", "as_string", "num_bytes"));
+        assertNamedConstructorVariantCount("SocketPollOperation", ("socket", "goal", "options"));
+        assertNamedConstructorVariantCount("FtpControlPollOperation",
+            ("host", "port", "secure", "secure_data", "username", "password"));
+        assertNamedClassMethodVariantCount("FtpControlPollOperation", "submitCommand",
+            ("command", "argument"));
+        assertNamedConstructorVariantCount("FtpDataPollOperation", ("host", "port", "secure_data"));
+        assertNamedConstructorVariantCount("FtpDataPollOperation", ("host", "port", "data", "secure_data"));
+        assertNamedConstructorVariantCount("FtpPortAcceptPollOperation",
+            ("listener_socket", "accept_operation", "secure_data"));
+        assertNamedConstructorVariantCount("FtpClient", ("url",));
+        assertNamedClassMethodVariantCount("FtpClient", "list", ("path",));
+        assertNamedClassMethodVariantCount("FtpClient", "nlst", ("path",));
+        assertNamedClassMethodVariantCount("FtpClient", "cwd", ("path",));
+        assertNamedClassMethodVariantCount("FtpClient", "put", ("local_path", "remote_path"));
+        assertNamedClassMethodVariantCount("FtpClient", "put", ("input_stream", "remote_path"));
+        assertNamedClassMethodVariantCount("FtpClient", "rename", ("source_path", "target_path"));
+        assertNamedClassMethodVariantCount("FtpClient", "get", ("remote_path", "local_path"));
+        assertNamedClassMethodVariantCount("FtpClient", "get", ("remote_path", "output_stream"));
+        assertNamedClassMethodVariantCount("FtpClient", "putData", ("data", "remote_path"), 2);
+        assertNamedClassMethodVariantCount("FtpClient", "getAsString", ("remote_path", "encoding"));
+        assertNamedClassMethodVariantCount("FtpClient", "getAsBinary", ("remote_path",));
+        assertNamedClassMethodVariantCount("FtpClient", "del", ("remote_path",));
+        assertNamedClassMethodVariantCount("FtpClient", "mkdir", ("remote_path",));
+        assertNamedClassMethodVariantCount("FtpClient", "rmdir", ("remote_path",));
+        assertNamedClassMethodVariantCount("FtpClient", "setUserName", ("username",));
+        assertNamedClassMethodVariantCount("FtpClient", "setPassword", ("password",));
+        assertNamedClassMethodVariantCount("FtpClient", "setHostName", ("host",));
+        assertNamedClassMethodVariantCount("FtpClient", "setPort", ("port",));
+        assertNamedClassMethodVariantCount("FtpClient", "setURL", ("url",));
+        assertNamedClassMethodVariantCount("FtpClient", "setNetworkFamily", ("family",));
+        assertNamedClassMethodVariantCount("FtpClient", "getControlSocketInfo", ("host_lookup",));
+        assertNamedClassMethodVariantCount("FtpClient", "getDataSocketInfo", ("host_lookup",));
+        assertNamedClassMethodVariantCount("FtpClient", "getControlPeerInfo", ("host_lookup",));
+        assertNamedClassMethodVariantCount("FtpClient", "getDataPeerInfo", ("host_lookup",));
+        assertNamedClassMethodVariantCount("FtpClient", "setSecure", ("secure",));
+        assertNamedClassMethodVariantCount("FtpClient", "setEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("FtpClient", "setDataEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("FtpClient", "setControlEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("FtpClient", "setWarningQueue",
+            ("warning_ms", "warning_bytes", "queue", "argument", "min_ms"));
+        assertNamedClassMethodVariantCount("FtpClient", "setTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("FtpClient", "sendControlMessage", ("command", "argument"));
+        assertNamedConstructorVariantCount("HTTPClient", ("options",));
+        assertNamedClassMethodVariantCount("HTTPClient", "addDefaultHeaders", ("headers",));
+        assertNamedClassMethodVariantCount("HTTPClient", "getURL", ("code",));
+        assertNamedClassMethodVariantCount("HTTPClient", "hasHttp2StreamData", ("stream_id",));
+        assertNamedClassMethodVariantCount("HTTPClient", "isDataAvailable", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "isHttp2DataAvailable", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "isHttp2StreamClosed", ("stream_id",));
+        assertNamedClassMethodVariantCount("HTTPClient", "isHttp3StreamClosed", ("stream_id",));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHTTPChunk", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHTTPChunkedBody", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHTTPChunkedBodyBinary", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHttp2StreamData", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHttp3StreamData", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "readServerSentEvent", ("content_encoding", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "recvBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "get", ("path", "headers", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "head", ("path", "headers", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "post", ("path", "body", "headers", "info"), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "send",
+            ("body", "method", "path", "headers", "read_response_body", "info"), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "send",
+            ("output_stream", "body", "method", "path", "headers", "timeout_ms", "read_response_body", "info",
+                "receive_callback"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendAndStream",
+            ("method", "path", "body", "headers", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendChunked",
+            ("output_stream", "input_stream", "method", "max_chunk_size", "path", "headers", "timeout_ms",
+                "read_response_body", "info", "receive_callback", "trailers_callback"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendWithCallbacks",
+            ("send_callback", "receive_callback", "method", "path", "headers", "timeout_ms",
+                "read_response_body", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendWithRecvCallback",
+            ("receive_callback", "body", "method", "path", "headers", "timeout_ms", "read_response_body", "info"),
+            2);
+        assertNamedClassMethodVariantCount("HTTPClient", "sendWithSendCallback",
+            ("send_callback", "method", "path", "headers", "timeout_ms", "read_response_body", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendHttp2Connect",
+            ("path", "headers", "protocol", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendHttp2StreamData",
+            ("stream_id", "data", "end_stream", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendHttp3Connect",
+            ("path", "headers", "protocol", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendHttp3StreamData",
+            ("stream_id", "data", "end_stream", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "startPollSendAndStream",
+            ("method", "path", "body", "headers"), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "startPollSendRecv",
+            ("method", "path", "body", "headers"), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "setAssumedEncoding", ("encoding",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setConnectTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setConnectionPath", ("uri_path",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setDefaultPath", ("path",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setEncoding", ("encoding",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setEncodingPassthru", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setErrorPassthru", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHTTPVersion", ("version",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp2Enabled", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp2Mode", ("mode",), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp2Settings", ("settings",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp2StreamPriority",
+            ("stream_id", "weight", "dependency", "exclusive"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp3Mode", ("mode",), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "setMaxRedirects", ("max_redirects",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setNoDelay", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setPreEncodedUrls", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setProxySecure", ("secure",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setProxyURL", ("url",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setProxyUserPassword", ("username", "password"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setRedirectPassthru", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setSecure", ("secure",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setURL", ("url",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setUseConnectionManager", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setUserPassword", ("username", "password"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setWarningQueue",
+            ("warning_ms", "warning_bytes", "queue", "argument", "min_ms"));
+        foreach string class_name in (("AbstractDatasource", "Datasource", "DatasourcePool")) {
+            assertNamedClassMethodVariantCount(class_name, "vexec", ("sql", "arguments"));
+            assertNamedClassMethodVariantCount(class_name, "execRaw", ("sql",));
+            assertNamedClassMethodVariantCount(class_name, "vselect", ("sql", "arguments"));
+            assertNamedClassMethodVariantCount(class_name, "vselectRow", ("sql", "arguments"));
+            assertNamedClassMethodVariantCount(class_name, "vselectRows", ("sql", "arguments"));
+            assertNamedClassMethodVariantCount(class_name, "getOption", ("option",));
+        }
+        assertNamedClassMethodVariantCount("Datasource", "setAutoCommit", ("auto_commit",));
+        assertNamedClassMethodVariantCount("Datasource", "setUserName", ("username",));
+        assertNamedClassMethodVariantCount("Datasource", "setPassword", ("password",));
+        assertNamedClassMethodVariantCount("Datasource", "setDBName", ("database",));
+        assertNamedClassMethodVariantCount("Datasource", "setDBCharset", ("encoding",));
+        assertNamedClassMethodVariantCount("Datasource", "setDBEncoding", ("encoding",));
+        assertNamedClassMethodVariantCount("Datasource", "setHostName", ("host",));
+        assertNamedClassMethodVariantCount("Datasource", "setPort", ("port",));
+        assertNamedClassMethodVariantCount("Datasource", "setTransactionLockTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Datasource", "setOption", ("option", "value"));
+        assertNamedClassMethodVariantCount("Datasource", "setEventQueue", ("queue", "argument"));
+        assertNamedClassStaticMethodVariantCount("Datasource", "makeConfigString", ("config",));
+        assertNamedClassMethodVariantCount("DatasourcePool", "setWarningCallback",
+            ("warning_ms", "callback", "argument"));
+        assertNamedClassMethodVariantCount("DatasourcePool", "setErrorTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("DatasourcePool", "setEventQueue", ("queue", "argument"));
+        foreach string class_name in (("AbstractSQLStatement", "SQLStatement")) {
+            assertNamedClassMethodVariantCount(class_name, "prepareRaw", ("sql",));
+            assertNamedClassMethodVariantCount(class_name, "bindArgs", ("arguments",));
+            assertNamedClassMethodVariantCount(class_name, "bindPlaceholdersArgs", ("arguments",));
+            assertNamedClassMethodVariantCount(class_name, "bindValuesArgs", ("arguments",));
+            assertNamedClassMethodVariantCount(class_name, "execArgs", ("arguments",));
+            assertNamedClassMethodVariantCount(class_name, "fetchRows", ("rows",));
+            assertNamedClassMethodVariantCount(class_name, "fetchColumns", ("rows",));
+            assertNamedClassMethodVariantCount(class_name, "memberGate", ("key",));
+        }
+        assertNamedConstructorVariantCount("SQLStatement", ("datasource",));
+        assertNamedConstructorVariantCount("SQLStatement", ("datasource_pool",));
+        assertNamedConstructorVariantCount("TimeZone", ("region",));
+        assertNamedConstructorVariantCount("TimeZone", ("seconds_east",));
+        assertNamedClassMethodVariantCount("TimeZone", "date", ("seconds", "microseconds"));
+        assertNamedClassMethodVariantCount("TimeZone", "date", ("date_value",));
+        assertNamedClassMethodVariantCount("TimeZone", "date", ("date_string",));
+        assertNamedClassMethodVariantCount("TimeZone", "date", ("date_string", "mask"));
+        assertNamedClassMethodVariantCount("TimeZone", "dateMs", ("milliseconds",));
+        assertNamedClassMethodVariantCount("TimeZone", "dateUs", ("microseconds",));
+        assertNamedClassMethodVariantCount("TimeZone", "set", ("zone",));
+        assertNamedClassMethodVariantCount("TimeZone", "setRegion", ("region",));
+        assertNamedClassMethodVariantCount("TimeZone", "setUTCOffset", ("seconds_east",));
+        foreach string name in (("setLFlag", "setCFlag", "setOFlag", "setIFlag")) {
+            assertNamedClassMethodVariantCount("TermIOS", name, ("flag",));
+        }
+        assertNamedClassMethodVariantCount("TermIOS", "getCC", ("offset",));
+        assertNamedClassMethodVariantCount("TermIOS", "setCC", ("offset", "value"));
+        assertNamedClassMethodVariantCount("TermIOS", "isEqual", ("termios",));
+        assertNamedClassMethodVariantCount("LoggerInterfaceBase", "logArgs",
+            ("level", "message", "format_args"));
+        assertNamedClassMethodVariantCount("LoggerInterfaceBase", "isEnabledFor", ("level",));
+        assertNamedConstructorVariantCount("SSLCertificate", ("pem",));
+        assertNamedConstructorVariantCount("SSLCertificate", ("der",));
+        assertNamedConstructorVariantCount("SSLPrivateKey", ("pem", "password"));
+        assertNamedConstructorVariantCount("SSLPrivateKey", ("der",));
+        assertNamedConstructorVariantCount("ParseOptions", ("parse_options",));
+        assertNamedConstructorVariantCount("ParseOptions", ("name",));
+        assertNamedConstructorVariantCount("ParseOptions", ("names",));
+        foreach string name in (("clear", "hasAll", "hasAny", "merge", "set")) {
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("other",));
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("parse_options",));
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("name",));
+        }
+        foreach string name in (("mask",)) {
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("other",));
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("parse_options",));
+        }
+        assertNamedClassMethodVariantCount("ParseOptions", "equals", ("other",));
+        assertNamedConstructorVariantCount("GetOpt", ("options",));
+        foreach string name in (("parse", "parse2", "parse3")) {
+            AbstractMethod method = Class::forName("GetOpt").getMethod(name);
+            AbstractMethodVariant reference_variant = method.getVariant(new Type("reference<list<string>>"));
+            assertTrue(reference_variant.isNamedCallable());
+            assertEq(("arguments",), reference_variant.getNamedParameterNames());
+            AbstractMethodVariant list_variant = method.getVariant(new Type("softlist<auto>"));
+            assertFalse(list_variant.isNamedCallable());
+            assertEq((), list_variant.getNamedParameterNames());
+        }
+        foreach string name in (("parse", "parseEx", "parseExit")) {
+            assertNamedClassStaticMethodVariantCount("GetOpt", name, ("options", "arguments"));
+        }
+        assertNamedConstructorVariantCount("Queue", ("max_size",));
+        assertNamedClassMethodVariantCount("Queue", "push", ("value", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Queue", "insert", ("value", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Queue", "get", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Queue", "pop", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Queue", "setError", ("error", "description"));
+        assertNamedConstructorVariantCount("Semaphore", ("permits",));
+        assertNamedClassMethodVariantCount("Semaphore", "acquire", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Semaphore", "release", ("permits",));
+
+        assertNamedConstructorVariantCount("BinaryInputStream", ("source",));
+        assertNamedClassMethodVariantCount("BinaryInputStream", "read", ("limit",));
+        assertNamedClassMethodVariantCount("BinaryOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("StringInputStream", ("source",));
+        assertNamedClassMethodVariantCount("StringInputStream", "read", ("limit",));
+        assertNamedConstructorVariantCount("StringOutputStream", ("encoding",));
+        assertNamedClassMethodVariantCount("StringOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("ReadOnlyFile", ("path", "encoding"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "open", ("path", "encoding"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "read", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "readBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "readShortBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "readLine", ("include_eol", "eol"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "setEncoding", ("encoding",));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "setPos", ("position",));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "isDataAvailable", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "setEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "startPollRead", ("path", "as_string", "max_bytes"));
+        assertNamedClassStaticMethodVariantCount("ReadOnlyFile", "readTextFile",
+            ("path", "encoding", "max_file_len"));
+        assertNamedClassStaticMethodVariantCount("ReadOnlyFile", "readBinaryFile", ("path", "max_file_len"));
+        foreach string name in (("stat", "lstat", "hstat", "hlstat", "statvfs")) {
+            assertNamedClassStaticMethodVariantCount("ReadOnlyFile", name, ("path",));
+        }
+        assertNamedConstructorVariantCount("FileInputStream", ("path", "timeout_ms", "nonblocking_open"));
+        assertNamedClassMethodVariantCount("FileInputStream", "read", ("limit",));
+        assertNamedClassMethodVariantCount("FileInputStream", "readNonBlock", ("limit",));
+        assertNamedClassMethodVariantCount("FileInputStream", "readWithTimeout", ("limit", "timeout_ms"));
+        assertNamedConstructorVariantCount("FileOutputStream", ("path", "append", "mode", "encoding"));
+        assertNamedClassMethodVariantCount("FileOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("FileLineIterator",
+            ("path", "encoding", "line_separator", "trim_line", "nonblocking_open"));
+        assertNamedConstructorVariantCount("Scanner", ("source",));
+        assertNamedClassMethodVariantCount("Scanner", "advanceN", ("count",));
+        assertNamedClassMethodVariantCount("Scanner", "extractRange", ("byte_offset", "byte_length"));
+        assertNamedClassMethodVariantCount("Scanner", "match", ("literal",));
+        assertNamedClassMethodVariantCount("Scanner", "peekAt", ("char_offset",));
+        assertNamedClassMethodVariantCount("Scanner", "peekByteAt", ("byte_offset",));
+        assertNamedClassMethodVariantCount("Scanner", "startsWith", ("literal",));
+        assertNamedConstructorVariantCount("StreamReader", ("input_stream", "encoding"));
+        assertNamedClassMethodVariantCount("StreamReader", "readString", ("limit",));
+        assertNamedClassMethodVariantCount("StreamReader", "readLine", ("line_separator", "trim_line"));
+        assertNamedClassMethodVariantCount("StreamReader", "readBinary", ("limit",));
+        assertNamedConstructorVariantCount("BufferedStreamReader", ("input_stream", "encoding", "buffer_size"));
+        assertNamedConstructorVariantCount("StreamWriter", ("output_stream", "encoding"));
+        assertNamedClassMethodVariantCount("StreamWriter", "print", ("text",));
+        assertNamedClassMethodVariantCount("StreamWriter", "vprintf", ("format", "format_args"));
+        assertNamedClassMethodVariantCount("StreamWriter", "f_vprintf", ("format", "format_args"));
+        assertNamedClassMethodVariantCount("StreamWriter", "write", ("text",));
+        assertNamedClassMethodVariantCount("StreamWriter", "write", ("data",));
+        foreach string name in (("writei1", "writei2", "writei4", "writei8", "writei2LSB", "writei4LSB",
+                "writei8LSB")) {
+            assertNamedClassMethodVariantCount("StreamWriter", name, ("value",));
+        }
+        assertNamedClassMethodVariantCount("InputStream", "read", ("limit",));
+        assertNamedClassMethodVariantCount("InputStream", "readNonBlock", ("limit",));
+        assertNamedClassMethodVariantCount("InputStream", "readWithTimeout", ("limit", "timeout_ms"));
+        assertNamedClassMethodVariantCount("OutputStream", "write", ("data",));
+        assertNamedClassMethodVariantCount("StdoutOutputStream", "write", ("data",));
+        assertNamedClassMethodVariantCount("StderrOutputStream", "write", ("data",));
+        assertNamedClassMethodVariantCount("PipeInputStream", "read", ("limit",));
+        assertNamedClassMethodVariantCount("PipeInputStream", "reportError", ("exception_info",));
+        assertNamedClassMethodVariantCount("PipeOutputStream", "write", ("data",));
+        assertNamedClassMethodVariantCount("PipeOutputStream", "reportError", ("exception_info",));
+        assertNamedConstructorVariantCount("StreamPipe", ("sync_close", "timeout_ms", "buffer_size"));
+        assertNamedConstructorVariantCount("TransformInputStream", ("input_stream", "transform"));
+        assertNamedClassMethodVariantCount("TransformInputStream", "read", ("limit",));
+        assertNamedConstructorVariantCount("TransformOutputStream", ("output_stream", "transform"));
+        assertNamedClassMethodVariantCount("TransformOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("EncodingConversionInputStream",
+            ("input_stream", "source_encoding", "target_encoding"));
+        assertNamedClassMethodVariantCount("EncodingConversionInputStream", "read", ("limit",));
+        assertNamedConstructorVariantCount("EncodingConversionOutputStream",
+            ("output_stream", "source_encoding", "target_encoding"));
+        assertNamedClassMethodVariantCount("EncodingConversionOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("InputStreamLineIterator",
+            ("input_stream", "encoding", "line_separator", "trim_line", "buffer_size"));
+        assertNamedConstructorVariantCount("InputStreamLineIterator",
+            ("stream_reader", "line_separator", "trim_line"));
+        assertNamedConstructorVariantCount("DataLineIterator", ("source", "line_separator", "trim_line"));
+        assertNamedClassMethodVariantCount("AbstractLineIterator", "getSplitLine",
+            ("separator", "quote", "line_separator", "trim_unquoted"));
+        assertNamedConstructorVariantCount("StringSplitIterator", ("source", "separator"));
+        assertNamedConstructorVariantCount("StringRegexSplitIterator",
+            ("source", "separator_pattern", "options", "with_separator"));
+
+        assertNamedClassMethodVariantCount("Serializable", "serializeToData", ("flags",));
+        assertNamedClassMethodVariantCount("Serializable", "serialize", ("output_stream", "flags"));
+        assertNamedClassMethodVariantCount("Serializable", "serialize", ("flags",));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserialize",
+            ("input_stream", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserialize",
+            ("binary_data", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserialize",
+            ("string_data", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserialize",
+            ("serialization_info", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserializeToData",
+            ("input_stream", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserializeToData",
+            ("binary_data", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "serializeToData", ("value", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "serialize",
+            ("value", "output_stream", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "serialize", ("value", "flags"));
+
+        assertNamedClassMethodVariantCount("TreeMap", "put", ("path", "value"));
+        assertNamedClassMethodVariantCount("TreeMap", "get", ("path", "unmatched"));
+        assertNamedClassMethodVariantCount("TreeMap", "take", ("path",));
+
+        foreach string class_name in (("Regex", "RegexExtract")) {
+            assertNamedConstructorVariantCount(class_name, ("pattern", "options"));
+            foreach string method_name in (("match", "count", "extractGroups", "extractNamedGroups",
+                    "extractDetailed")) {
+                assertNamedClassMethodVariantCount(class_name, method_name, ("subject",));
+            }
+        }
+        assertNamedConstructorVariantCount("RegexSubst", ("pattern", "replacement", "options"));
+        assertNamedClassMethodVariantCount("RegexSubst", "subst", ("subject",));
+        assertNamedClassMethodVariantCount("RegexSubst", "subst", ("subject", "replacement"));
+        assertNamedClassMethodVariantCount("RegexSubst", "subst", ("subject", "callback"));
+
+        assertNamedConstructorVariantCount("Sequence", ("start",));
+        assertNamedConstructorVariantCount("SingleValueIterator", ("value",));
+        assertNamedConstructorVariantCount("RangeIterator", ("start", "stop", "step"));
+        assertNamedConstructorVariantCount("RangeIterator", ("stop",));
+        assertNamedCallableVariantCount("xrange", ("start", "stop", "step"));
+        assertNamedCallableVariantCount("xrange", ("stop",));
+        assertNamedConstructorVariantCount("StringCharIterator", ("source",));
+
+        foreach string class_name in (("ListIterator", "ListReverseIterator", "ListHashIterator",
+                "ListHashReverseIterator")) {
+            assertNamedConstructorVariantCount(class_name, ("list_value",));
+        }
+        assertNamedClassMethodVariantCount("ListIterator", "set", ("position",));
+        foreach string class_name in (("ListHashIterator", "HashListIterator")) {
+            assertNamedClassMethodVariantCount(class_name, "set", ("position",));
+            assertNamedClassMethodVariantCount(class_name, "getKeyValue", ("key",));
+            assertNamedClassMethodVariantCount(class_name, "memberGate", ("key",));
+        }
+        foreach string class_name in (("ListHashReverseIterator", "HashListReverseIterator")) {
+            assertNamedClassMethodVariantCount(class_name, "memberGate", ("key",));
+        }
+        foreach string class_name in (("HashIterator", "HashReverseIterator", "HashKeyIterator",
+                "HashKeyReverseIterator", "HashPairIterator", "HashPairReverseIterator", "HashListIterator",
+                "HashListReverseIterator")) {
+            assertNamedConstructorVariantCount(class_name, ("hash_value",));
+        }
+        foreach string class_name in (("ObjectIterator", "ObjectReverseIterator", "ObjectKeyIterator",
+                "ObjectKeyReverseIterator", "ObjectPairIterator", "ObjectPairReverseIterator")) {
+            assertNamedConstructorVariantCount(class_name, ("object_value",));
+        }
+
+        assertNamedPseudoMethodVariantCount(ValuePseudoClass, "fullType", ("with_namespaces",));
+        assertNamedPseudoMethodVariantCount(ValuePseudoClass, "toString", ("encoding",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "find", ("pattern", "byte_offset"));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "rfind", ("pattern", "byte_offset"));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "split", ("separator",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toHexArray",
+            ("byte_prefix", "byte_suffix", "bytes_per_line", "line_separator"));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toBase64", ("max_line_length",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toBase64Url", ("max_line_length",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "substr", ("start",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "substr", ("start", "length"));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toString", ("encoding",));
+        assertNamedPseudoMethodVariantCount(DatePseudoClass, "format", ("format",));
+        foreach PseudoClass cls in ((IntPseudoClass, FloatPseudoClass, NumberPseudoClass)) {
+            assertNamedPseudoMethodVariantCount(cls, "format", ("format",));
+            assertNamedPseudoMethodVariantCount(cls, "format",
+                ("precision", "decimal_separator", "thousands_separator"));
+            assertNamedPseudoMethodVariantCount(cls, "toBase", ("base",));
+        }
+        assertNamedPseudoMethodVariantCount(IntPseudoClass, "encodeMsb", ("size",));
+        assertNamedPseudoMethodVariantCount(IntPseudoClass, "encodeLsb", ("size",));
+        assertNamedPseudoMethodVariantCount(NumberPseudoClass, "toString", ("format_flags",));
+        assertNamedPseudoMethodVariantCount(HashPseudoClass, "hasKey", ("key",));
+        assertNamedPseudoMethodVariantCount(HashPseudoClass, "hasKeyValue", ("key",));
+        assertNamedPseudoMethodVariantCount(HashPseudoClass, "compareKeys", ("other_hash",));
+        assertNamedPseudoMethodVariantCount(NothingPseudoClass, "hasKey", ("key",));
+        assertNamedPseudoMethodVariantCount(NothingPseudoClass, "hasKeyValue", ("key",));
+        assertNamedPseudoMethodVariantCount(ListPseudoClass, "join", ("separator",));
+        assertNamedPseudoMethodVariantCount(ListPseudoClass, "contains", ("value",));
+        assertNamedPseudoMethodVariantCount(ListPseudoClass, "rangeIterator", ("value",));
+        assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "hasCallableMethod", ("method",));
+        assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "hasCallableNormalMethod", ("method",));
+        assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "hasCallableStaticMethod", ("method",));
+        assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "getCallReference", ("identifier",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "comparePartial", ("other_string",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "equalPartial", ("other_string",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "equalPartialPath", ("other_string",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "find", ("substring", "offset"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "rfind", ("substring", "offset"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "substr", ("start", "length"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "split", ("separator", "with_separator"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "split", ("separator", "quote", "trim_unquoted"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitString", ("separator",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitLinesRegex",
+            ("separator_pattern", "options", "with_separator"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitRegex",
+            ("separator_pattern", "options", "with_separator", "limit"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regex", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regexCount", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regexExtract", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regexExtractNamed", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regexExtractDetailed", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getUnicode", ("offset",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getByte", ("byte_offset",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "startsWith", ("prefix",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "endsWith", ("suffix",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "contains", ("substring",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getLine",
+            ("offset", "line_separator", "trim_line", "byte_count"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getEncoded", ("encoding_flags",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getDecoded", ("decoding_flags",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "toBase64", ("max_line_length",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "toBase64Url", ("max_line_length",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "toInt", ("base",));
     }
 
     modNameTests() {
@@ -154,8 +1896,39 @@ class ReflectionTest inherits QUnit::Test {
         {
             Type type("hash<auto>");
             assertEq("hash<auto>", type.getName());
+            assertEq("hash<auto>", type.getPathName());
             type = new Type("*hash<auto>");
             assertEq("*hash<auto>", type.getName());
+            assertEq("*hash<auto>", type.getPathName());
+        }
+        {
+            Type type("buffer<int64>");
+            assertEq("buffer<int64>", type.getName());
+            assertEq("buffer<int64>", type.getPathName());
+
+            type = new Type("buffer<*int64>");
+            assertEq("buffer<*int64>", type.getName());
+            assertEq("buffer<*int64>", type.getPathName());
+
+            type = new Type("*buffer<int64>");
+            assertEq("*buffer<int64>", type.getName());
+            assertEq("*buffer<int64>", type.getPathName());
+
+            type = new Type("hash<string, buffer<int64>>");
+            assertEq("hash<string, buffer<int64>>", type.getName());
+            assertEq("hash<string, buffer<int64>>", type.getPathName());
+        }
+        {
+            Type type("object<Qore::Thread::Mutex>");
+            assertEq("object<Mutex>", type.getName());
+            assertEq("object<::Qore::Thread::Mutex>", type.getPathName());
+            type = Serializable::deserialize(type.serialize());
+            assertEq("object<Mutex>", type.getName());
+            assertEq("object<::Qore::Thread::Mutex>", type.getPathName());
+
+            type = new Type("list<object<Qore::Thread::Mutex>>");
+            assertEq("list<object<Mutex>>", type.getName());
+            assertEq("list<object<::Qore::Thread::Mutex>>", type.getPathName());
         }
 
         assertTrue(StringType.isAssignableFrom(StringOrNothingType));
@@ -173,6 +1946,7 @@ class ReflectionTest inherits QUnit::Test {
         {
             Type t("hash<StatInfo>");
             assertEq("hash<StatInfo>", t.getName());
+            assertEq("hash<::Qore::StatInfo>", t.getPathName());
             assertTrue(t.isTypedHash());
             assertEq("StatInfo", t.getTypedHash().getName());
             assertNothing(StringType.getElementType());
@@ -461,6 +2235,153 @@ class ReflectionTest inherits QUnit::Test {
         }
     }
 
+    genericReflectionTests() {
+        Class queue_class = Class::forName("Queue");
+        assertEq(("T",), queue_class.getTypeParameters());
+        assertNothing(queue_class.getTypeParameterDefaults());
+        assertNothing(queue_class.getTypeParameterBounds());
+        assertNothing(Class::forName("Mutex").getTypeParameters());
+        assertNothing(Class::forName("Mutex").getTypeParameterDefaults());
+        assertNothing(Class::forName("Mutex").getTypeParameterBounds());
+        NormalMethodVariant push_variant = queue_class.getMethod("push").getVariants()[0];
+        assertEq("T value, timeout timeout_ms = 0", push_variant.getParamString());
+        assertEq("nothing", push_variant.getReturnType().getName());
+
+        Program generic_pgm(PO_NEW_STYLE);
+        generic_pgm.parse("class GenericBox<T: int = int> { private { T value; } }\n"
+            "hashdecl GenericResult<V: string = string> { V value; }\n", "");
+        Class generic_box = Class::forName(generic_pgm, "GenericBox");
+        assertEq(("T",), generic_box.getTypeParameters());
+        assertEq("int", generic_box.getTypeParameterDefaults().T);
+        assertEq("int", generic_box.getTypeParameterBounds().T);
+        TypedHash generic_result = TypedHash::forName(generic_pgm, "GenericResult");
+        assertEq(("V",), generic_result.getTypeParameters());
+        assertEq("string", generic_result.getTypeParameterDefaults().V);
+        assertEq("string", generic_result.getTypeParameterBounds().V);
+
+        NormalMethodVariant future_get_variant = Class::forName("Future").getMethod("get").getVariants()[0];
+        assertEq("T", future_get_variant.getReturnType().getName());
+        assertEq("timeout timeout_ms = 0", future_get_variant.getParamString());
+
+        Class abstract_iterator_class = Class::forName("AbstractIterator");
+        assertEq(("T",), abstract_iterator_class.getTypeParameters());
+        NormalMethodVariant abstract_iterator_get_variant =
+            abstract_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("T", abstract_iterator_get_variant.getReturnType().getName());
+        assertEq(NT_ALL, abstract_iterator_get_variant.getReturnType().getBaseTypeCode());
+
+        Class channel_iterator_class = Class::forName("ChannelIterator");
+        assertEq(("T",), channel_iterator_class.getTypeParameters());
+        NormalMethodVariant channel_iterator_get_variant =
+            channel_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("T", channel_iterator_get_variant.getReturnType().getName());
+        assertEq(NT_ALL, channel_iterator_get_variant.getReturnType().getBaseTypeCode());
+
+        Class list_iterator_class = Class::forName("ListIterator");
+        assertEq(("T",), list_iterator_class.getTypeParameters());
+        NormalMethodVariant list_iterator_get_variant =
+            list_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("T", list_iterator_get_variant.getReturnType().getName());
+        assertEq(NT_ALL, list_iterator_get_variant.getReturnType().getBaseTypeCode());
+
+        Class hash_iterator_class = Class::forName("HashIterator");
+        assertEq(("V",), hash_iterator_class.getTypeParameters());
+        NormalMethodVariant hash_iterator_get_variant =
+            hash_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("V", hash_iterator_get_variant.getReturnType().getName());
+        assertEq(NT_ALL, hash_iterator_get_variant.getReturnType().getBaseTypeCode());
+        NormalMethodVariant hash_iterator_key_value_variant =
+            hash_iterator_class.getMethod("getKeyValue").getVariants()[0];
+        assertEq("V", hash_iterator_key_value_variant.getReturnType().getName());
+        assertEq(NT_ALL, hash_iterator_key_value_variant.getReturnType().getBaseTypeCode());
+
+        Class single_value_iterator_class = Class::forName("SingleValueIterator");
+        assertEq(("T",), single_value_iterator_class.getTypeParameters());
+        NormalMethodVariant single_value_iterator_get_variant =
+            single_value_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("T", single_value_iterator_get_variant.getReturnType().getName());
+        assertEq(NT_ALL, single_value_iterator_get_variant.getReturnType().getBaseTypeCode());
+
+        Type queue_int("Queue<int>");
+        assertTrue(queue_int.isParameterized());
+        assertEq("object<Queue<int>>", queue_int.getName());
+        assertEq("object<::Qore::Thread::Queue<int>>", queue_int.getPathName());
+        list<Type> queue_args = queue_int.getTypeArguments();
+        assertEq(1, queue_args.size());
+        assertTrue(IntType.isEqual(queue_args[0]));
+
+        Type future_queue("Future<Queue<int>>");
+        assertTrue(future_queue.isParameterized());
+        assertEq("object<Future<object<Queue<int>>>>", future_queue.getName());
+        assertEq("object<::Qore::Thread::Future<object<::Qore::Thread::Queue<int>>>>",
+            future_queue.getPathName());
+        list<Type> future_args = future_queue.getTypeArguments();
+        assertEq(1, future_args.size());
+        assertTrue(future_args[0].isParameterized());
+        assertEq("object<Queue<int>>", future_args[0].getName());
+        assertEq("object<::Qore::Thread::Queue<int>>", future_args[0].getPathName());
+        assertTrue(IntType.isEqual(future_args[0].getTypeArguments()[0]));
+
+        Type abstract_iterator_int("AbstractIterator<int>");
+        assertTrue(abstract_iterator_int.isParameterized());
+        assertEq("object<AbstractIterator<int>>", abstract_iterator_int.getName());
+        assertTrue(IntType.isEqual(abstract_iterator_int.getTypeArguments()[0]));
+
+        Type channel_iterator_string("ChannelIterator<string>");
+        assertTrue(channel_iterator_string.isParameterized());
+        assertEq("object<ChannelIterator<string>>", channel_iterator_string.getName());
+        assertTrue(StringType.isEqual(channel_iterator_string.getTypeArguments()[0]));
+
+        Type list_iterator_int("ListIterator<int>");
+        assertTrue(list_iterator_int.isParameterized());
+        assertEq("object<ListIterator<int>>", list_iterator_int.getName());
+        assertTrue(IntType.isEqual(list_iterator_int.getTypeArguments()[0]));
+
+        Type hash_iterator_string("HashIterator<string>");
+        assertTrue(hash_iterator_string.isParameterized());
+        assertEq("object<HashIterator<string>>", hash_iterator_string.getName());
+        assertTrue(StringType.isEqual(hash_iterator_string.getTypeArguments()[0]));
+
+        Type single_value_iterator_int("SingleValueIterator<int>");
+        assertTrue(single_value_iterator_int.isParameterized());
+        assertEq("object<SingleValueIterator<int>>", single_value_iterator_int.getName());
+        assertTrue(IntType.isEqual(single_value_iterator_int.getTypeArguments()[0]));
+
+        TypedHash key_value_info_hashdecl = TypedHash::forName("KeyValueInfo");
+        assertEq(("V",), key_value_info_hashdecl.getTypeParameters());
+        assertNothing(key_value_info_hashdecl.getTypeParameterDefaults());
+        assertNothing(key_value_info_hashdecl.getTypeParameterBounds());
+        Type key_value_info_int("hash<KeyValueInfo<int>>");
+        assertTrue(key_value_info_int.isParameterized());
+        assertEq("hash<KeyValueInfo<int>>", key_value_info_int.getName());
+        list<Type> key_value_info_args = key_value_info_int.getTypeArguments();
+        assertEq(1, key_value_info_args.size());
+        assertTrue(IntType.isEqual(key_value_info_args[0]));
+
+        assertFalse(IntType.isParameterized());
+        assertNothing(IntType.getTypeArguments());
+
+        object typed_queue = queue_class.callConstructor(arguments: (), type_args: (IntType,));
+        typed_queue.push(value: 1);
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub() { typed_queue.push(value: "bad"); });
+        assertEq(1, typed_queue.pop(timeout_ms: 0));
+
+        object raw_queue = queue_class.callConstructor(arguments: ());
+        raw_queue.push(value: "raw");
+        assertEq("raw", raw_queue.pop(timeout_ms: 0));
+
+        assertThrows("TYPE-ARGUMENT-ERROR", sub() {
+            queue_class.callConstructor(arguments: (), type_args: ());
+        });
+        assertThrows("TYPE-ARGUMENT-ERROR", sub() {
+            queue_class.callConstructor(arguments: (), type_args: (IntType, StringType));
+        });
+        Class mutex_class = Class::forName("Mutex");
+        assertThrows("TYPE-ARGUMENT-ERROR", sub() {
+            mutex_class.callConstructor(arguments: (), type_args: (IntType,));
+        });
+    }
+
     pgmTests() {
         Program p(PO_NEW_STYLE);
         p.parse("class TestClass {} const Test = 1; sub test() {} our int test; namespace Test1 {} hashdecl Test2 { int i; }", "");
@@ -730,8 +2651,8 @@ class ReflectionTest inherits QUnit::Test {
 
         {
             AbstractReflectionFunction f = Function::forName("get_thread_data");
-            assertEq(CF_RET_VALUE_ONLY, f.getCodeFlags());
-            assertEq(("RET_VALUE_ONLY",), f.getCodeFlagList());
+            assertEq(CF_RET_VALUE_ONLY | CF_NAMED_ARGS, f.getCodeFlags());
+            assertEq(("RET_VALUE_ONLY", "NAMED_ARGS"), f.getCodeFlagList());
             assertEq(DOM_THREAD_CONTROL | DOM_THREAD_INFO, f.getDomain());
             assertEq(("THREAD_CONTROL", "THREAD_INFO"), f.getDomainStringList());
         }
@@ -764,8 +2685,8 @@ class ReflectionTest inherits QUnit::Test {
         assertEq(("lock", "timeout_ms"), v.getParamNames());
         assertEq("object<::Qore::Thread::AbstractSmartLock> lock, timeout timeout_ms = 0", v.getParamString());
         assertEq("public int Condition::wait(object<::Qore::Thread::AbstractSmartLock> lock, timeout timeout_ms = 0)", v.toString());
-        assertEq(0, v.getCodeFlags());
-        assertEq((), v.getCodeFlagList());
+        assertEq(CF_NAMED_ARGS, v.getCodeFlags());
+        assertEq(("NAMED_ARGS",), v.getCodeFlagList());
 
         v = Class::forName("File").getMethod("printf").getVariants()[0];
         assertEq(CF_USES_EXTRA_ARGS, v.getCodeFlags());
@@ -1154,13 +3075,13 @@ class ReflectionTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE | PO_NO_THREAD_CLASSES);
             p.parse("(Class::forName(\"Mutex\")).getConstructorVariant().call();", "");
-            assertThrows("INVALID-FUNCTION-ACCESS", "parse options", \p.run());
+            assertThrows("INVALID-FUNCTION-ACCESS", "access.*method", \p.run());
         }
 
         {
             Program p(PO_NEW_STYLE | PO_NO_THREAD_CLASSES);
             p.parse("(Class::forName(\"Mutex\")).getConstructorVariant().callArgs();", "");
-            assertThrows("INVALID-FUNCTION-ACCESS", "parse options", \p.run());
+            assertThrows("INVALID-FUNCTION-ACCESS", "access.*method", \p.run());
         }
 
         {
@@ -1233,6 +3154,13 @@ class ReflectionTest inherits QUnit::Test {
         assertTrue(c.isEqual(StringPseudoClass));
         assertFalse(c.isEqual(IntPseudoClass));
 
+        PseudoClass enum_string_class = PseudoClass::forValue(ShortStringPseudoEnum::Input);
+        assertTrue(enum_string_class.isEqual(StringPseudoClass));
+        PseudoMethod enum_size = enum_string_class.getMethod("size");
+        assertEq(5, enum_size.call(ShortStringPseudoEnum::Input));
+        PseudoMethodVariant enum_size_variant = enum_size.getVariants()[0];
+        assertEq(5, enum_size_variant.call(ShortStringPseudoEnum::Input));
+
         assertTrue(ValuePseudoClass.isEqual(PseudoClass::forType(StringType.getOrNothingType())));
 
         # "or nothing" types must return the <value> pseudo-class
@@ -1257,6 +3185,12 @@ class ReflectionTest inherits QUnit::Test {
             assertEq("1.00", pv.call(1));
             assertThrows("METHOD-ERROR", \pv.call("str", 1n));
         }
+    }
+
+    typeMemberPseudoMethodDispatchTest() {
+        TypeMemberPseudoTest obj();
+        assertEq("object", obj.type());
+        assertEq("bool", obj.type.getName());
     }
 
     programTests() {

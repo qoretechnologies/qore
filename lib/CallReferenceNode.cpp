@@ -35,6 +35,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/qore_list_private.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -89,6 +90,27 @@ const char* CallReferenceCallNode::getTypeName() const {
     return "call reference call";
 }
 
+void CallReferenceCallNode::resolveParseArgs() {
+    if (!parse_args || args) {
+        return;
+    }
+    bool has_eval_entries = false;
+    for (size_t i = 0; i < parse_args->size(); ++i) {
+        if (parse_args->get(i).needsEval()) {
+            has_eval_entries = true;
+            break;
+        }
+    }
+    args = has_eval_entries
+        ? qore_list_private::newList(true)
+        : new QoreListNode(autoTypeInfo);
+    for (size_t i = 0; i < parse_args->size(); ++i) {
+        QoreValue v = parse_args->get(i);
+        v.refSelf();
+        args->push(v, nullptr);
+    }
+}
+
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue CallReferenceCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
@@ -97,6 +119,9 @@ QoreValue CallReferenceCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
 
 QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
+    assert(!parse_args || args
+        || !"CallReferenceCallNode::evalImpl(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
     ValueEvalRefHolder lv(rc, exp, xsink);
     if (*xsink) {
         return QoreValue();
@@ -116,8 +141,11 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     parse_context.typeInfo = nullptr;
+    parse_context.analysis.clear();
+    QoreParseAnalysis arg_analysis;
     int err = parse_init_value(exp, parse_context);
     const QoreTypeInfo* expTypeInfo = parse_context.typeInfo;
+    parse_context.analysis.clear();
 
     if (!err && expTypeInfo && codeTypeInfo && QoreTypeInfo::hasType(expTypeInfo)
         && !QoreTypeInfo::parseAccepts(codeTypeInfo, expTypeInfo)) {
@@ -130,15 +158,37 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     }
 
     if (parse_args) {
+        if (parse_args->hasNamedArgs()) {
+            qore_program_private::makeParseException(getProgram(), *loc, "NAMED-CALL-NOT-SUPPORTED",
+                new QoreStringNode(
+                    "named arguments are not supported for call-reference or closure calls without a "
+                    "parse-time-resolved signature; use positional arguments instead"));
+            if (!err) {
+                err = -1;
+            }
+        }
         type_vec_t argTypeInfo;
-        if (parse_args->initArgs(parse_context, argTypeInfo, args) && !err) {
-            err = -1;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_args->initArgs(parse_context, argTypeInfo, args) && !err) {
+                err = -1;
+            }
+            arg_analysis = parse_context.analysis;
         }
         parse_args = nullptr;
     }
 
-    // call reference calls can return any value
-    parse_context.typeInfo = nullptr;
+    // For typed code references (code<RetType(ArgTypes...)>), extract and
+    // propagate the return type. This enables map/select and other functional
+    // operators to preserve element type information through closure calls.
+    {
+        const QoreComplexCodeTypeInfo* cct = QoreTypeInfo::getComplexCodeType(expTypeInfo);
+        parse_context.typeInfo = cct ? cct->getReturnType() : nullptr;
+    }
+    parse_context.analysis.clear();
+    if (arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 
@@ -354,6 +404,12 @@ QoreValue ParseSelfMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_
         return QoreValue();
     }
 
+    // meth may be null when this node is deserialized in an AOT binary (parse context not available);
+    // in that case fall back to runtime method lookup by name
+    if (!meth) {
+        return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str());
+    }
+
     // return class with method already found at parse time if known
     if (o->getClass() == meth->getClass()) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, meth,
@@ -375,7 +431,6 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
         *const_cast<QoreClass*>(QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
     );
     meth = class_ctx->parseResolveSelfMethod(loc, method.c_str(), class_ctx);
-    method.clear();
     return meth ? 0 : -1;
 }
 
@@ -492,8 +547,11 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    //printd(5, "RunTimeObjectMethodReferenceNode::exec() this: %p obj: %p %s::%s() qc: %p (%s)\n", this, obj,
-    //    obj->getClassName(), method.c_str(), qc, qc ? qc->name.c_str() : "n/a");
+    if (obj && !obj->isValid()) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call a method on an object that has already been "
+            "deleted");
+        return QoreValue();
+    }
     // issue #2145: set class context after evaluating arguments
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, rc, xsink);

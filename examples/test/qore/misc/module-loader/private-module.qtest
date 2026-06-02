@@ -6,7 +6,8 @@
 %allow-injection
 %no-child-restrictions
 
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
 
 %exec-class PrivateModuleTest
 

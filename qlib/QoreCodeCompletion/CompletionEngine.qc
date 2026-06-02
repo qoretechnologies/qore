@@ -101,14 +101,14 @@ public class AbstractCompletionProvider {
     abstract list<hash<CompletionItem>> getClassNames(string prefix);
 
     #! Get instance members/methods for dot completion (after ".")
-    /** @param target the identifier before "."
+    /** @param target the identifier before "."; generic type arguments are stripped before provider dispatch
         @param prefix The prefix to filter by
         @return A list of matching member/method completion items
     */
     abstract list<hash<CompletionItem>> getInstanceMembers(string target, string prefix);
 
     #! Get namespace/class/enum members for scope completion (after "::")
-    /** @param target the identifier before "::"
+    /** @param target the identifier before "::"; generic type arguments are stripped before provider dispatch
         @param prefix The prefix to filter by
         @return A list of matching scope member completion items
     */
@@ -277,7 +277,7 @@ public class CompletionEngine {
             pos--;
         }
 
-        # Collect identifier chars and :: chains
+        # Collect identifier chars, :: chains, and generic type arguments.
         string result = "";
         while (pos >= 0) {
             if (input[pos] =~ /[a-zA-Z_0-9]/) {
@@ -286,11 +286,51 @@ public class CompletionEngine {
             } else if (pos >= 1 && input[pos] == ":" && input[pos - 1] == ":") {
                 result = "::" + result;
                 pos -= 2;
+            } else if (input[pos] == ">") {
+                int end = pos;
+                int depth = 1;
+                pos--;
+                while (pos >= 0 && depth > 0) {
+                    if (input[pos] == ">") {
+                        depth++;
+                    } else if (input[pos] == "<") {
+                        depth--;
+                    }
+                    pos--;
+                }
+                if (depth != 0) {
+                    break;
+                }
+                result = input.substr(pos + 1, end - pos) + result;
             } else {
                 break;
             }
         }
 
+        return result;
+    }
+
+    #! Removes generic type arguments from a target name before provider lookup
+    /** @param target A target name such as Queue<int> or Qore::Thread::Queue<int>
+        @return The base target name without generic type arguments
+    */
+    static string stripGenericTypeArguments(string target) {
+        string result = "";
+        int depth = 0;
+        for (int i = 0; i < target.length(); i++) {
+            string ch = target[i];
+            if (ch == "<") {
+                depth++;
+                continue;
+            }
+            if (ch == ">" && depth > 0) {
+                depth--;
+                continue;
+            }
+            if (depth == 0) {
+                result += ch;
+            }
+        }
         return result;
     }
 
@@ -382,8 +422,9 @@ public class CompletionEngine {
     private list<hash<CompletionItem>> completeDot(hash<auto> ctx) {
         list<hash<CompletionItem>> result = ();
         hash<string, bool> seen;
+        string target = stripGenericTypeArguments(ctx.target);
 
-        foreach hash<CompletionItem> item in (provider.getInstanceMembers(ctx.target, ctx.prefix)) {
+        foreach hash<CompletionItem> item in (provider.getInstanceMembers(target, ctx.prefix)) {
             if (!seen{item.label}) {
                 seen{item.label} = True;
                 result += item;
@@ -399,8 +440,9 @@ public class CompletionEngine {
     private list<hash<CompletionItem>> completeScope(hash<auto> ctx) {
         list<hash<CompletionItem>> result = ();
         hash<string, bool> seen;
+        string target = stripGenericTypeArguments(ctx.target);
 
-        foreach hash<CompletionItem> item in (provider.getScopeMembers(ctx.target, ctx.prefix)) {
+        foreach hash<CompletionItem> item in (provider.getScopeMembers(target, ctx.prefix)) {
             if (!seen{item.label}) {
                 seen{item.label} = True;
                 result += item;

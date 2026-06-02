@@ -6,7 +6,8 @@
 */
 
 %modern
-%requires ../../../../qlib/QoreAgentStrategies
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreAgentStrategies
 %requires json
 %requires Util
 %requires QUnit

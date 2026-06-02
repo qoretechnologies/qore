@@ -70,8 +70,14 @@ public:
     //! returns the type name as a c string
     DLLLOCAL virtual const char* getTypeName() const;
 
+    //! Resolves parse_args into evaluated args for AOT-deserialized nodes
+    DLLLOCAL void resolveParseArgs();
+
     //! returns call expression (for background operator processing)
     DLLLOCAL QoreValue getExp() const { return exp; }
+
+    //! returns parse arguments
+    DLLLOCAL const QoreParseListNode* getParseArgs() const { return parse_args; }
 
     //! returns the arguments (for background operator processing)
     DLLLOCAL const QoreListNode* getArgs() const { return args; }

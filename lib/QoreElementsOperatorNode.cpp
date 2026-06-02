@@ -54,10 +54,14 @@ QoreValue QoreElementsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
     switch (v->getType()) {
         case NT_LIST: return v->get<const QoreListNode>()->size();
         // return the number of characters in a string (not bytes)
-        case NT_STRING: return v->get<const QoreStringNode>()->length();
+        case NT_STRING: {
+            QoreStringValueHelper str(*v);
+            return str->length();
+        }
         case NT_HASH: return v->get<const QoreHashNode>()->size();
         case NT_OBJECT: return v->get<const QoreObject>()->size(xsink);
         case NT_BINARY: return v->get<const BinaryNode>()->size();
+        case NT_BUFFER: return v->get<const QoreBufferNode>()->size();
     }
 
     return 0;
@@ -69,18 +73,25 @@ int QoreElementsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
 
     if (QoreTypeInfo::hasType(parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(listTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(hashTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(stringTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(binaryTypeInfo, parse_context.typeInfo)
+        && !QoreTypeInfo::parseAccepts(bufferTypeInfo, parse_context.typeInfo)
         && !QoreTypeInfo::parseAccepts(objectTypeInfo, parse_context.typeInfo)) {
         QoreStringNode* edesc = new QoreStringNode("the argument given to the 'elements' operator is ");
         QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);
         edesc->concat(", so this expression will always return 0; the 'elements' operator can only return a value " \
-            "with lists, hashes, strings, binary objects, and objects");
+            "with lists, hashes, strings, binary objects, buffers, and objects");
         qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
             edesc);
     }
@@ -96,6 +107,15 @@ int QoreElementsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
         // (constants may not be fully resolved at parse time, resulting in NOTHING)
         if (!result.isNothing()) {
             val = result;
+            parse_context.typeInfo = val.getFullTypeInfo();
+            parse_context.analysis.clear();
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            if (!val.isNothing()) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+            }
+            parse_context.analysis.known_type = parse_context.typeInfo;
+            return 0;
         } else {
             // constants not resolved - skip parse-time folding, let runtime handle it
             del.release();
@@ -103,5 +123,12 @@ int QoreElementsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

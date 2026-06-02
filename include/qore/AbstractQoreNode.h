@@ -399,6 +399,9 @@ protected:
     //! set to one for objects that need custom reference handlers
     bool custom_reference_handlers : 1;
 
+    //! explicitly initialize the final bit in the bitfield storage word
+    bool spare_flag : 1;
+
     //! default destructor does nothing
     /**
         The destructor is protected because it should not be called directly, which also means that these objects cannot normally be created on the stack.  They are referenced counted, and the deref() function should be used to decrement the reference count rather than using the delete operator.  Because the QoreObject class at least could throw a Qore Exception when it is deleted, AbstractQoreNode::deref() takes an ExceptionSink pointer argument by default as well.

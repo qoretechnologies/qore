@@ -539,7 +539,7 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
 
         # remove the directory's contents
         list errors = ();
-        foreach string name in (dir.list()) {
+        foreach string name in (dir.listNames()) {
             string sub_path = join_paths(path, name);
             try {
                 # Check for symlink first since is_dir follows symlinks
@@ -636,8 +636,8 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
         indeed don't point to the same file.
     */
     public bool sub same_file(string path1, string path2, bool follow_symlinks = True, bool ignore_errors = True) {
-        hash<StatInfo> stat1;
-        hash<StatInfo> stat2;
+        *hash<StatInfo> stat1;
+        *hash<StatInfo> stat2;
 
         try {
             if (follow_symlinks) {
@@ -648,6 +648,14 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
                 stat2 = hlstat(path2);
             }
         } catch (hash<ExceptionInfo> ex) {
+            if (ignore_errors) {
+                return False;
+            }
+
+            throw "FILE-STAT-ERROR", sprintf("Couldn't stat path: %s", strerror());
+        }
+
+        if (!exists stat1 || !exists stat2) {
             if (ignore_errors) {
                 return False;
             }
@@ -729,7 +737,7 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
 
         if (!exists depth || depth > 0) {
             *int next_depth = exists depth ? depth - 1 : NOTHING;
-            foreach string name in (src_dir.list()) {
+            foreach string name in (src_dir.listNames()) {
                 string src_path = join_paths(source, name);
                 string dst_path = join_paths(destination, name);
 
@@ -1070,7 +1078,7 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
 
         if (!exists depth || depth > 0) {
             *int next_depth = exists depth ? depth - 1 : NOTHING;
-            foreach string name in (src_dir.listDirs()) {
+            foreach string name in (src_dir.listDirNames()) {
                 string src_path = join_paths(source, name);
                 # ignore symlinks
                 if (is_link(src_path)) {

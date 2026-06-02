@@ -77,6 +77,16 @@ public:
         return true;
     }
 
+    // Public accessor for IR lowering to get the return type
+    DLLLOCAL const QoreTypeInfo* getMapReturnType() const {
+        return returnTypeInfo;
+    }
+
+    //! Returns the iterator expression (e[1]) for nested map chain detection
+    DLLLOCAL const QoreValue& getIteratorExpr() const {
+        return e[1];
+    }
+
     DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
             ExceptionSink* xsink) const;
 
@@ -115,13 +125,13 @@ public:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getValueType() const {
-        return getList()->getValueTypeInfo();
+        return map->expTypeInfo;
     }
 
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return l->getValueTypeInfo();
+        return map->expTypeInfo;
     }
 };
 
@@ -143,7 +153,7 @@ public:
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return v.getTypeInfo();
+        return map->expTypeInfo;
     }
 };
 
@@ -167,7 +177,7 @@ public:
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return autoTypeInfo;
+        return map->expTypeInfo;
     }
 };
 

@@ -617,13 +617,11 @@ public const DefaultGenericSearchOpMap = {
 #/@{
 #! returns an @ref SearchOperatorInfo hash
 public hash<SearchOperatorInfo> sub dp_make_op(string op, auto arg, *int op_args) {
-    if (!exists op_args) {
-        op_args = DefaultGenericSearchOpMap{op}.op_args ?? 1;
-    }
+    int op_args_int = exists op_args ? op_args : (DefaultGenericSearchOpMap{op}.op_args ?? 1);
     return new hash<SearchOperatorInfo>({
         "op": op,
         "arg": arg,
-        "op_args": op_args,
+        "op_args": op_args_int,
     });
 }
 
@@ -801,7 +799,7 @@ public hash<SearchOperatorInfo> sub dp_op_not(hash<auto> arg) {
 /** this class also implements generic search APIs that can be used to filter record sets for data providers that do
     not support native search / filtering APIs
 */
-public class AbstractDataProviderRecordIterator inherits AbstractIterator {
+public class AbstractDataProviderRecordIterator<RecT> [legacy_raw] inherits AbstractIterator<RecT> {
     public {
         #! Default block size
         const DefaultBlockSize = 1000;
@@ -901,7 +899,7 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     #! returns a single record if the iterator is valid
     /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     */
-    abstract hash<auto> getValue();
+    abstract RecT getValue();
 
     #! Positions the iterator on the next record if possible, returns @ref True if successful
     /** @return @ref True if the iterator was advanced to the next record, @ref False if no more records are available
@@ -916,7 +914,7 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
         @throw FIELD-ERROR invalid or unknown field name
     */
     private auto doMemberGate(string key) {
-        hash<auto> record = getValue();
+        auto record = getValue();
         auto rv = record{key};
         if (!exists rv && !record.hasKey(key)) {
             throw "FIELD-ERROR", sprintf("the current record does not have field %y; valid fields: %y", key,
@@ -946,7 +944,7 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
             *hash<auto> template_context) {
         foreach hash<auto> elem in (where_cond.pairIterator()) {
             # Template references and other typed hashdecls are matched directly as values
-            if (!(elem.value instanceof hash<DataProviderTemplateReference>)
+            if (!AbstractDataProviderRecordIterator::isTemplateReferenceValue(elem.value)
                 && elem.value.op && (*hash<auto> op = (DefaultGenericSearchOpMap{elem.value.op}
                     ?? DefaultGenericSearchOpMap{OperatorAliasMap{elem.value.op}}))) {
                 if (!AbstractDataProviderRecordIterator::evalOperator(elem.key, elem.value, op, record,
@@ -989,13 +987,23 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
         @since DataProvider 3.3
     */
     private static auto resolveTemplateValue(auto val, *hash<auto> template_context) {
-        if (val instanceof hash<DataProviderTemplateReference>) {
-            return AbstractDataProvider::evalGenericExpressionValue({}, val, template_context);
+        if (AbstractDataProviderRecordIterator::isTemplateReferenceValue(val)) {
+            return AbstractDataProvider::evalGenericExpressionValue({}, cast<hash<DataProviderTemplateReference>>(val),
+                template_context);
         }
         if (val.typeCode() == NT_LIST) {
             return map AbstractDataProviderRecordIterator::resolveTemplateValue($1, template_context), val;
         }
         return val;
+    }
+
+    #! Returns True if the value is a typed or normalized template reference hash.
+    private static bool isTemplateReferenceValue(auto val) {
+        return val instanceof hash<DataProviderTemplateReference>
+            || (val.typeCode() == NT_HASH
+                && val.hasKey("tmpl_context") && val.tmpl_context.typeCode() == NT_STRING
+                && val.hasKey("tmpl_value") && val.tmpl_value.typeCode() == NT_STRING
+                && val.hasKey("raw") && val.raw.typeCode() == NT_STRING);
     }
 
     #! Match a single value
@@ -1004,8 +1012,9 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     */
     private static bool matchGenericValue(auto expects, auto val, *hash<auto> template_context) {
         # Resolve template references in the value
-        if (val instanceof hash<DataProviderTemplateReference>) {
-            val = AbstractDataProvider::evalGenericExpressionValue({}, val, template_context);
+        if (AbstractDataProviderRecordIterator::isTemplateReferenceValue(val)) {
+            val = AbstractDataProvider::evalGenericExpressionValue({}, cast<hash<DataProviderTemplateReference>>(val),
+                template_context);
         }
         if (val.typeCode() == NT_HASH) {
             # in case of a hash, do a recursive partial match with only the given keys

@@ -83,7 +83,7 @@ nothing getpwuid() [flags=RUNTIME_NOOP;dom=EXTERNAL_INFO] {
 
     @see getpwuid2() for a similar function that throws an exception if the user ID is invalid
  */
-*hash getpwuid(softint uid) [flags=CONSTANT;dom=EXTERNAL_INFO] {
+*hash getpwuid(softint uid) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
    return q_getpwuid(uid);
 #else
@@ -109,7 +109,7 @@ nothing getpwuid() [flags=RUNTIME_NOOP;dom=EXTERNAL_INFO] {
 
     @see getpwuid() for a similar function that does not throw an exception if the user ID is invalid
  */
-hash getpwuid2(softint uid) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+hash getpwuid2(softint uid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
    errno = 0;
    QoreHashNode *h = q_getpwuid(uid);
@@ -141,7 +141,7 @@ hash getpwuid2(softint uid) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
 
     @see getpwnam2() for a similar function that throws an exception if the user is invalid
  */
-hash getpwnam(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
+hash getpwnam(string name) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
    return q_getpwnam(name->getBuffer());
 #else
@@ -167,7 +167,7 @@ hash getpwnam(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
 
     @see getpwnam() for a similar function that does not throw an exception if the user is invalid
  */
-hash getpwnam2(string name) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+hash getpwnam2(string name) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
    errno = 0;
    QoreHashNode *h = q_getpwnam(name->getBuffer());
@@ -199,7 +199,7 @@ hash getpwnam2(string name) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
 
     @see getgrgid2() for a similar function that throws an exception if the group ID is invalid
  */
-*hash getgrgid(softint gid) [flags=CONSTANT;dom=EXTERNAL_INFO] {
+*hash getgrgid(softint gid) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
    return q_getgrgid(gid);
 #else
@@ -225,7 +225,7 @@ hash getpwnam2(string name) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
 
     @see getgrgid() for a similar function that does not throw an exception if the group ID is invalid
  */
-hash getgrgid2(softint gid) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+hash getgrgid2(softint gid) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
    errno = 0;
    QoreHashNode *h = q_getgrgid(gid);
@@ -257,7 +257,7 @@ hash getgrgid2(softint gid) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
 
     @see getgrnam2() for a similar function that throws an exception if the group is invalid
  */
-*hash getgrnam(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
+*hash getgrnam(string name) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
    return q_getgrnam(name->getBuffer());
 #else
@@ -283,7 +283,7 @@ hash getgrgid2(softint gid) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
 
     @see getgrnam() for a similar function that does not throw an exception if the group is invalid
  */
-hash getgrnam2(string name) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+hash getgrnam2(string name) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
 #ifdef HAVE_PWD_H
    errno = 0;
    QoreHashNode *h = q_getgrnam(name->getBuffer());

@@ -30,6 +30,60 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreHashIterator.h"
+#include "qore/intern/QoreTypeInfo.h"
+
+const QoreTypeInfo* qore_get_hash_iterator_value_type(const QoreTypeInfo* iterator_type_info) {
+    const QoreParameterizedClassTypeInfo* iterator_type
+        = QoreTypeInfo::getParameterizedClassType(iterator_type_info);
+    return iterator_type && iterator_type->getArgCount() ? iterator_type->getTypeArgs()[0] : autoTypeInfo;
+}
+
+const TypedHashDecl* qore_get_key_value_info_hashdecl(const QoreTypeInfo* value_type) {
+    const QoreTypeInfo* resolved_type = QoreTypeInfo::hasType(value_type) ? value_type : autoTypeInfo;
+    type_vec_t type_args;
+    type_args.push_back(resolved_type);
+    return hashdeclKeyValueInfo->getParameterizedHashDecl(type_args);
+}
+
+static const QoreTypeInfo* qore_get_hash_value_iterator_type(const QoreHashNode* h) {
+    const QoreTypeInfo* value_type = h && !h->getHashDecl() ? h->getValueTypeInfo() : autoTypeInfo;
+    return QoreTypeInfo::hasType(value_type) ? value_type : autoTypeInfo;
+}
+
+QoreObject* qore_new_hash_iterator_object(QoreProgram* pgm, const QoreHashNode* h) {
+    const QoreTypeInfo* value_type = qore_get_hash_value_iterator_type(h);
+    type_vec_t type_args;
+    type_args.push_back(value_type);
+    QoreObject* rv = new QoreObject(QC_HASHITERATOR, pgm, new QoreHashIterator(h, value_type));
+    rv->setInstantiatedTypeInfo(QC_HASHITERATOR->getTypeInfo(type_args));
+    return rv;
+}
+
+QoreObject* qore_new_hash_pair_iterator_object(QoreProgram* pgm, const QoreHashNode* h) {
+    const QoreTypeInfo* value_type = qore_get_hash_value_iterator_type(h);
+    type_vec_t type_args;
+    type_args.push_back(value_type);
+    ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(h, value_type), nullptr);
+    p->setView(QoreHashIterator::VIEW_PAIR);
+    QoreObject* rv = new QoreObject(QC_HASHPAIRITERATOR, pgm, p.release());
+    rv->setInstantiatedTypeInfo(QC_HASHPAIRITERATOR->getTypeInfo(type_args));
+    return rv;
+}
+
+//! Key/value pair returned by hash and object pair iterators
+/** @par Example:
+    @code{.py}
+hash<KeyValueInfo<int>> pair = {"key": "id", "value": 1};
+    @endcode
+
+    @since %Qore 2.3
+ */
+hashdecl Qore::KeyValueInfo<V> {
+    //! The key for the current hash or object member
+    string key;
+    //! The value for the current hash or object member
+    V value;
+}
 
 //! This class an iterator class for hashes
 /** Call HashIterator::next() to iterate through the hash; do not use the iterator if HashIterator::next() returns @ref False.
@@ -37,9 +91,9 @@
 
     @par Example: HashIterator basic usage
     @code{.py}
-    hash<auto> h = {"key1": 1, "key2": 2,};
+    hash<string, int> h = {"key1": 1, "key2": 2,};
 
-    HashIterator it(h);
+    HashIterator<int> it(h);
     while (it.next()) {
         printf("getKey: %n; getKeyValue: %n; getValue: %n; getValuePair: %n\n",
                it.getKey(), it.getKeyValue(), it.getValue(), it.getValuePair());
@@ -56,35 +110,38 @@
 
     @see HashReverseIterator
  */
-qclass HashIterator [arg=QoreHashIterator* i; ns=Qore; vparent=AbstractQuantifiedBidirectionalIterator];
+qclass HashIterator<V> [arg=QoreHashIterator* i; ns=Qore;
+    vparent=AbstractQuantifiedBidirectionalIterator<V>; legacy_raw];
 
 //! Creates the hash iterator object
-/** @param h the hash to iterate
+/** @param hash_value the hash to iterate
 
     @par Example:
     @code{.py}
-HashIterator hi(h);
+HashIterator<int> hi(h);
     @endcode
  */
-HashIterator::constructor(hash<auto> h) {
-   self->setPrivate(CID_HASHITERATOR, new QoreHashIterator(h));
+HashIterator::constructor(hash<string, V> hash_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_HASHITERATOR,
+      new QoreHashIterator(hash_value, qore_get_hash_iterator_value_type(self->getInstantiatedTypeInfo())));
 }
 
 //! Creates an empty hash iterator object
 /** @par Example:
     @code{.py}
-*hash<auto> h = get_hash_or_nothing();
-HashIterator hi(h);
+*hash<string, int> h = get_hash_or_nothing();
+HashIterator<int> hi(h);
     @endcode
  */
 HashIterator::constructor() {
-   self->setPrivate(CID_HASHITERATOR, new QoreHashIterator);
+   self->setPrivate(CID_HASHITERATOR,
+      new QoreHashIterator(qore_get_hash_iterator_value_type(self->getInstantiatedTypeInfo())));
 }
 
 //! Creates a copy of the HashIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-HashIterator ni = i.copy();
+HashIterator<int> ni = i.copy();
     @endcode
  */
 HashIterator::copy() {
@@ -191,7 +248,7 @@ while (i.next()) {
     @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-auto HashIterator::getValue() [flags=RET_VALUE_ONLY] {
+V HashIterator::getValue() [flags=RET_VALUE_ONLY] {
    if (i->check(xsink))
       return QoreValue();
    return i->getReferencedValue(xsink);
@@ -212,7 +269,7 @@ while (i.next()) {
 
     @since %Qore 0.8.6
  */
-auto HashIterator::getKeyValue() [flags=RET_VALUE_ONLY] {
+V HashIterator::getKeyValue() [flags=RET_VALUE_ONLY] {
    if (i->check(xsink))
       return QoreValue();
    return i->getReferencedKeyValue(xsink);
@@ -233,7 +290,7 @@ while (i.next()) {
 
     @since %Qore 0.8.6
  */
-hash<auto> HashIterator::getValuePair() [flags=RET_VALUE_ONLY] {
+hash<KeyValueInfo<V>> HashIterator::getValuePair() [flags=RET_VALUE_ONLY] {
    if (i->check(xsink))
       return QoreValue();
    return i->getReferencedValuePair(xsink);

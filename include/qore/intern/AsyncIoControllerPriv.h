@@ -60,6 +60,11 @@ class QoreObject;
 class QoreSocketObject;
 class SocketPollOperationBase;
 
+// AsyncIoController class id, defined in QC_AsyncIoController.cpp; declared here
+// so connection TUs can use getReferencedPrivateData(CID_ASYNCIOCONTROLLER, ...)
+// in non-SCU builds.
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
+
 //! Lightweight async dispatcher for executing user callbacks and Qore abort() off the I/O thread
 /** Manages a small pool of Qore worker threads (with full interpreter stack) that
     execute user callbacks and Qore-language abort() calls on behalf of the I/O thread
@@ -70,6 +75,13 @@ class SocketPollOperationBase;
     @since %Qore 2.3
 */
 class AsyncIoControllerPriv;  // forward declaration for DT_CONTINUE_POLL
+
+#ifdef DEBUG
+//! Overrides the async I/O thread flag for focused unit tests
+/** @return the previous async I/O thread flag value
+*/
+DLLLOCAL bool qore_set_async_io_thread_for_test(bool value);
+#endif
 
 class QoreCallDispatcher {
 public:
@@ -234,9 +246,8 @@ public:
     */
     DLLLOCAL void waitForOwnerIdle(const std::string& owner);
 
-    //! Maximum worker cap — workers exit when idle, so a large cap is safe; this just
-    //! prevents runaway thread creation under extreme load
-    static constexpr int DEFAULT_WORKER_CAP = 4096;
+    //! Upper bound for automatic worker sizing; explicit setMaxCallbackWorkers() values may be higher
+    static constexpr int DEFAULT_WORKER_CAP = 512;
 
     //! Idle timeout before a worker thread exits (milliseconds)
     static constexpr int WORKER_IDLE_TIMEOUT_MS = 60000;
@@ -1144,9 +1155,13 @@ private:
     //! Returns SOCKET-CLOSED if a Socket fd changed during the controller wait
     DLLLOCAL static QoreHashNode* makeSocketWaitGenerationException(PollInfo& pinfo, ExceptionSink* xsink);
 
+    //! Returns true if the poll-info socket fd changed since the last wait snapshot
+    DLLLOCAL static bool hasSocketWaitGenerationChanged(PollInfo& pinfo, QoreHashNode* poll_info);
+
     //! Update EventLoop registration for an operation
     DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
-        QoreObject* socket, const std::string& sock_hash, int events, ExceptionSink* xsink);
+        QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
+        ExceptionSink* xsink);
 
     //! Unregister an operation from the EventLoop
     DLLLOCAL void unregisterFromEventLoop(IoThreadContext& t, const std::string& key,

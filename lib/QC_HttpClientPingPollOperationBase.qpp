@@ -161,13 +161,14 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
     if (status_code < expected_status_lo || status_code > expected_status_hi) {
         // Try to get status message from response headers
         QoreValue info_val = output->getKeyValue("info");
-        const char* status_message = "";
+        std::string status_message;
         if (info_val.getType() == NT_HASH) {
             QoreValue resp_hdr = info_val.get<QoreHashNode>()->getKeyValue("response-headers");
             if (resp_hdr.getType() == NT_HASH) {
                 QoreValue sm_val = resp_hdr.get<QoreHashNode>()->getKeyValue("status_message");
                 if (sm_val.getType() == NT_STRING) {
-                    status_message = sm_val.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper sm(sm_val);
+                    status_message = sm->c_str();
                 }
             }
         }
@@ -175,10 +176,10 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
         QoreStringNode* desc = new QoreStringNode;
         if (expected_status_lo == expected_status_hi) {
             desc->sprintf("expected status %d, got %d %s",
-                expected_status_lo, status_code, status_message);
+                expected_status_lo, status_code, status_message.c_str());
         } else {
             desc->sprintf("expected status %d-%d, got %d %s",
-                expected_status_lo, expected_status_hi, status_code, status_message);
+                expected_status_lo, expected_status_hi, status_code, status_message.c_str());
         }
         xsink->raiseException(err_code.c_str(), desc);
         setError(desc->c_str(), xsink);
@@ -198,9 +199,12 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
     // Validate header if configured (e.g. Content-Type: text/event-stream)
     if (!validate_header_name.empty() && response_headers) {
         QoreValue hdr_val = response_headers->getKeyValue(validate_header_name.c_str());
+        std::string hdr_storage;
         const char* hdr_str = nullptr;
         if (hdr_val.getType() == NT_STRING) {
-            hdr_str = hdr_val.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper hdr(hdr_val);
+            hdr_storage = hdr->c_str();
+            hdr_str = hdr_storage.c_str();
         }
 
         if (!hdr_str) {
@@ -229,9 +233,12 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
     // Validate WebSocket Sec-WebSocket-Accept if configured
     if (!expected_ws_accept.empty() && response_headers) {
         QoreValue accept_val = response_headers->getKeyValue("sec-websocket-accept");
+        std::string accept_storage;
         const char* accept_str = nullptr;
         if (accept_val.getType() == NT_STRING) {
-            accept_str = accept_val.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper accept(accept_val);
+            accept_storage = accept->c_str();
+            accept_str = accept_storage.c_str();
         }
 
         if (!accept_str) {
@@ -331,29 +338,29 @@ qclass HttpClientPingPollOperationBase [
     private_members=string goal;
     ns=Qore;
     arg=HttpClientPingPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<*hash<auto>>
 ];
 
 //! Creates the HTTP client ping/verify poll operation base
-/** @param inner_poll_op the inner poll operation from HTTPClient.startPollSendRecv()
-    @param status_lo lowest acceptable HTTP status code (inclusive)
-    @param status_hi highest acceptable HTTP status code (inclusive)
-    @param err_code Qore exception error code for validation failures
+/** @param operation the inner poll operation from HTTPClient.startPollSendRecv()
+    @param min_status lowest acceptable HTTP status code (inclusive)
+    @param max_status highest acceptable HTTP status code (inclusive)
+    @param error_code Qore exception error code for validation failures
     @param header_name optional response header name to validate (lowercase)
     @param header_prefix optional required prefix for the validated header value
-    @param ws_key optional WebSocket key for Sec-WebSocket-Accept validation
+    @param websocket_key optional WebSocket key for Sec-WebSocket-Accept validation
 
-    @throw HTTPCLIENTPINGPOLLOPERATIONBASE-ERROR if inner_poll_op is not a valid poll operation
+    @throw HTTPCLIENTPINGPOLLOPERATIONBASE-ERROR if operation is not a valid poll operation
 */
-HttpClientPingPollOperationBase::constructor(object inner_poll_op, int status_lo, int status_hi,
-        string err_code, *string header_name, *string header_prefix, *string ws_key) {
+HttpClientPingPollOperationBase::constructor(object operation, int min_status, int max_status,
+        string error_code, *string header_name, *string header_prefix, *string websocket_key) [flags=NAMED_ARGS] {
     // Extract the C++ SocketPollOperationBase from the inner poll op
     SocketPollOperationBase* inner_priv = dynamic_cast<SocketPollOperationBase*>(
-        inner_poll_op->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+        operation->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
     if (!inner_priv) {
         if (!*xsink) {
             xsink->raiseException("HTTPCLIENTPINGPOLLOPERATIONBASE-ERROR",
-                "inner_poll_op is not a SocketPollOperationBase subclass");
+                "operation is not a SocketPollOperationBase subclass");
         }
         return;
     }
@@ -371,11 +378,11 @@ HttpClientPingPollOperationBase::constructor(object inner_poll_op, int status_lo
     // Create the private data
     self->setPrivate(CID_HTTPCLIENTPINGPOLLOPERATIONBASE,
         new HttpClientPingPollOperationPriv(self, inner_priv, inner_obj,
-            (int)status_lo, (int)status_hi,
-            err_code->c_str(),
+            (int)min_status, (int)max_status,
+            error_code->c_str(),
             header_name ? header_name->c_str() : nullptr,
             header_prefix ? header_prefix->c_str() : nullptr,
-            ws_key ? ws_key->c_str() : nullptr));
+            websocket_key ? websocket_key->c_str() : nullptr));
 }
 
 //! Destroys the object
@@ -434,7 +441,7 @@ nothing HttpClientPingPollOperationBase::abort() {
 //! Returns the output of the operation
 /** @return the HTTP response hash from the inner operation, or NOTHING if not yet complete
 */
-auto HttpClientPingPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+*hash<auto> HttpClientPingPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

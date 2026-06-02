@@ -34,9 +34,15 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
+#include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+
+// Forward declarations for QPP type references
+extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
+extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
@@ -199,10 +205,10 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     QoreHashNode* poll_info = inner_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
         // Extract error details before clearing
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP3-CONNECT-ERROR",
-            desc_str ? desc_str->c_str() : "QUIC connection failed", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP3-CONNECT-ERROR",
+            *desc_str ? desc_str->c_str() : "QUIC connection failed", xsink);
         poll_xsink.clear();
         cleanupPendingState();
         return nullptr;
@@ -272,13 +278,11 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         if (poll_xsink) {
             // Extract error and propagate
             QoreException* ex_obj = poll_xsink.getException();
-            const QoreStringNode* err_str = nullptr;
-            const QoreStringNode* desc_str = nullptr;
             if (ex_obj) {
-                err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-                desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-                setError(err_str ? err_str->c_str() : "HTTP3-READ-ERROR",
-                    desc_str ? desc_str->c_str() : "QUIC read error", xsink);
+                QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+                QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+                setError(*err_str ? err_str->c_str() : "HTTP3-READ-ERROR",
+                    *desc_str ? desc_str->c_str() : "QUIC read error", xsink);
             } else {
                 setError("HTTP3-READ-ERROR", "QUIC read error", xsink);
             }
@@ -429,13 +433,13 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 // exception rather than an empty "successful" response.
                 // Without this, callers cannot distinguish peer-reset from
                 // empty response — leading to silent data loss.
-                const QoreStringNode* err_str =
-                    resp->getKeyValue("err").get<const QoreStringNode>();
-                const QoreStringNode* desc_str =
-                    resp->getKeyValue("desc").get<const QoreStringNode>();
-                if (err_str) {
+                QoreValue err_val = resp->getKeyValue("err");
+                if (err_val.getType() == NT_STRING) {
+                    QoreValue desc_val = resp->getKeyValue("desc");
+                    QoreStringValueHelper err_str(err_val);
+                    QoreStringValueHelper desc_str(desc_val);
                     std::string err_copy = err_str->c_str();
-                    std::string desc_copy = desc_str ? desc_str->c_str() : "";
+                    std::string desc_copy = desc_val.getType() == NT_STRING ? desc_str->c_str() : "";
                     action->executeError(err_copy.c_str(), desc_copy.c_str(), xsink);
                 } else {
                     action->execute(resp.release(), xsink);
@@ -762,23 +766,25 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
         // default), surfacing as FUTURE-TIMEOUT.  Surface the closure error
         // eagerly and release the action's ref.
         if (need_cancel) {
-            const char* err_str = "HTTP3-CONNECTION-CLOSED";
-            const char* desc_str = "connection closed before request could be submitted";
+            std::string err_str = "HTTP3-CONNECTION-CLOSED";
+            std::string desc_str = "connection closed before request could be submitted";
             if (error_info) {
                 QoreValue ev = error_info->getKeyValue("err");
                 QoreValue dv = error_info->getKeyValue("desc");
                 if (ev.getType() == NT_STRING) {
-                    err_str = ev.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper ev_str(ev);
+                    err_str = ev_str->c_str();
                 }
                 if (dv.getType() == NT_STRING) {
-                    desc_str = dv.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper dv_str(dv);
+                    desc_str = dv_str->c_str();
                 }
             }
             ExceptionSink fire_xs;
-            action->executeError(err_str, desc_str, &fire_xs);
+            action->executeError(err_str.c_str(), desc_str.c_str(), &fire_xs);
             fire_xs.clear();
             if (!*xsink) {
-                xsink->raiseException(err_str, "%s", desc_str);
+                xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
             }
         }
         action->deref(xsink);
@@ -1106,11 +1112,11 @@ qclass Http3ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
     ns=Qore;
     arg=Http3ClientPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<auto>
 ];
 
 //! Creates the HTTP/3 client poll operation base
-/** @param sock the UDP socket (must be bound via bindINET())
+/** @param socket the UDP socket (must be bound via bindINET())
     @param host the remote hostname
     @param port the remote port (1-65535)
     @param connection owning HTTP client connection
@@ -1122,15 +1128,15 @@ qclass Http3ClientPollOperationBase [
         a diagnosable connect-phase error instead of waiting for the outer
         request_timeout (UDP has no OS-level connect-phase error like TCP).
 */
-Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string host, int port,
+Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, string host, int port,
         AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection,
-        int family = AF_UNSPEC, timeout connect_timeout = 0) {
+        int family = AF_UNSPEC, timeout connect_timeout = 0) [flags=NAMED_ARGS] {
     if (port < 1 || port > 65535) {
         xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
         return;
     }
 
-    QoreSocketObject* sock_ptr = *sock;
+    QoreSocketObject* sock_ptr = *socket;
 
     // Convert connect_timeout from ms (Qore timeout type) to ns for ngtcp2
     // timestamp comparison. <=0 means "no deadline" (backward-compatible).
@@ -1267,10 +1273,10 @@ int Http3ClientPollOperationBase::getQuicStreamLimit() [flags=RET_VALUE_ONLY] {
 }
 
 //! Sets the discovered QUIC stream limit
-/** @param limit the stream limit
+/** @param stream_limit the stream limit
 */
-nothing Http3ClientPollOperationBase::setQuicStreamLimit(int limit) {
-    priv->setQuicStreamLimit(limit);
+nothing Http3ClientPollOperationBase::setQuicStreamLimit(int stream_limit) [flags=NAMED_ARGS] {
+    priv->setQuicStreamLimit(stream_limit);
 }
 
 //! Returns the QUIC session ID (0 = not yet connected)
@@ -1329,7 +1335,7 @@ nothing Http3ClientPollOperationBase::setMigrationPending() {
 //! Phase 1: advisory capacity check under lock
 /** @param max_streams the maximum concurrent streams
 */
-nothing Http3ClientPollOperationBase::checkCapacity(int max_streams) {
+nothing Http3ClientPollOperationBase::checkCapacity(int max_streams) [flags=NAMED_ARGS] {
     priv->checkCapacity(max_streams, xsink);
 }
 
@@ -1343,7 +1349,7 @@ nothing Http3ClientPollOperationBase::beginSubmit() {
 //! Phase 2 exit (success): mark stream as pending registration
 /** @param stream_id the QUIC stream ID
 */
-nothing Http3ClientPollOperationBase::endSubmitOk(int stream_id) {
+nothing Http3ClientPollOperationBase::endSubmitOk(int stream_id) [flags=NAMED_ARGS] {
     priv->endSubmitOk(stream_id);
 }
 
@@ -1364,7 +1370,7 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
 
     @param stream_id the QUIC stream ID
 */
-nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
+nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) [flags=NAMED_ARGS] {
     priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink);
 }
 
@@ -1374,7 +1380,8 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
 
     @return hash with: "need_cancel" (bool)
 */
-*hash<auto> Http3ClientPollOperationBase::registerStreamWithPromise(int stream_id, Promise[QorePromise] promise) {
+*hash<auto> Http3ClientPollOperationBase::registerStreamWithPromise(
+        int stream_id, Promise[QorePromise] promise) [flags=NAMED_ARGS] {
     bool need_cancel = false;
     // Create a PromiseAction — pure C++ dispatch, no execValue on I/O thread
     QoreObject* promise_obj = const_cast<QoreObject*>(
@@ -1421,7 +1428,7 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
 */
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithPromiseAndNotifier(
         int stream_id, Promise[QorePromise] promise,
-        EventNotifier[QoreEventNotifier] notifier) {
+        EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
     // Get QoreObject pointers for the Promise and EventNotifier (prevent GC)
     QoreObject* promise_obj = const_cast<QoreObject*>(
         get_param_value(args, 1).get<const QoreObject>());
@@ -1470,7 +1477,7 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
 */
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithChannel(int stream_id, object channel,
         *EventNotifier[QoreEventNotifier] notifier,
-        bool sse_install_eligible = False) {
+        bool sse_install_eligible = False) [flags=NAMED_ARGS] {
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -1533,7 +1540,7 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     @since %Qore 2.3
 */
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithQueue(int stream_id, Queue[Queue] queue,
-        *EventNotifier[QoreEventNotifier] notifier) {
+        *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
     bool need_cancel = false;
     QoreEventNotifier* notifier_ptr = nullptr;
     QoreObject* notifier_obj_ptr = nullptr;
@@ -1583,23 +1590,23 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
 /** @param stream_id the stream to cancel
     @return True if the stream was found and cancelled
 */
-bool Http3ClientPollOperationBase::cancelStream(int stream_id) {
+bool Http3ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS] {
     return priv->cancelStream(stream_id, xsink);
 }
 
 //! Wait on stream capacity condition (for STREAM_ID_BLOCKED retry)
 /** @param timeout_ms timeout in milliseconds
 */
-nothing Http3ClientPollOperationBase::waitStreamCapacity(int timeout_ms) {
+nothing Http3ClientPollOperationBase::waitStreamCapacity(int timeout_ms) [flags=NAMED_ARGS] {
     priv->waitStreamCapacity(timeout_ms);
 }
 
 //! Set error state from submit failure
-/** @param err error string
-    @param desc error description
+/** @param error_code error string
+    @param description error description
 */
-nothing Http3ClientPollOperationBase::setSubmitError(string err, string desc) {
-    priv->setSubmitError(err->c_str(), desc->c_str());
+nothing Http3ClientPollOperationBase::setSubmitError(string error_code, string description) [flags=NAMED_ARGS] {
+    priv->setSubmitError(error_code->c_str(), description->c_str());
 }
 
 //! Returns the socket object
@@ -1617,7 +1624,7 @@ Socket Http3ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
 
     @since %Qore 2.3
 */
-nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) {
+nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) [flags=NAMED_ARGS] {
     priv->registerStreamNotify(stream_id);
 }
 
@@ -1625,7 +1632,7 @@ nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) {
 /** Attaches a WebSocketStreamFrameState to the ChannelAction already
     registered for @a stream_id.  After this call, body bytes from H3 DATA
     chunks dispatched by the I/O thread are fed into a pure C++ frame
-    decoder that pushes complete, typed message hashes to @a msg_queue
+    decoder that pushes complete, typed message hashes to @a message_queue
     instead of the raw response hash routed through the handle's Channel.
     This avoids the O(N²) Qore binary concatenation path for large WS
     frames over HTTP/3.
@@ -1637,7 +1644,7 @@ nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) {
     frame state.  No caller-side pre-swap residual is needed.
 
     @param stream_id the QUIC stream ID returned by submitRequestStreamingWithChannel()
-    @param msg_queue the Queue that will receive typed frame hashes
+    @param message_queue the Queue that will receive typed frame hashes
            ({type, data, rsv1?, rsv2?, rsv3?, code?, reason?})
 
     @throw HTTPCLIENT-STREAM-CLOSED if the stream is not found or already
@@ -1647,8 +1654,8 @@ nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) {
     @since %Qore 2.3
 */
 nothing Http3ClientPollOperationBase::installFrameState(int stream_id,
-        Queue[Queue] msg_queue) {
-    Queue* queue_ptr = msg_queue.release();
+        Queue[Queue] message_queue) [flags=NAMED_ARGS] {
+    Queue* queue_ptr = message_queue.release();
     priv->installFrameState(static_cast<int64_t>(stream_id), queue_ptr, xsink);
 }
 
@@ -1663,7 +1670,7 @@ nothing Http3ClientPollOperationBase::installFrameState(int stream_id,
 */
 nothing Http3ClientPollOperationBase::installSseState(int stream_id,
         Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,
-        *data initial_body) {
+        *data initial_body) [flags=NAMED_ARGS] {
     QoreEventNotifier* notifier_ptr = nullptr;
     QoreObject* notifier_obj_ptr = nullptr;
     if (notifier) {

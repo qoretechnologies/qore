@@ -345,7 +345,7 @@ QoreValue Context::eval(const char* field, ExceptionSink* xsink) {
 
     QoreValue rv = val->get<QoreListNode>()->retrieveEntry(row_list[pos]);
     //printd(5, "Context::eval(%s) this: %p pos: %d rv: %p %s %lld\n", field, this, pos, rv, rv.getTypeName(), rv.getType() == NT_INT ? rv.getAsBigInt() : -1);
-    //printd(5, "Context::eval(%s) pos: %d, val: %s\n", field, pos, rv.getType() == NT_STRING ? rv.get<const QoreStringNode>()->c_str() : "?");
+    //printd(5, "Context::eval(%s) pos: %d, val: %s\n", field, pos, rv.getTypeName());
     return rv.refSelf();
 }
 

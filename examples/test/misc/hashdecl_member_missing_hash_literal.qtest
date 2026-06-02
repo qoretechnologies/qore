@@ -1,0 +1,31 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+
+%requires QUnit
+
+public namespace hashdecl_member_missing_hash_literal_test;
+
+hashdecl OptionalStringInfo {
+    string uri_path;
+    string content;
+}
+
+class HashdeclMemberMissingHashLiteralTest inherits QUnit::Test {
+    public {
+        const TEST_NAME = "Hashdecl Missing Member Hash Literal Test";
+        const TEST_VERSION = "1.0";
+    }
+
+    testMissingHashdeclMemberDoesNotNarrowHashLiteralValueType() {
+        hash<OptionalStringInfo> info();
+        info.uri_path = "/api/test";
+
+        hash headers = ("content-type": info.content);
+
+        assertTrue(headers.hasKey("content-type"));
+        assertNothing(headers."content-type");
+    }
+}

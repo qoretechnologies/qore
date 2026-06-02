@@ -128,7 +128,7 @@ nothing getMethodList() [flags=RUNTIME_NOOP,DEPRECATED] {
 
 //! Returns a list of strings of the names of the methods of the class of the object passed as a parameter
 /**
-    @param obj an object of the class to get the method list from
+    @param object_value an object of the class to get the method list from
 
     @return a list of strings of the names of the methods of the class of the object passed as a parameter; returns all methods in the class, both private and public but does not return inherited methods
 
@@ -139,13 +139,13 @@ list<string> l = get_method_list(obj);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getMethodList()
  */
-list<string> get_method_list(object obj) [flags=CONSTANT] {
-    return obj->getClass()->getMethodList();
+list<string> get_method_list(object object_value) [flags=CONSTANT,NAMED_ARGS] {
+    return object_value->getClass()->getMethodList();
 }
 
 //! Calls a method of an object, passing the remainder of the arguments to the function as arguments to the method
 /**
-    @param obj the object to use for the call
+    @param object_value the object to use for the call
     @param method the method to call
     @param ... any additional arguments to the method
 
@@ -210,7 +210,7 @@ auto result = call_object_method(obj, "method", arg1, arg2);
     - call_static_method()
     - call_static_method_args()
 */
-auto call_object_method(object obj, string method, ...) {
+auto call_object_method(object object_value, string method, ...) {
     ReferenceHolder<QoreListNode> call_args(xsink);
 
     // if there are arguments to pass
@@ -219,14 +219,14 @@ auto call_object_method(object obj, string method, ...) {
         call_args = args->copyListFrom(2);
     }
 
-    return obj->evalMethod(method, *call_args, xsink);
+    return object_value->evalMethod(method, *call_args, xsink);
 }
 
 //! Calls a method of an object, using the optional third argument as the argument list to the method
 /**
-    @param obj the object to use for the call
+    @param object_value the object to use for the call
     @param method the method to call
-    @param varg any additional arguments to the method
+    @param arguments any additional arguments to the method
 
     @return the value returned by the method call
 
@@ -276,17 +276,17 @@ auto result = call_object_method_args(obj, "method", arglist);
     - call_static_method()
     - call_static_method_args()
 */
-auto call_object_method_args(object obj, string method, *softlist<auto> varg) {
-    return obj->evalMethod(method, varg, xsink);
+auto call_object_method_args(object object_value, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return object_value->evalMethod(method, arguments, xsink);
 }
 
 //! Calls a static method of an object, passing the arguments to the function as arguments to the method
 /** @par Example:
     @code{.py}
-auto result = call_static_method("Namespace::Class::method", arg1, arg2);
+auto result = call_static_method("Namespace::Class", "method", arg1, arg2);
     @endcode
 
-    @param class_name the with an optional namespace prefix
+    @param class_name the class name with an optional namespace prefix
     @param method the static method to call
     @param ... any additional arguments to the method
 
@@ -319,12 +319,12 @@ auto call_static_method(string class_name, string method, ...) {
 //! Calls a static method of an object, passing the arguments to the function as arguments to the method
 /** @par Example:
     @code{.py}
-auto result = call_static_method_args("Namespace::Class::method", (arg1, arg2));
+auto result = call_static_method_args("Namespace::Class", "method", (arg1, arg2));
     @endcode
 
-    @param class_name the with an optional namespace prefix
+    @param class_name the class name with an optional namespace prefix
     @param method the static method to call
-    @param call_args any additional arguments to the method
+    @param arguments any additional arguments to the method
 
     @return the value returned by the method call
 
@@ -342,13 +342,13 @@ auto result = call_static_method_args("Namespace::Class::method", (arg1, arg2));
     - @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
     - @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()"
 */
-auto call_static_method_args(string class_name, string method, *softlist<auto> call_args) {
-    return call_static_method_args_intern(class_name, method, call_args, xsink);
+auto call_static_method_args(string class_name, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return call_static_method_args_intern(class_name, method, arguments, xsink);
 }
 
 //! calls a pseudo-method on the given value
-/** @param val the value to call the pseudo-method on
-    @param meth the string method name of the pseudo-method to call
+/** @param value the value to call the pseudo-method on
+    @param method the string method name of the pseudo-method to call
     @param ... any other arguments to the method
 
     @return the return value of the pseudo-method
@@ -360,17 +360,17 @@ auto call_static_method_args(string class_name, string method, *softlist<auto> c
 
     @since %Qore 0.8.5
  */
- auto call_pseudo(any val, string meth, ...) {
+ auto call_pseudo(any value, string method, ...) {
     ReferenceHolder<QoreListNode> nargs(xsink);
     if (args->size() > 2)
         nargs = args->copyListFrom(2);
-    return pseudo_classes_eval(val, meth->getBuffer(), *nargs, xsink);
+    return pseudo_classes_eval(value, method->getBuffer(), *nargs, xsink);
 }
 
 //! calls a pseudo-method on the given value with arguments given as a list
-/** @param val the value to call the pseudo-method on
-    @param meth the string method name of the pseudo-method to call
-    @param argv any other arguments to the method
+/** @param value the value to call the pseudo-method on
+    @param method the string method name of the pseudo-method to call
+    @param arguments any other arguments to the method
 
     @return the return value of the pseudo-method
 
@@ -381,8 +381,8 @@ auto call_static_method_args(string class_name, string method, *softlist<auto> c
 
     @since %Qore 0.8.8
  */
-auto call_pseudo_args(any val, string meth, *softlist<auto> argv) {
-    return pseudo_classes_eval(val, meth->getBuffer(), argv, xsink);
+auto call_pseudo_args(any value, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return pseudo_classes_eval(value, method->getBuffer(), arguments, xsink);
 }
 
 //! creates an object from the class name (which can include a namespace path) and optionally any arguments for the constructor
@@ -416,7 +416,7 @@ object obj = create_object_args(class_name, arg_list);
     @endcode
 
     @param class_name the name of the class to instantiate (can be prefixed with a namespace path)
-    @param argv any other arguments to the constructor
+    @param arguments any other arguments to the constructor
 
     @return the object created
 
@@ -429,7 +429,7 @@ object obj = create_object_args(class_name, arg_list);
 
     @since %Qore 0.8.12
  */
-object create_object_args(string class_name, *softlist<auto> argv) {
-    return create_object_intern(class_name, 0, argv, xsink);
+object create_object_args(string class_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return create_object_intern(class_name, 0, arguments, xsink);
 }
 ///@}

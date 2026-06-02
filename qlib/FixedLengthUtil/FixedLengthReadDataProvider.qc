@@ -174,7 +174,7 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
             return;
         }
         # create a dummy interator with no input
-        i = new FixedLengthIterator(new StringInputStream(""), copts.spec, copts{FixedLengthReadOptionList});
+        i = new FixedLengthIterator(new StringInputStream(source: ""), copts.spec, copts{FixedLengthReadOptionList});
     }
 
     #! Returns the object name
@@ -188,17 +188,18 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
     /** @param where_cond the search criteria
         @param search_options the search options after processing by validateSearchOptions()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        return new DefaultRecordIterator(i, where_cond, search_options, i.getRecordType(), "record");
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        return new DefaultRecordIterator<hash<auto>>(i, where_cond, search_options, i.getRecordType(), "record");
     }
 
     #! Returns an iterator for zero or more records matching the search options
     /** @param where_cond the search criteria
         @param search_options the search options after processing by validateSearchOptions()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<DataProviderExpression> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<DataProviderExpression> where_cond,
             *hash<auto> search_options) {
-        return new DefaultRecordIterator(i, where_cond, search_options, getRecordType());
+        return new DefaultRecordIterator<hash<auto>>(i, where_cond, search_options, getRecordType());
     }
 
     #! Returns the description of the record type, if any

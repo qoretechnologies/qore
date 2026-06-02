@@ -49,6 +49,13 @@ public bool sub is_valid_qore_file(string path) {
         # return False if we can't stat() the file
         return False;
     }
+
+    # AOT build artifacts are binary metadata/code, not parseable Qore source.
+    # Avoid probing them as text when qlib contains generated .qmod symlinks.
+    if (path =~ /\.(qmod|qo|qoa)(\.d)?$/i) {
+        return False;
+    }
+
     *string ext = (path =~ x/\.([a-z0-9]+)$/i)[0];
     if (ext && QORE_EXTENSIONS{ext}) {
         return True;
@@ -81,17 +88,15 @@ public list<string> sub find_qore_files(string path) {
 
     list<string> ret = ();
 
-    ListIterator it = d.listFiles().iterator();
-    while (it.next()) {
-        string fpath = sprintf("%s%s%s", path, DirSep, it.getValue());
+    foreach string entry in (d.listFileNames()) {
+        string fpath = sprintf("%s%s%s", path, DirSep, entry);
         if (is_valid_qore_file(fpath)) {
             push ret, fpath;
         }
     }
 
-    it = d.listDirs().iterator();
-    while (it.next()) {
-        string targ = path + DirSep + it.getValue();
+    foreach string entry in (d.listDirNames()) {
+        string targ = path + DirSep + entry;
         if (hstat(targ).type == "DIRECTORY") {
             try {
                 ret += find_qore_files(targ);
@@ -120,9 +125,42 @@ public list<string> sub find_std_modules() {
     }
     string modulePath = dirname(filename);
 
-    # find modules
-    list<string> moduleFiles = find_qore_files(modulePath);
-    return moduleFiles;
+    list<string> candidatePaths = ();
+    hash<auto> seen = {};
+
+    seen{modulePath} = True;
+    push candidatePaths, modulePath;
+
+    # When modules are loaded from generated qmods, QLS still needs parseable
+    # source files.  In in-tree builds, build/qlib-qmod maps back to qlib.
+    string sourceModulePath = regex_subst(modulePath, "/build/qlib-qmod($|/.*$)", "/qlib");
+    if (sourceModulePath != modulePath && is_dir(sourceModulePath)) {
+        seen{sourceModulePath} = True;
+        push candidatePaths, sourceModulePath;
+    }
+
+    # Also honor the runtime module path.  In qmod-first setups the source qlib
+    # path normally follows the qmod directory.
+    if (ENV.QORE_MODULE_DIR) {
+        foreach string path in (ENV.QORE_MODULE_DIR.split(":")) {
+            if (path && !seen{path}) {
+                seen{path} = True;
+                push candidatePaths, path;
+            }
+        }
+    }
+
+    foreach string path in (candidatePaths) {
+        if (!is_dir(path)) {
+            continue;
+        }
+        list<string> moduleFiles = find_qore_files(path);
+        if (moduleFiles.size()) {
+            return moduleFiles;
+        }
+    }
+
+    return ();
 }
 
 } # namespace Files

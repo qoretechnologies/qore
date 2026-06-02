@@ -100,7 +100,7 @@ public class SendCloudShippingMethodsDataProvider inherits SendCloudDataProvider
         return new SendCloudShippingMethodDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.sender_address) {
@@ -120,7 +120,7 @@ public class SendCloudShippingMethodsDataProvider inherits SendCloudDataProvider
         }
         hash<auto> response = doGet("shipping_methods", params);
         list<auto> records = response.shipping_methods ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

@@ -26,10 +26,10 @@
 
 public namespace MongoDbDataProvider {
 #! MongoDB record iterator for iterating through collection documents
-public class MongoDbRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class MongoDbRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The MongoDB cursor
-        MongoCursor cursor;
+        MongoCursor<hash<auto>> cursor;
 
         #! Current document
         *hash<auto> current_doc;

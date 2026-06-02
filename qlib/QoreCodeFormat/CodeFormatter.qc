@@ -106,6 +106,7 @@ public const AEK_Ternary = 28;
 public const AEK_Unary = 29;
 public const AEK_HashdeclHash = 30;
 public const AEK_StringConcat = 31;
+public const AEK_NamedArgument = 32;
 
 #! Operator string mapping
 public const OperatorStrings = {
@@ -1011,6 +1012,12 @@ public class CodeFormatter {
             prefix += mods + " ";
         }
         prefix += "class " + name;
+        if (exists node.typeParameters) {
+            prefix += node.typeParameters;
+        }
+        if (exists node.compatAttributes) {
+            prefix += " " + node.compatAttributes;
+        }
 
         # Build inherits items list
         list<string> inhItems = ();
@@ -1068,7 +1075,12 @@ public class CodeFormatter {
                     emitCommentsBeforeLine1(findRealStartLine1(decl));
                 }
 
-                emitDeclaration(decl);
+                if (decl.nodetype == ANT_Expression) {
+                    emitExpression(decl);
+                    emitter.emitLine(";");
+                } else {
+                    emitDeclaration(decl);
+                }
             }
         }
         inClassContext = savedClassContext;
@@ -1145,6 +1157,9 @@ public class CodeFormatter {
             prefix += "sub ";
         }
         prefix += name;
+        if (exists node.typeParameters) {
+            prefix += node.typeParameters;
+        }
 
         # Parameters
         string params = "";
@@ -1258,12 +1273,27 @@ public class CodeFormatter {
             header += mods + " ";
         }
         header += "hashdecl " + name;
+        if (exists node.typeParameters) {
+            header += node.typeParameters;
+        }
 
         # Check for inherits
-        string srcText = extractSourceText(node.loc);
         *string inheritsStr;
-        if (srcText =~ /inherits\s+(\S+)/) {
-            inheritsStr = ($1);
+        if (exists node.inherits) {
+            inheritsStr = node.inherits;
+        } else {
+            string srcText = extractSourceText(node.loc);
+            if (srcText =~ /inherits\s+/) {
+                int pos = srcText.find("inherits");
+                if (pos >= 0) {
+                    string inherited = srcText.substr(pos + 8);
+                    int brace = inherited.find("{");
+                    if (brace >= 0) {
+                        inherited = inherited.substr(0, brace);
+                    }
+                    inheritsStr = trim(inherited);
+                }
+            }
         }
 
         if (exists inheritsStr) {
@@ -1873,6 +1903,8 @@ public class CodeFormatter {
                 return emitConstrInitExpr(node);
             case AEK_StringConcat:
                 return emitStringConcatExpr(node);
+            case AEK_NamedArgument:
+                return emitNamedArgumentExpr(node);
             default:
                 return stripTrailingSemicolon(extractSourceText(node.loc));
         }
@@ -2032,6 +2064,9 @@ public class CodeFormatter {
     #! Emit call expression
     private string emitCallExpr(hash<auto> node) {
         string target = emitExpressionStr(node.target);
+        if (exists node.typeArguments) {
+            target += node.typeArguments;
+        }
         string args = exists node.args ? emitExpressionStrInner(node.args) : "";
         return target + "(" + args + ")";
     }
@@ -2165,6 +2200,13 @@ public class CodeFormatter {
         string key = emitExpressionStr(node.key);
         string val = emitExpressionStr(node.value);
         return key + ": " + val;
+    }
+
+    #! Emit named argument expression
+    private string emitNamedArgumentExpr(hash<auto> node) {
+        string name = node.name.name ?? stripTrailingSemicolon(extractSourceText(node.loc));
+        string val = emitExpressionStr(node.value);
+        return name + ": " + val;
     }
 
     #! Emit hashdecl hash expression

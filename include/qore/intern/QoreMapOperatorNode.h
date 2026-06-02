@@ -69,6 +69,16 @@ public:
         return true;
     }
 
+    // Public accessor for IR lowering to get the result list type
+    DLLLOCAL const QoreTypeInfo* getMapReturnType() const {
+        return returnTypeInfo;
+    }
+
+    // Public accessor for IR lowering to get the mapped expression element type directly
+    DLLLOCAL const QoreTypeInfo* getMapExpType() const {
+        return expTypeInfo;
+    }
+
 protected:
     const QoreTypeInfo* returnTypeInfo;
     const QoreTypeInfo* expTypeInfo = nullptr;
@@ -130,7 +140,7 @@ public:
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return v.getTypeInfo();
+        return map->expTypeInfo;
     }
 
 protected:
@@ -154,7 +164,7 @@ public:
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return autoTypeInfo;
+        return map->expTypeInfo;
     }
 
 protected:

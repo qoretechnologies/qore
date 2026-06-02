@@ -30,6 +30,25 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreListIterator.h"
+#include "qore/intern/QoreTypeInfo.h"
+
+static const QoreTypeInfo* get_list_iterator_element_type(const QoreTypeInfo* iterator_type_info) {
+    const QoreParameterizedClassTypeInfo* iterator_type
+        = QoreTypeInfo::getParameterizedClassType(iterator_type_info);
+    return iterator_type && iterator_type->getArgCount() ? iterator_type->getTypeArgs()[0] : autoTypeInfo;
+}
+
+QoreObject* qore_new_list_iterator_object(QoreProgram* pgm, const QoreListNode* l) {
+    const QoreTypeInfo* element_type = l->getValueTypeInfo();
+    if (!QoreTypeInfo::hasType(element_type)) {
+        element_type = autoTypeInfo;
+    }
+    type_vec_t type_args;
+    type_args.push_back(element_type);
+    QoreObject* rv = new QoreObject(QC_LISTITERATOR, pgm, new QoreListIterator(l, element_type));
+    rv->setInstantiatedTypeInfo(QC_LISTITERATOR->getTypeInfo(type_args));
+    return rv;
+}
 
 //! This class an iterator class for lists
 /** Call ListIterator::next() to iterate through the list; do not use the iterator if ListIterator::next() returns @ref False.
@@ -37,15 +56,15 @@
 
     @par Example: ListIterator basic usage
     @code{.py}
-    list data = (1, "foo", 2);
-    ListIterator it(data);
+    list<int> data = (1, 2, 3);
+    ListIterator<int> it(data);
     while (it.next()) {
         printf("iter: %n\n", it.getValue());
     }
 
     iter: 1
-    iter: "foo"
     iter: 2
+    iter: 3
     @endcode
 
     @note
@@ -56,26 +75,28 @@
     @see ListReverseIterator
 
  */
-qclass ListIterator [arg=QoreListIterator* i; ns=Qore; vparent=AbstractQuantifiedBidirectionalIterator];
+qclass ListIterator<T> [arg=QoreListIterator* i; ns=Qore;
+    vparent=AbstractQuantifiedBidirectionalIterator<T>; legacy_raw];
 
 //! Creates the list iterator object
-/** @param l the list to iterate
+/** @param list_value the list to iterate
 
     @par Example:
     @code{.py}
-ListIterator li(l);
+ListIterator<int> li(l);
     @endcode
 
     @note the constructor's argument is @ref softlist_type "softlist" so that it can also accept @ref nothing
  */
-ListIterator::constructor(softlist<auto> l) {
-   self->setPrivate(CID_LISTITERATOR, new QoreListIterator(l));
+ListIterator::constructor(softlist<T> list_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_LISTITERATOR,
+      new QoreListIterator(list_value, get_list_iterator_element_type(self->getInstantiatedTypeInfo())));
 }
 
 //! Creates a copy of the ListIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-ListIterator ni = i.copy();
+ListIterator<int> ni = i.copy();
     @endcode
  */
 ListIterator::copy() {
@@ -180,7 +201,7 @@ while (i.next()) {
     @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-auto ListIterator::getValue() [flags=RET_VALUE_ONLY] {
+T ListIterator::getValue() [flags=RET_VALUE_ONLY] {
     if (i->check(xsink))
         return QoreValue();
     return i->getReferencedValue(xsink);
@@ -215,7 +236,7 @@ int ListIterator::max() [flags=CONSTANT] {
 }
 
 //! sets the new position in the list; if the position is invalid then the method returns @ref False, meaning the iterator is not valid, otherwise it returns @ref True
-/** @param pos the new position for the iterator with 0 as the first element
+/** @param position the new position for the iterator with 0 as the first element
 
     @return @ref False, meaning the iterator is not valid, otherwise it returns @ref True
 
@@ -227,10 +248,10 @@ if (!i.set(pos))
 
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-bool ListIterator::set(int pos) {
+bool ListIterator::set(int position) [flags=NAMED_ARGS] {
    if (i->check(xsink))
       return QoreValue();
-   return !i->set(pos);
+   return !i->set(position);
 }
 
 //! returns @ref True "True" if the iterator is currently pointing at a valid element, @ref False "False" if not

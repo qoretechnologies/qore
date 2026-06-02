@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class RelativeDateLiteralTest
+
+class RelativeDateLiteralTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("RelativeDateLiteralTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+
+        addTestCase("relative date literal fields are preserved", \testRelativeDateLiteralFields());
+        addTestCase("AOT qmod relative date literal fields are preserved", \testAotQmodRelativeDateLiteralFields());
+
+        set_return_value(main());
+    }
+
+    private string makeProbeCode() {
+        return "%modern
+
+date sub getDate() {
+    return P10Y4M200DT99H140S;
+}
+
+hash<auto> info = getDate().info();
+printf(\"%d,%d,%d,%d,%d,%d,%d\\n\",
+    info.year, info.month, info.day, info.hour, info.minute, info.second, info.microsecond);
+";
+    }
+
+    private string runScript(string mode) {
+        string code = makeProbeCode();
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return trim(backquote(sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, mode, tmp.path)));
+    }
+
+    testRelativeDateLiteralFields() {
+        string expect = "10,4,200,99,0,140,0";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            assertEq(expect, runScript(mode), sprintf("mode %s preserves unnormalized relative literal fields", mode));
+        }
+    }
+
+    testAotQmodRelativeDateLiteralFields() {
+        string expect = "10,4,200,99,0,140,0\n";
+        TmpDir tmp("qore-relative-date-literal-");
+        string tmp_dir = tmp.path;
+
+        string mod_code = "%modern
+
+module RelativeDateLiteralMod {
+    version = \"1.0\";
+    desc = \"relative date literal AOT regression module\";
+    author = \"Qore\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace RelativeDateLiteralMod {
+    public string sub value() {
+        auto d = P10Y4M200DT99H140S;
+        hash<auto> info = d.info();
+        return sprintf(\"%d,%d,%d,%d,%d,%d,%d\",
+            info.year, info.month, info.day, info.hour, info.minute, info.second, info.microsecond);
+    }
+}
+";
+        string qm_path = tmp_dir + "/RelativeDateLiteralMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(mod_code);
+        qm.close();
+
+        string qmod_path = tmp_dir + "/RelativeDateLiteralMod.qmod";
+        string qore_dir = dirname(qore_bin);
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1",
+            qore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled relative-date regression module: " + compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern\n%requires RelativeDateLiteralMod\nprintf(\"%s\\n\", RelativeDateLiteralMod::value());\n");
+        script.close();
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            qore_dir, tmp_dir, qore_bin, script_path));
+        assertEq(expect, aot_out, "AOT qmod preserves unnormalized relative literal fields");
+
+        unlink(qmod_path);
+        string source_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            qore_dir, tmp_dir, qore_bin, script_path));
+        assertEq(expect, source_out, "source module preserves unnormalized relative literal fields");
+    }
+}

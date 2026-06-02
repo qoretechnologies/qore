@@ -440,6 +440,18 @@ DLLEXPORT int q_remove_thread_local_data(int key, q_user_tld& data, bool run_des
 */
 DLLEXPORT bool qore_check_cancel(ExceptionSink* xsink, const char* operation = "operation");
 
+//! Deprecated compatibility wrapper for binary modules built against older cooperative interrupt APIs
+/** @deprecated use qore_check_cancel(ExceptionSink*, const char*) instead.
+    This function is kept exported so existing binary modules continue to load
+    with newer libqore builds. It delegates to qore_check_cancel(), so callers
+    observe both thread cancellation and program interrupt checks.
+
+    @param xsink exception sink for cancellation or interrupt exceptions
+    @param operation description of the current operation for exception text
+    @return true if cancelled/interrupted (exception raised), false otherwise
+*/
+DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation = "operation");
+
 //! Requests cooperative cancellation of a specific thread
 /** The target thread will receive a \c THREAD-CANCELLED exception at the next cancellation
     point. Only threads in the same program context can be cancelled.

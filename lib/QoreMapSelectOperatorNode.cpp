@@ -57,7 +57,15 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     // check iterator expression
-    int err = parse_init_value(e[1], parse_context);
+    QoreParseAnalysis iterator_analysis;
+    QoreParseAnalysis exp_analysis;
+    QoreParseAnalysis select_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(e[1], parse_context);
+        iterator_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
     {
@@ -68,14 +76,22 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         ParseImplicitArgTypeHelper pia(implicitArgType);
         // check iterated expression
         parse_context.typeInfo = nullptr;
-        if (parse_init_value(e[0], parse_context) && !err) {
-            err = -1;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_init_value(e[0], parse_context) && !err) {
+                err = -1;
+            }
+            exp_analysis = parse_context.analysis;
         }
         expTypeInfo = parse_context.typeInfo;
 
         // check select expression
         parse_context.typeInfo = nullptr;
-        parse_init_value(e[2], parse_context);
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            parse_init_value(e[2], parse_context);
+            select_analysis = parse_context.analysis;
+        }
     }
 
     if (!QoreTypeInfo::hasType(expTypeInfo)) {
@@ -102,8 +118,12 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             if (qc && qore_class_private::parseCheckCompatibleClass(qc, QC_ABSTRACTITERATOR)) {
                 parse_context.typeInfo = QoreMapOperatorNode::setReturnTypeInfo(returnTypeInfo, expTypeInfo,
                     iteratorTypeInfo);
-            }else if ((QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL)
+            } else if ((QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL)
                 && (QoreTypeInfo::parseReturns(iteratorTypeInfo, QC_ABSTRACTITERATOR) == QTI_NOT_EQUAL)) {
+                // Scalar input: map-select returns the mapped scalar, not a list.
+                // Set returnTypeInfo to the iterator type (concrete scalar) for IR lowering.
+                // parse_context.typeInfo stays as expTypeInfo for correct caller type checking.
+                returnTypeInfo = iteratorTypeInfo;
                 parse_context.typeInfo = expTypeInfo;
             } else {
                 parse_context.typeInfo = nullptr;
@@ -111,6 +131,20 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         }
     } else {
         parse_context.typeInfo = nullptr;
+    }
+
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (iterator_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && exp_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && select_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
 
     //printd(5, "QoreMapSelectOperatorNode::parseInitImpl() r: '%s' e: '%s' i: '%s' arg: '%s' t: '%s'\n",
@@ -190,7 +224,12 @@ FunctionalOperatorInterface* QoreMapSelectOperatorNode::getFunctionalIteratorImp
                 return 0;
             if (h) {
                 bool temp = marg.isTemp();
-                marg.clearTemp();
+                if (temp) {
+                    marg.clearTemp();
+                } else {
+                    const_cast<QoreObject*>(marg->get<const QoreObject>())->ref();
+                    temp = true;
+                }
                 value_type = list;
                 return new QoreFunctionalMapSelectIteratorOperator(this, temp, h, xsink);
             }

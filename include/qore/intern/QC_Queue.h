@@ -35,6 +35,7 @@
 
 #include <qore/QoreQueue.h>
 
+DLLLOCAL TypedHashDecl* init_hashdecl_QueueTryResult(QoreNamespace& ns);
 DLLLOCAL QoreClass *initQueueClass(QoreNamespace &qorens);
 
 #endif // _QORE_CLASS_QUEUE

@@ -33,7 +33,8 @@
 //! This class defines an abstract interface for iterators where the size of the object being iterated is known in advance
 /**
  */
-qclass AbstractQuantifiedIterator [arg=AbstractQuantifiedIterator* i; ns=Qore; vparent=AbstractIterator];
+qclass AbstractQuantifiedIterator<T> [arg=AbstractQuantifiedIterator* i; ns=Qore;
+    vparent=AbstractIterator<T>; legacy_raw];
 
 //! returns @ref True if the object to iterate is empty; @ref False if not
 /** @return @ref True if the object to iterate is empty; @ref False if not

@@ -101,10 +101,12 @@ public:
             QoreValue descv = ex->getKeyValue("desc");
             QoreValue argv = ex->getKeyValue("arg");
             if (errv.getType() == NT_STRING) {
-                err_code = errv.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper err(errv);
+                err_code = err->c_str();
             }
             if (descv.getType() == NT_STRING) {
-                err_desc = descv.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper desc(descv);
+                err_desc = desc->c_str();
             }
             err_arg = argv.refSelf();
             ex->deref(nullptr);

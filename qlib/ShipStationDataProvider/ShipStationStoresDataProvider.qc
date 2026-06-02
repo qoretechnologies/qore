@@ -90,7 +90,7 @@ public class ShipStationStoresDataProvider inherits ShipStationDataProviderBase 
     }
 
     #! Searches for stores
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -108,7 +108,7 @@ public class ShipStationStoresDataProvider inherits ShipStationDataProviderBase 
             ? cast<list<hash<auto>>>(response)
             : ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

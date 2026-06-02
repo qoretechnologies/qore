@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-dbi.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/dataframe"
+
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/Util.qm
+
+%try-module dataframe
+%define NoDataFrame
+%endtry
+
+%exec-class DataFrameDbiTest
+
+class DataFrameDbiTest inherits QUnit::Test {
+    constructor() : Test("DataFrameDbiTest", "1.0") {
+        addTestCase("PostgreSQL DataFrame DBI columnar path", \pgsqlTest());
+        addTestCase("MySQL DataFrame DBI columnar path", \mysqlTest());
+        addTestCase("Oracle DataFrame DBI columnar path", \oracleTest());
+        addTestCase("FreeTDS DataFrame DBI columnar path", \freetdsTest());
+        addTestCase("ODBC DataFrame DBI columnar path", \odbcTest());
+        addTestCase("JDBC DataFrame DBI columnar path", \jdbcTest());
+        addTestCase("SQLite DataFrame DBI columnar path", \sqliteTest());
+
+        set_return_value(main());
+    }
+
+    private list<auto> getColumn(DataFrame::DataFrame df, string name) {
+        try {
+            return df.getColumn(name);
+        } catch (hash<ExceptionInfo> ex) {
+            return df.getColumn(name.upr());
+        }
+    }
+
+    private execIgnore(Datasource ds, string sql) {
+        try {
+            ds.exec(sql);
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                ds.rollback();
+            } catch (hash<ExceptionInfo> rollback_ex) {
+            }
+        }
+    }
+
+    private verifyDriver(string label, Datasource ds) {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(label + " connection not available: " + ex.err + ": " + ex.desc);
+        }
+
+        string table = sprintf("qdfdbi%d", getpid());
+        string out_table = sprintf("qdfdbo%d", getpid());
+        on_exit {
+            execIgnore(ds, "DROP TABLE " + out_table);
+            execIgnore(ds, "DROP TABLE " + table);
+            ds.close();
+        }
+
+        execIgnore(ds, "DROP TABLE " + out_table);
+        execIgnore(ds, "DROP TABLE " + table);
+
+        ds.exec("CREATE TABLE " + table + " (id integer, name varchar(80), score float)");
+        ds.exec("INSERT INTO " + table + " (id, name, score) VALUES (1, 'Ada', 95.5)");
+        ds.exec("INSERT INTO " + table + " (id, name, score) VALUES (2, 'Bo', 88.0)");
+        ds.exec("INSERT INTO " + table + " (id, name, score) VALUES (3, 'Cy', 92.25)");
+        ds.commit();
+
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromQuery(ds,
+            "SELECT id, name, score FROM " + table + " ORDER BY id");
+        assertEq(3, df.numRows(), label + " fromQuery preserves row count");
+        assertEq((1, 2, 3), cast<list<int>>(getColumn(df, "id")), label + " fromQuery preserves dense ids");
+        assertEq(("Ada", "Bo", "Cy"), cast<list<string>>(getColumn(df, "name")),
+            label + " fromQuery preserves strings");
+
+        ColumnarResult columns = ds.selectColumnar("SELECT id, name, score FROM " + table + " ORDER BY id");
+        assertEq(3, columns.numRows(), label + " selectColumnar returns rows");
+        assertEq((1, 2, 3), cast<list<int>>(columns.getColumn("id").toList()),
+            label + " selectColumnar preserves dense ids");
+
+        ds.exec("CREATE TABLE " + out_table + " (id integer, name varchar(80), score float)");
+        df.toTable(ds, out_table);
+        ds.commit();
+
+        DataFrame::DataFrame out = DataFrame::DataFrame::fromQuery(ds,
+            "SELECT id, name, score FROM " + out_table + " ORDER BY id");
+        assertEq(("Ada", "Bo", "Cy"), cast<list<string>>(getColumn(out, "name")),
+            label + " toTable round-trip preserves strings");
+    }
+
+    private verifyConnstr(string label, *string connstr) {
+        if (!connstr) {
+            testSkip(label + " connection string not set");
+        }
+        Datasource ds(connstr);
+        verifyDriver(label, ds);
+    }
+
+    private pgsqlTest() {
+        verifyConnstr("pgsql", ENV.QORE_DB_CONNSTR_PGSQL);
+    }
+
+    private mysqlTest() {
+        verifyConnstr("mysql", ENV.QORE_DB_CONNSTR_MYSQL);
+    }
+
+    private oracleTest() {
+        verifyConnstr("oracle", ENV.QORE_DB_CONNSTR_ORACLE);
+    }
+
+    private freetdsTest() {
+        verifyConnstr("freetds", ENV.QORE_DB_CONNSTR_FREETDS);
+    }
+
+    private odbcTest() {
+        verifyConnstr("odbc", ENV.QORE_DB_CONNSTR_ODBC);
+    }
+
+    private jdbcTest() {
+        verifyConnstr("jdbc", ENV.QORE_DB_CONNSTR_JDBC_PGSQL);
+    }
+
+    private sqliteTest() {
+        Datasource ds("sqlite3", "", "", ":memory:");
+        verifyDriver("sqlite3", ds);
+    }
+}

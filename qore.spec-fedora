@@ -13,7 +13,7 @@ Source0: https://github.com/qorelanguage/qore/releases/download/release-%{versio
 
 Requires: libqore%{?_isa} = %{version}-%{release}
 Requires: %{name}-stdlib%{?_isa} = %{version}-%{release}
-BuildRequires: cmake >= 3.5
+BuildRequires: cmake >= 3.14
 BuildRequires: gcc-c++
 BuildRequires: flex >= 2.5.31
 BuildRequires: bison
@@ -104,13 +104,15 @@ Qore is a scripting language supporting threading and embedded logic, designed
 for applying a flexible scripting-based approach to enterprise interface
 development but is also useful as a general purpose language.
 
-This package provides header files needed to compile client programs using the
-Qore library.
+This package provides header files and development tools, including qcc, needed
+to compile client programs and AOT-compiled Qore artifacts.
 
 %files devel
 %{_bindir}/qpp
+%{_bindir}/qcc
 %{_bindir}/qdx
 %{_bindir}/qjar
+%{_mandir}/man1/qcc.1.*
 %{_mandir}/man1/qdx.1.*
 %{_mandir}/man1/qjar.1.*
 %{_libdir}/libqore.so
@@ -154,6 +156,7 @@ This package contains tools for working with:
  - API Schema Generation (qore-openapi3-gen, qore-asyncapi-gen)
  - Language Server (qls)
  - File Downloads (qget)
+ - Translation Catalogs (qore-i18n)
 
 %files misc-tools
 %{_bindir}/qdiff
@@ -164,6 +167,7 @@ This package contains tools for working with:
 %{_bindir}/qls
 %{_bindir}/qore-asyncapi-gen
 %{_bindir}/qore-extract-qm-metadata
+%{_bindir}/qore-i18n
 %{_bindir}/qore-openapi3-gen
 %{_bindir}/qpatch
 %{_bindir}/qschema
@@ -180,6 +184,7 @@ This package contains tools for working with:
 %{_mandir}/man1/qls.1.*
 %{_mandir}/man1/qore-asyncapi-gen.1.*
 %{_mandir}/man1/qore-extract-qm-metadata.1.*
+%{_mandir}/man1/qore-i18n.1.*
 %{_mandir}/man1/qore-openapi3-gen.1.*
 %{_mandir}/man1/qpatch.1.*
 %{_mandir}/man1/qschema.1.*

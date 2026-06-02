@@ -6,17 +6,18 @@
 */
 
 %modern
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/GeminiBodyShape.qm
-%requires ../../../../qlib/GeminiRestClient.qm
-%requires ../../../../qlib/QoreLlmUtils
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires QoreLlmTypes
+%requires GeminiBodyShape
+%requires GeminiRestClient
+%requires QoreLlmUtils
 %requires Util
 %requires QUnit
 
@@ -228,6 +229,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \sanitizeLlmToolNameLengthCapTest());
         addTestCase("CallbackLlmProvider chatStream forwards content deltas + terminal",
             \callbackChatStreamRealPathTest());
+        addTestCase("CallbackLlmProvider nested chatCompletionsStream does not recurse",
+            \callbackNestedChatCompletionsStreamNoReentryTest());
         addTestCase("CallbackLlmProvider chatStream suppresses empty intermediate chunks",
             \callbackChatStreamSuppressesEmptyChunksTest());
         addTestCase("CallbackLlmProvider chatStream falls back to chat() when api_stream_callback unset",
@@ -2678,6 +2681,87 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertFalse(seen[1].done);
         assertEq(True, seen[2].done, "terminal event");
         assertEq("stop", seen[2].raw_finish);
+    }
+
+    callbackNestedChatCompletionsStreamNoReentryTest() {
+        int inner_stream_calls = 0;
+        int forwarded_chunks = 0;
+
+        QoreLlmUtils::LlmBackend inner(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "callback",
+            "api_callback": hash<auto> sub (string m, string p,
+                    hash<auto> body) {
+                return {};
+            },
+            "api_stream_callback": sub (string m, string p, hash<auto> body,
+                    code<nothing(hash<auto>)> dcb) {
+                ++inner_stream_calls;
+                dcb({
+                    "id": "nested-1",
+                    "object": "chat.completion.chunk",
+                    "model": "mock-model",
+                    "choices": ({
+                        "index": 0,
+                        "delta": {"role": "assistant", "content": "nested"},
+                        "finish_reason": NOTHING,
+                    },),
+                });
+                dcb({
+                    "id": "nested-1",
+                    "object": "chat.completion.chunk",
+                    "model": "mock-model",
+                    "choices": ({
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": "stop",
+                    },),
+                    "usage": {
+                        "prompt_tokens": 1,
+                        "completion_tokens": 1,
+                        "total_tokens": 2,
+                    },
+                });
+            },
+        });
+
+        QoreLlmUtils::LlmBackend outer(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "callback",
+            "api_callback": hash<auto> sub (string m, string p,
+                    hash<auto> body) {
+                return {};
+            },
+            "api_stream_callback": sub (string m, string p, hash<auto> body,
+                    code<nothing(hash<auto>)> dcb) {
+                inner.chatCompletionsStream(body, sub (hash<auto> chunk) {
+                    ++forwarded_chunks;
+                    if (forwarded_chunks > 2) {
+                        throw "STREAM-REENTRY-ERROR",
+                            "nested callback stream recursively re-entered";
+                    }
+                    dcb(chunk);
+                });
+            },
+        });
+
+        list<hash<auto>> seen = ();
+        outer.chatStream(
+            (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "x"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
+                push seen, {
+                    "delta": e.delta,
+                    "done": e.done,
+                    "raw_finish": e.raw.choices[0].finish_reason,
+                    "raw_usage": e.raw.usage,
+                };
+            });
+        assertEq(1, inner_stream_calls);
+        assertEq(2, forwarded_chunks);
+        assertEq(2, seen.size());
+        assertEq("nested", seen[0].delta);
+        assertFalse(seen[0].done);
+        assertEq(True, seen[1].done);
+        assertEq("stop", seen[1].raw_finish);
+        assertEq(2, seen[1].raw_usage.total_tokens);
     }
 
     callbackChatStreamSuppressesEmptyChunksTest() {

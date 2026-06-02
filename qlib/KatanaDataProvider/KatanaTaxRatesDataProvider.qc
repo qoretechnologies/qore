@@ -48,7 +48,7 @@ public class KatanaTaxRatesDataProvider inherits KatanaDataProviderBase {
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return new KatanaTaxRateDataType().getFields();
     }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Katana has no GET /tax_rates/{id}; fetch a single record via the ids= filter
         return runListSearch("tax_rates", where_cond, search_options, "id", True);

@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
 
 %exec-class EventLoopTimerTest
 
@@ -27,7 +28,7 @@ class EventLoopTimerTest inherits QUnit::Test {
     private list<hash<EventPollInfo>> collectAllTimers(EventLoop loop, timeout to = 5s) {
         list<hash<EventPollInfo>> all_events = ();
         while (loop.timerCount() > 0) {
-            *list<hash<EventPollInfo>> events = loop.poll(to);
+            *list<hash<EventPollInfo>> events = loop.poll(timeout_ms: to);
             if (events) {
                 all_events += events;
             }
@@ -42,7 +43,7 @@ class EventLoopTimerTest inherits QUnit::Test {
 
         # Set timer 100ms from now
         date deadline = now_us() + 100ms;
-        int id = loop.addTimer(deadline, NOTHING);
+        int id = loop.addTimer(deadline: deadline, user_data: NOTHING);
         assertEq(1, loop.timerCount());
         assertTrue(id > 0);
 
@@ -59,9 +60,9 @@ class EventLoopTimerTest inherits QUnit::Test {
         EventLoop loop();
 
         date now = now_us();
-        int id1 = loop.addTimer(now + 300ms, "third");
-        int id2 = loop.addTimer(now + 100ms, "first");
-        int id3 = loop.addTimer(now + 200ms, "second");
+        int id1 = loop.addTimer(deadline: now + 300ms, user_data: "third");
+        int id2 = loop.addTimer(deadline: now + 100ms, user_data: "first");
+        int id3 = loop.addTimer(deadline: now + 200ms, user_data: "second");
         assertEq(3, loop.timerCount());
 
         # Collect all timer events
@@ -80,10 +81,10 @@ class EventLoopTimerTest inherits QUnit::Test {
     testTimerCancel() {
         EventLoop loop();
 
-        int id = loop.addTimer(now_us() + 5s, NOTHING);
+        int id = loop.addTimer(deadline: now_us() + 5s, user_data: NOTHING);
         assertEq(1, loop.timerCount());
 
-        bool canceled = loop.cancelTimer(id);
+        bool canceled = loop.cancelTimer(timer_id: id);
         assertTrue(canceled);
         assertEq(0, loop.timerCount());
 
@@ -96,11 +97,11 @@ class EventLoopTimerTest inherits QUnit::Test {
         EventLoop loop();
 
         # Set timer in the past
-        int id = loop.addTimer(now_us() - 1s, "expired");
+        int id = loop.addTimer(deadline: now_us() - 1s, user_data: "expired");
         assertEq(1, loop.timerCount());
 
         # Should fire immediately (0ms poll)
-        *list<hash<EventPollInfo>> events = loop.poll(0ms);
+        *list<hash<EventPollInfo>> events = loop.poll(timeout_ms: 0ms);
         assertEq(1, events.size());
         assertEq(id, events[0].timer_id);
         assertEq("expired", events[0].timer_udata);
@@ -112,7 +113,7 @@ class EventLoopTimerTest inherits QUnit::Test {
         EventLoop loop();
         assertTrue(loop.empty());
 
-        int id = loop.addTimer(now_us() + 50ms, "timer-only");
+        int id = loop.addTimer(deadline: now_us() + 50ms, user_data: "timer-only");
         assertFalse(loop.empty());
 
         list<hash<EventPollInfo>> events = collectAllTimers(loop);
@@ -129,7 +130,7 @@ class EventLoopTimerTest inherits QUnit::Test {
         int count = 100;
         date now = now_us();
         for (int i = 0; i < count; ++i) {
-            loop.addTimer(now + milliseconds(10 + i), i);
+            loop.addTimer(deadline: now + milliseconds(10 + i), user_data: i);
         }
         assertEq(count, loop.timerCount());
 
@@ -151,10 +152,10 @@ class EventLoopTimerTest inherits QUnit::Test {
         EventLoop loop();
 
         # Test various types of user data
-        loop.addTimer(now_us() + 10ms, 42);
-        loop.addTimer(now_us() + 20ms, "hello");
-        loop.addTimer(now_us() + 30ms, {"key": "value", "num": 123});
-        loop.addTimer(now_us() + 40ms, NOTHING);
+        loop.addTimer(deadline: now_us() + 10ms, user_data: 42);
+        loop.addTimer(deadline: now_us() + 20ms, user_data: "hello");
+        loop.addTimer(deadline: now_us() + 30ms, user_data: {"key": "value", "num": 123});
+        loop.addTimer(deadline: now_us() + 40ms, user_data: NOTHING);
 
         list<hash<EventPollInfo>> all_events = collectAllTimers(loop);
 
@@ -170,16 +171,16 @@ class EventLoopTimerTest inherits QUnit::Test {
         EventLoop loop();
         assertEq(0, loop.timerCount());
 
-        int id1 = loop.addTimer(now_us() + 10s, NOTHING);
+        int id1 = loop.addTimer(deadline: now_us() + 10s, user_data: NOTHING);
         assertEq(1, loop.timerCount());
 
-        int id2 = loop.addTimer(now_us() + 10s, NOTHING);
+        int id2 = loop.addTimer(deadline: now_us() + 10s, user_data: NOTHING);
         assertEq(2, loop.timerCount());
 
-        loop.cancelTimer(id1);
+        loop.cancelTimer(timer_id: id1);
         assertEq(1, loop.timerCount());
 
-        loop.cancelTimer(id2);
+        loop.cancelTimer(timer_id: id2);
         assertEq(0, loop.timerCount());
     }
 
@@ -187,17 +188,17 @@ class EventLoopTimerTest inherits QUnit::Test {
     testDoubleCancelReturnsFalse() {
         EventLoop loop();
 
-        int id = loop.addTimer(now_us() + 10s, NOTHING);
-        assertTrue(loop.cancelTimer(id));
-        assertFalse(loop.cancelTimer(id));
+        int id = loop.addTimer(deadline: now_us() + 10s, user_data: NOTHING);
+        assertTrue(loop.cancelTimer(timer_id: id));
+        assertFalse(loop.cancelTimer(timer_id: id));
     }
 
     #! Test that timers are cleaned up when EventLoop is destroyed
     testTimerCleanupOnDestroy() {
         {
             EventLoop loop();
-            loop.addTimer(now_us() + 10s, "cleanup1");
-            loop.addTimer(now_us() + 10s, "cleanup2");
+            loop.addTimer(deadline: now_us() + 10s, user_data: "cleanup1");
+            loop.addTimer(deadline: now_us() + 10s, user_data: "cleanup2");
             assertEq(2, loop.timerCount());
             # EventLoop goes out of scope — should clean up without leaking
         }

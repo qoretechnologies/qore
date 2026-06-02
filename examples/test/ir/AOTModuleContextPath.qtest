@@ -1,0 +1,452 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTModuleContextPathTest
+
+class AOTModuleContextPathTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTModuleContextPathTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT module init uses runtime qmod path", \moduleInitUsesRuntimeQmodPath());
+        addTestCase("AOT module init can inspect module hash", \moduleInitCanInspectModuleHash());
+        addTestCase("AOT module init can load another module", \moduleInitCanLoadAnotherModule());
+        addTestCase("AOT module binds dependency public our globals",
+            \moduleBindsDependencyPublicOurGlobal());
+        addTestCase("AOT module preserves inherited concrete method bodies",
+            \modulePreservesInheritedConcreteMethodBody());
+        addTestCase("AOT module preserves raw generic base compatibility",
+            \modulePreservesRawGenericBaseCompatibility());
+
+        set_return_value(main());
+    }
+
+    private string runQoreScriptWithTimeout(string module_dir, string script_path) {
+        return backquote(sprintf(
+            "{ if command -v timeout >/dev/null 2>&1; then "
+            "timeout 20s env QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s; rc=$?; "
+            "elif command -v gtimeout >/dev/null 2>&1; then "
+            "gtimeout 20s env QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s; rc=$?; "
+            "else echo 'GNU timeout command not found'; rc=127; fi; echo EXIT=$rc; } 2>&1",
+            libqore_dir, libqore_dir, module_dir, qore_bin, script_path,
+            libqore_dir, libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    moduleInitUsesRuntimeQmodPath() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/AOTModuleContextPath.qm";
+        string qmod_path = tmp_dir + "/AOTModuleContextPath.qmod";
+        string script_path = tmp_dir + "/run.qr";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTModuleContextPath {
+    version = \"1.0\";
+    desc = \"module context path test\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        AOTModuleContextPath::ContextPath = get_module_context_path();
+    };
+}
+
+public namespace AOTModuleContextPath {
+    our *string ContextPath;
+
+    public *string sub contextPath() {
+        return ContextPath;
+    }
+}
+");
+        f.close();
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled AOT module: " + compile_out);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTModuleContextPath
+
+printf(\"%s\\n\", AOTModuleContextPath::contextPath());
+");
+        f.close();
+
+        string run_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq(qmod_path + "\n", run_out,
+            "AOT module init context path must be the loaded .qmod path");
+    }
+
+    moduleInitCanInspectModuleHash() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/AOTModuleHashDuringInit.qm";
+        string qmod_path = tmp_dir + "/AOTModuleHashDuringInit.qmod";
+        string script_path = tmp_dir + "/run-hash.qr";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTModuleHashDuringInit {
+    version = \"1.0\";
+    desc = \"module init module hash test\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        AOTModuleHashDuringInit::Loaded = exists get_module_hash(){\"AOTModuleHashDuringInit\"};
+    };
+}
+
+public namespace AOTModuleHashDuringInit {
+    our *bool Loaded;
+
+    public bool sub loaded() {
+        return Loaded ?? False;
+    }
+}
+");
+        f.close();
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled AOT module: " + compile_out);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTModuleHashDuringInit
+
+printf(\"loaded=%y\\n\", AOTModuleHashDuringInit::loaded());
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("loaded=True\nEXIT=0\n", run_out,
+            "AOT module init must not hold the module-manager lock while get_module_hash() runs");
+    }
+
+    moduleInitCanLoadAnotherModule() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string dep_qm_path = tmp_dir + "/AOTModuleLoadedFromInit.qm";
+        string dep_qmod_path = tmp_dir + "/AOTModuleLoadedFromInit.qmod";
+        string main_qm_path = tmp_dir + "/AOTModuleLoadsModuleInInit.qm";
+        string main_qmod_path = tmp_dir + "/AOTModuleLoadsModuleInInit.qmod";
+        string script_path = tmp_dir + "/run-load.qr";
+
+        File f();
+        f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTModuleLoadedFromInit {
+    version = \"1.0\";
+    desc = \"module loaded from init dependency\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTModuleLoadedFromInit {
+    public int sub value() {
+        return 23;
+    }
+}
+");
+        f.close();
+
+        string compile_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, dep_qmod_path, dep_qm_path));
+        assertTrue(is_file(dep_qmod_path), "compiled dependency AOT module: " + compile_dep_out);
+
+        f.open2(main_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTModuleLoadsModuleInInit {
+    version = \"1.0\";
+    desc = \"module init nested load test\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        load_module(\"AOTModuleLoadedFromInit\");
+        AOTModuleLoadsModuleInInit::Seen = exists get_module_hash(){\"AOTModuleLoadedFromInit\"};
+    };
+}
+
+public namespace AOTModuleLoadsModuleInInit {
+    our *bool Seen;
+
+    public *bool sub seen() {
+        return Seen;
+    }
+}
+");
+        f.close();
+
+        string compile_main_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, main_qmod_path, main_qm_path));
+        assertTrue(is_file(main_qmod_path), "compiled main AOT module: " + compile_main_out);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTModuleLoadsModuleInInit
+
+printf(\"seen=%y\\n\", AOTModuleLoadsModuleInInit::seen());
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("seen=True\nEXIT=0\n", run_out,
+            "nested module loads from AOT module init must not leak into the outer module context");
+    }
+
+    modulePreservesRawGenericBaseCompatibility() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/AOTRawGenericBase.qm";
+        string qmod_path = tmp_dir + "/AOTRawGenericBase.qmod";
+        string script_path = tmp_dir + "/run-raw-generic-base.qr";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTRawGenericBase {
+    version = \"1.0\";
+    desc = \"raw generic base compatibility regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTRawGenericBase {
+    public class RawPollOperation inherits Qore::AbstractPollOperation {
+        string getGoal() {
+            return \"done\";
+        }
+
+        string getState() {
+            return \"done\";
+        }
+
+        bool goalReached() {
+            return True;
+        }
+
+        *hash<Qore::SocketPollInfo> continuePoll() {
+            return NOTHING;
+        }
+    }
+
+    public string sub verify() {
+        RawPollOperation op();
+        Qore::DelegatingPollOperation wrapped(op, sub (hash<Qore::SocketPollResultInfo> result) {
+        });
+        return op instanceof Qore::AbstractPollOperation ? \"ok\" : \"bad\";
+    }
+}
+");
+        f.close();
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled raw generic base module: " + compile_out);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTRawGenericBase
+
+printf(\"%s\\n\", AOTRawGenericBase::verify());
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("ok\nEXIT=0\n", run_out,
+            "AOT raw legacy generic base must match wildcard generic APIs");
+    }
+
+    moduleBindsDependencyPublicOurGlobal() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string dep_qm_path = tmp_dir + "/AOTPublicOurDep.qm";
+        string dep_qmod_path = tmp_dir + "/AOTPublicOurDep.qmod";
+        string main_qm_path = tmp_dir + "/AOTPublicOurMain.qm";
+        string main_qmod_path = tmp_dir + "/AOTPublicOurMain.qmod";
+        string script_path = tmp_dir + "/run-public-our.qr";
+
+        File f();
+        f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTPublicOurDep {
+    version = \"1.0\";
+    desc = \"dependency public our global regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public class AOTPublicOurToken {
+    public string value() {
+        return \"live-slot\";
+    }
+}
+
+public our *AOTPublicOurToken AOTPublicOurShared;
+
+public sub initAOTPublicOurShared() {
+    AOTPublicOurShared = new AOTPublicOurToken();
+}
+");
+        f.close();
+
+        string compile_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, dep_qmod_path, dep_qm_path));
+        assertTrue(is_file(dep_qmod_path), "compiled public-our dependency module: " + compile_dep_out);
+
+        f.open2(main_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTPublicOurDep
+
+module AOTPublicOurMain {
+    version = \"1.0\";
+    desc = \"downstream public our global regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        initAOTPublicOurShared();
+    };
+}
+
+public class AOTPublicOurReader {
+    public string read() {
+        return AOTPublicOurShared.value();
+    }
+}
+
+public string sub readAOTPublicOurShared() {
+    AOTPublicOurReader reader();
+    return reader.read();
+}
+");
+        f.close();
+
+        string compile_main_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, tmp_dir, qore_bin, main_qmod_path, main_qm_path));
+        assertTrue(is_file(main_qmod_path), "compiled public-our downstream module: " + compile_main_out);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTPublicOurMain
+
+printf(\"top=%s\\n\", AOTPublicOurShared.value());
+printf(\"aot=%s\\n\", readAOTPublicOurShared());
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("top=live-slot\naot=live-slot\nEXIT=0\n", run_out,
+            "AOT-compiled downstream method must read the dependency module's live public our slot");
+    }
+
+    modulePreservesInheritedConcreteMethodBody() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string dep_qm_path = tmp_dir + "/AOTInheritedMethodDep.qm";
+        string dep_qmod_path = tmp_dir + "/AOTInheritedMethodDep.qmod";
+        string main_qm_path = tmp_dir + "/AOTInheritedMethodMain.qm";
+        string main_qmod_path = tmp_dir + "/AOTInheritedMethodMain.qmod";
+        string script_path = tmp_dir + "/run-inherited-method.qr";
+
+        File f();
+        f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTInheritedMethodDep {
+    version = \"1.0\";
+    desc = \"inherited concrete method body dependency module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public class AOTInheritedAbstractName {
+    public abstract string name();
+}
+
+public class AOTInheritedConcreteName inherits AOTInheritedAbstractName {
+    public string name() {
+        return \"parent-impl\";
+    }
+}
+
+public class AOTInheritedAbstractBranch inherits AOTInheritedAbstractName {
+}
+");
+        f.close();
+
+        string compile_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, dep_qmod_path, dep_qm_path));
+        assertTrue(is_file(dep_qmod_path), "compiled inherited-method dependency module: " + compile_dep_out);
+        unlink(dep_qm_path);
+
+        f.open2(main_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTInheritedMethodDep
+
+module AOTInheritedMethodMain {
+    version = \"1.0\";
+    desc = \"inherited concrete method body downstream module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public class AOTInheritedMethodChild inherits AOTInheritedConcreteName, AOTInheritedAbstractBranch {
+}
+
+public string sub callAOTInheritedMethod() {
+    AOTInheritedMethodChild child();
+    return child.name();
+}
+");
+        f.close();
+
+        string compile_main_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, tmp_dir, qore_bin, main_qmod_path, main_qm_path));
+        assertTrue(is_file(main_qmod_path), "compiled inherited-method downstream module: " + compile_main_out);
+        unlink(main_qm_path);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTInheritedMethodMain
+
+AOTInheritedMethodChild child();
+printf(\"child=%s\\n\", child.name());
+printf(\"aot=%s\\n\", callAOTInheritedMethod());
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("child=parent-impl\naot=parent-impl\nEXIT=0\n", run_out,
+            "AOT child class must call the inherited concrete parent method body");
+    }
+}

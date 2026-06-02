@@ -70,18 +70,33 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         assert(needs_deref);
         needs_deref = false;
+        // Return NOTHING if the target object has been deleted
+        if (!obj->isValid()) {
+            return QoreValue();
+        }
         return obj;
     }
 
     DLLLOCAL virtual bool getAsBoolImpl() const {
-        return obj->getAsBoolImpl();
+        // Weak reference is only true if the target object is still valid
+        return obj->isValid() && obj->getAsBoolImpl();
     }
 
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const {
+        // Return "null" if the target object has been deleted
+        if (!obj->isValid()) {
+            str.concat("null");
+            return 0;
+        }
         return obj->getAsString(str, foff, xsink);
     }
 
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
+        // Return "null" if the target object has been deleted
+        if (!obj->isValid()) {
+            del = true;
+            return new QoreString("null");
+        }
         return obj->getAsString(del, foff, xsink);
     }
 

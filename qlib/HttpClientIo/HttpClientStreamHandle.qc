@@ -271,7 +271,7 @@ public class HttpClientStreamHandle {
                 releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
-            if (!conn.waitForReady(remaining)) {
+            if (!conn.waitForReady(timeout_ms: remaining)) {
                 # Close the stale connect operation through the connection so
                 # the controller cancels the poll op and closes its socket.
                 try { conn.close(); } catch () {}
@@ -374,7 +374,7 @@ public class HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
-            if (!conn.waitForReady(request_timeout)) {
+            if (!conn.waitForReady(timeout_ms: request_timeout)) {
                 # Close the stale connect operation through the connection so
                 # the controller cancels the poll op and closes its socket.
                 try { conn.close(); } catch () {}
@@ -576,7 +576,7 @@ public class HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
-            if (!conn.waitForReady(request_timeout)) {
+            if (!conn.waitForReady(timeout_ms: request_timeout)) {
                 # Close the stale connect operation through the connection so
                 # the controller cancels the poll op and closes its socket.
                 try { conn.close(); } catch () {}
@@ -692,7 +692,7 @@ public class HttpClientStreamHandle {
         }
         EventNotifier notifier();
         # registerReadyNotifier returns True if queued (CONNECTING), False if already decided
-        if (!conn.registerReadyNotifier(notifier)) {
+        if (!conn.registerReadyNotifier(notifier: notifier)) {
             # State transitioned (READY/DRAINING/CLOSED) between isReady() and registration
             return NOTHING;
         }
@@ -1000,7 +1000,7 @@ f.cancel();
     @endcode
 
 */
-public class HttpCancellableFuture inherits Future {
+public class HttpCancellableFuture inherits Future<auto> {
     private {
         #! The raw protocol Future from submitAsync()
         Future real_future;

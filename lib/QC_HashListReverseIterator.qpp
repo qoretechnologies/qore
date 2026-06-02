@@ -104,15 +104,15 @@ public:
 qclass HashListReverseIterator [arg=QoreHashListReverseIterator* i; ns=Qore; vparent=HashListIterator];
 
 //! Creates the hash list iterator object
-/** @param h the hash of lists to iterate
+/** @param hash_value the hash of lists to iterate
 
     @par Example:
     @code{.py}
 HashListReverseIterator i(h);
     @endcode
  */
-HashListReverseIterator::constructor(hash<auto> h) {
-    self->setPrivate(CID_HASHLISTREVERSEITERATOR, new QoreHashListReverseIterator(h));
+HashListReverseIterator::constructor(hash<auto> hash_value) [flags=NAMED_ARGS] {
+    self->setPrivate(CID_HASHLISTREVERSEITERATOR, new QoreHashListReverseIterator(hash_value));
 }
 
 //! Creates an empty hash list iterator object
@@ -226,7 +226,7 @@ while (i.next()) {
 
     @note equivalent to HashListIterator::getKeyValue() when called explicitly
  */
-auto HashListReverseIterator::memberGate(string key) [flags=RET_VALUE_ONLY] {
+auto HashListReverseIterator::memberGate(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (i->check(xsink))
         return QoreValue();
 

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     constants can only be defined when parsing
     constants values will be substituted during the 2nd parse phase
@@ -40,6 +40,7 @@
 
 #include <qore/common.h>
 #include "qore/intern/ParseNode.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 #include <string>
 
@@ -100,7 +101,12 @@ public:
         pub : 1,          // public constant (modules only)
         init : 1,         // already initialized
         builtin : 1,      // builtin vs user
-        delayed_eval : 1  // delayed evaluation
+        delayed_eval : 1, // delayed evaluation
+        has_init_expr : 1, // had a delayed-eval init expression (for AOT)
+        saved_val_set : 1, // saved_val contains a runtime value or preserved init expression
+        aot_shell_pending : 1, // AOT-deserialized shell whose init-func has not run
+        external_stub : 1, // qcc --stub declaration; value is supplied by the runtime host
+        external_stub_dependent : 1 // initializer references an external stub constant
         ;
 
     DLLLOCAL ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue v,
@@ -136,9 +142,19 @@ public:
 
     DLLLOCAL const QoreValue getValue() const;
 
+    //! Returns true if the constant's value has been initialized
+    DLLLOCAL bool hasValue() const {
+        return !aot_shell_pending && !external_stub
+            && (saved_val_set || (init && val.getType() != NT_RTCONSTREF));
+    }
+
+    //! Sets the runtime value (val + saved_val) for AOT init functions
+    DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink);
+    DLLLOCAL void materializeRuntimeRefs(ExceptionSink* xsink);
+
     // Follows a chain of RuntimeConstantRefNode indirections (const A = B;
-    // const B = ...) to the terminal stored value so the internal
-    // NT_RTCONSTREF node type is never exposed through the public API.
+    // const B = ...) to the terminal stored value while preserving unresolved
+    // AOT shells / external stubs as runtime references.
     DLLLOCAL static const QoreValue& resolveRtConstRef(const QoreValue& start);
 
     DLLLOCAL int parseInit(ClassNs ptr);
@@ -193,13 +209,43 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
+    //! Returns true if this constant had a delayed-eval init expression
+    DLLLOCAL bool hasInitExpr() const {
+        return has_init_expr;
+    }
+
+    //! Returns true for qcc --stub constants that are declarations only.
+    DLLLOCAL bool isExternalStub() const {
+        return external_stub;
+    }
+
+    //! Returns true when this constant's preserved init expression depends on a qcc --stub constant.
+    DLLLOCAL bool isExternalStubDependent() const {
+        return external_stub_dependent;
+    }
+
+    //! Converts this parse-time stub placeholder into a runtime-resolved declaration.
+    DLLLOCAL void makeExternalStubDeclaration();
+
+    //! Returns the preserved init expression (for AOT lowering); NOTHING if not preserved
+    DLLLOCAL const QoreValue getInitExpr() const {
+        return aot_init_expr;
+    }
+
+    //! Discard the preserved init expression (call after AOT lowering is complete)
+    DLLLOCAL void discardInitExpr(ExceptionSink* xsink) {
+        aot_init_expr.discard(xsink);
+    }
+
 protected:
     QoreValue saved_val{};
+    QoreValue aot_init_expr{};  //!< preserved init expression for AOT lowering
     ClassAccess access;
     std::string from_module;
 
     DLLLOCAL ~ConstantEntry() {
         assert(saved_val.isNothing());
+        assert(aot_init_expr.isNothing());
         assert(val.isNothing());
     }
 
@@ -253,6 +299,8 @@ private:
 
     DLLLOCAL void clearIntern(ExceptionSink* xsink);
 
+    size_t runtime_init_hwm = 0;  // high water mark for initialized constants
+
 protected:
     // the object that owns the list (either a class or a namespace)
     ClassNs ptr;
@@ -275,6 +323,19 @@ public:
 
     DLLLOCAL cnemap_t::iterator parseAdd(const QoreProgramLocation* loc, const char* name, QoreValue val,
             const QoreTypeInfo* typeInfo = nullptr, bool pub = false, ClassAccess access = Public);
+
+    //! Add a pre-created ConstantEntry (takes ownership)
+    /** Uses ce->getName() as the key — which returns a pointer into the
+        ConstantEntry's own std::string storage — so the key remains stable
+        for the lifetime of the entry. The deserializer-supplied `name`
+        pointer must NOT be used here: it points into the AOT binary
+        reader's string pool, which is freed when the deserializer is
+        destroyed (end of qore_aot_module_init_v3), leaving dangling keys
+        that cause find() to fail while iteration still works.
+    */
+    DLLLOCAL void addEntry(const char* /*name*/, ConstantEntry* ce) {
+        cnemap.insert(cnemap_t::value_type(ce->getName(), ce));
+    }
 
     DLLLOCAL ConstantEntry* findEntry(const char* name);
 
@@ -424,6 +485,9 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         parse_context.typeInfo = ce->typeInfo;
+        if (ce->external_stub) {
+            parse_context.external_stub_constant_ref = true;
+        }
         return 0;
     }
 
@@ -432,7 +496,38 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-        return ce->saved_val.eval(needs_deref, xsink);
+        // For constants still undergoing delayed init (parseCommitRuntimeInit
+        // path), ce->saved_val holds the committed value. For normal/builtin
+        // constants (e.g. Reflection::IntType), only ce->val is populated and
+        // saved_val remains empty — fall back to evaluating ce->val in that
+        // case so AOT init functions referencing builtin constants get the
+        // correct value instead of NOTHING.
+        if (ce->saved_val_set) {
+            return ce->saved_val.eval(needs_deref, xsink);
+        }
+        // AOT pending shell: ce->val is a self-referential RuntimeConstantRefNode
+        // set up by QoreAOTBinaryDeserializer::deserializeConstants so sibling
+        // `.qo` references defer to runtime.  Evaluating ce->val here would
+        // re-enter evalImpl → infinite recursion → stack overflow.  The
+        // legitimate consumer is post-init-func dispatch (saved_val populated,
+        // handled above); any other eval path is a programmer error (typically
+        // parse-time fold of an unpopulated pending constant) and must raise
+        // rather than loop.
+        if (ce->external_stub) {
+            xsink->raiseException("EXTERNAL-STUB-CONSTANT",
+                "cannot evaluate external stub constant '%s'; the runtime host "
+                "must inject this constant before loading AOT code that references it",
+                ce->getName());
+            return QoreValue();
+        }
+        if (ce->aot_shell_pending || !ce->hasValue()) {
+            xsink->raiseException("AOT-PENDING-CONSTANT",
+                "cannot evaluate AOT-deserialized constant '%s' before its "
+                "__const_init function has populated the value",
+                ce->getName());
+            return QoreValue();
+        }
+        return ce->val.eval(needs_deref, xsink);
     }
 
     DLLLOCAL ~RuntimeConstantRefNode() {
@@ -441,7 +536,16 @@ protected:
 public:
     DLLLOCAL RuntimeConstantRefNode(const QoreProgramLocation* loc, ConstantEntry* n_ce) : ParseNode(loc,
             NT_RTCONSTREF, true, false), ce(n_ce) {
-        assert(ce->saved_val);
+        assert(ce->hasValue());
+        assert(!ce->aot_shell_pending);
+    }
+
+    //! Constructor for AOT deferred evaluation — saved_val may not be set yet
+    /** The init function will populate saved_val via setRuntimeValue() before
+        evalImpl() is called at runtime.
+    */
+    DLLLOCAL RuntimeConstantRefNode(const QoreProgramLocation* loc, ConstantEntry* n_ce, bool aot_deferred)
+            : ParseNode(loc, NT_RTCONSTREF, true, false), ce(n_ce) {
     }
 
     DLLLOCAL ConstantEntry* getConstantEntry() const {
@@ -449,17 +553,57 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-        assert(ce->saved_val);
-        return ce->saved_val.getAsString(str, foff, xsink);
+        if (ce->saved_val_set) {
+            return ce->saved_val.getAsString(str, foff, xsink);
+        }
+        if (ce->external_stub) {
+            xsink->raiseException("EXTERNAL-STUB-CONSTANT",
+                "cannot convert external stub constant '%s' to a string; the runtime host "
+                "must inject this constant before loading AOT code that references it",
+                ce->getName());
+            return -1;
+        }
+        if (ce->aot_shell_pending || !ce->hasValue()) {
+            xsink->raiseException("AOT-PENDING-CONSTANT",
+                "cannot convert AOT-deserialized constant '%s' to a string before its "
+                "__const_init function has populated the value",
+                ce->getName());
+            return -1;
+        }
+        return ce->val.getAsString(str, foff, xsink);
     }
 
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
-        assert(ce->saved_val);
-        return ce->saved_val.getAsString(del, foff, xsink);
+        if (ce->saved_val_set) {
+            return ce->saved_val.getAsString(del, foff, xsink);
+        }
+        if (ce->external_stub) {
+            xsink->raiseException("EXTERNAL-STUB-CONSTANT",
+                "cannot convert external stub constant '%s' to a string; the runtime host "
+                "must inject this constant before loading AOT code that references it",
+                ce->getName());
+            del = false;
+            return nullptr;
+        }
+        if (ce->aot_shell_pending || !ce->hasValue()) {
+            xsink->raiseException("AOT-PENDING-CONSTANT",
+                "cannot convert AOT-deserialized constant '%s' to a string before its "
+                "__const_init function has populated the value",
+                ce->getName());
+            del = false;
+            return nullptr;
+        }
+        return ce->val.getAsString(del, foff, xsink);
     }
 
     DLLLOCAL virtual const char* getTypeName() const {
-        return ce->saved_val.getTypeName();
+        if (ce->saved_val_set) {
+            return ce->saved_val.getTypeName();
+        }
+        if (ce->external_stub || ce->aot_shell_pending || !ce->hasValue()) {
+            return QoreTypeInfo::getName(ce->typeInfo);
+        }
+        return ce->val.getTypeName();
     }
 };
 

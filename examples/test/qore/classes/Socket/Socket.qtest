@@ -3,8 +3,9 @@
 
 %modern
 
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
 
 %exec-class SocketTest
 
@@ -436,13 +437,13 @@ class SocketTest inherits QUnit::Test {
         Socket server();
         server.bind("localhost:0");
         server.listen();
-        int port = server.getSocketInfo().port;
+        hash<auto> server_info = server.getSocketInfo(False);
 
         Counter cnt(1);
         Queue release_client();
         background sub () {
             Socket client();
-            client.connect("localhost:" + port);
+            client.connectINET(server_info.address, server_info.port, 10s, server_info.family);
             client.send("HTTP/1.1 204 No Content\r\nX-Test: value\r\nContent-Length: 5\r\n\r\nhello");
             release_client.get(5s);
             cnt.dec();
@@ -461,13 +462,13 @@ class SocketTest inherits QUnit::Test {
         Socket server();
         server.bind("localhost:0");
         server.listen();
-        int port = server.getSocketInfo().port;
+        hash<auto> server_info = server.getSocketInfo(False);
 
         Counter cnt(1);
         string received;
         background sub () {
             Socket client();
-            client.connect("localhost:" + port);
+            client.connectINET(server_info.address, server_info.port, 10s, server_info.family);
             received = client.recv(22, 5s);
             cnt.dec();
         }();
@@ -480,13 +481,13 @@ class SocketTest inherits QUnit::Test {
         Socket server2();
         server2.bind("localhost:0");
         server2.listen();
-        port = server2.getSocketInfo().port;
+        hash<auto> server2_info = server2.getSocketInfo(False);
 
         string expected = "2\r\nhe\r\n2\r\nll\r\n1\r\no\r\n0\r\nX-Trailer: done\r\n\r\n";
         cnt.inc();
         background sub () {
             Socket client();
-            client.connect("localhost:" + port);
+            client.connectINET(server2_info.address, server2_info.port, 10s, server2_info.family);
             received = client.recv(expected.size(), 5s);
             cnt.dec();
         }();
@@ -502,14 +503,14 @@ class SocketTest inherits QUnit::Test {
         Socket server3();
         server3.bind("localhost:0");
         server3.listen();
-        port = server3.getSocketInfo().port;
+        hash<auto> server3_info = server3.getSocketInfo(False);
 
         hash<auto> response_headers;
         hash<auto> response_body;
         cnt.inc();
         background sub () {
             Socket client();
-            client.connect("localhost:" + port);
+            client.connectINET(server3_info.address, server3_info.port, 10s, server3_info.family);
             response_headers = client.readHTTPHeader(5s);
             response_body = client.readHTTPChunkedBody(5s);
             cnt.dec();
@@ -537,7 +538,7 @@ class SocketTest inherits QUnit::Test {
         Socket guard_server();
         guard_server.bind("localhost:0");
         guard_server.listen();
-        int guard_port = guard_server.getSocketInfo().port;
+        hash<auto> guard_info = guard_server.getSocketInfo(False);
         Queue guard_entered();
         Queue guard_release();
         Queue guard_sender_result();
@@ -545,7 +546,7 @@ class SocketTest inherits QUnit::Test {
         background sub () {
             try {
                 Socket client();
-                client.connect("localhost:" + guard_port);
+                client.connectINET(guard_info.address, guard_info.port, 10s, guard_info.family);
                 client.send("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
                 client.readHTTPHeader(5s);
                 client.readHTTPChunkedBody(5s);
@@ -589,7 +590,7 @@ class SocketTest inherits QUnit::Test {
                 Socket server4();
                 server4.bind("localhost:0");
                 server4.listen();
-                q.push(server4.getSocketInfo().port);
+                q.push(server4.getSocketInfo(False));
 
                 Socket peer = server4.accept(5s);
                 peer.send("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
@@ -601,7 +602,8 @@ class SocketTest inherits QUnit::Test {
         }();
 
         Socket client4();
-        client4.connect("localhost:" + q.get(5s));
+        hash<auto> server4_info = q.get(5s);
+        client4.connectINET(server4_info.address, server4_info.port, 10s, server4_info.family);
         response_headers = client4.readHTTPHeader(5s);
         response_body = client4.readHTTPChunkedBodyBinary(5s);
         assertEq("chunked", response_headers."transfer-encoding");
@@ -618,7 +620,7 @@ class SocketTest inherits QUnit::Test {
                 Socket server5();
                 server5.bind("localhost:0");
                 server5.listen();
-                q.push(server5.getSocketInfo().port);
+                q.push(server5.getSocketInfo(False));
 
                 Socket peer = server5.accept(5s);
                 peer.send("2\r\nhe\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
@@ -629,7 +631,8 @@ class SocketTest inherits QUnit::Test {
         }();
 
         Socket client5();
-        client5.connect("localhost:" + q.get(5s));
+        hash<auto> server5_info = q.get(5s);
+        client5.connectINET(server5_info.address, server5_info.port, 10s, server5_info.family);
         response_body = client5.readHTTPChunk(5s);
         assertEq(<6865>, response_body.body);
         response_body = client5.readHTTPChunk(5s);
@@ -646,7 +649,7 @@ class SocketTest inherits QUnit::Test {
                 Socket server6();
                 server6.bind("localhost:0");
                 server6.listen();
-                q.push(server6.getSocketInfo().port);
+                q.push(server6.getSocketInfo(False));
 
                 Socket peer = server6.accept(5s);
                 peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
@@ -657,7 +660,8 @@ class SocketTest inherits QUnit::Test {
         }();
 
         Socket client6();
-        client6.connect("localhost:" + q.get(5s));
+        hash<auto> server6_info = q.get(5s);
+        client6.connectINET(server6_info.address, server6_info.port, 10s, server6_info.family);
         BinaryOutputStream output_stream();
         response_body = client6.readHTTPChunkedBodyToOutputStream(output_stream, 5s);
         assertEq(<68656c6c6f>, output_stream.getData());
@@ -673,7 +677,7 @@ class SocketTest inherits QUnit::Test {
                 Socket server7();
                 server7.bind("localhost:0");
                 server7.listen();
-                q.push(server7.getSocketInfo().port);
+                q.push(server7.getSocketInfo(False));
 
                 Socket peer = server7.accept(5s);
                 peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
@@ -684,7 +688,8 @@ class SocketTest inherits QUnit::Test {
         }();
 
         Socket client7();
-        client7.connect("localhost:" + q.get(5s));
+        hash<auto> server7_info = q.get(5s);
+        client7.connectINET(server7_info.address, server7_info.port, 10s, server7_info.family);
         list<hash<auto>> callback_events = ();
         client7.readHTTPChunkedBodyWithCallback(sub (hash<auto> h) {
             callback_events += h;
@@ -704,7 +709,7 @@ class SocketTest inherits QUnit::Test {
                 Socket server8();
                 server8.bind("localhost:0");
                 server8.listen();
-                q.push(server8.getSocketInfo().port);
+                q.push(server8.getSocketInfo(False));
 
                 Socket peer = server8.accept(5s);
                 peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
@@ -715,7 +720,8 @@ class SocketTest inherits QUnit::Test {
         }();
 
         Socket client8();
-        client8.connect("localhost:" + q.get(5s));
+        hash<auto> server8_info = q.get(5s);
+        client8.connectINET(server8_info.address, server8_info.port, 10s, server8_info.family);
         callback_events = ();
         client8.readHTTPChunkedBodyBinaryWithCallback(sub (hash<auto> h) {
             callback_events += h;
@@ -746,7 +752,7 @@ class SocketTest inherits QUnit::Test {
                 Socket server();
                 server.bind("localhost:0");
                 server.listen();
-                q.push(server.getSocketInfo().port);
+                q.push(server.getSocketInfo(False));
 
                 Socket peer = server.accept(5s);
                 peer.send("event: alpha\r\ndata: one\r\nid: 1\r\n\r\ndata: two\n\n", 5s);
@@ -757,7 +763,8 @@ class SocketTest inherits QUnit::Test {
         }();
 
         Socket client();
-        client.connect("localhost:" + q.get(5s));
+        hash<auto> server_info = q.get(5s);
+        client.connectINET(server_info.address, server_info.port, 10s, server_info.family);
 
         hash<SseMessageInfo> event1 = client.readServerSentEvent(5s);
         assertEq("alpha", event1.event);
@@ -781,7 +788,7 @@ class SocketTest inherits QUnit::Test {
                 Socket server();
                 server.bind("localhost:0");
                 server.listen();
-                q2.push(server.getSocketInfo().port);
+                q2.push(server.getSocketInfo(False));
 
                 Socket peer = server.accept(5s);
                 peer.send(payload, 5s);
@@ -792,7 +799,9 @@ class SocketTest inherits QUnit::Test {
         }();
 
         Socket encoded_client();
-        encoded_client.connect("localhost:" + q2.get(5s));
+        hash<auto> encoded_server_info = q2.get(5s);
+        encoded_client.connectINET(encoded_server_info.address, encoded_server_info.port, 10s,
+            encoded_server_info.family);
 
         hash<SseMessageInfo> encoded_event = encoded_client.readServerSentEvent(COMPRESSION_ALG_GZIP, 5s);
         assertEq("beta", encoded_event.event);

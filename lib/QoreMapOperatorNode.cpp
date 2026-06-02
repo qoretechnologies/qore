@@ -40,6 +40,23 @@
 
 QoreString QoreMapOperatorNode::map_str("map operator expression");
 
+static void set_analysis_map(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 // if del is true, then the returned QoreString * should be mapd, if false, then it must not be
 QoreString* QoreMapOperatorNode::getAsString(bool &del, int foff, ExceptionSink *xsink) const {
     del = false;
@@ -56,7 +73,11 @@ const QoreTypeInfo* QoreMapOperatorNode::setReturnTypeInfo(const QoreTypeInfo*& 
     const QoreTypeInfo* typeInfo;
 
     // this operator returns no value if the iterator expression has no value
-    bool or_nothing = QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_NOTHING);
+    // when iteratorTypeInfo is null (unknown type), we cannot know if it can return NOTHING,
+    // so we default to false; only set true when we KNOW the type can be NOTHING
+    bool or_nothing = iteratorTypeInfo && QoreTypeInfo::hasType(iteratorTypeInfo)
+        ? (QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_NOTHING) != QTI_NOT_EQUAL)
+        : false;
     if (QoreTypeInfo::hasType(expTypeInfo)) {
         returnTypeInfo = qore_get_complex_list_type(expTypeInfo);
 
@@ -84,8 +105,15 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
     // check iterator expression
-    int err = parse_init_value(right, parse_context);
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(right, parse_context);
+        right_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
     // check iterated expression
@@ -96,15 +124,27 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
 
         ParseImplicitArgTypeHelper pia(implicitArgType);
         parse_context.typeInfo = nullptr;
-        if (parse_init_value(left, parse_context) && !err) {
-            err = -1;
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            if (parse_init_value(left, parse_context) && !err) {
+                err = -1;
+            }
+            left_analysis = parse_context.analysis;
         }
         expTypeInfo = parse_context.typeInfo;
     }
 
     // issue #4318: make sure complex types are not stripped from the iterand
+    // If type was not set during parsing, try to get it from the expression itself
+    // This handles cases where parse_init_value doesn't set typeInfo (e.g., literal values)
     if (!QoreTypeInfo::hasType(expTypeInfo)) {
-        expTypeInfo = autoTypeInfo;
+        // Try to get type info from the expression value or node
+        const QoreTypeInfo* valueTypeInfo = left.getFullTypeInfo();
+        if (QoreTypeInfo::hasType(valueTypeInfo)) {
+            expTypeInfo = valueTypeInfo;
+        } else {
+            expTypeInfo = autoTypeInfo;
+        }
     }
 
     // use lazy evaluation if the iterator expression supports it
@@ -129,6 +169,12 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                     iteratorTypeInfo);
             } else if ((QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL)
                 && (QoreTypeInfo::parseReturns(iteratorTypeInfo, QC_ABSTRACTITERATOR) == QTI_NOT_EQUAL)) {
+                // Scalar input: map returns the mapped scalar, not a list.
+                // Set returnTypeInfo to the iterator type (concrete scalar) so that
+                // getTypeInfo() returns a non-list type, enabling the IR lowering's
+                // single-value path for nested map expressions.
+                // parse_context.typeInfo stays as expTypeInfo for correct caller type checking.
+                returnTypeInfo = iteratorTypeInfo;
                 parse_context.typeInfo = expTypeInfo;
             } else {
                 parse_context.typeInfo = nullptr;
@@ -138,6 +184,7 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
         parse_context.typeInfo = nullptr;
     }
 
+    set_analysis_map(parse_context, left_analysis, right_analysis);
     return err;
 }
 
@@ -213,7 +260,12 @@ FunctionalOperatorInterface* QoreMapOperatorNode::getFunctionalIteratorImpl(Func
                 return nullptr;
             if (h) {
                 bool temp = marg.isTemp();
-                marg.clearTemp();
+                if (temp) {
+                    marg.clearTemp();
+                } else {
+                    const_cast<QoreObject*>(marg->get<const QoreObject>())->ref();
+                    temp = true;
+                }
                 value_type = list;
                 return new QoreFunctionalMapIteratorOperator(this, temp, h, xsink);
             }

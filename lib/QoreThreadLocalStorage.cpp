@@ -38,7 +38,19 @@ typedef std::map<void*, void*> storage_map_t;
 
 static pthread_key_t qore_storage_key;
 
+struct qore_tls_cache_t {
+    void* key = nullptr;
+    void* value = nullptr;
+};
+
+static thread_local qore_tls_cache_t qore_tls_cache;
+
+static void qore_thread_local_storage_clear_cache() {
+    qore_tls_cache = {};
+}
+
 static void qore_thread_local_storage_destructor(void* p) {
+    qore_thread_local_storage_clear_cache();
     if (p) {
         storage_map_t* sm = (storage_map_t*)p;
         delete sm;
@@ -57,6 +69,7 @@ void qore_thread_local_storage_destroy() {
     if (!qore_storage_key) {
         return;
     }
+    qore_thread_local_storage_clear_cache();
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (sm) {
         delete sm;
@@ -67,6 +80,9 @@ void qore_thread_local_storage_destroy() {
 void qore_thread_local_storage_destroy(void* qtls) {
     if (!qore_storage_key) {
         return;
+    }
+    if (qore_tls_cache.key == qtls) {
+        qore_thread_local_storage_clear_cache();
     }
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (sm) {
@@ -81,6 +97,7 @@ void qore_thread_local_storage_cleanup() {
     if (!qore_storage_key) {
         return;
     }
+    qore_thread_local_storage_clear_cache();
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (sm) {
         delete sm;
@@ -100,13 +117,23 @@ void qore_thread_local_storage_set(void* qtls, void* p) {
     } else {
         i->second = p;
     }
+    qore_tls_cache.key = qtls;
+    qore_tls_cache.value = p;
 }
 
 void* qore_thread_local_storage_get(void* qtls) {
+    if (qore_tls_cache.key == qtls) {
+        return qore_tls_cache.value;
+    }
     storage_map_t* sm = (storage_map_t*)pthread_getspecific(qore_storage_key);
     if (!sm) {
+        qore_tls_cache.key = qtls;
+        qore_tls_cache.value = nullptr;
         return nullptr;
     }
     storage_map_t::iterator i = sm->find(qtls);
-    return i != sm->end() ? i->second : nullptr;
+    void* rv = i != sm->end() ? i->second : nullptr;
+    qore_tls_cache.key = qtls;
+    qore_tls_cache.value = rv;
+    return rv;
 }

@@ -275,6 +275,9 @@ const CF_RET_VALUE_ONLY = QCF_RET_VALUE_ONLY;
 /** as with @ref Qore::Reflection::CF_NOOP "CF_NOOP", variants with this flag set should be considered deprecated
 */
 const CF_RUNTIME_NOOP = QCF_RUNTIME_NOOP;
+
+//! Set on builtin variants that accept named-argument calls
+const CF_NAMED_ARGS = QCF_NAMED_ARGS;
 ///@}
 
 //! class and inheritance access information

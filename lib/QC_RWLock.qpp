@@ -147,7 +147,7 @@ nothing RWLock::readLock() {
 
     @par Example:
     @code{.py}
-if (rwl.readLock(1500ms))
+if (rwl.readLock(timeout_ms: 1500ms))
     throw "TIMEOUT", "timed out after 1.5s waiting for the read lock";
     @endcode
 
@@ -158,7 +158,7 @@ if (rwl.readLock(1500ms))
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
-int RWLock::readLock(timeout timeout_ms) {
+int RWLock::readLock(timeout timeout_ms) [flags=NAMED_ARGS] {
     // Always poll for cancel/interrupt checking
     const int poll_ms = 500;  // 500ms polling interval
     int64 remaining = timeout_ms;
@@ -217,7 +217,7 @@ nothing RWLock::readUnlock() {
 
     @par Example:
     @code{.py}
-if (rwl.writeLock(1500ms))
+if (rwl.writeLock(timeout_ms: 1500ms))
     throw "TIMEOUT", "timed out after 1.5s waiting for the write lock";
     @endcode
 
@@ -228,7 +228,7 @@ if (rwl.writeLock(1500ms))
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
-int RWLock::writeLock(timeout timeout_ms) {
+int RWLock::writeLock(timeout timeout_ms) [flags=NAMED_ARGS] {
     // Always poll for cancel/interrupt checking
     const int poll_ms = 500;  // 500ms polling interval
     int64 remaining = timeout_ms;

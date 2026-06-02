@@ -35,10 +35,15 @@
 
 #include "qore/intern/QoreClassIntern.h"
 
+#include <map>
+#include <mutex>
 #include <string>
+#include <vector>
 
 class typed_hash_decl_private;
 class NamedScope;
+
+DLLLOCAL const typed_hash_decl_private* parse_get_hashdecl_type_param_context();
 
 class HashDeclMemberInfo : public QoreMemberInfoBase {
 public:
@@ -53,6 +58,8 @@ public:
     DLLLOCAL bool equal(const HashDeclMemberInfo& other) const;
 
     DLLLOCAL int parseInit(const char* name, bool priv);
+
+    DLLLOCAL HashDeclMemberInfo* instantiate(const QoreTypeInfo* receiver_type_info) const;
 };
 
 typedef QoreMemberMapBase<HashDeclMemberInfo> HashDeclMemberMap;
@@ -77,6 +84,9 @@ public:
 
     DLLLOCAL ~typed_hash_decl_private() {
         assert(!refs.reference_count());
+        for (auto& i : parameterized_hashdecl_cache) {
+            typed_hash_decl_private::get(*i.second)->deref();
+        }
         delete typeInfo;
         delete orNothingTypeInfo;
         delete parse_parent;
@@ -92,6 +102,12 @@ public:
     }
 
     DLLLOCAL bool equal(const typed_hash_decl_private& other) const {
+        // Imported/copied hashdecls keep the same original declaration pointer.
+        // Treat that as identity before structural comparison so AOT/module load
+        // ordering cannot make copies of the same declaration temporarily diverge.
+        if (orig == other.orig) {
+            return true;
+        }
         if (name != other.name || members.size() != other.members.size())
             return false;
 
@@ -227,6 +243,67 @@ public:
         members.addNoCheck(pair);
     }
 
+    DLLLOCAL void addTypeParameter(const char* param, const char* default_type = nullptr) {
+        type_params.emplace_back(param, default_type);
+    }
+
+    DLLLOCAL void addTypeParameter(const char* param, const char* default_type, const char* bound_type) {
+        type_params.emplace_back(param, default_type, bound_type);
+    }
+
+    DLLLOCAL bool hasTypeParams() const {
+        return !type_params.empty();
+    }
+
+    DLLLOCAL size_t getTypeParamCount() const {
+        return type_params.size();
+    }
+
+    DLLLOCAL const char* getTypeParamName(size_t i) const {
+        assert(i < type_params.size());
+        return type_params[i].name.c_str();
+    }
+
+    DLLLOCAL const char* getTypeParamDefaultType(size_t i) const {
+        assert(i < type_params.size());
+        return type_params[i].getDefaultType();
+    }
+
+    DLLLOCAL const char* getTypeParamBoundType(size_t i) const {
+        assert(i < type_params.size());
+        return type_params[i].getBoundType();
+    }
+
+    DLLLOCAL size_t getTypeParamRequiredCount() const {
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (type_params[i].hasDefault()) {
+                return i;
+            }
+        }
+        return type_params.size();
+    }
+
+    DLLLOCAL bool isParameterizedHashDecl() const {
+        return parameterized_base;
+    }
+
+    DLLLOCAL const TypedHashDecl* getParameterizedBase() const {
+        return parameterized_base;
+    }
+
+    DLLLOCAL const std::vector<const QoreTypeInfo*>& getTypeArgs() const {
+        return type_args;
+    }
+
+    DLLLOCAL const TypedHashDecl* getParameterizedHashDecl(
+            const std::vector<const QoreTypeInfo*>& args) const;
+
+    DLLLOCAL const QoreTypeInfo* getParameterizedTypeInfo(const std::vector<const QoreTypeInfo*>& args,
+            bool or_nothing = false) const {
+        const TypedHashDecl* hd = getParameterizedHashDecl(args);
+        return hd ? hd->getTypeInfo(or_nothing) : nullptr;
+    }
+
     DLLLOCAL bool hasMember(const char* name) const {
         if (members.inList(name)) {
             return true;
@@ -250,6 +327,10 @@ public:
 
     DLLLOCAL const char* getPath() const {
         return path.c_str();
+    }
+
+    DLLLOCAL const TypedHashDecl* getHashDecl() const {
+        return thd;
     }
 
     DLLLOCAL const std::string& getNameStr() const {
@@ -297,11 +378,14 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
-    //! Sets the parse-time parent hashdecl scope to be resolved during parseInit
-    DLLLOCAL void setParseParent(NamedScope* parent) {
+    //! Sets the parse-time parent hashdecl type to be resolved during parseInit
+    DLLLOCAL void setParseParent(QoreParseTypeInfo* parent) {
         assert(!parse_parent);
         parse_parent = parent;
     }
+
+    //! Resolves the parse-time parent hashdecl type, if any
+    DLLLOCAL int resolveParseParent();
 
     //! Returns the resolved parent hashdecl or nullptr if none
     DLLLOCAL const TypedHashDecl* getParentHashDecl() const {
@@ -311,6 +395,7 @@ public:
     //! Sets the parent hashdecl directly (for system hashdecls)
     DLLLOCAL void setParentHashDecl(const TypedHashDecl* parent) {
         parentHashDecl = parent;
+        parentHashDeclName = parent ? get(*parent)->getPath() : "";
     }
 
     //! Returns the name of the parent hashdecl (for use when updating parent pointers after copying)
@@ -354,12 +439,19 @@ protected:
     // member information
     HashDeclMemberMap members;
 
+    // Source generic type parameters and cached concrete instantiations.
+    std::vector<QoreGenericTypeParam> type_params;
+    mutable std::mutex parameterized_hashdecl_cache_lock;
+    mutable std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*> parameterized_hashdecl_cache;
+    const TypedHashDecl* parameterized_base = nullptr;
+    std::vector<const QoreTypeInfo*> type_args;
+
     // parent hashdecl (resolved after parseInit)
     const TypedHashDecl* parentHashDecl = nullptr;
     // parent hashdecl name (stored during copy to avoid dangling pointer dereference)
     std::string parentHashDeclName;
-    // parse-time parent scope (to be resolved during parseInit)
-    NamedScope* parse_parent = nullptr;
+    // parse-time parent type (to be resolved during parseInit)
+    QoreParseTypeInfo* parse_parent = nullptr;
 
     bool pub = false;
     bool sys = false;

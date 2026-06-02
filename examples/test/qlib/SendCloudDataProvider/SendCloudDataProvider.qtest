@@ -123,6 +123,12 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         return root;
     }
 
+    #! Executes an advertised SendCloud action through the real child data provider API
+    private auto runAction(DataProvider::AbstractDataProvider provider, string action, hash<auto> req) {
+        DataProvider::AbstractDataProvider action_provider = provider.getChildProviderEx(action);
+        return action_provider.doRequest(req);
+    }
+
     #! Returns True if the given exception corresponds to an HTTP status code indicating a
     #! missing scope or unsupported endpoint (so the test can be skipped gracefully).
     private bool isScopeOr404(hash<ExceptionInfo> ex) {
@@ -344,7 +350,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         checkJson();
         DataProvider::AbstractDataProvider r = requireConnection();
         try {
-            hash<auto> result = r.doAppAction("get-user", {});
+            hash<auto> result = runAction(r, "get-user", {});
             # get-user unwraps the {user: ...} envelope — result is the user record directly
             assertTrue(result.username.val(), "username should be non-empty");
         } catch (hash<ExceptionInfo> ex) {
@@ -359,7 +365,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         checkJson();
         DataProvider::AbstractDataProvider r = requireConnection();
         try {
-            hash<auto> result = r.doAppAction("list-shipping-methods", {});
+            hash<auto> result = runAction(r, "list-shipping-methods", {});
             assertTrue(exists result.shipping_methods, "response should include shipping_methods");
             assertEq(Type::List, result.shipping_methods.type(),
                 "shipping_methods should be a list");
@@ -376,7 +382,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         checkJson();
         DataProvider::AbstractDataProvider r = requireConnection();
         try {
-            hash<auto> result = r.doAppAction("list-sender-addresses", {});
+            hash<auto> result = runAction(r, "list-sender-addresses", {});
             # Account may have zero sender addresses — accept empty list
             assertTrue(exists result.sender_addresses, "response should include sender_addresses key");
         } catch (hash<ExceptionInfo> ex) {
@@ -411,7 +417,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
 
         hash<auto> created;
         try {
-            created = r.doAppAction("create-parcel", parcel_request);
+            created = runAction(r, "create-parcel", parcel_request);
         } catch (hash<ExceptionInfo> ex) {
             if (isScopeOr404(ex)) {
                 testSkip(sprintf("create-parcel unavailable: %s", ex.desc));
@@ -433,7 +439,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         on_exit {
             if (testParcelId) {
                 try {
-                    r.doAppAction("cancel-parcel", {"id": testParcelId});
+                    runAction(r, "cancel-parcel", {"id": testParcelId});
                 } catch (hash<ExceptionInfo> ex) {
                     if (m_options.verbose) {
                         printf("cleanup: failed to cancel parcel %d: %s\n", testParcelId, ex.desc);
@@ -445,7 +451,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         # Verify data persistence — the server must return the parcel when queried.
         # This is the critical check: 200 OK on create is not proof of persistence.
         try {
-            hash<auto> fetched = r.doAppAction("get-parcel", {"id": testParcelId});
+            hash<auto> fetched = runAction(r, "get-parcel", {"id": testParcelId});
             # get-parcel's doRequestImpl returns the parcel record directly (already unwrapped)
             assertEq(testParcelId, fetched.id,
                 "fetched parcel id should match created id (data persistence check)");
@@ -482,7 +488,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         on_exit {
             if (parcel_id) {
                 try {
-                    r.doAppAction("cancel-parcel", {"id": parcel_id});
+                    runAction(r, "cancel-parcel", {"id": parcel_id});
                 } catch (hash<ExceptionInfo> ex) {
                     if (m_options.verbose) {
                         printf("cleanup: failed to cancel parcel %d: %s\n", parcel_id, ex.desc);
@@ -493,7 +499,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
 
         hash<auto> created;
         try {
-            created = r.doAppAction("create-parcel", minimal_request);
+            created = runAction(r, "create-parcel", minimal_request);
         } catch (hash<ExceptionInfo> ex) {
             if (isScopeOr404(ex)) {
                 testSkip(sprintf("create-parcel unavailable: %s", ex.desc));
@@ -533,7 +539,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         # First, create an outgoing parcel to anchor the return on.
         hash<auto> created;
         try {
-            created = r.doAppAction("create-parcel", {
+            created = runAction(r, "create-parcel", {
                 "name": "Qore Test Recipient",
                 "company_name": "Qore Technologies",
                 "address": "Test Street 1",
@@ -557,7 +563,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         int parcel_id = created.id;
         on_exit {
             try {
-                r.doAppAction("cancel-parcel", {"id": parcel_id});
+                runAction(r, "cancel-parcel", {"id": parcel_id});
             } catch () {
                 # best-effort cleanup
             }
@@ -570,7 +576,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         # limit, not a test failure.
         hash<auto> created_return;
         try {
-            created_return = r.doAppAction("create-return", {
+            created_return = runAction(r, "create-return", {
                 "outgoing_parcel": parcel_id,
                 "products": (
                     {"description": "Test item", "quantity": 1, "value": "9.99"},
@@ -598,7 +604,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
 
         on_exit {
             try {
-                r.doAppAction("cancel-return", {"id": return_id});
+                runAction(r, "cancel-return", {"id": return_id});
             } catch () {
                 # best-effort cleanup
             }
@@ -609,7 +615,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         # works for v3-created returns); skip if this account has migrated returns reads
         # to v3-only.
         try {
-            hash<auto> fetched = r.doAppAction("get-return", {"id": return_id});
+            hash<auto> fetched = runAction(r, "get-return", {"id": return_id});
             assertEq(return_id, int(fetched.id),
                 "fetched return id should match created id (data persistence check)");
         } catch (hash<ExceptionInfo> ex) {
@@ -624,7 +630,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         checkJson();
         DataProvider::AbstractDataProvider r = requireConnection();
         try {
-            hash<auto> result = r.doAppAction("search-service-points", {
+            hash<auto> result = runAction(r, "search-service-points", {
                 "country": "NL",
             });
             # Accept either a top-level list or a {service_points: [...]} shape

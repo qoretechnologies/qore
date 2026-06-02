@@ -70,15 +70,15 @@ extern QoreClass* QC_OBJECTITERATOR;
 qclass ObjectKeyIterator [arg=QoreObjectIterator* i; ns=Qore; vparent=ObjectIterator];
 
 //! Creates the object iterator object
-/** @param o the object to iterate
+/** @param object_value the object to iterate
 
     @par Example:
     @code{.py}
 ObjectKeyIterator i(h);
     @endcode
  */
-ObjectKeyIterator::constructor(object o) {
-   ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator(o), xsink);
+ObjectKeyIterator::constructor(object object_value) [flags=NAMED_ARGS] {
+   ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator(object_value), xsink);
    p->setView(QoreHashIterator::VIEW_KEY);
    self->setPrivate(CID_OBJECTKEYITERATOR, p.release());
 }

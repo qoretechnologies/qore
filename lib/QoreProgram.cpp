@@ -39,12 +39,15 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreClassList.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSerializable.h"
+#include "qore/intern/QoreJIT.h"
 
 #include <string>
 #include <set>
@@ -421,6 +424,183 @@ void qore_program_private_base::setDefines() {
     }
 }
 
+namespace {
+
+// module API version as a formatted string for ${QORE_MODULE_VERSION}
+inline std::string qore_module_api_version_str() {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d.%d", QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
+    return buf;
+}
+
+// Expand ${NAME} variable references in `in` into `out`.
+// Returns true on success, false on error (with `err` populated with a human-readable reason).
+// Supports \$ as a literal $ escape.  Recognises the predefined macros listed in the design doc;
+// falls back to the process environment for anything else.  Unknown macros and unset env vars
+// produce an error (no silent empty substitution — see design doc "Error cases").
+bool expand_module_path_macros(const std::string& in, std::string& out, std::string& err,
+        qore_program_private_base& pp) {
+    out.clear();
+    out.reserve(in.size());
+    const char* const data = in.data();
+    const size_t n = in.size();
+    for (size_t i = 0; i < n; ) {
+        char c = data[i];
+        if (c == '\\' && i + 1 < n && data[i + 1] == '$') {
+            out.push_back('$');
+            i += 2;
+            continue;
+        }
+        if (c == '$' && i + 1 < n && data[i + 1] == '{') {
+            // find closing '}'
+            size_t j = i + 2;
+            while (j < n && data[j] != '}') {
+                ++j;
+            }
+            if (j >= n) {
+                err = "expected '}' to close variable reference";
+                return false;
+            }
+            std::string name(data + i + 2, j - (i + 2));
+            if (name.empty()) {
+                err = "empty variable name in ${...}";
+                return false;
+            }
+            // predefined macros
+            const char* expansion = nullptr;
+            std::string owned;
+            if (name == "SCRIPT_DIR") {
+                if (pp.script_dir.empty()) {
+                    err = "${SCRIPT_DIR} is not available (parse input has no on-disk file)";
+                    return false;
+                }
+                expansion = pp.script_dir.c_str();
+            } else if (name == "SCRIPT_NAME") {
+                if (pp.script_name.empty()) {
+                    err = "${SCRIPT_NAME} is not available (parse input has no on-disk file)";
+                    return false;
+                }
+                expansion = pp.script_name.c_str();
+            } else if (name == "SCRIPT_PATH") {
+                if (pp.script_path.empty()) {
+                    err = "${SCRIPT_PATH} is not available (parse input has no on-disk file)";
+                    return false;
+                }
+                expansion = pp.script_path.c_str();
+            } else if (name == "PROGRAM_DIR") {
+                // Per design, PROGRAM_DIR refers to the TOP-LEVEL program file's directory —
+                // same as SCRIPT_DIR for the top-level program, but in a module (.qm/.qc) it
+                // yields the parent program's script_dir.  We walk up via the thread-local
+                // getProgram() chain isn't stable here, so approximate with script_dir —
+                // this matches user intent in the Qorus case because the entrypoint directive
+                // fires during the top-level parse.  (Future work: thread a parent pointer
+                // through qore_program_private to distinguish the two.)
+                if (pp.script_dir.empty()) {
+                    err = "${PROGRAM_DIR} is not available (parse input has no on-disk file)";
+                    return false;
+                }
+                expansion = pp.script_dir.c_str();
+            } else if (name == "QORE_VERSION") {
+                expansion = QORE_VERSION;
+            } else if (name == "QORE_PREFIX") {
+                expansion = QORE_INSTALL_PREFIX;
+            } else if (name == "QORE_MODULE_VERSION") {
+                owned = qore_module_api_version_str();
+                expansion = owned.c_str();
+            } else {
+                const char* env_val = getenv(name.c_str());
+                if (!env_val) {
+                    err = "undefined variable '";
+                    err += name;
+                    err += "' in path argument";
+                    return false;
+                }
+                expansion = env_val;
+            }
+            out.append(expansion);
+            i = j + 1;
+            continue;
+        }
+        if (c == '$' && i + 1 < n && data[i + 1] == '$') {
+            // literal $ via $$
+            out.push_back('$');
+            i += 2;
+            continue;
+        }
+        out.push_back(c);
+        ++i;
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+int qore_program_private_base::applyModulePathDirective(bool prepend, std::string raw_path,
+        const QoreProgramLocation& loc) {
+    const char* directive_name = prepend ? "prepend-module-path" : "append-module-path";
+
+    // Strip surrounding whitespace
+    auto lstrip = [](std::string& s) {
+        size_t i = 0;
+        while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n')) {
+            ++i;
+        }
+        if (i) {
+            s.erase(0, i);
+        }
+    };
+    auto rstrip = [](std::string& s) {
+        while (!s.empty()) {
+            char c = s.back();
+            if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+                s.pop_back();
+            } else {
+                break;
+            }
+        }
+    };
+    lstrip(raw_path);
+    rstrip(raw_path);
+
+    // Strip surrounding double-quotes, if any — the new-style directive uses quoted paths
+    if (raw_path.size() >= 2 && raw_path.front() == '"' && raw_path.back() == '"') {
+        raw_path = raw_path.substr(1, raw_path.size() - 2);
+    }
+
+    if (raw_path.empty()) {
+        parse_error(loc, "missing argument to %%%s", directive_name);
+        return -1;
+    }
+
+    std::string expanded;
+    std::string err;
+    if (!expand_module_path_macros(raw_path, expanded, err, *this)) {
+        parse_error(loc, "%%%s: %s", directive_name, err.c_str());
+        return -1;
+    }
+
+    if (expanded.empty()) {
+        parse_error(loc, "%%%s: empty path computed from variable expansion", directive_name);
+        return -1;
+    }
+
+    auto& target = prepend ? prepended_module_paths : appended_module_paths;
+
+    // silent dedup (design: "silent dedup at insert time")
+    for (const std::string& existing : target) {
+        if (existing == expanded) {
+            return 0;
+        }
+    }
+
+    if (prepend) {
+        target.insert(target.begin(), std::move(expanded));
+    } else {
+        target.push_back(std::move(expanded));
+    }
+    return 0;
+}
+
 void qore_program_private_base::startThread(ExceptionSink& xsink) {
    if (!thread_local_storage->get())
       thread_local_storage->set(new QoreHashNode(autoTypeInfo));
@@ -570,6 +750,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     }
     QoreNS = RootNS->rootGetQoreNamespace();
 
+    // inherit parent's execution mode so sub-programs respect --exec-mode=ast
+    exec_mode = p_pgm->priv->exec_mode;
+
     // copy parent feature list
     for (auto& i : p_pgm->priv->featureList) {
         assert(featureList.find(i) == featureList.end());
@@ -586,6 +769,12 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     for (auto& i : p_pgm->priv->dmap) {
         dmap[i.first] = i.second.refSelf();
     }
+
+    // inherit parent's %prepend-module-path / %append-module-path lists so subprograms
+    // see the same module search surface their parent established (design:
+    // design/parse-directive-prepend-module-path.md, "Subprogram propagation")
+    prepended_module_paths = p_pgm->priv->prepended_module_paths;
+    appended_module_paths = p_pgm->priv->appended_module_paths;
 
     // copy external data if present
     if (!(n_parse_options & PO_NO_INHERIT_PROGRAM_DATA) && !p_pgm->priv->extmap.empty()) {
@@ -811,13 +1000,99 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         statementIds.shrink_to_fit();
         reverseStatementIds.clear();
 
-        for (auto var : local_var_list) {
-            delete var;
-        }
+        // deque-backed arena: clearing destroys LocalVars in-place;
+        // no manual delete loop needed.
         local_var_list.clear();
 
         // clear program location
         //update_runtime_location(&loc_builtin);
+    }
+}
+
+// Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified
+static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exec_mode) {
+    // Walk functions in this namespace
+    for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
+        FunctionEntry* fe = i->second;
+        QoreFunction* func = fe->getFunction();
+        if (!func) {
+            continue;
+        }
+
+        // Iterate through all variants of the function
+        QoreFunctionIterator vit(*func);
+        while (vit.next()) {
+            const AbstractQoreFunctionVariant* variant = vit.getVariant();
+            UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
+            if (!uvb || !uvb->hasBody()) {
+                continue;
+            }
+
+            // Eagerly compile to IR/JIT as requested
+            uvb->eagerlyCompileForExecMode(func->getName(), exec_mode);
+        }
+    }
+
+    // Eagerly compile class methods for user classes defined in this parse context.
+    // Module-imported classes (from_module non-empty) are skipped here. The HttpServerHttp3Stress
+    // timeout problem was investigated extensively (9-second CPU vs 120-second wall-clock) and
+    // determined to be caused by lock contention in the polling loop itself, not method compilation
+    // overhead. Eager compilation of class methods improves performance for methods that reach
+    // threshold-based warmup, but does not resolve architectural bottlenecks in polling/concurrency.
+    // Builtin/system classes (sys == true) have no Qore bytecode to lower.
+    ClassListIterator cli(ns->classList);
+    while (cli.next()) {
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* qcp = qore_class_private::get(*qc);
+        if (qcp->sys || !qcp->from_module.empty()) {
+            continue;
+        }
+
+        // Non-static methods
+        for (auto& kv : qcp->hm) {
+            QoreMethod* m = kv.second;
+            qore_method_private* mp = qore_method_private::get(*m);
+            MethodFunctionBase* mfb = mp->getFunction();
+            QoreFunctionIterator vit(*mfb);
+            while (vit.next()) {
+                const AbstractQoreFunctionVariant* av = vit.getVariant();
+                UserVariantBase* uvb =
+                    const_cast<AbstractQoreFunctionVariant*>(av)->getUserVariantBase();
+                if (!uvb || !uvb->hasBody()) {
+                    continue;
+                }
+                uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
+            }
+        }
+
+        // Static methods
+        for (auto& kv : qcp->shm) {
+            QoreMethod* m = kv.second;
+            qore_method_private* mp = qore_method_private::get(*m);
+            MethodFunctionBase* mfb = mp->getFunction();
+            QoreFunctionIterator vit(*mfb);
+            while (vit.next()) {
+                const AbstractQoreFunctionVariant* av = vit.getVariant();
+                UserVariantBase* uvb =
+                    const_cast<AbstractQoreFunctionVariant*>(av)->getUserVariantBase();
+                if (!uvb || !uvb->hasBody()) {
+                    continue;
+                }
+                uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
+            }
+        }
+    }
+
+    // Recursively compile functions in child namespaces
+    for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
+        QoreNamespace* child_ns = ni->second;
+        if (child_ns) {
+            qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
+            eagerlyCompileAllFunctions(child_priv, exec_mode);
+        }
     }
 }
 
@@ -879,6 +1154,20 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // update high water marks for atomic rollback support
             str_vec_hwm = str_vec.size();
             pgmloc_hwm = pgmloc.size();
+
+            // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified.
+            // Gate on PO_MODERN: `ensureIrExecMode` in parseCommit runs
+            // right after this and will downgrade non-%modern programs to
+            // QEM_AST.  Without the gate, every attemptIRLowering call
+            // records a spurious `lowering: ...` fallback (e.g. `break`
+            // under PO_BROKEN_LOOP_STATEMENT is legal in AST but fails
+            // IR lowering) before the exec-mode is downgraded.
+            if ((exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED)
+                    && standard_parse
+                    && (pwo.parse_options & PO_MODERN) == PO_MODERN) {
+                qore_root_ns_private* root_ns_priv = qore_root_ns_private::get(*RootNS);
+                eagerlyCompileAllFunctions(root_ns_priv, exec_mode);
+            }
 
             rc = 0;
         }
@@ -1368,6 +1657,10 @@ void qore_program_private::del(ExceptionSink* xsink) {
         //printd(5, "qore_program_private::del() this: %p cleared constants\n", this);
     }
 
+    // drain any pending background JIT compilations before deleting namespace data;
+    // the bg thread holds raw pointers to QoreIRFunction objects owned by this program
+    QoreJIT::instance().waitForBgCompileQueue();
+
     // delete the namespace and all data
     qore_root_ns_private::get(*RootNS)->deleteData(!ns_vars, xsink);
     delete RootNS;
@@ -1435,9 +1728,11 @@ int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, Exc
 }
 
 LocalVar* qore_program_private::createLocalVar(const char* name, const QoreTypeInfo* typeInfo) {
-   LocalVar* lv = new LocalVar(name, typeInfo);
-   local_var_list.push_back(lv);
-   return lv;
+   // emplace into the deque-backed arena; returns a stable pointer
+   // that stays valid for the Program's lifetime.  Avoids the per-
+   // LocalVar `new`+list-node allocation of the prior safe_dslist
+   // implementation — hot path in AOT deserialization.
+   return local_var_list.emplace(name, typeInfo);
 }
 
 void qore_program_private::addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement *statement, int offs, const char* section, int sectionOffs) {
@@ -1452,19 +1747,18 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
         statementIndex->insert(name_section_sline_statement_map_t::value_type(key, sssm));
     } else {
         sssm = it->second;
-        if (statement) {
-            sline_statement_map_t::iterator li = sssm->statementMap.find(statement->loc->start_line+offs);
-            while (li != sssm->statementMap.end() && li->first == statement->loc->start_line+offs) {
-                if (li->second->loc->end_line == statement->loc->end_line) {
-                    // order of multimap values is not defined, so unless we want create extra index by statement position at line then we need insert only the first statement
-                    printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) skipping line (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line, statement->loc->end_line, this);
-                    return;
-                }
-                ++li;
+        if (statement && statement->loc) {
+            int line = statement->loc->start_line + offs;
+            sline_statement_map_t::iterator li = sssm->statementMap.find(line);
+            if (li != sssm->statementMap.end() && li->first == line) {
+                // The index stores raw statement pointers owned elsewhere; do not
+                // dereference existing entries here. First statement for a line wins.
+                printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) skipping line (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line, statement->loc->end_line, this);
+                return;
             }
         }
     }
-    if (statement) {
+    if (statement && statement->loc) {
         printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) insert line %d (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line+offs, statement->loc->start_line, statement->loc->end_line, this);
         sssm->statementMap.insert(std::pair<int, AbstractStatement*>(statement->loc->start_line+offs, statement));
     }
@@ -1476,6 +1770,30 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
     }
 }
 
+AbstractStatement* qore_program_private::findStatementInIndexIntern(
+        const name_section_sline_statement_map_t& statementIndex, const char* key, int line) const {
+    if (!key) {
+        return nullptr;
+    }
+    name_section_sline_statement_map_t::const_iterator it = statementIndex.find(key);
+    if (it == statementIndex.end() || !it->second) {
+        return nullptr;
+    }
+    sline_statement_map_t::const_iterator li = it->second->statementMap.find(line);
+    return li == it->second->statementMap.end() ? nullptr : li->second;
+}
+
+AbstractStatement* qore_program_private::findIndexedStatementForLocation(const char* file, const char* source,
+        int start_line, int offset) const {
+    if (start_line <= 0) {
+        return nullptr;
+    }
+    if (source && *source) {
+        return findStatementInIndexIntern(statementByFileIndex, source, start_line + offset);
+    }
+    return findStatementInIndexIntern(statementByFileIndex, file, start_line + offset);
+}
+
 void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement *statement, bool addToIndex) {
     if (pgm && statement) {
         // plock must already be held
@@ -1484,7 +1802,7 @@ void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement
             pgm->priv->statementIds.push_back(statement);
             pgm->priv->reverseStatementIds.insert(std::pair<AbstractStatement*, unsigned long>(statement, pgm->priv->statementIds.size()));
         }
-        if (addToIndex) {
+        if (addToIndex && statement->loc) {
             if (statement->loc->getSource()) {
                 printd(5, "qore_program_private::registerStatement(file+source), this: %p, statement: %p\n", pgm->priv, statement);
                 pgm->priv->addStatementToIndexIntern(&pgm->priv->statementByFileIndex, statement->loc->getSource(), statement, statement->loc->offset, statement->loc->getFile(), statement->loc->offset);
@@ -1683,6 +2001,30 @@ int ThreadLocalProgramData::dbgStep(const StatementBlock* blockStatement, const 
     return rc;
 }
 
+int ThreadLocalProgramData::dbgSyntheticBlockStep(const StatementBlock* blockStatement, ExceptionSink* xsink) {
+    checkAttach(xsink);
+    checkBreakFlag();
+    if (runState == DBG_RS_STOPPED || runState == DBG_RS_DETACH) {
+        return 0;
+    }
+
+    int rc = 0;
+    if (runState == DBG_RS_STEP || (runState == DBG_RS_STEP_OVER && functionCallLevel == 0)) {
+        printd(5, "ThreadLocalProgramData::dbgSyntheticBlockStep() this: %p, rs: %d, tid: %d\n",
+            this, runState, q_gettid());
+        functionCallLevel = 0;
+        DebugRunStateEnum rs = runState;
+        const AbstractStatement* rts = runToStatement;
+        runState = DBG_RS_STOPPED;
+        runToStatement = nullptr;
+        getProgram()->priv->onStep(blockStatement, nullptr, 0, rc, rs, rts, xsink);
+        setRunState(rs, rts);
+        printd(5, "ThreadLocalProgramData::dbgSyntheticBlockStep() this: %p, rs: %d, rts: %p, rc: %d, xsink:%d\n",
+            this, runState, runToStatement, rc, xsink && xsink->isEvent());
+    }
+    return rc;
+}
+
 void ThreadLocalProgramData::dbgFunctionEnter(const StatementBlock* statement, ExceptionSink* xsink) {
     checkAttach(xsink);
     checkBreakFlag();
@@ -1771,6 +2113,9 @@ QoreProgram::QoreProgram() : priv(new qore_program_private(this, PO_DEFAULT)) {
 QoreProgram::QoreProgram(const QoreParseOptions& po) : priv(new qore_program_private(this, po)) {
 }
 
+QoreProgram::QoreProgram(int64 po) : QoreProgram(QoreParseOptions(po)) {
+}
+
 QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn)
         : priv(new qore_program_private(this, po, pgm)) {
     printd(QPP_DBG_LVL, "QoreProgram::QoreProgram(), this: %p, pgm: %p, priv: %p, pgmid: %d\n", this, pgm, priv,
@@ -1832,6 +2177,10 @@ QoreParseOptions QoreProgram::getParseOptions() const {
     return priv->pwo.parse_options;
 }
 
+int64 QoreProgram::getParseOptions64() const {
+    return getParseOptions().getLo();
+}
+
 QoreListNode* QoreProgram::getUserFunctionList() {
     ExceptionSink xsink;
     ProgramRuntimeParseAccessHelper pah(&xsink, this);
@@ -1847,8 +2196,16 @@ void QoreProgram::waitForTermination() {
 }
 
 void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
-    priv->waitForTerminationAndClear(xsink);
-    deref(xsink);
+    if (xsink) {
+        priv->waitForTerminationAndClear(xsink);
+        deref(xsink);
+        return;
+    }
+
+    ExceptionSink local_xsink;
+    priv->waitForTerminationAndClear(&local_xsink);
+    deref(&local_xsink);
+    local_xsink.clear();
 }
 
 void QoreProgram::lockOptions() {
@@ -1919,6 +2276,8 @@ QoreHashNode* QoreProgram::getThreadData() {
 }
 
 QoreValue QoreProgram::run(ExceptionSink* xsink) {
+    printd(5, "QoreProgram::run() exec_class_name='%s' empty=%d\n",
+        priv->exec_class_name.c_str(), (int)priv->exec_class_name.empty());
     if (!priv->exec_class_name.empty()) {
         runClass(priv->exec_class_name.c_str(), xsink);
         QoreValue rv = priv->exec_class_rv;
@@ -2004,6 +2363,27 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
+
+    // Save and set runtime_po for this program's top-level code.
+    // Without this, runtime_po retains the outer program's value,
+    // causing runtime_check_parse_option() to check the wrong program's
+    // options (e.g., PO_STRICT_ARGS from an outer %modern program leaking
+    // into a sub-program without it).
+    // RAII guard ensures restore even if an unexpected C++ exception propagates.
+    class RuntimePoGuard {
+    public:
+        RuntimePoGuard(const QoreParseOptions& new_po) {
+            swap_runtime_statement_location(nullptr, nullptr, nullptr, new_po, saved_stmt, saved_loc, saved_po);
+        }
+        ~RuntimePoGuard() {
+            swap_runtime_statement_location(nullptr, saved_stmt, saved_loc, saved_po, saved_stmt, saved_loc, saved_po);
+        }
+    private:
+        const AbstractStatement* saved_stmt = nullptr;
+        const QoreProgramLocation* saved_loc = nullptr;
+        QoreParseOptions saved_po;
+    };
+    RuntimePoGuard po_guard(priv->pwo.parse_options);
     return priv->sb.exec(xsink);
 }
 
@@ -2048,7 +2428,49 @@ int QoreProgram::parseRollback(ExceptionSink* xsink) {
     return priv->parseRollback(xsink);
 }
 
+void QoreProgram::setExecMode(qore_exec_mode_t mode, bool user_requested) {
+    priv->exec_mode = mode;
+    priv->user_requested_exec_mode = user_requested;
+}
+
+qore_exec_mode_t QoreProgram::getExecMode() const {
+    return priv->exec_mode;
+}
+
+void QoreProgram::setIRDump(bool dump) {
+    priv->ir_dump = dump;
+}
+
+bool QoreProgram::getIRDump() const {
+    return priv->ir_dump;
+}
+
+void QoreProgram::setIRFallbackWarn(bool warn) {
+    priv->ir_fallback_warn = warn;
+}
+
+bool QoreProgram::getIRFallbackWarn() const {
+    return priv->ir_fallback_warn;
+}
+
+void QoreProgram::setIRFallbackReport(bool report) {
+    priv->ir_fallback_report = report;
+}
+
+bool QoreProgram::getIRFallbackReport() const {
+    return priv->ir_fallback_report;
+}
+
+void QoreProgram::recordIRFallback(const char* reason) const {
+    priv->recordIRFallback(reason);
+}
+
+void QoreProgram::printIRFallbackReport() const {
+    priv->printIRFallbackReport();
+}
+
 void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
+    printd(5, "QoreProgram::runClass('%s') entered\n", classname);
     // find class
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*priv->RootNS, classname);
     if (!qc) {
@@ -2056,10 +2478,9 @@ void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
         return;
     }
 
-    if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink))
+    if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
         return;
-
-    //printd(5, "QoreProgram::runClass(%s)\n", classname);
+    }
 
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (!*xsink) {
@@ -2475,7 +2896,7 @@ AbstractStatement* QoreProgram::findFunctionStatement(const char* functionName, 
     //printd(5, "QoreProgram::findFunctionStatement() '%s' -> %p\n", functionName, uvb);
     if (!uvb)
         return nullptr;
-    return uvb->getStatementBlock();
+    return uvb->getEntryStatementBlock();
 }
 
 unsigned long QoreProgram::getStatementId(const AbstractStatement* statement) const {

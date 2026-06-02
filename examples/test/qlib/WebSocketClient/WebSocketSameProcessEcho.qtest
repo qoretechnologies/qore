@@ -9,20 +9,21 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/HttpServerUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires HttpServerUtil
 %requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/WebSocketUtil.qm
-%requires ../../../../qlib/WebSocketHandler.qm
-%requires ../../../../qlib/WebSocketClient.qm
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
 %try-module json
 %define NoJson
 %endtry

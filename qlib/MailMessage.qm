@@ -418,21 +418,22 @@ public string sub decode_mime_filename(string filename) {
 */
 public string sub sanitize_filename(string filename) {
     # Remove control characters, path separators, and other unsafe characters
-    # Work at the character level to preserve UTF-8 multibyte sequences
-    string result = "";
-    int len = filename.length();
-    for (int i = 0; i < len; i++) {
-        string ch = filename[i];
-        int c = ord(ch);
-        # Skip control characters (0x00-0x1f), DEL (0x7f), and path separators (/ and \)
-        if (c >= 0x20 && c != 0x7f && ch != "/" && ch != "\\") {
-            result += ch;
-        }
-    }
+    # Using regex substitution to reliably handle UTF-8 multibyte characters
+    string result = filename;
+
+    # Remove control characters first (0x00-0x1f, 0x7f) before path separators
+    # to avoid regex corruption issues with embedded null bytes
+    result =~ s/[\x00-\x1f\x7f]//g;
+
+    # Remove path separators
+    result =~ s/[\/\\]//g;
+
     # Trim whitespace
     trim result;
+
     # Remove leading dots
     result =~ s/^\.+//;
+
     # If empty after sanitization, return a default name
     if (result.empty()) {
         result = "attachment";

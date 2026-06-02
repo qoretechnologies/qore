@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ObjectClosureSelfTest
+
+class ObjectClosureSelfSource {
+    private {
+        int value;
+    }
+
+    constructor(int value) {
+        self.value = value;
+    }
+
+    code<int()> makeGetter() {
+        return int sub () {
+            return self.getValue();
+        };
+    }
+
+    int getValue() {
+        return value;
+    }
+}
+
+public class ObjectClosureSelfTest inherits QUnit::Test {
+    constructor() : Test("ObjectClosureSelfTest", "1.0") {
+        addTestCase("Object closure explicit self", \testObjectClosureExplicitSelf(), NOTHING);
+
+        set_return_value(main());
+    }
+
+    testObjectClosureExplicitSelf() {
+        ObjectClosureSelfSource obj(17);
+        code<int()> getter = obj.makeGetter();
+
+        assertEq(17, getter(), "object closure resolves captured self");
+    }
+}

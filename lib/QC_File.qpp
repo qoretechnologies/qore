@@ -251,7 +251,7 @@ f.open2("/tmp/my-file.txt");
 
     @see File::open(), File::open2()
  */
-File::constructor(*string encoding) {
+File::constructor(*string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
 
    SimpleRefHolder<File> f(new File(qe));
@@ -304,7 +304,7 @@ if (f.open(fn, O_CREAT | O_TRUNC | O_WRONLY, 0644, "ISO-8859-1"))
 
     @see File::open2() for a version of this method that throws an exception when errors occur opening the file
  */
-int File::open(string path, softint flags = O_RDONLY, softint mode = 0666, *string encoding) {
+int File::open(string path, softint flags = O_RDONLY, softint mode = 0666, *string encoding) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::open", xsink))
       return QoreValue();
 
@@ -345,7 +345,7 @@ catch (hash ex) {
 
     @see File::open() for a version of this method that returns an error code instead of throwing an exception when errors occur opening the %File
  */
-nothing File::open2(string path, softint flags = O_RDONLY, softint mode = 0666, *string encoding) {
+nothing File::open2(string path, softint flags = O_RDONLY, softint mode = 0666, *string encoding) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::open2", xsink))
       return QoreValue();
 
@@ -389,7 +389,7 @@ f.write(data);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::write(binary data) {
+int File::write(binary data) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::write", xsink))
       return QoreValue();
 
@@ -417,7 +417,7 @@ f.write(data);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::write(string data) {
+int File::write(string data) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::write", xsink))
       return QoreValue();
 
@@ -445,7 +445,7 @@ f.print(data);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::print(string data) {
+int File::print(string data) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::print", xsink))
       return QoreValue();
 
@@ -461,7 +461,7 @@ f.writei1(val);
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param c the integer to write; only the least-significant 8 bits will be written to the file
+    @param value the integer to write; only the least-significant 8 bits will be written to the file
 
     @return 0 for success
 
@@ -470,11 +470,11 @@ f.writei1(val);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::writei1(int c) {
+int File::writei1(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei1", xsink))
       return QoreValue();
 
-   return f->writei1(c, xsink);
+   return f->writei1(value, xsink);
 }
 
 //! Writes a 2-byte (16 bit) integer to the file in binary big-endian format
@@ -486,7 +486,7 @@ f.writei2(val);
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param s the integer to write in binary big-endian format; only the least-significant 16 bits of the integer will be written to the file
+    @param value the integer to write in binary big-endian format; only the least-significant 16 bits of the integer will be written to the file
 
     @return 0 for success
 
@@ -495,11 +495,11 @@ f.writei2(val);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::writei2(int s) {
+int File::writei2(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei2", xsink))
       return QoreValue();
 
-   return f->writei2(s, xsink);
+   return f->writei2(value, xsink);
 }
 
 //! Writes a 4-byte (32 bit) integer to the file in binary big-endian format
@@ -511,7 +511,7 @@ f.writei4(val);
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param i the integer to write in binary big-endian format; only the least-significant 32 bits of the integer will be written to the file
+    @param value the integer to write in binary big-endian format; only the least-significant 32 bits of the integer will be written to the file
 
     @return 0 for success
 
@@ -520,11 +520,11 @@ f.writei4(val);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::writei4(int i) {
+int File::writei4(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei4", xsink))
       return QoreValue();
 
-   return f->writei4(i, xsink);
+   return f->writei4(value, xsink);
 }
 
 //! Writes an 8-byte (64 bit) integer to the file in binary big-endian format
@@ -536,7 +536,7 @@ f.writei8(val);
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param i the integer to write in binary big-endian format; only the least-significant 64 bits of the integer will be written to the file
+    @param value the integer to write in binary big-endian format; only the least-significant 64 bits of the integer will be written to the file
 
     @return 0 for success
 
@@ -545,11 +545,11 @@ f.writei8(val);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::writei8(int i) {
+int File::writei8(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei8", xsink))
       return QoreValue();
 
-   return f->writei8(i, xsink);
+   return f->writei8(value, xsink);
 }
 
 //! Writes a 2-byte (16 bit) integer to the file in binary little-endian format
@@ -561,7 +561,7 @@ f.writei2LSB(val);
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param s the integer to write in binary little-endian format; only the least-significant 16 bits of the integer will be written to the file
+    @param value the integer to write in binary little-endian format; only the least-significant 16 bits of the integer will be written to the file
 
     @return 0 for success
 
@@ -570,11 +570,11 @@ f.writei2LSB(val);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::writei2LSB(int s) {
+int File::writei2LSB(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei2LSB", xsink))
       return QoreValue();
 
-   return f->writei2LSB(s, xsink);
+   return f->writei2LSB(value, xsink);
 }
 
 //! Writes a 4-byte (32 bit) integer to the file in binary little-endian format
@@ -586,7 +586,7 @@ f.writei4LSB(val);
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param i the integer to write in binary little-endian format; only the least-significant 32 bits of the integer will be written to the file
+    @param value the integer to write in binary little-endian format; only the least-significant 32 bits of the integer will be written to the file
 
     @return 0 for success
 
@@ -595,11 +595,11 @@ f.writei4LSB(val);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::writei4LSB(int i) {
+int File::writei4LSB(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei4LSB", xsink))
       return QoreValue();
 
-   return f->writei4LSB(i, xsink);
+   return f->writei4LSB(value, xsink);
 }
 
 //! Writes an 8-byte (64 bit) integer to the file in binary little-endian format
@@ -611,7 +611,7 @@ f.writei8LSB(val);
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param i the integer to write in binary little-endian format; only the least-significant 64 bits of the integer will be written to the file
+    @param value the integer to write in binary little-endian format; only the least-significant 64 bits of the integer will be written to the file
 
     @return 0 for success
 
@@ -620,11 +620,11 @@ f.writei8LSB(val);
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::writei8LSB(int i) {
+int File::writei8LSB(int value) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::writei8LSB", xsink))
       return QoreValue();
 
-   return f->writei8LSB(i, xsink);
+   return f->writei8LSB(value, xsink);
 }
 
 //! Writes a formatted string with soft field widths to the file
@@ -678,8 +678,8 @@ f.vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello there: 2\n", exceed
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param fmt the format string; see @ref string_formatting for more information about the format string
-    @param fmt_args the single argument or list of arguments that will be used as the argument list or the format string. If a single argument is passed instead of a list, it will be used as the first argument as if a list were passed
+    @param format the format string; see @ref string_formatting for more information about the format string
+    @param values the single argument or list of arguments that will be used as the argument list or the format string. If a single argument is passed instead of a list, it will be used as the first argument as if a list were passed
 
     @return the number of bytes written
 
@@ -690,7 +690,7 @@ f.vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello there: 2\n", exceed
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::vprintf(string[doc] fmt, any[doc] fmt_args) {
+int File::vprintf(string[doc] format, any[doc] values) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::vprintf", xsink))
       return QoreValue();
 
@@ -759,8 +759,8 @@ f.f_vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello: 2\n", enforcing 
     @par Events:
     @ref EVENT_DATA_WRITTEN
 
-    @param fmt the format string; see @ref string_formatting for more information about the format string
-    @param fmt_args the single argument or list of arguments that will be used as the argument list or the format string. If a single argument is passed instead of a list, it will be used as the first argument as if a list were passed
+    @param format the format string; see @ref string_formatting for more information about the format string
+    @param values the single argument or list of arguments that will be used as the argument list or the format string. If a single argument is passed instead of a list, it will be used as the first argument as if a list were passed
 
     @return the number of bytes written
 
@@ -771,7 +771,7 @@ f.f_vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello: 2\n", enforcing 
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::f_vprintf(string[doc] fmt, any[doc] fmt_args) {
+int File::f_vprintf(string[doc] format, any[doc] values) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::f_vprintf", xsink))
       return QoreValue();
 
@@ -795,7 +795,7 @@ int File::f_vprintf() [flags=RUNTIME_NOOP] {
 
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
  */
-nothing File::setCharset(*string encoding) {
+nothing File::setCharset(*string encoding) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::setCharset", xsink))
       return QoreValue();
 
@@ -830,9 +830,9 @@ f.lock(F_RDLCK, 512, 2048);
 f.lock(F_UNLCK);
     @endcode
 
-    @param type %Type of lock (or unlock); see @ref file_locking_constants
+    @param lock_type %Type of lock (or unlock); see @ref file_locking_constants
     @param start Start byte for lock, 0 is the default (start of file)
-    @param len Length in bytes for range to lock, 0 is the default (rest of file)
+    @param length Length in bytes for range to lock, 0 is the default (rest of file)
     @param whence Indicates how the relative offset of the file should be calculated for the lock; see @ref file_seek_constants
 
     @return 0 for success, @ref Err::EACCES "EACCES" if the lock would block (only in the case that the lock would block is no exception thrown and @ref Err::EACCES "EACCES" returned)
@@ -843,7 +843,8 @@ f.lock(F_UNLCK);
 
     @see File::lockBlocking() for a blocking version of this method
  */
-int File::lock(softint[doc] type = F_RDLCK, softint[doc] start = 0, softint[doc] len = 0, softint[doc] whence = SEEK_SET) {
+int File::lock(softint[doc] lock_type = F_RDLCK, softint[doc] start = 0, softint[doc] length = 0,
+      softint[doc] whence = SEEK_SET) [flags=NAMED_ARGS] {
 #ifdef HAVE_STRUCT_FLOCK
    if (check_terminal_io(self, "lock", xsink))
       return QoreValue();
@@ -876,9 +877,9 @@ f.lockBlocking(F_RDLCK, 512, 2048);
 f.lockBlocking(F_UNLCK);
     @endcode
 
-    @param type %Type of lock (or unlock); see @ref file_locking_constants
+    @param lock_type %Type of lock (or unlock); see @ref file_locking_constants
     @param start Start byte for lock, 0 is the default (start of file)
-    @param len Length in bytes for range to lock, 0 is the default (rest of file)
+    @param length Length in bytes for range to lock, 0 is the default (rest of file)
     @param whence Indicates how the relative offset of the file should be calculated for the lock; see @ref file_seek_constants
 
     @throw FILE-LOCK-ERROR %File is not open, lock length is negative, or the fcntl operation failed
@@ -887,7 +888,8 @@ f.lockBlocking(F_UNLCK);
 
     @see File::lockBlocking() for a blocking version of this method
  */
-nothing File::lockBlocking(softint[doc] type = F_RDLCK, softint[doc] start = 0, softint[doc] len = 0, softint[doc] whence = SEEK_SET) {
+nothing File::lockBlocking(softint[doc] lock_type = F_RDLCK, softint[doc] start = 0, softint[doc] length = 0,
+      softint[doc] whence = SEEK_SET) [flags=NAMED_ARGS] {
 #ifdef HAVE_STRUCT_FLOCK
    if (check_terminal_io(self, "File::lockBlocking", xsink))
       return QoreValue();
@@ -956,19 +958,19 @@ hash File::getLockInfo() [flags=RET_VALUE_ONLY] {
 f.chown(0, 0);
     @endcode
 
-    @param uid The user id of the user to change to; -1 means do not change uid
-    @param gid The group id of the user to change to; -1 means do not change gid
+    @param owner The user id of the user to change to; -1 means do not change uid
+    @param group The group id of the user to change to; -1 means do not change gid
 
     @throw FILE-CHOWN-ERROR %File is not open or the chown operation failed
     @throw MISSING-FEATURE-ERROR this method is not supported on this platform; check Option::HAVE_UNIX_FILEMGT before calling this method to avoid this exception
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
  */
-nothing File::chown(softint uid, softint gid = -1) {
+nothing File::chown(softint owner, softint group = -1) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN
    if (check_terminal_io(self, "File::chown", xsink))
       return QoreValue();
 
-   f->chown( (uid_t)uid, (gid_t)gid, xsink);
+   f->chown((uid_t)owner, (gid_t)group, xsink);
    return QoreValue();
 #else
    return missing_method_error("File::chown", "UNIX_FILEMGT", xsink);
@@ -994,7 +996,7 @@ stdin.getTerminalAttributes(termios);
     @throw MISSING-FEATURE-ERROR this method is not supported on this platform; check Option::HAVE_TERMIOS before calling this method to avoid this exception
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
  */
-nothing File::getTerminalAttributes(TermIOS[QoreTermIOS] termios) {
+nothing File::getTerminalAttributes(TermIOS[QoreTermIOS] termios) [flags=NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
    if (check_terminal_io(self, "File::getTerminalAttributes", xsink))
       return QoreValue();
@@ -1077,7 +1079,7 @@ stdin.setTerminalAttributes(TCSADRAIN, termios);
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
     @ref stdout, @ref stderr) when @ref no-terminal-io is set
  */
-nothing File::setTerminalAttributes(softint action = TCSANOW, TermIOS[QoreTermIOS] termios) {
+nothing File::setTerminalAttributes(softint action = TCSANOW, TermIOS[QoreTermIOS] termios) [flags=NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
    if (check_terminal_io(self, "File::setTerminalAttributes", xsink))
       return QoreValue();
@@ -1096,7 +1098,7 @@ File my_file("/tmp/my_stderr.txt", O_CREAT|O_TRUNC|O_WRONLY);
 stderr.redirect(my_file);
     @endcode
 
-    @param file the file that the current object will be redirected to
+    @param target_file the file that the current object will be redirected to
 
     @throw FILE-REDIRECT-ERROR the underlying call to \c dup2() failed
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called on or with a system constant object (@ref stdin,
@@ -1109,11 +1111,11 @@ stderr.redirect(my_file);
 
     @since Qore 0.9
 */
-nothing File::redirect(Qore::File[File] file) {
-    if (check_terminal_io(self, "File::redirect", xsink) || check_terminal_io(obj_file, "File::redirect", xsink))
+nothing File::redirect(Qore::File[File] target_file) [flags=NAMED_ARGS] {
+    if (check_terminal_io(self, "File::redirect", xsink) || check_terminal_io(obj_target_file, "File::redirect", xsink))
         return QoreValue();
 
-    f->redirect(**file, xsink);
+    f->redirect(**target_file, xsink);
 }
 
 //! Returns a hash with read and write files on an internal FIFO pipe

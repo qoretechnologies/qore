@@ -4,11 +4,12 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/DataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires DataProvider
 
 %requires reflection
 
@@ -88,6 +89,53 @@ class TestRecordProcessor inherits AbstractDataProcessor {
         hash<auto> new_rec = (map {pfx + "-" + $1.key: $1.value}, rec.pairIterator()) + crec;
         raw_recs += new_rec;
         recs += map $1, new_rec.contextIterator();
+        enqueue(new_rec);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return True;
+    }
+}
+
+class SignalingTestRecordProcessor inherits AbstractDataProcessor {
+    public {
+        string pfx;
+        list<hash<auto>> recs;
+        list<hash<auto>> raw_recs;
+        Queue processed_queue();
+    }
+
+    constructor(string pfx) {
+        self.pfx = pfx;
+    }
+
+    clear() {
+        remove recs;
+        remove raw_recs;
+        while (processed_queue.size()) {
+            processed_queue.get();
+        }
+    }
+
+    int waitForRecords(int count, string desc) {
+        try {
+            while (True) {
+                int size = processed_queue.get(5s);
+                if (size >= count) {
+                    return size;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            throw "TEST-TIMEOUT", sprintf("timeout waiting for %s; expected at least %d processed records; have %d",
+                desc, count, recs.size()), ex;
+        }
+    }
+
+    private submitImpl(code enqueue, auto rec) {
+        hash<auto> new_rec = (map {pfx + "-" + $1.key: $1.value}, rec.pairIterator());
+        raw_recs += new_rec;
+        recs += map $1, new_rec.contextIterator();
+        processed_queue.push(recs.size());
         enqueue(new_rec);
     }
 
@@ -328,6 +376,44 @@ class TestBulkRecordProvider inherits AbstractDataProviderBulkRecordInterface {
     }
 }
 
+hashdecl TypedRecordIteratorRow {
+    int id;
+    string name;
+}
+
+class TypedRecordIterator inherits AbstractIterator<hash<TypedRecordIteratorRow>> {
+    private {
+        bool available = True;
+        bool valid_flag = False;
+    }
+
+    bool next() {
+        if (!available) {
+            valid_flag = False;
+            return False;
+        }
+
+        available = False;
+        valid_flag = True;
+        return True;
+    }
+
+    hash<TypedRecordIteratorRow> getValue() {
+        if (!valid_flag) {
+            throw "INVALID-ITERATOR", "iterator is not valid";
+        }
+
+        return <TypedRecordIteratorRow>{
+            "id": 1,
+            "name": "alpha",
+        };
+    }
+
+    bool valid() {
+        return valid_flag;
+    }
+}
+
 class TestIntProcessor inherits AbstractDataProcessor {
     private {
         int inc;
@@ -474,8 +560,118 @@ class TestPipelineDataProvider inherits AbstractDataProvider {
     }
 }
 
+class BufferColumnBulkRecordProvider inherits AbstractDataProviderBulkRecordInterface {
+    private {
+        bool available = True;
+    }
+
+    constructor() : AbstractDataProviderBulkRecordInterface(10) {
+    }
+
+    private DataProviderShape getValueShapeImpl() {
+        return DataProviderShape::BufferColumns;
+    }
+
+    private *auto getShapedValueImpl() {
+        if (!available) {
+            return;
+        }
+        available = False;
+        return {
+            "id": new buffer<int64>((10, 20)),
+            "score": new buffer<float64>((1.5, 2.5)),
+        };
+    }
+
+    private *hash<auto> getValueImpl() {
+        throw "TEST-ERROR", "createRecordsBulk(stream) must consume the shaped bulk API";
+    }
+}
+
+class BulkShapeTestProvider inherits AbstractDataProvider {
+    public {
+        *DataProviderShape last_shape;
+        *auto last_recs;
+        int shape_create_calls = 0;
+        int bulk_create_calls = 0;
+        int shape_upsert_calls = 0;
+        int bulk_upsert_calls = 0;
+    }
+
+    private {
+        *list<DataProviderShape> create_shapes;
+        *list<DataProviderShape> upsert_shapes;
+    }
+
+    constructor(*list<DataProviderShape> create_shapes, *list<DataProviderShape> upsert_shapes) {
+        self.create_shapes = create_shapes;
+        self.upsert_shapes = upsert_shapes;
+    }
+
+    string getName() {
+        return "BulkShapeTestProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        hash<DataProviderInfo> info = <DataProviderInfo>{
+            "name": "bulk-shape-test",
+            "desc": "bulk shape test provider",
+            "type": "bulk-shape-test",
+            "supports_create": True,
+            "supports_bulk_create": True,
+            "supports_upsert": True,
+            "supports_bulk_upsert": True,
+        };
+        if (create_shapes) {
+            info.bulk_create_shapes = create_shapes;
+        }
+        if (upsert_shapes) {
+            info.bulk_upsert_shapes = upsert_shapes;
+        }
+        return info;
+    }
+
+    private *hash<auto> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
+        last_shape = DataProviderShape::HashOfLists;
+        last_recs = recs;
+        ++bulk_create_calls;
+        return recs;
+    }
+
+    private *hash<auto> createRecordsShapeImpl(auto recs, DataProviderShape shape, *hash<auto> create_options) {
+        last_shape = shape;
+        last_recs = recs;
+        ++shape_create_calls;
+        return AbstractDataProcessor::bufferColumnsToHashList(recs);
+    }
+
+    private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        return UpsertResultInserted;
+    }
+
+    private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
+        last_shape = DataProviderShape::HashOfLists;
+        last_recs = recs;
+        ++bulk_upsert_calls;
+        return AbstractDataProcessor::repeatValue(UpsertResultInserted,
+            AbstractDataProcessor::shapeRecordCount(recs, DataProviderShape::HashOfLists));
+    }
+
+    private *list<string> upsertRecordsShapeImpl(auto recs, DataProviderShape shape, *hash<auto> upsert_options) {
+        last_shape = shape;
+        last_recs = recs;
+        ++shape_upsert_calls;
+        return AbstractDataProcessor::repeatValue(UpsertResultUpdated,
+            AbstractDataProcessor::shapeRecordCount(recs, shape));
+    }
+}
+
 public class DataProviderTest inherits QUnit::Test {
     constructor() : Test("DataProvider Test", "1.0") {
+        # Keep this core module test independent of host-specific provider discovery configuration.
+        unsetenv("QORE_DATA_PROVIDERS");
+        remove ENV{"QORE_DATA_PROVIDERS"};
+
         DataProviderTypeEntry::setEpheremalIdStart(-1);
 
         addTestCase("expression tests", \expressionTests());
@@ -486,6 +682,11 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("string test", \stringTest());
         addTestCase("data test", \dataTest());
         addTestCase("compat test", \compatTest());
+        addTestCase("filtered hash map type hint test", \filteredHashMapTypeHintTest());
+        addTestCase("optional typed hash field test", \optionalTypedHashFieldTest());
+        addTestCase("generic record iterator test", \genericRecordIteratorTest());
+        addTestCase("processor shape API test", \processorShapeApiTest());
+        addTestCase("bulk provider shape API test", \bulkProviderShapeApiTest());
         addTestCase("pipeline test", \pipelineTest());
         addTestCase("pipeline metrics test", \pipelineMetricsTest());
         addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
@@ -496,6 +697,110 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
+    }
+
+    genericRecordIteratorTest() {
+        DefaultRecordIterator<hash<TypedRecordIteratorRow>> i(new TypedRecordIterator());
+
+        assertTrue(i instanceof AbstractDataProviderRecordIterator<hash<TypedRecordIteratorRow>>);
+        assertTrue(i instanceof AbstractIterator<hash<TypedRecordIteratorRow>>);
+        assertTrue(i.next());
+
+        hash<TypedRecordIteratorRow> row = i.getValue();
+        assertEq("hash<TypedRecordIteratorRow>", row.fullType());
+        assertEq(1, row.id);
+        assertEq("alpha", row.name);
+        assertFalse(i.next());
+    }
+
+    processorShapeApiTest() {
+        assertEq(DataProviderShape::RowRecords, AbstractDataProcessor::detectShape({"a": 1}));
+        assertEq(DataProviderShape::HashOfLists, AbstractDataProcessor::detectShape({"a": (1, 2)}));
+        assertEq(2, AbstractDataProcessor::shapeRecordCount({"a": (1, 2)}, DataProviderShape::HashOfLists));
+
+        list<auto> rows = AbstractDataProcessor::convertShape({"a": (1, 2), "b": ("x", "y")},
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+        assertEq(2, rows.size());
+        assertEq({"a": 1, "b": "x"}, rows[0]);
+        assertEq({"a": 2, "b": "y"}, rows[1]);
+
+        hash<auto> columns = AbstractDataProcessor::convertShape({"a": 1, "b": "x"},
+            DataProviderShape::RowRecords, DataProviderShape::HashOfLists)[0];
+        assertEq({"a": (1,), "b": ("x",)}, columns);
+
+        ReturnBasedProcessor proc();
+        assertTrue(proc.supportsInputShape(DataProviderShape::HashOfLists));
+        assertTrue(proc.supportsInputShape(DataProviderShape::RowRecords));
+        assertFalse(proc.supportsInputShape(DataProviderShape::DataFrameBlock));
+    }
+
+    bulkProviderShapeApiTest() {
+        hash<auto> dense_columns = {
+            "id": new buffer<int64>((1, 2)),
+            "score": new buffer<float64>((90.5, 88.0)),
+        };
+
+        BulkShapeTestProvider provider(
+            (DataProviderShape::BufferColumns,),
+            (DataProviderShape::BufferColumns,));
+        assertEqSoft((DataProviderShape::BufferColumns,), provider.getBulkCreateShapes(),
+            "provider advertises native bulk create shapes");
+        assertEqSoft((DataProviderShape::BufferColumns,), provider.getBulkUpsertShapes(),
+            "provider advertises native bulk upsert shapes");
+        assertTrue(provider.supportsBulkCreateShape(DataProviderShape::BufferColumns),
+            "provider reports BufferColumns create support");
+        assertTrue(provider.supportsBulkUpsertShape(DataProviderShape::BufferColumns),
+            "provider reports BufferColumns upsert support");
+        assertFalse(provider.supportsBulkCreateShape(DataProviderShape::DataFrameBlock),
+            "provider does not report unadvertised create shapes");
+
+        assertEq({"id": (1, 2), "score": (90.5, 88.0)}, provider.createRecordsBulk(dense_columns, NOTHING),
+            "advertised BufferColumns bulk create preserves the native shape until provider dispatch");
+        assertEq(DataProviderShape::BufferColumns, provider.last_shape,
+            "BufferColumns create dispatch uses createRecordsShapeImpl()");
+        assertEq(1, provider.shape_create_calls, "BufferColumns create calls shaped provider implementation");
+        assertEq(0, provider.bulk_create_calls, "BufferColumns create does not fall back to hash-of-lists first");
+
+        assertEq((UpsertResultUpdated, UpsertResultUpdated), provider.upsertRecordsBulk(dense_columns, NOTHING),
+            "advertised BufferColumns bulk upsert preserves the native shape until provider dispatch");
+        assertEq(DataProviderShape::BufferColumns, provider.last_shape,
+            "BufferColumns upsert dispatch uses upsertRecordsShapeImpl()");
+        assertEq(1, provider.shape_upsert_calls, "BufferColumns upsert calls shaped provider implementation");
+        assertEq(0, provider.bulk_upsert_calls, "BufferColumns upsert does not fall back to hash-of-lists first");
+
+        BulkShapeTestProvider fallback_provider(NOTHING, NOTHING);
+        assertEqSoft((DataProviderShape::HashOfLists,), fallback_provider.getBulkCreateShapes(),
+            "providers without explicit create shapes default to hash-of-lists compatibility");
+        assertEq({"id": (1, 2), "score": (90.5, 88.0)}, fallback_provider.createRecordsBulk(dense_columns, NOTHING),
+            "unadvertised BufferColumns bulk create falls back automatically to hash-of-lists");
+        assertEq(DataProviderShape::HashOfLists, fallback_provider.last_shape,
+            "fallback create dispatch uses hash-of-lists provider implementation");
+        assertEq(0, fallback_provider.shape_create_calls, "fallback create does not call shaped implementation");
+        assertEq(1, fallback_provider.bulk_create_calls, "fallback create calls bulk hash-of-lists implementation");
+
+        BulkShapeTestProvider stream_provider(
+            (DataProviderShape::BufferColumns,),
+            (DataProviderShape::BufferColumns,));
+        assertEq({"id": (10, 20), "score": (1.5, 2.5)},
+            stream_provider.createRecordsBulk(new BufferColumnBulkRecordProvider(), NOTHING),
+            "stream bulk create consumes getShapedValue() automatically");
+        assertEq(DataProviderShape::BufferColumns, stream_provider.last_shape,
+            "stream bulk create preserves the advertised stream shape");
+    }
+
+    filteredHashMapTypeHintTest() {
+        hash<string, bool> path_vars = {"name": True};
+        *hash<string, bool> query_set;
+
+        hash<string, AbstractDataField> fields = map {$1: new QoreDataField({
+            "name": $1,
+            "type": AbstractDataProviderTypeMap."softstring",
+            "desc": sprintf("URI path variable %y", $1),
+        })}, keys path_vars, !query_set{$1};
+
+        assertEq(1, fields.size());
+        assertEq("name", fields.name.getName());
+        assertEq("softstring", fields.name.getTypeName());
     }
 
     private checkYaml() {
@@ -1272,6 +1577,26 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(h2, t2.acceptsValue(h2));
     }
 
+    optionalTypedHashFieldTest() {
+        AbstractDataProviderType optional_type = AbstractDataProviderType::get(new Type("*hash<StatInfo>"));
+        assertFalse(optional_type.isMandatory());
+        assertTrue(optional_type.isOrNothingType());
+        assertNothing(optional_type.acceptsValue());
+        assertEq(<StatInfo>{"size": 1}, optional_type.acceptsValue({"size": 1}));
+
+        HashDataType request_type();
+        request_type.addQoreFields({
+            "stat": {
+                "type": new Type("*hash<StatInfo>"),
+                "display_name": "Stat",
+            },
+        });
+
+        assertFalse(request_type.getField("stat").isMandatory());
+        assertEq({}, request_type.acceptsValue({}));
+        assertEq({"stat": <StatInfo>{"size": 1}}, request_type.acceptsValue({"stat": {"size": 1}}));
+    }
+
     pipelineTest() {
         {
             TestRecordProvider record_provider();
@@ -1708,7 +2033,7 @@ public class DataProviderTest inherits QUnit::Test {
             });
             DataProviderPipeline pipe(opts);
 
-            TestRecordProcessor record_processor0("A");
+            SignalingTestRecordProcessor record_processor0("A");
             pipe.append(record_processor0);
             hash<PipelineInfo> info = pipe.getInfo();
             assertNothing(info.start_time);
@@ -1723,14 +2048,7 @@ public class DataProviderTest inherits QUnit::Test {
             pipe.submit({"a": 1});
             assertEq(PS_RUNNING, pipe.getInfo().status);
 
-            # wait for record count = 1
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size == 1) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(1, "initial pipeline submission");
 
             Counter thread_cnt(1);
             Queue abort_queue();
@@ -1750,17 +2068,10 @@ public class DataProviderTest inherits QUnit::Test {
                 }
             };
             background submit();
-            thread_cnt.waitForZero();
+            assertEq(0, thread_cnt.waitForZero(5s));
 
             # issue #4317: do not abort before we know the infinite record provider is in progress
-            # wait for record count >= 2
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size >= 2) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(2, "abort test pipeline submission");
 
             if (m_options.verbose > 2) {
                 printf("TID %d: record processor0 size: %d; about to abort\n", gettid(), record_processor0.recs.size());
@@ -1781,7 +2092,7 @@ public class DataProviderTest inherits QUnit::Test {
                 printf("TID %d: pipeline info: %N\n", gettid(), pipe.getInfo());
             }
 
-            *hash<ExceptionInfo> ex_info = abort_queue.get();
+            *hash<ExceptionInfo> ex_info = abort_queue.get(5s);
             assertEq("PIPELINE-SUBMISSION-ABORTED", ex_info.err);
 
             if (m_options.verbose > 2) {
@@ -1813,14 +2124,7 @@ public class DataProviderTest inherits QUnit::Test {
             pipe1.submit({"a": 1});
             assertEq(PS_RUNNING, pipe1.getInfo().status);
 
-            # wait for record count = 1
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size == 1) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(1, "initial copied pipeline submission");
 
             assertEq(0, thread_cnt.getCount());
             assertEq(0, abort_queue.size());
@@ -1835,24 +2139,17 @@ public class DataProviderTest inherits QUnit::Test {
                 }
             };
             background submit();
-            thread_cnt.waitForZero();
+            assertEq(0, thread_cnt.waitForZero(5s));
 
             # issue #4317: do not abort before we know the infinite record provider is in progress
-            # wait for record count >= 2
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size >= 2) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(2, "abort test copied pipeline submission");
 
             pipe1.abort();
             assertEq(PS_ABORTED, pipe1.getInfo().status);
             #printf("%N\n", pipe.getInfo());
             assertThrows("PIPELINE-ERROR", \pipe1.submit(), {});
 
-            ex_info = abort_queue.get();
+            ex_info = abort_queue.get(5s);
             assertEq("PIPELINE-SUBMISSION-ABORTED", ex_info.err);
 
             pipe1.reset();
@@ -1887,14 +2184,7 @@ public class DataProviderTest inherits QUnit::Test {
             pipe2.submit({"a": 1});
             assertEq(PS_RUNNING, pipe2.getInfo().status);
 
-            # wait for record count = 1
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size == 1) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(1, "initial factory pipeline submission");
 
             assertEq(0, thread_cnt.getCount());
             assertEq(0, abort_queue.size());
@@ -1909,24 +2199,17 @@ public class DataProviderTest inherits QUnit::Test {
                 }
             };
             background submit();
-            thread_cnt.waitForZero();
+            assertEq(0, thread_cnt.waitForZero(5s));
 
             # issue #4317: do not abort before we know the infinite record provider is in progress
-            # wait for record count >= 2
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size >= 2) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(2, "abort test factory pipeline submission");
 
             pipe2.abort();
             assertEq(PS_ABORTED, pipe2.getInfo().status);
             #printf("%N\n", pipe.getInfo());
             assertThrows("PIPELINE-ERROR", \pipe2.submit(), {});
 
-            ex_info = abort_queue.get();
+            ex_info = abort_queue.get(5s);
             assertEq("PIPELINE-SUBMISSION-ABORTED", ex_info.err);
 
             pipe2.reset();
@@ -2962,7 +3245,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Test DPAT_PIPELINE_PROCESSOR constant
         {
-            assertEq(10, DPAT_PIPELINE_PROCESSOR);
+            assertEq(10, cast<int>(DPAT_PIPELINE_PROCESSOR));
             assertEq("supports_pipeline_processors", ActionCodeFlagMap{DPAT_PIPELINE_PROCESSOR});
             assertEq("supports_pipeline_processor", ActionAttrMap{DPAT_PIPELINE_PROCESSOR});
             assertEq("PIPELINE_PROCESSOR", ActionNameMap{DPAT_PIPELINE_PROCESSOR});
@@ -3281,6 +3564,7 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, type_cache.size());
         assertFalse(type_cache.empty());
         assertThrows("TYPE-ERROR", \type_cache.registerType(), ("test/one", h2));
+        assertNothing(h2.getPath());
         hash<DataProviderTypeEntryInfo> type_info = type_cache.getTypeInfo("test/one");
         assertEq(-1, type_info.epheremal_type_id);
         assertEq("one", type_info.name);
@@ -3301,7 +3585,9 @@ public class DataProviderTest inherits QUnit::Test {
         type_cache.registerType("test/two", h2);
         assertEq(2, type_cache.size());
         assertThrows("TYPE-ARG-ERROR", \type_cache.registerType(), ("test/two", h1));
+        assertEq("/test/one", h1.getPath());
         assertThrows("TYPE-ERROR", \type_cache.registerType(), ("test/two", hx));
+        assertNothing(hx.getPath());
         type_info = type_cache.getTypeInfo("test/two");
         assertEq(-2, type_info.epheremal_type_id);
         assertEq("two", type_info.name);
@@ -3320,7 +3606,9 @@ public class DataProviderTest inherits QUnit::Test {
         type_cache.registerType("test/three", h3, True);
         assertEq(3, type_cache.size());
         assertThrows("TYPE-ARG-ERROR", \type_cache.registerType(), ("test/three", h1));
+        assertEq("/test/one", h1.getPath());
         assertThrows("TYPE-ERROR", \type_cache.registerType(), ("test/three", hx));
+        assertNothing(hx.getPath());
         assertEq(("/test/one", "/test/two", "/test/three"), type_cache.listTypes());
         assertEq(h1, type_cache.getType("test/one"));
         assertEq(h1, type_cache.getType("/test/one"));
@@ -3609,8 +3897,9 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreSoftNumberDataType num1({"number.format": ".,"});
             assertEq(1234.56n, num1.acceptsValue("1.234,56"));
+            # NULL and NOTHING are treated the same for soft types - both reject without qore.no_null
             assertThrows("RUNTIME-TYPE-ERROR", \num1.acceptsValue());
-            assertEq(0n, num1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \num1.acceptsValue(), NULL);
         }
 
         {
@@ -3661,7 +3950,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftBinaryDataType bin1();
             assertEq(<3132>, bin1.acceptsValue("12"));
             assertThrows("RUNTIME-TYPE-ERROR", \bin1.acceptsValue());
-            assertEq(binary(), bin1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \bin1.acceptsValue(), NULL);
         }
 
         {
@@ -3706,7 +3995,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftIntDataType int1();
             assertEq(1234, int1.acceptsValue("1234"));
             assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue());
-            assertEq(0, int1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \int1.acceptsValue(), NULL);
         }
 
         {
@@ -3857,7 +4146,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftBoolDataType bool1();
             assertEq(True, bool1.acceptsValue("1234"));
             assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue());
-            assertEq(False, bool1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \bool1.acceptsValue(), NULL);
         }
 
         {
@@ -3903,7 +4192,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftFloatDataType float1();
             assertEq(1234.0, float1.acceptsValue("1234"));
             assertThrows("RUNTIME-TYPE-ERROR", \float1.acceptsValue());
-            assertEq(0.0, float1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \float1.acceptsValue(), NULL);
         }
 
         {
@@ -3955,7 +4244,7 @@ public class DataProviderTest inherits QUnit::Test {
                 assertEq(2019-09-13T05:00:00Z, date1.acceptsValue("13.09.2019"));
                 assertEq(1970-01-01Z, date1.acceptsValue(0));
                 assertThrows("RUNTIME-TYPE-ERROR", \date1.acceptsValue());
-                assertEq(1970-01-01, date1.acceptsValue(NULL));
+                assertThrows("RUNTIME-TYPE-ERROR", \date1.acceptsValue(), NULL);
             }
 
             {
@@ -3976,7 +4265,7 @@ public class DataProviderTest inherits QUnit::Test {
             QoreSoftStringDataType str1();
             assertEq("123", str1.acceptsValue(123));
             assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue());
-            assertEq("", str1.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \str1.acceptsValue(), NULL);
         }
 
         {
@@ -4105,12 +4394,12 @@ public class DataProviderTest inherits QUnit::Test {
 
         {
             QoreDataType t(SoftStringType);
-            assertEq("", t.acceptsValue(NULL));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
         }
 
         {
             QoreDataType t(SoftStringType, {"qore.no_null": True});
-            assertThrows("RUNTIME-TYPE-ERROR", "does not accept.*NULL", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NULL);
         }
 
         {
@@ -4120,7 +4409,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertThrows("RUNTIME-TYPE-ERROR", "list.*integer", \t.acceptsValue(), 1);
             assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'integer'", \t.acceptsValue(), (1,));
             assertThrows("RUNTIME-TYPE-ERROR", "int.*string", \t.acceptsValue(), (("a",),));
-            assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'NULL'", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", "expects|got no value", \t.acceptsValue(), (NULL,));
             assertEq((1,), t.acceptsValue((1,)));
         }
 
@@ -4131,7 +4420,7 @@ public class DataProviderTest inherits QUnit::Test {
             assertThrows("RUNTIME-TYPE-ERROR", "list.*integer", \t.acceptsValue(), 1);
             assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'integer'", \t.acceptsValue(), (1,));
             assertThrows("RUNTIME-TYPE-ERROR", "int.*string", \t.acceptsValue(), (("a",),));
-            assertThrows("RUNTIME-TYPE-ERROR", "expects.*got type 'NULL'", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", "expects|got no value", \t.acceptsValue(), (NULL,));
             assertEq((1,), t.acceptsValue((1,)));
         }
 
@@ -4156,14 +4445,14 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreListDataType t(new Type("softlist<int>"));
             assertEq((1,), t.acceptsValue(1));
-            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), ((NULL,),));
             assertEq((1,), t.acceptsValue((1,)));
         }
 
         {
             QoreListDataType t(new Type("softlist<string>"));
             assertEq(("a",), t.acceptsValue("a"));
-            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), ((NULL,),));
             assertEq(("a",), t.acceptsValue(("a",)));
         }
     }

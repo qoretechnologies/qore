@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,13 +34,30 @@
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/qore_debug_narrowing.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRBuilder.h"
+#include "qore/intern/QoreIRLowering.h"
+#include "qore/intern/QoreIRInterpreter.h"
+#include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreIRPrinter.h"
+#include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreAOT.h"
 
+
+#include <atomic>
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
+
+// Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
+extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
@@ -57,9 +74,9 @@ VNode::~VNode() {
     //printd(5, "VNode::~VNode() this: %p '%s' %p top_level: %d\n", this, lvar ? lvar->getName() : "n/a", lvar,
     //    top_level);
 
-    if (lvar && !refs) {
+    if (lvar && !refs && !lvar->isAssigned()) {
         const QoreTypeInfo* ti = lvar->parseGetTypeInfo();
-        if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_OBJECT) || !lvar->isAssigned()) {
+        if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_OBJECT)) {
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_UNREFERENCED_VARIABLE,
                 "UNREFERENCED-VARIABLE", "local variable '%s' was declared in this block but not referenced; to " \
                 "disable this warning, use '%%disable-warning unreferenced-variable' in your code", lvar->getName());
@@ -136,6 +153,13 @@ VariableBlockHelper::~VariableBlockHelper() {
 }
 
 StatementBlock::StatementBlock(qore_program_private_base* p) : AbstractStatement(p) {
+}
+
+StatementBlock::StatementBlock(qore_program_private_base* p, const QoreProgramLocation* n_loc)
+        : AbstractStatement(p) {
+    if (n_loc) {
+        loc = n_loc;
+    }
 }
 
 StatementBlock::StatementBlock(int sline, int eline) : AbstractStatement(sline, eline) {
@@ -249,10 +273,12 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
         ExceptionSink obe_xsink;
         int nrc = 0;
         bool error = xsink->isException();
+        int ast_on_exit_count = 0;
         for (block_list_t::iterator i = popBlock(), e = on_block_exit_list.end(); i != e; ++i) {
             enum obe_type_e type = (*i).first;
             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
                 if ((*i).second) {
+                    ast_on_exit_count++;
                     {
                         // instantiate exception for on_error blocks as an implicit arg
                         std::unique_ptr<SingleArgvContextHelper> argv_helper;
@@ -280,6 +306,16 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                 }
             }
         }
+        if (ast_on_exit_count > 0) {
+            static bool debug_on_exit = [] {
+                const char* debug_env = getenv("QORE_IR_DEBUG");
+                return debug_env && strstr(debug_env, "on_exit");
+            }();
+            if (debug_on_exit) {
+                fprintf(stderr, "[ON_EXIT-AST] executed %d on_exit handlers\n", ast_on_exit_count);
+                fflush(stderr);
+            }
+        }
         if (nrc)
             stmt_rc = nrc;
     }
@@ -293,7 +329,15 @@ void StatementBlock::exec() {
     exec(&xsink);
 }
 
+static bool irBlockHasTerminator(const QoreIRBasicBlock* block) {
+    if (!block || block->instructions.empty()) {
+        return false;
+    }
+    return isTerminator(block->instructions.back()->opcode);
+}
+
 static void push_top_level_local_var(LocalVar* lv, const QoreProgramLocation* loc) {
+    lv->setTopLevel();
     new VNode(lv, loc, 1, true);
 }
 
@@ -364,6 +408,9 @@ LocalVar* push_local_var(const char* name, const QoreProgramLocation* loc,
     }
 
     //printd(5, "push_local_var(): pushing var %s\n", name);
+    if (pflag & PF_TOP_LEVEL) {
+        lv->setTopLevel();
+    }
     new VNode(lv, loc, n_refs, pflag & PF_TOP_LEVEL);
     return lv;
 }
@@ -391,6 +438,7 @@ LocalVar* pop_local_var(bool set_unassigned) {
 LocalVar* find_local_var(const char* name, bool& in_closure) {
     VNode* vnode = getVStack();
     ClosureParseEnvironment* cenv = thread_get_closure_parse_env();
+    std::vector<ClosureParseEnvironment*> capture_envs;
     in_closure = false;
 
     if (vnode && !vnode->lvar)
@@ -400,16 +448,21 @@ LocalVar* find_local_var(const char* name, bool& in_closure) {
 
     while (vnode) {
         assert(vnode->lvar);
-        if (cenv && !in_closure && cenv->getHighWaterMark() == vnode)
-            in_closure = true;
+        for (ClosureParseEnvironment* ce = cenv; ce; ce = ce->getPrev()) {
+            if (ce->getHighWaterMark() == vnode) {
+                capture_envs.push_back(ce);
+            }
+        }
 
         //printd(5, "find_local_var('%s' %p) v: '%s' %p in_closure: %d match: %d\n", name, name, vnode->getName(),
         //    vnode->getName(), in_closure, !strcmp(vnode->getName(), name));
 
         if (!strcmp(vnode->getName(), name)) {
             //printd(5, "find_local_var() %s in_closure: %d\n", name, in_closure);
-            if (in_closure)
-                cenv->add(vnode->lvar);
+            in_closure = !capture_envs.empty();
+            for (ClosureParseEnvironment* ce : capture_envs) {
+                ce->add(vnode->lvar);
+            }
             vnode->setRef();
             return vnode->lvar;
         }
@@ -560,7 +613,7 @@ int StatementBlock::parseInitConstructor(const QoreTypeInfo* typeInfo, UserVaria
 int StatementBlock::parseInitClosure(UserVariantBase* uvb, UserClosureFunction* cf) {
     QORE_TRACE("StatementBlock::parseInitClosure");
 
-    ClosureParseEnvironment cenv(cf->getVList());
+    ClosureParseEnvironment cenv(cf->getVList(), cf);
     UserParamListLocalVarHelper ph(uvb, cf->getClassType());
 
     // initialize code block
@@ -583,8 +636,8 @@ int TopLevelStatementBlock::parseInit() {
     }
 
     // Check if we're in REPL mode (allows new local vars in subsequent parse transactions)
-    QoreParseOptions current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
-    bool repl_mode = static_cast<bool>(current_parse_options & PO_ALLOW_REPARSE);
+    const QoreParseOptions& current_parse_options = qore_program_private::getParseWarnOptions(getProgram()).parse_options;
+    bool repl_mode = (current_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE);
 
     if (!first && lvars) {
         // push already-registered local variables on the stack
@@ -665,6 +718,41 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
     hwm = statement_list.last();
 }
 
+TopLevelStatementBlock::~TopLevelStatementBlock() {
+    delete cached_toplevel_aot_ctx;
+    delete cached_toplevel_ir;
+}
+
+void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
+    // Copy LocalVar* pointers from the AOT context to the statement block's LVList
+    // This ensures pointer consistency between AOT-compiled code and runtime
+    if (!ctx || !ctx->locals || ctx->num_locals == 0) {
+        return;
+    }
+    const LVList* lv_list = getLVList();
+    if (!lv_list) {
+        // v2 path: no parse() was called, so lvars was never created.
+        // Create an LVList from the AOT context locals so doTopLevelInstantiation() works.
+        for (int i = 0; i < ctx->num_locals; ++i) {
+            if (ctx->locals[i]) {
+                ctx->locals[i]->setTopLevel();
+            }
+        }
+        lvars = new LVList(ctx->locals, ctx->num_locals);
+        return;
+    }
+    // Update the LVList entries from the AOT context
+    size_t count = std::min(static_cast<size_t>(lv_list->size()),
+                            static_cast<size_t>(ctx->num_locals));
+    for (size_t i = 0; i < count; ++i) {
+        // Note: this modifies const data, but it's needed for pointer consistency
+        if (ctx->locals[i]) {
+            ctx->locals[i]->setTopLevel();
+        }
+        const_cast<LVList*>(lv_list)->lv[i] = ctx->locals[i];
+    }
+}
+
 int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return execImpl(rc, return_value, xsink);
@@ -673,11 +761,255 @@ int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsi
 int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     // do not instantiate local vars here; they are instantiated by the QoreProgram object for each thread
 
-    // Get the parse options from the current program at runtime
-    // NOTE: We can't use pwo.parse_options here because the TopLevelStatementBlock is constructed
-    // before the program's pwo is initialized (due to C++ member initialization order)
-    QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
-    QoreParseOptions runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+    // Get the parse options from the current program at runtime.
+    // Use getProgram() (the thread-local current program set by ProgramThreadCountContextHelper)
+    // rather than rc.getProgram() which may return the outer/calling program.
+    // NOTE: We can't use pwo.parse_options because the TopLevelStatementBlock is constructed
+    // before the program's pwo is initialized (due to C++ member initialization order).
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        pgm = rc.getProgram();
+    }
+    const QoreParseOptions& runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+
+    // AOT pre-compiled top-level function — execute directly if registered
+    if (!((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
+        if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
+            // Instantiate nested non-closure body locals before AOT execution.
+            // Top-level locals are pre-instantiated by QoreProgram.  Closure-use
+            // nested locals are managed by explicit InstantiateLocal /
+            // UninstantiateLocal IR so loop/block closures get fresh CVVs.
+            const LVList* toplevel_lvars = getLVList();
+            std::unordered_set<const LocalVar*> toplevel_set;
+            if (toplevel_lvars) {
+                for (unsigned i = 0; i < toplevel_lvars->size(); ++i) {
+                    toplevel_set.insert(toplevel_lvars->lv[i]);
+                }
+            }
+            std::vector<LocalVar*> nested_locals;
+            for (LocalVar* lv : cached_toplevel_aot_ctx->all_body_locals) {
+                if (toplevel_set.count(lv) == 0 && !lv->closureUse()) {
+                    lv->instantiate(runtime_parse_options);
+                    nested_locals.push_back(lv);
+                }
+            }
+
+            uint64_t result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+
+            // Uninstantiate nested locals after AOT execution (reverse order)
+            for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {
+                (*it)->uninstantiate(xsink);
+            }
+
+            QoreValue result;
+            std::memcpy(&result, &result_bits, sizeof(result));
+            if (!*xsink) {
+                return_value = result;
+            }
+            return 0;
+        }
+        if (cached_toplevel_jit_fn) {
+            uint64_t result_bits = cached_toplevel_jit_fn(xsink);
+
+            QoreValue result;
+            std::memcpy(&result, &result_bits, sizeof(result));
+            if (!*xsink) {
+                return_value = result;
+            }
+            return 0;
+        }
+    }
+
+    // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode
+    if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
+        qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
+        // QEM_TIERED uses IR/JIT immediately for top-level code (same as QEM_JIT)
+        // but only for %modern programs — legacy parse options are not supported by IR
+        if (exec_mode == QEM_IR || exec_mode == QEM_JIT
+            || (exec_mode == QEM_TIERED
+                && (runtime_parse_options & PO_MODERN) == PO_MODERN)) {
+            // Try to use cached IR if available
+            QoreIRFunction* ir_func = cached_toplevel_ir;
+            bool need_lower = !ir_func && !toplevel_ir_failed;
+
+            if (need_lower) {
+                std::call_once(toplevel_ir_once, [this, pgm]() {
+                    // Make the top-level function name unique per TopLevelStatementBlock
+                    // to avoid name collisions in the JIT's compiled_functions map.
+                    // Different child Programs each have their own TopLevelStatementBlock
+                    // with different LocalVar* pointers baked into JIT code.
+                    // A monotonic counter is needed in addition to the address because
+                    // when a Program is destroyed and a new one allocated at the same
+                    // address, the old JIT cache entry would be returned with stale
+                    // LocalVar pointers.
+                    static std::atomic<uint64_t> toplevel_counter{0};
+                    std::string unique_name = std::string("_toplevel@")
+                        + std::to_string((uintptr_t)this) + "_"
+                        + std::to_string(toplevel_counter.fetch_add(1));
+                    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+
+                    // Collect nested body locals from the statement tree.  Root
+                    // top-level locals remain owned by QoreProgram and must not
+                    // be managed as lexical block locals by the compiled body.
+                    collectAllStatementLocals(this, func->all_body_locals);
+                    removeBlockLocalsFromBodyLocals(this, func->all_body_locals);
+                    for (LocalVar* lv : func->all_body_locals) {
+                        func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+                        func->reserveLocalSlot(lv);
+                    }
+                    if (const LVList* top_lvars = getLVList()) {
+                        for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                            func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(top_lvars->lv[i]));
+                            func->reserveLocalSlot(top_lvars->lv[i]);
+                        }
+                    }
+
+                    QoreIRBuilder builder(func);
+                    auto* entry = func->createBlock("entry");
+                    builder.setBlock(entry);
+
+                    QoreParseContext parse_context(pgm);
+                    QoreIRLowering lowering(builder, &parse_context);
+                    std::string error;
+                    if (!lowering.lowerStatementBlock(this, error)) {
+                        toplevel_ir_failed = true;
+                        toplevel_ir_fail_reason = std::string("lowering: ") + error;
+                        delete func;
+                        printd(1, "IR lowering failed: %s\n", error.c_str());
+                        qore_program_private::get(*pgm)->recordIRFallback(toplevel_ir_fail_reason);
+                        return;
+                    }
+                    if (!irBlockHasTerminator(builder.getBlock())) {
+                        builder.createReturnNothing();
+                    }
+                    if (!QoreIRVerifier::verify(*func, error)) {
+                        toplevel_ir_failed = true;
+                        toplevel_ir_fail_reason = std::string("verification: ") + error;
+                        delete func;
+                        printd(1, "IR verification failed: %s\n", error.c_str());
+                        qore_program_private::get(*pgm)->recordIRFallback(toplevel_ir_fail_reason);
+                        return;
+                    }
+
+                    // Compute slot IDs and embed them into instructions for fast array access
+                    // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated
+                    func->computeSlotIdsAndEmbed();
+
+                    // Phase A4: Compile all handler bodies to separate IR functions and attach to OnBlockExit instructions
+                    // This must happen AFTER computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context.
+                    std::string handler_compile_error;
+                    int handlers_compiled = lowering.compileAllHandlerIRs(handler_compile_error);
+                    if (handlers_compiled < 0) {
+                        toplevel_ir_failed = true;
+                        toplevel_ir_fail_reason = std::string("handler lowering: ") + handler_compile_error;
+                        delete func;
+                        printd(1, "Top-level handler compilation failed: %s\n", handler_compile_error.c_str());
+                        qore_program_private::get(*pgm)->recordIRFallback(toplevel_ir_fail_reason);
+                        return;
+                    }
+                    // NOTE: do NOT call func->computeIROnlyLocals() for top-level code.
+                    // Top-level locals are accessible by any called function/sub through the
+                    // thread-local variable stack, but the IR-only analysis doesn't track
+                    // cross-function access.  Marking a top-level local as IR-only would cause
+                    // StoreLocal to only update the IR cache without syncing to the thread-local
+                    // stack, making the variable invisible to called functions.
+                    cached_toplevel_ir = func;
+                });
+                ir_func = cached_toplevel_ir;
+            }
+
+            // If IR lowering failed, raise a hard error instead of silently
+            // falling back to AST.  This path runs only under %modern
+            // (ensureIrExecMode guarantees it), so any lowering gap is a
+            // bug in the IR implementation that must surface.
+            if (toplevel_ir_failed) {
+                xsink->raiseException("IR-COMPILATION-ERROR",
+                    "IR lowering of top-level code failed: %s (silent AST fallback "
+                    "disabled)", toplevel_ir_fail_reason.c_str());
+                return -1;
+            }
+
+            if (ir_func) {
+                if (qore_program_private::get(*pgm)->ir_dump) {
+                    QoreIRPrinter::print(*ir_func, std::cout);
+                }
+                QoreValue ir_return_value;
+                bool ok;
+                // Build set of pre-instantiated local variables from the IR function's
+                // all_body_locals.  This ensures the pointers match those embedded in
+                // the JIT-compiled code (captured at IR creation time).
+                std::unordered_set<const LocalVar*> pre_instantiated;
+                for (LocalVar* lv : ir_func->all_body_locals) {
+                    pre_instantiated.insert(lv);
+                }
+                if (const LVList* top_lvars = getLVList()) {
+                    for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                        pre_instantiated.insert(top_lvars->lv[i]);
+                    }
+                }
+
+                // Instantiate nested non-closure body locals before JIT execution.
+                // Closure-use nested locals are scoped by explicit IR
+                // InstantiateLocal / UninstantiateLocal operations.
+                const LVList* toplevel_lvars = getLVList();
+                std::unordered_set<const LocalVar*> toplevel_set;
+                if (toplevel_lvars) {
+                    for (unsigned i = 0; i < toplevel_lvars->size(); ++i) {
+                        toplevel_set.insert(toplevel_lvars->lv[i]);
+                    }
+                }
+                std::vector<LocalVar*> nested_locals;
+                for (LocalVar* lv : ir_func->all_body_locals) {
+                    if (toplevel_set.count(lv) == 0 && !lv->closureUse()) {
+                        lv->instantiate(runtime_parse_options);
+                        nested_locals.push_back(lv);
+                    }
+                }
+
+                std::string error;
+                if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+                    ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
+                        &pre_instantiated);
+
+                    // Clear any pending deopt request from top-level JIT execution.
+                    // Top-level code handles guard failures internally (e.g., via
+                    // try-catch) and must not propagate deopt to subsequent calls.
+                    qore_jit_deopt_requested();
+                } else {
+                    // suppress_guard_deopt=true: top-level code must not deopt on
+                    // guard failure because re-executing the entire block from the
+                    // beginning would duplicate side effects (I/O, mutations).
+                    ok = QoreIRInterpreter::execute(*ir_func, ir_return_value, xsink, nullptr,
+                        nullptr, nullptr, &pre_instantiated, nullptr, this, pgm, true);
+                }
+
+                // Uninstantiate nested locals after JIT execution (reverse order)
+                for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {
+                    (*it)->uninstantiate(xsink);
+                }
+
+                if (ok && !*xsink) {
+                    return_value = ir_return_value;
+                    return 0;
+                }
+                // If IR execution raised an exception, propagate it
+                if (*xsink) {
+                    return 0;
+                }
+                // IR execution failed without raising an exception.  This path only
+                // runs under %modern (ensureIrExecMode guarantees it), so silent AST
+                // fallback is disabled to expose IR-interpreter bugs immediately.
+                if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
+                    QoreIRInterpreter::dumpLastSilentFail("toplevel");
+                }
+                qore_program_private::get(*pgm)->recordIRFallback("execution: runtime failure");
+                xsink->raiseException("IR-EXECUTION-ERROR",
+                    "IR interpreter execution of top-level code failed without raising an "
+                    "exception; this is a bug in the IR interpreter (silent AST fallback disabled)");
+                return -1;
+            }
+        }
+    }
 
     // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
     // This is determined by the execution high water mark (ehwm)
@@ -766,7 +1098,9 @@ void NarrowedTypeHelper::recordBranchAndRestore() {
     VNode* vnode = getVStack();
     while (vnode) {
         if (vnode->lvar && vnode->lvar->isAutoType()) {
-            branch.push_back({vnode->lvar, vnode->lvar->parseGetNarrowedType()});
+            const QoreTypeInfo* narrowed = vnode->lvar->parseGetNarrowedType();
+            QORE_DEBUG_NARROW_RECORD_BRANCH(vnode->lvar->getName(), narrowed);
+            branch.push_back({vnode->lvar, narrowed});
         }
         vnode = vnode->nextSearch();
     }
@@ -787,6 +1121,8 @@ void NarrowedTypeHelper::mergeAndApply() {
         return;
     }
 
+    QORE_DEBUG_NARROW_MERGE_START(saved_types.size(), branch_types.size());
+
     // For each saved variable, find the common type across all branches
     for (const auto& saved_entry : saved_types) {
         LocalVar* lvar = saved_entry.first;
@@ -794,11 +1130,18 @@ void NarrowedTypeHelper::mergeAndApply() {
         bool found_in_all = true;
         bool first = true;
 
+        QORE_DEBUG_NARROW_MERGE_VAR(lvar->getName(), saved_entry.second);
+        printd(5, "NarrowedTypeHelper::mergeAndApply() processing var '%s', %lu branches\n",
+            lvar->getName(), branch_types.size());
+
         for (const auto& branch : branch_types) {
             bool found = false;
             for (const auto& branch_entry : branch) {
                 if (branch_entry.first == lvar) {
                     found = true;
+                    QORE_DEBUG_NARROW_MERGE_BRANCH(branch_entry.second);
+                    printd(5, "  branch has var with type: %s\n",
+                        branch_entry.second ? QoreTypeInfo::getName(branch_entry.second) : "nullptr");
                     if (first) {
                         common_type = branch_entry.second;
                         first = false;
@@ -808,12 +1151,14 @@ void NarrowedTypeHelper::mergeAndApply() {
                             const QoreTypeInfo* merged = common_type;
                             if (!QoreTypeInfo::matchCommonType(merged, branch_entry.second)) {
                                 // Types incompatible, reset to original (un-narrowed)
+                                printd(5, "  incompatible types, resetting\n");
                                 common_type = nullptr;
                             } else {
                                 common_type = merged;
                             }
                         } else {
                             // One branch has null (reset), use null
+                            printd(5, "  one branch has null, resetting\n");
                             common_type = nullptr;
                         }
                     }
@@ -822,18 +1167,89 @@ void NarrowedTypeHelper::mergeAndApply() {
             }
             if (!found) {
                 found_in_all = false;
+                printd(5, "  var not found in this branch\n");
                 break;
             }
         }
 
         // Apply the merged type
+        QORE_DEBUG_NARROW_MERGE_DECISION(lvar->getName(), found_in_all, common_type);
+        printd(5, "  applying: found_in_all=%d, common_type=%s, pre_branch=%s\n",
+            found_in_all, common_type ? QoreTypeInfo::getName(common_type) : "nullptr",
+            saved_entry.second ? QoreTypeInfo::getName(saved_entry.second) : "nullptr");
         if (found_in_all && common_type) {
+            // If the variable was un-narrowed (auto) before the branches, don't apply
+            // a merged narrowing unless all branches had the same concrete type.
+            // Merging different branch types (e.g., Mutex + nothing → *Mutex) would
+            // incorrectly restrict an auto variable's type.
+            if (!saved_entry.second && common_type != saved_entry.second) {
+                // Check if all branches agreed on the same type (no merge happened)
+                bool all_same = true;
+                const QoreTypeInfo* first_type = nullptr;
+                for (const auto& branch : branch_types) {
+                    for (const auto& branch_entry : branch) {
+                        if (branch_entry.first == lvar) {
+                            if (!first_type) {
+                                first_type = branch_entry.second;
+                            } else if (branch_entry.second != first_type) {
+                                all_same = false;
+                            }
+                            break;
+                        }
+                    }
+                    if (!all_same) {
+                        break;
+                    }
+                }
+                if (!all_same) {
+                    // Different types in branches with un-narrowed pre-branch → reset
+                    printd(5, "    pre-branch was unnarrow, branches differ → resetting\n");
+                    lvar->parseResetNarrowedType();
+                    continue;
+                }
+            }
+            QORE_DEBUG_NARROW_MERGE_ACTION("setting narrowed type");
+            printd(5, "    setting narrowed type\n");
             lvar->parseSetNarrowedType(common_type);
         } else if (found_in_all) {
-            // All branches found but no common type - keep original
-            if (saved_entry.second) {
-                lvar->parseSetNarrowedType(saved_entry.second);
+            // All branches found but no common type - create union type
+            // Collect all concrete types from branches
+            bool has_null_branch = false;
+            type_vec_t concrete_types;
+
+            for (const auto& branch : branch_types) {
+                for (const auto& branch_entry : branch) {
+                    if (branch_entry.first == lvar) {
+                        if (branch_entry.second) {
+                            concrete_types.push_back(branch_entry.second);
+                        } else {
+                            has_null_branch = true;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!concrete_types.empty()) {
+                // When some branches don't narrow the variable (null in record), check pre-branch type
+                // If pre-branch type was auto (unrestricted), null branches mean "variable stays as auto"
+                // Cannot narrow the result in that case - reset to auto instead of creating union with nothing
+                if (has_null_branch && !saved_entry.second) {
+                    // Some branches leave the variable as unrestricted auto - cannot narrow
+                    lvar->parseResetNarrowedType();
+                    QORE_DEBUG_NARROW_MERGE_ACTION("resetting due to auto branch");
+                    printd(5, "    resetting narrowed type (auto branch)\n");
+                } else {
+                    // Create union type from all concrete branch types
+                    const QoreTypeInfo* union_type = has_null_branch
+                        ? qore_get_union_or_nothing_type(concrete_types)
+                        : qore_get_union_type(concrete_types, false);
+                    lvar->parseSetNarrowedType(union_type);
+                    QORE_DEBUG_NARROW_MERGE_ACTION("creating union type");
+                    printd(5, "    creating union type: %s\n", QoreTypeInfo::getName(union_type));
+                }
             } else {
+                // All branches had null — no concrete type available
                 lvar->parseResetNarrowedType();
             }
         }

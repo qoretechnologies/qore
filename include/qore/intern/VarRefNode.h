@@ -33,6 +33,7 @@
 #define _QORE_VARREFNODE_H
 
 #include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/LocalVar.h"
 
 class VarRefNewObjectNode;
 class LocalVar;
@@ -59,6 +60,16 @@ public:
     }
 
     DLLLOCAL VarRefNode(const QoreProgramLocation* loc, char* n, LocalVar* n_id, bool in_closure)
+            : ParseNode(loc, NT_VARREF, true, false), name(n), new_decl(false), explicit_scope(false) {
+        ref.id = n_id;
+        if (in_closure) {
+            setClosureIntern();
+        } else {
+            type = VT_LOCAL;
+        }
+    }
+
+    DLLLOCAL VarRefNode(const QoreProgramLocation* loc, const char* n, LocalVar* n_id, bool in_closure)
             : ParseNode(loc, NT_VARREF, true, false), name(n), new_decl(false), explicit_scope(false) {
         ref.id = n_id;
         if (in_closure) {
@@ -163,6 +174,30 @@ public:
     }
 
     DLLLOCAL bool scanMembers(RSetHelper& rsh);
+
+    //! Returns the declared type info for reference creation (no narrowing)
+    /** References allow write-back, so the declared type must be used instead of any
+        narrowed type. For reference parameters (reference<T> or *reference<T>), extracts
+        the inner type T to avoid double-wrapping in ParseReferenceNode::parseInitImpl().
+    */
+    DLLLOCAL const QoreTypeInfo* parseGetTypeInfoForReference() const {
+        const QoreTypeInfo* rv;
+        if (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) {
+            rv = ref.id->parseGetTypeInfoForInitialAssignment();
+        } else if (type == VT_GLOBAL || type == VT_THREAD_LOCAL) {
+            rv = ref.var->parseGetTypeInfoForInitialAssignment();
+        } else {
+            rv = nullptr;
+        }
+        // extract inner type from reference types to avoid double-wrapping
+        if (rv) {
+            const QoreTypeInfo* inner = QoreTypeInfo::getReferenceTarget(rv);
+            if (inner) {
+                return inner;
+            }
+        }
+        return rv;
+    }
 
 protected:
     NamedScope name;
@@ -419,6 +454,34 @@ public:
         QoreParseListNode* rv = parse_args;
         parse_args = nullptr;
         return rv;
+    }
+
+    //! Construct the value without assigning to the variable (for JIT split)
+    DLLLOCAL QoreValue constructValue(ExceptionSink* xsink) const;
+
+    //! Returns true if this is a hashdecl construction
+    DLLLOCAL bool isHashDeclConstruct() const {
+        return vrn_type == VRN_HASHDECL;
+    }
+
+    //! Returns true if this is a complex hash construction
+    DLLLOCAL bool isComplexHashConstruct() const {
+        return vrn_type == VRN_COMPLEXHASH;
+    }
+
+    //! Returns true if this is a complex list construction
+    DLLLOCAL bool isComplexListConstruct() const {
+        return vrn_type == VRN_COMPLEXLIST;
+    }
+
+    //! Returns whether runtime key checking is required for hashdecl construction
+    DLLLOCAL bool getRuntimeCheck() const {
+        return runtime_check;
+    }
+
+    //! Returns pre-parsed constructor args for complex-list construction
+    DLLLOCAL const QoreValue& getNewArgs() const {
+        return new_args;
     }
 
 protected:

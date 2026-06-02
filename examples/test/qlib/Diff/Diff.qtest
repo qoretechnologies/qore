@@ -3,9 +3,10 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Diff.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Diff
 
 %exec-class DiffTest
 
@@ -20,7 +21,9 @@ public class DiffTest inherits QUnit::Test {
         addTestCase("Test chars and words diff", \charsAndWordsDiff(), NOTHING);
         addTestCase("Test patch apply", \patchApply(), NOTHING);
         addTestCase("Test side by side and files", \sideBySideAndFiles(), NOTHING);
-        addTestCase("Test performance", \perfTest(), NOTHING);
+        if (getenv("QORE_EXCLUDE_PERF_TESTS") != "1") {
+            addTestCase("Test performance", \perfTest(), NOTHING);
+        }
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());

@@ -56,6 +56,12 @@ public:
     DLLLOCAL void setTargetRange();
     DLLLOCAL void setSourceRange();
 
+    //! Returns the source string (for AOT serialization)
+    DLLLOCAL const QoreString& getSource() const { return source; }
+
+    //! Returns the target string (for AOT serialization)
+    DLLLOCAL const QoreString& getTarget() const { return target; }
+
     DLLLOCAL void ref() const {
         ROreference();
     }

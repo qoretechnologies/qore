@@ -4,7 +4,8 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class DatasourceProviderTest
 

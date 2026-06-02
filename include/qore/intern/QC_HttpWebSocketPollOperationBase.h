@@ -279,11 +279,14 @@ public:
     */
     DLLLOCAL void queueSendRawFrame(const BinaryNode* data, ExceptionSink* xsink);
 
-    //! Sets the frame callback (called on I/O thread when a frame is received)
+    //! Sets the frame callback (called from onPollComplete() on a worker thread)
     /** @param cb the callback reference (ref'd), or nullptr to clear
         @param xsink exception sink
     */
     DLLLOCAL void setFrameCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink);
+
+    //! Dispatches the frame callback after an I/O-thread poll cycle pushed frames
+    DLLLOCAL void dispatchFrameCallback(ExceptionSink* xsink);
 
     //! Sets the I/O-thread frame handler for zero-context-switch processing
     /** When set, data frames (text/binary) are dispatched to this handler
@@ -379,7 +382,7 @@ private:
     //! Error information (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
 
-    //! Frame callback — invoked on I/O thread when a frame is pushed to recv_queue
+    //! Frame callback — invoked from onPollComplete() after frames are pushed to recv_queue
     ResolvedCallReferenceNode* frame_callback = nullptr;
 
     //! Optional I/O-thread frame handler — bypasses recv_queue entirely

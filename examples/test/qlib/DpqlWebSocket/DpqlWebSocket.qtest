@@ -24,22 +24,23 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/FsUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires FsUtil
 
 %try-module json
 %define NoJson
 %endtry
 
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/WebSocketClient.qm
-%requires ../../../../qlib/WebSocketHandler.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/DpqlWebSocket
-%requires ../../../../qlib/CsvUtil
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketClient
+%requires WebSocketHandler
+%requires DataProvider
+%requires DpqlWebSocket
+%requires CsvUtil
 
 %exec-class DpqlWebSocketTest
 

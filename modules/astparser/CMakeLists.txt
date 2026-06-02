@@ -5,47 +5,63 @@
 #   parser.c + tree-sitter C runtime → static libraries
 #   astparser module links against these static libraries
 #
-# Build dependency: tree-sitter CLI (cargo install tree-sitter-cli)
-# Runtime dependency: none (tree-sitter statically linked)
-
-include(FetchContent)
+# Runtime dependency: system tree-sitter when available; otherwise the
+# tree-sitter runtime is fetched and linked statically for developer builds.
 
 # tree-sitter CLI is only needed when changing grammar.js (developer workflow):
 #   cd grammars/tree-sitter-qore && tree-sitter generate grammar.js
 # The generated src/ files are committed to source control.
 
-# Fetch tree-sitter C runtime library (same version as module-treesitter)
-FetchContent_Declare(
-    tree-sitter
-    GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git
-    GIT_TAG v0.26.8
-)
-FetchContent_GetProperties(tree-sitter)
-if(NOT tree-sitter_POPULATED)
-    # FetchContent_MakeAvailable() would call add_subdirectory() on the
-    # tree-sitter source, but we only need the populated source to compile
-    # lib/src/lib.c into our own static target. Setting CMP0169 to OLD is
-    # the cmake-sanctioned way to keep calling FetchContent_Populate() in
-    # this "sources only" case (cmake 3.30+).
-    if(POLICY CMP0169)
-        cmake_policy(PUSH)
-        cmake_policy(SET CMP0169 OLD)
-    endif()
-    FetchContent_Populate(tree-sitter)
-    if(POLICY CMP0169)
-        cmake_policy(POP)
-    endif()
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(TREE_SITTER QUIET IMPORTED_TARGET tree-sitter)
 endif()
 
-# Build tree-sitter C runtime as a static library
-add_library(tree-sitter-lib STATIC
-    ${tree-sitter_SOURCE_DIR}/lib/src/lib.c
-)
-set_property(TARGET tree-sitter-lib PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_include_directories(tree-sitter-lib PUBLIC
-    ${tree-sitter_SOURCE_DIR}/lib/include
-    ${tree-sitter_SOURCE_DIR}/lib/src
-)
+if(TREE_SITTER_FOUND)
+    message(STATUS "Found tree-sitter: ${TREE_SITTER_VERSION}")
+    add_library(tree-sitter-lib INTERFACE)
+    target_link_libraries(tree-sitter-lib INTERFACE PkgConfig::TREE_SITTER)
+    set(TREE_SITTER_INCLUDE_DIRS_FOR_BUILD ${TREE_SITTER_INCLUDE_DIRS})
+else()
+    include(FetchContent)
+
+    # Fetch tree-sitter C runtime library (same version as module-treesitter)
+    FetchContent_Declare(
+        tree-sitter
+        GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git
+        GIT_TAG v0.26.8
+    )
+    FetchContent_GetProperties(tree-sitter)
+    if(NOT tree-sitter_POPULATED)
+        # FetchContent_MakeAvailable() would call add_subdirectory() on the
+        # tree-sitter source, but we only need the populated source to compile
+        # lib/src/lib.c into our own static target. Setting CMP0169 to OLD is
+        # the cmake-sanctioned way to keep calling FetchContent_Populate() in
+        # this "sources only" case (cmake 3.30+).
+        if(POLICY CMP0169)
+            cmake_policy(PUSH)
+            cmake_policy(SET CMP0169 OLD)
+        endif()
+        FetchContent_Populate(tree-sitter)
+        if(POLICY CMP0169)
+            cmake_policy(POP)
+        endif()
+    endif()
+
+    # Build tree-sitter C runtime as a static library
+    add_library(tree-sitter-lib STATIC
+        ${tree-sitter_SOURCE_DIR}/lib/src/lib.c
+    )
+    set_property(TARGET tree-sitter-lib PROPERTY POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(tree-sitter-lib PUBLIC
+        ${tree-sitter_SOURCE_DIR}/lib/include
+        ${tree-sitter_SOURCE_DIR}/lib/src
+    )
+    set(TREE_SITTER_INCLUDE_DIRS_FOR_BUILD
+        ${tree-sitter_SOURCE_DIR}/lib/include
+        ${tree-sitter_SOURCE_DIR}/lib/src
+    )
+endif()
 
 # Use pre-generated parser files from source tree.
 # Developers: run "tree-sitter generate grammar.js" manually when grammar.js changes,
@@ -59,7 +75,7 @@ add_library(tree-sitter-qore-grammar STATIC
 )
 set_property(TARGET tree-sitter-qore-grammar PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_include_directories(tree-sitter-qore-grammar PUBLIC
-    ${tree-sitter_SOURCE_DIR}/lib/include
+    ${TREE_SITTER_INCLUDE_DIRS_FOR_BUILD}
     ${TS_QORE_SRC_DIR}
 )
 
@@ -81,8 +97,8 @@ include(${CMAKE_SOURCE_DIR}/cmake/QoreMacros.cmake)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-include_directories(${CMAKE_SOURCE_DIR/build/include})
-include_directories(${CMAKE_SOURCE_DIR/include})
+include_directories(BEFORE ${CMAKE_BINARY_DIR}/include)
+include_directories(BEFORE ${CMAKE_SOURCE_DIR}/include)
 
 # Source files organized by type for proper dependency tracking.
 # Direct C++ sources (no generator)
@@ -119,7 +135,7 @@ set(QORE_DOX_ASTPARSER_TMPL_SRC
     docs/mainpage.dox.tmpl
 )
 
-qore_wrap_qpp_value(ASTPARSER_QPP_SOURCES DOXLIST _dox_src ${ASTPARSER_QPP_SRC})
+qore_wrap_qpp_value(ASTPARSER_QPP_SOURCES DOXLIST _dox_src METALIST ASTPARSER_QPP_META_SRC ${ASTPARSER_QPP_SRC})
 add_custom_target(ASTPARSER_QPP_GENERATED_FILES DEPENDS qpp ${ASTPARSER_QPP_SOURCES})
 
 # prepare astparser module target
@@ -174,7 +190,7 @@ endif (SINGLE_COMPILATION_UNIT)
 
 # Link against tree-sitter libraries and add include paths
 target_include_directories(${astparser_module_name} PRIVATE
-    ${tree-sitter_SOURCE_DIR}/lib/include
+    ${TREE_SITTER_INCLUDE_DIRS_FOR_BUILD}
     ${TS_QORE_SRC_DIR}
 )
 target_link_libraries(${astparser_module_name} tree-sitter-lib tree-sitter-qore-grammar)
@@ -182,6 +198,7 @@ target_link_libraries(${astparser_module_name} tree-sitter-lib tree-sitter-qore-
 add_dependencies(${astparser_module_name} libqore ASTPARSER_QPP_GENERATED_FILES)
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/astparser/mainpage.dox ${_dox_src})
 qore_binary_module_qore(${astparser_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${astparser_module_name} ${ASTPARSER_QPP_META_SRC})
 
 # Install grammar artifacts so module-treesitter can reuse them
 install(FILES

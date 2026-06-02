@@ -4,17 +4,18 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/Swagger.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientDataProvider
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires Swagger
+%requires OpenApi3
+%requires RestClient
+%requires RestClientDataProvider
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
 
 %try-module yaml >= 0.5
 %define NoYaml

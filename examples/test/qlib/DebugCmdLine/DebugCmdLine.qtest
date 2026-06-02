@@ -3,10 +3,11 @@
 
 %modern
 
-%requires ../../../../qlib/DebugUtil.qm
-%requires ../../../../qlib/DebugCmdLine.qm
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires DebugUtil
+%requires DebugCmdLine
+%requires Util
+%requires QUnit
 
 %exec-class DebugCmdLineTest
 

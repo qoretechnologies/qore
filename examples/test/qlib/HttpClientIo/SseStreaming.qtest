@@ -23,16 +23,17 @@
 */
 
 %modern
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/HttpClientStreamingIo
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/ServerSentEventHandler
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Mime
+%requires Logger
+%requires QUnit
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
 
 %exec-class SseStreamingTest
 

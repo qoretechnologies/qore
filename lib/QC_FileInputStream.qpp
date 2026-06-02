@@ -63,7 +63,7 @@ qclass FileInputStream [system_constructor=FILEINPUTSTREAM_system_constructor; a
 
 //! Creates the FileInputStream by opening a file
 /**
-    @param fileName the name of the file to open
+    @param path the name of the file to open
     @param timeout_ms a timeout period with a resolution of milliseconds (a @ref relative_dates
            "relative date/time value"; integer arguments will be assumed to be milliseconds);
            if not given or negative the operations will never time out
@@ -73,9 +73,9 @@ qclass FileInputStream [system_constructor=FILEINPUTSTREAM_system_constructor; a
 
     @since %Qore 0.9.3 added the \a nonblocking_open flag
  */
-FileInputStream::constructor(string fileName, timeout timeout_ms = -1, *bool nonblocking_open) {
+FileInputStream::constructor(string path, timeout timeout_ms = -1, *bool nonblocking_open) [flags=NAMED_ARGS] {
     int flags = nonblocking_open ? O_NONBLOCK : 0;
-    SimpleRefHolder<FileInputStream> fis(new FileInputStream(fileName, timeout_ms, flags, xsink));
+    SimpleRefHolder<FileInputStream> fis(new FileInputStream(path, timeout_ms, flags, xsink));
     self->setPrivate(CID_FILEINPUTSTREAM, fis.release());
 }
 
@@ -87,9 +87,9 @@ FileInputStream::constructor(string fileName, timeout timeout_ms = -1, *bool non
 
     @par Example:
     @code{.py}
-    FileInputStream fis("file.ext");
+    FileInputStream fis(path: "file.ext");
     *binary b;
-    while (b = fis.read(2)) {
+    while (b = fis.read(limit: 2)) {
         printf("read %s\n", make_hex_string(b));
     }
     @endcode
@@ -102,7 +102,7 @@ FileInputStream::constructor(string fileName, timeout timeout_ms = -1, *bool non
 
     @see StreamReader::readString()
  */
-*binary FileInputStream::read(int limit) {
+*binary FileInputStream::read(int limit) [flags=NAMED_ARGS] {
    return is->readHelper(limit, xsink);
 }
 
@@ -112,7 +112,7 @@ FileInputStream::constructor(string fileName, timeout timeout_ms = -1, *bool non
 
     @par Example:
     @code{.py}
-    FileInputStream fis("file.ext");
+    FileInputStream fis(path: "file.ext");
     int nextByte = fis.peek();
     @endcode
 
@@ -157,7 +157,7 @@ int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
 
     @since %Qore 2.2
 */
-*binary FileInputStream::readNonBlock(int limit) {
+*binary FileInputStream::readNonBlock(int limit) [flags=NAMED_ARGS] {
     return is->readNonBlockHelper(limit, xsink);
 }
 
@@ -174,6 +174,6 @@ int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
 
     @since %Qore 2.2
 */
-*binary FileInputStream::readWithTimeout(int limit, int timeout_ms) {
+*binary FileInputStream::readWithTimeout(int limit, int timeout_ms) [flags=NAMED_ARGS] {
     return is->readWithTimeoutHelper(limit, timeout_ms, xsink);
 }

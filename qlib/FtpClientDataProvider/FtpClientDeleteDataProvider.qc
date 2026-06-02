@@ -73,18 +73,18 @@ public class FtpClientDeleteDataProvider inherits AbstractDataProvider {
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string path = FtpClientDataProvider::getPath(ftp, req.path);
-        hash<FtpResponseInfo> mh = ftp.sendControlMessage("SIZE", path);
+        hash<FtpResponseInfo> mh = ftp.sendControlMessage(command: "SIZE", argument: path);
         if (mh."code" == 550) {
             on_error rethrow "DELETE-ERROR", sprintf("%y: cannot delete path: %s", path, $1.desc);
             try {
-                ftp.cwd(path);
+                ftp.cwd(path: path);
             } catch (hash<ExceptionInfo> ex) {
-                ftp.del(path);
+                ftp.del(remote_path: path);
             }
             # check if it's a directory
-            ftp.rmdir(path);
+            ftp.rmdir(remote_path: path);
         } else {
-            ftp.del(path);
+            ftp.del(remote_path: path);
         }
         return {
             "path": path,

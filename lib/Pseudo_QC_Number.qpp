@@ -54,8 +54,8 @@ const NF_Raw = QORE_NF_RAW;
 /** @defgroup number_string_formatting_constants Number String Formatting Constants
 */
 ///@{
-//! This is a special constant to be used with string number formatting pseudo-methods that take an integer \a prec argument; this value indicates that all available digits should be included in the output string
-/** @see the following pseudo-methods that accept this value in the \a prec argument:
+//! This is a special constant to be used with string number formatting pseudo-methods that take an integer \a precision argument; this value indicates that all available digits should be included in the output string
+/** @see the following pseudo-methods that accept this value in the \a precision argument:
     - @ref <number>::format(int, string, string)
     - @ref <float>::format(int, string, string)
     - @ref <int>::format(int, string, string)
@@ -198,21 +198,21 @@ int <number>::prec() [flags=CONSTANT] {
    return (int64)qore_number_private::get(*n)->getPrec();
 }
 
-//! Returns the string representation of the number according to the format argument
-/** @param fmt see @ref number_formatting_constants for possible values; note that this argument is interpreted as a bit field; if the format argument is not a valid format value (i.e. if none of the formatting bits are set in the argument) then @ref NF_Default is assumed instead
+//! Returns the string representation of the number according to the format flags
+/** @param format_flags see @ref number_formatting_constants for possible values; note that this argument is interpreted as a bit field; if the format argument is not a valid format value (i.e. if none of the formatting bits are set in the argument) then @ref NF_Default is assumed instead
 
-    @return the string representation of the number according to the format argument
+    @return the string representation of the number according to the format flags
 
     @since %Qore 0.8.6
 */
-string <number>::toString(int fmt) [flags=CONSTANT] {
+string <number>::toString(int format_flags) [flags=CONSTANT,NAMED_ARGS] {
    QoreStringNode* rv = new QoreStringNode;
-   n->toString(*rv, fmt);
+   n->toString(*rv, format_flags);
    return rv;
 }
 
 //! Returns a formatted string of the number according to the format argument
-/** @param fmt the format string has the following format:\n
+/** @param format the format string has the following format:\n
     <em>\<thousands_separator\></em><tt>[</tt><em>\<decimal_separator\>[\<decimals\>]</em><tt>]</tt>\n
     where:\n
     - \a thousands_separator and \a decimal_separator are single characters defining the thousands and decimal
@@ -242,15 +242,15 @@ string fstr = f.format(".,3"); # returns "-48.392.093.894,235"
     - %Qore 0.8.6
     - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
  */
-string <number>::format(string fmt) [flags=RET_VALUE_ONLY] {
-   SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(fmt->getEncoding()));
-   return qore_number_private::get(*n)->format(**rv, *fmt, xsink) ? 0 : rv.release();
+string <number>::format(string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(format->getEncoding()));
+   return qore_number_private::get(*n)->format(**rv, *format, xsink) ? 0 : rv.release();
 }
 
 //! Returns a formatted string of the number according to format arguments
-/** @param prec the number of digits after the decimal point; a negative value means to round that number of digits before the decimal place, whereas the special constant @ref SNF_AllDigits means to include all possible digits after the decimal point
-    @param decimal_sep a single character that defines the decimal separator; an empty string means no decimal separator
-    @param thousands_sep a single character that defines the thousands and further separators every three digits before the decimal point; an empty string means no thousands separator
+/** @param precision the number of digits after the decimal point; a negative value means to round that number of digits before the decimal place, whereas the special constant @ref SNF_AllDigits means to include all possible digits after the decimal point
+    @param decimal_separator a single character that defines the decimal separator; an empty string means no decimal separator
+    @param thousands_separator a single character that defines the thousands and further separators every three digits before the decimal point; an empty string means no thousands separator
 
     @return a string representing the number according to the format arguments as described above
 
@@ -269,9 +269,9 @@ string fstr = f.format(3, ".", ","); # returns "-48.392.093.894,235"
 
     @since %Qore 0.8.13
  */
-string <number>::format(int prec = 2, string decimal_sep = ".", string thousands_sep = "") [flags=RET_VALUE_ONLY] {
+string <number>::format(int precision = 2, string decimal_separator = ".", string thousands_separator = "") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode);
-   return qore_number_private::get(*n)->format(**rv, prec, *decimal_sep, *thousands_sep, xsink) ? 0 : rv.release();
+   return qore_number_private::get(*n)->format(**rv, precision, *decimal_separator, *thousands_separator, xsink) ? 0 : rv.release();
 }
 
 //! Returns the absolute value of the number
@@ -312,6 +312,6 @@ number <number>::abs() [flags=CONSTANT] {
 
     @since %Qore 0.8.13
 */
-string <number>::toBase(int base = 10) [flags=RET_VALUE_ONLY] {
+string <number>::toBase(int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_number_private::toBase(*n, base, xsink);
 }

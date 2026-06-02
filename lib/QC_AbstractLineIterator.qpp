@@ -35,7 +35,7 @@
 
     @since %Qore 0.8.13
  */
-qclass AbstractLineIterator [arg=void* i; ns=Qore; vparent=AbstractIterator];
+qclass AbstractLineIterator [arg=void* i; ns=Qore; vparent=AbstractIterator<string>];
 
 //! Moves the current position to the next line; returns @ref False if there are no more lines to read.
 /** This method will return @ref True again after it returns @ref False once if data is not empty, otherwise it will always return @ref False.
@@ -78,12 +78,12 @@ abstract string AbstractLineIterator::getValue();
     Also the separator character can appear as a part of a field with this variant.\n
     This variant is useful for parsing CSV files, for example.
 
-    @param sep the separator string; if the separator string is not found in the string to split, then a list with
+    @param separator the separator string; if the separator string is not found in the string to split, then a list with
     only one element containing the entire string argument is returned'; if this string has a different
     @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s
     @ref character_encoding "character encoding"
     @param quote the quote character
-    @param eol the end of line string to be readded in case of a field split between lines
+    @param line_separator the end of line string to be readded in case of a field split between lines
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
 
     @return a list of each component of a string separated by a separator string, with the separator and any enclosing
@@ -102,8 +102,8 @@ list<string> list = "some,'text with spaces, and commas, here is another one! ,'
     @since
     - %Qore 0.9.8 added this method
  */
-list<string> AbstractLineIterator::getSplitLine(string sep, string quote, string eol = "\n",
-        bool trim_unquoted = False) [flags=RET_VALUE_ONLY] {
+list<string> AbstractLineIterator::getSplitLine(string separator, string quote, string line_separator = "\n",
+        bool trim_unquoted = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     AbstractIteratorHelper h(xsink, "AbstractLineIterator::getSplitLine() method", self);
     if (*xsink) {
         return QoreValue();
@@ -117,8 +117,9 @@ list<string> AbstractLineIterator::getSplitLine(string sep, string quote, string
             v->getTypeName());
         return QoreValue();
     }
-    const QoreStringNode* str = v->get<const QoreStringNode>();
-    ReferenceHolder<QoreListNode> rv(split_with_quote(xsink, sep, str, quote, trim_unquoted, &h, eol), xsink);
+    QoreStringValueHelper str(*v);
+    ReferenceHolder<QoreListNode> rv(split_with_quote(xsink, separator, *str, quote, trim_unquoted, &h,
+        line_separator), xsink);
     if (*xsink) {
         ExceptionSink xsink2;
         ValueHolder line_num(self->evalMethod("index", nullptr, &xsink2), xsink);
@@ -166,4 +167,3 @@ while (i.next()) {
     @endcode
  */
 abstract int AbstractLineIterator::index();
-

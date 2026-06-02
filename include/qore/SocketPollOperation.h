@@ -35,6 +35,7 @@
 
 #include <qore/SocketPollOperationBase.h>
 #include <qore/QoreSocketObject.h>
+#include <qore/QoreSandboxManager.h>
 #include <qore/AbstractPollState.h>
 #include <qore/ReferenceHolder.h>
 #include <qore/AbstractQoreNode.h>
@@ -255,6 +256,7 @@ private:
     bool initialized = false;
     bool controller_deferred_init = false;
     int controller_deferred_tid = -1;
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager;
 };
 
 //! Non-blocking send operation (string or binary data)

@@ -3,8 +3,9 @@
 
 %modern
 
-%requires ../../../../qlib/WebSocketUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires WebSocketUtil
+%requires QUnit
 
 %exec-class WebSocketUtilTest
 

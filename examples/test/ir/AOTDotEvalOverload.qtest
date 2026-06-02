@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTDotEvalOverloadTest
+
+class AOTDotEvalOverloadTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTDotEvalOverloadTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT qmod dot-eval overload dispatch matches source",
+            \testAOTQmodDotEvalOverloadDispatch());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTDotEvalOverloadMod {
+    version = \"1.0\";
+    desc = \"AOT dot-eval overload dispatch regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTDotEvalOverloadMod {
+    class A {
+        public string put(string path, auto args, *hash<auto> hdr, *reference<hash<auto>> info) {
+            return \"base:\" + path;
+        }
+    }
+
+    class B inherits A {
+        public string put(*hash<auto> opt, string path, auto args, *hash<auto> hdr,
+                *reference<hash<auto>> info) {
+            return \"derived:\" + opt.type();
+        }
+    }
+
+    public string sub verify(softint wfiid) {
+        B b();
+        return b.put(\"orders/\" + wfiid + \"/cancel\");
+    }
+}
+";
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    testAOTQmodDotEvalOverloadDispatch() {
+        TmpDir tmp("qore-aot-dot-eval-overload-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTDotEvalOverloadMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern\n%requires AOTDotEvalOverloadMod\nprintf(\"%s\\n\", "
+            "AOTDotEvalOverloadMod::verify(1));\n");
+        script.close();
+
+        string qmod_path = qmod_dir + "/AOTDotEvalOverloadMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled dot-eval overload module: " + compile_out);
+
+        string expected = "base:orders/1/cancel\n";
+        assertEq(expected, runModule(src_dir, script_path),
+            "source module uses runtime overload dispatch");
+        assertEq(expected, runModule(qmod_dir, script_path),
+            "AOT qmod uses runtime overload dispatch");
+    }
+}

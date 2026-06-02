@@ -27,15 +27,27 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/protobuf"
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/ml"
+
 %requires QUnit
 %requires FsUtil
 %requires ml
+%requires QoreOnnxExport
 
 %exec-class MlTest
 
 public class MlTest inherits QUnit::Test {
     constructor() : Test("MlTest", "1.0") {
         addTestCase("ml_get_capabilities", \capabilitiesTest());
+        addTestCase("Tensor basics", \tensorBasicTest());
+        addTestCase("Tensor string dtype", \tensorStringTest());
+        addTestCase("Tensor native postprocessing", \tensorPostprocessingTest());
+        addTestCase("Tensor mock device buffer", \tensorMockDeviceTest());
+        addTestCase("Tensor device upload (CUDA)", \tensorDeviceUploadTest());
+        addTestCase("Tensor pinned host buffer (CUDA)", \tensorPinnedHostTest());
+        addTestCase("device entry-point sandboxing", \deviceSandboxDomainTest());
         addTestCase("IsolationForest constructor options", \iforestConstructorTest());
         addTestCase("IsolationForest fit and score (matrix)", \iforestMatrixTest());
         addTestCase("IsolationForest fit and score (hash)", \iforestHashTest());
@@ -140,7 +152,31 @@ public class MlTest inherits QUnit::Test {
         addTestCase("GMM online EM update", \gmmUpdateTest());
         addTestCase("OnnxModel load and metadata", \onnxLoadTest());
         addTestCase("OnnxModel inference", \onnxInferenceTest());
+        addTestCase("OnnxModel tensor inference", \onnxTensorInferenceTest());
+        addTestCase("OnnxModel dtype coverage", \onnxTypeCoverageTest());
+        addTestCase("OnnxModel device_binding config", \onnxDeviceBindingConfigTest());
+        addTestCase("OnnxModel device output fallback", \onnxDeviceOutputFallbackTest());
+        addTestCase("OnnxModel device output (CUDA)", \onnxDeviceOutputCudaTest());
+        addTestCase("OnnxModel device input (CUDA)", \onnxDeviceInputCudaTest());
+        addTestCase("OnnxModel CoreML acceleration", \onnxCoreMLAccelerationTest());
+        addTestCase("OnnxModel device binding resolves to host (CoreML)", \onnxDeviceBindingCoreMLResolvesToHostTest());
+        addTestCase("Tensor device upload (Metal/UMA)", \tensorMetalDeviceUploadTest());
+        addTestCase("OnnxModel device input (Metal/UMA)", \onnxDeviceInputMetalTest());
+        addTestCase("OnnxModel Metal materialize_outputs no-op", \onnxDeviceMaterializeMetalTest());
+        addTestCase("Tensor pinnedHost on Apple Silicon (UMA no-op)", \tensorPinnedHostMetalTest());
+        addTestCase("OnnxModel I/O binding", \onnxIoBindingTest());
+        addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
+        addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
+        addTestCase("OnnxModel ORT artifact", \onnxOrtArtifactTest());
+        addTestCase("OnnxModel profiling and stats", \onnxProfilingStatsTest());
+        addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
+        addTestCase("OnnxSessionPool inference and stats", \onnxSessionPoolTest());
+        addTestCase("OnnxSessionPool dynamic batch ordering", \onnxSessionPoolDynamicBatchTest());
+        addTestCase("OnnxSessionPool backpressure", \onnxSessionPoolBackpressureTest());
+        addTestCase("OnnxSessionPool timeout", \onnxSessionPoolTimeoutTest());
+        addTestCase("OnnxSessionPool async inference", \onnxSessionPoolAsyncTest());
+        addTestCase("OnnxSessionPool async dynamic batching", \onnxSessionPoolAsyncDynamicBatchTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
         addTestCase("OnnxModel bytes constructor", \onnxBytesConstructorTest());
@@ -165,6 +201,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("StandardScaler edge cases", \stdScalerEdgeCasesTest());
         addTestCase("MinMaxScaler basic", \mmScalerBasicTest());
         addTestCase("MinMaxScaler custom range", \mmScalerCustomRangeTest());
+        addTestCase("MinMaxScaler matrix column API", \mmScalerMatrixColumnsTest());
         addTestCase("MinMaxScaler inverse round-trip", \mmScalerInverseTest());
         addTestCase("MinMaxScaler constant feature", \mmScalerConstantFeatureTest());
         addTestCase("MinMaxScaler error cases", \mmScalerErrorTest());
@@ -366,10 +403,367 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(33, caps.native_algorithms.size());
+            assertTrue(caps.native_algorithms.contains("OnnxSessionPool"));
+            assertEq(34, caps.native_algorithms.size());
         } else {
             assertEq(32, caps.native_algorithms.size());
         }
+    }
+
+    tensorBasicTest() {
+        ML::Tensor t(data: ((1.0, 2.0), (3.0, 4.0)), dtype: "float32");
+        assertEq("float32", t.getDtype());
+        assertEq((2, 2), t.getShape());
+        assertEq(2, t.rank());
+        assertEq(4, t.size());
+        assertEq("buffer<float32>", t.getBuffer().fullType());
+
+        list<auto> nested = t.toList();
+        assertEq(2, nested.size());
+        assertEq(2, nested[0].size());
+        assertFloat(1.0, nested[0][0], 1e-5);
+        assertFloat(4.0, nested[1][1], 1e-5);
+
+        buffer<float64> backing = new buffer<float64>((1.0, 2.0, 3.0, 4.0));
+        ML::Tensor from_buffer = ML::Tensor::fromBuffer(backing, (2, 2));
+        assertEq("float64", from_buffer.getDtype());
+        assertEq((2, 2), from_buffer.getShape());
+        assertEq("buffer<float64>", from_buffer.getBuffer().fullType());
+        backing[0] = 9.0;
+        assertFloat(1.0, from_buffer.toList()[0][0], 1e-5);
+
+        ML::Tensor shared_buffer = ML::Tensor::fromBuffer(data: backing, shape: (2, 2), zero_copy: True);
+        assertFloat(9.0, shared_buffer.toList()[0][0], 1e-5);
+        backing[1] = 8.0;
+        assertFloat(2.0, shared_buffer.toList()[0][1], 1e-5);
+
+        ML::Tensor from_columns = ML::Tensor::fromColumns((
+            new buffer<float32>((1.0, 3.0)),
+            new buffer<float32>((2.0, 4.0)),
+        ), "float32");
+        assertEq("float32", from_columns.getDtype());
+        assertEq((2, 2), from_columns.getShape());
+        assertEq(((1.0, 2.0), (3.0, 4.0)), from_columns.toList());
+        assertTrue(from_columns.hostStorage());
+        assertFalse(from_columns.deviceStorage());
+        assertEq(NOTHING, from_columns.deviceInfo());
+        assertTrue(from_columns.getBuffer().hostStorage());
+        assertFalse(from_columns.getBuffer().deviceStorage());
+        assertEq(NOTHING, from_columns.getBuffer().deviceInfo());
+
+        ML::Tensor flat = from_columns.flatten();
+        assertEq((4,), flat.getShape());
+        assertEq((1.0, 2.0, 3.0, 4.0), flat.toList());
+
+        ML::Tensor squeezed = from_columns.reshape((1, 4, 1)).squeeze();
+        assertEq((4,), squeezed.getShape());
+        assertEq((1.0, 2.0, 3.0, 4.0), squeezed.toList());
+
+        assertEq((1, 2, 2), from_columns.unsqueeze(0).getShape());
+        assertEq((2, 1, 2), from_columns.unsqueeze(1).getShape());
+        assertEq((2, 2, 1), from_columns.unsqueeze(-1).getShape());
+        assertEq(from_columns.toList(), from_columns.materialize().toList());
+
+        ML::Tensor reshaped = from_columns.reshape((4, 1));
+        assertEq((4, 1), reshaped.getShape());
+        assertEq(((1.0,), (2.0,), (3.0,), (4.0,)), reshaped.toList());
+
+        ML::Tensor reshaped_temp = ML::Tensor::fromColumns((
+            new buffer<float32>((5.0, 7.0)),
+            new buffer<float32>((6.0, 8.0)),
+        ), "float32").reshape((4, 1));
+        assertEq(((5.0,), (6.0,), (7.0,), (8.0,)), reshaped_temp.toList());
+
+        ML::Tensor row_slice = from_columns.sliceRows(offset: 1, count: 1);
+        assertEq((1, 2), row_slice.getShape());
+        assertEq(((3.0, 4.0),), row_slice.toList());
+
+        ML::Tensor copied_slice = from_columns.sliceRows(offset: 0, count: 1, zero_copy: False);
+        assertEq((1, 2), copied_slice.getShape());
+        assertEq(((1.0, 2.0),), copied_slice.toList());
+
+        ML::Tensor concatenated = ML::Tensor::concatRows((copied_slice, row_slice));
+        assertEq((2, 2), concatenated.getShape());
+        assertEq(((1.0, 2.0), (3.0, 4.0)), concatenated.toList());
+
+        ML::Tensor int8_tensor(data: (-1, 0, 1), dtype: "int8");
+        assertEq("int8", int8_tensor.getDtype());
+        assertEq("buffer<int8>", int8_tensor.getBuffer().fullType());
+        assertEq((-1, 0, 1), int8_tensor.toList());
+
+        ML::Tensor bool_tensor(data: (True, False, True), dtype: "bool");
+        assertEq("bool", bool_tensor.getDtype());
+        assertEq("buffer<bool>", bool_tensor.getBuffer().fullType());
+        assertEq((True, False, True), bool_tensor.toList());
+
+        assertThrows("ML-TENSOR-ERROR", sub() {
+            ML::Tensor bad(data: new buffer<*float64>((1.0, NOTHING)));
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad(data: (1.0, 2.0, 3.0), shape: (2, 2));
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad = ML::Tensor::fromColumns((
+                new buffer<float32>((1.0, 2.0)),
+                new buffer<float32>((3.0,)),
+            ), "float32");
+        });
+        assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
+            ML::Tensor bad = ML::Tensor::fromColumns((
+                new buffer<float32>((1.0, 2.0)),
+                new buffer<float64>((3.0, 4.0)),
+            ), "float32");
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad = from_columns.reshape((3,));
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad = from_columns.unsqueeze(3);
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor bad = from_columns.sliceRows(offset: 1, count: 5);
+        });
+        assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
+            ML::Tensor bad = ML::Tensor::concatRows((from_columns, from_buffer));
+        });
+    }
+
+    tensorStringTest() {
+        ML::Tensor t(data: (("alpha", "beta"), ("gamma", "delta")), dtype: "string");
+        assertEq("string", t.getDtype());
+        assertEq((2, 2), t.getShape());
+        assertEq("buffer<string>", t.getBuffer().fullType());
+        assertEq((("alpha", "beta"), ("gamma", "delta")), t.toList());
+
+        ML::Tensor inferred(data: ("red", "green", "blue"));
+        assertEq("string", inferred.getDtype());
+        assertEq(("red", "green", "blue"), inferred.toList());
+    }
+
+    tensorMockDeviceTest() {
+        ML::Tensor host(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+        assertEq(False, host.deviceStorage());
+        assertTrue(host.hostStorage());
+
+        # a fresh mock device tensor lives only on the (fake) device
+        ML::Tensor dev = host.mockDevice("cuda", 0);
+        assertTrue(dev.deviceStorage());
+        assertEq("float32", dev.getDtype());
+        assertEq((2, 2), dev.getShape());
+
+        hash<auto> di = dev.deviceInfo();
+        assertEq("cuda", di.kind);
+        assertEq(0, di.device_id);
+        assertEq(True, di.device_storage);
+
+        # reading transparently materializes back to identical host values
+        assertEq(host.toList(), dev.toList());
+        assertTrue(dev.hostStorage());
+
+        # explicit materialize() on a fresh mock yields identical data
+        ML::Tensor dev2 = host.mockDevice("rocm", 3);
+        assertEq("rocm", dev2.deviceInfo().kind);
+        assertEq(3, dev2.deviceInfo().device_id);
+        ML::Tensor mat = dev2.materialize();
+        assertEq(host.toList(), mat.toList());
+
+        # default device_kind is cuda
+        assertEq("cuda", host.mockDevice().deviceInfo().kind);
+
+        # bit-packed bool buffers are rejected
+        ML::Tensor bhost(data: new buffer<bool>((True, False, True, False)), shape: (2, 2));
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () {
+            bhost.mockDevice("cuda", 0);
+        });
+    }
+
+    tensorDeviceUploadTest() {
+        ML::Tensor host(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+
+        # a negative device id is rejected before the device runtime is touched (any build)
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () { host.toDevice("cuda", -1); });
+        # unsupported device kinds and bit-packed bool buffers raise (CUDA-only upload in v1)
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () { host.toDevice("opencl", 0); });
+        ML::Tensor bhost(data: new buffer<bool>((True, False)), shape: (2,));
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () { bhost.toDevice("cuda", 0); });
+
+        if (skipOnnxCuda()) {
+            return;
+        }
+
+        # real host->device upload: the result is device-resident and materializes back
+        # to identical host values through the device->host copy-back callback
+        ML::Tensor dev = host.toDevice("cuda", 0);
+        assertTrue(dev.deviceStorage());
+        assertEq(False, dev.hostStorage());
+        assertEq("cuda", dev.deviceInfo().kind);
+        assertEq(0, dev.deviceInfo().device_id);
+        assertEq("float32", dev.getDtype());
+        assertEq((2, 2), dev.getShape());
+        assertEq(host.toList(), dev.toList());
+        assertTrue(dev.hostStorage(), "device tensor is materialized to host after a read");
+
+        # an uploaded device tensor binds zero-copy as a CUDA model input (no host copy)
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True, "require_zero_copy_inputs": True,
+            },
+        });
+        ML::Tensor host_in(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1));
+        ML::Tensor input = host_in.toDevice("cuda", 0);
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", input);
+        b.bindOutputsDevice();
+        ML::Tensor y = b.run(tensors: True).Y;          # 2x+1, device-resident
+        assertEq((((3.0,), (5.0,), (7.0,))), y.toList());
+        assertEq(1, model.getInferenceStats().device_binding.zero_copy_inputs,
+            "an uploaded device input must be bound zero-copy");
+    }
+
+    tensorPinnedHostTest() {
+        ML::Tensor host(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+
+        # bit-packed bool buffers are rejected on any build (checked before the device runtime)
+        ML::Tensor bhost(data: new buffer<bool>((True, False)), shape: (2,));
+        assertThrows("ML-TENSOR-DEVICE-ERROR", sub () { bhost.pinnedHost(); });
+
+        if (skipOnnxCuda()) {
+            return;
+        }
+
+        # a pinned tensor is host-resident and functionally identical to the source
+        ML::Tensor pinned = host.pinnedHost();
+        assertTrue(pinned.hostStorage());
+        assertEq(False, pinned.deviceStorage());
+        assertEq("float32", pinned.getDtype());
+        assertEq((2, 2), pinned.getShape());
+        assertEq(host.toList(), pinned.toList());
+
+        # a pinned tensor uploads to the device and produces correct inference results
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True, "require_zero_copy_inputs": True,
+            },
+        });
+        ML::Tensor host_in(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1));
+        ML::Tensor input = host_in.pinnedHost().toDevice("cuda", 0);
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", input);
+        b.bindOutputsDevice();
+        ML::Tensor y = b.run(tensors: True).Y;          # 2x+1
+        assertEq((((3.0,), (5.0,), (7.0,))), y.toList());
+        assertEq(1, model.getInferenceStats().device_binding.zero_copy_inputs,
+            "a pinned-then-uploaded device input must be bound zero-copy");
+    }
+
+    deviceSandboxDomainTest() {
+        # the device-binding entry points are in the QDOM_UNCONTROLLED_API functional
+        # domain, so a program parsed with PO_NO_UNCONTROLLED_APIS is rejected at parse
+        # time when it calls them (no accelerator required - this is a parse-time check).
+        # Each check uses a fresh restricted program so the rejection is independent.
+        code parse_restricted = sub (string code_str, string label) {
+            Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+            p.loadModule("ml");
+            p.parse(code_str, label);
+        };
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("ML::Tensor sub f(ML::Tensor t) { return t.toDevice(\"cuda\", 0); }", "toDevice-cuda"));
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("ML::Tensor sub f(ML::Tensor t) { return t.toDevice(\"metal\", 0); }", "toDevice-metal"));
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("ML::Tensor sub f(ML::Tensor t) { return t.pinnedHost(); }", "pinnedHost"));
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("nothing sub f(ML::OnnxIoBinding b) { b.bindOutputsDevice(); }", "bindOutputsDevice"));
+        assertThrows("PARSE-EXCEPTION", parse_restricted,
+            ("nothing sub f(ML::OnnxIoBinding b) { b.bindOutputDevice(\"Y\"); }", "bindOutputDevice"));
+
+        # an unrestricted program parses the same device call without error
+        Program allowed(PO_NEW_STYLE);
+        allowed.loadModule("ml");
+        allowed.parse("ML::Tensor sub f(ML::Tensor t) { return t.toDevice(\"cuda\", 0); }", "ok-device");
+
+        # host-only tensor methods remain callable under PO_NO_UNCONTROLLED_APIS
+        Program host_ok(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+        host_ok.loadModule("ml");
+        host_ok.parse("list<int> sub g(ML::Tensor t) { return t.getShape(); }", "ok-host");
+    }
+
+    tensorPostprocessingTest() {
+        ML::Tensor logits(data: new buffer<float32>((0.0, 2.0, -2.0, 1.0)), shape: (2, 2));
+
+        ML::Tensor sigmoid = logits.sigmoid();
+        assertEq((2, 2), sigmoid.getShape());
+        list<auto> sigmoid_values = sigmoid.toList();
+        assertFloat(0.5, sigmoid_values[0][0], 1e-5);
+        assertFloat(1.0 / (1.0 + exp(-2.0)), sigmoid_values[0][1], 1e-5);
+
+        ML::Tensor softmax = logits.softmax();
+        list<auto> probs = softmax.toList();
+        assertFloat(1.0, probs[0][0] + probs[0][1], 1e-5);
+        assertTrue(probs[0][1] > probs[0][0], "softmax should preserve row ordering");
+
+        ML::Tensor argmax = logits.argmax();
+        assertEq((2,), argmax.getShape());
+        assertEq((1, 1), argmax.toList());
+
+        hash<auto> top = logits.topK(k: 1);
+        assertTrue(top.values instanceof ML::Tensor, "topK values should be a Tensor");
+        assertTrue(top.indices instanceof ML::Tensor, "topK indices should be a Tensor");
+        assertEq((2, 1), top.values.getShape());
+        assertEq(((2.0,), (1.0,)), top.values.toList());
+        assertEq(((1,), (1,)), top.indices.toList());
+
+        list<auto> column_buffers = logits.toColumnBuffers();
+        assertEq(2, column_buffers.size(), "rank-2 tensor should split to one buffer per column");
+        assertEq((0.0, -2.0), column_buffers[0].toList());
+        assertEq((2.0, 1.0), column_buffers[1].toList());
+        ML::Tensor rank1(data: new buffer<float32>((9.0, 8.0)), shape: (2,));
+        assertEq((9.0, 8.0), rank1.toColumnBuffers()[0].toList());
+
+        ML::Tensor hidden(data: new buffer<float32>((
+            1.0, 2.0, 3.0,
+            3.0, 4.0, 5.0,
+            100.0, 100.0, 100.0,
+            2.0, 0.0, 0.0,
+            4.0, 0.0, 0.0,
+            0.0, 0.0, 0.0
+        )), shape: (2, 3, 3));
+        ML::Tensor mask(data: new buffer<int64>((1, 1, 0, 1, 1, 0)), shape: (2, 3));
+        ML::Tensor pooled = hidden.poolTokenEmbeddings(attention_mask: mask, strategy: "mean");
+        assertEq((2, 3), pooled.getShape());
+        assertEq(((2.0, 3.0, 4.0), (3.0, 0.0, 0.0)), pooled.toList());
+
+        ML::Tensor max_pooled = hidden.poolTokenEmbeddings(attention_mask: mask, strategy: "max");
+        assertEq(((3.0, 4.0, 5.0), (4.0, 0.0, 0.0)), max_pooled.toList());
+
+        ML::Tensor cls_pooled = hidden.poolTokenEmbeddings(mask, "cls");
+        assertEq(((1.0, 2.0, 3.0), (2.0, 0.0, 0.0)), cls_pooled.toList());
+
+        ML::Tensor normalized = pooled.l2NormalizeRows();
+        list<auto> normalized_values = normalized.toList();
+        float n00 = normalized_values[0][0];
+        float n01 = normalized_values[0][1];
+        float n02 = normalized_values[0][2];
+        float n10 = normalized_values[1][0];
+        float n11 = normalized_values[1][1];
+        float n12 = normalized_values[1][2];
+        assertFloat(1.0, sqrt(n00 * n00 + n01 * n01 + n02 * n02), 1e-5);
+        assertFloat(1.0, sqrt(n10 * n10 + n11 * n11 + n12 * n12), 1e-5);
+
+        assertThrows("ML-TENSOR-DTYPE-ERROR", sub() {
+            ML::Tensor bad(data: (1, 2, 3), dtype: "int64").sigmoid();
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            logits.topK(k: 3);
+        });
+        assertThrows("ML-TENSOR-SHAPE-ERROR", sub() {
+            ML::Tensor rank3(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (1, 2, 2));
+            rank3.toColumnBuffers();
+        });
     }
 
     iforestConstructorTest() {
@@ -1179,6 +1573,19 @@ public class MlTest inherits QUnit::Test {
         hash<ML::KMeansResult> r_near1 = km.predict({"x": 10.0, "y": 10.0});
         assertTrue(r_near0.cluster != r_near1.cluster,
             "points near different clusters should have different assignments");
+
+        hash<auto> column_result = km.predictMatrixColumns(((0.0, 0.0), (10.0, 10.0)),
+            {"include_centroid_distances": False});
+        assertEq("buffer<int64>", column_result.cluster.fullType());
+        assertEq("buffer<float64>", column_result.distance.fullType());
+        assertEq(2, column_result.cluster.lsize());
+        assertEq(2, column_result.distance.lsize());
+        assertFalse(exists column_result.centroid_distances);
+
+        hash<auto> full_column_result = km.predictMatrixColumns(((0.0, 0.0), (10.0, 10.0)));
+        assertEq(2, full_column_result.centroid_distances.size());
+        assertEq("buffer<float64>", full_column_result.centroid_distances[0].fullType());
+        assertEq(2, full_column_result.centroid_distances[0].lsize());
     }
 
     kmeansUpdateTest() {
@@ -1368,6 +1775,14 @@ public class MlTest inherits QUnit::Test {
         for (int i = 0; i < results.size(); ++i) {
             assertEq(2, results[i].components.size());
         }
+
+        ML::PCA column_pca({"n_components": 2});
+        hash<auto> column_results = column_pca.fitTransformMatrixColumns(data);
+        assertEq(2, column_results.components.size());
+        assertEq("buffer<float64>", column_results.components[0].fullType());
+        assertEq(30, column_results.components[0].lsize());
+        assertEq("buffer<float64>", column_results.total_explained_variance.fullType());
+        assertEq(30, column_results.total_explained_variance.lsize());
     }
 
     pcaErrorTest() {
@@ -2848,6 +3263,103 @@ public class MlTest inherits QUnit::Test {
         return False;
     }
 
+    private bool skipOnnxCuda() {
+        if (skipOnnx()) {
+            return True;
+        }
+        # the CUDA provider must be present in the build AND usable at runtime
+        try {
+            ML::OnnxModel m(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA"},),
+                "fail_on_provider_fallback": True,
+            });
+            if (m.getEffectiveProviderReport().active_provider != "CUDAExecutionProvider") {
+                testSkip("CUDA execution provider not active");
+                return True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("CUDA execution provider not available: " + ex.err);
+            return True;
+        }
+        return False;
+    }
+
+    private bool skipMetal() {
+        hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        if (!caps.has_metal) {
+            testSkip("Metal/UMA device-buffer support not compiled in (HAVE_METAL undefined)");
+            return True;
+        }
+        return False;
+    }
+
+    private bool skipOnnxCoreML() {
+        if (skipOnnx()) {
+            return True;
+        }
+        # the CoreML provider must be present in the build AND usable at runtime
+        try {
+            ML::OnnxModel m(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+                "fail_on_provider_fallback": True,
+            });
+            if (m.getEffectiveProviderReport().active_provider != "CoreMLExecutionProvider") {
+                testSkip("CoreML execution provider not active");
+                return True;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("CoreML execution provider not available: " + ex.err);
+            return True;
+        }
+        return False;
+    }
+
+    private string getMultiInputModelPath() {
+        string dir = get_script_dir();
+        string path = dir + "/../../modules/ml/test/data/test_multi_input.onnx";
+        if (!is_file(path)) {
+            path = dir + "/../../../modules/ml/test/data/test_multi_input.onnx";
+        }
+        if (!is_file(path)) {
+            path = "modules/ml/test/data/test_multi_input.onnx";
+        }
+        return path;
+    }
+
+    private bool skipMultiInputOnnx() {
+        if (skipOnnx()) {
+            return True;
+        }
+        string path = getMultiInputModelPath();
+        if (!is_file(path)) {
+            testSkip("multi-input ONNX model not found at: " + path);
+            return True;
+        }
+        return False;
+    }
+
+    private binary makeOnnxIdentityModel(list<hash<auto>> specs) {
+        list<hash<auto>> nodes = ();
+        list<hash<auto>> inputs = ();
+        list<hash<auto>> outputs = ();
+
+        foreach hash<auto> spec in (specs) {
+            string input_name = spec.name + "_in";
+            string output_name = spec.name + "_out";
+            nodes += QoreOnnxExport::OnnxGraphBuilder::makeNode(
+                "Identity", (input_name,), (output_name,));
+            inputs += QoreOnnxExport::OnnxGraphBuilder::makeInput(input_name, 1, spec.type);
+            outputs += QoreOnnxExport::OnnxGraphBuilder::makeOutput(output_name, 1, spec.type);
+        }
+
+        hash<auto> model_hash = QoreOnnxExport::OnnxGraphBuilder::buildModel(
+            "qore_type_identity", nodes, inputs, outputs, (),
+            ({"domain": "", "version": 13},), "qore-ml-test");
+        model_hash.ir_version = 8;
+        model_hash.doc_string = "Qore ONNX dtype coverage identity model";
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(model_hash);
+    }
+
     onnxLoadTest() {
         if (skipOnnx()) {
             return;
@@ -2867,6 +3379,7 @@ public class MlTest inherits QUnit::Test {
         assertEq("float", inputs[0].type);
         assertEq(2, inputs[0].shape.size());
         assertEq(1, inputs[0].shape[1]);
+        assertEq(2, inputs[0].symbolic_shape.size());
 
         # Check outputs
         list<hash<ML::OnnxTensorInfo>> outputs = model.getOutputInfo();
@@ -2896,6 +3409,715 @@ public class MlTest inherits QUnit::Test {
         assertFloat(-1.0, y_vals[4], 1e-5);
     }
 
+    onnxTensorInferenceTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        ML::Tensor input(data: new buffer<float32>((1.0, 2.0, 3.0, 0.0, -1.0)), shape: (5, 1));
+        hash<auto> result = model.runTensors({"X": input});
+        assertTrue(result.hasKey("Y"));
+
+        ML::Tensor y = result.Y;
+        assertEq("float32", y.getDtype());
+        assertEq((5, 1), y.getShape());
+        assertEq("buffer<float32>", y.getBuffer().fullType());
+
+        list<auto> y_vals = y.toList();
+        assertEq(5, y_vals.size());
+        assertFloat(3.0, y_vals[0][0], 1e-5);
+        assertFloat(5.0, y_vals[1][0], 1e-5);
+        assertFloat(7.0, y_vals[2][0], 1e-5);
+        assertFloat(1.0, y_vals[3][0], 1e-5);
+        assertFloat(-1.0, y_vals[4][0], 1e-5);
+    }
+
+    onnxTypeCoverageTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        binary model_data = makeOnnxIdentityModel((
+            {"name": "f16", "type": QoreOnnxExport::ONNX_FLOAT16},
+            {"name": "bf16", "type": QoreOnnxExport::ONNX_BFLOAT16},
+            {"name": "u8", "type": QoreOnnxExport::ONNX_UINT8},
+            {"name": "u16", "type": QoreOnnxExport::ONNX_UINT16},
+            {"name": "u32", "type": QoreOnnxExport::ONNX_UINT32},
+            {"name": "u64", "type": QoreOnnxExport::ONNX_UINT64},
+            {"name": "s", "type": QoreOnnxExport::ONNX_STRING},
+        ));
+
+        ML::OnnxModel model(model_data, <ML::OnnxSessionConfig>{"providers": ()});
+        hash<auto> out = model.run({
+            "f16_in": ((1.5,), (-2.0,)),
+            "bf16_in": ((3.0,), (4.5,)),
+            "u8_in": ((0,), (255,)),
+            "u16_in": ((0,), (65535,)),
+            "u32_in": ((0,), (4000000000,)),
+            "u64_in": ((0,), (9223372036854775807,)),
+            "s_in": (("alpha",), ("beta",)),
+        });
+
+        assertFloat(1.5, out.f16_out[0], 0.001);
+        assertFloat(-2.0, out.f16_out[1], 0.001);
+        assertFloat(3.0, out.bf16_out[0], 0.01);
+        assertFloat(4.5, out.bf16_out[1], 0.01);
+        assertEq((0, 255), out.u8_out);
+        assertEq((0, 65535), out.u16_out);
+        assertEq((0, 4000000000), out.u32_out);
+        assertEq((0, 9223372036854775807), out.u64_out);
+        assertEq(("alpha", "beta"), out.s_out);
+
+        hash<auto> tensor_out = model.runTensors({
+            "f16_in": new ML::Tensor(data: ((1.5,), (-2.0,)), dtype: "float32"),
+            "bf16_in": new ML::Tensor(data: ((3.0,), (4.5,)), dtype: "float32"),
+            "u8_in": new ML::Tensor(data: ((0,), (255,)), dtype: "int64"),
+            "u16_in": new ML::Tensor(data: ((0,), (65535,)), dtype: "int64"),
+            "u32_in": new ML::Tensor(data: ((0,), (4000000000,)), dtype: "int64"),
+            "u64_in": new ML::Tensor(data: ((0,), (9223372036854775807,)), dtype: "int64"),
+            "s_in": new ML::Tensor(data: (("alpha",), ("beta",)), dtype: "string"),
+        });
+
+        assertEq("float32", tensor_out.f16_out.getDtype());
+        assertEq((2, 1), tensor_out.f16_out.getShape());
+        assertFloat(1.5, tensor_out.f16_out.toList()[0][0], 0.001);
+        assertFloat(-2.0, tensor_out.f16_out.toList()[1][0], 0.001);
+        assertEq("float32", tensor_out.bf16_out.getDtype());
+        assertFloat(3.0, tensor_out.bf16_out.toList()[0][0], 0.01);
+        assertFloat(4.5, tensor_out.bf16_out.toList()[1][0], 0.01);
+        assertEq("int64", tensor_out.u8_out.getDtype());
+        assertEq(((0,), (255,)), tensor_out.u8_out.toList());
+        assertEq(((0,), (65535,)), tensor_out.u16_out.toList());
+        assertEq(((0,), (4000000000,)), tensor_out.u32_out.toList());
+        assertEq(((0,), (9223372036854775807,)), tensor_out.u64_out.toList());
+        assertEq(("alpha",), tensor_out.s_out.toList()[0]);
+        assertEq(("beta",), tensor_out.s_out.toList()[1]);
+
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "uint8 tensor value", sub() {
+            model.run({
+                "f16_in": ((1.0,),),
+                "bf16_in": ((1.0,),),
+                "u8_in": ((256,),),
+                "u16_in": ((1,),),
+                "u32_in": ((1,),),
+                "u64_in": ((1,),),
+                "s_in": (("x",),),
+            });
+        });
+
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "uint64 tensor value", sub() {
+            model.run({
+                "f16_in": ((1.0,),),
+                "bf16_in": ((1.0,),),
+                "u8_in": ((1,),),
+                "u16_in": ((1,),),
+                "u32_in": ((1,),),
+                "u64_in": (("-1",),),
+                "s_in": (("x",),),
+            });
+        });
+    }
+
+    onnxDeviceBindingConfigTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # default: no device_binding -> disabled, provider output, no device requested
+        {
+            ML::OnnxModel model(getTestModelPath());
+            hash<auto> db = model.getEffectiveProviderReport().device_binding;
+            assertEq(False, db.enabled);
+            assertEq("provider", db.default_output_device);
+            assertEq(False, db.allow_host_fallback);
+            assertEq(False, db.materialize_outputs);
+            assertEq(-1, db.device_id);
+        }
+
+        # full device_binding policy parses and is reflected in the report
+        {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True,
+                    "default_output_device": "cpu",
+                    "allow_host_fallback": True,
+                    "materialize_outputs": True,
+                    "require_zero_copy_inputs": True,
+                    "require_zero_copy_outputs": True,
+                },
+            });
+            hash<auto> db = model.getEffectiveProviderReport().device_binding;
+            assertEq(True, db.enabled);
+            assertEq("cpu", db.default_output_device);
+            assertEq(True, db.allow_host_fallback);
+            assertEq(True, db.materialize_outputs);
+            assertEq(True, db.require_zero_copy_inputs);
+            assertEq(True, db.require_zero_copy_outputs);
+        }
+
+        # explicit provider device with a device id ("cuda:0")
+        {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True,
+                    "default_output_device": "cuda:0",
+                },
+            });
+            hash<auto> db = model.getEffectiveProviderReport().device_binding;
+            assertEq("explicit", db.default_output_device);
+            assertEq("CUDAExecutionProvider", db.device_name);
+            assertEq(0, db.device_id);
+        }
+
+        # invalid: non-integer device id suffix
+        assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", sub () {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True,
+                    "default_output_device": "cuda:abc",
+                },
+            });
+        });
+
+        # invalid: negative device id
+        assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", sub () {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True,
+                    "default_output_device": "cuda:-1",
+                },
+            });
+        });
+
+        # invalid: zero-copy/materialize policy without enabling binding
+        assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", sub () {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "require_zero_copy_outputs": True,
+                },
+            });
+        });
+    }
+
+    onnxDeviceOutputFallbackTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # device output requested but only CPU is active and no host fallback -> error
+        {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CPU"},),
+                "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+            });
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0,)), shape: (1, 1)));
+            assertThrows("ML-ONNX-DEVICE-UNAVAILABLE", sub () {
+                b.bindOutputsDevice();
+            });
+        }
+
+        # with allow_host_fallback, device binding falls back to CPU output
+        {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CPU"},),
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True, "allow_host_fallback": True,
+                },
+            });
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0,)), shape: (1, 1)));
+            b.bindOutputsDevice();
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertEq(False, y.deviceStorage());   # CPU output, not device-backed
+            assertFloat(3.0, y.toList()[0][0], 1e-5);
+        }
+    }
+
+    onnxDeviceOutputCudaTest() {
+        if (skipOnnxCuda()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+        });
+        assertEq("CUDAExecutionProvider", model.getEffectiveProviderReport().active_provider);
+
+        # provider-managed device output stays on device until a host read
+        {
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1)));
+            b.bindOutputsDevice();
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertTrue(y.deviceStorage(), "output should be device-resident");
+            assertEq(False, y.hostStorage(), "output should not be on host before a read");
+            assertEq("cuda", y.deviceInfo().kind);
+            assertEq(0, y.deviceInfo().device_id);
+            # reading materializes once via cudaMemcpy
+            assertEq(((3.0,), (5.0,), (7.0,)), y.toList());
+            assertTrue(y.hostStorage(), "output should be on host after materialization");
+        }
+
+        # explicit device hash on a single output
+        {
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((5.0,)), shape: (1, 1)));
+            b.bindOutputDevice("Y", {"kind": "cuda", "device_id": 0});
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertTrue(y.deviceStorage());
+            assertEq((((11.0,),)), y.toList());
+        }
+
+        # materialize_outputs forces the device output to host before returning
+        {
+            ML::OnnxModel model2(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True, "materialize_outputs": True,
+                },
+            });
+            ML::OnnxIoBinding b = model2.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((4.0,)), shape: (1, 1)));
+            b.bindOutputsDevice();
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertTrue(y.hostStorage(), "materialize_outputs should pre-materialize to host");
+            assertEq((((9.0,),)), y.toList());
+        }
+    }
+
+    onnxDeviceInputCudaTest() {
+        if (skipOnnxCuda()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+        });
+
+        # zero-copy device -> device chaining: a device output fed back as input
+        # must be bound directly without materializing to host
+        {
+            ML::OnnxIoBinding b1 = model.createBinding();
+            b1.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1)));
+            b1.bindOutputsDevice();
+            ML::Tensor y1 = b1.run(tensors: True).Y;   # device-resident: 2x+1
+            assertEq(False, y1.hostStorage());
+
+            ML::OnnxIoBinding b2 = model.createBinding();
+            b2.bindInput("X", y1);                       # device input, zero-copy
+            b2.bindOutputsDevice();
+            ML::Tensor y2 = b2.run(tensors: True).Y;     # 2*(2x+1)+1 = 4x+3
+            assertEq(False, y1.hostStorage(),
+                "device input must be bound zero-copy (no host materialization)");
+            assertEq((((7.0,), (11.0,), (15.0,))), y2.toList());
+        }
+
+        # require_zero_copy_inputs rejects a device input that cannot be bound
+        # directly to the active provider (here a mock ROCm buffer on a CUDA session)
+        {
+            ML::OnnxModel strict(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True, "require_zero_copy_inputs": True,
+                },
+            });
+            ML::OnnxIoBinding b = strict.createBinding();
+            ML::Tensor rocm_in = (new ML::Tensor(data: new buffer<float32>((1.0,)), shape: (1, 1))).mockDevice("rocm", 0);
+            assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", sub () {
+                b.bindInput("X", rocm_in);
+            });
+        }
+
+        # without require_zero_copy_inputs, an incompatible device input falls back
+        # to host materialization and still runs correctly
+        {
+            ML::OnnxIoBinding b = model.createBinding();
+            ML::Tensor rocm_in = (new ML::Tensor(data: new buffer<float32>((5.0,)), shape: (1, 1))).mockDevice("rocm", 0);
+            assertEq(False, rocm_in.hostStorage());
+            b.bindInput("X", rocm_in);    # incompatible device -> host fallback materializes at bind
+            assertTrue(rocm_in.hostStorage(), "incompatible device input should materialize to host");
+            b.bindOutput("Y");
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertEq((((11.0,),)), y.toList());   # 2*5+1
+        }
+    }
+
+    onnxCoreMLAccelerationTest() {
+        if (skipOnnxCoreML()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+            "fail_on_provider_fallback": True,
+        });
+        assertEq("CoreMLExecutionProvider", model.getEffectiveProviderReport().active_provider);
+
+        # OnnxModel.run() path (nested-list input, shape inferred; returns flat list)
+        {
+            hash<auto> result = model.run({"X": ((1.0,), (2.0,), (3.0,))});
+            assertEq((3.0, 5.0, 7.0), result.Y);   # 2x+1, returned as flat list in non-tensor mode
+        }
+
+        # OnnxIoBinding.run() path
+        {
+            ML::OnnxIoBinding b = model.createBinding();
+            b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)),
+                                             shape: (3, 1)));
+            b.bindOutputs();
+            ML::Tensor y = b.run(tensors: True).Y;
+            assertEq(((3.0,), (5.0,), (7.0,)), y.toList());
+            assertEq(False, y.deviceStorage());   # CoreML manages its own opaque memory
+            assertTrue(y.hostStorage());
+        }
+    }
+
+    onnxDeviceBindingCoreMLResolvesToHostTest() {
+        if (skipOnnxCoreML()) {
+            return;
+        }
+
+        # CoreML is an EP-acceleration provider with no raw device memory exposed;
+        # a device_binding request must resolve to host with truthful counters
+        # (no fabricated device->host or host->device transfers) and without
+        # consulting allow_host_fallback
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+            "fail_on_provider_fallback": True,
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True,
+                "default_output_device": "provider",
+            },
+        });
+        assertEq("CoreMLExecutionProvider", model.getEffectiveProviderReport().active_provider);
+
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1)));
+        b.bindOutputsDevice();   # must not raise on CoreML
+        ML::Tensor y = b.run(tensors: True).Y;
+        assertEq(((3.0,), (5.0,), (7.0,)), y.toList());
+        assertEq(False, y.deviceStorage(), "CoreML output must resolve to host (no raw device memory)");
+        assertTrue(y.hostStorage());
+
+        hash<auto> db = model.getInferenceStats().device_binding;
+        assertEq(1, db.host_outputs, "tensor output landed on host");
+        assertEq(0, db.device_outputs, "no provider-managed device output (CoreML has no device memory)");
+        assertEq(0, db.host_to_device_transfers, "no fabricated H2D copy on EP-acceleration provider");
+        assertEq(0, db.device_to_host_transfers, "no fabricated D2H copy on EP-acceleration provider");
+        assertEq(0, db.output_materializations, "no materialize step (CoreML output is host-native)");
+        assertEq(1, db.provider_host_resolutions,
+            "CoreML resolved to host truthfully (EP-acceleration provider with opaque memory)");
+    }
+
+    tensorMetalDeviceUploadTest() {
+        if (skipMetal()) {
+            return;
+        }
+
+        # Apple Silicon UMA: an MTLBuffer with MTLStorageModeShared is the same
+        # physical memory CPU-side and GPU-side, so toDevice("metal") wraps the
+        # input bytes in a Metal-tagged device buffer with a no-op copy-back.
+        ML::Tensor host = new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0, 5.0, 6.0)),
+                                          shape: (2, 3));
+        assertEq(False, host.deviceStorage());
+        assertTrue(host.hostStorage());
+
+        ML::Tensor dev = host.toDevice("metal", 0);
+        assertTrue(dev.deviceStorage(), "toDevice('metal') must produce a device-tagged tensor");
+        assertEq(False, dev.hostStorage(),
+            "Metal-tagged buffer has no Qore-owned host storage until materialized");
+        hash<auto> info = dev.deviceInfo();
+        assertEq("metal", info.kind);
+        assertEq(0, info.device_id);
+
+        # toList() materializes: substrate fills its own host slot from the same
+        # UMA bytes -- correct values, no real DMA hop
+        assertEq(((1.0, 2.0, 3.0), (4.0, 5.0, 6.0)), dev.toList());
+        assertTrue(dev.hostStorage(), "materialize after toList()");
+
+        # negative paths
+        assertThrows("ML-TENSOR-DEVICE-ERROR",
+            sub() { host.toDevice("metal", -1); });
+    }
+
+    onnxDeviceInputMetalTest() {
+        if (skipMetal() || skipOnnx()) {
+            return;
+        }
+
+        # Metal-tagged input bound to a CPU provider: UMA means the GPU and CPU
+        # share the same physical bytes, so any provider can read the Metal
+        # buffer through CPU memory info with zero copies and zero transfers.
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+        });
+
+        ML::Tensor host_in = new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)),
+                                             shape: (3, 1));
+        ML::Tensor metal_in = host_in.toDevice("metal", 0);
+        assertTrue(metal_in.deviceStorage());
+
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", metal_in);
+        b.bindOutput("Y");
+        ML::Tensor y = b.run(tensors: True).Y;
+        assertEq(((3.0,), (5.0,), (7.0,)), y.toList());   # 2x+1
+
+        hash<auto> db = model.getInferenceStats().device_binding;
+        assertEq(1, db.zero_copy_inputs,
+            "Metal/UMA input must bind zero-copy through CPU memory info");
+        assertEq(0, db.host_fallback_inputs);
+        assertEq(0, db.host_to_device_transfers,
+            "Metal/UMA: no H2D transfer (CPU and GPU see the same physical bytes)");
+        assertEq(0, db.device_to_host_transfers,
+            "Metal/UMA: no D2H transfer on input binding");
+    }
+
+    onnxDeviceMaterializeMetalTest() {
+        if (skipMetal() || skipOnnx()) {
+            return;
+        }
+
+        # An ml::Tensor that is Metal-tagged and then read via toList() (which calls
+        # the substrate ensureHostStorage -> metalSharedCopyToHost) does NOT count as
+        # a device->host transfer in the OnnxModel counters because no Metal output
+        # came back from ORT; the substrate-level materialization is a UMA memcpy and
+        # is invisible to the OnnxModel transfer counters by construction.
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True,
+                "materialize_outputs": True,
+            },
+        });
+
+        ML::Tensor metal_in = (new ML::Tensor(data: new buffer<float32>((4.0,)), shape: (1, 1)))
+            .toDevice("metal", 0);
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("X", metal_in);
+        b.bindOutput("Y");
+        ML::Tensor y = b.run(tensors: True).Y;
+        assertEq((((9.0,),)), y.toList());   # 2*4+1
+
+        hash<auto> db = model.getInferenceStats().device_binding;
+        assertEq(1, db.zero_copy_inputs);
+        assertEq(0, db.host_to_device_transfers, "Metal/UMA H2D stays 0 truthfully");
+        assertEq(0, db.device_to_host_transfers,
+            "no D2H from ORT (CPU output) and Metal materialization is not counted");
+    }
+
+    tensorPinnedHostMetalTest() {
+        if (skipMetal()) {
+            return;
+        }
+
+        # On Apple Silicon UMA, pinning is moot (no DMA hop to accelerate); pinnedHost()
+        # returns a Tensor sharing the same host buffer (no allocation, no copy) so
+        # portable code that calls .pinnedHost().toDevice("metal") still works.
+        ML::Tensor host = new ML::Tensor(data: new buffer<float32>((1.0, 2.0, 3.0)),
+                                          shape: (3,));
+        ML::Tensor pinned = host.pinnedHost();
+        assertEq(False, pinned.deviceStorage());
+        assertTrue(pinned.hostStorage());
+        assertEq((1.0, 2.0, 3.0), pinned.toList());
+
+        # pinnedHost().toDevice("metal") composes correctly: Metal upload allocates the
+        # MTLBuffer; the pinned no-op did not allocate anything earlier
+        ML::Tensor dev = pinned.toDevice("metal", 0);
+        assertTrue(dev.deviceStorage());
+        assertEq((1.0, 2.0, 3.0), dev.toList());
+    }
+
+    onnxIoBindingTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        ML::OnnxIoBinding binding = model.createBinding();
+        ML::Tensor input(data: new buffer<float32>((1.0, 2.0, 3.0, 0.0, -1.0)), shape: (5, 1));
+
+        binding.bindInput(name: "X", value: input);
+        binding.bindOutput(name: "Y");
+        assertEq(("X",), binding.getBoundInputNames());
+        assertEq(("Y",), binding.getBoundOutputNames());
+
+        ML::OnnxRunOptions options({"run_tag": "qore-ml-binding-test"});
+        hash<auto> result = binding.run(options: options, tensors: True);
+        assertTrue(result.hasKey("Y"));
+
+        ML::Tensor y = result.Y;
+        assertEq("float32", y.getDtype());
+        assertEq((5, 1), y.getShape());
+        list<auto> y_vals = y.toList();
+        assertFloat(3.0, y_vals[0][0], 1e-5);
+        assertFloat(5.0, y_vals[1][0], 1e-5);
+        assertFloat(7.0, y_vals[2][0], 1e-5);
+        assertFloat(1.0, y_vals[3][0], 1e-5);
+        assertFloat(-1.0, y_vals[4][0], 1e-5);
+
+        hash<auto> info = options.getInfo();
+        assertEq("qore-ml-binding-test", info.run_tag);
+
+        binding.clearInputs();
+        binding.clearOutputs();
+        assertEq((), binding.getBoundInputNames());
+        assertEq((), binding.getBoundOutputNames());
+
+        binding.bindInputs({"X": ((10.0,),)});
+        binding.bindOutputs();
+        hash<auto> scalar_result = model.runBound(binding: binding);
+        assertFloat(21.0, scalar_result.Y[0], 1e-5);
+    }
+
+    onnxPreallocatedIoBindingTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        binary model_data = makeOnnxIdentityModel(({"name": "x", "type": QoreOnnxExport::ONNX_FLOAT},));
+        ML::OnnxModel model(model_data, <ML::OnnxSessionConfig>{"providers": ()});
+        ML::OnnxIoBinding binding = model.createBinding();
+        ML::Tensor input(data: new buffer<float32>((8.0, 13.0)), shape: (2, 1));
+        ML::Tensor output(data: new buffer<float32>((0.0, 0.0)), shape: (2, 1));
+
+        binding.bindInput(name: "x_in", value: input);
+        binding.bindOutputTensor(name: "x_out", output: output);
+        hash<auto> result = binding.run(tensors: True);
+
+        assertTrue(result.hasKey("x_out"));
+        assertEq(((8.0,), (13.0,)), output.toList());
+        ML::Tensor y = result.x_out;
+        assertEq((2, 1), y.getShape());
+        assertEq(((8.0,), (13.0,)), y.toList());
+
+        # a device-backed tensor (immutable external storage) cannot be used as a
+        # preallocated output: v1 requires provider-managed device output allocation
+        # via bindOutputDevice(), not caller-preallocated writable device buffers
+        ML::OnnxIoBinding binding2 = model.createBinding();
+        binding2.bindInput(name: "x_in", value: input);
+        ML::Tensor device_out = output.mockDevice("cuda", 0);
+        assertThrows("ML-ONNX-BINDING-ERROR", sub () {
+            binding2.bindOutputTensor(name: "x_out", output: device_out);
+        });
+    }
+
+    onnxOptimizedArtifactTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        FsUtil::TmpFile out("qore-ml-onnx-opt-", ".onnx");
+        unlink(out.path);
+
+        hash<auto> info = ML::onnx_optimize_model(
+            input_path: getTestModelPath(),
+            output_path: out.path,
+            options: <ML::OnnxSessionConfig>{"providers": ()});
+        assertEq("ONNX", info.output_format);
+        assertEq(out.path, info.output_path);
+        assertTrue(is_file(out.path));
+
+        ML::OnnxModel model(out.path, <ML::OnnxSessionConfig>{"providers": ()});
+        hash<auto> result = model.run({"X": ((4.0,),)});
+        assertFloat(9.0, result.Y[0], 1e-5);
+    }
+
+    onnxOrtArtifactTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        FsUtil::TmpFile out("qore-ml-onnx-opt-", ".ort");
+        unlink(out.path);
+
+        ML::OnnxModel source(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        hash<auto> info = source.saveOptimized(output_path: out.path);
+        assertEq("ORT", info.output_format);
+        assertEq(out.path, info.output_path);
+        assertTrue(is_file(out.path));
+
+        ML::OnnxModel model(out.path,
+            <ML::OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
+        hash<auto> result = model.run({"X": ((5.0,),)});
+        assertFloat(11.0, result.Y[0], 1e-5);
+    }
+
+    onnxProfilingStatsTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        FsUtil::TmpFile prefix("qore-ml-onnx-profile-", "");
+
+        ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "profile_file_prefix": prefix.path,
+        });
+        hash<auto> before = model.getInferenceStats();
+        assertEq(0, before.run_count);
+        assertTrue(before.profiling_enabled);
+
+        hash<auto> result = model.run({"X": ((6.0,),)});
+        assertFloat(13.0, result.Y[0], 1e-5);
+
+        hash<auto> stats = model.getInferenceStats();
+        assertEq(1, stats.run_count);
+        assertEq(1, stats.batch_items);
+        assertTrue(stats.last_ms >= 0.0);
+        assertTrue(stats.total_ms >= stats.last_ms);
+        assertEq(prefix.path, stats.profile_file_prefix);
+
+        *string profile_path = model.endProfiling();
+        assertTrue(profile_path && profile_path.val());
+        assertTrue(is_file(profile_path));
+        unlink(profile_path);
+
+        hash<auto> after_profile = model.getInferenceStats();
+        assertFalse(after_profile.profiling_enabled);
+        assertEq(profile_path, after_profile.last_profile_file);
+
+        model.resetInferenceStats();
+        hash<auto> reset = model.getInferenceStats();
+        assertEq(0, reset.run_count);
+        assertEq(0, reset.batch_items);
+        assertEq(0.0, reset.total_ms);
+    }
+
+    onnxMultiInputTensorInferenceTest() {
+        if (skipMultiInputOnnx()) {
+            return;
+        }
+
+        ML::OnnxModel model(getMultiInputModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        ML::Tensor a(data: new buffer<float32>((1.0, 2.0, 3.0)), shape: (3, 1));
+        ML::Tensor b(data: new buffer<float32>((0.5, 1.0, 1.5)), shape: (3, 1));
+        hash<auto> result = model.runTensors({"A": a, "B": b});
+        assertTrue(result.hasKey("Y"));
+
+        ML::Tensor y = result.Y;
+        assertEq("float32", y.getDtype());
+        assertEq((3, 1), y.getShape());
+        list<auto> y_vals = y.toList();
+        assertFloat(6.0, y_vals[0][0], 1e-5);
+        assertFloat(12.0, y_vals[1][0], 1e-5);
+        assertFloat(18.0, y_vals[2][0], 1e-5);
+
+        hash<auto> list_result = model.run({
+            "A": ((1.0,), (2.0,), (3.0,)),
+            "B": ((0.5,), (1.0,), (1.5,)),
+        });
+        assertFloat(6.0, list_result.Y[0], 1e-5);
+        assertFloat(18.0, list_result.Y[2], 1e-5);
+    }
+
     onnxBatchTest() {
         if (skipOnnx()) {
             return;
@@ -2914,6 +4136,292 @@ public class MlTest inherits QUnit::Test {
         assertFloat(3.0, results[0].Y[0], 1e-5);
         assertFloat(11.0, results[1].Y[0], 1e-5);
         assertFloat(21.0, results[2].Y[0], 1e-5);
+    }
+
+    onnxSessionPoolTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 2, "max_concurrent_runs": 2, "queue_depth": 4, "timeout_ms": 1000});
+
+        hash<auto> result = pool.run({"X": ((4.0,),)});
+        assertTrue(result.hasKey("Y"));
+        assertFloat(9.0, result.Y[0], 1e-5);
+
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(2, stats.max_sessions);
+        assertEq(2, stats.actual_sessions);
+        assertEq(2, stats.max_concurrent_runs);
+        assertEq(1, stats.total_runs);
+        assertEq(1, stats.total_batch_items);
+        assertEq(0, stats.total_rejections);
+        assertEq(0, stats.total_timeouts);
+
+        # the pool aggregates device-binding transfer counters across its sessions; a
+        # tensor run on the CPU provider produces one host output and no device transfers
+        hash<auto> tresult = pool.runTensors({"X": ((4.0,),)});
+        assertTrue(tresult.Y instanceof ML::Tensor);
+        stats = pool.getPoolStats();
+        assertTrue(stats.hasKey("device_binding"), "pool stats must include a device_binding block");
+        assertTrue(stats.device_binding.host_outputs >= 1, "a tensor pool run counts a host output");
+        assertEq(0, stats.device_binding.device_outputs);
+        assertEq(0, stats.device_binding.device_to_host_transfers);
+        # the GPU-memory snapshot is present only on CUDA-enabled builds with a device
+        if (stats.hasKey("device_memory")) {
+            assertTrue(stats.device_memory.total_bytes > 0, "device memory snapshot must report total");
+            assertEq(stats.device_memory.total_bytes - stats.device_memory.free_bytes,
+                stats.device_memory.used_bytes);
+        }
+
+        list<hash<ML::OnnxTensorInfo>> inputs = pool.getInputInfo();
+        assertEq("X", inputs[0].name);
+        list<hash<ML::OnnxTensorInfo>> outputs = pool.getOutputInfo();
+        assertEq("Y", outputs[0].name);
+
+        pool.resetPoolStats();
+        stats = pool.getPoolStats();
+        assertEq(0, stats.total_runs);
+        assertEq(0, stats.total_batch_items);
+    }
+
+    onnxSessionPoolDynamicBatchTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 2, "dynamic_batch_size": 2, "queue_depth": 4, "timeout_ms": 1000});
+
+        list<hash<auto>> batch = (
+            {"X": ((1.0,),)},
+            {"X": ((5.0,),)},
+            {"X": ((10.0,),)},
+            {"X": ((-1.0,),)},
+            {"X": ((0.0,),)},
+        );
+        list<hash<auto>> results = pool.runBatch(batch);
+        assertEq(5, results.size());
+        assertFloat(3.0, results[0].Y[0], 1e-5);
+        assertFloat(11.0, results[1].Y[0], 1e-5);
+        assertFloat(21.0, results[2].Y[0], 1e-5);
+        assertFloat(-1.0, results[3].Y[0], 1e-5);
+        assertFloat(1.0, results[4].Y[0], 1e-5);
+
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(2, stats.dynamic_batch_size);
+        assertEq(1, stats.total_batches);
+        assertEq(1, stats.total_runs);
+        assertEq(5, stats.total_batch_items);
+    }
+
+    onnxSessionPoolBackpressureTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 0, "timeout_ms": 1});
+
+        list<hash<auto>> long_batch;
+        for (int i = 0; i < 50000; ++i) {
+            push long_batch, {"X": ((2.0,),)};
+        }
+
+        Counter ready(1);
+        Counter cnt(1);
+        *hash<ExceptionInfo> bg_error;
+        background sub() {
+            on_exit cnt.dec();
+            try {
+                ready.dec();
+                list<hash<auto>> results = pool.runBatch(long_batch);
+                assertEq(long_batch.size(), results.size());
+                assertFloat(5.0, results[0].Y[0], 1e-5);
+            } catch (hash<ExceptionInfo> ex) {
+                bg_error = ex;
+            }
+        }();
+
+        ready.waitForZero();
+        bool active_seen = False;
+        for (int i = 0; i < 1000; ++i) {
+            if (pool.getPoolStats().active_runs > 0) {
+                active_seen = True;
+                break;
+            }
+            usleep(1ms);
+        }
+        assertTrue(active_seen, "background inference should occupy the only pool session");
+        assertThrows("ML-ONNX-POOL-BACKPRESSURE", sub() {
+            pool.run({"X": ((3.0,),)});
+        });
+        cnt.waitForZero();
+        assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
+
+        hash<auto> stats = pool.getPoolStats();
+        assertTrue(stats.total_rejections >= 1,
+            "pool should count rejected callers when queue_depth is zero");
+    }
+
+    onnxSessionPoolTimeoutTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 1, "timeout_ms": 1});
+
+        list<hash<auto>> long_batch;
+        for (int i = 0; i < 500000; ++i) {
+            push long_batch, {"X": ((2.0,),)};
+        }
+
+        Counter ready(1);
+        Counter cnt(1);
+        *hash<ExceptionInfo> bg_error;
+        background sub() {
+            on_exit cnt.dec();
+            try {
+                ready.dec();
+                list<hash<auto>> results = pool.runBatch(long_batch);
+                assertEq(long_batch.size(), results.size());
+                assertFloat(5.0, results[0].Y[0], 1e-5);
+            } catch (hash<ExceptionInfo> ex) {
+                bg_error = ex;
+            }
+        }();
+
+        ready.waitForZero();
+        bool active_seen = False;
+        for (int i = 0; i < 1000; ++i) {
+            if (pool.getPoolStats().active_runs > 0) {
+                active_seen = True;
+                break;
+            }
+            usleep(1ms);
+        }
+        assertTrue(active_seen, "background inference should occupy the only pool session");
+
+        bool timeout_seen = False;
+        while (cnt.getCount() > 0 && !timeout_seen) {
+            try {
+                pool.run({"X": ((3.0,),)});
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "ML-ONNX-POOL-TIMEOUT") {
+                    timeout_seen = True;
+                    break;
+                }
+                rethrow;
+            }
+        }
+        assertTrue(timeout_seen, "foreground inference should time out while the only pool session is occupied");
+        cnt.waitForZero();
+        assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
+
+        hash<auto> stats = pool.getPoolStats();
+        assertTrue(stats.total_timeouts >= 1,
+            "pool should count timed-out callers when waiting exceeds timeout_ms");
+    }
+
+    onnxSessionPoolAsyncTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 2, "queue_depth": 4, "timeout_ms": 1000});
+
+        Future<hash<auto>> f = pool.runAsync({"X": ((6.0,),)});
+        hash<auto> result = f.get(5s);
+        assertFloat(13.0, result.Y[0], 1e-5);
+
+        Future<hash<auto>> sf = pool.runAsync({"X": ((7.0,),)}, ("Y",));
+        hash<auto> selected_result = sf.get(5s);
+        assertEq(("Y",), sort(keys selected_result));
+        assertFloat(15.0, selected_result.Y[0], 1e-5);
+
+        Future<hash<auto>> tf = pool.runTensorsAsync({"X": ((8.0,),)}, ("Y",));
+        hash<auto> tensor_result = tf.get(5s);
+        assertEq(("Y",), sort(keys tensor_result));
+        assertTrue(tensor_result.Y instanceof ML::Tensor, "selected async tensor output should be a Tensor");
+
+        Future<list<hash<auto>>> bf = pool.runBatchAsync((
+            {"X": ((1.0,),)},
+            {"X": ((2.0,),)},
+        ));
+        list<hash<auto>> batch_result = bf.get(5s);
+        assertFloat(3.0, batch_result[0].Y[0], 1e-5);
+        assertFloat(5.0, batch_result[1].Y[0], 1e-5);
+
+        Future<list<hash<auto>>> sbf = pool.runBatchAsync((
+            {"X": ((3.0,),)},
+            {"X": ((4.0,),)},
+        ), ("Y",));
+        list<hash<auto>> selected_batch_result = sbf.get(5s);
+        assertEq(("Y",), sort(keys selected_batch_result[0]));
+        assertEq(("Y",), sort(keys selected_batch_result[1]));
+        assertFloat(7.0, selected_batch_result[0].Y[0], 1e-5);
+        assertFloat(9.0, selected_batch_result[1].Y[0], 1e-5);
+
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(5, stats.async_submitted);
+        assertEq(5, stats.async_completed);
+        assertEq(0, stats.async_errors);
+    }
+
+    onnxSessionPoolAsyncDynamicBatchTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(),
+            <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 4, "timeout_ms": 1000,
+                "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 100});
+
+        Future<hash<auto>> f1 = pool.runAsync({"X": ((1.0,),)});
+        Future<hash<auto>> f2 = pool.runAsync({"X": ((5.0,),)});
+
+        hash<auto> r1 = f1.get(5s);
+        hash<auto> r2 = f2.get(5s);
+        assertFloat(3.0, r1.Y[0], 1e-5);
+        assertFloat(11.0, r2.Y[0], 1e-5);
+
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(2, stats.async_submitted);
+        assertEq(2, stats.async_completed);
+        assertEq(0, stats.async_errors);
+        assertEq(1, stats.async_batches);
+        assertEq(2, stats.async_batch_items);
+        assertEq(1, stats.total_batches);
+        assertEq(2, stats.total_batch_items);
+
+        pool.resetPoolStats();
+        Future<hash<auto>> s1 = pool.runAsync({"X": ((2.0,),)}, ("Y",));
+        Future<hash<auto>> s2 = pool.runAsync({"X": ((4.0,),)}, ("Y",));
+
+        hash<auto> sr1 = s1.get(5s);
+        hash<auto> sr2 = s2.get(5s);
+        assertEq(("Y",), sort(keys sr1));
+        assertEq(("Y",), sort(keys sr2));
+        assertFloat(5.0, sr1.Y[0], 1e-5);
+        assertFloat(9.0, sr2.Y[0], 1e-5);
+
+        stats = pool.getPoolStats();
+        assertEq(2, stats.async_submitted);
+        assertEq(2, stats.async_completed);
+        assertEq(0, stats.async_errors);
+        assertEq(1, stats.async_batches);
+        assertEq(2, stats.async_batch_items);
+        assertEq(1, stats.total_batches);
+        assertEq(2, stats.total_batch_items);
     }
 
     onnxSingleValueTest() {
@@ -3102,6 +4610,35 @@ public class MlTest inherits QUnit::Test {
         assertTrue(label_key.val(), "should have an int64 output for labels");
         assertTrue(prob_key.val(), "should have a float output for probabilities");
 
+        hash<auto> selected = model.run({"X": ((5.1, 3.5, 1.4, 0.2),)}, (prob_key,));
+        assertEq(1, selected.size(), "selected ONNX run should only return requested outputs");
+        assertTrue(selected.hasKey(prob_key), "selected ONNX run should include requested output");
+        assertFalse(selected.hasKey(label_key), "selected ONNX run should not materialize omitted output");
+
+        hash<auto> selected_tensors = model.runTensors({"X": ((5.1, 3.5, 1.4, 0.2),)}, (prob_key,));
+        assertEq(1, selected_tensors.size(), "selected ONNX tensor run should only return requested outputs");
+        assertTrue(selected_tensors{prob_key} instanceof ML::Tensor,
+            "selected ONNX tensor run should preserve tensor output");
+
+        list<hash<auto>> selected_batch = model.runBatch((
+            {"X": ((5.1, 3.5, 1.4, 0.2),)},
+            {"X": ((7.0, 3.2, 4.7, 1.4),)}
+        ), (label_key,));
+        assertEq(2, selected_batch.size(), "selected ONNX batch run should preserve batch size");
+        assertEq(1, selected_batch[0].size(), "selected ONNX batch run should only return requested outputs");
+        assertTrue(selected_batch[0].hasKey(label_key), "selected ONNX batch run should include requested label");
+        assertFalse(selected_batch[0].hasKey(prob_key), "selected ONNX batch run should omit unrequested probabilities");
+
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "unknown ONNX output name", sub() {
+            model.run({"X": ((5.1, 3.5, 1.4, 0.2),)}, ("missing_output",));
+        });
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "duplicate ONNX output name", sub() {
+            model.run({"X": ((5.1, 3.5, 1.4, 0.2),)}, (prob_key, prob_key));
+        });
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "output_names must contain at least one", sub() {
+            model.run({"X": ((5.1, 3.5, 1.4, 0.2),)}, ());
+        });
+
         # Verify label is a valid Iris class (0, 1, or 2)
         auto label = result{label_key};
         # label could be a scalar int or a list with one element
@@ -3199,9 +4736,27 @@ public class MlTest inherits QUnit::Test {
         assertTrue(providers.contains(info.active_provider),
             sprintf("active_provider %y should be in available providers %y",
                 info.active_provider, providers));
+        assertTrue(info.available_providers.contains("CPUExecutionProvider"));
+        assertTrue(info.provider_diagnostics.size() > 0);
+        assertFalse(info.cpu_fallback_used);
 
         # getProviderInfo() should match
         assertEq(info.active_provider, model.getProviderInfo());
+
+        assertEq(providers, model.getProviders());
+        hash<auto> options = ML::ml_get_onnx_provider_options();
+        assertTrue(options.hasKey("CPUExecutionProvider"));
+        assertTrue(options.CPUExecutionProvider.available);
+
+        hash<auto> method_options = model.getProviderOptions();
+        assertTrue(method_options.hasKey("CPUExecutionProvider"));
+        assertEq(options.CPUExecutionProvider.available,
+            method_options.CPUExecutionProvider.available);
+
+        hash<auto> report = model.getEffectiveProviderReport();
+        assertEq(model.getProviderInfo(), report.active_provider);
+        assertTrue(report.available_providers.contains("CPUExecutionProvider"));
+        assertTrue(report.provider_diagnostics.size() > 0);
     }
 
     onnxInvalidProviderTest() {
@@ -3218,6 +4773,13 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-ONNX-PROVIDER-ERROR", sub() {
             ML::OnnxModel model(getTestModelPath(), config);
         });
+
+        assertThrows("ML-ONNX-PROVIDER-ERROR", "available providers", sub() {
+            ML::OnnxModel model(getTestModelPath(), <ML::OnnxSessionConfig>{
+                "required_providers": ("NonExistentProvider123",),
+            });
+        });
+
     }
 
     onnxInvalidConfigTest() {
@@ -3290,6 +4852,10 @@ public class MlTest inherits QUnit::Test {
         ML::OnnxModel model(getTestModelPath(), config);
         assertTrue(model.isLoaded());
         assertEq("CPUExecutionProvider", model.getProviderInfo());
+        assertEq((), model.getRequestedProviders());
+        hash<auto> report = model.getEffectiveProviderReport();
+        assertTrue(report.explicit_provider_config);
+        assertFalse(report.cpu_fallback_used);
 
         # Inference should work
         hash<auto> result = model.run({"X": ((4.0,),)});
@@ -3304,6 +4870,11 @@ public class MlTest inherits QUnit::Test {
         ML::OnnxModel model2(getTestModelPath(), config2);
         assertTrue(model2.isLoaded());
         assertEq("CPUExecutionProvider", model2.getProviderInfo());
+        assertEq(("CPUExecutionProvider",), model2.getRequestedProviders());
+        list<hash<ML::OnnxProviderDiagnostic>> diags = model2.getProviderDiagnostics();
+        assertEq("CPUExecutionProvider", diags[0].name);
+        assertTrue(diags[0].requested);
+        assertTrue(diags[0].appended);
     }
 
     onnxCudaTest() {
@@ -3327,13 +4898,22 @@ public class MlTest inherits QUnit::Test {
                 },
             ),
         };
-        ML::OnnxModel model(getTestModelPath(), config);
-        assertTrue(model.isLoaded());
-        assertEq("CUDAExecutionProvider", model.getProviderInfo());
 
-        # Verify inference works on CUDA
-        hash<auto> result = model.run({"X": ((3.0,),)});
-        assertFloat(7.0, result.Y[0], 1e-4);
+        try {
+            ML::OnnxModel model(getTestModelPath(), config);
+            assertTrue(model.isLoaded());
+            assertEq("CUDAExecutionProvider", model.getProviderInfo());
+
+            # Verify inference works on CUDA
+            hash<auto> result = model.run({"X": ((3.0,),)});
+            assertFloat(7.0, result.Y[0], 1e-4);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ML-ONNX-PROVIDER-ERROR") {
+                testSkip("CUDA execution provider is advertised but not usable: " + ex.desc);
+                return;
+            }
+            rethrow;
+        }
     }
 
     # --- StandardScaler tests ---
@@ -3389,6 +4969,20 @@ public class MlTest inherits QUnit::Test {
         assertTrue(result[0][0] < 0.0);
         # Last point should be positive (above mean)
         assertTrue(result[4][0] > 0.0);
+
+        list<auto> columns = scaler.transformMatrixColumns(data);
+        assertEq(2, columns.size());
+        assertEq("buffer<float64>", columns[0].fullType());
+        assertEq(5, columns[0].lsize());
+        assertFloat(0.0, columns[0][2], 1e-10);
+        assertFloat(0.0, columns[1][2], 1e-10);
+
+        ML::StandardScaler column_scaler();
+        list<auto> fit_columns = column_scaler.fitTransformMatrixColumns(data);
+        assertTrue(column_scaler.isFitted());
+        assertEq(2, fit_columns.size());
+        assertEq("buffer<float64>", fit_columns[0].fullType());
+        assertFloat(0.0, fit_columns[0][2], 1e-10);
     }
 
     stdScalerInverseTest() {
@@ -3517,6 +5111,35 @@ public class MlTest inherits QUnit::Test {
         assertFloat(-1.0, result[0][0], 1e-10);
         assertFloat(0.0, result[1][0], 1e-10);
         assertFloat(1.0, result[2][0], 1e-10);
+    }
+
+    mmScalerMatrixColumnsTest() {
+        list<list<float>> data = ((0.0, 10.0), (5.0, 20.0), (10.0, 30.0));
+
+        ML::MinMaxScaler scaler();
+        scaler.fitMatrix(data);
+        list<auto> columns = scaler.transformMatrixColumns(data);
+
+        assertEq(2, columns.size());
+        assertEq("buffer<float64>", columns[0].fullType());
+        assertEq("buffer<float64>", columns[1].fullType());
+        assertEq(3, columns[0].lsize());
+        assertEq(3, columns[1].lsize());
+        assertFloat(0.0, columns[0][0], 1e-10);
+        assertFloat(0.5, columns[0][1], 1e-10);
+        assertFloat(1.0, columns[0][2], 1e-10);
+        assertFloat(0.0, columns[1][0], 1e-10);
+        assertFloat(0.5, columns[1][1], 1e-10);
+        assertFloat(1.0, columns[1][2], 1e-10);
+
+        ML::MinMaxScaler column_scaler({"feature_min": -1.0, "feature_max": 1.0});
+        list<auto> fit_columns = column_scaler.fitTransformMatrixColumns(data);
+        assertTrue(column_scaler.isFitted());
+        assertEq(2, fit_columns.size());
+        assertEq("buffer<float64>", fit_columns[0].fullType());
+        assertFloat(-1.0, fit_columns[0][0], 1e-10);
+        assertFloat(0.0, fit_columns[0][1], 1e-10);
+        assertFloat(1.0, fit_columns[0][2], 1e-10);
     }
 
     mmScalerInverseTest() {

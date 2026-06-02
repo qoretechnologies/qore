@@ -30,14 +30,34 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/SingleValueIterator.h"
+#include "qore/intern/QoreTypeInfo.h"
+
+static const QoreTypeInfo* get_single_value_iterator_element_type(const QoreTypeInfo* iterator_type_info) {
+    const QoreParameterizedClassTypeInfo* iterator_type
+        = QoreTypeInfo::getParameterizedClassType(iterator_type_info);
+    return iterator_type && iterator_type->getArgCount() ? iterator_type->getTypeArgs()[0] : autoTypeInfo;
+}
+
+QoreObject* qore_new_single_value_iterator_object(QoreProgram* pgm, QoreValue value,
+        const QoreTypeInfo* element_type) {
+    const QoreTypeInfo* value_type = element_type ? element_type : value.getTypeInfo();
+    if (!QoreTypeInfo::hasType(value_type)) {
+        value_type = autoTypeInfo;
+    }
+    type_vec_t type_args;
+    type_args.push_back(value_type);
+    QoreObject* rv = new QoreObject(QC_SINGLEVALUEITERATOR, pgm, new SingleValueIterator(value, value_type));
+    rv->setInstantiatedTypeInfo(QC_SINGLEVALUEITERATOR->getTypeInfo(type_args));
+    return rv;
+}
 
 //! This class defines a simple iterator to be used to iterate single values (or complex objects where no iterator has been implemented yet)
 /** @since %Qore 0.8.6
 
     @par Example: SingleValueIterator basic usage
     @code{.py}
-    auto val = 1;
-    SingleValueIterator it(val);
+    int val = 1;
+    SingleValueIterator<int> it(val);
     while (it.next()) {
         printf("iter: %n\n", it.getValue());
     }
@@ -53,24 +73,25 @@
     @endcode
 
  */
-qclass SingleValueIterator [arg=SingleValueIterator* i; ns=Qore; vparent=AbstractIterator];
+qclass SingleValueIterator<T> [arg=SingleValueIterator* i; ns=Qore; vparent=AbstractIterator<T>; legacy_raw];
 
 //! creates the single value iterator with the value passed as an argument
-/** @param v the value to iterate
+/** @param value the value to iterate
 
     @par Example:
     @code{.py}
-SingleValueIterator i(v);
+SingleValueIterator<int> i(v);
     @endcode
  */
-SingleValueIterator::constructor(auto v) {
-   self->setPrivate(CID_SINGLEVALUEITERATOR, new SingleValueIterator(v));
+SingleValueIterator::constructor(T value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_SINGLEVALUEITERATOR,
+      new SingleValueIterator(value, get_single_value_iterator_element_type(self->getInstantiatedTypeInfo())));
 }
 
 //! Creates a copy of the SingleValueIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-SingleValueIterator ni = i.copy();
+SingleValueIterator<int> ni = i.copy();
     @endcode
  */
 SingleValueIterator::copy() {
@@ -109,7 +130,7 @@ while (i.next()) {
 
     @throw INVALID-ITERATOR the iterator is not pointing at a valid element
  */
-auto SingleValueIterator::getValue() [flags=RET_VALUE_ONLY] {
+T SingleValueIterator::getValue() [flags=RET_VALUE_ONLY] {
    return i->checkValid(xsink) ? QoreValue() : i->getValue();
 }
 

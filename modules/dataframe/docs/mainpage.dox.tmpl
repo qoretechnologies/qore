@@ -11,22 +11,431 @@
     Features:
     - Typed columns: \c float64 (Eigen3-backed), \c int64, \c string, \c bool, \c date
     - Null/missing value support with per-column null masks
-    - SQL-like operations: select, filter, sort, groupby, join, pivot, melt, window functions
-    - I/O: CSV (streaming reader), Parquet (optional Apache Arrow), database (Qore DBI)
+    - SQL-like operations: select, filter, sort, groupby, join, valueCounts, nunique,
+      pivot, melt, missing-data cleanup, and window functions
+    - Dense column interop with \c buffer<T> and @ref Qore::SQL::ColumnarResult "ColumnarResult"
+      for SQL and pipeline workloads
+    - Native plugin-operator support: \c frame["column"] for columns,
+      \c frame[row] for row hashes, \c frame[start..stop] for row slices, and
+      \c frame[mask] for predicate masks
+    - I/O: CSV (streaming reader), Parquet via Apache Arrow, database (Qore DBI)
     - ML integration: toMatrix/toVector/fromMatrix for zero-overhead ML feeding
     - Thread-safe with cooperative cancellation support
 
     To use this module, use \c "%requires dataframe" in your code.
 
+    @section dataframe_performance_positioning Performance Positioning
+
+    The dataframe, DBI columnar result, dense \c buffer<T>, and DataProvider
+    pipeline APIs are designed to handle production ETL and analytics workloads
+    without unnecessary row-hash materialization. The fastest paths keep
+    primitive numeric, boolean, and string values in typed columns, use dense boolean
+    masks for filtering, and let shape-aware DataProvider processors preserve
+    \c DataFrameBlock or \c BufferColumns representation until row-oriented
+    behavior is required.
+
+    This is not a claim that every DataFrame operation is faster than every
+    alternative implementation. It is the intended performance profile for the
+    covered workload class: typed column construction, filtering, groupby,
+    joins, value counting, missing-data cleanup, reshaping, Arrow/Parquet I/O,
+    SQL read/write, DataProvider pipelines, and ML-oriented analytical flows
+    that can keep data columnar. Drivers with
+    @ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT "DBI_CAP_HAS_COLUMNAR_SELECT"
+    provide the fastest SQL-read path; drivers without it still work through
+    compatibility conversion.
+
+    In local benchmarks on the Qore 2.3 development branch with locally built
+    modules, including a PostgreSQL DBI driver with native columnar support,
+    Qore was faster than pandas for the paired cases in the benchmark suite.
+    The following table is a representative run from 2026-05-24:
+
+    | Case | Qore median | pandas median | pandas / Qore |
+    |------|-------------|---------------|---------------|
+    | construct columns | 9.700 ms | 42.059 ms | 4.34x |
+    | construct records | 20.035 ms | 40.411 ms | 2.02x |
+    | filter mask | 1.591 ms | 1.923 ms | 1.21x |
+    | groupby aggregate | 3.089 ms | 4.763 ms | 1.54x |
+    | filter + group | 1.441 ms | 3.072 ms | 2.13x |
+    | left join | 2.222 ms | 2.901 ms | 1.31x |
+    | DataProvider filter + group | 1.985 ms | 3.072 ms | 1.55x |
+    | DataProvider pipeline filter + group | 2.000 ms | 3.072 ms | 1.54x |
+    | SQL read | 15.525 ms | 18.081 ms | 1.16x |
+    | SQL write | 16.839 ms | 64.177 ms | 3.81x |
+    | Arrow IPC roundtrip | 5.829 ms | 10.034 ms | 1.72x |
+    | Parquet roundtrip | 18.198 ms | 24.167 ms | 1.33x |
+    | value counts | 0.968 ms | 1.557 ms | 1.61x |
+    | fill/drop missing values | 3.541 ms | 8.075 ms | 2.28x |
+    | melt + pivot reshape | 15.837 ms | 41.078 ms | 2.59x |
+    | solution ETL pipeline | 5.448 ms | 7.804 ms | 1.43x |
+    | solution AI analytics | 37.218 ms | 97.824 ms | 2.63x |
+
+    The benchmark suite is in the source tree under \c bench/ and can be rerun
+    against a local build. Absolute timings depend on hardware, database driver,
+    database server, and Python/pandas versions; the useful signal is whether
+    data stays in the typed columnar paths for the operation being measured.
+
     @section dataframeapi dataframe Module API
 
     Main classes:
     - @ref DataFrame::DataFrame "DataFrame" - the columnar data structure
+    - @ref DataFrame::ColumnRef "ColumnRef" - lazy column reference for predicate masks
+    - @ref DataFrame::RowMask "RowMask" - bitmap row selector returned by column comparisons
     - @ref DataFrame::GroupedDataFrame "GroupedDataFrame" - grouped DataFrame for aggregation
+
+    Result hashdecls:
+    - @ref DataFrame::DataFrameShape "DataFrameShape" - returned by
+      @ref DataFrame::DataFrame::shape() "DataFrame::shape()"
+    - @ref DataFrame::ColumnStats "ColumnStats" - returned by
+      @ref DataFrame::DataFrame::describe() "DataFrame::describe()"
+    - @ref DataFrame::CsvOptions "CsvOptions" - accepted by
+      @ref DataFrame::DataFrame::readCSV() "DataFrame::readCSV()" and
+      @ref DataFrame::DataFrame::writeCSV() "DataFrame::writeCSV()"
+
+    @section dataframe_typed_examples Typed DataFrame Examples
+
+    DataFrame methods that produce another frame now declare
+    @ref DataFrame::DataFrame "DataFrame" directly, and grouped operations
+    declare @ref DataFrame::GroupedDataFrame "GroupedDataFrame" or
+    @ref DataFrame::DataFrame "DataFrame" according to the value returned.
+    Methods that return fixed record shapes use typed hashdecls:
+
+    @code{.py}
+%requires dataframe
+
+DataFrame::DataFrame employees(
+    ({"dept": "sales", "name": "Alice", "salary": 65000.0},
+     {"dept": "sales", "name": "Bob", "salary": 70000.0},
+     {"dept": "eng", "name": "Carol", "salary": 95000.0}));
+
+hash<DataFrame::DataFrameShape> shape = employees.shape();
+printf("rows=%d cols=%d\n", shape.rows, shape.cols);
+
+DataFrame::DataFrame sales = employees.filter("dept", "==", "sales");
+DataFrame::GroupedDataFrame grouped = employees.groupBy(("dept",));
+DataFrame::DataFrame means = grouped.mean();
+
+list<hash<DataFrame::ColumnStats>> stats = employees.describe();
+foreach hash<DataFrame::ColumnStats> stat in (stats) {
+    printf("%s: %s count=%d\n", stat.name, stat.dtype, stat.count);
+}
+    @endcode
+
+    DataFrame also registers native plugin-operator operations for common
+    access patterns. Row slices use normal inclusive Qore range semantics,
+    including open-ended forms:
+
+    @code{.py}
+list<auto> names = employees["name"];
+hash<auto> second_row = employees[1];
+DataFrame::DataFrame first_two = employees[0..1];
+DataFrame::DataFrame reversed = employees[2..0];
+DataFrame::DataFrame from_second = employees[1..];
+    @endcode
+
+    Predicate masks use explicit column references so direct column access stays
+    simple and predictable. Compare a @ref DataFrame::ColumnRef "ColumnRef" with
+    a scalar to get a @ref DataFrame::RowMask "RowMask"; then pass the mask to
+    \c frame[mask] or @ref DataFrame::DataFrame::filter(DataFrame::RowMask) "filter(mask)".
+    The comparison operators are registered plugin operations and work in AST,
+    IR, and JIT execution. In JIT/AOT-generated code, the hot subscript,
+    comparison, and mask-composition operators use direct module-helper calls
+    while preserving the same runtime-helper fallback behavior:
+
+    @code{.py}
+DataFrame::ColumnRef salary = employees.column("salary");
+DataFrame::RowMask high_salary = salary >= 90000.0;
+DataFrame::DataFrame senior = employees[high_salary];
+
+DataFrame::DataFrame sales = employees.filter(employees.column("dept") == "sales");
+DataFrame::DataFrame known_salary = employees[employees.column("salary") != NOTHING];
+
+printf("selected %d of %d rows\n", high_salary.count(), high_salary.size());
+    @endcode
+
+    Supported predicate operators are \c ==, \c !=, \c <, \c <=, \c >, and
+    \c >= against scalar \c int, \c float, \c number, \c string, \c bool,
+    \c date, \c null, and \c NOTHING values. \c NOTHING equality selects null
+    rows; \c NOTHING inequality selects non-null rows. Ordered comparisons with
+    \c NOTHING do not select rows.
+
+    @section dataframe_dense_columnar Dense Buffers And Columnar Results
+
+    DataFrames can be constructed from dense \c buffer<T> values for primitive
+    numeric, boolean, and string columns. Buffer-backed columns keep a reference to the
+    original dense storage, so \c getColumnBuffer(), \c toColumnarResult(), and
+    \c fromColumnarResult() can move primitive columns between DataFrame,
+    @ref buffer "buffer<T>", and
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" without first boxing every
+    cell into a list. Fixed-scale decimal columns use \c buffer<decimal128>.
+    Date, timestamp, and duration columns use \c buffer<int64> with
+    ColumnarResult schema metadata when they come from dense columnar sources,
+    storing microseconds and materializing Qore \c date values when read as
+    rows or lists. Nested arrays, fixed-size lists, structs, maps, and
+    dictionary-compatible values keep recursive ColumnarResult schema metadata
+    and list/hash values; \c buffer<T> remains a primitive dense-vector type.
+
+    @code{.py}
+%requires dataframe
+
+DataFrame::DataFrame scores({
+    "id": new buffer<int64>((1001, 1002, 1003, 1004)),
+    "score": new buffer<float64>((95.5, 88.0, 92.0, 81.5)),
+    "active": new buffer<bool>((True, False, True, True)),
+    "name": new buffer<*string>(("Alice", "Bob", "Carol", NOTHING)),
+});
+
+buffer<int64> ids = scores.getColumnBuffer("id");
+buffer<*string> names = scores.getColumnBuffer("name");
+ColumnarResult columns = scores.toColumnarResult();
+buffer<float64> dense_scores = columns.getColumn("score");
+buffer<*string> dense_names = columns.getColumn("name");
+
+ColumnarResult timestamps = ColumnarResult::fromColumnHash({
+    "created_at": (2026-01-01T00:00:00Z, 2026-01-02T00:00:00Z),
+}, {
+    "created_at": {"native_type": "timestamp with time zone", "nullable": False},
+});
+buffer<int64> created_at_us = timestamps.getColumn("created_at");
+DataFrame::DataFrame timestamp_df = DataFrame::DataFrame::fromColumnarResult(timestamps);
+
+buffer<bool> high_score = dense_scores >= 90.0;
+buffer<*bool> named = dense_names == "Alice";
+ColumnarResult selected_columns = columns.filter(high_score);
+DataFrame::DataFrame selected = DataFrame::DataFrame::fromColumnarResult(selected_columns);
+    @endcode
+
+    ColumnarResult masks can be composed in native code with
+    @ref Qore::SQL::ColumnarResult::combineMasks() "combineMasks()" and
+    @ref Qore::SQL::ColumnarResult::invertMask() "invertMask()". Nullable columns can use
+    @ref Qore::SQL::ColumnarResult::nullMask() "nullMask()" to build dense masks without row
+    materialization. This is useful
+    when code receives typed columns dynamically and cannot rely on parse-time
+    vectorized operator resolution for a column variable:
+
+    @code{.py}
+buffer<bool> high = columns.getColumn("score") >= 90.0;
+buffer<bool> active = columns.getColumn("active") == True;
+buffer<bool> selected_mask = columns.combineMasks(high, active, "&&");
+ColumnarResult high_active = columns.filter(selected_mask);
+ColumnarResult missing_scores = columns.filter(columns.nullMask("score"));
+ColumnarResult first_page = columns.slice(offset: 0, count: 1000);
+ColumnarResult ranked_rows = columns.take((3, 0, 2));
+DataFrame::DataFrame ranked_df = scores.takeRows((3, 0, 2));
+    @endcode
+
+    Use @ref Qore::SQL::ColumnarResult::take() "ColumnarResult::take()" and
+    @ref DataFrame::DataFrame::takeRows() "DataFrame::takeRows()" when row order
+    matters, for example after ranking model scores. These APIs gather explicit
+    row indices and keep primitive columns in dense buffer form.
+
+    Use @ref DataFrame::DataFrame::concat() "DataFrame::concat()" with
+    \c axis:1 for horizontal concat. This shares existing column data when
+    possible and rejects mismatched row counts or duplicate output column names:
+
+    @code{.py}
+DataFrame::DataFrame left({"id": new buffer<int64>((1, 2, 3))});
+DataFrame::DataFrame right({"score": new buffer<float64>((90.0, 80.0, 70.0))});
+DataFrame::DataFrame combined = DataFrame::DataFrame::concat((left, right), axis: 1);
+    @endcode
+
+    DataFrame kernels still maintain the module's existing internal vectors for
+    compatibility with groupby, joins, window functions, and ML conversion.
+    Therefore source buffers are preserved for columnar export and dense column
+    access. Row filtering preserves primitive buffer-backed columns by creating
+    filtered dense buffers, and contiguous row slicing preserves them with
+    zero-copy buffer views. Operations that reorder, aggregate, or reshape rows
+    may allocate new column storage.
+
+    @section dataframe_dataprovider_pipelines DataProvider Pipeline Integration
+
+    The companion \c DataProviderDataFrame user module wraps a DataFrame as a
+    DataProvider and lets DataFrames flow through
+    @ref DataProvider::DataProviderPipeline "DataProviderPipeline" in
+    @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock" shape.
+    DataFrames can also be submitted as ColumnarResult values, which the
+    pipeline treats as
+    @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" shape.
+    DataFrame-aware processors can keep DataFrameBlock representation,
+    dense-column processors can keep BufferColumns representation, and other
+    bulk-aware processors receive a hash-of-lists or row conversion.
+
+    @code{.py}
+%requires DataProviderDataFrame
+
+hash<DataProviderExpression> expr = <DataProviderExpression>{
+    "exp": ">=",
+    "args": (<DataProviderFieldReference>{"field": "salary"}, 90000.0),
+};
+
+list<hash<auto>> selected;
+DataProviderPipeline pipeline(<PipelineOptionInfo>{
+    "name": "senior-compensation",
+    "output_callback": sub (auto row) {
+        push selected, row;
+    },
+});
+
+pipeline.append(new QoreFilterRecordsProcessor({"where_cond": expr}));
+pipeline.submit(employees);
+pipeline.waitDone();
+    @endcode
+
+    QoreFilterRecordsProcessor compiles supported DPQL/DataProvider
+    expressions to DataFrame row masks or dense ColumnarResult boolean masks
+    when possible, including computed comparisons, arithmetic and scalar
+    function calls, \c between, \c in / \c notIn, structured strict
+    equality/inequality, \c containsAny and other string predicates, list
+    membership predicates, list/hash accessors, ternary computed values, null
+    checks, and boolean combinations. QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor,
+    QoreRecordLimitProcessor, QoreSetFieldsProcessor, and
+    QoreSearchReplaceProcessor preserve DataFrameBlock and BufferColumns shapes
+    for simple top-level fields; with ColumnarResult input they rebuild
+    projected or updated blocks from referenced column containers. Analytics
+    processors, including the full AbstractAnalyticsProcessor family plus
+    correlation and cross-correlation processors, accept DataFrameBlock and
+    BufferColumns input and preserve those shapes for rectangular event blocks,
+    including flush-time output from partial windows;
+    top-level configured fields are read from selected columns directly instead
+    of materializing full input blocks as hash-of-lists data.
+    Supported compiled filter forms include \c &&, \c ||, \c !,
+    scalar \c ==, \c !=, \c <, \c <=, \c >, and \c >= comparisons, computed
+    scalar comparisons over top-level fields, expression-to-expression
+    comparisons such as \c @amount \c >= \c @target or
+    \c @amount \c + \c @tax \c >= \c @limit, scalar functions including
+    \c abs(), \c round(), \c floor(), \c ceil(), \c lwr(), \c upr(),
+    \c trim(), \c ltrim(), \c rtrim(), \c concat(), \c coalesce(),
+    \c nullif(), and date-part functions such as \c get_year() and
+    \c get_month(), row-independent scalar expressions such as
+    \c 2026-04-01T00:00:00Z \c - \c days(60), truthy field checks,
+    \c between, \c inRange, \c in, \c not \c in,
+    \c isNull and \c isNotNull checks, case-sensitive \c contains,
+    \c containsAny, \c starts-with, and \c ends-with string predicates,
+    \c listContains and \c listContainsAny membership predicates, list index,
+    slice, and hash key accessors such as \c @scores[0] and
+    \c @payload{region}, structured ternary expressions, and BufferColumns
+    \c like, \c =~, and \c !~ pattern predicates. Unsupported expressions,
+    including expressions whose semantics require row materialization, fall
+    back to generic row evaluation and rebuild the negotiated output shape when
+    possible.
+
+    @code{.py}
+ColumnarResult dense_columns = employees.toColumnarResult();
+hash<DataProviderExpression> high_value = DataProvider::parseDpqlExpression(
+    "round(@salary * 1.05) >= 90000.0 && trim(@status) == \"active\""
+        + " && @created >= 2026-04-01T00:00:00Z - days(60)");
+
+DataProviderPipeline dense_pipeline(<PipelineOptionInfo>{
+    "name": "dense-filter",
+    "output_callback": sub (auto row) {
+        printf("%y\n", row);
+    },
+});
+dense_pipeline.append(new QoreFilterRecordsProcessor({"where_cond": high_value}));
+dense_pipeline.submit(dense_columns);
+dense_pipeline.waitDone();
+    @endcode
+
+    CSV option hashes can also be typed explicitly:
+
+    @code{.py}
+hash<DataFrame::CsvOptions> options = {
+    "separator": "\t",
+    "header": True,
+    "null_string": "NULL",
+};
+
+DataFrame::DataFrame tsv = DataFrame::DataFrame::readCSV("employees.tsv", options);
+tsv.writeCSV("employees-copy.tsv", options);
+    @endcode
+
+    Parquet I/O accepts typed option hashes for projection, row-group reads,
+    predicate filters, compression, and writer tuning:
+
+    @code{.py}
+hash<DataFrame::ParquetReadOptions> read_options = {
+    "columns": ("id", "dept", "salary"),
+    "filters": ({
+        "column": "dept",
+        "op": "==",
+        "value": "sales",
+    }, {
+        "column": "salary",
+        "op": ">=",
+        "value": 90000.0,
+    }),
+    "use_threads": True,
+};
+DataFrame::DataFrame salary = DataFrame::DataFrame::readParquet(
+    "employees.parquet", read_options);
+
+hash<DataFrame::ParquetWriteOptions> write_options = {
+    "compression": "zstd",
+    "row_group_size": 100000,
+    "use_dictionary": True,
+    "write_statistics": True,
+};
+salary.writeParquet("employees-filtered.parquet", write_options);
+    @endcode
+
+    Filter predicates are ANDed. Equality and range predicates on primitive,
+    decimal128, and logical timestamp/date columns use Parquet row-group
+    statistics when available and when the comparison value can be represented
+    in the Parquet logical storage unit without ambiguity. Every filter is still
+    applied exactly after reading, so predicates that cannot be pushed down
+    remain correct.
+
+    @section dataframe_arrow_copy_behavior Arrow, Parquet, And Copy Behavior
+
+    DataFrame Arrow IPC and Parquet APIs preserve logical schema and values
+    across \c DataFrame, @ref Qore::SQL::ColumnarResult "ColumnarResult", and
+    Apache Arrow. They use zero-copy storage only where ownership, alignment,
+    nullability, and mutability rules make it safe. Mutating a DataFrame column
+    that references external immutable storage detaches that column before
+    writing.
+
+    | Data shape | Import/export behavior |
+    |------------|------------------------|
+    | Fixed-width primitive columns | Preserved as dense buffers and can be zero-copy when host storage is compatible. |
+    | Boolean columns | Preserved as dense boolean buffers; Arrow bitmaps may be copied into Qore-compatible storage. |
+    | Fixed-scale decimal columns | Preserved as \c buffer<decimal128>; Arrow IPC and Parquet import/export can reuse the fixed-width buffer when precision and scale metadata match. |
+    | String and binary columns | Preserve values and schema; variable-width buffers may be copied into Qore-owned storage. |
+    | Date, timestamp, and duration columns | Preserve logical values and use \c buffer<int64> microsecond storage when represented as ColumnarResult/DataFrame dense columns; microsecond timestamp and duration Arrow arrays can be imported and exported without copying the value buffer. |
+    | List, fixed-size-list, struct, map, and dictionary-compatible columns | Preserve recursive schema metadata and lossless Qore values in \c auto columns. |
+    | Unsupported physical layouts | Raise an explicit I/O error or copy to a supported representation; they are not silently converted to lossy scalar strings. |
+
+    A DataFrame itself is intentionally not generic. Operations such as
+    select(), groupBy(), join(), pivot(), and melt() can change the row shape
+    at runtime based on selected columns or remote data. Use typed hashdecls
+    for stable result records and \c hash<auto> for dynamic rows.
 
     @section dataframerelease dataframe Module Release History
 
     @subsection dataframe_1_0 dataframe Module Version 1.0
     - initial public release with full SQL-like query operations, CSV/Parquet/database I/O,
       and ML integration
+    - native plugin-operator access with column, row, and inclusive row-range
+      subscripts, plus ColumnRef comparison predicates returning RowMask
+      objects accepted by \c df[mask] and \c df.filter(mask)
+    - dense \c buffer<T> column interop through DataFrame construction,
+      \c getColumnBuffer(), \c toColumnarResult(), and
+      \c fromColumnarResult(), preserving buffer-backed primitive columns under
+      Qore copy-on-write semantics where possible
+    - ColumnarResult filtering with dense boolean masks and horizontal
+      DataFrame concat with \c DataFrame::concat(axis:1)
+    - integration with DataProvider pipelines through the \c DataProviderDataFrame
+      module, including DataFrame bulk reads, DataFrameBlock propagation,
+      BufferColumns propagation for ColumnarResult values, and vectorized
+      DPQL/DataProvider filter masks for supported scalar and computed
+      comparisons, \c between, \c in / \c notIn, structured strict
+      equality/inequality, \c containsAny and other string predicates,
+      list membership predicates, list/hash accessors, ternary computed values,
+      and null checks
+    - API metadata and generated Doxygen signatures identify DataFrame-returning
+      operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
+      @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result
+      hashes as @ref DataFrame::DataFrameShape "DataFrameShape",
+      @ref DataFrame::ColumnStats "ColumnStats",
+      @ref DataFrame::CsvOptions "CsvOptions",
+      @ref DataFrame::ParquetReadOptions "ParquetReadOptions", and
+      @ref DataFrame::ParquetWriteOptions "ParquetWriteOptions"
 */

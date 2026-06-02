@@ -230,7 +230,11 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
                 "namespace '%s'", i.first, ns.name.c_str());
             qore_class_private::get(*i.second.cls)->deref(!ns_const, !ns_vars);
         } else if (QoreClass* existing = ns.classList.find(i.first)) {
-            if (!qore_class_private::injected(*existing)) {
+            if (ns.imported && qore_class_private::isPublic(*existing)
+                && qore_class_private::isPublic(*i.second.cls)) {
+                // A child Program can parse a user module that redeclares public API classes inherited from the
+                // parent Program. Keep the inherited class and drop the redundant parsed declaration.
+            } else if (!qore_class_private::injected(*existing)) {
                 parse_error(*qore_class_private::get(*i.second.cls)->loc,
                     "class '%s' has already been defined in namespace '%s'", i.first, ns.name.c_str());
             }

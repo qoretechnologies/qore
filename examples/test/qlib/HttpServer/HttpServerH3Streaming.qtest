@@ -36,15 +36,17 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpClientIo
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires RestHandler
 
 %exec-class HttpServerH3StreamingTest
 
@@ -611,6 +613,102 @@ class BidiInterleaveHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class ConnectBodySizeStreamRequest inherits AbstractStreamRequest {
+    private {
+        binary m_body = binary();
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s,
+            hash<auto> cx, hash<auto> hdr, auto body)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private hash<HttpHandlerResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpHandlerResponseInfo>{
+            "code": 200,
+            "body": string(m_body.size()),
+            "hdr": {"Content-Type": "text/plain"},
+        };
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (!exists v.data) {
+            return;
+        }
+        m_body += v.data.typeCode() == NT_BINARY ? v.data : binary(v.data);
+    }
+
+    private auto sendImpl() {
+    }
+}
+
+class ConnectBodyStreamingHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {}
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return hdr."content-type" =~ /^application\/connect\+/;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s,
+            hash<auto> cx, hash<auto> hdr, *data body) {
+        return new ConnectBodySizeStreamRequest(listener, self, s, cx, hdr, body);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, "unexpected non-streaming dispatch",
+            {"Content-Type": "text/plain"});
+    }
+}
+
+class RestConnectBodyStreamHandler inherits RestHandler::AbstractRestStreamRequestHandler {
+    private {
+        binary m_body = binary();
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {
+            "code": 200,
+            "body": string(m_body.size()),
+            "hdr": {"Content-Type": "text/plain"},
+        };
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (!exists v.data) {
+            return;
+        }
+        m_body += v.data.typeCode() == NT_BINARY ? v.data : binary(v.data);
+    }
+
+    private auto sendImpl() {
+    }
+}
+
+class RestConnectBodyHandler inherits RestHandler::RestHandler {
+    private {
+        bool m_wants_body_streaming;
+    }
+
+    constructor(bool wants_body_streaming = True) : RestHandler(NOTHING) {
+        m_wants_body_streaming = wants_body_streaming;
+    }
+
+    removeRootPath(reference<string> path) {
+        path = regex_subst(path, "^/?rest-connect-body", "");
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return m_wants_body_streaming && RestHandler::wantsBodyStreaming(cx, hdr);
+    }
+
+    RestHandler::AbstractRestStreamRequestHandler streamPutBody(hash<auto> cx, *hash<auto> ah) {
+        return new RestConnectBodyStreamHandler(cx, ah);
+    }
+}
+
 #! Handler wiring the ConnectStreamRequest subclass into the
 #! AbstractStreamRequest pipeline.  Must pass `stream=True` to the base
 #! constructor so HttpServer uses `getStreamRequestImpl()` instead of the
@@ -952,6 +1050,12 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testH3CallbackInputStreamConnectProtocolLarge());
         addTestCase("HTTP/3 bidi: handler reads request + emits response",
             \testH3BidiInterleavedRequestResponse());
+        addTestCase("HTTP/3 stream handler receives Connect-framed body",
+            \testH3ConnectFramedStreamingBody());
+        addTestCase("HTTP/3 REST stream handler receives Connect-framed body",
+            \testH3RestConnectFramedStreamingBody());
+        addTestCase("HTTP/3 REST buffered handler receives Connect-framed body",
+            \testH3RestConnectFramedBufferedBody());
 
         set_return_value(main());
     }
@@ -1992,5 +2096,130 @@ l50Xb2GWQesIt9k5jF5IOw==
         string body_str = body_bin.toString();
         assertTrue(body_str.find("ALPHA") >= 0, "bidi: ALPHA present");
         assertTrue(body_str.find("EPSILON") >= 0, "bidi: EPSILON present");
+    }
+
+    testH3ConnectFramedStreamingBody() {
+        hash<auto> setup = createServer({
+            "headers_only": True,
+            "extra_handlers": {
+                "connect-body": {
+                    "path": "/connect-body",
+                    "handler": new ConnectBodyStreamingHandler(),
+                },
+            },
+        });
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        HttpClientIo::Http3ClientStreamHandle h3stream =
+            cast<HttpClientIo::Http3ClientStreamHandle>(stream);
+
+        binary msg = binary("%YAML 1.2\n--- {sql: \"x\"}\n");
+        int sz = msg.size();
+        binary frame = <00>
+            + binary(chr((sz >> 24) & 0xff))
+            + binary(chr((sz >> 16) & 0xff))
+            + binary(chr((sz >> 8) & 0xff))
+            + binary(chr(sz & 0xff))
+            + msg;
+        binary end_frame = <0200000002> + binary("{}");
+
+        h3stream.startStreaming("PUT", "/connect-body",
+            {"Content-Type": "application/connect+yaml"}, True);
+        h3stream.sendData(frame);
+        h3stream.sendData(end_frame);
+        h3stream.writesDone();
+
+        binary received = binary();
+        date end_time = now_us() + 30s;
+        while (now_us() < end_time) {
+            auto data = h3stream.readData(5s);
+            if (!exists data) {
+                continue;
+            }
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;
+            }
+            if (data.typeCode() == NT_HASH && data.error) {
+                fail(sprintf("Connect-framed body response error: %y", data.error));
+                break;
+            }
+            received += data.typeCode() == NT_BINARY ? data : binary(data);
+        }
+
+        assertEq(string(frame.size() + end_frame.size()), received.toString(),
+            "stream handler received complete Connect-framed request body");
+    }
+
+    testH3RestConnectFramedStreamingBody() {
+        testH3RestConnectFramedBody(True);
+    }
+
+    testH3RestConnectFramedBufferedBody() {
+        testH3RestConnectFramedBody(False);
+    }
+
+    private testH3RestConnectFramedBody(bool wants_body_streaming) {
+        hash<auto> setup = createServer({
+            "headers_only": True,
+            "extra_handlers": {
+                "rest-connect-body": {
+                    "path": "/rest-connect-body",
+                    "handler": new RestConnectBodyHandler(wants_body_streaming),
+                },
+            },
+        });
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        HttpClientIo::Http3ClientStreamHandle h3stream =
+            cast<HttpClientIo::Http3ClientStreamHandle>(stream);
+
+        binary msg = binary("%YAML 1.2\n--- {sql: \"x\"}\n");
+        int sz = msg.size();
+        binary frame = <00>
+            + binary(chr((sz >> 24) & 0xff))
+            + binary(chr((sz >> 16) & 0xff))
+            + binary(chr((sz >> 8) & 0xff))
+            + binary(chr(sz & 0xff))
+            + msg;
+        binary end_frame = <0200000002> + binary("{}");
+
+        h3stream.startStreaming("PUT", "/rest-connect-body?action=body",
+            {"Content-Type": "application/connect+yaml"}, True);
+        h3stream.sendData(frame);
+        h3stream.sendData(end_frame);
+        h3stream.writesDone();
+
+        binary received = binary();
+        date end_time = now_us() + 30s;
+        while (now_us() < end_time) {
+            auto data = h3stream.readData(5s);
+            if (!exists data) {
+                continue;
+            }
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;
+            }
+            if (data.typeCode() == NT_HASH && data.error) {
+                fail(sprintf("REST Connect-framed body response error: %y", data.error));
+                break;
+            }
+            received += data.typeCode() == NT_BINARY ? data : binary(data);
+        }
+
+        string desc = wants_body_streaming ? "streamed" : "buffered";
+        assertEq(string(frame.size() + end_frame.size()), received.toString(),
+            sprintf("REST stream handler received complete %s Connect-framed request body", desc));
     }
 }

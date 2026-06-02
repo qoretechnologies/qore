@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
 
 %exec-class Test
 
@@ -81,10 +82,11 @@ class Test inherits QUnit::Test {
 
         # tryGet on queue with data returns {"value": data}
         {
-            Queue q();
+            Queue<int> q();
             q.push(42);
-            auto result = q.tryGet();
+            *hash<QueueTryResult<int>> result = q.tryGet();
             assertEq({"value": 42}, result);
+            assertEq("hash<QueueTryResult<int>>", result.fullType());
             assertEq(0, q.size());
         }
 
@@ -126,11 +128,12 @@ class Test inherits QUnit::Test {
 
         # tryPop on queue with data returns {"value": data} (last element)
         {
-            Queue q();
+            Queue<string> q();
             q.push("first");
             q.push("last");
-            auto result = q.tryPop();
+            *hash<QueueTryResult<string>> result = q.tryPop();
             assertEq({"value": "last"}, result);
+            assertEq("hash<QueueTryResult<string>>", result.fullType());
             assertEq(1, q.size());
         }
 

@@ -213,6 +213,9 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
     private {
         #! the iterator object
         AbstractCsvIterator i;
+
+        #! stable object name for path-backed providers
+        *string object_name;
     }
 
     #! Creates the CsvReadDataProvider with the input data path and optionally an option hash
@@ -223,6 +226,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
         is @ref True "True" and \c "headers" is also present; unknown field type
     */
     constructor(string path, *hash<auto> opts) {
+        object_name = path;
         i = new CsvFileIterator(path, opts);
     }
 
@@ -249,6 +253,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 error("CONSTRUCTOR-ERROR", "cannot provide both \"path\" and \"data\" options; use either one or "
                     "the other");
             }
+            object_name = copts.path;
             i = new CsvIterator(FileLocationHandler::getBinaryStreamFromLocation(copts.path),
                 copts.encoding, copts{CsvIterationOptionList} - "encoding");
             return;
@@ -267,14 +272,12 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
             return;
         }
         # create a dummy interator with no input
-        i = new CsvIterator(new StringInputStream(""), copts.encoding, copts{CsvIterationOptionList});
+        i = new CsvIterator(new StringInputStream(source: ""), copts.encoding, copts{CsvIterationOptionList});
     }
 
     #! Returns the object name
     string getName() {
-        return i instanceof CsvFileIterator
-            ? i.getFileName()
-            : sprintf("stream %s", self.uniqueHash());
+        return object_name ?? sprintf("stream %s", self.uniqueHash());
     }
 
     #! Returns additional data-provider-specific info
@@ -286,17 +289,17 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
     /** @param where_cond the search criteria
         @param search_options the search options after processing by validateSearchOptions()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        return new DefaultRecordIterator(i, where_cond, search_options, getRecordType());
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator<hash<auto>>(i, where_cond, search_options, getRecordType());
     }
 
     #! Returns an iterator for zero or more records matching the search options
     /** @param where_cond the search criteria
         @param search_options the search options after processing by validateSearchOptions()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<DataProviderExpression> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<DataProviderExpression> where_cond,
             *hash<auto> search_options) {
-        return new DefaultRecordIterator(i, where_cond, search_options, getRecordType());
+        return new DefaultRecordIterator<hash<auto>>(i, where_cond, search_options, getRecordType());
     }
 
     #! Returns the description of the record type, if any

@@ -29,12 +29,8 @@
 %requires WebSocketUtil >= 1.6
 %requires Util
 %requires AsyncSocketIo
+%requires AsyncApi >= 1.0
 %requires(reexport) Logger
-
-# Optional AsyncAPI support
-%try-module AsyncApi >= 1.0
-%define NoAsyncApi
-%endtry
 
 %modern
 
@@ -117,6 +113,8 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @section websockethandler_relnotes WebSocketHandler Release History
 
     @subsection websockethandler_v2_8 Version 2.8
+    - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketHandler
+      metadata always resolves the typed AsyncAPI validator members and methods
     - HTTP/2 WebSocket connections now thread an \c io_wake closure into
       the @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext"
       they hand to the @ref WebSocketHandler::WebSocketConnection
@@ -343,6 +341,14 @@ public class WebSocketConnection {
         */
         *WebSocketStreamProcessor stream_processor;
 
+        #! True after the async transport has been registered and can accept direct writes
+        /** Sends performed during @ref registered() must be queued and drained
+            after async H1 poll-op registration or H2/H3 stream-listener
+            registration completes; otherwise initial server messages can be
+            written before the transport is ready.
+        */
+        bool direct_send_enabled = False;
+
         #! Listener ID this connection belongs to
         string lid;
 
@@ -419,6 +425,9 @@ public class WebSocketConnection {
     */
     setWsPollOp(*HttpWebSocketPollOperationBase poll_op) {
         self.async_ws_poll_op = poll_op;
+        if (!poll_op) {
+            direct_send_enabled = False;
+        }
     }
 
     #! Enables C++ echo mode for zero-context-switch echo
@@ -445,6 +454,16 @@ public class WebSocketConnection {
     */
     setStreamProcessor(*WebSocketStreamProcessor proc) {
         self.stream_processor = proc;
+        if (!proc) {
+            direct_send_enabled = False;
+        }
+    }
+
+    #! Enables direct transport writes after async registration is complete
+    /** Internal API used by WebSocketHandler::startImpl().
+    */
+    enableDirectSend() {
+        direct_send_enabled = True;
     }
 
     #! Sets the stream context for WebSocket over HTTP/2 or HTTP/3
@@ -600,13 +619,13 @@ public class WebSocketConnection {
 
     #! Pushes an already-encoded message on the connection's message channel
     sendEncoded(binary msg) {
-        if (async_ws_poll_op) {
+        if (direct_send_enabled && async_ws_poll_op) {
             async_ws_poll_op.sendRawFrame(msg);
             notifyIo();
             return;
         }
         # H2/H3: send directly via stream context if available
-        if (stream_ctx) {
+        if (direct_send_enabled && stream_ctx) {
             stream_ctx.sendData(msg);
             notifyIo();
             return;
@@ -652,7 +671,7 @@ public class WebSocketConnection {
         }
 %endif
         binary encoded = sendWithExtensions(msg);
-        if (async_ws_poll_op) {
+        if (direct_send_enabled && async_ws_poll_op) {
             async_ws_poll_op.sendRawFrame(encoded);
             notifyIo();
             return;
@@ -661,7 +680,7 @@ public class WebSocketConnection {
         # stream context. Using the channel + notifyIo() only wakes the I/O
         # controller but doesn't trigger the stream processor to drain the
         # channel if no incoming data arrives.
-        if (stream_ctx) {
+        if (direct_send_enabled && stream_ctx) {
             stream_ctx.sendData(encoded);
             notifyIo();
             return;
@@ -690,12 +709,12 @@ public class WebSocketConnection {
         }
 %endif
         binary encoded = sendWithExtensions(msg, op, fin);
-        if (async_ws_poll_op) {
+        if (direct_send_enabled && async_ws_poll_op) {
             async_ws_poll_op.sendRawFrame(encoded);
             notifyIo();
             return;
         }
-        if (stream_ctx) {
+        if (direct_send_enabled && stream_ctx) {
             stream_ctx.sendData(encoded);
             notifyIo();
             return;
@@ -1035,7 +1054,7 @@ public class WebSocketConnection {
         }
 
         # Apply transforms in reverse order
-        ListIterator i(active_extensions);
+        ListIterator<AbstractWebSocketExtension> i(active_extensions);
         i.last();
         while (i.prev()) {
             AbstractWebSocketExtension ext = i.getValue();
@@ -2040,8 +2059,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 ws_async_io.registerH1WebSocketConnection(sock, ws_poll_op,
                     ws_async_target, ws_listener, cx);
             }
+            wsc.enableDirectSend();
 
-            # Drain any data queued during getConnectionImpl (e.g., sendData)
+            # Drain any data queued before async H1 direct sends were enabled
+            # (for example from getConnectionImpl() or registered()).
             while (*binary d = wsc.pollDataImmediate()) {
                 ws_poll_op.sendRawFrame(d);
             }
@@ -2088,8 +2109,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             logError("WebSocketHandler: NO register_stream_listener callback for cid %y "
                 "(h2=%y h3=%y) — frames will not be delivered!", cid, is_http2, is_http3);
         }
+        wsc.enableDirectSend();
 
-        # Drain any data queued during getConnectionImpl
+        # Drain any data queued before H2/H3 direct sends were enabled
+        # (for example from getConnectionImpl() or registered()).
         {
             bool sent = False;
             while (*binary d = wsc.pollDataImmediate()) {

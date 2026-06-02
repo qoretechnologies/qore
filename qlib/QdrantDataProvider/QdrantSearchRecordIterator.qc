@@ -27,7 +27,7 @@ public namespace QdrantDataProvider {
 #! Record iterator wrapping Qdrant query results
 /** Calls `POST /collections/{name}/points/query` and iterates over scored point results
 */
-public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private:internal {
         #! Record type
         const RecordType = new QdrantScoredPointRecordType();

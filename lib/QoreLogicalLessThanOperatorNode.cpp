@@ -29,8 +29,39 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/intern/QorePluginRegistry.h>
 
 QoreString QoreLogicalLessThanOperatorNode::op_str("< operator expression");
+
+static void set_binary_analysis_lt(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
+static int try_plugin_binary_parse_lt(QoreParseContext& parse_context, const QoreTypeInfo* lti,
+        const QoreTypeInfo* rti, const QoreParseAnalysis& left_analysis,
+        const QoreParseAnalysis& right_analysis, const QoreTypeInfo*& typeInfo) {
+    QorePluginResolvedOperationInfo plugin_op;
+    ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+    int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, rti, "lt",
+        QorePluginHelperAbi::BinaryValue, plugin_op, parse_xsink);
+    if (plugin_rc) {
+        return plugin_rc;
+    }
+
+    typeInfo = plugin_op.signature.return_type;
+    parse_context.typeInfo = typeInfo;
+    set_binary_analysis_lt(parse_context, left_analysis, right_analysis);
+    return 0;
+}
 
 QoreValue QoreLogicalLessThanOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     if (pfunc) {
@@ -44,6 +75,19 @@ QoreValue QoreLogicalLessThanOperatorNode::evalImpl(bool& needs_deref, Exception
     if (*xsink)
         return QoreValue();
 
+    if (qore_buffer_binary_op_applies(*lh, *rh)) {
+        return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::LessThan, xsink);
+    }
+
+    if (qore_plugin_value_may_have_operation(*lh) || qore_plugin_value_may_have_operation(*rh)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "lt",
+            QorePluginHelperAbi::BinaryValue, *lh, *rh, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
+
     return doLessThan(*lh, *rh, xsink);
 }
 
@@ -53,27 +97,57 @@ int QoreLogicalLessThanOperatorNode::parseInitIntern(const char* name, QoreValue
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* lti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
 
     parse_context.typeInfo = boolTypeInfo;
+    typeInfo = boolTypeInfo;
+
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(lti, rti,
+        QoreBufferBinaryOperation::LessThan);
+    if (bufferResultTypeInfo) {
+        parse_context.typeInfo = bufferResultTypeInfo;
+        typeInfo = bufferResultTypeInfo;
+        set_binary_analysis_lt(parse_context, left_analysis, right_analysis);
+        return err;
+    }
+
+    int plugin_rc = try_plugin_binary_parse_lt(parse_context, lti, rti, left_analysis, right_analysis, typeInfo);
+    if (plugin_rc < 0 && !err) {
+        err = -1;
+    } else if (!plugin_rc) {
+        return err;
+    }
 
     // see if both arguments are constants, then eval immediately and substitute this node with the result
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalLessThanOperatorNode> del(this);
         ParseExceptionSink xsink;
         val = doLessThan(left, right, *xsink);
+        set_binary_analysis_lt(parse_context, left_analysis, right_analysis);
         return **xsink ? -1 : 0;
     }
 
     // check for optimizations based on type; but only if types are known on both sides, although the highest priority
     // (float) can be assigned if either side is a float
-    if (!QoreTypeInfo::isType(lti, NT_NUMBER) && !QoreTypeInfo::isType(rti, NT_NUMBER)) {
+    if (!QoreTypeInfo::parseReturns(lti, NT_BUFFER) && !QoreTypeInfo::parseReturns(rti, NT_BUFFER)
+            && !QoreTypeInfo::isType(lti, NT_NUMBER) && !QoreTypeInfo::isType(rti, NT_NUMBER)) {
         if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT))
             pfunc = &QoreLogicalLessThanOperatorNode::floatLessThan;
         else if (QoreTypeInfo::hasType(lti) && QoreTypeInfo::hasType(rti)) {
@@ -85,6 +159,7 @@ int QoreLogicalLessThanOperatorNode::parseInitIntern(const char* name, QoreValue
         }
     }
 
+    set_binary_analysis_lt(parse_context, left_analysis, right_analysis);
     return err;
 }
 

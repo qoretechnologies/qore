@@ -117,6 +117,47 @@ Example from the root source directory:
     cmake .. -DCMAKE_INSTALL_PREFIX=/usr
     make && make docs && sudo make install
 
+
+Two-Pass Build (for environments installing external binary modules between passes)
+-----------------------------------------------------------------------------------
+
+The qore qlib contains user modules that use `%try-module` / `%ifdef
+No<Name>` to branch on the availability of external binary modules
+(json, yaml, xml, uuid, ...).  Those branch outcomes are baked into
+the AOT-compiled `.qmod` files at qcc compile time.  If qore is built
+before the external modules are installed, qlib `.qmod`s end up with
+no-<module> stubs that throw at runtime even after the module is
+installed.
+
+For CI and packaging flows that build qore alongside external binary
+modules, use the two-pass build:
+
+    # Pass 1: build and install libqore, headers, and tools only.
+    # AOT of qlib qmods is skipped, so external module presence does
+    # not affect qlib output.
+    mkdir build; cd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DQORE_BUILD_AOT_MODULES=OFF
+    make && sudo make install
+
+    # Pass 2: build and install all external binary modules
+    # (module-json, module-yaml, module-xml, module-uuid, etc.)
+    # against the qore installed above.
+
+    # Pass 3: re-cmake qore with AOT re-enabled; the cmake-time probe
+    # records which external modules are now loadable and the qmod
+    # rules depend on its result, so all qlib qmods are AOT-compiled
+    # with the correct %ifdef branches.
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DQORE_BUILD_AOT_MODULES=ON
+    make && sudo make install
+
+Single-source-tree re-builds: the AOT rules track which external
+binary modules were loadable at cmake configure time (via the file
+`qore-aot-probe.stamp` in the build directory).  Re-running cmake
+after installing or removing an external binary module forces a
+re-AOT of the affected qlib qmods on the next make invocation; no
+clean rebuild needed.
+
+
 OS-Specific Issues
 ------------------
 *) Linux:

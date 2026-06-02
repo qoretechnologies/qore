@@ -3,11 +3,12 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Qorize.qm
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/Schema
-%requires ../../../../qlib/SchemaReverse.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Qorize
+%requires SqlUtil
+%requires Schema
+%requires SchemaReverse
 
 %try-module yaml
 %define NoYaml

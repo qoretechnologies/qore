@@ -33,15 +33,25 @@
 
 #define _QORE_FUNCTION_H
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
+#include "qore/intern/QoreParseTypeInfo.h"
 
 class qore_class_private;
+class QoreIRFunction;
+struct QoreAOTContext;
+using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
+using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
 // these data structures are all private to the library
 
@@ -53,6 +63,8 @@ class BarewordNode;
 class QoreFunction;
 class qore_class_private;
 class qore_ns_private;
+class QoreClosureBase;
+class UserSignature;
 
 typedef std::vector<QoreParseTypeInfo*> ptype_vec_t;
 typedef std::vector<LocalVar*> lvar_vec_t;
@@ -109,6 +121,14 @@ public:
     }
 
     DLLLOCAL const char* getSignatureText() const {
+        // Lazy build — populated on first request.  The AOT deserialization
+        // path skips the eager build in setupFromAOTMetadata because most
+        // of the 656 k variants' signature text is never queried at
+        // runtime.  Source-parse paths still build eagerly via resolve(),
+        // so they short-circuit through the empty-check below.
+        if (str.empty() && (!typeList.empty() || varargs)) {
+            addAbstractParameterSignature(str);
+        }
         return str.c_str();
     }
 
@@ -152,6 +172,12 @@ public:
         return num >= typeList.size() ? 0 : typeList[num];
     }
 
+    DLLLOCAL bool needsTypeParameterSubstitution() const;
+
+    DLLLOCAL void clearTypeParameterSubstitutionCache() const {
+        type_param_substitution_cache.store(-1, std::memory_order_relaxed);
+    }
+
     DLLLOCAL bool hasDefaultArg(unsigned i) const {
         return i >= defaultArgList.size() || !defaultArgList[i] ? false : true;
     }
@@ -178,12 +204,33 @@ protected:
     arg_vec_t defaultArgList;
     name_vec_t names;
 
-    // parameter signature string
-    std::string str;
+    // parameter signature string (lazy — see getSignatureText)
+    mutable std::string str;
 
     // varargs flag
     bool varargs = false;
+
+    mutable std::atomic<signed char> type_param_substitution_cache {-1};
 };
+
+struct QoreNamedArgBinding {
+    std::vector<size_t> source_to_param;
+    size_t result_size = 0;
+};
+
+class UserSignatureTypeParamContextHelper {
+public:
+    DLLLOCAL UserSignatureTypeParamContextHelper(const UserSignature* sig);
+    DLLLOCAL ~UserSignatureTypeParamContextHelper();
+
+private:
+    const UserSignature* old_sig;
+};
+
+DLLLOCAL const UserSignature* parse_get_signature_type_param_context();
+DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
+DLLLOCAL const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(
+    const QoreTypeParamInstantiation* inst);
 
 // used to store return type info during parsing for user code
 class RetTypeInfo {
@@ -211,6 +258,9 @@ class UserSignature : public AbstractFunctionSignature {
 protected:
     ptype_vec_t parseTypeList;
     QoreParseTypeInfo* parseReturnTypeInfo;
+    std::vector<QoreGenericTypeParam> type_params;
+    type_vec_t type_param_default_types;
+    type_vec_t type_param_bound_types;
 
     const QoreProgramLocation* loc;
 
@@ -231,6 +281,41 @@ public:
 
     DLLLOCAL UserSignature(int n_first_line, int n_last_line, QoreValue params, RetTypeInfo* retTypeInfo, const QoreParseOptions& po);
 
+    //! Set up a fully-resolved signature from AOT binary metadata (no parsing required)
+    /** Used during AOT binary deserialization to construct a variant with known parameter types
+        without going through the parse-time path.
+
+        @param pgm the QoreProgram that owns the LocalVar objects
+        @param retType the resolved return type info
+        @param paramNames parameter names
+        @param paramTypes resolved parameter type info pointers
+        @param defaults default argument values (ref'd for storage)
+        @param hasVarargs true if the function has varargs
+        @param classTypeInfo optional owning-class type info for methods
+        @param parseLocFile optional path of the source file that declared
+            this variant — plumbed through so `getParseLocation()->getFile()`
+            is non-null on AOT-deserialised signatures (used by
+            `xsink->overrideLocation()` in the block-missing-return path).
+            Pre-fix AOT signatures inherited `loc = getLocation(0, 0)` from
+            the default constructor, which has a null file; errors from
+            type-checked AOT returns then reported `:0 (Qore)` with no
+            filename — empty, unuseful.
+    */
+    DLLLOCAL void setupFromAOTMetadata(
+        QoreProgram* pgm,
+        const QoreTypeInfo* retType,
+        std::vector<std::string>&& paramNames,
+        std::vector<const QoreTypeInfo*>&& paramTypes,
+        std::vector<QoreValue>&& defaults,
+        bool hasVarargs,
+        const QoreClass* classTypeInfo = nullptr,
+        const char* parseLocFile = nullptr,
+        int parseLocFirstLine = 0,
+        int parseLocLastLine = 0);
+
+    DLLLOCAL void replaceResolvedTypes(const QoreTypeInfo* retType,
+        std::vector<const QoreTypeInfo*>&& paramTypes);
+
     DLLLOCAL virtual ~UserSignature() {
         for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
             delete* i;
@@ -240,6 +325,7 @@ public:
     DLLLOCAL void setFirstParamType(const QoreTypeInfo* typeInfo) {
         assert(!typeList.empty());
         typeList[0] = typeInfo;
+        clearTypeParameterSubstitutionCache();
     }
 
     DLLLOCAL void setSelfId(LocalVar* n_selfid) {
@@ -253,6 +339,45 @@ public:
 
     DLLLOCAL virtual const QoreParseTypeInfo* getParseParamTypeInfo(unsigned num) const {
         return num < parseTypeList.size() ? parseTypeList[num] : nullptr;
+    }
+
+    DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& n_type_params) {
+        type_params = std::move(n_type_params);
+        type_param_default_types.clear();
+        type_param_bound_types.clear();
+    }
+
+    DLLLOCAL bool hasTypeParameters() const {
+        return !type_params.empty();
+    }
+
+    DLLLOCAL size_t getTypeParameterCount() const {
+        return type_params.size();
+    }
+
+    DLLLOCAL const char* getTypeParameterName(size_t index) const {
+        return index < type_params.size() ? type_params[index].name.c_str() : nullptr;
+    }
+
+    DLLLOCAL const char* getTypeParameterDefaultType(size_t index) const {
+        return index < type_params.size() ? type_params[index].getDefaultType() : nullptr;
+    }
+
+    DLLLOCAL const char* getTypeParameterBoundType(size_t index) const {
+        return index < type_params.size() ? type_params[index].getBoundType() : nullptr;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeParameterDefaultTypeInfo(size_t index) const {
+        return index < type_param_default_types.size() ? type_param_default_types[index] : nullptr;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeParameterBoundTypeInfo(size_t index) const {
+        return index < type_param_bound_types.size() ? type_param_bound_types[index] : nullptr;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeParameterType(size_t index, bool or_nothing = false) const {
+        const char* name = getTypeParameterName(index);
+        return name ? qore_get_signature_type_parameter_type(this, index, name, or_nothing) : nullptr;
     }
 
     // resolves all parse types to the final types
@@ -320,7 +445,9 @@ public:
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
-            bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr);
+            bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* explicit_receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -339,7 +466,9 @@ public:
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
-            bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr);
+            bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* explicit_receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -403,8 +532,9 @@ public:
 
     //! returns the source location of the element
     DLLLOCAL virtual const QoreProgramLocation& getLocation() const {
-        // return loc_builtin for Qore builtin calls
-        return *loc;
+        // loc can be null during IR/JIT execution when swap_runtime_statement_location
+        // sets runtime_loc to nullptr; fall back to loc_builtin to avoid null dereference
+        return loc ? *loc : loc_builtin;
     }
 
     //! returns the name of the function or method call (ex: "[Class::]method")
@@ -440,13 +570,27 @@ protected:
     const QoreProgramLocation* loc;
     QoreListNodeEvalOptionalRefHolder tmp;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
+    const QoreTypeInfo* receiver_type_info = nullptr;
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
     const AbstractStatement* stmt = nullptr; // the current statement for the call stack entry
     std::string callName;
     const QoreStackLocation* stack_loc = nullptr;
     const QoreProgramLocation* old_runtime_loc = nullptr;
+    const AbstractStatement* old_runtime_stmt = nullptr;
+    const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
+    QoreParseOptions old_runtime_po;
+    QoreParseOptions old_rc_po;
+    const QoreTypeInfo* explicit_receiver_type_info = nullptr;
+    const QoreTypeInfo* old_receiver_type_info = nullptr;
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
+    QoreTypeParamInstantiation type_param_instantiation;
+    const QoreTypeParamInstantiation* old_type_param_instantiation = nullptr;
     q_rt_flags_t old_rtflags = 0;
+    bool variant_needs_type_param_substitution = false;
     bool restore_stack = false;
+    bool restore_runtime_ctx = false;
+    bool restore_receiver_type_info = false;
+    bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
@@ -455,15 +599,41 @@ protected:
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 
+    DLLLOCAL int setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
+        const AbstractFunctionSignature* sig);
+
     DLLLOCAL void setCallName(const QoreFunction* func);
 };
 
 class UserVariantBase;
 
 // describes the details of the function variant
+//! Returns the thread-local source location currently pushed by
+//! QoreBuiltinSrcLocHelper, or nullptr if none is active.  Used by
+//! builtin variant constructors to pick up the declaring `.qpp` source
+//! coordinates so reflection can report them instead of `loc_builtin`.
+DLLLOCAL const QoreProgramLocation* get_current_builtin_src_loc();
+
 class AbstractQoreFunctionVariant : protected QoreReferenceCounter {
 public:
-    DLLLOCAL AbstractQoreFunctionVariant(int64 n_flags, bool n_is_user = false) : flags(n_flags), is_user(n_is_user) {
+    DLLLOCAL AbstractQoreFunctionVariant(int64 n_flags, bool n_is_user = false)
+            : flags(n_flags), is_user(n_is_user) {
+        // Pick up the thread-local builtin source location if one has
+        // been pushed by a QoreBuiltinSrcLocHelper (qpp-emitted around
+        // every builtin registration).  User variants normally have no
+        // helper in scope, so this stays null and reflection falls back
+        // to getUserSignature()->getParseLocation() for them.
+        if (const QoreProgramLocation* tlsloc = get_current_builtin_src_loc()) {
+            builtin_src_loc = tlsloc;
+        }
+    }
+
+    //! Returns the location pushed by QoreBuiltinSrcLocHelper at ctor
+    //! time, or nullptr if none was active.  Reflection prefers this
+    //! over `&loc_builtin` so `FunctionVariant::getSourceLocation()`
+    //! points at the declaring .qpp file + line.
+    DLLLOCAL const QoreProgramLocation* getBuiltinSourceLocation() const {
+        return builtin_src_loc;
     }
 
     DLLLOCAL const QoreTypeInfo* parseGetReturnTypeInfo() const {
@@ -512,6 +682,8 @@ public:
         return is_user ? const_cast<AbstractQoreFunctionVariant*>(this)->getUserVariantBase() : nullptr;
     }
 
+    DLLLOCAL const UserSignature* getGenericSignature() const;
+
     DLLLOCAL virtual QoreValue evalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const {
         assert(false);
         return QoreValue();
@@ -558,6 +730,10 @@ public:
         return is_user;
     }
 
+    DLLLOCAL bool isNamedCallable() const {
+        return is_user || (flags & QCF_NAMED_ARGS);
+    }
+
     DLLLOCAL bool hasBody() const;
 
     DLLLOCAL virtual bool isModulePublic() const {
@@ -577,14 +753,31 @@ public:
         return flags & QCF_USES_EXTRA_ARGS;
     }
 
+    //! Set a code flag on this variant (used during AOT deserialization)
+    DLLLOCAL void setFlag(int64 flag) {
+        flags |= flag;
+    }
+
 protected:
     // code flags
     int64 flags;
     bool is_user;
 
+    //! Declaring .qpp source location for builtin variants; nullptr when
+    //! no location is known (non-qpp-registered builtins).  Never owned
+    //! by the variant — always points at a static QoreProgramLocation
+    //! emitted by qpp at TU scope.
+    const QoreProgramLocation* builtin_src_loc = nullptr;
+
+    mutable std::atomic<const UserSignature*> generic_signature_cache {genericSignatureCacheUnknown()};
+
     DLLLOCAL virtual ~AbstractQoreFunctionVariant() {}
 
 private:
+    DLLLOCAL static const UserSignature* genericSignatureCacheUnknown() {
+        return reinterpret_cast<const UserSignature*>(static_cast<uintptr_t>(1));
+    }
+
     // not implemented
     DLLLOCAL AbstractQoreFunctionVariant(const AbstractQoreFunctionVariant& old) = delete;
     DLLLOCAL AbstractQoreFunctionVariant& operator=(AbstractQoreFunctionVariant& orig) = delete;
@@ -592,14 +785,23 @@ private:
 
 class VRMutex;
 class UserVariantExecHelper;
+class QoreJIT;
 
 // base implementation shared between all user variants
 class UserVariantBase {
     friend class UserVariantExecHelper;
+    friend class QoreJIT;
+
+public:
+    //! Tiered compilation execution tier
+    enum ExecutionTier : uint8_t { TIER_AST = 0, TIER_IR = 1, TIER_JIT = 2 };
 
 protected:
     UserSignature signature;
     StatementBlock* statements;
+    //! Source-stripped AOT has no executable AST body, but ProgramControl and
+    //! debugger APIs still need a stable function-entry statement identity.
+    StatementBlock* aot_entry_statement = nullptr;
     // for "synchronized" functions
     VRMutex* gate;
 
@@ -612,11 +814,70 @@ protected:
     // flag to tell if variant has been initialized or not (still in pending list)
     bool init;
 
-    DLLLOCAL QoreValue evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const;
+    // Tiered compilation state
+    mutable std::atomic<uint64_t> exec_count{0};
+    mutable std::atomic<ExecutionTier> current_tier{TIER_AST};
+    mutable QoreIRFunction* cached_ir = nullptr;
+    mutable std::atomic<JitFunctionPtr> cached_jit_fn{nullptr};
+    mutable AotFunctionPtr cached_aot_fn = nullptr;
+    mutable QoreAOTContext* cached_aot_ctx = nullptr;
+    mutable std::once_flag ir_lower_once;
+    //! JIT compilation state: 0=not started, 1=submitted, 2=done (success or failure)
+    mutable std::atomic<int> jit_compile_state{0};
+    mutable bool ir_lower_failed = false;
+    mutable bool jit_compile_failed = false;
+    bool is_closure = false;  //!< true for closure variants
+    //! Deopt counter: incremented on JIT guard failure, triggers recompilation
+    mutable std::atomic<uint32_t> deopt_count{0};
+    //! JIT recompilation state: 0=not started, 1=submitted, 2=done
+    mutable std::atomic<int> jit_recompile_state{0};
+    //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
+    mutable bool all_body_locals_ir_only = false;
+    //! True if argv is actually referenced in the function body (set during IR lowering)
+    mutable bool uses_argv = true;  // Conservative: assume used unless proven otherwise
+    //! True if self is actually referenced in the function body (set during IR lowering)
+    mutable bool uses_self = true;  // Conservative: assume used unless proven otherwise
+    //! Specialized IR functions keyed by concrete receiver and method type arguments
+    mutable std::mutex specialized_ir_mutex;
+    mutable std::unordered_map<std::string, std::unique_ptr<QoreIRFunction>> specialized_ir_cache;
+    //! Protects lazy source-stripped AOT debug IR materialization.
+    mutable std::mutex aot_debug_ir_mutex;
+
+    DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
+            ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr, bool ref_obj = true) const;
     DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
             const;
+
+    //! Tiered compilation dispatch path
+    DLLLOCAL QoreValue evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
+            ExceptionSink* xsink, bool caller_has_frame_boundary = false) const;
+    //! Attempt to lower to IR; called via std::call_once.
+    /** If @p raise_on_failure is true and lowering fails, a parseException
+        is raised describing the gap.  Used for parse-time eager compilation
+        under --exec-mode=ir/jit/tiered so IR gaps surface as parse errors
+        rather than silently falling back to AST.
+    */
+    DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false) const;
+    DLLLOCAL QoreIRFunction* lowerIRFunction(const char* name, const std::string& unique_name,
+            const QoreTypeInfo* specialization_receiver_type_info,
+            const QoreTypeParamInstantiation* specialization_type_param_instantiation,
+            bool mark_failure, bool raise_on_failure) const;
+    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIR(const char* name,
+            const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* type_param_instantiation,
+            bool raise_on_failure) const;
+    DLLLOCAL QoreValue evalSpecializedIR(const char* name, const QoreIRFunction* ir,
+            ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
+            bool caller_has_frame_boundary) const;
+    //! Materialize source-stripped AOT debug IR on demand when a debugger is attached.
+    DLLLOCAL bool materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const;
+
+    //! Attempt JIT compilation; called via std::call_once
+    DLLLOCAL void attemptJITCompilation() const;
+    //! Attempt JIT recompilation with updated type profiles after deopt
+    DLLLOCAL void attemptJITRecompilation() const;
 
 public:
     DLLLOCAL UserVariantBase(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
@@ -624,6 +885,14 @@ public:
     DLLLOCAL virtual ~UserVariantBase();
     DLLLOCAL UserSignature* getUserSignature() const {
         return const_cast<UserSignature*>(&signature);
+    }
+
+    DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& type_params) {
+        signature.setTypeParameters(std::move(type_params));
+    }
+
+    DLLLOCAL bool hasTypeParameters() const {
+        return signature.hasTypeParameters();
     }
 
     DLLLOCAL bool isSynchronized() const {
@@ -638,12 +907,23 @@ public:
         return init;
     }
 
+    //! Public wrapper for evalTiered() - allows IR interpreter cross-function dispatch
+    //! without building AST fallback nodes.
+    DLLLOCAL QoreValue callTieredPublic(const char* name, ReferenceHolder<QoreListNode>& argv,
+            QoreObject* self, ExceptionSink* xsink) const {
+        return evalTiered(name, argv, self, xsink);
+    }
+
     DLLLOCAL bool hasBody() const {
         return (bool)statements;
     }
     DLLLOCAL StatementBlock* getStatementBlock() const {
         return statements;
     }
+    DLLLOCAL StatementBlock* getEntryStatementBlock() const {
+        return statements ? statements : aot_entry_statement;
+    }
+    DLLLOCAL void setAOTEntryStatementBlock(StatementBlock* b);
 
     DLLLOCAL QoreParseOptions getParseOptions(const QoreParseOptions& po) const;
 
@@ -656,6 +936,133 @@ public:
     }
 
     DLLLOCAL void parseCommit();
+
+    //! Register a pre-compiled AOT function pointer, promoting directly to JIT tier
+    DLLLOCAL void registerPrecompiledFunction(JitFunctionPtr fn) {
+        cached_jit_fn.store(fn, std::memory_order_release);
+        jit_compile_state.store(2, std::memory_order_relaxed);
+        current_tier.store(TIER_JIT, std::memory_order_release);
+    }
+
+    //! Register a pre-compiled AOT function pointer with context, promoting directly to JIT tier
+    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx) {
+        cached_aot_fn = fn;
+        cached_aot_ctx = ctx;
+        jit_compile_state.store(2, std::memory_order_relaxed);
+        current_tier.store(TIER_JIT, std::memory_order_release);
+    }
+
+    //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
+    DLLLOCAL bool hasCachedFunction() const {
+        return current_tier.load(std::memory_order_acquire) == TIER_JIT
+            && (cached_jit_fn.load(std::memory_order_acquire) || cached_aot_fn);
+    }
+
+    //! Execute the cached JIT/AOT function directly (caller must set up locals)
+    //! @param xsink exception sink
+    //! @param invalidated set to true if cached_jit_fn was nulled by recompilation;
+    //!        caller should fall back to AST via deopt
+    //! @return NaN-boxed result bits, or 0 if invalidated
+    DLLLOCAL uint64_t execCachedFunction(ExceptionSink* xsink, bool& invalidated) const {
+        invalidated = false;
+        if (cached_aot_ctx && cached_aot_fn) {
+            // C++ EH prototype: the AOT code body is now emitted with
+            // invoke/landingpad EH under QORE_AOT_EH=1. Per-function landing
+            // pads resume the in-flight exception so it propagates up through
+            // nested AOT frames. This call is the AOT↔C++ boundary — we catch
+            // here so the exception doesn't escape into libqore's non-EH C++.
+            // xsink is already populated at the raise site, so the caller
+            // just sees 0 (NOTHING bits) + xsink set, matching the behavior
+            // of the check-based path.
+            try {
+                return cached_aot_fn(cached_aot_ctx, xsink);
+            } catch (const QoreJITException&) {
+                return 0;
+            }
+        }
+        JitFunctionPtr fn = cached_jit_fn.load(std::memory_order_acquire);
+        if (!fn) {
+            // Function pointer was invalidated by recompilation; signal caller to deopt
+            invalidated = true;
+            return 0;
+        }
+        try {
+            return fn(xsink);
+        } catch (const QoreJITException&) {
+            return 0;
+        }
+    }
+
+    //! Returns the body locals vector for fast call setup
+    DLLLOCAL const std::vector<LocalVar*>& getBodyLocals() const;
+
+    //! Returns true if all body locals are IR-only (can skip instantiation in fast call path)
+    DLLLOCAL bool areAllBodyLocalsIROnly() const;
+
+    //! Returns the AST-visible (filtered) body locals for JIT fast call path
+    //! (excludes IR-only locals that are never accessed by AST callbacks)
+    DLLLOCAL const std::vector<LocalVar*>& getASTVisibleBodyLocals() const;
+
+    //! Returns true if this variant has a cached AOT function
+    DLLLOCAL bool hasCachedAOT() const {
+        return cached_aot_ctx != nullptr && cached_aot_fn != nullptr;
+    }
+
+    //! Returns true if argv is actually used in the function body
+    DLLLOCAL bool usesArgv() const {
+        return uses_argv;
+    }
+
+    //! Returns true if self is actually used in the function body
+    DLLLOCAL bool usesSelf() const {
+        return uses_self;
+    }
+
+    //! Returns the cached IR function (if at IR tier or higher), or nullptr
+    DLLLOCAL const QoreIRFunction* getCachedIR() const {
+        return cached_ir;
+    }
+
+    //! Set cached IR for a variant reconstructed from AOT binary.
+    //! Promotes directly to TIER_IR by default for variants without an AOT function.
+    DLLLOCAL void setCachedIR(QoreIRFunction* ir, bool promote_to_ir = true) const;
+
+    //! Returns a pointer to the deopt counter for JIT guard failure tracking
+    DLLLOCAL void* getDeoptCounterPtr() const {
+        return const_cast<void*>(static_cast<const void*>(&deopt_count));
+    }
+
+    //! Force IR lowering (thread-safe via call_once).  Used by batch compilation
+    //! to ensure callees have IR before the root function is JIT-compiled.
+    DLLLOCAL void forceIRLowering(const char* name, bool raise_on_failure = false) const {
+        std::call_once(ir_lower_once, [this, name, raise_on_failure]() {
+            attemptIRLowering(name, raise_on_failure);
+        });
+    }
+
+    //! Eagerly compile to IR and optionally JIT when --exec-mode is specified
+    //! This respects the user's explicit request to execute in a specific mode
+    DLLLOCAL void eagerlyCompileForExecMode(const char* name, qore_exec_mode_t exec_mode) const;
+
+    //! Returns true if this variant is statically eligible for the fast call path
+    //! (no default args, not synchronized). Runtime readiness (has cached function)
+    //! is checked separately by qore_rt_call_fast() which falls back if not ready.
+    DLLLOCAL bool isStaticallyFastCallEligible() const {
+        if (isSynchronized()) {
+            return false;
+        }
+        if (signature.hasTypeParameters()) {
+            return false;
+        }
+        // Check for default args
+        const arg_vec_t& defaults = signature.getDefaultArgList();
+        for (size_t i = 0; i < defaults.size(); ++i) {
+            if (defaults[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
 
 // the following defines the pure virtual functions that are common to all user variants
@@ -966,6 +1373,19 @@ public:
         return vlist.singular() ? first()->getSignature() : 0;
     }
 
+    DLLLOCAL const AbstractQoreFunctionVariant* findVariantBySignatureText(const char* sig_text) const {
+        if (!sig_text) {
+            return nullptr;
+        }
+        for (auto* v : vlist) {
+            AbstractFunctionSignature* sig = v->getSignature();
+            if (sig && !strcmp(sig->getSignatureText(), sig_text)) {
+                return v;
+            }
+        }
+        return nullptr;
+    }
+
     DLLLOCAL AbstractFunctionSignature* parseGetUniqueSignature() const;
 
     DLLLOCAL int64 parseGetUniqueFunctionality() const {
@@ -1019,21 +1439,54 @@ public:
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink) const;
+            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"
     DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
-            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink) const;
+            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    // finds a variant using destructive evaluation of temporary arguments and executes the variant
+    DLLLOCAL QoreValue evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
 
     // find variant at parse time, throw parse exception if no variant can be matched
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
     // reachable
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
-            const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err) const;
+            const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const type_vec_t* explicit_type_args = nullptr) const;
+
+    DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNamed(const QoreProgramLocation* loc,
+            const type_vec_t& argTypeInfo, const name_vec_t& argNames,
+            const qore_class_private* class_ctx, int& err, QoreNamedArgBinding& binding,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const type_vec_t* explicit_type_args = nullptr) const;
+
+    //! Infers a concrete receiver type for a raw generic class constructor or static method call
+    /** @param loc source location for diagnostics
+        @param argTypeInfo parse-time argument types
+        @param argNames named argument names, or nullptr for positional calls
+        @param class_ctx current class context for access checks
+        @param err parse error flag
+        @param expected_type_info surrounding expected type hint, or nullptr
+        @param infer_from_args true to infer from formal/actual constructor arguments
+        @param explicit_type_args explicit method/function type arguments, or nullptr
+        @return the inferred parameterized class type, or nullptr if no unique inference is available
+    */
+    DLLLOCAL const QoreTypeInfo* parseInferClassReceiverTypeInfo(const QoreProgramLocation* loc,
+            const type_vec_t& argTypeInfo, const name_vec_t* argNames,
+            const qore_class_private* class_ctx, int& err, const QoreTypeInfo* expected_type_info,
+            bool infer_from_args, const type_vec_t* explicit_type_args = nullptr,
+            const char* call_desc = nullptr) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {
@@ -1049,10 +1502,17 @@ public:
 
     // find variant at runtime
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
-    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args, bool only_user, const qore_class_private* class_ctx) const;
+    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
+            bool only_user, const qore_class_private* class_ctx,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
 
     // finds the best match with the given arg types
-    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
+    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
+            const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
     // finds only an exact match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
 
@@ -1214,7 +1674,9 @@ protected:
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
-        bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant) const;
+        bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant,
+        const QoreTypeInfo* receiver_type_info = nullptr,
+        const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, const QoreParseOptions& ppo,
         const AbstractQoreFunctionVariant* variant) const;
@@ -1388,11 +1850,12 @@ public:
 
 class UserParamListLocalVarHelper {
 protected:
+    UserSignatureTypeParamContextHelper type_param_context;
     UserVariantBase* uvb;
 
 public:
     DLLLOCAL UserParamListLocalVarHelper(UserVariantBase* n_uvb, const QoreTypeInfo* classTypeInfo = nullptr)
-            : uvb(n_uvb) {
+            : type_param_context(n_uvb->getUserSignature()), uvb(n_uvb) {
         uvb->parseInitPushLocalVars(classTypeInfo);
     }
 
@@ -1405,14 +1868,13 @@ class UserClosureVariant : public UserFunctionVariant {
 protected:
 public:
     DLLLOCAL UserClosureVariant(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : UserFunctionVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags) {
+        is_closure = true;
     }
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);
 
-    DLLLOCAL QoreValue evalClosure(CodeEvaluationHelper& ceh, QoreObject* self, ExceptionSink* xsink,
-            bool ref_obj) const {
-        return eval("<anonymous closure>", &ceh, self, xsink, nullptr, ref_obj);
-    }
+    DLLLOCAL QoreValue evalClosure(CodeEvaluationHelper& ceh, const QoreClosureBase& closure_base,
+            QoreObject* self, ExceptionSink* xsink, bool ref_obj) const;
 };
 
 #define UCLOV(f) (reinterpret_cast<UserClosureVariant*>(f))
@@ -1422,6 +1884,7 @@ class UserClosureFunction : public QoreFunction {
 protected:
     LVarSet varlist;  // closure local variable environment
     const QoreTypeInfo* classTypeInfo;
+    bool has_nested_closures = false;  // set during parse if body contains nested closures
 
 public:
     DLLLOCAL UserClosureFunction(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : QoreFunction("<anonymous closure>"), classTypeInfo(0) {
@@ -1445,6 +1908,14 @@ public:
     // returns true if at least one variable in the set of closure-bound local variables could contain an object or a closure (also through a container)
     DLLLOCAL bool needsScan() const {
         return varlist.needsScan();
+    }
+
+    DLLLOCAL bool hasNestedClosures() const {
+        return has_nested_closures;
+    }
+
+    DLLLOCAL void setHasNestedClosures() {
+        has_nested_closures = true;
     }
 };
 

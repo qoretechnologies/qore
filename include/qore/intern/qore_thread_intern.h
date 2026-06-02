@@ -60,6 +60,7 @@ class CallNode;
 class CallStack;
 class LocalVar;
 class LocalVarValue;
+class LVarSet;
 class ClosureParseEnvironment;
 class QoreClosureBase;
 struct ClosureVarValue;
@@ -68,6 +69,7 @@ class ConstantEntry;
 class qore_ns_private;
 class qore_root_ns_private;
 class qore_class_private;
+class QoreTypeInfo;
 class AbstractQoreFunctionVariant;
 class AbstractQoreZoneInfo;
 class ThreadProgramData;
@@ -247,12 +249,23 @@ DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, 
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
-        const QoreProgramLocation* loc, const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
+
+//! Cached runtime location pointers for hot-loop optimization.
+//! Avoids repeated TLS lookups (pthread_getspecific + std::map::find) per instruction.
+struct RuntimeLocationCache {
+    const QoreProgramLocation** loc_ptr;
+    const AbstractStatement** stmt_ptr;
+};
+
+//! Returns cached pointers to the current thread's runtime location fields.
+//! Call once at function entry, then write through the pointers directly.
+DLLLOCAL RuntimeLocationCache get_runtime_location_cache();
 
 DLLLOCAL void set_parse_file_info(QoreProgramLocation& loc);
 DLLLOCAL const char* get_parse_code();
@@ -350,6 +363,15 @@ DLLLOCAL void clear_thread_tz();
 
 DLLLOCAL ThreadProgramData* get_thread_program_data();
 DLLLOCAL ThreadLocalProgramData* get_thread_local_program_data();
+
+//! Ensures td->tlpd is set for td->current_pgm.
+/** ProgramRuntimeParseContextHelper sets td->current_pgm without setting
+    td->tlpd. If ProgramThreadCountContextHelper is subsequently called
+    with the same program, it's a no-op and td->tlpd stays null. This
+    function bridges that gap by calling setThreadVarData() directly when
+    td->current_pgm is set but td->tlpd is null.
+*/
+DLLLOCAL void thread_ensure_local_program_data();
 
 DLLLOCAL int thread_ref_set(const lvalue_ref* r);
 DLLLOCAL void thread_ref_remove(const lvalue_ref* r);
@@ -494,6 +516,7 @@ protected:
     qore_call_t call_type;
 };
 
+
 class QoreProgramLocationHelper {
 public:
     DLLLOCAL QoreProgramLocationHelper(ExceptionSink* xsink, const QoreProgramLocation* loc,
@@ -601,12 +624,30 @@ DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const Q
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
+//! Returns true if the given ClosureVarValue is already present on the current thread's cvstack
+/** Used by CVecInstantiator to avoid re-pushing CVVs that are already in scope, which would
+    cause aliasing in name-based lookup (a caller-frame CVV shadowing a current-frame CVV with
+    the same name). O(cvstack depth) per call.
+*/
+DLLLOCAL bool thread_closure_var_on_stack(const ClosureVarValue* cvv);
+//! Like thread_find_closure_var() but returns nullptr instead of asserting when the variable is not found.
+/** Used by the IR interpreter when a closure variable may or may not be on the cvstack
+    (e.g., closures running on background threads where captured variables are in the
+    ThreadSafeLocalVarRuntimeEnvironment, not on the cvstack).
+*/
+DLLLOCAL ClosureVarValue* thread_try_find_closure_var(const char* id);
+DLLLOCAL ClosureVarValue* thread_try_find_closure_var_in_current_frame(const char* id);
 
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
+//! Safe version that returns nullptr when no runtime closure environment is set
+DLLLOCAL ClosureVarValue* thread_try_get_runtime_closure_var(const LocalVar* id);
 DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current);
+//! Returns true if a runtime closure environment is set on the current thread
+DLLLOCAL bool thread_has_runtime_closure_env();
 
 typedef std::vector<ClosureVarValue*> cvv_vec_t;
 DLLLOCAL cvv_vec_t* thread_get_all_closure_vars();
+DLLLOCAL cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist);
 
 DLLLOCAL void thread_push_frame_boundary();
 DLLLOCAL void thread_pop_frame_boundary();
@@ -657,14 +698,21 @@ public:
 };
 
 DLLLOCAL const QoreListNode* thread_get_implicit_args();
+DLLLOCAL void thread_set_implicit_args(QoreListNode* argv);
 
 DLLLOCAL LocalVarValue* thread_find_lvar(const char* id);
+DLLLOCAL LocalVarValue* thread_try_find_lvar(const char* id);
+DLLLOCAL LocalVarValue* thread_find_lvar(const LocalVar* local);
+DLLLOCAL LocalVarValue* thread_try_find_lvar(const LocalVar* local);
 
 // to get the current runtime object
 DLLLOCAL QoreObject* runtime_get_stack_object();
 // to get the current runtime class
 DLLLOCAL const qore_class_private* runtime_get_class();
 DLLLOCAL void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc);
+// to get or set the current generic receiver type for static generic method bodies
+DLLLOCAL const QoreTypeInfo* runtime_get_receiver_type_info();
+DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti);
 // for methods that behave differently when called within the method itself (methodGate(), memberGate(), etc)
 DLLLOCAL bool runtime_in_object_method(const char* name, const QoreObject* o);
 
@@ -817,6 +865,7 @@ protected:
     int old_frameCount = 0;
     bool restore = false;
     bool init_tlpd = false;
+    bool thread_count_incremented = false;
 };
 
 class ProgramRuntimeParseContextHelper {

@@ -33,7 +33,7 @@ public namespace DataProviderML {
     ClusteringMetricsEventInfo event summarizing the batch.
 
 */
-public class QoreClusteringMetricsProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreClusteringMetricsProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -197,9 +197,9 @@ public class QoreClusteringMetricsProcessor inherits DataProvider::AbstractDataP
         },);
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

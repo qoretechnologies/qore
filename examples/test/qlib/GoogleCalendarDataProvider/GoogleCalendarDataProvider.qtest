@@ -4,15 +4,16 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/GoogleRestClient.qm
-%requires ../../../../qlib/GoogleDataProvider
-%requires ../../../../qlib/GoogleCalendarDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires GoogleRestClient
+%requires GoogleDataProvider
+%requires GoogleCalendarDataProvider
 
 %exec-class GoogleDataProviderTest
 

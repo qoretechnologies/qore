@@ -1,0 +1,345 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QoreParseTypeInfo.h
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is dual-licensed under LGPL and MIT licenses; see
+    LICENSE.LGPL and LICENSE.MIT in the source code directory for details.
+*/
+
+#ifndef _QORE_QOREPARSETYPE_INFO_H
+#define _QORE_QOREPARSETYPE_INFO_H
+
+#include "qore/intern/NamedScope.h"
+#include "qore/intern/QoreTypeInfo.h"
+
+#include <string>
+#include <utility>
+#include <vector>
+
+class QoreParseTypeInfo;
+typedef std::vector<QoreParseTypeInfo*> parse_type_vec_t;
+
+//! Parses a type string into parse-stage type metadata
+DLLLOCAL QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str);
+
+struct QoreGenericTypeParam {
+    std::string name;
+    std::string bound_type;
+    std::string default_type;
+
+    DLLLOCAL QoreGenericTypeParam(const char* n_name, const char* n_default_type = nullptr,
+            const char* n_bound_type = nullptr)
+            : name(n_name ? n_name : ""), bound_type(n_bound_type ? n_bound_type : ""),
+                default_type(n_default_type ? n_default_type : "") {
+    }
+
+    DLLLOCAL QoreGenericTypeParam(std::string&& n_name, std::string&& n_default_type = std::string(),
+            std::string&& n_bound_type = std::string())
+            : name(std::move(n_name)), bound_type(std::move(n_bound_type)),
+                default_type(std::move(n_default_type)) {
+    }
+
+    DLLLOCAL bool hasBound() const {
+        return !bound_type.empty();
+    }
+
+    DLLLOCAL const char* getBoundType() const {
+        return hasBound() ? bound_type.c_str() : nullptr;
+    }
+
+    DLLLOCAL bool hasDefault() const {
+        return !default_type.empty();
+    }
+
+    DLLLOCAL const char* getDefaultType() const {
+        return hasDefault() ? default_type.c_str() : nullptr;
+    }
+};
+
+// this is basically just a wrapper around NamedScope
+//
+// Three-stage type resolution pipeline:
+//   Stage 1 (parsing): type names are strings (QoreParseTypeInfo), conservative matching
+//   Stage 2 (after resolution): types are resolved to QoreTypeInfo, rechecks happen here via setRecheck()
+//   Stage 3 (runtime): type coercion and runtime type matching via QoreTypeInfo
+//
+// At parse stage, duplicate-signature detection (paramTypesIdentical) conservatively matches
+// unresolved names and flags ambiguous cases via the recheck mechanism (issue #3861).
+// See parseCheckDuplicateSignatureCommitted() in Function.cpp for stage-2 rechecks.
+class QoreParseTypeInfo {
+protected:
+    std::string tname;
+
+    DLLLOCAL QoreParseTypeInfo(const NamedScope* n_cscope) : cscope(n_cscope->copy()), or_nothing(false) {
+        setName();
+    }
+
+    DLLLOCAL void setName() {
+        if (wildcard_type_arg) {
+            tname = "?";
+            if (wildcard_kind == QoreWildcardKind::Extends) {
+                tname += " extends ";
+                wildcard_bound->concatName(tname);
+            } else if (wildcard_kind == QoreWildcardKind::Super) {
+                tname += " super ";
+                wildcard_bound->concatName(tname);
+            }
+            return;
+        }
+        if (or_nothing)
+            tname = "*";
+        tname += cscope->ostr;
+        if (has_explicit_subtypes) {
+            tname += '<';
+            if (!subtypes.empty()) {
+                tname += subtypes[0]->getName();
+                for (unsigned i = 1; i < subtypes.size(); ++i) {
+                    tname += ", ";
+                    tname += subtypes[i]->getName();
+                }
+            }
+            tname += '>';
+        }
+    }
+
+public:
+    NamedScope* cscope; // namespace scope for class
+    parse_type_vec_t subtypes;
+    bool or_nothing;
+    bool has_explicit_subtypes = false;
+    bool wildcard_type_arg = false;
+    QoreWildcardKind wildcard_kind = QoreWildcardKind::Unbounded;
+    QoreParseTypeInfo* wildcard_bound = nullptr;
+
+    DLLLOCAL QoreParseTypeInfo(char* n_cscope, bool n_or_nothing = false) : cscope(new NamedScope(n_cscope)),
+            or_nothing(n_or_nothing) {
+        setName();
+        //printd(5, "QoreParseTypeInfo::QoreParseTypeInfo() %s\n", tname.c_str());
+    }
+
+    DLLLOCAL QoreParseTypeInfo(char* n_cscope, bool n_or_nothing, parse_type_vec_t&& subtypes)
+            : cscope(new NamedScope(n_cscope)), subtypes(subtypes), or_nothing(n_or_nothing),
+            has_explicit_subtypes(true) {
+        setName();
+
+        //printd(5, "QoreParseTypeInfo::QoreParseTypeInfo() %s\n", tname.c_str());
+    }
+
+    DLLLOCAL QoreParseTypeInfo(QoreWildcardKind n_kind, QoreParseTypeInfo* n_bound = nullptr)
+            : cscope(new NamedScope(strdup("?"))), or_nothing(false), wildcard_type_arg(true),
+            wildcard_kind(n_kind), wildcard_bound(n_bound) {
+        assert(wildcard_kind == QoreWildcardKind::Unbounded || wildcard_bound);
+        setName();
+    }
+
+    DLLLOCAL QoreParseTypeInfo(const QoreParseTypeInfo& old) : tname(old.tname),
+            cscope(old.cscope ? new NamedScope(*old.cscope) : nullptr), or_nothing(old.or_nothing),
+            has_explicit_subtypes(old.has_explicit_subtypes), wildcard_type_arg(old.wildcard_type_arg),
+            wildcard_kind(old.wildcard_kind), wildcard_bound(old.wildcard_bound ? old.wildcard_bound->copy() : nullptr) {
+        // copy subtypes
+        for (const auto& i : old.subtypes)
+            subtypes.push_back(new QoreParseTypeInfo(*i));
+    }
+
+    DLLLOCAL ~QoreParseTypeInfo() {
+        delete cscope;
+        for (auto& i : subtypes)
+            delete i;
+        delete wildcard_bound;
+    }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static bool parseStageOneIdenticalWithParsed(const QoreParseTypeInfo* pti, const QoreTypeInfo* typeInfo,
+            bool& recheck) {
+        if (pti && typeInfo)
+            return pti->parseStageOneIdenticalWithParsed(typeInfo, recheck);
+        else if (pti)
+            return false;
+        else if (typeInfo)
+            return false;
+        else
+            return true;
+    }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static bool parseStageOneIdentical(const QoreParseTypeInfo* pti, const QoreParseTypeInfo* typeInfo,
+            bool& recheck) {
+        if (pti && typeInfo)
+            return pti->parseStageOneIdentical(typeInfo, recheck);
+        else
+            return !(pti || typeInfo);
+    }
+
+    // dispatch matrix for parse-stage parameter type comparison:
+    //   both resolved → QoreTypeInfo::isInputIdentical
+    //   mixed         → parseStageOneIdenticalWithParsed (sets recheck=true)
+    //   both unresolved → parseStageOneIdentical
+    //   both nullptr  → identical
+    DLLLOCAL static bool paramTypesIdentical(
+        const QoreTypeInfo* ti_a, const QoreParseTypeInfo* pti_a,
+        const QoreTypeInfo* ti_b, const QoreParseTypeInfo* pti_b,
+        bool& recheck);
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* resolveAndDelete(QoreParseTypeInfo* pti, const QoreProgramLocation* loc,
+            int& err) {
+        return pti ? pti->resolveAndDelete(loc, err) : nullptr;
+    }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* resolve(QoreParseTypeInfo* pti, const QoreProgramLocation* loc, int& err) {
+        return pti ? pti->resolve(loc, err) : nullptr;
+    }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* resolveAny(QoreParseTypeInfo* pti, const QoreProgramLocation* loc, int& err) {
+        return pti ? pti->resolveAny(loc, err) : nullptr;
+    }
+
+    DLLLOCAL static const QoreTypeInfo* resolveRuntime(QoreParseTypeInfo* pti) {
+        return pti ? pti->resolveRuntime() : nullptr;
+    }
+
+#ifdef DEBUG
+    DLLLOCAL const char* getCID() const { return cscope ? cscope->getIdentifier() : "n/a"; }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const char* getCID(const QoreParseTypeInfo* pti) { return pti ? pti->getCID() : "n/a"; }
+#endif
+
+    DLLLOCAL QoreParseTypeInfo* copy() const {
+        return new QoreParseTypeInfo(*this);
+    }
+
+    DLLLOCAL bool hasExplicitSubtypeList() const {
+        return has_explicit_subtypes;
+    }
+
+    DLLLOCAL bool isWildcardTypeArg() const {
+        return wildcard_type_arg;
+    }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const char* getName(const QoreParseTypeInfo* pti) {
+        return pti ? pti->getName() : NO_TYPE_INFO;
+    }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static void concatName(const QoreParseTypeInfo* pti, std::string& str) {
+        if (pti)
+            pti->concatName(str);
+        else
+            str.append(NO_TYPE_INFO);
+    }
+
+private:
+    // used when parsing user code to find duplicate signatures
+    DLLLOCAL bool parseStageOneIdenticalWithParsed(const QoreTypeInfo* typeInfo, bool& recheck) const {
+        if (!typeInfo)
+            return false;
+
+        const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
+        if (!qc) {
+            const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+            if (!hd) {
+                const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
+                if (!ti) {
+                    recheck = true;
+                    return false;
+                }
+                if (subtypes.size() == 2 && !strcmp(cscope->getIdentifier(), "hash"))
+                    return recheck = true;
+                recheck = true;
+                return false;
+            }
+            if (subtypes.size() == 1 && !strcmp(cscope->getIdentifier(), "hash"))
+                return recheck = true;
+            recheck = true;
+            return false;
+        }
+
+        // both have class info
+        if (!strcmp(cscope->getIdentifier(), qc->getName()))
+            return recheck = true;
+        recheck = true;
+        return false;
+    }
+
+    // used when parsing user code to find duplicate signatures
+    DLLLOCAL bool parseStageOneIdentical(const QoreParseTypeInfo* typeInfo, bool& recheck) const {
+        //printd(5, "QoreParseTypeInfo::parseStageOneIdentical() this: %p '%s' == %p '%s'\n", this, tname.c_str(), typeInfo, typeInfo->tname.c_str());
+        if (tname == typeInfo->tname) {
+            return true;
+        }
+        // issue #3861: check if they could potentially refer to the same declaration; if the shorter string is the same as the
+        // longer string, and the longer string is prefixed by "::", then the declarations are ambiguous and must be rechecked
+        if (tname.size() > typeInfo->tname.size()) {
+            recheck = checkAmbiguous(tname, typeInfo->tname);
+        } else if (typeInfo->tname.size() > tname.size()) {
+            recheck = checkAmbiguous(typeInfo->tname, tname);
+        }
+        if (!recheck) {
+            recheck = true;
+        }
+        return false;
+    }
+
+    DLLLOCAL static bool checkAmbiguous(const std::string& longer, const std::string& shorter) {
+        // if the previous two character in longer are not '::', then the strings are not ambiguous
+        if (longer.size() - shorter.size() < 2) {
+            return false;
+        }
+        if (longer.compare(longer.size() - shorter.size() - 2, 2, "::")) {
+            return false;
+        }
+        return !longer.compare(longer.size() - shorter.size(), shorter.size(), shorter);
+    }
+
+    // resolves complex types (classes, hashdecls, etc)
+    DLLLOCAL const QoreTypeInfo* resolve(const QoreProgramLocation* loc, int& err) const;
+    // also resolves base types
+    DLLLOCAL const QoreTypeInfo* resolveAny(const QoreProgramLocation* loc, int& err) const;
+    // resolves the current type to an QoreTypeInfo pointer and deletes itself
+    DLLLOCAL const QoreTypeInfo* resolveAndDelete(const QoreProgramLocation* loc, int& err);
+    DLLLOCAL const QoreTypeInfo* resolveSubtype(const QoreProgramLocation* loc, int& err) const;
+
+    DLLLOCAL const QoreTypeInfo* resolveRuntime() const;
+    DLLLOCAL const QoreTypeInfo* resolveRuntimeSubtype() const;
+    DLLLOCAL static const QoreTypeInfo* resolveRuntimeClass(const NamedScope& cscope, bool or_nothing);
+
+    DLLLOCAL const char* getName() const {
+        return tname.c_str();
+    }
+
+    DLLLOCAL void concatName(std::string& str) const {
+        assert(!tname.empty());
+        str.append(tname);
+    }
+
+    DLLLOCAL static const QoreTypeInfo* resolveClass(const QoreProgramLocation* loc, const NamedScope& cscope,
+            bool or_nothing, int& err);
+};
+
+#endif

@@ -1188,7 +1188,7 @@ public auto sub parse_to_qore_value(string arg) {
             return eval_text(pc[1], True).value;
     }
 
-    # we should not use "auto" here because this lvalue must be able to convert to an untyped list
+    # keep "auto" here; recursive closure frames must not leak across calls
     auto v;
 
     list<hash> l = scan_exp(arg);
@@ -1261,25 +1261,19 @@ public auto sub parse_to_qore_value(string arg) {
         }
     };
 
-    code check_val = sub (int i) {
-        if (i) {
-            int lt = l[i-1].type;
-            if (lt != ET_Comma && lt != ET_Eq) {
-                throw "PARSE-ERROR", sprintf("cannot parse %y (%y) after %y (%y)", EtMap{l[i].type}, l[i].val,
-                    EtMap{lt}, l[i-1].val);
-            }
-        }
-    };
-
     for (int i = 0; i < l.size(); ++i) {
         hash<auto> h = l[i];
         # get preceding type
         *int pt;
-        if (i)
+        if (i) {
             pt = l[i-1].type;
+        }
         switch (h.type) {
             case ET_RawString: {
-                check_val(i);
+                if (pt && pt != ET_Comma && pt != ET_Eq) {
+                    throw "PARSE-ERROR", sprintf("cannot parse %y (%y) after %y (%y)", EtMap{h.type}, h.val,
+                        EtMap{pt}, l[i-1].val);
+                }
                 # check next symbol, if it's an "=" sign, then use as a hash key
                 if (l[i+1].type == ET_Eq) {
                     do_eq(\i, trim(h.val));
@@ -1290,7 +1284,10 @@ public auto sub parse_to_qore_value(string arg) {
                 break;
             }
             case ET_CurlyBracketString: {
-                check_val(i);
+                if (pt && pt != ET_Comma && pt != ET_Eq) {
+                    throw "PARSE-ERROR", sprintf("cannot parse %y (%y) after %y (%y)", EtMap{h.type}, h.val,
+                        EtMap{pt}, l[i-1].val);
+                }
                 if (!exists h.val) {
                     do_val({});
                 } else {
@@ -1300,7 +1297,10 @@ public auto sub parse_to_qore_value(string arg) {
                 break;
             }
             case ET_BracketString: {
-                check_val(i);
+                if (pt && pt != ET_Comma && pt != ET_Eq) {
+                    throw "PARSE-ERROR", sprintf("cannot parse %y (%y) after %y (%y)", EtMap{h.type}, h.val,
+                        EtMap{pt}, l[i-1].val);
+                }
                 if (!exists h.val) {
                     do_val(());
                 } else {
@@ -1310,7 +1310,10 @@ public auto sub parse_to_qore_value(string arg) {
                 break;
             }
             case ET_QuotedString: {
-                check_val(i);
+                if (pt && pt != ET_Comma && pt != ET_Eq) {
+                    throw "PARSE-ERROR", sprintf("cannot parse %y (%y) after %y (%y)", EtMap{h.type}, h.val,
+                        EtMap{pt}, l[i-1].val);
+                }
                 # check next symbol, if it's an "=" sign, then use as a hash key
                 if (l[i+1].type == ET_Eq) {
                     do_eq(\i, h.val);
@@ -1331,13 +1334,17 @@ public auto sub parse_to_qore_value(string arg) {
                 break;
             }
             case ET_Eq: {
-                if (i)
+                if (i) {
                     throw "PARSE-ERROR", sprintf("cannot parse %y after %y (%y)", EtMap{h.type}, EtMap{l[i-1].type}, h.val);
-                else
+                } else {
                     throw "PARSE-ERROR", sprintf("cannot parse %y at the beginning of the expression", EtMap{h.type});
+                }
             }
             case ET_Placeholder: {
-                check_val(i);
+                if (pt && pt != ET_Comma && pt != ET_Eq) {
+                    throw "PARSE-ERROR", sprintf("cannot parse %y (%y) after %y (%y)", EtMap{h.type}, h.val,
+                        EtMap{pt}, l[i-1].val);
+                }
                 do_val(process_placeholder(h.val.type, h.val.path));
                 do_break = False;
                 break;
@@ -1350,7 +1357,7 @@ public auto sub parse_to_qore_value(string arg) {
 }
 
 bool sub parse_to_qore_value_yaml_candidate(string arg) {
-    DataLineIterator it(arg);
+    DataLineIterator it(source: arg);
     while (it.next()) {
         string line = trim(it.getValue());
         if (!line.size() || line =~ /^#/) {

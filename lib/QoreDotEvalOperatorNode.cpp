@@ -34,28 +34,25 @@
 
 QoreString QoreDotEvalOperatorNode::name("dot eval expression");
 
-static const AbstractQoreNode* check_call_ref(const AbstractQoreNode *op, const char *name) {
-    // FIXME: this is an ugly hack!
-    const QoreHashNode *h = reinterpret_cast<const QoreHashNode *>(op);
-    // see if the hash member is a call reference
-    const QoreValue ref = h->getKeyValue(name);
-    return (ref.getType() == NT_FUNCREF || ref.getType() == NT_RUNTIME_CLOSURE) ? ref.getInternalNode() : nullptr;
-}
-
 QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder op(left, xsink);
-    if (*xsink)
+    if (*xsink) {
         return QoreValue();
+    }
 
-    switch (op->getType()) {
+    return evalWithBase(*op, xsink);
+}
+
+QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* xsink) const {
+    switch (base.getType()) {
         case NT_WEAKREF: {
             // FIXME: inefficient
-            return m->exec(op->get<WeakReferenceNode>()->get(), xsink);
+            return m->exec(base.get<WeakReferenceNode>()->get(), xsink);
         }
 
         case NT_WEAKREF_HASH: {
             // FIXME: inefficient
-            const AbstractQoreNode* ref = check_call_ref(op->get<WeakHashReferenceNode>()->get(), m->getName());
+            const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), m->getName());
             if (ref) {
                 return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(m->getArgs(), xsink);
             }
@@ -63,13 +60,13 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
         }
 
         case NT_OBJECT: {
-            QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(op->getInternalNode()));
+            QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
             // FIXME: inefficient
             return m->exec(o, xsink);
         }
 
         case NT_HASH: {
-            const AbstractQoreNode* ref = check_call_ref(op->getInternalNode(), m->getName());
+            const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), m->getName());
             if (ref) {
                 return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(m->getArgs(), xsink);
             }
@@ -82,10 +79,10 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
 
     // FIXME: inefficient
     if (m->isPseudo()) {
-        return m->execPseudo(*op, xsink);
+        return m->execPseudo(base, xsink);
     }
 
-    return pseudo_classes_eval(*op, m->getName(), m->getArgs(), xsink);
+    return pseudo_classes_eval(base, m->getName(), m->getArgs(), xsink);
 }
 
 int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {

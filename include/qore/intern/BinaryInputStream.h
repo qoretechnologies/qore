@@ -43,8 +43,8 @@ public:
     DLLLOCAL BinaryInputStream(const QoreValue& src) {
         assert(src);
         if (src.getType() == NT_STRING) {
-            const QoreStringNode* str = src.get<const QoreStringNode>();
-            this->src = str->stringRefSelf();
+            QoreStringNodeValueHelper str(src);
+            this->src = str.getReferencedValue();
             ptr = str->c_str();
             len = str->size();
         } else {

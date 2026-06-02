@@ -1,0 +1,37 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameCleaning
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameCleaning {
+    constructor() {
+        Bench::BenchRunner r("dataframe_cleaning");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+
+        r.setup = sub () {
+            df = DataFrameBench::makeNullableFrame(rows);
+            r.bytes_processed = DataFrameBench::approxWideBytes(rows) * 2;
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame filled = df.fillna(0);
+            DataFrame::DataFrame cleaned = df.dropna();
+            DataFrameBench::verifyRows("dataframe_cleaning/fillna", filled, rows);
+            DataFrameBench::verifyRows("dataframe_cleaning/dropna", cleaned, 1);
+        };
+
+        exit(r.run());
+    }
+}

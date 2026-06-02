@@ -147,6 +147,21 @@ public class ReflectionMetadataExtractor {
             ci.module_name = mod;
         }
 
+        *list<string> type_params = cls.getTypeParameters();
+        if (exists type_params) {
+            ci.type_parameters = type_params;
+        }
+        *hash<string, string> type_param_defaults =
+            cls.getTypeParameterDefaults();
+        if (exists type_param_defaults) {
+            ci.type_parameter_defaults = type_param_defaults;
+        }
+        *hash<string, string> type_param_bounds =
+            cls.getTypeParameterBounds();
+        if (exists type_param_bounds) {
+            ci.type_parameter_bounds = type_param_bounds;
+        }
+
         # extract parent classes
         list<auto> parents = cls.getParentClasses();
         if (parents.size()) {
@@ -179,7 +194,7 @@ public class ReflectionMetadataExtractor {
             }
         }
 
-        return ci;
+        return TypeMetadata::enrichClass(ci);
     }
 
     #! Build MethodInfo from a reflection Method + Variant
@@ -214,6 +229,8 @@ public class ReflectionMetadataExtractor {
         # extract params
         list<hash<ParameterInfo>> params =
             ReflectionMetadataExtractor::extractParams(variant);
+        list<string> named_params =
+            ReflectionMetadataExtractor::extractNamedParams(variant);
 
         # check deprecation
         int flags = variant.getCodeFlags();
@@ -230,18 +247,21 @@ public class ReflectionMetadataExtractor {
             domain = sprintf("0x%x", variant.getDomain());
         }
 
-        return <MethodInfo>{
+        hash<MethodInfo> info({
             "name": method_name,
             "full_name": class_full_name + "::" + method_name,
             "signature": sig,
             "return_type": variant.getReturnTypeString(),
             "params": params,
+            "named_callable": variant.isNamedCallable() ? True : False,
+            "named_parameters": named_params,
             "access": access,
             "is_static": is_static,
             "is_abstract": is_abstract,
             "is_deprecated": is_deprecated,
             "functional_domain": domain,
-        };
+        });
+        return TypeMetadata::enrichMethod(info);
     }
 
     #! Build FunctionInfo from a reflection Function + Variant
@@ -254,6 +274,8 @@ public class ReflectionMetadataExtractor {
         # extract params
         list<hash<ParameterInfo>> params =
             ReflectionMetadataExtractor::extractParams(variant);
+        list<string> named_params =
+            ReflectionMetadataExtractor::extractNamedParams(variant);
 
         # check deprecation
         int flags = variant.getCodeFlags();
@@ -271,16 +293,19 @@ public class ReflectionMetadataExtractor {
             domain = sprintf("0x%x", variant.getDomain());
         }
 
-        return <FunctionInfo>{
+        hash<FunctionInfo> info({
             "name": name,
             "full_name": full_name,
             "namespace_path": ns_full_name,
             "signature": sig,
             "return_type": string(variant.getReturnTypeString()),
             "params": params,
+            "named_callable": variant.isNamedCallable() ? True : False,
+            "named_parameters": named_params,
             "is_deprecated": is_deprecated,
             "functional_domain": domain,
-        };
+        });
+        return TypeMetadata::enrichFunction(info);
     }
 
     #! Extract parameter info from a variant
@@ -306,7 +331,20 @@ public class ReflectionMetadataExtractor {
                 "type_name": p_type,
                 "default_value": p_default,
             });
-            params += pi;
+            params += TypeMetadata::enrichParameter(pi);
+        }
+        return params;
+    }
+
+    #! Extract named-argument parameter names from a variant
+    private static list<string> extractNamedParams(auto variant) {
+        list<string> params = ();
+        if (!variant.isNamedCallable()) {
+            return params;
+        }
+
+        foreach auto name in (variant.getNamedParameterNames()) {
+            params += string(name);
         }
         return params;
     }
@@ -315,11 +353,12 @@ public class ReflectionMetadataExtractor {
     private static hash<ConstantInfo> buildConstantInfo(auto constant) {
         string name = constant.getName();
         string type_name = constant.getType().getName();
-        return <ConstantInfo>{
+        hash<ConstantInfo> info({
             "name": name,
             "full_name": name,
             "type_name": type_name,
-        };
+        });
+        return TypeMetadata::enrichConstant(info);
     }
 
     #! Build HashdeclInfo from a reflection TypedHash
@@ -338,6 +377,21 @@ public class ReflectionMetadataExtractor {
             hi.namespace_path = full_name.substr(0, pos);
         }
 
+        *list<string> type_params = typed_hash.getTypeParameters();
+        if (exists type_params) {
+            hi.type_parameters = type_params;
+        }
+        *hash<string, string> type_param_defaults =
+            typed_hash.getTypeParameterDefaults();
+        if (exists type_param_defaults) {
+            hi.type_parameter_defaults = type_param_defaults;
+        }
+        *hash<string, string> type_param_bounds =
+            typed_hash.getTypeParameterBounds();
+        if (exists type_param_bounds) {
+            hi.type_parameter_bounds = type_param_bounds;
+        }
+
         # extract members
         list<auto> members = typed_hash.getMembers();
         foreach auto m in (members) {
@@ -345,10 +399,10 @@ public class ReflectionMetadataExtractor {
                 "name": string(m.getName()),
                 "type_name": string(m.getType().getName()),
             });
-            hi.members += mi;
+            hi.members += TypeMetadata::enrichMember(mi);
         }
 
-        return hi;
+        return TypeMetadata::enrichHashdecl(hi);
     }
 }
 

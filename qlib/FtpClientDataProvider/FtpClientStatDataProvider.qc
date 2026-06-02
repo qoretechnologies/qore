@@ -73,7 +73,7 @@ public class FtpClientStatDataProvider inherits AbstractDataProvider {
         date mtime;
         int size;
 
-        hash<FtpResponseInfo> mh = ftp.sendControlMessage("SIZE", path);
+        hash<FtpResponseInfo> mh = ftp.sendControlMessage(command: "SIZE", argument: path);
         if (mh."code" == 550) {
             if (FtpClientStatDataProvider::checkDir(ftp, path)) {
                 mtime = 1970-01-01Z;
@@ -113,7 +113,7 @@ public class FtpClientStatDataProvider inherits AbstractDataProvider {
 
     #! Returns the modified time for a remote file, if possible
     static date getModifiedTime(FtpClient ftp, string path) {
-        hash<FtpResponseInfo> mh = ftp.sendControlMessage("MDTM", path);
+        hash<FtpResponseInfo> mh = ftp.sendControlMessage(command: "MDTM", argument: path);
         # assume we have a directory if we get a 550 response to the MDTM command
         if ((mh."code" / 100) != 2) {
             throw "FTP-ERROR", sprintf("%s: MDTM failure: %d %y ", path, mh."code", mh.msg);
@@ -124,7 +124,7 @@ public class FtpClientStatDataProvider inherits AbstractDataProvider {
     static bool checkDir(FtpClient ftp, string path) {
         # check if it's a directory
         try {
-            ftp.cwd(path);
+            ftp.cwd(path: path);
             return True;
         } catch (hash<ExceptionInfo> ex) {
         }

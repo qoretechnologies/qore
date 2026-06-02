@@ -359,6 +359,7 @@ list<string> l = f.getCodeFlagList();
     - \c "DEPRECATED": the variant has the @ref Qore::Reflection::CF_DEPRECATED "CF_DEPRECATED" flag set
     - \c "RET_VALUE_ONLY": the variant has the @ref Qore::Reflection::CF_RET_VALUE_ONLY "CF_RET_VALUE_ONLY" flag set
     - \c "RUNTIME_NOOP": the variant has the @ref Qore::Reflection::CF_RUNTIME_NOOP "CF_RUNTIME_NOOP" flag set
+    - \c "NAMED_ARGS": the variant has the @ref Qore::Reflection::CF_NAMED_ARGS "CF_NAMED_ARGS" flag set
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
@@ -426,4 +427,3 @@ list<string> AbstractReflectionFunction::getDomainStringList() [flags=RET_VALUE_
     // the function ptr must be valid
     return domain_bitfield_to_string_list(f->f->getDomain(), xsink);
 }
-

@@ -76,7 +76,7 @@ public class FtpClientCreateFileLocationDataProvider inherits AbstractDataProvid
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string path = FtpClientDataProvider::getPath(ftp, req.path);
         InputStream stream = FileLocationHandler::getBinaryStreamFromLocation(req.location);
-        ftp.put(stream, path);
+        ftp.put(input_stream: stream, remote_path: path);
         return {
             "path": path,
         };

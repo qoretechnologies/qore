@@ -8,7 +8,7 @@
     @ref variable_implicit_construction "variable implicit construction".
 
     @section hashdecl_syntax hashdecl Declaration Syntax
-    <tt><b>hashdecl</b></tt> <em>hashdecl_identifier</em> <tt>[<b>inherits</b></tt> <em>parent_hashdecl</em><tt>]</tt> <tt>{</tt> \n
+    <tt><b>hashdecl</b></tt> <em>hashdecl_identifier</em><tt>[&lt;</tt><em>type_parameter</em><tt>[, ...]&gt;]</tt> <tt>[<b>inherits</b></tt> <em>parent_hashdecl</em><tt>]</tt> <tt>{</tt> \n
     &nbsp;&nbsp;&nbsp;&nbsp;<em>@ref data_type_declarations "member_type"</em><tt> </tt><em>member_name</em> <tt>[= </tt><em>@ref expressions "initialization_expression"</em><tt>];</tt> \n
     &nbsp;&nbsp;&nbsp;&nbsp;[...] \n
     <tt>}</tt>
@@ -84,6 +84,115 @@ c.i = 2;
     @see
     - @ref variable_implicit_construction
     - @ref new
+
+    @section hashdecl_generic Generic Hashdecls
+
+    Hashdecls can declare formal type parameters and use them in member type
+    positions. A generic hashdecl must be used with explicit type arguments in
+    type positions such as <tt>hash&lt;Result&lt;int&gt;&gt;</tt>.
+
+    @par Example
+    @code{.py}
+hashdecl Result<T> {
+    string status;
+    T value;
+    list<T> values;
+}
+
+hash<Result<int>> int_result(("status": "ok", "value": 1, "values": (1, 2)));
+int int_value = int_result.value;
+
+hash<Result<string>> string_result(("status": "ok", "value": "done", "values": ("a",)));
+string string_value = string_result.value;
+    @endcode
+
+    Type parameters can also be used in nested typed-hash members:
+
+    @code{.py}
+hashdecl Envelope<T> {
+    string request_id;
+    hash<Result<T>> result;
+}
+
+hash<Envelope<int>> response(("request_id": "abc", "result": int_result));
+int payload = response.result.value;
+    @endcode
+
+    Generic hashdecl type parameters can declare defaults and upper bounds:
+
+    @code{.py}
+hashdecl Count<T: int = int> {
+    T value;
+}
+
+hash<Count<>> default_count(("value": 1));      # same type as hash<Count<int>>
+hash<Count<int>> explicit_count(("value": 2));
+# hash<Count<string>> bad(("value": "x"));      # PARSE-TYPE-ERROR
+    @endcode
+
+    Generic hashdecl type arguments are invariant when concrete type arguments
+    are used and are checked in the same way as other typed hash members. For
+    example,
+    <tt>hash&lt;Result&lt;int&gt;&gt;</tt> and
+    <tt>hash&lt;Result&lt;string&gt;&gt;</tt> are different concrete hashdecl types.
+    Omitting type arguments for a source-defined generic hashdecl, such as
+    <tt>hash&lt;Result&gt;</tt>, is a parse-time type error.
+
+    Wildcard type arguments can be used for read-oriented or write-oriented
+    hashdecl annotations:
+
+    @code{.py}
+hash<Result<int>> result(("status": "ok", "value": 1, "values": (2,)));
+
+hash<Result<?>> any_result = result;
+hash<Result<? extends number>> numeric_result = result;
+number value = numeric_result.value;
+    @endcode
+
+    Generic hashdecl inheritance can pass through type parameters or bind a
+    parent to a concrete type argument:
+
+    @code{.py}
+hashdecl Parent<T> {
+    T value;
+}
+
+hashdecl Child<T> inherits Parent<T> {
+    string name;
+}
+
+hash<Child<int>> child(("value": 1, "name": "one"));
+hash<Parent<?>> parent = child;
+    @endcode
+
+    Some builtin APIs also expose generic hashdecl result records. The type
+    argument ties the record payload back to the producing generic class:
+
+    @code{.py}
+Queue<string> q();
+q.push(value: "ready");
+hash<QueueTryResult<string>> q_result = q.tryGet();
+if (q_result.exists) {
+    string value = q_result.value;
+}
+
+Channel<int> ch(1);
+ch.send(value: 42);
+hash<ChannelTryResult<int>> ch_result = ch.tryRecv();
+
+hash<string, number> totals = {"net": 10.5};
+HashPairIterator<number> it(totals);
+while (it.next()) {
+    hash<KeyValueInfo<number>> pair = it.getValue();
+    printf("%s = %n\n", pair.key, pair.value);
+}
+    @endcode
+
+    Reflection and API metadata preserve generic hashdecl type parameters,
+    defaults, bounds, and parameterized parents. Tools should render
+    <tt>hash&lt;Result&lt;int&gt;&gt;</tt> and
+    <tt>hash&lt;KeyValueInfo&lt;number&gt;&gt;</tt> instead of the raw hashdecl
+    name when the payload type is known.
 
     @section hashdecl_type_compatibility Type-Safe Hash Type Compatibility
 

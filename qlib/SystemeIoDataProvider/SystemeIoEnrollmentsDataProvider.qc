@@ -101,11 +101,11 @@ public class SystemeIoEnrollmentsDataProvider inherits SystemeIoDataProviderBase
         return new SystemeIoEnrollmentDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.id) {
             hash<auto> result = doGet("school/enrollments/" + string(search_options.id));
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
@@ -114,7 +114,7 @@ public class SystemeIoEnrollmentsDataProvider inherits SystemeIoDataProviderBase
             params.order = search_options.order;
         }
         list<auto> records = doPaginatedGet("school/enrollments", params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
             where_cond, search_options);
     }
 

@@ -43,7 +43,11 @@ public class ErrorResponse {
             "code": ErrorCodes.ServerNotInitialized,
             "message": "server has not been initialized yet",
         };
+%ifndef NoJson
         return make_jsonrpc_error(request.jsonrpc, request.id, err);
+%else
+        throw "JSON-MODULE-MISSING", "json module is required for QLS";
+%endif
     }
 
     public static string invalidRequest(hash<auto> request, *string message) {
@@ -51,7 +55,11 @@ public class ErrorResponse {
             "code": ErrorCodes.InvalidRequest,
             "message": message ? message : "invalid request",
         };
+%ifndef NoJson
         return make_jsonrpc_error(request.jsonrpc, request.id, err);
+%else
+        throw "JSON-MODULE-MISSING", "json module is required for QLS";
+%endif
     }
 
     public static string methodNotFound(hash<auto> request) {
@@ -59,7 +67,11 @@ public class ErrorResponse {
             "code": ErrorCodes.MethodNotFound,
             "message": sprintf("method '%s' is not implemented", request.method),
         };
+%ifndef NoJson
         return make_jsonrpc_error(request.jsonrpc, request.id, err);
+%else
+        throw "JSON-MODULE-MISSING", "json module is required for QLS";
+%endif
     }
 
     public static string internalError(string jsonrpc, *string message) {
@@ -67,7 +79,11 @@ public class ErrorResponse {
             "code": ErrorCodes.InternalError,
             "message": message ?? "internal error",
         };
+%ifndef NoJson
         return make_jsonrpc_error(jsonrpc, NOTHING, err);
+%else
+        throw "JSON-MODULE-MISSING", "json module is required for QLS";
+%endif
     }
 
     public static string invalidParams(hash<auto> request, *string message) {
@@ -75,7 +91,11 @@ public class ErrorResponse {
             "code": ErrorCodes.InvalidParams,
             "message": message ?? "invalid params",
         };
+%ifndef NoJson
         return make_jsonrpc_error(request.jsonrpc, request.id, err);
+%else
+        throw "JSON-MODULE-MISSING", "json module is required for QLS";
+%endif
     }
 
     public static string nonExistentDocument(hash<auto> request) {

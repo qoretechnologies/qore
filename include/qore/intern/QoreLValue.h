@@ -36,7 +36,11 @@
 DLLLOCAL void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out);
 
 template <typename U = qore_value_u>
+#if defined(__GNUC__) || defined(__clang__)
+class __attribute__((may_alias)) QoreLValue {
+#else
 class QoreLValue {
+#endif
 protected:
     // returns the old value just in case it needs to be dereferenced outside a lock
     template <class T, typename t, int nt>
@@ -69,6 +73,19 @@ protected:
             assigned = false;
             assert(!static_assignment);
         }
+    }
+
+    DLLLOCAL QoreValue getInlineValue() const {
+        assert(type == QV_Value);
+        QoreSimpleValue sv;
+        sv.setRawBits(v.qv);
+        return QoreValue(sv);
+    }
+
+    DLLLOCAL void setInlineValue(QoreValue val) {
+        assert(!val.hasNode());
+        v.qv = val.rawBits();
+        type = QV_Value;
     }
 
 public:
@@ -118,6 +135,7 @@ public:
             case QV_Int: v.i = old.v.i; break;
             case QV_Float: v.f = old.v.f; break;
             case QV_Enum: v.em = old.v.em; break;
+            case QV_Value: v.qv = old.v.qv; break;
             case QV_Node:
                 v.n = old.v.n ? old.v.n->refSelf() : nullptr;
                 if (!is_closure)
@@ -130,9 +148,28 @@ public:
 
 #ifdef DEBUG
     DLLLOCAL ~QoreLValue() {
+        if (assigned && type == QV_Node && v.n) {
+            // DGC violation: Variable being destroyed with assigned node value
+            // This indicates improper variable uninstantiation during frame boundary handling
+            // This diagnostic helps identify Task #5: Frame boundary variable uninstantiation fix
+            fprintf(stderr, "DGC VIOLATION: QoreLValue destructor with assigned node (v.n=%p, type=%d)\n", v.n, type);
+            fprintf(stderr, "  This indicates variables were not properly uninstantiated during frame boundary operations.\n");
+            fflush(stderr);
+        }
         assert(!assigned || type != QV_Node || !v.n);
     }
 #endif
+
+    // Reset to initial empty state for reuse (when stack-allocated LocalVarValue is reused for a different variable)
+    DLLLOCAL void reset_to_empty() {
+        type = QV_Node;
+        fixed_type = false;
+        assigned = false;
+        static_assignment = false;
+        is_closure = false;
+        // Always clear the node pointer to ensure destructor assertion doesn't fail
+        v.n = 0;
+    }
 
     DLLLOCAL void setClosure() {
         assert(!is_closure);
@@ -144,7 +181,7 @@ public:
     }
 
     DLLLOCAL bool optimized() const {
-        return type != QV_Node && type != QV_Ref;
+        return type != QV_Node && type != QV_Ref && type != QV_Value;
     }
 
     //! returns the value as the given type
@@ -153,7 +190,14 @@ public:
     */
     template<typename T>
     DLLLOCAL typename detail::QoreValueCastHelper<T>::Result get() {
-        return assigned ? detail::QoreValueCastHelper<T>::cast(this, type) : nullptr;
+        if (!assigned) {
+            return nullptr;
+        }
+        if (type == QV_Value) {
+            QoreValue qv = getInlineValue();
+            return qv.template get<T>();
+        }
+        return detail::QoreValueCastHelper<T>::cast(this, type);
     }
 
     //! returns the value as the given type
@@ -162,7 +206,14 @@ public:
     */
     template<typename T>
     DLLLOCAL typename detail::QoreValueCastHelper<const T>::Result get() const {
-        return assigned ? detail::QoreValueCastHelper<const T>::cast(this, type) : nullptr;
+        if (!assigned) {
+            return nullptr;
+        }
+        if (type == QV_Value) {
+            QoreValue qv = getInlineValue();
+            return qv.template get<const T>();
+        }
+        return detail::QoreValueCastHelper<const T>::cast(this, type);
     }
 
     DLLLOCAL const char* getFixedTypeName() const {
@@ -255,6 +306,13 @@ public:
                 return nullptr;
             }
 
+            case QV_Value: {
+                int64 i = getInlineValue().getAsBigInt();
+                v.i = i;
+                type = QV_Int;
+                return nullptr;
+            }
+
             case QV_Int:
                 break;
 
@@ -302,6 +360,13 @@ public:
 
             case QV_Enum: {
                 double f = QoreValue::makeEnum(v.em).getAsFloat();
+                v.f = f;
+                type = QV_Float;
+                return nullptr;
+            }
+
+            case QV_Value: {
+                double f = getInlineValue().getAsFloat();
                 v.f = f;
                 type = QV_Float;
                 return nullptr;
@@ -374,6 +439,13 @@ public:
                 return nullptr;
             }
 
+            case QV_Value: {
+                QoreNumberNode* n = new QoreNumberNode(getInlineValue());
+                v.n = n;
+                type = QV_Node;
+                return nullptr;
+            }
+
             default:
                 assert(false);
         }
@@ -393,6 +465,7 @@ public:
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
             case QV_Enum: return QoreValue::makeEnum(v.em);
+            case QV_Value: return getInlineValue();
             case QV_Node:
                 if (!is_closure)
                     check_lvalue_object_in_out(nullptr, v.n);
@@ -412,6 +485,7 @@ public:
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
             case QV_Enum: return QoreValue::makeEnum(v.em);
+            case QV_Value: return getInlineValue();
             case QV_Node: return v.n;
             default: assert(false);
                 // no break
@@ -428,6 +502,7 @@ public:
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
             case QV_Enum: return QoreValue::makeEnum(v.em);
+            case QV_Value: return getInlineValue();
             case QV_Node: return v.n;
             default: assert(false);
                 // no break
@@ -455,6 +530,7 @@ public:
             case QV_Int: return QoreValue(v.i);
             case QV_Float: return QoreValue(v.f);
             case QV_Enum: return QoreValue::makeEnum(v.em);
+            case QV_Value: return getInlineValue().refSelf();
             default: assert(false);
                 // no break
         }
@@ -508,6 +584,9 @@ public:
             case QV_Enum:
                 needs_deref = false;
                 return QoreValue::makeEnum(v.em);
+            case QV_Value:
+                needs_deref = false;
+                return getInlineValue().refSelf();
             default: assert(false);
             // no break
         }
@@ -535,6 +614,7 @@ public:
             case QV_Int: return (bool)v.i;
             case QV_Float: return (bool)v.f;
             case QV_Enum: return true;
+            case QV_Value: return !getInlineValue().isNothing();
             case QV_Node: return !is_nothing(v.n);
             default: assert(false);
             // no break
@@ -549,6 +629,10 @@ public:
             set(QV_Float);
         else if (typeInfo == boolTypeInfo || typeInfo == softBoolTypeInfo)
             set(QV_Bool);
+        // For complex types (hash, list, objects), check using QoreTypeInfo API functions
+        // since pointers may not match for wrapped types
+        else if (QoreTypeInfo::isHashType(typeInfo) || QoreTypeInfo::isListType(typeInfo))
+            set(QV_Node);
         else
             set(QV_Node);
     }
@@ -569,7 +653,7 @@ public:
             if (!assigned)
                 assigned = true;
             switch (type) {
-                case QV_Bool: v.b = false; return 0;
+                case QV_Bool: v.b = b; return 0;
                 case QV_Int: v.i = (int64)b; return 0;
                 case QV_Float: v.f = (double)b; return 0;
                 default: assert(false);
@@ -702,6 +786,16 @@ public:
                 n.v.em = nullptr;
                 break;
 
+            case QV_Value:
+                v.qv = n.v.qv;
+                if (val.hasNode()) {
+                    n.v.n = val.takeNode();
+                    n.type = QV_Node;
+                } else {
+                    n.v.qv = val.rawBits();
+                }
+                break;
+
             case QV_Node:
                 if (n.is_closure) {
                     assert(!is_closure);
@@ -732,6 +826,7 @@ public:
             case QV_Int: v.i = n.v.i; n.v.i = 0; break;
             case QV_Float: v.f = n.v.f; n.v.f = 0; break;
             case QV_Enum: v.em = n.v.em; n.v.em = nullptr; break;
+            case QV_Value: v.qv = n.v.qv; n.v.qv = QoreValue().rawBits(); break;
             case QV_Node:
                 if (n.is_closure) {
                     assert(!is_closure);
@@ -880,6 +975,8 @@ public:
         } else if (vt == NT_FLOAT) {
             v.f = val.getAsFloat();
             if (type != QV_Float) type = QV_Float;
+        } else if (val.isShortString()) {
+            setInlineValue(val);
         } else if (val.hasNode()) {
             v.n = val.takeNode();
             if (type != QV_Node) {
@@ -888,8 +985,16 @@ public:
             if (!is_closure) {
                 check_lvalue_object_in_out(v.n, nullptr);
             }
+        } else if (val.isNull()) {
+            // NULL: store the Null singleton node pointer so getReferencedValue()
+            // can distinguish NULL from NOTHING (v.n == nullptr)
+            v.n = &Null;
+            v.n->ref();
+            if (type != QV_Node) {
+                type = QV_Node;
+            }
         } else {
-            // nothing or null
+            // nothing
             v.n = nullptr;
             if (type != QV_Node) {
                 type = QV_Node;
@@ -984,23 +1089,11 @@ public:
 
     // Assign from QoreValue - delegates to the appropriate typed assign method
     DLLLOCAL AbstractQoreNode* assign(QoreValue val) {
-        qore_type_t vt = val.getType();
-        if (vt == NT_BOOLEAN) {
-            return assign(val.getAsBool());
-        } else if (vt == NT_INT) {
-            return assign(val.getAsBigInt());
-        } else if (vt == NT_FLOAT) {
-            return assign(val.getAsFloat());
-        } else if (val.hasNode()) {
-            return assign(val.takeNode());
-        } else {
-            // nothing or null
-            return assign(static_cast<AbstractQoreNode*>(nullptr));
-        }
+        return assignAssume(val);
     }
 
     DLLLOCAL bool exists() const {
-        return assigned && (type != QV_Node || !is_nothing(v.n));
+        return assigned && (type == QV_Value ? !getInlineValue().isNothing() : (type != QV_Node || !is_nothing(v.n)));
     }
 
     DLLLOCAL bool getAsBool() const {
@@ -1010,6 +1103,7 @@ public:
                 case QV_Int: return (bool)v.i;
                 case QV_Float: return (bool)v.f;
                 case QV_Enum: return QoreValue::makeEnum(v.em).getAsBool();
+                case QV_Value: return getInlineValue().getAsBool();
                 case QV_Node: return v.n ? v.n->getAsBool() : false;
                 default: assert(false);
                 // no break
@@ -1025,6 +1119,7 @@ public:
                 case QV_Int: return v.i;
                 case QV_Float: return (int64)v.f;
                 case QV_Enum: return QoreValue::makeEnum(v.em).getAsBigInt();
+                case QV_Value: return getInlineValue().getAsBigInt();
                 case QV_Node: return v.n ? v.n->getAsBigInt() : 0;
                 default: assert(false);
                 // no break
@@ -1040,6 +1135,7 @@ public:
                 case QV_Int: return (double)v.i;
                 case QV_Float: return v.f;
                 case QV_Enum: return QoreValue::makeEnum(v.em).getAsFloat();
+                case QV_Value: return getInlineValue().getAsFloat();
                 case QV_Node: return v.n ? v.n->getAsFloat() : 0.0;
                 default: assert(false);
                 // no break
@@ -1059,6 +1155,7 @@ public:
                 case QV_Int: return NT_INT;
                 case QV_Float: return NT_FLOAT;
                 case QV_Enum: return QoreValue::makeEnum(v.em).getType();
+                case QV_Value: return getInlineValue().getType();
                 case QV_Node: return v.n ? v.n->getType() : NT_NOTHING;
                 default: assert(false);
                 // no break
@@ -1073,6 +1170,7 @@ public:
                 case QV_Int: return qoreIntTypeName;
                 case QV_Float: return qoreFloatTypeName;
                 case QV_Enum: return QoreValue::makeEnum(v.em).getTypeName();
+                case QV_Value: return getInlineValue().getTypeName();
                 case QV_Node: return get_type_name(v.n);
                 default: assert(false);
                 // no break
@@ -1548,6 +1646,8 @@ public:
                 return v.f;
             case QV_Enum:
                 return QoreValue::makeEnum(v.em);
+            case QV_Value:
+                return getInlineValue();
             case QV_Node:
                 if (!is_closure)
                     check_lvalue_object_in_out(nullptr, v.n);
@@ -1585,6 +1685,8 @@ public:
                 return for_del ? QoreValue() : QoreValue(v.f);
             case QV_Enum:
                 return for_del ? QoreValue() : QoreValue::makeEnum(v.em);
+            case QV_Value:
+                return for_del ? QoreValue() : getInlineValue();
             case QV_Node:
                 if (!is_closure)
                     check_lvalue_object_in_out(nullptr, v.n);

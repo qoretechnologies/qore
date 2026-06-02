@@ -50,7 +50,7 @@ public class MLScoringUtils {
         float score = MLScoringUtils::r2Scorer((1.0, 2.0, 3.0), (1.1, 2.0, 2.9));
         @endcode
     */
-    static float r2Scorer(list<auto> y_true, list<auto> y_pred) {
+    static float r2Scorer(list<float> y_true, list<float> y_pred) {
         return ML::ml_r2_score(y_true, y_pred);
     }
 
@@ -59,7 +59,7 @@ public class MLScoringUtils {
         @param y_pred list of predicted values
         @return negative MSE (higher is better; 0.0 = perfect)
     */
-    static float negMseScorer(list<auto> y_true, list<auto> y_pred) {
+    static float negMseScorer(list<float> y_true, list<float> y_pred) {
         return -ML::ml_mse(y_true, y_pred);
     }
 
@@ -74,7 +74,7 @@ public class MLScoringUtils {
         # returns 0.75
         @endcode
     */
-    static float accuracyScorer(list<auto> y_true, list<auto> y_pred) {
+    static float accuracyScorer(list<float> y_true, list<float> y_pred) {
         return ML::ml_accuracy(y_true, y_pred);
     }
 }

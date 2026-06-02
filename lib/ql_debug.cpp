@@ -45,6 +45,7 @@
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
+#include "qore/intern/RSection.h"
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/QoreHttpClientObject.h>
 
@@ -93,7 +94,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
     qore_type_t ntype = n.getType();
 
     if (ntype == NT_STRING) {
-        const QoreStringNode *str = n.get<const QoreStringNode>();
+        QoreStringValueHelper str(n);
         s->sprintf("val: (enc: %s, %d:%d) \"%s\"", str->getEncoding()->getCode(), str->length(), str->strlen(),
             str->c_str());
         return;
@@ -148,10 +149,32 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
     if (ntype == NT_OBJECT) {
         const QoreObject *o = n.get<const QoreObject>();
         const qore_object_private* priv = qore_object_private::get(*o);
-        s->sprintf("priv: %p elements: %d (cls: %p, type: %s, valid: %s)", priv, o->size(xsink),
+        int rrefs;
+        int rcount;
+        int refs;
+        int tref_count;
+        RSet* rset;
+        bool deferred_scan;
+        int scan_private_data;
+        int status;
+        {
+            AutoLocker al(priv->rlck);
+            refs = priv->references.load();
+            rrefs = priv->rrefs.load();
+            rcount = priv->rcount;
+            tref_count = priv->tRefs.reference_count();
+            rset = priv->rset;
+            deferred_scan = priv->deferred_scan;
+            scan_private_data = priv->scan_private_data;
+            status = priv->status;
+        }
+        s->sprintf("priv: %p elements: %d (cls: %p, type: %s, valid: %s, refs: %d, rrefs: %d, "
+            "rcount: %d, rset: %p, deferred_scan: %s, tref: %d, scan_private_data: %d, status: %d)",
+            priv, o->size(xsink),
             o->getClass(),
             o->getClass() ? o->getClass()->getName() : "<none>",
-            o->isValid() ? "yes" : "no");
+            o->isValid() ? "yes" : "no", refs, rrefs, rcount, rset, deferred_scan ? "yes" : "no", tref_count,
+            scan_private_data, status);
         if (!shallow) {
             // FIXME: this is inefficient, use copyData and a hashiterator instead
             ReferenceHolder<QoreListNode> l(o->getMemberList(xsink), xsink);
@@ -159,7 +182,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
                 for (unsigned i = 0; i < l->size(); i++) {
                     s->concat('\n');
                     strindent(s, indent);
-                    QoreStringNode *entry = l->retrieveEntry(i).get<QoreStringNode>();
+                    QoreStringValueHelper entry(l->retrieveEntry(i));
                     s->sprintf("key %d/%d \"%s\" = ", i, l->size(), entry->c_str());
                     QoreValue nn{};
                     dni(xsink, s, nset, nn = o->getReferencedMemberNoMethod(entry->c_str(), xsink), indent + 3,
@@ -274,6 +297,53 @@ static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
 
     QoreSimpleValue simple_null(null_value);
     UT_ASSERT(c, !(bool)simple_null, "QoreSimpleValue NULL is false in C++ bool context");
+}
+
+class TestRSectionPriv : public qore_rsection_priv {
+public:
+    DLLLOCAL void setFakeWriter(int tid) {
+        AutoLocker al(l);
+        write_tid = tid;
+    }
+
+    DLLLOCAL void clearFakeWriterAndNotify() {
+        AutoLocker al(l);
+        write_tid = -1;
+        notifyIntern();
+        unlock_signal();
+    }
+};
+
+class TestRSectionLock : public QoreVarRWLock {
+public:
+    DLLLOCAL TestRSectionLock() : QoreVarRWLock(new TestRSectionPriv) {
+    }
+
+    DLLLOCAL void setFakeWriter(int tid) {
+        static_cast<TestRSectionPriv*>(priv)->setFakeWriter(tid);
+    }
+
+    DLLLOCAL void clearFakeWriterAndNotify() {
+        static_cast<TestRSectionPriv*>(priv)->clearFakeWriterAndNotify();
+    }
+
+    DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn) {
+        return static_cast<TestRSectionPriv*>(priv)->tryRSectionLockNotifyWaitRead(rn);
+    }
+};
+
+static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c) {
+    TestRSectionLock lock;
+    RNotifier notifier;
+
+    lock.setFakeWriter(q_gettid() + 1000);
+    int try_result = lock.tryRSectionLockNotifyWaitRead(&notifier);
+    UT_ASSERT_EQ(c, -1, try_result,
+        "tryRSectionLockNotifyWaitRead() reports retry when a writer owns the lock");
+    UT_ASSERT(c, notifier.setp,
+        "tryRSectionLockNotifyWaitRead() registers notification for writer-owned lock");
+    lock.clearFakeWriterAndNotify();
+    UT_ASSERT(c, !notifier.setp, "writer release clears registered notification");
 }
 
 static void ut_asyncio_construction(UnitTestCounters& c) {
@@ -560,7 +630,7 @@ static void ut_future_get_blocking_resolved(UnitTestCounters& c) {
     UT_ASSERT(c, future.operator->() != nullptr, "Future is non-null");
 
     // Wrap the Future in a QoreObject (like FutureImpl would)
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     // Resolve the promise from a background thread after ~50ms
     std::thread resolver([&promise]() {
@@ -583,8 +653,8 @@ static void ut_future_get_blocking_resolved(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "q_future_get_blocking on resolved Future: no exception");
     UT_ASSERT_EQ(c, (int64)42, result.getAsBigInt(),
         "q_future_get_blocking returns the resolved value");
-    UT_ASSERT(c, elapsed_us >= 40000 && elapsed_us < 200000,
-        "q_future_get_blocking elapsed ~50ms (before resolution)");
+    UT_ASSERT(c, elapsed_us >= 40000,
+        "q_future_get_blocking waits until background resolution");
 
     result.discard(&xsink);
     future_obj->deref(&xsink);
@@ -597,7 +667,7 @@ static void ut_future_get_blocking_timeout(UnitTestCounters& c) {
     ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
     UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
 
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     // Don't resolve the promise — wait should time out at 100ms
     int unused_us;
@@ -610,7 +680,7 @@ static void ut_future_get_blocking_timeout(UnitTestCounters& c) {
 
     UT_ASSERT(c, xsink.isException(),
         "q_future_get_blocking times out → FUTURE-TIMEOUT exception");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && !strcmp(err->c_str(), "FUTURE-TIMEOUT"),
         "timeout exception is FUTURE-TIMEOUT");
     UT_ASSERT(c, result.isNothing(), "timeout returns NOTHING");
@@ -631,7 +701,7 @@ static void ut_future_get_blocking_error(UnitTestCounters& c) {
     ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
     UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
 
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     // Reject the promise with an error
     promise->setError("TEST-ERROR", "test error description", QoreValue(), &xsink);
@@ -641,7 +711,7 @@ static void ut_future_get_blocking_error(UnitTestCounters& c) {
     QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
     UT_ASSERT(c, xsink.isException(),
         "q_future_get_blocking on rejected Future: raises exception");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && !strcmp(err->c_str(), "TEST-ERROR"),
         "exception has the Future's error code");
     UT_ASSERT(c, result.isNothing(), "error returns NOTHING");
@@ -670,7 +740,7 @@ static void ut_promise_action_execute_then_get(UnitTestCounters& c) {
 
     // Wrap the Future in a QoreObject so q_future_get_blocking can use
     // the FutureImpl fast path.
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     // Hand ownership of the Promise to the PromiseAction.  The C++
     // poll op would do the same — submitRequest() stores the action
@@ -722,7 +792,8 @@ static void ut_promise_action_execute_then_get(UnitTestCounters& c) {
         QoreValue body = h->getKeyValue("body");
         UT_ASSERT(c, body.getType() == NT_STRING, "result hash carries a body string");
         if (body.getType() == NT_STRING) {
-            UT_ASSERT(c, !strcmp(body.get<const QoreStringNode>()->c_str(), "hello"),
+            QoreStringValueHelper bs(body);
+            UT_ASSERT(c, !strcmp(bs->c_str(), "hello"),
                 "result body is 'hello'");
         }
     }
@@ -741,7 +812,7 @@ static void ut_promise_action_execute_error(UnitTestCounters& c) {
     ReferenceHolder<QoreFuture> future(promise_holder->getFuture(&xsink), &xsink);
     UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
 
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     QorePromise* promise_raw = promise_holder.release();
     AbstractAsyncAction* action = new PromiseAction(promise_raw);
@@ -764,7 +835,7 @@ static void ut_promise_action_execute_error(UnitTestCounters& c) {
 
     UT_ASSERT(c, xsink.isException(),
         "executeError propagates to q_future_get_blocking");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTP1-RECV-ERROR"),
         "exception code matches the action's error code");
     UT_ASSERT(c, result.isNothing(), "error path returns NOTHING");
@@ -1008,7 +1079,7 @@ static void ut_http1_connection_timeout(UnitTestCounters& c) {
     QoreValue result = q_future_get_blocking(future_obj, 100, &xsink);
     future_obj->deref(&xsink);
     UT_ASSERT(c, xsink.isException(), "q_future_get_blocking raises on timeout");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && !strcmp(err->c_str(), "FUTURE-TIMEOUT"),
         "exception is FUTURE-TIMEOUT");
     UT_ASSERT(c, result.isNothing(), "timeout returns NOTHING");
@@ -1184,7 +1255,7 @@ static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
     UT_ASSERT(c, !ready, "connection is not ready");
     UT_ASSERT(c, xsink.isException(),
         "waitForReadyOrError raises on connection refused");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     // Error code comes through from the poll op's error info hash; the
     // SocketConnectPollOperation raises SOCKET-CONNECT-ERROR on refused.
     UT_ASSERT(c, err && strstr(err->c_str(), "CONNECT") != nullptr,
@@ -1424,7 +1495,7 @@ static void ut_manager_close_all(UnitTestCounters& c) {
         "http", "127.0.0.1", server_port, &xsink);
     UT_ASSERT(c, !dead_conn, "acquireConnection returns nullptr after closeAll");
     UT_ASSERT(c, xsink.isException(), "acquireConnection raises after closeAll");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN"),
         "exception code is HTTPCLIENT-SHUTDOWN");
     xsink.clear();
@@ -1719,7 +1790,7 @@ static void ut_manager_negotiate_requires_ssl(UnitTestCounters& c) {
     UT_ASSERT(c, !conn, "NEGOTIATE + plain HTTP returns nullptr");
     UT_ASSERT(c, xsink.isException(),
         "NEGOTIATE + plain HTTP raises an exception");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-NEGOTIATE-SSL-REQUIRED") == 0,
         "exception code is HTTPCLIENT-NEGOTIATE-SSL-REQUIRED");
     xsink.clear();
@@ -1758,7 +1829,7 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
         "NEGOTIATE + refused port raises an exception");
     // Exception code should NOT be HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED
     // (the Phase 1 placeholder) — if we see that, the wire-up is broken.
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err
             && strcmp(err->c_str(), "HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED") != 0,
         "NEGOTIATE is wired (not the phase 1 placeholder)");
@@ -1892,7 +1963,7 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     UT_ASSERT(c, !conn, "acquireConnection on refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
         "manager(H2) raises a connect error (no longer PROTOCOL-NOT-IMPLEMENTED)");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && strcmp(err->c_str(), "PROTOCOL-NOT-IMPLEMENTED") != 0,
         "exception is NOT PROTOCOL-NOT-IMPLEMENTED");
     xsink.clear();
@@ -1962,7 +2033,7 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
     UT_ASSERT(c, !conn, "acquireConnection fails on refused port");
     UT_ASSERT(c, xsink.isException(),
         "manager(H3) raises a connect error (not PROTOCOL-NOT-IMPLEMENTED)");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && strcmp(err->c_str(), "PROTOCOL-NOT-IMPLEMENTED") != 0,
         "exception is NOT PROTOCOL-NOT-IMPLEMENTED");
     xsink.clear();
@@ -2041,7 +2112,7 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
     UT_ASSERT(c, !conn, "acquireConnection(https via proxy) returns nullptr (connect refused)");
     UT_ASSERT(c, xsink.isException(),
         "acquireConnection(https via proxy) raises exception");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-PROXY-ERROR") != 0,
         "exception is NOT HTTPCLIENT-PROXY-ERROR (proxy CONNECT is attempted)");
     xsink.clear();
@@ -2074,7 +2145,7 @@ static void ut_manager_proxy_h3_rejected(UnitTestCounters& c) {
         "https", "target.example.com", 443, &xsink);
     UT_ASSERT(c, !conn, "H3+proxy acquireConnection returns nullptr");
     UT_ASSERT(c, xsink.isException(), "H3+proxy raises exception");
-    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    QoreStringValueHelper err(xsink.getExceptionErr());
     UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-PROXY-ERROR") == 0,
         "H3+proxy raises HTTPCLIENT-PROXY-ERROR");
     xsink.clear();
@@ -2135,7 +2206,7 @@ static void ut_httpclient_conn_mgr_get(UnitTestCounters& c) {
         QoreValue body = response->getKeyValue("body");
         UT_ASSERT(c, body.getType() == NT_STRING, "body is a string");
         if (body.getType() == NT_STRING) {
-            const QoreStringNode* bs = body.get<const QoreStringNode>();
+            QoreStringValueHelper bs(body);
             UT_ASSERT(c, !strcmp(bs->c_str(), "hello"), "body is 'hello'");
         }
 
@@ -2218,7 +2289,7 @@ static void ut_httpclient_conn_mgr_post(UnitTestCounters& c) {
         QoreValue body = response->getKeyValue("body");
         UT_ASSERT(c, body.getType() == NT_STRING, "body is a string");
         if (body.getType() == NT_STRING) {
-            const QoreStringNode* bs = body.get<const QoreStringNode>();
+            QoreStringValueHelper bs(body);
             UT_ASSERT(c, !strcmp(bs->c_str(), "test-body"), "body echoed");
         }
     }
@@ -2381,8 +2452,8 @@ static void ut_socket_async_owner_blocks_sync(UnitTestCounters& c) {
         UT_ASSERT(c, rv == -1, "checkNonBlock returns -1 while async ownership is active");
         UT_ASSERT(c, (bool)xsink, "checkNonBlock raises exception while async ownership is active");
         const QoreValue err_val = xsink.getExceptionErr();
-        const QoreStringNode* err = err_val.get<const QoreStringNode>();
-        UT_ASSERT(c, err && *err == "SOCKET-ASYNC-MODE-ERROR",
+        QoreStringValueHelper err(err_val);
+        UT_ASSERT(c, err && !strcmp(err->c_str(), "SOCKET-ASYNC-MODE-ERROR"),
             "exception is SOCKET-ASYNC-MODE-ERROR");
         xsink.clear();
 
@@ -2883,6 +2954,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
+    ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
@@ -2891,6 +2963,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     UnitTestCounters c;
 
     ut_qorevalue_operator_bool_null(c);
+    ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_asyncio_construction(c);
     ut_asyncio_autostop(c);

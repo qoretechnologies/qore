@@ -13,6 +13,59 @@
     implementations of common ML algorithms. Optional ONNX Runtime support allows running
     pre-trained models from frameworks like PyTorch, scikit-learn, and TensorFlow.
 
+    @section mldata Matrix, DataFrame, and Pipeline Data
+
+    The core \c ml module is intentionally matrix-oriented and does not depend on
+    the \c dataframe module.  This keeps the binary module small and usable in
+    installations that do not need DataFrame APIs.  Use row matrices
+    (\c list<list<float>>) or list-of-record hashes for direct model APIs, and
+    use DataFrame conversion or DataProviderML processors when the source data is
+    columnar.
+
+    @par DataFrame to matrix example:
+    @code{.py}
+%requires dataframe
+%requires ml
+
+DataFrame::DataFrame df({
+    "amount": (45.0, 52.0, 50000.0, 48.0),
+    "hour": (10.0, 11.0, 3.0, 10.0),
+});
+
+list<auto> matrix = df.toMatrix(("amount", "hour"));
+
+Qore::ML::StandardScaler scaler();
+scaler.fitMatrix(matrix);
+list<auto> scaled = scaler.transformMatrix(matrix);
+    @endcode
+
+    @par Shape-aware pipeline example:
+    @code{.py}
+%requires dataframe
+%requires DataProviderML
+
+DataFrame::DataFrame df({
+    "amount": (45.0, 52.0, 50000.0, 48.0),
+    "hour": (10.0, 11.0, 3.0, 10.0),
+});
+
+DataProviderML::QoreIsolationForestProcessor proc({
+    "fields": "amount,hour",
+    "window_size": 4,
+});
+
+hash<auto> events = proc.processRecordsShape(
+    df, DataProviderShape::DataFrameBlock);
+    @endcode
+
+    \c DataProviderML processors also accept \c BufferColumns input,
+    including @ref Qore::SQL::ColumnarResult "ColumnarResult" values
+    produced by SQL queries.  Rectangular bulk outputs preserve
+    \c DataFrameBlock or \c BufferColumns shapes when possible so downstream
+    shape-aware processors can continue in columnar bulk mode; processors with
+    naturally row-oriented or multi-output responses keep \c HashOfLists or row
+    compatibility.
+
     @section mlalgorithms Available Algorithms
 
     @subsection mlalgo_table Algorithm Overview
@@ -321,8 +374,23 @@
     When compiled with ONNX Runtime support, the module provides:
     - @ref Qore::ML::OnnxModel "OnnxModel" — Loads and runs pre-trained ONNX models for inference.
       For example, a credit scoring model trained in scikit-learn can be exported to ONNX and
-      deployed in a %Qore pipeline for real-time scoring. Supports float, double, int32, and
-      int64 tensor types. ONNX Runtime sessions are thread-safe for concurrent inference.
+      deployed in a %Qore pipeline for real-time scoring. Supports float, double, int8, int16,
+      int32, int64, and bool tensor types. ONNX Runtime sessions are thread-safe for concurrent
+      inference. The \c run(), \c runTensors(), and \c runBatch() methods accept optional
+      output tensor names so multi-output models can materialize only the values needed by
+      the caller.
+    - @ref Qore::ML::OnnxSessionPool "OnnxSessionPool" — Keeps a bounded set of immutable
+      ONNX sessions ready for concurrent service requests. Use it when production traffic needs
+      explicit limits for session count, concurrent runs, queue depth, and acquisition timeout.
+      The pool also supports ordered \c runBatch() chunking with \c dynamic_batch_size so large
+      request lists can be split into stable mini-batches without changing result order. The
+      Future-returning \c runAsync(), \c runTensorsAsync(), and \c runBatchAsync() methods let
+      service handlers submit work without blocking; when \c dynamic_batch_size and
+      \c dynamic_batch_wait_ms are configured, concurrent \c runAsync() callers are coalesced
+      into ordered batches and each Future resolves to its own result.
+    - @ref Qore::ML::Tensor "Tensor" — Dense tensor wrapper around \c buffer<T> plus explicit
+      shape metadata. Use it with @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()"
+      to avoid converting large numeric inputs and outputs through nested lists.
 
     To check ONNX availability at runtime:
     @code{.py}
@@ -330,8 +398,222 @@ hash<Qore::ML::MLCapabilities> caps = Qore::ML::ml_get_capabilities();
 if (caps.has_onnx) {
     Qore::ML::OnnxModel model("/path/to/model.onnx");
     hash<auto> result = model.run({"input": data});
+    hash<auto> scores = model.run({"input": data}, ("probabilities",));
+
+    Qore::ML::Tensor dense(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (2, 2));
+    hash<auto> tensor_result = model.runTensors({"input": dense}, ("output",));
+    Qore::ML::Tensor output = tensor_result.output;
+    printf("output dtype=%s shape=%y\n", output.getDtype(), output.getShape());
+
+    Qore::ML::OnnxSessionPool pool("/path/to/model.onnx",
+        <Qore::ML::OnnxSessionConfig>{"providers": ()}, {
+            "max_sessions": 4,
+            "queue_depth": 64,
+            "timeout_ms": 250,
+            "dynamic_batch_size": 128,
+            "dynamic_batch_wait_ms": 2,
+        });
+    hash<auto> pooled_result = pool.run({"input": data});
+    hash<auto> pooled_scores = pool.run({"input": data}, ("probabilities",));
+    Future<hash<auto>> pooled_future = pool.runAsync({"input": data});
+    hash<auto> async_result = pooled_future.get(5s);
+    hash<auto> pool_stats = pool.getPoolStats();
+
+    # Pack dense DataFrame columns directly into a row-major model tensor.
+    Qore::ML::Tensor features = Qore::ML::Tensor::fromColumns((
+        df.getColumnBuffer("income"),
+        df.getColumnBuffer("debt_ratio"),
+        df.getColumnBuffer("history_months"),
+    ), "float32");
+
+    # Reshape and row-slice tensors without materializing nested lists.
+    Qore::ML::Tensor flat = features.reshape((features.size(),));
+    Qore::ML::Tensor first_batch = features.sliceRows(offset: 0, count: 128);
+    Qore::ML::Tensor next_batch = features.sliceRows(offset: 128, count: 128);
+    Qore::ML::Tensor combined = Qore::ML::Tensor::concatRows((first_batch, next_batch));
+
+    # Postprocess ONNX transformer outputs while they are still dense tensors.
+    # "last_hidden_state" has shape (batch, tokens, embedding_dim); "attention_mask"
+    # has shape (batch, tokens). The result has shape (batch, embedding_dim).
+    Qore::ML::Tensor input_ids(data: new buffer<int64>((101, 2023, 2003, 102)), shape: (1, 4));
+    Qore::ML::Tensor attention_mask(data: new buffer<int64>((1, 1, 1, 1)), shape: (1, 4));
+    hash<auto> token_outputs = model.runTensors({
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+    });
+    Qore::ML::Tensor sentence_embeddings = token_outputs.last_hidden_state
+        .poolTokenEmbeddings(attention_mask: attention_mask, strategy: "mean")
+        .l2NormalizeRows();
+
+    # Classifier and reranker logits can also be postprocessed natively.
+    Qore::ML::Tensor logits(data: new buffer<float32>((0.2, 2.4, -0.7, 1.1, 0.4, 3.2)), shape: (2, 3));
+    Qore::ML::Tensor probabilities = logits.sigmoid();
+    Qore::ML::Tensor labels = logits.argmax(axis: -1);
+    hash<auto> top3 = logits.topK(k: 2, axis: -1);
+
+    # Split rank-2 ONNX outputs directly into dense DataFrame columns.
+    list<auto> probability_columns = logits.toColumnBuffers();
+    DataFrame::DataFrame scored({
+        "class_0": probability_columns[0],
+        "class_1": probability_columns[1],
+        "class_2": probability_columns[2],
+    });
 }
     @endcode
+
+    @subsection mlalgo_onnx_device GPU Device Binding (Zero-Copy)
+
+    On builds with a device-capable execution provider (CUDA first), ONNX inputs and
+    outputs can stay resident on the accelerator instead of always copying through host
+    memory. Device binding is opt-in and never changes CPU-only behavior: on a CPU
+    provider, or when a requested device path is unavailable, the policy resolves to host
+    memory (optionally with an explicit error instead of a silent fallback).
+
+    Device binding is configured through the @ref Qore::ML::OnnxDeviceBindingConfig
+    "device_binding" field of @ref Qore::ML::OnnxSessionConfig "OnnxSessionConfig":
+
+    | Field | Meaning |
+    |-------|---------|
+    | \c enabled | Enables device-aware input/output binding. |
+    | \c default_output_device | \c "cpu", \c "provider", or an explicit \c "<provider>:<device_id>" such as \c "cuda:0". |
+    | \c allow_host_fallback | Allow host copies when a requested device path is unavailable (default \c False). |
+    | \c materialize_outputs | Force returned device outputs to host before returning (default \c False). |
+    | \c require_zero_copy_inputs | Reject device inputs that cannot be bound without a host copy. |
+    | \c require_zero_copy_outputs | Reject outputs that cannot be returned as device-backed buffers. |
+
+    @subsubsection mlalgo_onnx_device_provider_classes Provider Classes
+
+    Execution providers fall into three groups for the purposes of device binding:
+
+    - <b>Raw-device-memory providers</b> (CUDA, TensorRT, ROCm) expose device
+      pointers that ONNX Runtime can bind outputs to directly. Device-binding requests
+      flow through to the provider and outputs come back as device-backed
+      @ref Qore::ML::Tensor "Tensors".
+    - <b>EP-acceleration providers</b> (CoreML on macOS, OpenVINO, DirectML,
+      WebGPU) accelerate inference on a non-CPU device but manage their own opaque
+      memory; user code cannot bind to a raw device pointer. A device-binding request
+      with one of these as the active provider <b>resolves to host</b>: outputs come
+      back to host memory, no fabricated host/device transfers are reported, and the
+      \c provider_host_resolutions counter is incremented so the reduction is
+      observable. This is intentional and matches the "truthful zero-copy" design
+      principle -- no error is raised even when \c allow_host_fallback is False, because
+      the EP acceleration is itself the device path being honored.
+    - <b>CPU provider</b> -- a device-binding request against CPU is a configuration
+      error and raises \c ML-ONNX-DEVICE-UNAVAILABLE unless \c allow_host_fallback is
+      True.
+
+    @subsubsection mlalgo_onnx_device_macos Apple Silicon (CoreML + Metal/UMA)
+
+    macOS / Apple Silicon has two distinct device paths, and the contract is
+    different from CUDA because of the Apple **Unified Memory Architecture (UMA):**
+    the CPU and GPU share one physical memory pool, so a "device buffer" can be
+    the same physical bytes as its host view.
+
+    - **CoreML EP** is the primary accelerator: it dispatches inference to the
+      ANE, GPU, or CPU and manages its own opaque memory. CoreML is treated as
+      an EP-acceleration provider (above) -- a device-binding request resolves
+      to host with zero transfers and a \c provider_host_resolutions bump.
+      Outputs are returned as host @ref Qore::ML::Tensor "Tensors".
+
+    - **Metal/UMA buffers** (via @ref Qore::ML::Tensor::toDevice()
+      "Tensor::toDevice(\"metal\")") allocate an \c MTLBuffer with
+      \c MTLStorageModeShared. On UMA, the CPU and GPU see the bytes at the same
+      physical address, so binding a Metal-tagged input to any provider (CPU,
+      CoreML, WebGPU) is zero-copy through CPU memory info. The transfer
+      counters report **zero** host↔device transfers truthfully -- no DMA hop
+      ever occurs. \c materialize_outputs is effectively free on UMA.
+
+    - @ref Qore::ML::Tensor::pinnedHost() "Tensor::pinnedHost()" is moot on
+      Apple Silicon (there is no DMA hop to accelerate). The Apple build returns
+      a Tensor sharing the same host buffer (no allocation, no copy) with a doc
+      note, so portable code that calls \c features.pinnedHost().toDevice(...)
+      still works correctly.
+
+    Apple Silicon device support is gated by \c MLCapabilities.has_metal in
+    @ref Qore::ML::ml_get_capabilities() "ml_get_capabilities()". When
+    \c has_metal is False (non-Apple builds), \c Tensor::toDevice("metal") raises
+    \c ML-TENSOR-DEVICE-ERROR with a clear message.
+
+    @code{.py}
+%requires ml
+
+if (!ML::ml_get_capabilities().has_metal) {
+    return;   # not Apple Silicon, no Metal/UMA backend
+}
+
+# Upload a host tensor to a Metal MTLBuffer (MTLStorageModeShared): zero copy on UMA
+ML::Tensor features = new ML::Tensor(data: new buffer<float32>(my_floats), shape: (n, d));
+ML::Tensor on_gpu  = features.toDevice("metal", 0);
+printf("kind=%s, transfers will stay 0 on UMA\n", on_gpu.deviceInfo().kind);
+
+# Bind a Metal-tagged input to a CoreML model.  inputDeviceMatchesProvider() returns
+# true for Metal on any provider; the binding goes through CPU memory info because
+# the UMA bytes are already host-addressable.  zero_copy_inputs increments;
+# host_to_device_transfers stays at 0.
+ML::OnnxModel m("/path/to/model.onnx", <ML::OnnxSessionConfig>{
+    "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+    "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+});
+ML::OnnxIoBinding b = m.createBinding();
+b.bindInput("X", on_gpu);
+b.bindOutput("Y");
+ML::Tensor y = b.run(tensors: True).Y;
+
+hash<auto> tr = m.getInferenceStats().device_binding;
+printf("zero-copy=%d, transfers (H2D/D2H)=%d/%d, provider_host=%d\n",
+    tr.zero_copy_inputs, tr.host_to_device_transfers,
+    tr.device_to_host_transfers, tr.provider_host_resolutions);
+    @endcode
+
+    Provider-managed device outputs are requested through the reusable I/O binding with
+    @ref Qore::ML::OnnxIoBinding::bindOutputsDevice() "bindOutputsDevice()" or
+    @ref Qore::ML::OnnxIoBinding::bindOutputDevice() "bindOutputDevice()". A device-resident
+    output is returned as a device-backed @ref Qore::ML::Tensor "Tensor"; reading its host
+    values (for example with \c toList()) materializes it once through a provider copy-to-host
+    callback. Host/device transfers are observable through the \c device_binding block of
+    @ref Qore::ML::OnnxModel::getInferenceStats() "getInferenceStats()" (\c zero_copy_inputs,
+    \c host_fallback_inputs, \c device_outputs, \c host_outputs, \c output_materializations,
+    \c host_to_device_transfers, \c device_to_host_transfers, and
+    \c provider_host_resolutions for EP-acceleration providers that resolve to host).
+
+    @code{.py}
+hash<Qore::ML::OnnxSessionConfig> cfg = <Qore::ML::OnnxSessionConfig>{
+    "providers": (<Qore::ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+    "device_binding": <Qore::ML::OnnxDeviceBindingConfig>{
+        "enabled": True,
+        "default_output_device": "provider",   # keep outputs on the GPU
+        "materialize_outputs": False,           # do not copy back to host automatically
+        "allow_host_fallback": False,           # raise instead of silently using CPU memory
+    },
+};
+Qore::ML::OnnxModel model("/path/to/model.onnx", cfg);
+
+Qore::ML::OnnxIoBinding binding = model.createBinding();
+binding.bindInput(name: "X", value: input_tensor);
+binding.bindOutputsDevice();                    # provider-managed device output allocation
+hash<auto> result = binding.run(tensors: True);
+Qore::ML::Tensor output = result.Y;             # device-resident; no host copy yet
+printf("device output: %y\n", output.deviceInfo());
+
+# inspect host/device transfer counters
+hash<auto> transfers = model.getInferenceStats().device_binding;
+printf("device_outputs=%d device->host=%d\n",
+    transfers.device_outputs, transfers.device_to_host_transfers);
+    @endcode
+
+    Host data can be made device-resident explicitly with
+    @ref Qore::ML::Tensor::toDevice() "Tensor::toDevice()", which uploads a tensor to
+    accelerator memory (CUDA) and returns a device-backed tensor that binds zero-copy as a
+    model input or chains across device inference without round-tripping through host. For
+    buffers transferred repeatedly, @ref Qore::ML::Tensor::pinnedHost() "Tensor::pinnedHost()"
+    returns a page-locked host copy that uploads over a faster DMA path.
+
+    The same policy is available to higher layers: the DataProviderML
+    \c QoreOnnxModelProcessor accepts \c device_binding, \c output_device,
+    \c materialize_outputs, \c allow_host_fallback, and \c require_zero_copy options and
+    reports transfer counters through its \c getDiagnostics(); QoreModelRegistry execution
+    manifests can carry a \c device_binding block that is propagated into the loaded session
+    and honored by the model execution adapter.
 
     @section mlpersistence Model Persistence
 
@@ -670,11 +952,50 @@ if (!caps.has_onnx) {
 
     # Score a loan application: income, debt_ratio, credit_history_months, ...
     hash<auto> result = credit_model.run({"X": ((75000.0, 0.28, 120.0),)});
+    hash<auto> probabilities = credit_model.run(
+        {"X": ((75000.0, 0.28, 120.0),)}, ("probabilities",));
     printf("Credit score: %y\n", result);
 }
     @endcode
 
     @section mlreleasenotes ml Module Release Notes
+
+    @subsection ml_1_1 ml Module Version 1.1
+    - Added @ref Qore::ML::Tensor "Tensor" and
+      @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()" for dense
+      ONNX inference with \c buffer<T> storage and explicit shape metadata
+    - @ref Qore::ML::OnnxModel::run() "OnnxModel::run()",
+      @ref Qore::ML::OnnxModel::runTensors() "OnnxModel::runTensors()",
+      @ref Qore::ML::OnnxModel::runBatch() "OnnxModel::runBatch()", and the
+      synchronous @ref Qore::ML::OnnxSessionPool "OnnxSessionPool" inference
+      methods can request selected ONNX output tensors by name, avoiding
+      unnecessary materialization for multi-output models
+    - Added @ref Qore::ML::Tensor::fromColumns() "Tensor::fromColumns()" to
+      pack equal-length dense column buffers into a row-major tensor without
+      row hash or nested list materialization
+    - Added @ref Qore::ML::Tensor::reshape() "Tensor::reshape()",
+      @ref Qore::ML::Tensor::sliceRows() "Tensor::sliceRows()", and
+      @ref Qore::ML::Tensor::concatRows() "Tensor::concatRows()" for
+      zero-copy tensor reshaping, row slicing, and native batch assembly
+    - Added @ref Qore::ML::Tensor::sigmoid() "Tensor::sigmoid()",
+      @ref Qore::ML::Tensor::softmax() "Tensor::softmax()",
+      @ref Qore::ML::Tensor::argmax() "Tensor::argmax()",
+      @ref Qore::ML::Tensor::topK() "Tensor::topK()",
+      @ref Qore::ML::Tensor::poolTokenEmbeddings() "Tensor::poolTokenEmbeddings()",
+      and @ref Qore::ML::Tensor::l2NormalizeRows() "Tensor::l2NormalizeRows()"
+      for dense ONNX postprocessing without nested list materialization
+    - Added @ref Qore::ML::Tensor::toColumnBuffers() "Tensor::toColumnBuffers()"
+      to split rank-1 and rank-2 tensor outputs into dense column buffers for
+      DataFrame and DataProvider pipelines
+    - ONNX tensor conversion now supports float, double, int8, int16, int32,
+      int64, and bool inputs and outputs
+    - @ref Qore::ML::OnnxModel "OnnxModel" automatic provider selection now
+      falls back to CPU when an advertised GPU provider cannot create a session,
+      for example when CUDA libraries are not installed; explicit provider
+      configurations still report provider initialization errors to the caller
+    - DataFrame and columnar workflows are documented through
+      \c DataFrame::toMatrix() for direct model APIs and through shape-aware
+      \c DataProviderML processors for pipeline use
 
     @subsection ml_1_0 ml Module Version 1.0
     - Initial release with native ML algorithms, preprocessing tools, feature engineering,

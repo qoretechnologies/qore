@@ -88,12 +88,12 @@ public class LinearIssueDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for the issue record (returns single record iterator)
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching issue id=%y", issueId));
         hash<auto> data = doGraphQL(GetIssueQuery, {"id": issueId});
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: issue found=%y", exists data.issue));
-        return new DefaultRecordIterator(new ListHashIterator(data.issue ? (data.issue,) : ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data.issue ? (data.issue,) : ()),
             where_cond, search_options, recordType.getFields());
     }
 

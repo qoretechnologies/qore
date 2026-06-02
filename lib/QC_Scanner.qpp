@@ -252,12 +252,12 @@ while (!s.atEnd()) {
 qclass Scanner [arg=QoreScanner* s; ns=Qore];
 
 //! Creates a scanner over the given string.
-/** @param src the source string to scan.  A reference is held for the
+/** @param source the source string to scan.  A reference is held for the
     lifetime of the scanner; subsequent mutations to the original string
     do not affect the scanner.
  */
-Scanner::constructor(string src) {
-    self->setPrivate(CID_SCANNER, new QoreScanner(src));
+Scanner::constructor(string source) [flags=NAMED_ARGS] {
+    self->setPrivate(CID_SCANNER, new QoreScanner(source));
 }
 
 //! Creates a copy of the scanner with the same source, position, line, and column.
@@ -279,7 +279,7 @@ int Scanner::peekByte() [flags=CONSTANT] {
 //! Returns the raw byte at @a byte_offset relative to the current position.
 /** Negative offsets look backwards.  Returns -1 if out of range.
  */
-int Scanner::peekByteAt(int byte_offset) [flags=CONSTANT] {
+int Scanner::peekByteAt(int byte_offset) [flags=CONSTANT,NAMED_ARGS] {
     return s->peekByteAt(byte_offset);
 }
 
@@ -295,7 +295,7 @@ int Scanner::peek() [flags=RET_VALUE_ONLY] {
 /** O(|char_offset|) per call (must walk codepoints).  For ASCII-anchored
     tokenizers prefer @ref peekByteAt().  Returns -1 if out of range.
  */
-int Scanner::peekAt(int char_offset) [flags=RET_VALUE_ONLY] {
+int Scanner::peekAt(int char_offset) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return s->peekAt(char_offset, xsink);
 }
 
@@ -314,12 +314,12 @@ bool Scanner::advanceByte() [flags=CONSTANT] {
     return s->advanceByte();
 }
 
-//! Advances by up to @a n codepoints; returns the number actually advanced.
-/** May advance fewer than @a n codepoints if end-of-input is reached or
+//! Advances by up to @a count codepoints; returns the number actually advanced.
+/** May advance fewer than @a count codepoints if end-of-input is reached or
     an encoding error occurs.
  */
-int Scanner::advanceN(int n) {
-    return (int64)s->advanceN(n, xsink);
+int Scanner::advanceN(int count) [flags=NAMED_ARGS] {
+    return (int64)s->advanceN(count, xsink);
 }
 
 //! Returns @ref True if cursor is at end of input.
@@ -362,26 +362,26 @@ int Scanner::bytesRemaining() [flags=CONSTANT] {
 /** Does not advance.  Compares raw bytes — the literal must be in the same
     byte representation as the source string.
  */
-bool Scanner::startsWith(string literal) [flags=CONSTANT] {
+bool Scanner::startsWith(string literal) [flags=CONSTANT,NAMED_ARGS] {
     return s->startsWith(literal->c_str(), literal->size());
 }
 
 //! If the bytes at the cursor begin with @a literal, advance past it and return @ref True.
 /** Otherwise leaves cursor unchanged and returns @ref False.
  */
-bool Scanner::match(string literal) {
+bool Scanner::match(string literal) [flags=NAMED_ARGS] {
     return s->match(literal->c_str(), literal->size());
 }
 
-//! Extracts a substring from the source at @a [start_byte, start_byte + len_bytes).
+//! Extracts a substring from the source at @a [byte_offset, byte_offset + byte_length).
 /** @return the substring as a new @ref string in the source's encoding,
     or @ref NOTHING if the range is out of bounds.
  */
-*string Scanner::extractRange(int start_byte, int len_bytes) [flags=RET_VALUE_ONLY] {
-    if (start_byte < 0 || len_bytes < 0) {
+*string Scanner::extractRange(int byte_offset, int byte_length) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (byte_offset < 0 || byte_length < 0) {
         return QoreValue();
     }
-    QoreStringNode* rv = s->extractRange((size_t)start_byte, (size_t)len_bytes);
+    QoreStringNode* rv = s->extractRange((size_t)byte_offset, (size_t)byte_length);
     return rv ? QoreValue(rv) : QoreValue();
 }
 

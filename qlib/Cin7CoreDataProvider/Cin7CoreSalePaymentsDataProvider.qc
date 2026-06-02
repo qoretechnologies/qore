@@ -106,7 +106,7 @@ public class Cin7CoreSalePaymentsDataProvider inherits Cin7CoreDataProviderBase 
     }
 
     #! Searches for sale payments
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -133,7 +133,7 @@ public class Cin7CoreSalePaymentsDataProvider inherits Cin7CoreDataProviderBase 
         hash<auto> response = doGet("/SalePayment", params);
         list<hash<auto>> records = response.PaymentList ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

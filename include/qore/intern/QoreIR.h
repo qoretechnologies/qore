@@ -1,0 +1,2628 @@
+/* -*- indent-tabs-mode: nil -*- */
+/*
+    QoreIR.h
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#ifndef _QORE_INTERN_QOREIR_H
+#define _QORE_INTERN_QOREIR_H
+
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include <qore/Qore.h>
+#include <qore/intern/QoreTypeInfo.h>
+
+class LocalVar;
+class Var;
+class VarRefNode;
+class VarRefNewObjectNode;
+class OnBlockExitStatement;
+class QoreFunction;
+class UserVariantBase;
+class StatementBlock;
+class CaseNodeRegex;
+class QoreIRFunction;
+class FunctionalOperator;
+class ContextStatement;
+class SummarizeStatement;
+class CaseNode;
+class CaseNodeRegex;
+class QoreTypeInfo;
+class QoreMethod;
+class QoreClass;
+class QoreVarInfo;
+class AbstractQoreFunctionVariant;
+class QoreClosureParseNode;
+class RuntimeConstantRefNode;
+class ParseReferenceNode;
+class NewHashDeclNode;
+class NewComplexHashNode;
+class NewComplexListNode;
+class NewComplexBufferNode;
+class VarRefNewObjectNode;
+class QoreEnumMember;
+class TypedHashDecl;
+class AbstractQoreNode;
+
+DLLLOCAL bool qore_plugin_get_value_profile_info(const AbstractQoreNode* node, std::string& module_name,
+    uint16_t& local_type_id, const QoreTypeInfo*& type_info);
+
+/** IR opcode identifiers.
+
+    IMPORTANT: Opcode IDs are explicitly numbered for binary compatibility.
+    When adding new opcodes:
+    - Always assign the next available ID after the current maximum
+    - Never reuse or reassign an existing ID
+    - Never insert opcodes in the middle of the enum
+    - Update QORE_IR_MAX_OPCODE after adding new opcodes
+    When removing opcodes:
+    - Leave the ID as a gap (comment it out but preserve the number)
+    - The runtime should handle unknown opcodes gracefully
+*/
+enum class QoreIROpcode : uint16_t {
+    // Constants (0-6)
+    ConstInt            = 0,
+    ConstFloat          = 1,
+    ConstBool           = 2,
+    ConstNothing        = 3,
+    ConstNull           = 4,
+    ConstString         = 5,
+    ConstDate           = 6,
+
+    // List/Hash construction (7-18)
+    MakeList            = 7,
+    MakeHash            = 8,
+    CreateEmptyList     = 9,    // Create empty list for functional operator results
+    CreateSizedList     = 10,   // Create list with pre-allocated capacity (for typed map loops)
+    ListAppend          = 11,   // Append value to list (for map/select loops)
+    ListSize            = 12,   // Get list element count (returns native i64)
+    ListGetInt          = 13,   // Get int element from list by index (returns native i64)
+    ListGetFloat        = 14,   // Get float element from list by index (returns native double)
+    ListGetValue        = 15,   // Get any element from list by index (returns nanboxed QoreValue)
+    ListSetInt          = 16,   // Set int element in list by index (for pre-sized typed map output)
+    ListSetFloat        = 17,   // Set float element in list by index
+    ListSetValue        = 18,   // Set any element in list by index
+
+    // Arithmetic (19-44)
+    AddInt              = 19,
+    AddFloat            = 20,
+    AddAny              = 21,
+    AddString           = 22,   // Typed string concatenation (no runtime type checks)
+    StringConcat        = 23,   // Multi-string concatenation (a + b + c + d in one pass)
+    SubInt              = 24,
+    SubFloat            = 25,
+    SubAny              = 26,
+    MulInt              = 27,
+    MulFloat            = 28,
+    MulAny              = 29,
+    DivInt              = 30,
+    DivFloat            = 31,
+    DivAny              = 32,
+    ModInt              = 33,
+    ModAny              = 34,
+    AndInt              = 35,
+    AndAny              = 36,
+    OrInt               = 37,
+    OrAny               = 38,
+    XorInt              = 39,
+    XorAny              = 40,
+    ShlInt              = 41,
+    ShlAny              = 42,
+    ShrInt              = 43,
+    ShrAny              = 44,
+
+    // Compound assignment (45-68)
+    ShlAssignInt        = 45,
+    ShlAssignAny        = 46,
+    ShrAssignInt        = 47,
+    ShrAssignAny        = 48,
+    AddAssignInt        = 49,
+    AddAssignFloat      = 50,
+    AddAssignAny        = 51,
+    SubAssignInt        = 52,
+    SubAssignFloat      = 53,
+    SubAssignAny        = 54,
+    MulAssignInt        = 55,
+    MulAssignFloat      = 56,
+    MulAssignAny        = 57,
+    DivAssignInt        = 58,
+    DivAssignFloat      = 59,
+    DivAssignAny        = 60,
+    ModAssignInt        = 61,
+    ModAssignAny        = 62,
+    AndAssignInt        = 63,
+    AndAssignAny        = 64,
+    OrAssignInt         = 65,
+    OrAssignAny         = 66,
+    XorAssignInt        = 67,
+    XorAssignAny        = 68,
+
+    // LValue operations (69-89)
+    LoadLValue          = 69,
+    StoreLValue         = 70,
+    PreIncLValue        = 71,
+    PreDecLValue        = 72,
+    PostIncLValue       = 73,
+    PostDecLValue       = 74,
+    AddAssignLValue     = 75,
+    SubAssignLValue     = 76,
+    MulAssignLValue     = 77,
+    DivAssignLValue     = 78,
+    ModAssignLValue     = 79,
+    AndAssignLValue     = 80,
+    OrAssignLValue      = 81,
+    XorAssignLValue     = 82,
+    ShlAssignLValue     = 83,
+    ShrAssignLValue     = 84,
+    ShiftLValue         = 85,
+    UnshiftLValue       = 86,
+    PopAny              = 87,
+    PushAny             = 88,
+    SpliceLValue        = 89,
+
+    // Extract/Remove (90-99)
+    ExtractAny          = 90,
+    ExtractList         = 91,
+    ExtractString       = 92,
+    ExtractBinary       = 93,
+    RemoveAny           = 94,
+    RemoveList          = 95,
+    RemoveHash          = 96,
+    RemoveObject        = 97,
+    RemoveString        = 98,
+    RemoveBinary        = 99,
+
+    // Collection utilities (100-122)
+    KeysAny             = 100,
+    KeysList            = 101,
+    KeysHash            = 102,
+    RegexMatchAny       = 103,
+    RegexMatchBool      = 104,
+    RegexNMatchBool     = 105,
+    RegexExtractAny     = 106,
+    RegexExtractList    = 107,
+    RegexSubstAny       = 108,
+    RegexSubstString    = 109,
+    InstanceOfBool      = 110,
+    TrimAny             = 111,
+    TrimString          = 112,
+    ChompAny            = 113,
+    ChompString         = 114,
+    TransliterateAny    = 115,
+    TransliterateString = 116,
+    BackgroundInt        = 117,
+    ListAssignAny       = 118,
+    ExistsAny           = 119,
+    ExistsBool          = 120,
+    ElementsAny         = 121,
+    ElementsInt         = 122,
+
+    // Dot-eval (123-130)
+    DotEvalAny          = 123,
+    DotEvalInt          = 124,
+    DotEvalFloat        = 125,
+    DotEvalString       = 126,
+    DotEvalDate         = 127,
+    DotEvalList         = 128,
+    DotEvalHash         = 129,
+    DotEvalObject       = 130,
+
+    // Iterators and control (131-141)
+    MapSelectList       = 131,
+    HashMap             = 132,
+    HashMapSelect       = 133,
+    IteratorCreate      = 134,  // Create iterator from list/iterable
+    IteratorNext        = 135,  // Advance iterator, branch if done, store value
+    OnBlockExit         = 136,
+    ScopeEnter          = 137,
+    ScopeExit           = 138,
+    ThreadExit          = 139,
+    //! Create a Context frame from the context hash expression, where/sort
+    //! modifiers, and optional name.  Result is an opaque Context* handle
+    //! (as i64) pushed on the thread-local context stack, or 0 on failure
+    //! (xsink set).  Evaluates the context expression and any where/sort
+    //! filters internally via the runtime Context class.
+    Context             = 140,
+    //! \deprecated Only reached from AST-execution fallback.  Kept for
+    //! backward-compatible IR serialization of the `summarize` statement;
+    //! never emitted under %modern (which requires PO_NO_SUMMARIZE).
+    Summarize           = 141,
+
+    // Comparisons (142-171)
+    EqInt               = 142,
+    EqFloat             = 143,
+    EqString            = 144,
+    EqAny               = 145,
+    NeInt               = 146,
+    NeFloat             = 147,
+    NeString            = 148,
+    NeAny               = 149,
+    EqHard              = 150,
+    NeHard              = 151,
+    LtInt               = 152,
+    LtFloat             = 153,
+    LtString            = 154,
+    LtAny               = 155,
+    LeInt               = 156,
+    LeFloat             = 157,
+    LeString            = 158,
+    LeAny               = 159,
+    GtInt               = 160,
+    GtFloat             = 161,
+    GtString            = 162,
+    GtAny               = 163,
+    GeInt               = 164,
+    GeFloat             = 165,
+    GeString            = 166,
+    GeAny               = 167,
+    CmpInt              = 168,
+    CmpFloat            = 169,
+    CmpString           = 170,
+    CmpAny              = 171,
+
+    // Type coercion and logic (172-179)
+    ToBool              = 172,
+    Not                 = 173,
+    IsNullOrNothing     = 174,
+    Phi                 = 175,
+    UnaryPlusAny        = 176,
+    UnaryMinusInt       = 177,
+    UnaryMinusFloat     = 178,
+    UnaryMinusAny       = 179,
+
+    // Fold operations (180-205)
+    FoldlAny            = 180,
+    FoldlInt            = 181,
+    FoldlFloat          = 182,
+    FoldrAny            = 183,
+    FoldrInt            = 184,
+    FoldrFloat          = 185,
+    // Optimized fold operations (native LLVM loops)
+    FoldlSumInt         = 186,  // foldl $1 + $2, list, init
+    FoldlSumFloat       = 187,
+    FoldlProdInt        = 188,  // foldl $1 * $2, list, init
+    FoldlProdFloat      = 189,
+    FoldlDiffInt        = 190,  // foldl $1 - $2, list, init
+    FoldlDiffFloat      = 191,
+    FoldlMinInt         = 192,  // foldl min($1, $2), list, init
+    FoldlMinFloat       = 193,
+    FoldlMaxInt         = 194,  // foldl max($1, $2), list, init
+    FoldlMaxFloat       = 195,
+    // Optimized foldr operations (native LLVM loops)
+    FoldrSumInt         = 196,  // foldr $1 + $2, list
+    FoldrSumFloat       = 197,
+    FoldrProdInt        = 198,  // foldr $1 * $2, list
+    FoldrProdFloat      = 199,
+    FoldrDiffInt        = 200,  // foldr $1 - $2, list (reverse iteration)
+    FoldrDiffFloat      = 201,
+    FoldrMinInt         = 202,  // foldr min($1, $2), list
+    FoldrMinFloat       = 203,
+    FoldrMaxInt         = 204,  // foldr max($1, $2), list
+    FoldrMaxFloat       = 205,
+
+    // Map operations (206-219)
+    MapAny              = 206,
+    MapInt              = 207,
+    MapFloat            = 208,
+    // Optimized map operations (native LLVM loops)
+    MapScaleInt         = 209,  // map $1 * const, list
+    MapScaleFloat       = 210,
+    MapOffsetInt        = 211,  // map $1 + const, list
+    MapOffsetFloat      = 212,
+    MapSquareInt        = 213,  // map $1 * $1, list
+    MapSquareFloat      = 214,
+    // Fully specialized hash-key map operations (single C++ runtime call)
+    MapHashKeyValue     = 215,  // map $1.key, list<hash> -> list<auto>
+    MapHashKeyInt       = 216,  // map $1.key, list<hash> -> list<int> (int values)
+    MapHashKeyOffsetInt = 217,  // map ($1.key + N), list<hash> -> list<int>
+    MapHashKeyScaleInt  = 218,  // map ($1.key * N), list<hash> -> list<int>
+    HashMapTwoKeys      = 219,  // map {$1.k1: $1.k2}, list<hash> -> hash<auto>
+
+    // Select operations (220-238)
+    SelectAny           = 220,
+    SelectInt           = 221,
+    SelectFloat         = 222,
+    // Optimized select operations (native LLVM loops)
+    SelectPositiveInt   = 223,  // select $1 > 0, list
+    SelectPositiveFloat = 224,
+    SelectNonZeroInt    = 225,  // select $1 != 0, list
+    SelectNonZeroFloat  = 226,
+    // Fused map+select operations (single-pass, no intermediate list)
+    FusedMapSelectScalePositiveInt      = 227,  // (map $1 * c, (select list, $1 > 0))
+    FusedMapSelectScalePositiveFloat    = 228,
+    FusedMapSelectOffsetPositiveInt     = 229,  // (map $1 + c, (select list, $1 > 0))
+    FusedMapSelectOffsetPositiveFloat   = 230,
+    FusedMapSelectSquarePositiveInt     = 231,  // (map $1 * $1, (select list, $1 > 0))
+    FusedMapSelectSquarePositiveFloat   = 232,
+    // Fused map+foldl operations (single-pass, no intermediate list)
+    FusedMapFoldlSumScaleInt            = 233,  // foldl $1 + $2, (map $1 * c, list)
+    FusedMapFoldlSumScaleFloat          = 234,
+    FusedMapFoldlSumSquareInt           = 235,  // foldl $1 + $2, (map $1 * $1, list)
+    FusedMapFoldlSumSquareFloat         = 236,
+    FusedMapFoldlProdScaleInt           = 237,  // foldl $1 * $2, (map $1 * c, list)
+    FusedMapFoldlProdScaleFloat         = 238,
+
+    // AST-delegated functional operators (239-241)
+    MapSelectAny        = 239,
+    HashMapAny          = 240,
+    HashMapSelectAny    = 241,
+
+    // Range operations (242-248)
+    RangeAny            = 242,
+    RangeInt            = 243,
+    RangeFloat          = 244,
+    RangeDate           = 245,
+    RangeSliceAny       = 246,
+    RangeSliceInt       = 247,
+    RangeSliceFloat     = 248,
+
+    // Cast operations (249-254)
+    CastAny             = 249,
+    CastList            = 250,
+    CastHash            = 251,  // Cast to bare hashdecl type or plain hash
+    CastObject          = 252,
+    CastEnum            = 253,
+    CastComplexHash     = 254,  // Cast to complex hash type (hash<KeyType, ValueType>)
+
+    // Control flow (255-260)
+    Br                  = 255,
+    BrIf                = 256,
+    SwitchInt           = 257,  // Integer switch with LLVM switch instruction
+    SwitchString        = 258,  // String switch with hash-table lookup
+    Return              = 259,
+    ReturnNothing       = 260,
+
+    // Variable access (261-270)
+    LoadLocal           = 261,
+    StoreLocal          = 262,
+    UninstantiateLocal  = 263,  // Uninstantiate a local variable at block scope exit
+    LoadArg             = 264,
+    LoadClosure         = 265,
+    StoreClosure        = 266,
+    LoadGlobal          = 267,
+    StoreGlobal         = 268,
+    LoadThreadLocal     = 269,
+    StoreThreadLocal    = 270,
+
+    // Implicit argument opcodes (271-278)
+    LoadImplicitArg     = 271,  // Load $1, $2, etc. by offset (0 for $1, 1 for $2, etc.)
+    LoadImplicitArgv    = 272,  // Load entire $argv list
+    LoadImplicitElement = 273,  // Load $# (current element index in map/select)
+    // Context setup/teardown for functional operators (map, select, foldl, etc.)
+    PushImplicitArg     = 274,  // Push value as $1, result = old context for restoration
+    SetImplicitArgv     = 275,  // Set list directly as implicit args (for foldl $1/$2)
+    PopImplicitArg      = 276,  // Restore previous $1 context (operand = old context)
+    PushImplicitElement = 277,  // Push index as $#, result = old element for restoration
+    PopImplicitElement  = 278,  // Restore previous $# context (operand = old element)
+
+    // Direct access opcodes (279-282)
+    HashKeyAccess       = 279,  // Load hash.key - direct hash member access
+    HashKeyAccessInt    = 280,  // Load hash.key as native int64 (known int value type)
+    LoadSelfMember      = 281,  // Load self.member_name - accesses current object's member
+    LoadStaticVar       = 282,  // Load static class variable - accesses QoreVarInfo directly
+
+    // Object instantiation (283)
+    NewObject           = 283,  // Create new object - calls QoreClass::execConstructor directly
+
+    // Constant and closure creation (284-288)
+    LoadConstant        = 284,  // Load runtime constant - accesses ConstantEntry::saved_val
+    CreateClosure       = 285,  // Create closure/lambda
+    CreateCallRef       = 286,  // Create call reference - function/static method references
+    CreateMethodRef     = 287,  // Create method reference - object method references
+    CreateParseRef      = 288,  // Create parse reference - \var lvalue references
+
+    // Typed container construction (289-292)
+    NewHashDecl         = 289,  // Create new hashdecl instance
+    NewComplexHash      = 290,  // Create new typed hash
+    NewComplexList      = 291,  // Create new typed list
+    VrnConstruct        = 292,  // Construct value for VarRefNewObjectNode (non-object types)
+
+    // Hash building (293)
+    HashSetKeyValue     = 293,  // Set key-value pair in hash (for hash map loops)
+
+    // Reverse iteration (294)
+    IteratorCreateReverse = 294, // Create reverse iterator from list/iterable (for foldr)
+
+    // Function/method calls (295-306)
+    Call                = 295,
+    CallDirect          = 296,  // Direct function call - resolved at parse time
+    CallIndirect        = 297,
+    CallMethod          = 298,
+    CallMethodDirect    = 299,  // Direct method call - no dispatch needed
+    InvokeMethodDirect  = 300,  // Direct method call with exception handling
+    CallStatic          = 301,
+    CallStaticDirect    = 302,  // Direct static method call - pre-evaluated args
+    DotEvalMethodDirect = 303,  // Direct dot-eval method call - pre-evaluated base+args
+    InvokeDotEvalMethodDirect = 304, // Direct dot-eval with exception handling
+    CallClosureDirect   = 305,  // Direct closure/callref call
+    Invoke              = 306,
+
+    // Type guards (307-311)
+    GuardInt            = 307,
+    GetObjectClass      = 308,  // Get runtime class pointer from object value
+    GuardFloat          = 309,
+    GuardType           = 310,
+    GuardNotNothing     = 311,
+
+    // Exception handling (312-317)
+    LandingPad          = 312,
+    CatchException      = 313,
+    CatchCleanup        = 314,
+    Rethrow             = 315,
+    Throw               = 316,
+    InvokeSimError      = 317,
+
+    // Reference management (318-320)
+    Incref              = 318,
+    Decref              = 319,
+    DecrefNoThrow       = 320,
+
+    // Regex switch (321)
+    SwitchRegexMatch    = 321,  // Test switch regex case: (switch_val, regex_case_ptr) -> bool
+
+    // Native list push (322)
+    ListPush            = 322,  // Native list push: (list, value) -> list (in-place push)
+
+    // Reference foreach opcodes (323-328)
+    RefForeachInit      = 323,  // Init ref foreach state from ParseReferenceNode expr -> state handle
+    RefForeachSize      = 324,  // Get iteration count from state handle -> int64
+    RefForeachGetEntry  = 325,  // Get element at index: (state, index) -> value
+    RefForeachRecord    = 326,  // Record modified value: (state, value) -> void
+    RefForeachFinalize  = 327,  // Write back to reference and cleanup: (state) -> void
+    RefForeachCleanup   = 328,  // Cleanup without write-back: (state) -> void
+
+    // Number arithmetic (329-332) — typed QoreNumberNode operations
+    // Both operands guaranteed NT_NUMBER; no tag-check branches needed.
+    // Compile to direct qore_rt_number_* helper calls.
+    AddNumber           = 329,
+    SubNumber           = 330,
+    MulNumber           = 331,
+    DivNumber           = 332,
+
+    // Hash element store (333) — write value to hash{const_key} with COW support
+    // operands[0] = hash container, operands[1] = value to store
+    HashKeyStore        = 333,
+
+    // List element access (334) — load list[index] directly (no AST delegation)
+    // operands[0] = list container, operands[1] = index
+    ListIndexAccess     = 334,
+
+    // List element store (335) — write value to list[index] with COW support
+    // operands[0] = list container, operands[1] = value to store, operands[2] = index
+    ListIndexStore      = 335,
+
+    // Fused local int operations (336-338) — reduce dispatch overhead for tight loops
+    // These fuse multiple instructions (load+op+store) into single opcodes.
+    AddAssignLocalInt   = 336,  // target_local += source_local (both typed int)
+    IncrementLocalInt   = 337,  // local += delta (typed int local, constant delta)
+    BranchIfLtLocalInt  = 338,  // if (lhs_local < rhs_local) goto true else goto false
+    ConstEnum           = 339,  // TAG_ENUM constant from QoreEnumMember*
+
+    // Read-only list element access (343) — borrowed reference, no refSelf
+    // operands[0] = list container, operands[1] = index
+    // Safe when the list outlives the use of the returned element (e.g., map/select loops)
+    ListGetValueNoRef   = 340,
+
+    // Switch case match with enum unwrapping (344)
+    // operands[0] = switch expression value
+    // Uses CaseNode::matches() which unwraps TAG_ENUM before hard comparison
+    SwitchCaseMatch     = 341,
+
+    // Runtime type check (345) — returns native bool (1 if value is NT_LIST or NT_OBJECT, 0 otherwise)
+    // Used by select to determine if the result should be returned as a list or unwrapped to a scalar
+    IsCollectionType    = 342,
+
+    //! Make a hash from constant string keys and value operands (avoids key boxing/conversion)
+    MakeHashConstKeys   = 343,
+
+    //! Convert any value to string (replaces builtin string() function call)
+    ToString            = 344,
+
+    //! Format a list as sprintf(fmt, args...) — used by assert failure messages
+    Sprintf             = 345,
+
+    //! Construct hashdecl from a hash operand — operands[0] = hash value
+    //! Unlike NewHashDecl (which delegates to AST node eval), this takes a
+    //! pre-lowered hash operand so each sub-expression is a proper IR instruction.
+    //! This enables correct AOT serialization of hashdecl constructors with
+    //! local variable references in the initializer hash.
+    NewHashDeclFromHash = 346,
+
+    //! Explicitly instantiate a closure-use local variable on the cvstack at block entry.
+    //! Pairs with UninstantiateLocal at block exit to ensure proper lifecycle for
+    //! closure-captured block-scoped variables.
+    InstantiateLocal    = 347,
+
+    //! Timeout arithmetic: int (milliseconds) +/- date → date
+    //! Unlike AddAny/SubAny which treat int as seconds, these treat int as ms
+    //! (matching the timeout type convention where values are stored as ms ints)
+    AddTimeout          = 348,
+    SubTimeout          = 349,
+
+    //! Dynamic hash/object dereference with pre-evaluated key: operands[0]=base, operands[1]=key
+    //! Used when key is not a constant string (h{var}, h{list} for slicing)
+    HashDerefDynamic    = 350,
+    //! Dynamic list/container index with pre-evaluated index: operands[0]=container, operands[1]=index
+    ListIndexDynamic    = 351,
+    //! Dynamic hash key store: operands[0]=hash, operands[1]=value, operands[2]=key
+    //! Like HashKeyStore but key is a pre-evaluated IR value instead of constant string
+    HashKeyStoreDynamic = 352,
+
+    //! Lvalue path operations — structured path replaces AST EXPR_TREE for lvalue access
+    //! All use LValueHelper::navigatePath() for correct locking/COW/DGC/deferred-deref
+    LValuePathAssign    = 353,  //!< lvalue = val (simple assignment via path)
+    LValuePathCompound  = 354,  //!< lvalue OP= val (compound assignment: +=, -=, *=, /=, etc.)
+    LValuePathUnary     = 355,  //!< unary lvalue op: ++, --, remove, delete, shift, pop, trim, chomp
+    LValuePathBinaryMut = 356,  //!< binary mutation: push, unshift, regex subst, transliterate
+    LValuePathTernary   = 357,  //!< ternary: splice, extract
+
+    //! Statement-scoped temp cleanup: marker + drain pair.
+    //!
+    //! `PushTempMark` pushes a sentinel (UINT32_MAX) onto the runtime cleanup
+    //! vector.  `DiscardTemps` drains cleanup entries back to (and including)
+    //! the nearest sentinel, so expression temps created during a statement
+    //! are destructed at statement end — matching AST-mode ValueEvalRefHolder
+    //! destructor timing.  Using a marker (rather than draining the entire
+    //! cleanup vector) preserves OUTER-scope temps such as a `foreach` list
+    //! expression's iterator temp, which must outlive the loop body.
+    //!
+    //! No operands, no result.  LLVM mode drains generated cleanup slots
+    //! created since the nearest mark.
+    DiscardTemps        = 358,  //!< drain cleanup back to nearest PushTempMark
+    PushTempMark        = 359,  //!< push UINT32_MAX sentinel onto cleanup
+
+    //! Call an AOT-emitted helper function by LLVM symbol name.
+    //! Used by the init-expression outlining pass (Phase 1.5 of the
+    //! Qorus AOT migration) to split a pathologically large init-expr
+    //! LLVM function — e.g. a `public const` bound to a 100-element
+    //! hash literal — into many small helper functions plus a thin
+    //! outer init that stitches their results into the aggregate.
+    //!
+    //! Helper ABI matches the AOT function signature
+    //! (`int64_t (ptr ctx, ptr xsink)`): result is a nan-boxed
+    //! QoreValue, exception propagation via the passed-in xsink.
+    //! No operands are consumed by the call itself — the helper is
+    //! self-contained (its own IR function was lowered separately
+    //! in the same module).  The result SSA id receives the helper's
+    //! return value.
+    //!
+    //! Not expected in the IR interpreter path — outlining runs only
+    //! during AOT `.qo`/`.qmod` compilation.  The interpreter handler
+    //! raises a runtime error if ever encountered.
+    CallAOTHelper       = 360,
+
+    //! Context iteration helpers — paired with `Context` (140) for native
+    //! IR-lowered `context` statements.  State handle is the Context*
+    //! returned by `Context`.
+    //!
+    //! `ContextMaxPos(state) -> i64` — iteration count (max_pos).
+    //! `ContextSetPos(state, index) -> void` — set current row before body.
+    //! `ContextDestroy(state) -> void` — pop frame + release hash + free.
+    //! Destroy is exception-safe: must be emitted on every exit path
+    //! (normal, break, return, exception).
+    ContextMaxPos       = 361,
+    ContextSetPos       = 362,
+    ContextDestroy      = 363,
+
+    //! Execute a shell command from a backquote expression and return stdout as a string.
+    //! This replaces the former generic Call/EXPR_TREE path for BackquoteNode.
+    Backquote           = 364,
+
+    //! Execute a `find EXP in SOURCE where COND` expression.
+    //! Carries the three sub-expressions explicitly so the FindNode itself
+    //! never has to be serialized as EXPR_TREE.
+    Find                = 365,
+
+    //! Evaluate context references without serializing ContextrefNode /
+    //! ContextRowNode expression trees.
+    ContextRef          = 366,
+    ContextRow          = 367,
+
+    //! Create an independently owned reference to an arbitrary Qore value.
+    //! Used when a value must survive cleanup code emitted before its eventual
+    //! consumer, such as return expressions evaluated before inlined on_exit
+    //! handlers.
+    RefSelf             = 368,
+    DebugBlock          = 369,
+    CheckException      = 370,
+    NewComplexBuffer    = 371,  // Create new typed buffer
+
+    //! Plugin operation dispatch opcodes.  These keep the core opcode-id space
+    //! fixed while allowing module-registered operations to carry a descriptor
+    //! (module/local operation id and resolved process-global operation id)
+    //! in the instruction payload.
+    PluginUnary         = 372,
+    PluginBinary        = 373,
+    PluginCall          = 374,
+    PluginSubscript     = 375,
+    PluginConstruct     = 376,
+    PluginDenseBufferUnary  = 377,
+    PluginDenseBufferBinary = 378,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (379, 380, ...)
+    // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
+};
+
+//! Maximum opcode ID supported by this build (derived from the last enum value)
+//! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
+//! static_assert guards that will break when this value changes, forcing
+//! review of their dispatch switches.
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::PluginDenseBufferBinary);
+static_assert(QORE_IR_MAX_OPCODE == 378, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    "verify binary format compatibility");
+
+//! Include the central opcode registry (must come after QoreIROpcode enum definition)
+#include "qore/intern/QoreOpcodeRegistry.h"
+
+//! PHASE 4: Opcode Coverage Documentation
+//!
+//! OPCODE REGISTRY (NEW - Single Source of Truth):
+//! ================================================
+//! A centralized registry in QoreOpcodeRegistry.h now contains metadata for all opcodes.
+//! When adding a new opcode, you MUST:
+//!   1. Add enum entry to QoreIROpcode (assign next sequential ID after current max)
+//!   2. Update QORE_IR_MAX_OPCODE value
+//!   3. Add entry to OPCODE_REGISTRY in QoreOpcodeRegistry.h
+//!   4. Compilation will fail if registry is incomplete (static_assert guards)
+//!
+//! The registry eliminates duplicated property switches across files. Query
+//! functions delegate to the registry instead.
+//!
+//! Remaining opcode switches are intentional local dispatch tables:
+//!   - lib/QoreIRInterpreter.cpp and lib/QoreIRToLLVM.cpp execute/lower each
+//!     operation family and must branch to different code bodies.
+//!   - lib/QoreAOTInstRegistry.cpp maps opcodes to binary instruction builders.
+//!   - lib/QoreAOT.cpp maps opcodes to persisted AOT feature flags.
+//!   - lib/QoreIRVerifier.cpp has verifier-only stack/local-safety
+//!     classifications that are not general opcode semantics.
+//!   - lib/QoreIRPrinter.cpp keeps stable lowercase/debug spellings that do not
+//!     exactly match registry names.
+
+//! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
+//! Delegates to OpcodeInfo::is_unary_invoke in the registry.
+inline bool isUnaryInvokeOpcode(QoreIROpcode op) {
+    return getOpcodeIsUnaryInvoke(static_cast<int>(op));
+}
+
+//! Returns true if the opcode is a binary computation op (used by Invoke dispatch)
+//! Delegates to OpcodeInfo::is_binary_invoke in the registry.
+inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
+    return getOpcodeIsBinaryInvoke(static_cast<int>(op));
+}
+
+//! Returns true if the opcode is a call-type op (used by Invoke dispatch)
+//! Delegates to OpcodeInfo::property_flags in the registry.
+inline bool isCallInvokeOpcode(QoreIROpcode op) {
+    return getOpcodeIsCallInvoke(static_cast<int>(op));
+}
+
+//! Returns true if the opcode is a non-subst regex op (used by Invoke dispatch)
+//! Delegates to OpcodeInfo::property_flags in the registry.
+inline bool isRegexInvokeOpcode(QoreIROpcode op) {
+    return getOpcodeIsRegexInvoke(static_cast<int>(op));
+}
+
+//! Returns true if the opcode is a DotEval-type op (method call on expression result)
+//! Delegates to OpcodeInfo::property_flags in the registry.
+inline bool isDotEvalInvokeOpcode(QoreIROpcode op) {
+    return getOpcodeIsDotEvalInvoke(static_cast<int>(op));
+}
+
+//! Returns true if the opcode is a range-slice expression op.
+//! Delegates to OpcodeInfo::property_flags in the registry.
+inline bool isRangeSliceOpcode(QoreIROpcode op) {
+    return getOpcodeIsRangeSlice(static_cast<int>(op));
+}
+
+inline bool isPluginDispatchOpcode(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::PluginUnary:
+        case QoreIROpcode::PluginBinary:
+        case QoreIROpcode::PluginCall:
+        case QoreIROpcode::PluginSubscript:
+        case QoreIROpcode::PluginConstruct:
+        case QoreIROpcode::PluginDenseBufferUnary:
+        case QoreIROpcode::PluginDenseBufferBinary:
+            return true;
+        default:
+            return false;
+    }
+}
+
+struct QoreIRValue {
+    uint32_t id = 0;
+
+    explicit QoreIRValue(uint32_t n_id = 0) : id(n_id) {
+    }
+
+    bool isValid() const {
+        return id != 0;
+    }
+};
+
+struct QoreIRConstant {
+    enum class Kind {
+        Int,
+        Float,
+        Bool,
+        Nothing,
+        Null,
+        String,
+        Date,
+        Enum,
+    };
+
+    Kind kind = Kind::Nothing;
+    int64_t int_value = 0;
+    double float_value = 0.0;
+    bool bool_value = false;
+    std::string string_value;
+    int64_t date_microseconds = 0;
+    bool date_is_relative = false;
+    const AbstractQoreZoneInfo* date_zone = nullptr;  // Original timezone for absolute dates
+    bool date_zone_set = false;  // true when date_zone was explicitly stored (nullptr = UTC)
+    // Relative date components (years/months can't be converted to seconds losslessly)
+    int rel_years = 0;
+    int rel_months = 0;
+    int rel_days = 0;
+    int rel_hours = 0;
+    int rel_minutes = 0;
+    int rel_seconds = 0;
+    int rel_us = 0;
+    const QoreEnumMember* enum_member = nullptr;
+};
+
+class QoreIRBasicBlock;
+struct QoreIRPhiIncoming;
+
+class QoreIRInstruction {
+public:
+    explicit QoreIRInstruction(QoreIROpcode op) : opcode(op), cached_start_line(-1) {
+    }
+
+    virtual ~QoreIRInstruction() = default;
+
+    QoreIROpcode opcode;
+    int16_t cached_start_line;  // -1 = no loc, >=0 = loc->start_line (fills padding after opcode)
+    const QoreProgramLocation* loc = nullptr;
+    QoreIRValue result{};
+    std::vector<QoreIRValue> operands;
+    QoreIRBasicBlock* exception_target = nullptr;
+    const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
+};
+
+struct QoreIRPluginOperationRef {
+    //! Process-global operation id assigned when the registering module commits.
+    //! 0 means unresolved; module_name/local_operation_id are then used for a
+    //! late lookup by the runtime helper or AOT loader.
+    uint32_t global_operation_id = 0;
+    std::string module_name;
+    uint16_t local_operation_id = 0;
+    uint8_t canonical_signature_version = 1;
+    uint64_t signature_hash = 0;
+    bool fp_reassociation_enabled = false;
+
+    bool isValid() const {
+        return global_operation_id != 0 || !module_name.empty();
+    }
+};
+
+class QoreIRPluginInstruction : public QoreIRInstruction {
+public:
+    QoreIRPluginInstruction(QoreIROpcode op, QoreIRPluginOperationRef n_operation = {})
+            : QoreIRInstruction(op), operation(std::move(n_operation)) {
+    }
+
+    QoreIRPluginOperationRef operation;
+};
+
+class QoreIRConstInstruction : public QoreIRInstruction {
+public:
+    QoreIRConstInstruction() : QoreIRInstruction(QoreIROpcode::ConstNothing) {
+    }
+
+    QoreIRConstant constant;
+};
+
+class QoreIRBranchInstruction : public QoreIRInstruction {
+public:
+    QoreIRBranchInstruction() : QoreIRInstruction(QoreIROpcode::Br) {
+    }
+
+    QoreIRBasicBlock* target = nullptr;
+};
+
+class QoreIRBranchIfInstruction : public QoreIRInstruction {
+public:
+    QoreIRBranchIfInstruction() : QoreIRInstruction(QoreIROpcode::BrIf) {
+    }
+
+    QoreIRValue condition{};
+    QoreIRBasicBlock* true_target = nullptr;
+    QoreIRBasicBlock* false_target = nullptr;
+};
+
+//! Integer switch case: value -> target block
+struct QoreIRSwitchCase {
+    int64_t value;
+    QoreIRBasicBlock* target;
+};
+
+//! Integer switch instruction - maps to LLVM switch for efficient dispatch
+class QoreIRSwitchIntInstruction : public QoreIRInstruction {
+public:
+    QoreIRSwitchIntInstruction() : QoreIRInstruction(QoreIROpcode::SwitchInt) {
+    }
+
+    QoreIRValue switch_val{};                       //!< Value being switched on
+    QoreIRBasicBlock* default_target = nullptr;     //!< Default case target
+    std::vector<QoreIRSwitchCase> cases;            //!< case value -> target block
+};
+
+//! String switch case: string value -> target block
+struct QoreIRSwitchStringCase {
+    std::string value;        //!< Case string value
+    QoreIRBasicBlock* target; //!< Target block for this case
+};
+
+//! String switch instruction - uses hash-table lookup for efficient dispatch
+class QoreIRSwitchStringInstruction : public QoreIRInstruction {
+public:
+    QoreIRSwitchStringInstruction() : QoreIRInstruction(QoreIROpcode::SwitchString) {
+    }
+
+    QoreIRValue switch_val{};                           //!< Value being switched on (string)
+    QoreIRBasicBlock* default_target = nullptr;         //!< Default case target
+    std::vector<QoreIRSwitchStringCase> cases;          //!< case string -> target block
+};
+
+struct QoreIRPhiIncoming {
+    QoreIRValue value{};
+    QoreIRBasicBlock* block = nullptr;
+};
+
+class QoreIRPhiInstruction : public QoreIRInstruction {
+public:
+    QoreIRPhiInstruction() : QoreIRInstruction(QoreIROpcode::Phi) {
+    }
+
+    std::vector<QoreIRPhiIncoming> incoming;
+};
+
+enum class QoreIRTypeProfileKind : uint8_t {
+    None,
+    BuiltinInt,
+    BuiltinFloat,
+    BuiltinString,
+    BuiltinBool,
+    BuiltinNothing,
+    BuiltinOther,
+    QoreClass,
+    PluginType,
+};
+
+struct QoreIRTypeProfileKey {
+    QoreIRTypeProfileKind kind = QoreIRTypeProfileKind::None;
+    const QoreTypeInfo* type_info = nullptr;
+    std::string plugin_module_name;
+    uint16_t plugin_local_type_id = 0;
+
+    bool isValid() const {
+        return kind != QoreIRTypeProfileKind::None;
+    }
+
+    bool isBuiltin(qore_type_t type) const {
+        switch (kind) {
+            case QoreIRTypeProfileKind::BuiltinInt:
+                return type == NT_INT;
+            case QoreIRTypeProfileKind::BuiltinFloat:
+                return type == NT_FLOAT;
+            case QoreIRTypeProfileKind::BuiltinString:
+                return type == NT_STRING;
+            case QoreIRTypeProfileKind::BuiltinBool:
+                return type == NT_BOOLEAN;
+            case QoreIRTypeProfileKind::BuiltinNothing:
+                return type == NT_NOTHING;
+            default:
+                return false;
+        }
+    }
+
+    qore_type_t legacyBuiltinType() const {
+        switch (kind) {
+            case QoreIRTypeProfileKind::BuiltinInt:
+                return NT_INT;
+            case QoreIRTypeProfileKind::BuiltinFloat:
+                return NT_FLOAT;
+            case QoreIRTypeProfileKind::BuiltinString:
+                return NT_STRING;
+            case QoreIRTypeProfileKind::BuiltinBool:
+                return NT_BOOLEAN;
+            case QoreIRTypeProfileKind::BuiltinNothing:
+                return NT_NOTHING;
+            default:
+                return NT_ALL;
+        }
+    }
+
+    static QoreIRTypeProfileKey builtin(QoreIRTypeProfileKind kind) {
+        return { kind, nullptr, {}, 0 };
+    }
+
+    static QoreIRTypeProfileKey qoreClass(const QoreTypeInfo* type_info) {
+        return { QoreIRTypeProfileKind::QoreClass, type_info, {}, 0 };
+    }
+
+    static QoreIRTypeProfileKey pluginType(std::string module_name, uint16_t local_type_id,
+            const QoreTypeInfo* type_info) {
+        return { QoreIRTypeProfileKind::PluginType, type_info, std::move(module_name), local_type_id };
+    }
+
+    static QoreIRTypeProfileKey pluginType(const QoreTypeInfo* type_info) {
+        return { QoreIRTypeProfileKind::PluginType, type_info, {}, 0 };
+    }
+};
+
+struct QoreIRPluginTypeProfileId {
+    std::string module_name;
+    uint16_t local_type_id = 0;
+    const QoreTypeInfo* type_info = nullptr;
+
+    bool operator==(const QoreIRPluginTypeProfileId& other) const {
+        return local_type_id == other.local_type_id && module_name == other.module_name;
+    }
+};
+
+struct QoreIRPluginTypeProfileIdHash {
+    size_t operator()(const QoreIRPluginTypeProfileId& id) const {
+        return std::hash<std::string>()(id.module_name)
+            ^ (std::hash<uint16_t>()(id.local_type_id) + 0x9e3779b9u);
+    }
+};
+
+//! Type profile for a single guard point: tracks observed runtime types
+struct TypeProfile {
+    std::atomic<uint32_t> int_count{0};
+    std::atomic<uint32_t> float_count{0};
+    std::atomic<uint32_t> string_count{0};
+    std::atomic<uint32_t> bool_count{0};
+    std::atomic<uint32_t> nothing_count{0};
+    std::atomic<uint32_t> other_count{0};
+    mutable std::mutex extended_mutex;
+    std::unique_ptr<std::unordered_map<const QoreTypeInfo*, uint32_t>> extended_type_counts;
+    std::unique_ptr<std::unordered_map<QoreIRPluginTypeProfileId, uint32_t,
+        QoreIRPluginTypeProfileIdHash>> plugin_type_counts;
+
+    uint32_t total() const {
+        return int_count.load(std::memory_order_relaxed)
+            + float_count.load(std::memory_order_relaxed)
+            + string_count.load(std::memory_order_relaxed)
+            + bool_count.load(std::memory_order_relaxed)
+            + nothing_count.load(std::memory_order_relaxed)
+            + other_count.load(std::memory_order_relaxed);
+    }
+
+    void recordTypeInfo(const QoreTypeInfo* type_info) {
+        if (!type_info) {
+            other_count.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (!extended_type_counts) {
+                extended_type_counts = std::make_unique<std::unordered_map<const QoreTypeInfo*, uint32_t>>();
+            }
+            ++(*extended_type_counts)[type_info];
+        }
+        other_count.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    uint32_t getTypeInfoCount(const QoreTypeInfo* type_info) const {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        if (!extended_type_counts) {
+            return 0;
+        }
+        auto i = extended_type_counts->find(type_info);
+        return i == extended_type_counts->end() ? 0 : i->second;
+    }
+
+    void recordPluginTypeInfo(std::string module_name, uint16_t local_type_id, const QoreTypeInfo* type_info) {
+        {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (!plugin_type_counts) {
+                plugin_type_counts = std::make_unique<std::unordered_map<QoreIRPluginTypeProfileId, uint32_t,
+                    QoreIRPluginTypeProfileIdHash>>();
+            }
+            QoreIRPluginTypeProfileId key{std::move(module_name), local_type_id, type_info};
+            ++(*plugin_type_counts)[std::move(key)];
+        }
+        other_count.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    uint32_t getPluginTypeCount(const std::string& module_name, uint16_t local_type_id) const {
+        std::lock_guard<std::mutex> lock(extended_mutex);
+        if (!plugin_type_counts) {
+            return 0;
+        }
+        QoreIRPluginTypeProfileId key{module_name, local_type_id, nullptr};
+        auto i = plugin_type_counts->find(key);
+        return i == plugin_type_counts->end() ? 0 : i->second;
+    }
+
+    QoreIRTypeProfileKey dominantKey(float threshold = 0.95f) const {
+        uint32_t t = total();
+        if (t == 0) {
+            return {};
+        }
+        float ft = (float)t;
+        if ((float)int_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinInt);
+        }
+        if ((float)float_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinFloat);
+        }
+        if ((float)string_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinString);
+        }
+        if ((float)bool_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinBool);
+        }
+        if ((float)nothing_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinNothing);
+        }
+
+        const QoreTypeInfo* dominant_type_info = nullptr;
+        uint32_t dominant_count = 0;
+        {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (extended_type_counts) {
+                for (const auto& i : *extended_type_counts) {
+                    if (i.second > dominant_count) {
+                        dominant_type_info = i.first;
+                        dominant_count = i.second;
+                    }
+                }
+            }
+        }
+        if (dominant_type_info && (float)dominant_count / ft >= threshold) {
+            if (QoreTypeInfo::getUniqueReturnClass(dominant_type_info)) {
+                return QoreIRTypeProfileKey::qoreClass(dominant_type_info);
+            }
+        }
+
+        QoreIRPluginTypeProfileId dominant_plugin;
+        uint32_t dominant_plugin_count = 0;
+        {
+            std::lock_guard<std::mutex> lock(extended_mutex);
+            if (plugin_type_counts) {
+                uint32_t n = 0;
+                for (const auto& i : *plugin_type_counts) {
+                    if (++n % 100 == 0 && qore_check_cancel(nullptr, "plugin TypeProfile dominant-key scan")) {
+                        return {};
+                    }
+                    if (i.second > dominant_plugin_count) {
+                        dominant_plugin = i.first;
+                        dominant_plugin_count = i.second;
+                    }
+                }
+            }
+        }
+        if (dominant_plugin_count && (float)dominant_plugin_count / ft >= threshold) {
+            return QoreIRTypeProfileKey::pluginType(std::move(dominant_plugin.module_name),
+                dominant_plugin.local_type_id, dominant_plugin.type_info);
+        }
+
+        if ((float)other_count.load(std::memory_order_relaxed) / ft >= threshold) {
+            return QoreIRTypeProfileKey::builtin(QoreIRTypeProfileKind::BuiltinOther);
+        }
+        return {};
+    }
+
+    bool dominantBuiltin(qore_type_t type, float threshold = 0.95f) const {
+        return dominantKey(threshold).isBuiltin(type);
+    }
+
+    //! Returns the dominant type if one type accounts for >= threshold of observations,
+    //! or NT_ALL if no single type dominates
+    qore_type_t dominantType(float threshold = 0.95f) const {
+        return dominantKey(threshold).legacyBuiltinType();
+    }
+
+    void record(const QoreValue& v) {
+        switch (v.getType()) {
+            case NT_INT:
+                int_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_FLOAT:
+                float_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_STRING:
+                string_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_BOOLEAN:
+                bool_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_NOTHING:
+                nothing_count.fetch_add(1, std::memory_order_relaxed);
+                break;
+            case NT_PLUGIN_VALUE: {
+                std::string module_name;
+                uint16_t local_type_id = 0;
+                const QoreTypeInfo* type_info = nullptr;
+                if (qore_plugin_get_value_profile_info(v.getInternalNode(), module_name, local_type_id,
+                        type_info)) {
+                    recordPluginTypeInfo(std::move(module_name), local_type_id, type_info);
+                } else {
+                    recordTypeInfo(v.getFullTypeInfo());
+                }
+                break;
+            }
+            default:
+                recordTypeInfo(v.getFullTypeInfo());
+                break;
+        }
+    }
+};
+
+class QoreIRGuardInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRGuardInstruction(QoreIROpcode op) : QoreIRInstruction(op) {
+    }
+
+    QoreIRBasicBlock* deopt_target = nullptr;
+    const QoreTypeInfo* type_info = nullptr;
+    uint32_t guard_id = 0;  //!< unique guard ID per function (for type profiling)
+};
+
+class QoreIRReturnInstruction : public QoreIRInstruction {
+public:
+    QoreIRReturnInstruction() : QoreIRInstruction(QoreIROpcode::ReturnNothing) {
+    }
+
+    bool has_value = false;
+    QoreIRValue value{};
+};
+
+class QoreIRThrowInstruction : public QoreIRInstruction {
+public:
+    QoreIRThrowInstruction(QoreIROpcode op = QoreIROpcode::Throw) : QoreIRInstruction(op) {
+    }
+
+    QoreIRBasicBlock* exception_target = nullptr;
+    //! Number of active catch scopes to clean up (for Rethrow only)
+    int catch_depth = 0;
+    //! True for synthetic rethrows (e.g. foreach ref cleanup) that just propagate the
+    //! exception already on xsink without accessing td->catchException
+    bool synthetic = false;
+};
+
+class QoreIRLocalInstruction : public QoreIRInstruction {
+public:
+    QoreIRLocalInstruction(QoreIROpcode op, LocalVar* n_local, bool n_auto_ref = true)
+            : QoreIRInstruction(op), local(n_local), auto_ref(n_auto_ref) {
+    }
+
+    LocalVar* local = nullptr;
+    bool auto_ref = true;  // For LoadLocal: if true, calls refSelf(); if false, loads without inflating refcount
+    bool weak = false;  // For StoreLocal: if true, wraps object/hash/list in weak reference
+    bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
+    bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
+    bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)
+    uint32_t slot_id = UINT32_MAX; // Pre-computed slot index into locals_slot_cache
+};
+
+
+class QoreIRVarInstruction : public QoreIRInstruction {
+public:
+    QoreIRVarInstruction(QoreIROpcode op, Var* n_var) : QoreIRInstruction(op), var(n_var) {
+    }
+
+    Var* var = nullptr;
+    bool weak = false;  // For StoreGlobal/StoreThreadLocal: if true, wraps object/hash/list in weak reference
+};
+
+//! Implicit argument reference instruction - loads $1, $2, etc.
+class QoreIRImplicitArgInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRImplicitArgInstruction(int n_offset)
+            : QoreIRInstruction(QoreIROpcode::LoadImplicitArg), offset(n_offset) {
+    }
+
+    int offset = 0;  // 0 for $1, 1 for $2, etc.
+};
+
+//! Hash key access instruction - loads hash.key directly (no AST delegation)
+class QoreIRHashKeyAccessInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRHashKeyAccessInstruction(const char* n_key_name,
+            QoreIROpcode op = QoreIROpcode::HashKeyAccess)
+            : QoreIRInstruction(op), key_name(n_key_name) {
+    }
+
+    std::string key_name;
+};
+
+//! Hash element store instruction — write hash{const_key} = value with COW support
+class QoreIRHashKeyStoreInstruction : public QoreIRInstruction {
+public:
+    QoreIRHashKeyStoreInstruction(const VarRefNode* n_container, const char* n_key)
+            : QoreIRInstruction(QoreIROpcode::HashKeyStore),
+              container(n_container), key_name(n_key) {
+    }
+
+    const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
+    std::string key_name;
+    uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
+    //! LocalVar* populated at AOT deserialization time from slot_to_local.
+    //! The original `container` VarRefNode* is not serialized (only slot_id is),
+    //! so deserialized instructions have `container == nullptr`. The interpreter
+    //! prefers `container_lv` over `container->ref.id` when set — fresh IR
+    //! lowering from AST leaves container_lv null and the COW path uses
+    //! `container->ref.id` as before. `closureUse` is queried on the LocalVar
+    //! at runtime rather than cached here because captured-var flags may be
+    //! set after deser (by CLOSURE_CREATE processing that runs later).
+    class LocalVar* container_lv = nullptr;
+    // operands[0] = hash value (from LoadLocal on container)
+    // operands[1] = new element value to store
+};
+
+//! Dynamic hash key store instruction - stores value at hash[key] where key is a pre-evaluated
+//! IR operand. Like HashKeyStore but handles dynamic (non-constant) keys.
+class QoreIRHashKeyStoreDynamicInstruction : public QoreIRInstruction {
+public:
+    QoreIRHashKeyStoreDynamicInstruction(const VarRefNode* n_container)
+            : QoreIRInstruction(QoreIROpcode::HashKeyStoreDynamic),
+              container(n_container) {
+    }
+
+    const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
+    uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
+    //! LocalVar* populated at AOT deserialization time — see QoreIRHashKeyStoreInstruction.
+    class LocalVar* container_lv = nullptr;
+    // operands[0] = hash value (from LoadLocal on container)
+    // operands[1] = new element value to store
+    // operands[2] = key value (converted to string at runtime)
+};
+
+//! ============================================================================
+//! Lvalue Path Types — structured encoding of lvalue navigation for IR
+//! ============================================================================
+
+//! Kind of step in an lvalue navigation path
+enum class LVPathStepKind : uint8_t {
+    LocalVar       = 0,  //!< Direct local variable (no lock for simple locals)
+    ClosureVar     = 1,  //!< Closure-captured variable (needs rml write lock)
+    GlobalVar      = 2,  //!< Global variable (needs rwl write lock)
+    ThreadLocalVar = 3,  //!< Thread-local global variable (no lock)
+    SelfMember     = 4,  //!< Object member via self (needs object lock + handoff)
+    StaticVar      = 5,  //!< Static class variable (needs rwl write lock)
+    HashKeyConst   = 6,  //!< Navigate hash by constant string key
+    HashKey        = 7,  //!< Navigate hash by dynamic key (IR operand)
+    ListIndex      = 8,  //!< Navigate list by index (IR operand)
+    HashKeySlice   = 9,  //!< Multi-key hash slice h{"a","b",...} — terminal step only
+    ListIndexSlice = 10, //!< Multi-index list/string/binary slice l[1,3,5,...] — terminal step only
+    ListRangeSlice = 11, //!< Range list/string/binary slice l[1..3] — terminal step only
+};
+
+//! A single step in an lvalue navigation path
+struct LVPathStep {
+    LVPathStepKind kind;
+
+    // Root step references (used for LocalVar/ClosureVar/GlobalVar/ThreadLocalVar/StaticVar)
+    const void* ref_ptr = nullptr;  //!< LocalVar*/Var*/QoreVarInfo* (JIT mode, null for AOT)
+    uint32_t slot_id = UINT32_MAX;  //!< AOT slot index for this variable
+
+    // Name for named steps (SelfMember, HashKeyConst, ClosureVar name, GlobalVar name, etc.)
+    std::string name;
+
+    // Operand index for dynamic navigation (HashKey, ListIndex)
+    // References an operand in the instruction's operands vector
+    uint32_t operand_idx = UINT32_MAX;
+
+    // For HashKeySlice / ListIndexSlice / ListRangeSlice: SSA ids (compile time) of the N
+    // sub-expressions that form the slice selector list.  Consumed by the
+    // LLVM emitter / JIT runtime in declared order to read from the boxed
+    // dynamic-operand array.  For non-slice steps this vector is empty.
+    std::vector<uint32_t> slice_operand_ids;
+
+    // For slice steps at runtime (populated by patchLVPath in JIT/AOT or
+    // directly by the IR interpreter): resolved values ready for use.
+    // HashKeySlice: each QoreValue converts to a string key; list values expand
+    // to multiple keys.  HashKey dynamic steps also keep their evaluated operand
+    // here so remove/delete can detect runtime list-key slice semantics.
+    // ListIndexSlice: each QoreValue is either an integer index or a list
+    // (produced by a range operator) that expands to a sequence of indexes.
+    // ListRangeSlice: exactly two QoreValues: start and stop (either can be NOTHING).
+    std::vector<QoreValue> slice_values;
+
+    // Type info for type checking at this step
+    const QoreTypeInfo* type_info = nullptr;
+};
+
+//! Sub-operation type for LValuePathCompound
+enum class LVCompoundOp : uint8_t {
+    AddAssign = 0, SubAssign, MulAssign, DivAssign, ModAssign,
+    AndAssign, OrAssign, XorAssign, ShlAssign, ShrAssign,
+};
+
+//! Sub-operation type for LValuePathUnary
+enum class LVUnaryOp : uint8_t {
+    PreInc = 0, PreDec, PostInc, PostDec,
+    Remove, Delete, Shift, Pop, Trim, Chomp,
+};
+
+//! Sub-operation type for LValuePathBinaryMut
+enum class LVBinaryMutOp : uint8_t {
+    Push = 0, Unshift, RegexSubst, Transliterate,
+};
+
+//! Sub-operation type for LValuePathTernary
+enum class LVTernaryOp : uint8_t {
+    Splice = 0, Extract,
+};
+
+//! Lvalue path instruction — replaces AST-based StoreLValue/AddAssignLValue/etc.
+//! The path encodes the lvalue navigation as structured steps instead of an AST
+//! expression tree, enabling compact AOT serialization (no EXPR_TREE blob).
+//! At runtime, LValueHelper::navigatePath() walks the steps to acquire locks,
+//! handle COW, and set up the lvalue target using the same protocol as doLValue().
+class QoreIRLValuePathInstruction : public QoreIRInstruction {
+public:
+    QoreIRLValuePathInstruction(QoreIROpcode op)
+            : QoreIRInstruction(op) {
+    }
+
+    ~QoreIRLValuePathInstruction() override {
+        if (owns_pattern_expr) {
+            const_cast<QoreValue&>(pattern_expr).discard(nullptr);
+        }
+        for (auto* node : owned_static_var_refs) {
+            node->deref(nullptr);
+        }
+    }
+
+    std::vector<LVPathStep> path;  //!< Root step + navigation steps
+
+    //! For LValuePathAssign
+    bool weak = false;             //!< Weak (:=) assignment
+
+    //! For LValuePathCompound
+    LVCompoundOp compound_op = LVCompoundOp::AddAssign;
+
+    //! For LValuePathUnary
+    LVUnaryOp unary_op = LVUnaryOp::PreInc;
+
+    //! For LValuePathBinaryMut
+    LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push;
+
+    //! For LValuePathTernary
+    LVTernaryOp ternary_op = LVTernaryOp::Splice;
+
+    //! For RegexSubst/Transliterate — pattern info
+    const QoreValue pattern_expr;   //!< Regex/transliteration pattern (for runtime eval)
+    bool owns_pattern_expr = false; //!< True for AOT-deserialized pattern_expr values.
+
+    //! StaticClassVarRefNode objects reconstructed while deserializing AOT LValuePath roots.
+    std::vector<AbstractQoreNode*> owned_static_var_refs;
+
+    //! Whether the return value of the operation is used (from QoreOperatorNode::ref_rv)
+    bool ref_rv = true;
+
+    //! Slot ID of the root local variable (for targeted cache invalidation after the operation).
+    //! Set by the IR verifier. UINT32_MAX if root is not a local variable.
+    static constexpr uint32_t LVALUE_NON_LOCAL = UINT32_MAX;
+    bool hasLocalTarget() const { return lvalue_slot_id < LVALUE_NON_LOCAL; }
+    uint32_t lvalue_slot_id = UINT32_MAX;
+
+    // Operands layout depends on opcode:
+    // LValuePathAssign:    operands[0] = RHS value; dynamic key/index operands follow
+    // LValuePathCompound:  operands[0] = RHS value; dynamic key/index operands follow
+    // LValuePathUnary:     dynamic key/index operands only (no RHS)
+    // LValuePathBinaryMut: operands[0] = RHS value; dynamic key/index operands follow
+    // LValuePathTernary:   operands[0..2] = offset, length, replacement; dynamic key/index follow
+};
+
+//! Shared LValuePathUnary slice-terminal-step executors, called from both
+//! the IR interpreter (QoreIRInterpreter.cpp) and the JIT runtime helper
+//! (qore_rt_lv_path_unary in JITRuntime.cpp).  Precondition: `lvh` is
+//! already navigated to the parent container at path[..size-1].
+//! Returns the aggregated removed-content value (hash for HashKeySlice,
+//! list/string/binary for ListIndexSlice/ListRangeSlice) on Remove, or NOTHING on Delete.
+class LValueHelper;  // forward
+DLLLOCAL QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink);
+DLLLOCAL QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink);
+DLLLOCAL QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink);
+
+//! List index access instruction - loads list[index] directly (no AST delegation)
+class QoreIRListIndexAccessInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRListIndexAccessInstruction()
+            : QoreIRInstruction(QoreIROpcode::ListIndexAccess) {
+    }
+    // operands[0] = list container
+    // operands[1] = index expression
+};
+
+//! List index store instruction - write value to list[index] with COW support
+class QoreIRListIndexStoreInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRListIndexStoreInstruction(const VarRefNode* n_container)
+            : QoreIRInstruction(QoreIROpcode::ListIndexStore),
+              container(n_container) {
+    }
+
+    const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
+    uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
+    // operands[0] = list value (from LoadLocal on container)
+    // operands[1] = new element value to store
+    // operands[2] = index expression
+};
+
+//! Fused add-assign for two typed int locals: target += source
+//! Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target)
+class QoreIRAddAssignLocalIntInstruction : public QoreIRInstruction {
+public:
+    QoreIRAddAssignLocalIntInstruction(LocalVar* n_target, LocalVar* n_source)
+            : QoreIRInstruction(QoreIROpcode::AddAssignLocalInt),
+              target(n_target), source(n_source) {
+    }
+
+    LocalVar* target;
+    LocalVar* source;
+    uint32_t target_slot_id = UINT32_MAX;  //!< Pre-computed slot index for target
+    uint32_t source_slot_id = UINT32_MAX;  //!< Pre-computed slot index for source
+    bool target_ir_only = false;  //!< True if target is IR-only (skip write-through)
+};
+
+//! Fused increment for typed int local: local += delta (constant int)
+//! Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal
+class QoreIRIncrementLocalIntInstruction : public QoreIRInstruction {
+public:
+    QoreIRIncrementLocalIntInstruction(LocalVar* n_local, int64_t n_delta)
+            : QoreIRInstruction(QoreIROpcode::IncrementLocalInt),
+              local(n_local), delta(n_delta) {
+    }
+
+    LocalVar* local;
+    int64_t delta;
+    uint32_t slot_id = UINT32_MAX;  //!< Pre-computed slot index for local
+    bool ir_only = false;  //!< True if local is IR-only (skip write-through)
+};
+
+//! Fused compare-and-branch for two typed int locals: if (lhs < rhs) goto true else goto false
+//! Replaces LoadLocal(lhs) + LoadLocal(rhs) + LtInt + BranchIf
+class QoreIRBranchIfLtLocalIntInstruction : public QoreIRInstruction {
+public:
+    QoreIRBranchIfLtLocalIntInstruction(LocalVar* n_lhs, LocalVar* n_rhs,
+            QoreIRBasicBlock* n_true_target, QoreIRBasicBlock* n_false_target)
+            : QoreIRInstruction(QoreIROpcode::BranchIfLtLocalInt),
+              lhs(n_lhs), rhs(n_rhs),
+              true_target(n_true_target), false_target(n_false_target) {
+    }
+
+    LocalVar* lhs;
+    LocalVar* rhs;
+    uint32_t lhs_slot_id = UINT32_MAX;   //!< Pre-computed slot index for lhs
+    uint32_t rhs_slot_id = UINT32_MAX;   //!< Pre-computed slot index for rhs
+    QoreIRBasicBlock* true_target;
+    QoreIRBasicBlock* false_target;
+};
+
+//! Map hash key instruction - fully specialized map over hash key access
+class QoreIRMapHashKeyInstruction : public QoreIRInstruction {
+public:
+    QoreIRMapHashKeyInstruction(QoreIROpcode op, const char* n_key1, const char* n_key2 = nullptr)
+            : QoreIRInstruction(op), key1(n_key1), key2(n_key2 ? n_key2 : "") {
+    }
+
+    std::string key1;  //!< primary key name
+    std::string key2;  //!< secondary key (HashMapTwoKeys only)
+};
+
+//! Make list instruction with optional parse-time type info
+class QoreIRMakeListInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRMakeListInstruction() : QoreIRInstruction(QoreIROpcode::MakeList) {
+    }
+
+    const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+};
+
+//! Make hash instruction with optional parse-time type info
+class QoreIRMakeHashInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRMakeHashInstruction() : QoreIRInstruction(QoreIROpcode::MakeHash) {
+    }
+
+    const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+};
+
+//! Make hash with constant string keys - operands are values only, keys are pre-stored
+class QoreIRMakeHashConstKeysInstruction : public QoreIRInstruction {
+public:
+    QoreIRMakeHashConstKeysInstruction(std::vector<std::string>&& n_keys)
+            : QoreIRInstruction(QoreIROpcode::MakeHashConstKeys), keys(std::move(n_keys)) {
+    }
+
+    std::vector<std::string> keys;  //!< constant key names (one per value operand)
+    const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+};
+
+//! Self member access instruction - loads self.member_name
+class QoreIRSelfMemberInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRSelfMemberInstruction(const char* n_member_name)
+            : QoreIRInstruction(QoreIROpcode::LoadSelfMember), member_name(n_member_name) {
+    }
+
+    std::string member_name;
+};
+
+//! Static class variable access instruction - loads a static class variable
+class QoreIRStaticVarInstruction : public QoreIRInstruction {
+public:
+    QoreIRStaticVarInstruction(QoreVarInfo* n_vi, const char* n_var_name, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::LoadStaticVar), vi(n_vi), var_name(n_var_name),
+              expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRStaticVarInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    QoreVarInfo* vi;
+    std::string var_name;
+    QoreValue expr;     //!< Original StaticClassVarRefNode AST expression (for AOT)
+};
+
+//! Object instantiation instruction - calls constructor directly
+class QoreIRNewObjectInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewObjectInstruction(const QoreClass* n_qc, const AbstractQoreFunctionVariant* n_variant,
+            const QoreValue& n_expr = QoreValue(), const QoreTypeInfo* n_object_type_info = nullptr)
+            : QoreIRInstruction(QoreIROpcode::NewObject), qc(n_qc), variant(n_variant),
+              expr(n_expr), object_type_info(n_object_type_info) {
+        expr.ref();
+    }
+
+    ~QoreIRNewObjectInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreClass* qc;
+    const AbstractQoreFunctionVariant* variant;
+    const QoreTypeInfo* object_type_info;
+    // Compile-time-only metadata: the original AST node (NewObjectCallNode,
+    // ScopedObjectCallNode, or VarRefNewObjectNode).  Used ONLY by the AOT
+    // compiler to serialize class_path/variant_sig as slot metadata so the
+    // runtime can re-resolve qc/variant.  Runtime execution uses qc/variant
+    // fields and `operands` (inherited), NEVER `expr`.
+    QoreValue expr;
+    // Constructor arguments come from the inherited `operands` field (IR values
+    // computed by separate IR instructions). No AST fallback.
+};
+
+//! Runtime constant load instruction - loads ConstantEntry::saved_val
+class QoreIRLoadConstantInstruction : public QoreIRInstruction {
+public:
+    QoreIRLoadConstantInstruction(const RuntimeConstantRefNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::LoadConstant), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRLoadConstantInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const RuntimeConstantRefNode* node;  //!< The constant ref node (for JIT access to ConstantEntry)
+    QoreValue expr;                      //!< Original AST expression (for AOT)
+};
+
+//! Closure creation instruction - creates QoreClosureNode or QoreObjectClosureNode
+class QoreIRCreateClosureInstruction : public QoreIRInstruction {
+public:
+    QoreIRCreateClosureInstruction(const QoreClosureParseNode* n_closure_node,
+            const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CreateClosure), closure_node(n_closure_node),
+              expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCreateClosureInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreClosureParseNode* closure_node;
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Call reference creation instruction - creates function/static method call references
+class QoreIRCreateCallRefInstruction : public QoreIRInstruction {
+public:
+    QoreIRCreateCallRefInstruction(const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CreateCallRef), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCreateCallRefInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    QoreValue expr;  //!< Original AST expression (for AOT and JIT eval)
+};
+
+//! Method reference creation instruction - creates object method call references
+class QoreIRCreateMethodRefInstruction : public QoreIRInstruction {
+public:
+    QoreIRCreateMethodRefInstruction(const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CreateMethodRef), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCreateMethodRefInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    QoreValue expr;  //!< Original AST expression (for AOT and JIT eval)
+};
+
+//! Parse reference creation instruction - creates \var lvalue references
+class QoreIRCreateParseRefInstruction : public QoreIRInstruction {
+public:
+    QoreIRCreateParseRefInstruction(const ParseReferenceNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CreateParseRef), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCreateParseRefInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const ParseReferenceNode* node;
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Hashdecl construction instruction
+class QoreIRNewHashDeclInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewHashDeclInstruction(const NewHashDeclNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewHashDecl), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewHashDeclInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const NewHashDeclNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Complex hash construction instruction
+class QoreIRNewComplexHashInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewComplexHashInstruction(const NewComplexHashNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewComplexHash), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewComplexHashInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const NewComplexHashNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Complex list construction instruction
+class QoreIRNewComplexListInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewComplexListInstruction(const NewComplexListNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewComplexList), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewComplexListInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const NewComplexListNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Complex buffer construction instruction
+class QoreIRNewComplexBufferInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewComplexBufferInstruction(const NewComplexBufferNode* n_node, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::NewComplexBuffer), node(n_node), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRNewComplexBufferInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const NewComplexBufferNode* node;  //!< AST node (for eval)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! VarRefNewObjectNode construction instruction - constructs value for typed variable declarations
+class QoreIRVrnConstructInstruction : public QoreIRInstruction {
+public:
+    QoreIRVrnConstructInstruction(const VarRefNewObjectNode* n_vrn, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::VrnConstruct), vrn(n_vrn), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRVrnConstructInstruction() {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const VarRefNewObjectNode* vrn;  //!< The VarRefNewObjectNode (for construction)
+    QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Hashdecl construction from a pre-lowered hash operand
+//! Unlike QoreIRVrnConstructInstruction which stores the full AST, this instruction
+//! takes the hash value as an operand (operands[0]), allowing each sub-expression
+//! (including local variable references) to be properly lowered as individual IR
+//! instructions. This enables correct AOT serialization.
+class QoreIRNewHashDeclFromHashInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewHashDeclFromHashInstruction(const TypedHashDecl* n_hd, bool n_runtime_check)
+            : QoreIRInstruction(QoreIROpcode::NewHashDeclFromHash), hd(n_hd),
+              runtime_check(n_runtime_check) {
+    }
+
+    QoreIRNewHashDeclFromHashInstruction(const char* n_hd_path, const TypedHashDecl* n_hd,
+            bool n_runtime_check)
+            : QoreIRInstruction(QoreIROpcode::NewHashDeclFromHash), hd(n_hd),
+              hd_path(n_hd_path ? n_hd_path : ""),
+              runtime_check(n_runtime_check) {
+    }
+
+    const TypedHashDecl* hd;    //!< Target hashdecl type
+    std::string hd_path;        //!< Target hashdecl path for source-stripped AOT/runtime resolution
+    bool runtime_check;         //!< Whether to validate keys at runtime
+};
+
+class QoreIRLValueInstruction : public QoreIRInstruction {
+public:
+    QoreIRLValueInstruction(QoreIROpcode op, const QoreValue& n_lvalue, bool n_weak = false)
+            : QoreIRInstruction(op), lvalue(n_lvalue), weak(n_weak) {
+        lvalue.ref();
+    }
+
+    ~QoreIRLValueInstruction() override {
+        lvalue.discard(nullptr);
+    }
+
+    //! Sentinel value indicating the lvalue target is a known non-local variable
+    //! (member via SelfVarrefNode, static class var, global). No local cache
+    //! invalidation is needed for these targets.
+    static constexpr uint32_t LVALUE_NON_LOCAL = UINT32_MAX - 1;
+
+    //! Returns true if the lvalue target is a known local variable with a valid slot_id.
+    bool hasLocalTarget() const { return lvalue_slot_id < LVALUE_NON_LOCAL; }
+
+    QoreValue lvalue;
+    bool weak = false;  //!< true for weak (:=) assignment
+    //! Pre-computed slot_id for the lvalue target variable.
+    //! Valid slot_id (< LVALUE_NON_LOCAL): target is a local variable at this slot index.
+    //! LVALUE_NON_LOCAL: target is a known non-local (member, static, global) — skip local cache invalidation.
+    //! UINT32_MAX: unresolved target — full local cache wipe for safety.
+    uint32_t lvalue_slot_id = UINT32_MAX;
+};
+
+class QoreIRExprInstruction : public QoreIRInstruction {
+public:
+    QoreIRExprInstruction(QoreIROpcode op, const QoreValue& n_expr) : QoreIRInstruction(op), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRExprInstruction() override {
+        expr.discard(nullptr);
+    }
+
+    QoreValue expr;
+    bool has_ref_args = false;  //!< True if any operand is a reference type (may be modified by callee)
+    //! ListIndexDynamic only: selector kinds for native list/string/binary slices
+    //! with range entries. 0 = single index (one operand), 1 = range (start+stop operands).
+    std::vector<uint8_t> list_selector_kinds;
+};
+
+enum class QoreIRBackgroundKind : uint8_t {
+    DotEval = 1,  //!< background obj.method(args), receiver in operand 0
+};
+
+//! Native background-call instruction metadata.
+class QoreIRBackgroundInstruction : public QoreIRExprInstruction {
+public:
+    QoreIRBackgroundInstruction(QoreIRBackgroundKind n_kind, std::string n_name,
+            const QoreValue& n_expr = QoreValue())
+            : QoreIRExprInstruction(QoreIROpcode::BackgroundInt, n_expr),
+              kind(n_kind),
+              name(std::move(n_name)) {
+    }
+
+    QoreIRBackgroundKind kind;
+    std::string name;
+};
+
+//! Direct function call instruction - bypasses AST round-trip for resolved function calls
+//! Stores function/variant/program pointers resolved at parse time
+class QoreIRCallDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
+            QoreProgram* n_pgm, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CallDirect),
+              func(n_func), variant(n_variant), pgm(n_pgm), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCallDirectInstruction() override {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreFunction* func = nullptr;     //!< The resolved function pointer
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (may be null)
+    QoreProgram* pgm = nullptr;             //!< The program context
+    QoreValue expr;                         //!< Original AST expression (for AOT)
+    bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
+    bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
+    //!< operands[0..n-1] are the function arguments
+
+    // Cached inline IR call state (computed on first execution, avoids repeated lookups)
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr;
+    mutable const UserVariantBase* cached_uvb = nullptr;
+    mutable const QoreTypeInfo* cached_return_type = nullptr;
+};
+
+//! Direct method call instruction - bypasses virtual dispatch for final classes/methods
+//! The method pointer is resolved at compile time and stored directly in the instruction
+class QoreIRCallMethodDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRCallMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            const AbstractQoreFunctionVariant* n_variant = nullptr, const QoreValue& n_expr = QoreValue())
+            : QoreIRInstruction(QoreIROpcode::CallMethodDirect),
+              method(n_method),
+              qc(n_qc),
+              variant(n_variant),
+              expr(n_expr) {
+        if (expr) expr.ref();
+    }
+
+    ~QoreIRCallMethodDirectInstruction() override {
+        if (expr) {
+            ExceptionSink xsink;
+            expr.discard(&xsink);
+        }
+    }
+
+    const QoreMethod* method = nullptr;     //!< The resolved method pointer
+    const QoreClass* qc = nullptr;          //!< The class containing the method
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
+    QoreValue expr;                         //!< Original AST expression (for AOT)
+    bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
+
+    // Phase 3: Aggressive inlining fields
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
+    //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
+};
+
+//! Direct method call with exception handling - bypasses virtual dispatch for final classes
+//! in try/catch blocks. Combines the devirtualization of CallMethodDirect with the exception
+//! routing of Invoke, avoiding AST evaluation overhead.
+class QoreIRInvokeMethodDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRInvokeMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            const AbstractQoreFunctionVariant* n_variant,
+            QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception, const QoreValue& n_expr = QoreValue())
+            : QoreIRInstruction(QoreIROpcode::InvokeMethodDirect),
+              method(n_method), qc(n_qc), variant(n_variant),
+              normal_target(n_normal), exception_target(n_exception),
+              expr(n_expr) {
+        if (expr) expr.ref();
+    }
+
+    ~QoreIRInvokeMethodDirectInstruction() override {
+        if (expr) {
+            ExceptionSink xsink;
+            expr.discard(&xsink);
+        }
+    }
+
+    const QoreMethod* method = nullptr;         //!< The resolved method pointer
+    const QoreClass* qc = nullptr;              //!< The class containing the method
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
+    QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
+    QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
+    QoreValue expr;                             //!< Original AST expression (for AOT)
+    bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
+    //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
+};
+
+//! Direct static method call instruction - pre-evaluates arguments to bypass AST round-trip.
+//! Uses the Invoke + invoke_opcode pattern for try/catch (like CallDirect).
+class QoreIRCallStaticDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRCallStaticDirectInstruction(const QoreMethod* n_method,
+            const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr)
+            : QoreIRInstruction(QoreIROpcode::CallStaticDirect),
+              method(n_method), variant(n_variant), expr(n_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRCallStaticDirectInstruction() override {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+    }
+
+    const QoreMethod* method = nullptr;     //!< The resolved static method pointer
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
+    QoreValue expr;                         //!< Original AST expression (for AOT)
+    bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
+
+    // Phase 3: Aggressive inlining fields
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
+    //!< operands[0..n-1] are the pre-evaluated method arguments
+};
+
+//! Direct dot-eval method call instruction - pre-evaluates base object and arguments
+//! for obj.method(args) calls where the method is resolved at parse time.
+class QoreIRDotEvalMethodDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo)
+            : QoreIRInstruction(QoreIROpcode::DotEvalMethodDirect),
+              method(n_method), qc(n_qc), variant(n_variant), expr(n_expr), pseudo(n_pseudo) {
+        expr.ref();
+    }
+
+    ~QoreIRDotEvalMethodDirectInstruction() override {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+        free(const_cast<char*>(fallback_method_name));
+    }
+
+    const QoreMethod* method = nullptr;     //!< The resolved method pointer
+    const QoreClass* qc = nullptr;          //!< The class containing the method
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
+    QoreValue expr;                         //!< Original AST expression (for AOT)
+    bool pseudo = false;                    //!< True if this is a pseudo-method call
+    bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
+    const char* fallback_method_name = nullptr; //!< Method name for dynamic dispatch when method ptr is null (AOT)
+    //!< operands[0] is the base expression, operands[1..n-1] are arguments
+};
+
+//! Direct dot-eval method call with exception handling - for try/catch blocks.
+//! Pre-evaluates base object and arguments like DotEvalMethodDirect but routes
+//! exceptions to the exception target block.
+class QoreIRInvokeDotEvalMethodDirectInstruction : public QoreIRInstruction {
+public:
+    QoreIRInvokeDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
+            const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo,
+            QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
+            : QoreIRInstruction(QoreIROpcode::InvokeDotEvalMethodDirect),
+              method(n_method), qc(n_qc), variant(n_variant), expr(n_expr), pseudo(n_pseudo),
+              normal_target(n_normal), exception_target(n_exception) {
+        expr.ref();
+    }
+
+    ~QoreIRInvokeDotEvalMethodDirectInstruction() override {
+        ExceptionSink xsink;
+        expr.discard(&xsink);
+        free(const_cast<char*>(fallback_method_name));
+    }
+
+    const QoreMethod* method = nullptr;         //!< The resolved method pointer
+    const QoreClass* qc = nullptr;              //!< The class containing the method
+    const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
+    QoreValue expr;                             //!< Original AST expression (for AOT)
+    bool pseudo = false;                        //!< True if this is a pseudo-method call
+    bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
+    const char* fallback_method_name = nullptr;           //!< Method name for dynamic dispatch when method ptr is null (AOT)
+    QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
+    QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
+    //!< operands[0] is the base expression, operands[1..n-1] are arguments
+};
+
+//! Creates a FunctionalOperatorInterface from a list or iterable expression
+//! result contains a pointer to the iterator (as int64_t)
+class QoreIRIteratorCreateInstruction : public QoreIRInstruction {
+public:
+    QoreIRIteratorCreateInstruction(QoreIRValue n_iterable, FunctionalOperator* n_iterator_func = nullptr)
+            : QoreIRInstruction(QoreIROpcode::IteratorCreate),
+              iterable(n_iterable),
+              iterator_func(n_iterator_func) {
+    }
+
+    QoreIRValue iterable;               //!< List value or iterable expression result
+    FunctionalOperator* iterator_func;  //!< Optional functional operator for lazy evaluation
+};
+
+//! Advances iterator and branches based on done status
+//! If not done, stores current value in result and branches to continue_target
+//! If done, branches to done_target
+class QoreIRIteratorNextInstruction : public QoreIRInstruction {
+public:
+    QoreIRIteratorNextInstruction(QoreIRValue n_iterator, QoreIRBasicBlock* n_done_target,
+            QoreIRBasicBlock* n_continue_target)
+            : QoreIRInstruction(QoreIROpcode::IteratorNext),
+              iterator(n_iterator),
+              done_target(n_done_target),
+              continue_target(n_continue_target) {
+    }
+
+    QoreIRValue iterator;                       //!< Iterator handle from IteratorCreate
+    QoreIRBasicBlock* done_target = nullptr;    //!< Target block when iterator is exhausted
+    QoreIRBasicBlock* continue_target = nullptr; //!< Target block with next value
+};
+
+class QoreIROnBlockExitInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIROnBlockExitInstruction(const OnBlockExitStatement* n_stmt)
+            : QoreIRInstruction(QoreIROpcode::OnBlockExit), stmt(n_stmt) {
+    }
+
+    //! Constructor for deserialized case (no AST statement available)
+    QoreIROnBlockExitInstruction(obe_type_e n_obe_type, std::unique_ptr<QoreIRFunction> n_handler_ir)
+            : QoreIRInstruction(QoreIROpcode::OnBlockExit), obe_type(n_obe_type),
+              handler_ir(std::move(n_handler_ir)) {
+    }
+
+    const OnBlockExitStatement* stmt = nullptr;
+    //! Handler type for deserialized case (when stmt is null)
+    obe_type_e obe_type = OBE_Unconditional;
+    //! Compiled handler body; required for IR/JIT/AOT execution.
+    //! Missing handler IR is a lowering/metadata error, not an AST fallback.
+    std::unique_ptr<QoreIRFunction> handler_ir;
+};
+
+//! Marks the entry into a new scope that may have on_exit/on_success/on_error handlers
+class QoreIRScopeEnterInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRScopeEnterInstruction(uint32_t n_scope_id)
+            : QoreIRInstruction(QoreIROpcode::ScopeEnter), scope_id(n_scope_id) {
+    }
+
+    uint32_t scope_id = 0;  //!< unique scope ID within function
+};
+
+//! Marks the exit from a scope - triggers execution of on_exit handlers registered since matching ScopeEnter
+class QoreIRScopeExitInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRScopeExitInstruction(uint32_t n_scope_id, bool n_is_error = false, bool n_inline_lowered = false)
+            : QoreIRInstruction(QoreIROpcode::ScopeExit), scope_id(n_scope_id), is_error(n_is_error), inline_lowered(n_inline_lowered) {
+    }
+
+    uint32_t scope_id = 0;  //!< scope ID from matching ScopeEnter
+    bool is_error = false;  //!< true if exiting due to an exception
+    bool inline_lowered = false;  //!< true if handlers were already inlined; just flush runtime vector
+};
+
+//! ContextInit — create a Context frame for a `context` statement.
+//!
+//! Carries the context name plus the context-data / where / sort AST
+//! expressions portably (round-trippable via AOT writeExpr).  The loop,
+//! body, and cleanup are emitted inline as IR basic blocks around this
+//! instruction (see `QoreIRLowering::lowerStatement`'s ContextStatement
+//! case — mirrors the non-ref foreach shape).
+//!
+//! The runtime helper (`qore_rt_context_init` for LLVM,
+//! `QoreIRInterpreter::execContextInit` for the interpreter) constructs
+//! a `Context` object, evaluates the where/sort filters per row internally
+//! against the thread-local context stack, and returns the Context*
+//! reinterpreted as i64.  0 means failure (xsink set).
+class QoreIRContextInstruction : public QoreIRInstruction {
+public:
+    QoreIRContextInstruction(std::string n_name, const QoreValue& n_exp,
+            const QoreValue& n_where, const QoreValue& n_sort, int n_sort_type)
+            : QoreIRInstruction(QoreIROpcode::Context),
+              name(std::move(n_name)),
+              exp(n_exp),
+              where_exp(n_where),
+              sort_exp(n_sort),
+              sort_type(n_sort_type) {
+        exp.ref();
+        where_exp.ref();
+        sort_exp.ref();
+    }
+
+    ~QoreIRContextInstruction() override {
+        exp.discard(nullptr);
+        where_exp.discard(nullptr);
+        sort_exp.discard(nullptr);
+    }
+
+    std::string name;        //!< context name (may be empty for anonymous contexts)
+    QoreValue exp;           //!< context data expression (AST tree)
+    QoreValue where_exp;     //!< optional `where` filter expression (empty = no filter)
+    QoreValue sort_exp;      //!< optional sort expression (empty = no sort)
+    int sort_type = -1;      //!< CM_SORT_ASCENDING, CM_SORT_DESCENDING, or -1 for none
+};
+
+//! Backquote expression instruction — execute command and return stdout as string.
+class QoreIRBackquoteInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRBackquoteInstruction(std::string n_command)
+            : QoreIRInstruction(QoreIROpcode::Backquote),
+              command(std::move(n_command)) {
+    }
+
+    std::string command;
+};
+
+//! Context reference expression instruction: `%field` or `name:field`.
+class QoreIRContextRefInstruction : public QoreIRInstruction {
+public:
+    QoreIRContextRefInstruction(std::string n_key, int32_t n_stack_offset)
+            : QoreIRInstruction(QoreIROpcode::ContextRef),
+              key(std::move(n_key)),
+              stack_offset(n_stack_offset) {
+    }
+
+    std::string key;
+    int32_t stack_offset = 0;
+};
+
+//! Find expression instruction — wraps find/source/where subexpressions.
+class QoreIRFindInstruction : public QoreIRInstruction {
+public:
+    QoreIRFindInstruction(const QoreValue& n_exp, const QoreValue& n_find_exp,
+            const QoreValue& n_where)
+            : QoreIRInstruction(QoreIROpcode::Find),
+              exp(n_exp),
+              find_exp(n_find_exp),
+              where(n_where) {
+        exp.ref();
+        find_exp.ref();
+        where.ref();
+    }
+
+    ~QoreIRFindInstruction() override {
+        exp.discard(nullptr);
+        find_exp.discard(nullptr);
+        where.discard(nullptr);
+    }
+
+    QoreValue exp;
+    QoreValue find_exp;
+    QoreValue where;
+};
+
+class QoreIRSummarizeInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRSummarizeInstruction(const SummarizeStatement* n_stmt)
+            : QoreIRInstruction(QoreIROpcode::Summarize), stmt(n_stmt) {
+    }
+
+    const SummarizeStatement* stmt = nullptr;
+};
+
+class QoreIRInvokeInstruction : public QoreIRInstruction {
+public:
+    QoreIRInvokeInstruction(const QoreValue& n_expr, QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
+            : QoreIRInstruction(QoreIROpcode::Invoke),
+            expr(n_expr),
+            normal_target(n_normal),
+            exception_target(n_exception) {
+        expr.ref();
+    }
+
+    ~QoreIRInvokeInstruction() override {
+        expr.discard(nullptr);
+    }
+
+    QoreValue expr;
+    QoreIROpcode invoke_opcode = QoreIROpcode::Invoke;
+    QoreIRBasicBlock* normal_target = nullptr;
+    QoreIRBasicBlock* exception_target = nullptr;
+    std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
+    bool weak = false;            //!< true for weak (:=) assignment in StoreLValue invoke path
+};
+
+//! LandingPad instruction - marks the entry point of an exception handler (catch block)
+//! Stores the scope stack depth at the try-catch entry so the IR interpreter can
+//! execute on_error/on_exit handlers for scopes entered within the try body.
+class QoreIRLandingPadInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRLandingPadInstruction(size_t n_scope_depth, uint32_t n_try_scope_id = 0)
+            : QoreIRInstruction(QoreIROpcode::LandingPad), scope_depth(n_scope_depth),
+              try_scope_id(n_try_scope_id) {
+    }
+
+    //! Scope stack depth at the try-catch entry point
+    size_t scope_depth = 0;
+
+    //! Scope ID for the try-level ScopeEnter that saves the OBE count at try entry.
+    //! Used by LLVM lowering to call qore_rt_exec_on_block_exit() with the saved count.
+    uint32_t try_scope_id = 0;
+};
+
+//! Switch regex case match instruction - tests if switch value matches a regex case
+//! operands[0] is the switch value to test
+//! result is a bool indicating match
+class QoreIRSwitchRegexMatchInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRSwitchRegexMatchInstruction(const CaseNodeRegex* n_regex_case)
+            : QoreIRInstruction(QoreIROpcode::SwitchRegexMatch), regex_case(n_regex_case) {
+    }
+
+    ~QoreIRSwitchRegexMatchInstruction() override;
+
+    const CaseNodeRegex* regex_case = nullptr;  //!< The regex case node containing the regex
+    bool owns_regex_case = false;  //!< true when deserialized (we own the CaseNodeRegex)
+};
+
+//! Switch case match instruction - tests if switch value matches a case value with enum unwrapping
+//! Uses CaseNode::matches() which unwraps TAG_ENUM from both sides before isEqualHard()
+//! operands[0] is the switch value to test
+//! result is a bool indicating match
+class QoreIRSwitchCaseMatchInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRSwitchCaseMatchInstruction(const CaseNode* n_case_node)
+            : QoreIRInstruction(QoreIROpcode::SwitchCaseMatch), case_node(n_case_node) {
+    }
+
+    ~QoreIRSwitchCaseMatchInstruction() override;
+
+    const CaseNode* case_node = nullptr;  //!< The case node for match evaluation
+    bool owns_case_node = false;  //!< True when case_node was created during deserialization
+};
+
+//! Reference foreach init instruction — stores the ParseReferenceNode expression
+//! for AOT serialization (expr slot). Result is an opaque state handle.
+class QoreIRRefForeachInitInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRRefForeachInitInstruction(const QoreValue& parse_ref_expr)
+            : QoreIRInstruction(QoreIROpcode::RefForeachInit), expr(parse_ref_expr) {
+        expr.ref();
+    }
+
+    ~QoreIRRefForeachInitInstruction() override {
+        expr.discard(nullptr);
+    }
+
+    QoreValue expr;  //!< ParseReferenceNode expression
+};
+
+//! Call an AOT-emitted helper function by LLVM symbol name.
+/** Produced by the init-expression outlining pass to split a large
+    init-function body across multiple LLVM functions.  Helper fns
+    have the AOT ABI (ptr ctx, ptr xsink) → int64_t nan-boxed value.
+    The call instruction carries only the symbol name; no operands
+    are consumed because the helper is self-contained.
+*/
+class QoreIRCallAOTHelperInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRCallAOTHelperInstruction(std::string n_helper_name)
+            : QoreIRInstruction(QoreIROpcode::CallAOTHelper),
+              helper_name(std::move(n_helper_name)) {
+    }
+
+    std::string helper_name;  //!< LLVM symbol name of the target helper fn
+};
+
+class QoreIRBasicBlock {
+public:
+    explicit QoreIRBasicBlock(std::string n_name) : name(std::move(n_name)) {
+    }
+
+    template <typename T, typename... Args>
+    T* appendInstruction(Args&&... args) {
+        auto inst = std::make_unique<T>(std::forward<Args>(args)...);
+        T* ptr = inst.get();
+        instructions.push_back(std::move(inst));
+        return ptr;
+    }
+
+    //! Insert instruction at the beginning of the block
+    void prependInstruction(std::unique_ptr<QoreIRInstruction> inst) {
+        instructions.insert(instructions.begin(), std::move(inst));
+    }
+
+    std::string name;
+    std::vector<std::unique_ptr<QoreIRInstruction>> instructions;
+
+    //! True if this block is a loop header (condition block for while/for/do-while).
+    //! Used by the IR interpreter for loop-aware JIT promotion (OSR).
+    bool is_loop_header = false;
+
+    //! True if this block contains phi nodes at the beginning.
+    //! Set during computeSlotIdsAndEmbed() to optimize phi loop skipping.
+    bool has_phi_nodes = false;
+};
+
+class QoreIRFunction {
+public:
+    explicit QoreIRFunction(std::string n_name, std::string n_display_name = {})
+            : name(std::move(n_name)),
+            display_name(n_display_name.empty() ? deriveDisplayName(name) : std::move(n_display_name)) {
+    }
+
+    ~QoreIRFunction() {
+        delete cached_pre_instantiated;
+        for (auto* loc : owned_locations) {
+            delete loc;
+        }
+    }
+
+    QoreIRBasicBlock* createBlock(const std::string& block_name) {
+        auto block = std::make_unique<QoreIRBasicBlock>(block_name);
+        QoreIRBasicBlock* ptr = block.get();
+        blocks.push_back(std::move(block));
+        return ptr;
+    }
+
+    //! Move an existing block to the end of the block list.
+    //! This ensures it is processed after all subsequently-created blocks
+    //! during LLVM lowering (which processes blocks in list order).
+    void moveBlockToEnd(QoreIRBasicBlock* block) {
+        auto it = std::find_if(blocks.begin(), blocks.end(),
+                [block](const std::unique_ptr<QoreIRBasicBlock>& p) { return p.get() == block; });
+        if (it != blocks.end()) {
+            auto ptr = std::move(*it);
+            blocks.erase(it);
+            blocks.push_back(std::move(ptr));
+        }
+    }
+
+    QoreIRValue createValue() {
+        return QoreIRValue(next_value_id++);
+    }
+
+    const std::string& getDisplayName() const {
+        return display_name;
+    }
+
+    static std::string deriveDisplayName(const std::string& n_name) {
+        size_t pos = n_name.find('@');
+        return pos == std::string::npos ? n_name : n_name.substr(0, pos);
+    }
+
+    //! @return true if direct parameter passing is enabled and no parameter local is closure-captured
+    bool isDirectParamsRuntimeSafe() const;
+
+    std::string name;
+    std::string display_name;
+    //! Source QoreFunction this IR was lowered from — used by
+    //! createCallDirect to identify self-recursion by pointer equality
+    //! rather than base-name comparison.  Without this, a caller in
+    //! namespace `OMQ` that invokes `Util::foo` was misidentified as
+    //! self-recursion because both `current_func->getName()` and
+    //! `callee->getName()` equal `"foo"`; the LLVM emitter then issued
+    //! a direct call to its own fast entry and infinite-recursed.
+    const QoreFunction* source_qf = nullptr;
+    std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
+
+    // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
+    uint32_t max_value_id = 0;
+
+    // Maximum local variable slot ID (used to right-size locals array in interpreter)
+    // Maps LocalVar* pointers to their slot IDs for flat array access instead of hash maps
+    uint32_t max_local_slot_id = 0;
+
+    // For handler IR functions: number of slots inherited from parent function
+    // Slot IDs 0..parent_slot_count-1 come from the parent, rest are handler-own
+    // At runtime, parent's local values are copied into these inherited slots
+    uint32_t parent_slot_count = 0;
+
+    // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
+    // Used by the IR interpreter to convert unordered_map lookups to direct array access
+    std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
+
+    //! Reserve a stable local slot before full IR lowering is complete.
+    /** Block-level on_exit handler compilation can compute and inherit parent
+        slot IDs while the parent function is still being lowered.  Signature
+        locals and other pre-instantiated locals must therefore have stable
+        slots before nested block lowering can trigger handler compilation.
+        @param lv the local variable to reserve a slot for; ignored if null or
+        already reserved */
+    void reserveLocalSlot(const LocalVar* lv) {
+        if (!lv || local_var_slots.find(lv) != local_var_slots.end()) {
+            return;
+        }
+        uint32_t next_slot = local_var_slots.empty() ? 0 : max_local_slot_id + 1;
+        local_var_slots[lv] = next_slot;
+        max_local_slot_id = next_slot;
+    }
+
+    // Mapping of param index → slot_id (built during IR lowering).
+    // Used by IRDirectParams to pre-populate the slot cache from caller-provided
+    // values, bypassing TLS instantiate/eval/uninstantiate round-trip.
+    std::unordered_map<int, uint32_t> param_slot_ids;
+
+    // Mapping of param index → LocalVar* (built during IR lowering).
+    // Used to access parameter type information during direct param processing.
+    std::unordered_map<int, const LocalVar*> param_local_vars;
+
+    //! True when all params are IR-only (not accessed by AST expression trees,
+    //! not closure-captured, not reference-typed) AND no argvid is needed.
+    //! When true, callers can use IRDirectParams to skip TLS entirely.
+    bool direct_params_eligible = false;
+
+    // Set of LocalVar* pointers that are already instantiated by the caller
+    // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),
+    // and AST-visible body locals from the statement tree).  IR-only body locals
+    // are intentionally excluded so the JIT can keep them in LLVM allocas
+    // without runtime local-stack traffic.
+    std::unordered_set<const void*> pre_instantiated_locals;
+
+    // Cached LocalVar* set for fast iteration in evalTiered() without per-call allocation.
+    // Populated in attemptIRLowering() with the same sources as pre_instantiated_locals.
+    std::unordered_set<const LocalVar*> pre_instantiated_cache;
+
+    // Cached pre-instantiated set (params + argvid + ast_visible_body_locals)
+    // This is built once during IR lowering and reused on every call.
+    // selfid is handled separately since it's conditional on (self && selfid).
+    mutable std::unordered_set<const LocalVar*>* cached_pre_instantiated = nullptr;
+
+    // Return type info for the function (populated in attemptIRLowering()).
+    // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.
+    const QoreTypeInfo* return_type_info = nullptr;
+
+    //! Concrete receiver type used when this IR function is specialized for a generic class instantiation
+    const QoreTypeInfo* specialization_receiver_type_info = nullptr;
+
+    //! Concrete method/function type arguments used when this IR function is specialized for a generic call
+    QoreTypeParamInstantiation specialization_type_param_instantiation;
+
+    bool hasTypeSpecialization() const {
+        return specialization_receiver_type_info || !specialization_type_param_instantiation.empty();
+    }
+
+    const QoreTypeInfo* specializeType(const QoreTypeInfo* ti) const {
+        return hasTypeSpecialization()
+            ? qore_substitute_type_params_if_needed(ti, specialization_receiver_type_info,
+                specialization_type_param_instantiation.empty() ? nullptr : &specialization_type_param_instantiation)
+            : ti;
+    }
+
+    // Owned source location objects for AOT-deserialized instructions.
+    // In JIT mode, inst->loc points into the parse tree (owned elsewhere).
+    // In AOT mode, the parse tree doesn't exist, so these are allocated here
+    // and inst->loc is set to point into this vector.
+    // Uses raw pointers because QoreProgramLocation is forward-declared here.
+    std::vector<QoreProgramLocation*> owned_locations;
+
+    // All body locals from the statement tree (top-level + all nested blocks
+    // from fully-lowered statements: if/for/while/try/switch).
+    // Used by evalTiered() to instantiate/uninstantiate all locals before/after
+    // IR or JIT execution, so that AST Invoke callbacks can find them on the
+    // thread-local variable stack.
+    std::vector<LocalVar*> all_body_locals;
+
+    // Subset of all_body_locals that are NOT IR-only: must be pre-instantiated by
+    // evalTiered() so AST Invoke callbacks can find them on the thread-local stack.
+    // Populated by computeIROnlyLocals() after ir_only_locals is determined.
+    std::vector<LocalVar*> ast_visible_body_locals;
+
+    // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
+    // in fully-lowered IR code — never referenced by Invoke expression subtrees,
+    // delegate-to-AST statements, or closure captures.  For these locals, the LLVM
+    // lowering can skip qore_rt_assign_local (runtime sync) and reloadLocalFromRuntime
+    // (reload after calls), since no AST callback will ever look them up.
+    std::unordered_set<const void*> ir_only_locals;
+
+    // Total number of unique locals referenced by LoadLocal/StoreLocal/UninstantiateLocal.
+    // Used with ir_only_locals.size() to determine if ALL locals are IR-only
+    // (enabling reloadAllLocalsFromRuntime to be skipped entirely).
+    size_t total_local_count = 0;
+
+    // Map from call instruction pointer → set of LocalVar* live immediately after
+    // Used by liveness analysis to determine which locals need reloading after each call
+    std::unordered_map<const QoreIRInstruction*, std::unordered_set<const LocalVar*>>
+        live_locals_after_call;
+
+    //! Compute slot IDs for local variables and embed them into instructions.
+    //! Also computes max_value_id for right-sizing the interpreter value vector.
+    //! Must be called after IR lowering and verification, before execution.
+    void computeSlotIdsAndEmbed();
+
+    //! Analyze all instructions to classify locals as IR-only vs AST-visible.
+    //! Must be called after IR lowering completes but before LLVM lowering/execution.
+    void computeIROnlyLocals();
+
+    //! Returns true if all body locals are IR-only (managed by LLVM allocas,
+    //! never accessed via thread-local stack).  When true, callers can skip
+    //! instantiating/uninstantiating body locals on the thread-local stack.
+    bool areAllBodyLocalsIROnly() const {
+        return !all_body_locals.empty() && !ir_only_locals.empty()
+            && std::all_of(all_body_locals.begin(), all_body_locals.end(),
+                [this](const LocalVar* lv) {
+                    return ir_only_locals.count(reinterpret_cast<const void*>(lv));
+                });
+    }
+
+    //! Type profiles for guards — indexed by guard_id
+    //! Populated during IR interpretation; read during JIT compilation for specialization
+    //! mutable: written during const IR execution (type recording is a side-channel)
+    //! Uses unique_ptr<[]> because TypeProfile contains std::atomic members (non-movable)
+    mutable std::unique_ptr<TypeProfile[]> guard_profiles;
+    mutable uint32_t guard_profile_count = 0;
+
+    //! Number of guards in this function
+    uint32_t num_guards = 0;
+
+    //! Allocate guard profiles array to match num_guards
+    void initGuardProfiles() {
+        if (guard_profile_count < num_guards) {
+            guard_profiles.reset(new TypeProfile[num_guards]());
+            guard_profile_count = num_guards;
+        }
+    }
+
+    //! OSR flag: set by the IR interpreter when a hot loop is detected.
+    //! Checked by evalTiered() after IR execution to trigger JIT compilation.
+    //! mutable: written during const IR execution.
+    mutable bool osr_jit_requested = false;
+
+private:
+    uint32_t next_value_id = 1;
+};
+
+//! Check if an opcode is a block terminator (transfers control flow)
+inline bool isTerminator(QoreIROpcode op) {
+    return getOpcodeIsTerminator(static_cast<int>(op));
+}
+
+#endif

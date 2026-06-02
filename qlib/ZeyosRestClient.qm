@@ -30,7 +30,9 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 2.0
 
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module ZeyosRestClient {
     version = "1.1";
@@ -245,6 +247,7 @@ ZeyosRestClient zeyos(
 
     #! logs in an sets the token for further communication
     private loginIntern(*reference<hash> info) {
+%ifndef NoJson
         hash<auto> result = RestClient::doValidatedRequest("POST", "/" + instance + AuthPath, make_json({
             "name": username,
             "password": password,
@@ -252,6 +255,9 @@ ZeyosRestClient zeyos(
             "appsecret": appsecret,
         }), \info, True, {"Content-Type": MimeTypeJson});
         setToken("Bearer", result.body.token);
+%else
+        throw "ZEYOSRESTCLIENT-ERROR", "json module not available";
+%endif
     }
 }
 

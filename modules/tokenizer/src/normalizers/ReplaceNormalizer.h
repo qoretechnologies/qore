@@ -13,6 +13,8 @@
 
 #include "normalizers/AbstractNormalizer.h"
 
+#include <regex>
+
 namespace QoreTokenizer {
 
 //! Normalizer that replaces all occurrences of a pattern string
@@ -30,8 +32,14 @@ private:
     //! The string pattern to find
     std::string pattern;
 
+    //! Compiled regular expression when the HuggingFace pattern is {"Regex": "..."}
+    std::regex regex_pattern;
+
     //! The replacement string
     std::string replacement;
+
+    //! True if regex_pattern should be used instead of literal string replacement
+    bool regex_mode = false;
 };
 
 } // namespace QoreTokenizer

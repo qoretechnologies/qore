@@ -224,6 +224,7 @@ public const ServerCapabilities = {
     },
 };
 
+%ifndef NoJson
 #! QLS - Language Server Protocol server implementation for Qore.
 public class QLSServer {
     private {
@@ -299,6 +300,12 @@ public class QLSServer {
         #! Standard Qore modules
         hash<auto> stdModuleDocs;
 
+        #! Standard Qore module URIs; documents are parsed lazily from this list
+        list<string> stdModuleUris = ();
+
+        #! Whether standard module sources have been parsed into stdModuleDocs
+        bool stdModuleDocsLoaded = False;
+
         #! URIs of ignored documents
         hash<auto> ignoredUris;
 
@@ -316,6 +323,18 @@ public class QLSServer {
 
         #! Single-char prefix index: lowercased first char → list of names
         hash<string, list<string>> metaPrefixIndex;
+
+        #! Process-local cache for immutable standard module URI lists and lazily parsed documents
+        static hash<auto> stdModuleDocsCache;
+
+        #! Lock protecting standard module document cache initialization
+        static Mutex stdModuleDocsCacheMutex();
+
+        #! Process-local cache for immutable builtin metadata and lookup indexes
+        static hash<auto> builtinMetadataCache;
+
+        #! Lock protecting builtin metadata cache initialization
+        static Mutex builtinMetadataCacheMutex();
     }
 
     private:internal {
@@ -344,7 +363,7 @@ public class QLSServer {
             Dir d();
             if (!d.chdir(dirname(logFilePath))) {
                 try {
-                    d.create(0755);
+                    d.create(mode: 0755);
                 } catch (hash<ExceptionInfo> ex) {
                     return;
                 }
@@ -358,18 +377,10 @@ public class QLSServer {
         }
     }
 
-    private:internal log(int verbosity, string fmt) {
+    private:internal log(int verbosity, string fmt, ...) {
         if (fos && verbosity <= logVerbosity) {
             string str = sprintf("%s: ", format_date("YYYY-MM-DD HH:mm:SS", now()));
             string msg = vsprintf(str + fmt + "\n", argv);
-            fos.write(binary(msg));
-        }
-    }
-
-    private:internal log(int verbosity, string fmt, softlist<auto> l) {
-        if (fos && verbosity <= logVerbosity) {
-            string str = sprintf("%s: ", format_date("YYYY-MM-DD HH:mm:SS", now()));
-            string msg = vsprintf(str + fmt + "\n", l);
             fos.write(binary(msg));
         }
     }
@@ -591,6 +602,24 @@ public class QLSServer {
     }
 
     private:internal parseStdModules() {
+        {
+            AutoLock al(stdModuleDocsCacheMutex);
+            if (exists stdModuleDocsCache.files) {
+                stdModuleUris = stdModuleDocsCache.files;
+                if (exists stdModuleDocsCache.docs) {
+                    stdModuleDocs = stdModuleDocsCache.docs;
+                    stdModuleDocsLoaded = True;
+                }
+                return;
+            }
+            if (exists stdModuleDocsCache.docs) {
+                stdModuleDocs = stdModuleDocsCache.docs;
+                stdModuleDocsLoaded = True;
+                stdModuleUris = keys stdModuleDocs;
+                return;
+            }
+        }
+
         # find standard Qore modules
         list<string> moduleFiles;
         try {
@@ -608,11 +637,67 @@ public class QLSServer {
             rethrow;
         }
 
-        # create a list of file URIs
-        moduleFiles = map Document::getFileUri($1), moduleFiles;
+        # create a list of file URIs; parsing is deferred until a request needs source docs
+        stdModuleUris = map Document::getFileUri($1), moduleFiles;
+        log(0, "standard module discovery found %d files", stdModuleUris.size());
 
-        # parse everything
-        map stdModuleDocs{$1} = new Document($1), moduleFiles;
+        {
+            AutoLock al(stdModuleDocsCacheMutex);
+            if (!exists stdModuleDocsCache.files) {
+                stdModuleDocsCache.files = stdModuleUris;
+            } else {
+                stdModuleUris = stdModuleDocsCache.files;
+            }
+            if (exists stdModuleDocsCache.docs) {
+                stdModuleDocs = stdModuleDocsCache.docs;
+                stdModuleDocsLoaded = True;
+            }
+        }
+    }
+
+    private:internal ensureStdModuleDocs(string reason = "unspecified") {
+        if (stdModuleDocsLoaded) {
+            return;
+        }
+
+        {
+            AutoLock al(stdModuleDocsCacheMutex);
+            if (exists stdModuleDocsCache.docs) {
+                stdModuleDocs = stdModuleDocsCache.docs;
+                stdModuleDocsLoaded = True;
+                if (!stdModuleUris.size() && exists stdModuleDocsCache.files) {
+                    stdModuleUris = stdModuleDocsCache.files;
+                }
+                return;
+            }
+            if (!stdModuleUris.size() && exists stdModuleDocsCache.files) {
+                stdModuleUris = stdModuleDocsCache.files;
+            }
+        }
+
+        if (!stdModuleUris.size()) {
+            parseStdModules();
+            if (stdModuleDocsLoaded) {
+                return;
+            }
+        }
+
+        date start = now_us();
+        log(0, "lazy parsing standard module files for %s", reason);
+        hash<auto> parsedDocs;
+        map parsedDocs{$1} = new Document($1), stdModuleUris;
+
+        {
+            AutoLock al(stdModuleDocsCacheMutex);
+            if (!exists stdModuleDocsCache.docs) {
+                stdModuleDocsCache.docs = parsedDocs;
+            }
+            stdModuleDocs = stdModuleDocsCache.docs;
+            stdModuleDocsLoaded = True;
+        }
+
+        date end = now_us();
+        log(0, "lazy parsing of %d standard module files took: %y", stdModuleDocs.size(), end - start);
     }
 
     #! Find the metadata directory containing qpp .meta.json files
@@ -636,6 +721,21 @@ public class QLSServer {
     #! Load builtin metadata from qpp .meta.json files + reflection
     private:internal loadBuiltinMetadata() {
         *string metadir = findMetadataDir();
+        string cacheKey = metadir ?? "";
+
+        {
+            AutoLock al(builtinMetadataCacheMutex);
+            if (builtinMetadataCache.builtinMetadata && builtinMetadataCache.dir == cacheKey) {
+                builtinMetadata = builtinMetadataCache.builtinMetadata;
+                metaByName = builtinMetadataCache.metaByName;
+                metaByQualifiedName = builtinMetadataCache.metaByQualifiedName;
+                metaClassByName = builtinMetadataCache.metaClassByName;
+                metaPrefixIndex = builtinMetadataCache.metaPrefixIndex;
+                log(0, "metadata index reused: %d names, %d qualified, %d classes",
+                    metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
+                return;
+            }
+        }
 
         # step 1: extract runtime structure via reflection
         hash<QoreApiMetadata::NamespaceInfo> runtimeMeta;
@@ -669,6 +769,20 @@ public class QLSServer {
         buildMetadataIndex(builtinMetadata);
         log(0, "metadata index built: %d names, %d qualified, %d classes",
             metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
+
+        {
+            AutoLock al(builtinMetadataCacheMutex);
+            if (!builtinMetadataCache.builtinMetadata || builtinMetadataCache.dir != cacheKey) {
+                builtinMetadataCache = {
+                    "dir": cacheKey,
+                    "builtinMetadata": builtinMetadata,
+                    "metaByName": metaByName,
+                    "metaByQualifiedName": metaByQualifiedName,
+                    "metaClassByName": metaClassByName,
+                    "metaPrefixIndex": metaPrefixIndex,
+                };
+            }
+        }
     }
 
     #! Build fast lookup indexes from the metadata tree
@@ -786,7 +900,7 @@ public class QLSServer {
         }
 
         try {
-            # parse standard Qore modules
+            # discover standard Qore modules; source parsing is deferred until needed
             parseStdModules();
         } catch (hash<ExceptionInfo> ex) {
             return ErrorResponse::internalError(jsonRpcVer, sprintf("%s: %s: %Y", ex.err, ex.desc, ex));
@@ -1130,12 +1244,12 @@ public class QLSServer {
                 query = query.substr(1);
             }
         }
+        bool queryCanBeSourceSymbol = query =~ /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-        # find matching symbols
+        # find matching symbols in already parsed documents first; standard modules are loaded lazily below
         list<auto> symbols = ();
         map symbols += $1.findMatchingSymbols(query, True), documents.iterator();
         map symbols += $1.findMatchingSymbols(query, True), workspaceDocs.iterator();
-        map symbols += $1.findMatchingSymbols(query, True), stdModuleDocs.iterator();
 
         for (int i = symbols.size() - 1; i >= 0; i--) {
             if (SymbolUsageFastMap{string(symbolInfo.usage)}) {
@@ -1144,6 +1258,7 @@ public class QLSServer {
                 }
             }
         }
+        bool parsedSymbolMatched = !symbols.empty();
 
         # prepare results
         hash<auto> result = {"range": symbolInfo.range, "contents": ()};
@@ -1172,6 +1287,31 @@ public class QLSServer {
             }
         }
 
+        # full standard-module source parsing is expensive, so only use it after metadata/open docs miss
+        if (!result.contents.size() && !parsedSymbolMatched && queryCanBeSourceSymbol) {
+            ensureStdModuleDocs("hover: " + query);
+
+            list<auto> stdSymbols = ();
+            map stdSymbols += $1.findMatchingSymbols(query, True), stdModuleDocs.iterator();
+
+            for (int i = stdSymbols.size() - 1; i >= 0; i--) {
+                if (SymbolUsageFastMap{string(symbolInfo.usage)}) {
+                    if (!SymbolUsageFastMap{string(symbolInfo.usage)}.contains(stdSymbols[i].kind)) {
+                        splice stdSymbols, i, 1;
+                    }
+                }
+            }
+
+            foreach hash<auto> symbol in (stdSymbols) {
+                *hash<auto> description = stdModuleDocs{symbol.location.uri}.hoverInfo(symbol.kind,
+                    symbol.location.range.start);
+
+                if (description) {
+                    result.contents += replace(description.description, "*", "\\*");
+                }
+            }
+        }
+
         return make_jsonrpc_response(jsonRpcVer, request.id, result);
     }
 
@@ -1187,7 +1327,7 @@ public class QLSServer {
         }
 
         # filter by symbol kind using usage info
-        *hash<string, bool> validKinds = SymbolUsageFastMap{string(symbolInfo.usage)};
+        *list<auto> validKinds = SymbolUsageFastMap{string(symbolInfo.usage)};
         list<hash<auto>> filtered = ();
         foreach hash<auto> entry in (entries) {
             if (validKinds) {
@@ -2203,17 +2343,32 @@ public class QLSServer {
             return make_jsonrpc_response(jsonRpcVer, request.id, ());
         }
 
-        # Search for type declaration across all documents
+        # Search for type declaration across already parsed documents first.
         list<auto> symbols = ();
         map symbols += $1.findMatchingSymbols(typeName, True), documents.iterator();
         map symbols += $1.findMatchingSymbols(typeName, True), workspaceDocs.iterator();
-        map symbols += $1.findMatchingSymbols(typeName, True), stdModuleDocs.iterator();
 
         # Filter to declaration types only (class, hashdecl, typedef, enum)
         list<auto> result = ();
         foreach hash<auto> sym in (symbols) {
             if (sym.kind == ASTSymbolKind.Class
                     || sym.kind == ASTSymbolKind.Interface  # hashdecl
+                    || sym.kind == ASTSymbolKind.Enum
+                    || sym.kind == ASTSymbolKind.Namespace) {
+                result += sym.location;
+            }
+        }
+
+        if (!result.empty()) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, result);
+        }
+
+        ensureStdModuleDocs("typeDefinition: " + typeName);
+        symbols = ();
+        map symbols += $1.findMatchingSymbols(typeName, True), stdModuleDocs.iterator();
+        foreach hash<auto> sym in (symbols) {
+            if (sym.kind == ASTSymbolKind.Class
+                    || sym.kind == ASTSymbolKind.Interface
                     || sym.kind == ASTSymbolKind.Enum
                     || sym.kind == ASTSymbolKind.Namespace) {
                 result += sym.location;
@@ -2401,12 +2556,32 @@ public class QLSServer {
         # Resolve each superclass to its declaration
         list<auto> result = ();
         foreach string parentName in (superNames) {
-            # Search across all docs
+            # Search parsed/open docs first; defer standard module parsing until needed.
             list<auto> symbols = ();
             map symbols += $1.findMatchingSymbols(parentName, True), documents.iterator();
             map symbols += $1.findMatchingSymbols(parentName, True), workspaceDocs.iterator();
-            map symbols += $1.findMatchingSymbols(parentName, True), stdModuleDocs.iterator();
 
+            bool found = False;
+            foreach hash<auto> sym in (symbols) {
+                if (sym.kind == ASTSymbolKind.Class) {
+                    result += {
+                        "name": sym.name,
+                        "kind": LspSymbolKind.Class,
+                        "uri": sym.location.uri,
+                        "range": sym.location.range,
+                        "selectionRange": sym.location.range,
+                    };
+                    found = True;
+                    break;  # take first match
+                }
+            }
+            if (found) {
+                continue;
+            }
+
+            ensureStdModuleDocs("typeHierarchy/supertypes: " + parentName);
+            symbols = ();
+            map symbols += $1.findMatchingSymbols(parentName, True), stdModuleDocs.iterator();
             foreach hash<auto> sym in (symbols) {
                 if (sym.kind == ASTSymbolKind.Class) {
                     result += {
@@ -2470,7 +2645,10 @@ public class QLSServer {
 
         map scanDoc(documents{$1}, $1), keys documents;
         map scanDoc(workspaceDocs{$1}, $1), keys workspaceDocs;
-        map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
+        if (result.empty()) {
+            ensureStdModuleDocs("typeHierarchy/subtypes: " + targetName);
+            map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
+        }
 
         return make_jsonrpc_response(jsonRpcVer, request.id, result);
     }
@@ -2633,7 +2811,9 @@ public class QLSServer {
 
             map scanDoc(documents{$1}, $1), keys documents;
             map scanDoc(workspaceDocs{$1}, $1), keys workspaceDocs;
-            map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
+            if (stdModuleDocsLoaded) {
+                map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
+            }
         } else if (symbolInfo.kind == ASTSymbolKind.Method
                 || symbolInfo.kind == ASTSymbolKind.Function) {
             # For methods: find implementations in subclasses
@@ -2683,7 +2863,9 @@ public class QLSServer {
 
                 map scanDoc(documents{$1}, $1), keys documents;
                 map scanDoc(workspaceDocs{$1}, $1), keys workspaceDocs;
-                map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
+                if (stdModuleDocsLoaded) {
+                    map scanDoc(stdModuleDocs{$1}, $1), keys stdModuleDocs;
+                }
             }
 
             # If no implementations found and this isn't abstract, return the definition itself
@@ -3430,7 +3612,7 @@ public class QLSServer {
         return NOTHING;
     }
 
-    #! Build a hash of URI → AstTree for all open documents except the given one
+    #! Build a hash of URI → AstTree for parsed documents except the given one
     private *hash<auto> buildOtherTrees(string excludeUri) {
         hash<auto> otherTrees;
         foreach string docUri in (keys documents) {
@@ -3519,12 +3701,12 @@ public class QLSServer {
                 query = query.substr(1);
             }
         }
+        bool queryCanBeSourceSymbol = query =~ /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-        # find matching symbols
+        # find matching symbols in already parsed documents first
         list<auto> symbols = ();
         map symbols += $1.findMatchingSymbols(query, True), documents.iterator();
         map symbols += $1.findMatchingSymbols(query, True), workspaceDocs.iterator();
-        map symbols += $1.findMatchingSymbols(query, True), stdModuleDocs.iterator();
 
         for (int i = symbols.size() - 1; i >= 0; i--) {
             if (SymbolUsageFastMap{string(symbolInfo.usage)}) {
@@ -3536,9 +3718,31 @@ public class QLSServer {
 
         # prepare results
         list<auto> result = map $1.location, symbols;
+        if (!result.empty()) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, result);
+        }
+
+        if (!queryCanBeSourceSymbol) {
+            return make_jsonrpc_response(jsonRpcVer, request.id, ());
+        }
+
+        ensureStdModuleDocs("definition: " + query);
+        symbols = ();
+        map symbols += $1.findMatchingSymbols(query, True), stdModuleDocs.iterator();
+
+        for (int i = symbols.size() - 1; i >= 0; i--) {
+            if (SymbolUsageFastMap{string(symbolInfo.usage)}) {
+                if (!SymbolUsageFastMap{string(symbolInfo.usage)}.contains(symbols[i].kind)) {
+                    splice symbols, i, 1;
+                }
+            }
+        }
+
+        result = map $1.location, symbols;
         return make_jsonrpc_response(jsonRpcVer, request.id, result);
     }
 }
+%endif
 
 #! ASTSymbolKind to CompletionItem.kind mapping
 const CSTSymbolKindMap = {

@@ -35,6 +35,14 @@
 %requires RestClientIo
 %requires FileLocationHandler
 
+%try-module json
+%define NoJson
+%endtry
+
+%try-module yaml
+%define NoYaml
+%endtry
+
 module OpenAiDataProvider {
     version = "1.6";
     desc = "user module providing a data provider API for OpenAI services";

@@ -675,9 +675,15 @@ public class DataProviderActionCatalog {
             throw "APP-ERROR", sprintf("Application is missing the following required keys: %y (app: %y)",
                 keys missing, app);
         }
-        if (*list<string> missing = (map $1.key, app{keys RequiredAppKeys}.pairIterator(), !$1.value.val())) {
+        list<string> missing_keys = ();
+        foreach hash<auto> elem in (app{keys RequiredAppKeys}.pairIterator()) {
+            if (!elem.value.val()) {
+                missing_keys += elem.key;
+            }
+        }
+        if (missing_keys) {
             throw "APP-ERROR", sprintf("Application is missing the following required keys: %y (app: %y)",
-                missing, app);
+                missing_keys, app);
         }
         if (DataProviderActionCatalog::checkName(app.name)) {
             throw "APP-ERROR", sprintf("Application name %y is illegal; only A-Za-z0-9_- are accepted", app.name);
@@ -1092,9 +1098,15 @@ public class DataProviderActionCatalog {
             throw "ACTION-ERROR", sprintf("action is missing the following required keys: %y (action: %y)",
                 keys missing, action);
         }
-        if (*list<string> missing = (map $1.key, action{keys RequiredActionKeys}.pairIterator(), !$1.value.val())) {
+        list<string> missing_keys = ();
+        foreach hash<auto> elem in (action{keys RequiredActionKeys}.pairIterator()) {
+            if (!elem.value.val()) {
+                missing_keys += elem.key;
+            }
+        }
+        if (missing_keys) {
             throw "ACTION-ERROR", sprintf("action is missing the following required keys: %y (action: %y)",
-                missing, action);
+                missing_keys, action);
         }
         if (!ActionCodeFlagMap.hasKey(action.action_code)) {
             throw "ACTION-ERROR", sprintf("invalid action code %y in action: %y", action.action_code, action);
@@ -1126,12 +1138,13 @@ public class DataProviderActionCatalog {
             }
         }
 
-        if (action.output_type && action.get_output_type) {
+        bool has_get_output_type = action.hasKey("get_output_type");
+        if (action.output_type && has_get_output_type) {
             throw "ACTION-ERROR", sprintf("action has both \"output_type\" and \"get_output_type\"; path: %y",
                 action.path);
         }
 
-        if (action.get_dynamic_options && !action.has_dynamic_options) {
+        if (action.hasKey("get_dynamic_options") && !action.has_dynamic_options) {
             action.has_dynamic_options = True;
         }
 
@@ -1209,7 +1222,12 @@ public class DataProviderActionCatalog {
             if (!DataProviderActionCatalog::compareActions(action, act)) {
                 return;
             }
-            list<string> diff = map $1.key, act.pairIterator(), $1.value != action{$1.key};
+            list<string> diff = ();
+            foreach hash<auto> elem in (act.pairIterator()) {
+                if (elem.value != action{elem.key}) {
+                    diff += elem.key;
+                }
+            }
             throw "ACTION-ERROR", sprintf("Action with application %y, action %y already registered; diff: %y",
                 act.app, act.action, diff);
         }
@@ -1223,7 +1241,7 @@ public class DataProviderActionCatalog {
             }
             smap{app.scheme} += action;
         }
-        if (action.get_output_type) {
+        if (has_get_output_type) {
             resolve_output_types{action.app}{action.action} = True;
         }
     }
@@ -1494,14 +1512,18 @@ public class DataProviderActionCatalog {
 
     #! Returns all actions for the given application
     /** @param app the data provider application
+        @param check_index if \c True, check the provider index for an on-demand module before reading registered
+            actions
 
         @return a list of actions for the given application
 
         @see getActionsEx()
     */
-    static *list<hash<DataProviderActionInfo>> getActions(string app) {
+    static *list<hash<DataProviderActionInfo>> getActions(string app, bool check_index = True) {
         # load app on demand
-        ProviderIndexUtil::checkAppModule(app);
+        if (check_index) {
+            ProviderIndexUtil::checkAppModule(app);
+        }
 
         # initialize any pending app
         if (*hash<auto> h = remove initmap{app}) {
@@ -1815,8 +1837,18 @@ public class DataProviderActionCatalog {
     static hash<string, hash<ActionOptionInfo>> getActionOptionFromFields(hash<auto> fields,
             *hash<auto> additional_fields) {
         hash<string, hash<ActionOptionInfo>> rv;
-        foreach hash<auto> i in (fields.pairIterator()) {
+        hash plain_fields = hash(fields);
+        foreach hash<auto> i in (plain_fields.pairIterator()) {
             on_error rethrow $1.err, sprintf("%s (while processing field %y)", $1.desc, i.key);
+            *hash<auto> raw_info;
+            if (!(i.value instanceof AbstractDataField) && i.value.typeCode() == NT_HASH
+                    && i.value.type.typeCode() != NT_LIST) {
+                raw_info = i.value;
+                if (!exists i.value.name) {
+                    i.value.name = i.key;
+                }
+                i.value = new QoreDataField(i.value);
+            }
             if (i.value instanceof AbstractDataField) {
                 hash<DataFieldInfo> info = i.value.getLocalInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",
@@ -1889,6 +1921,14 @@ public class DataProviderActionCatalog {
                 if (info.attr.option_type_name) {
                     i.value.option_type_name = info.attr.option_type_name;
                 }
+                if (raw_info) {
+                    i.value += raw_info{"required", "sensitive", "ref_data", "element_ref_data",
+                        "default_ref_data", "preselected", "required_groups", "exclusive_with",
+                        "validation_regex", "depends_on", "on_change", "metadata", "messages",
+                        "icon", "image", "disabled", "readonly", "supports_custom_values",
+                        "supports_templates", "supports_expressions", "server_expression_handling",
+                        "option_type_name"};
+                }
             }
             on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
             hash<ActionOptionInfo> info = <ActionOptionInfo>{
@@ -1952,6 +1992,12 @@ public class DataProviderActionCatalog {
                 if (i.value.allowed_values instanceof list<hash<AllowedValueInfo>>
                     || i.value.allowed_values instanceof hash<AllowedValueInfo>) {
                     info.allowed_values = i.value.allowed_values;
+                } else if (i.value.allowed_values.typeCode() == NT_LIST
+                    && i.value.allowed_values.size()
+                    && i.value.allowed_values[0].typeCode() == NT_HASH
+                    && i.value.allowed_values[0].hasKey("value")) {
+                    info.allowed_values =
+                        map cast<hash<AllowedValueInfo>>($1), i.value.allowed_values;
                 } else {
                     info.allowed_values = map <AllowedValueInfo>{
                         "value": $1,
@@ -1966,6 +2012,12 @@ public class DataProviderActionCatalog {
                 if (i.value.element_allowed_values instanceof list<hash<AllowedValueInfo>>
                     || i.value.element_allowed_values instanceof hash<AllowedValueInfo>) {
                     info.element_allowed_values = i.value.element_allowed_values;
+                } else if (i.value.element_allowed_values.typeCode() == NT_LIST
+                    && i.value.element_allowed_values.size()
+                    && i.value.element_allowed_values[0].typeCode() == NT_HASH
+                    && i.value.element_allowed_values[0].hasKey("value")) {
+                    info.element_allowed_values =
+                        map cast<hash<AllowedValueInfo>>($1), i.value.element_allowed_values;
                 } else {
                     info.element_allowed_values = map <AllowedValueInfo>{
                         "value": $1,
@@ -2079,10 +2131,31 @@ public class DataProviderActionCatalog {
         foreach hash<auto> i in ((remove resolve_output_types).pairIterator()) {
             foreach hash<auto> j in (i.value.pairIterator()) {
                 string key = sprintf("%s/%s", i.key, j.key);
+                *hash<DataProviderActionInfo> top_action = top_actionmap{key};
+                *hash<DataProviderActionInfo> app_action = app_actionmap{i.key}{j.key};
+                if (!top_action || !app_action) {
+                    continue;
+                }
                 try {
-                    code get_output_type = remove top_actionmap{key}.get_output_type;
-                    remove app_actionmap{i.key}{j.key}.get_output_type;
-                    top_actionmap{key}.output_type = app_actionmap{i.key}{j.key}.output_type = get_output_type();
+                    AbstractDataProviderType output_type = top_action.get_output_type();
+                    top_action.output_type = output_type;
+                    app_action.output_type = output_type;
+                    remove top_action.get_output_type;
+                    remove app_action.get_output_type;
+                    top_actionmap{key} = top_action;
+                    app_actionmap{i.key}{j.key} = app_action;
+                    if (*string scheme = appcache{i.key}.scheme) {
+                        *list<hash<DataProviderActionInfo>> actions = smap{scheme};
+                        if (actions) {
+                            for (int idx = 0; idx < actions.size(); ++idx) {
+                                if (actions[idx].app == i.key && actions[idx].action == j.key) {
+                                    actions[idx] = app_action;
+                                    smap{scheme} = actions;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore exceptions
                 }
@@ -2107,7 +2180,10 @@ public class DataProviderActionCatalog {
         # deregistration (unbounded growth under app/connection churn)
         *hash<string, hash<DataProviderActionInfo>> actions = remove app_actionmap{name};
         remove initactionmap{name};
-        map remove top_actionmap{name + "/" + $1.action}, actions.values();
+        remove resolve_output_types{name};
+        if (actions) {
+            map remove top_actionmap{name + "/" + $1.action}, actions.values();
+        }
         if (!app) {
             return;
         }

@@ -612,7 +612,7 @@ public class AsyncApi3Loader {
 
     #! tries to determine the AsyncApi schema source encoding automatically
     static string detectSourceEncoding(string str) {
-        DataLineIterator it(str);
+        DataLineIterator it(source: str);
         while (it.next()) {
             string line = trim(it.getValue());
             if (line.size()) {

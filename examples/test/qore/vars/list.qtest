@@ -56,15 +56,46 @@ public class ListTest inherits QUnit::Test {
     reverseIterFastPathTest() {
         list<int> l = (1, 2, 3, 4, 5);
 
+        # ListIterator<T> carries the list element type through AbstractIterator<T>.
+        ListIterator<int> li(l);
+        AbstractIterator<int> typed_li = li;
+        assertTrue(typed_li instanceof AbstractIterator<int>);
+        assertFalse(typed_li instanceof AbstractIterator<auto>);
+        assertTrue(typed_li.next());
+        int first = typed_li.getValue();
+        assertEq(1, first);
+
+        object pseudo_li = l.iterator();
+        assertTrue(pseudo_li instanceof ListIterator<int>);
+        assertTrue(pseudo_li instanceof AbstractIterator<int>);
+        assertFalse(pseudo_li instanceof AbstractIterator<auto>);
+
+        AbstractIterator<int> abstract_li = l.iterator();
+        list<int> selected_li = select abstract_li, $1 > 2;
+        assertEq((3, 4, 5), selected_li);
+
+        AbstractIterator<int> abstract_li_ms = l.iterator();
+        list<int> mapped_selected_li = map $1 + 10, abstract_li_ms, $1 % 2;
+        assertEq((11, 13, 15), mapped_selected_li);
+
+        Program p();
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(),
+            ("%new-style\nsub t(){list<int> l=(1,2); AbstractIterator<int> it=l.iterator(); " +
+                "list<string> bad = select it, $1 > 1;}", "typed-abstract-iterator-select-error"));
+
         # ListReverseIterator via foreach
-        ListReverseIterator lri(l);
+        ListReverseIterator<int> lri(l);
+        assertTrue(lri instanceof ListReverseIterator<int>);
+        assertTrue(lri instanceof ListIterator<int>);
+        assertFalse(lri instanceof AbstractIterator<auto>);
         list<int> got = ();
         foreach int v in (lri) { got += v; }
         assertEq((5, 4, 3, 2, 1), got);
 
         # ListReverseIterator via map
-        ListReverseIterator lri2(l);
-        assertEq((50, 40, 30, 20, 10), (map $1 * 10, lri2));
+        ListReverseIterator<int> lri2(l);
+        list<int> doubled_reverse = map $1 * 10, lri2;
+        assertEq((50, 40, 30, 20, 10), doubled_reverse);
 
         # HashListReverseIterator via foreach
         hash<auto> data = {"col1": (1, 2, 3), "col2": ("a", "b", "c")};
@@ -81,7 +112,10 @@ public class ListTest inherits QUnit::Test {
         assertEq(({"x": 3, "y": 30}, {"x": 2, "y": 20}, {"x": 1, "y": 10}), hr);
 
         # SingleValueIterator via foreach
-        SingleValueIterator svi(42);
+        SingleValueIterator<int> svi(42);
+        AbstractIterator<int> typed_svi = svi;
+        assertTrue(typed_svi instanceof AbstractIterator<int>);
+        assertFalse(typed_svi instanceof AbstractIterator<auto>);
         list<auto> sv = ();
         foreach auto v in (svi) { sv += v; }
         assertEq((42,), sv);
@@ -122,6 +156,14 @@ public class ListTest inherits QUnit::Test {
             FsUtil::TmpFile tmp("qore_iterfp", ".txt");
             tmp.file.printf("one\ntwo\nthree\n");
             tmp.file.close();
+            FileLineIterator typed_fli(tmp.path);
+            AbstractIterator<string> typed_file = typed_fli;
+            assertTrue(typed_file instanceof AbstractIterator<string>);
+            assertFalse(typed_file instanceof AbstractIterator<auto>);
+            assertTrue(typed_file.next());
+            string first = typed_file.getValue();
+            assertEq("one", first);
+
             FileLineIterator fli(tmp.path);
             list<string> got = ();
             foreach string line in (fli) { got += line; }
@@ -132,8 +174,16 @@ public class ListTest inherits QUnit::Test {
         string data = "alpha\nbeta\ngamma\n";
 
         DataLineIterator it(data);
+        AbstractIterator<string> typed_data = it;
+        assertTrue(typed_data instanceof AbstractIterator<string>);
+        assertFalse(typed_data instanceof AbstractIterator<auto>);
+        assertTrue(typed_data.next());
+        string first = typed_data.getValue();
+        assertEq("alpha", first);
+
+        DataLineIterator it_foreach(data);
         list<string> got = ();
-        foreach string line in (it) { got += line; }
+        foreach string line in (it_foreach) { got += line; }
         assertEq(("alpha", "beta", "gamma"), got);
 
         # map composition exercises native fast path.
@@ -159,28 +209,52 @@ public class ListTest inherits QUnit::Test {
         # share QoreHashIterator priv; the fast path branches on a view-mode
         # flag set by the QPP ctor.  Verify each Qore class yields the right
         # shape through foreach (drives AbstractIteratorHelper -> fast path).
-        hash<auto> h = {"a": 1, "b": 2, "c": 3};
+        hash<string, int> h = {"a": 1, "b": 2, "c": 3};
+
+        object pseudo_hi = h.iterator();
+        assertTrue(pseudo_hi instanceof HashIterator<int>);
+        assertTrue(pseudo_hi instanceof AbstractIterator<int>);
+        assertFalse(pseudo_hi instanceof AbstractIterator<auto>);
 
         # Forward: VIEW_VALUE
-        HashIterator hi(h);
+        HashIterator<int> hi(h);
+        AbstractIterator<int> typed_hi = hi;
+        assertTrue(typed_hi instanceof AbstractIterator<int>);
+        assertFalse(typed_hi instanceof AbstractIterator<auto>);
         list<auto> vals = ();
         foreach auto v in (hi) { vals += v; }
         assertEq((1, 2, 3), vals);
+        HashIterator<int> hi_get(h);
+        assertTrue(hi_get.next());
+        int hv = hi_get.getValue();
+        int hkv = hi_get.getKeyValue();
+        assertEq(1, hv);
+        assertEq(1, hkv);
 
         # Forward: VIEW_KEY
         HashKeyIterator hki(h);
+        assertTrue(hki instanceof HashIterator<auto>);
+        assertTrue(hki instanceof AbstractIterator<auto>);
+        assertFalse(hki instanceof AbstractIterator<int>);
         list<auto> ks = ();
         foreach auto k in (hki) { ks += k; }
         assertEq(("a", "b", "c"), ks);
 
         # Forward: VIEW_PAIR
         HashPairIterator hpi(h);
+        assertTrue(hpi instanceof HashIterator<auto>);
+        assertTrue(hpi instanceof AbstractIterator<auto>);
+        assertFalse(hpi instanceof AbstractIterator<int>);
         list<auto> pairs = ();
         foreach auto p in (hpi) { pairs += p; }
         assertEq(({"key": "a", "value": 1}, {"key": "b", "value": 2}, {"key": "c", "value": 3}), pairs);
 
         # Reverse value
-        HashReverseIterator hri(h);
+        HashReverseIterator<int> hri(h);
+        assertTrue(hri instanceof HashReverseIterator<int>);
+        assertTrue(hri instanceof HashIterator<int>);
+        assertTrue(hri instanceof AbstractIterator<int>);
+        assertFalse(hri instanceof AbstractIterator<auto>);
         list<auto> rvals = ();
         foreach auto v in (hri) { rvals += v; }
         assertEq((3, 2, 1), rvals);

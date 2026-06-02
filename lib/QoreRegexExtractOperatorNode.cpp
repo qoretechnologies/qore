@@ -47,7 +47,13 @@ int QoreRegexExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
         QoreStringMaker desc("the left side of the %s is ", op_str.c_str());
@@ -66,6 +72,13 @@ int QoreRegexExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         if (!result.isNothing()) {
             parse_context.typeInfo = result.getTypeInfo();
             val = result;
+            parse_context.analysis.clear();
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            if (!result.isNothing()) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+            }
+            parse_context.analysis.known_type = parse_context.typeInfo;
             return 0;
         }
         // constants not resolved - skip parse-time folding, let runtime handle it
@@ -73,5 +86,16 @@ int QoreRegexExtractOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     }
 
     parse_context.typeInfo = qore_get_complex_list_or_nothing_type(stringOrNothingTypeInfo);
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

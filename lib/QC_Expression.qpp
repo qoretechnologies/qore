@@ -41,12 +41,12 @@
 qclass Expression [arg=QoreExpression* e];
 
 //! Creates the expression object
-/** @param pgm The @ref Qore::Program "Program" object where the expression will be created
+/** @param program The @ref Qore::Program "Program" object where the expression will be created
     @param source The source to the expression
     @param label the label for the expression
  */
-Expression::constructor(Program[QoreProgram] pgm, string source, string label) {
-    ReferenceHolder<QoreExpression> exp(new QoreExpression(**pgm, *source, *label, xsink), xsink);
+Expression::constructor(Program[QoreProgram] program, string source, string label) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreExpression> exp(new QoreExpression(**program, *source, *label, xsink), xsink);
     if (!*xsink) {
         self->setPrivate(CID_EXPRESSION, exp.release());
     }

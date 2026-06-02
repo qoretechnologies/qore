@@ -110,10 +110,12 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             const QoreValue file = csi->getKeyValue("file");
             const QoreValue line = csi->getKeyValue("line");
             const QoreValue function = csi->getKeyValue("function");
+            QoreStringValueHelper file_str(file);
+            QoreStringValueHelper function_str(function);
             return new QoreStringNodeMaker("%s:%lld [%s()]",
-                file.getType() == NT_STRING ? file.get<const QoreStringNode>()->c_str() : "",
+                file.getType() == NT_STRING ? file_str->c_str() : "",
                 line.getAsBigInt(),
-                function.getType() == NT_STRING ? function.get<const QoreStringNode>()->c_str() : "");
+                function.getType() == NT_STRING ? function_str->c_str() : "");
         }
         case 'L': {
             ValueHolder v(xsink);

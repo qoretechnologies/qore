@@ -75,15 +75,15 @@ extern QoreClass* QC_OBJECTREVERSEITERATOR;
 qclass ObjectPairReverseIterator [arg=QoreObjectReverseIterator* i; ns=Qore; vparent=ObjectReverseIterator];
 
 //! Creates the object iterator object
-/** @param o the object to iterate
+/** @param object_value the object to iterate
 
     @par Example:
     @code{.py}
 ObjectPairReverseIterator i(obj);
     @endcode
  */
-ObjectPairReverseIterator::constructor(object o) {
-   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator(o), xsink);
+ObjectPairReverseIterator::constructor(object object_value) [flags=NAMED_ARGS] {
+   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator(object_value), xsink);
    p->setView(QoreHashIterator::VIEW_PAIR);
    self->setPrivate(CID_OBJECTPAIRREVERSEITERATOR, p.release());
 }
@@ -127,7 +127,7 @@ foreach hash<auto> h in (new ObjectPairReverseIterator(obj))
 
     @since %Qore 0.8.6.2
  */
-hash<auto> ObjectPairReverseIterator::getValue() [flags=RET_VALUE_ONLY] {
+hash<KeyValueInfo<auto>> ObjectPairReverseIterator::getValue() [flags=RET_VALUE_ONLY] {
     if (i->check(xsink))
         return QoreValue();
     return i->getReferencedValuePair(xsink);

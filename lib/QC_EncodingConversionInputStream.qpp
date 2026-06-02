@@ -59,18 +59,19 @@ qclass EncodingConversionInputStream [arg=EncodingConversionInputStream* is; ns=
 
 //! Creates the EncodingConversionInputStream based on the \ref InputStream given
 /**
-    @param is the source \ref InputStream to read bytes from
-    @param sourceEncoding the encoding of the characters in the source input stream
-    @param destEncoding the destination character encoding
+    @param input_stream the source \ref InputStream to read bytes from
+    @param source_encoding the encoding of the characters in the source input stream
+    @param target_encoding the destination character encoding
     @throw ENCODING-CONVERSION-ERROR if either of the encodings is unsupported
  */
-EncodingConversionInputStream::constructor(Qore::InputStream[InputStream] is, string sourceEncoding, string destEncoding) {
+EncodingConversionInputStream::constructor(Qore::InputStream[InputStream] input_stream, string source_encoding,
+        string target_encoding) [flags=NAMED_ARGS] {
    SimpleRefHolder<EncodingConversionInputStream> ecis(new EncodingConversionInputStream(
-         is.release(), QEM.findCreate(sourceEncoding), QEM.findCreate(destEncoding), xsink));
+         input_stream.release(), QEM.findCreate(source_encoding), QEM.findCreate(target_encoding), xsink));
    self->setPrivate(CID_ENCODINGCONVERSIONINPUTSTREAM, ecis.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_ENCODINGCONVERSIONINPUTSTREAM);
-   o->setValueIntern(cls, "is", static_cast<QoreObject *>(obj_is->refSelf()), xsink);
+   o->setValueIntern(cls, "is", static_cast<QoreObject *>(obj_input_stream->refSelf()), xsink);
 }
 
 //! Reads bytes (up to a specified limit) from the input stream; returns \ref NOTHING if there are no more bytes in the stream
@@ -92,7 +93,7 @@ EncodingConversionInputStream::constructor(Qore::InputStream[InputStream] is, st
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-*binary EncodingConversionInputStream::read(int limit) {
+*binary EncodingConversionInputStream::read(int limit) [flags=NAMED_ARGS] {
    return is->readHelper(limit, xsink);
 }
 

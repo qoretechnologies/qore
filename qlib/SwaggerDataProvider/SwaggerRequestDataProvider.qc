@@ -267,25 +267,11 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         @throw SWAGGER-SEARCH-ERROR the response type exists but is not list or hash and therefore does not support
         searching
     */
-    private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req,
+    private AbstractDataProviderRecordIterator<hash<auto>> requestSearchRecordsImpl(auto req,
             *hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
         hash<auto> resp = doRequestIntern(req, search_options);
-        # return an iterator for the result
-        AbstractIterator i;
-        switch (resp.body.typeCode()) {
-            case NT_HASH:
-            case NT_NOTHING:
-                i = new SingleValueIterator(resp.body);
-                break;
-            case NT_LIST:
-                i = new ListIterator(resp.body);
-                break;
-            default:
-                throw "SWAGGER-SEARCH-ERROR", sprintf("the response has type %y, which does not support searching",
-                    resp.body.type());
-                break;
-        }
-        return new DefaultRecordIterator(i, where_cond, search_options, record_type);
+        return new DefaultRecordIterator<hash<auto>>(makeSearchBodyIterator(resp.body), where_cond, search_options,
+            record_type);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -298,25 +284,38 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         @throw SWAGGER-SEARCH-ERROR the response type exists but is not list or hash and therefore does not support
         searching
     */
-    private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req, *hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> requestSearchRecordsImpl(auto req, *hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> resp = doRequestIntern(req, search_options);
-        # return an iterator for the result
-        AbstractIterator i;
-        switch (resp.body.typeCode()) {
+        return new DefaultRecordIterator<hash<auto>>(makeSearchBodyIterator(resp.body), where_cond, search_options,
+            record_type);
+    }
+
+    #! Wraps a searchable response body in a hash record iterator
+    private AbstractIterator<hash<auto>> makeSearchBodyIterator(auto body) {
+        switch (body.typeCode()) {
             case NT_HASH:
+                return new SingleValueIterator<hash<auto>>(body);
             case NT_NOTHING:
-                i = new SingleValueIterator(resp.body);
-                break;
-            case NT_LIST:
-                i = new ListIterator(resp.body);
-                break;
+                return new ListHashIterator(());
+            case NT_LIST: {
+                list<hash<auto>> records = ();
+                int index = 0;
+                foreach auto record in (body) {
+                    if (record.typeCode() != NT_HASH) {
+                        throw "SWAGGER-SEARCH-ERROR", sprintf("the response body list cannot be searched because "
+                            "element %d has type %y; expected every list element to be a hash record", index,
+                            record.type());
+                    }
+                    records += record;
+                    ++index;
+                }
+                return new ListHashIterator(records);
+            }
             default:
-                throw "SWAGGER-SEARCH-ERROR", sprintf("the response has type %y, which does not support searching",
-                    resp.body.type());
-                break;
+                throw "SWAGGER-SEARCH-ERROR", sprintf("the response body has type %y, which cannot be searched; "
+                    "expected a hash record, a list of hash records, or NOTHING", body.type());
         }
-        return new DefaultRecordIterator(i, where_cond, search_options, record_type);
     }
 
     #! Makes a REST request and returns the response

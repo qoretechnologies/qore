@@ -4,12 +4,13 @@
 %modern
 %allow-debugger
 
-%requires ../../../../qlib/DebugUtil.qm
-%requires ../../../../qlib/DebugProgramControl.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/WebSocketClient.qm
-%requires ../../../../qlib/DebugHandler.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires DebugUtil
+%requires DebugProgramControl
+%requires QUnit
+%requires HttpServer
+%requires WebSocketClient
+%requires DebugHandler
 
 %try-module yaml >= 0.5
 %define NoYaml

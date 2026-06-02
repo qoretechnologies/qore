@@ -128,8 +128,8 @@ static AbstractQoreNode* GETOPT_parse2_intern(ReferenceHolder<QoreHashNode>& rv,
     if (!l)
         return rv.release();
 
-    const QoreStringNode* err = l->retrieveEntry(0).get<const QoreStringNode>();
-    return xsink->raiseException("GETOPT-ERROR", err->stringRefSelf());
+    QoreStringNodeValueHelper err(l->retrieveEntry(0));
+    return xsink->raiseException("GETOPT-ERROR", err.getReferencedValue());
 }
 
 static AbstractQoreNode* GETOPT_parse3_intern(ReferenceHolder<QoreHashNode>& rv, ExceptionSink* xsink) {
@@ -140,10 +140,10 @@ static AbstractQoreNode* GETOPT_parse3_intern(ReferenceHolder<QoreHashNode>& rv,
     if (!l)
         return rv.release();
 
-    const QoreStringNode* err = l->retrieveEntry(0).get<const QoreStringNode>();
     const QoreStringNode* sn = getProgram()->getScriptName();
     if (sn)
         fprintf(stderr, "%s: ", sn->getBuffer());
+    QoreStringValueHelper err(l->retrieveEntry(0));
     fprintf(stderr, "%s\n", err->getBuffer());
     qore_exit_process(1);
 
@@ -168,7 +168,7 @@ static GetOpt* GETOPT_constructor_intern(const QoreHashNode* options, ExceptionS
             break;
         }
 
-        const QoreStringNode* str = v.get<const QoreStringNode>();
+        QoreStringValueHelper str(v);
 
         qore_type_t at = -1;
         const char *long_opt = 0;
@@ -270,7 +270,7 @@ GetOpt getopt(ProgramOptions);
     @throw GETOPT-PARAMETER-ERROR option key value is not a string; \c "_ERRORS_" used as option key
     @throw GETOPT-OPTION-ERROR list option specified as optional; empty option key value string; multiple long options given for key; duplicate options given; invalid attributes for option; unknown modifier given for option
  */
-GetOpt::constructor(hash<auto> options) {
+GetOpt::constructor(hash<auto> options) [flags=NAMED_ARGS] {
     SimpleRefHolder<GetOpt> g(GETOPT_constructor_intern(options, xsink));
     if (*xsink) {
         return;
@@ -291,7 +291,7 @@ GetOpt::copy() {
 
     If any errors are encountered, the return value hash will have a key \c "_ERRORS_" giving a list of error messages pertaining to the options parsed.
 
-    @param pgm_args The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any argument accepted by the object will be removed from the list
+    @param arguments The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any argument accepted by the object will be removed from the list
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is the value of the argument passed in the list argument. The hash key \c "_ERRORS_" will contain any errors.
 
@@ -307,8 +307,8 @@ if (exists o."_ERRORS_") {
 
     @see GetOpt::parse2() for a similar method that throws an exception instead of putting error information in the \c "_ERRORS_" key of the hash value returned
  */
-hash<auto> GetOpt::parse(reference<list<string>> pgm_args) {
-    QoreTypeSafeReferenceHelper ref(pgm_args, xsink);
+hash<auto> GetOpt::parse(reference<list<string>> arguments) [flags=NAMED_ARGS] {
+    QoreTypeSafeReferenceHelper ref(arguments, xsink);
     if (!ref)
         return QoreValue();
 
@@ -325,7 +325,7 @@ hash<auto> GetOpt::parse(reference<list<string>> pgm_args) {
 //! Parses the parameter list according to the option hash passed to the constructor
 /** If any errors are encountered, the return value hash will have a key \c "_ERRORS_" giving a list of error messages pertaining to the options parsed.
 
-    @param pgm_args A list of arguments to process
+    @param arguments A list of arguments to process
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is the value of the argument passed in the list argument. The hash key \c "_ERRORS_" will contain any errors.
 
@@ -340,14 +340,14 @@ if (o._ERRORS_) {
 
     @see GetOpt::parse2() for a similar method that throws an exception instead of putting error information in the \c "_ERRORS_" key of the hash value returned
  */
-hash<auto> GetOpt::parse(softlist<auto> pgm_args) {
-    return g->parse(const_cast<QoreListNode*>(pgm_args), false, xsink);
+hash<auto> GetOpt::parse(softlist<auto> arguments) {
+    return g->parse(const_cast<QoreListNode*>(arguments), false, xsink);
 }
 
 //! Parses the parameter list according to the option hash passed to the constructor
 /** If any errors are encountered, an appropriate exception will be thrown.
 
-    @param pgm_args The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any argument accepted by the object will be removed from the list
+    @param arguments The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any argument accepted by the object will be removed from the list
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is the value of the argument passed in the list argument
 
@@ -365,8 +365,8 @@ try {
 
     @see GetOpt::parse() for a similar method that puts error information in the \c "_ERRORS_" key of the hash value returned instead of throwing an exception
  */
-hash<auto> GetOpt::parse2(reference<list<string>> pgm_args) {
-    QoreTypeSafeReferenceHelper ref(pgm_args, xsink);
+hash<auto> GetOpt::parse2(reference<list<string>> arguments) [flags=NAMED_ARGS] {
+    QoreTypeSafeReferenceHelper ref(arguments, xsink);
     if (!ref)
         return QoreValue();
 
@@ -384,7 +384,7 @@ hash<auto> GetOpt::parse2(reference<list<string>> pgm_args) {
 //! Parses the parameter list according to the option hash passed to the constructor
 /** If any errors are encountered, an appropriate exception will be thrown.
 
-    @param pgm_args A list of arguments to process
+    @param arguments A list of arguments to process
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is the value of the argument passed in the list argument
 
@@ -402,13 +402,13 @@ try {
 
     @see GetOpt::parse() for a similar method that puts error information in the \c "_ERRORS_" key of the hash value returned instead of throwing an exception
  */
-hash<auto> GetOpt::parse2(softlist<auto> pgm_args) {
-    ReferenceHolder<QoreHashNode> rv(g->parse(const_cast<QoreListNode*>(pgm_args), false, xsink), xsink);
+hash<auto> GetOpt::parse2(softlist<auto> arguments) {
+    ReferenceHolder<QoreHashNode> rv(g->parse(const_cast<QoreListNode*>(arguments), false, xsink), xsink);
     return *xsink ? 0 : GETOPT_parse2_intern(rv, xsink);
 }
 
 //! Parses the parameter list according to the option hash passed to the constructor and displays an explanatory error message on stderr and exits the program if an error occurs
-/** @param pgm_args The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any argument accepted by the object will be removed from the list
+/** @param arguments The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any argument accepted by the object will be removed from the list
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is the value of the argument passed in the list argument
 
@@ -421,8 +421,8 @@ hash<auto> o = getopt.parse3(\ARGV);
     - GetOpt::parse() for a similar method that puts error information in the \c "_ERRORS_" key of the hash value returned
     - GetOpt::parse2() for a similar method that throws exceptions instead of exiting the program
  */
-hash<auto> GetOpt::parse3(reference<list<string>> pgm_args) [dom=PROCESS] {
-    QoreTypeSafeReferenceHelper ref(pgm_args, xsink);
+hash<auto> GetOpt::parse3(reference<list<string>> arguments) [flags=NAMED_ARGS;dom=PROCESS] {
+    QoreTypeSafeReferenceHelper ref(arguments, xsink);
     if (!ref)
         return QoreValue();
 
@@ -438,7 +438,7 @@ hash<auto> GetOpt::parse3(reference<list<string>> pgm_args) [dom=PROCESS] {
 }
 
 //! Parses the parameter list according to the option hash passed to the constructor and displays an explanatory error message on stderr and exits the program if an error occurs
-/** @param pgm_args A list of arguments to process
+/** @param arguments A list of arguments to process
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is the value of the argument passed in the list argument
 
@@ -453,8 +453,8 @@ hash<auto> o = getopt.parse3(ARGV);
     - GetOpt::parse() for a similar method that puts error information in the \c "_ERRORS_" key of the hash value returned
     - GetOpt::parse2() for a similar method that throws exceptions instead of exiting the program
  */
-hash<auto> GetOpt::parse3(softlist<auto> pgm_args) [dom=PROCESS] {
-    ReferenceHolder<QoreHashNode> rv(g->parse(const_cast<QoreListNode*>(pgm_args), false, xsink), xsink);
+hash<auto> GetOpt::parse3(softlist<auto> arguments) [dom=PROCESS] {
+    ReferenceHolder<QoreHashNode> rv(g->parse(const_cast<QoreListNode*>(arguments), false, xsink), xsink);
     return *xsink ? 0 : GETOPT_parse3_intern(rv, xsink);
 }
 
@@ -476,7 +476,7 @@ if (exists o."_ERRORS_") {
 }
     @endcode
 
-    @param opts a hash where each key defines the key value for the return hash if any arguments are given
+    @param options a hash where each key defines the key value for the return hash if any arguments are given
     corresponding to the string value of the key; The string value of each hash key follows the following pattern:\n
     <em>opts</em><tt>[(=|:)</tt><em>type</em><tt>[</tt><em>modifier</em><tt>]]</tt>\n
     Where the meaning of the above placeholders in italics is:\n
@@ -490,13 +490,13 @@ if (exists o."_ERRORS_") {
       - <em>d</em>: date
       - <em>b</em>: boolean
     - <em>modifier</em>: \c "@" specifies a list, \c "+" an additive value (sum; must be integer or float type)
-    @param pgm_args The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any
+    @param arguments The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any
     argument accepted by the object will be removed from the list
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is
     the value of the argument passed in the list argument. The hash key \c "_ERRORS_" will contain any errors.
 
-    All arguments parsed will be removed from \a pgm_args, leaving only unparsed arguments (for example, file names).
+    All arguments parsed will be removed from \a arguments, leaving only unparsed arguments (for example, file names).
 
     If any errors are encountered, the return value hash will have a key \c "_ERRORS_" giving a list of error messages
     pertaining to the options parsed.
@@ -505,13 +505,13 @@ if (exists o."_ERRORS_") {
     - @ref Qore::GetOpt::parseEx() "GetOpt::parseEx(hash<auto>, reference<list<string>>)"
     - @ref Qore::GetOpt::parseExit() "GetOpt::parseExit(hash<auto>, reference<list<string>>)"
 */
-static hash<auto> GetOpt::parse(hash<auto> opts, reference<list<string>> pgm_args) {
-    SimpleRefHolder<GetOpt> g(GETOPT_constructor_intern(opts, xsink));
+static hash<auto> GetOpt::parse(hash<auto> options, reference<list<string>> arguments) [flags=NAMED_ARGS] {
+    SimpleRefHolder<GetOpt> g(GETOPT_constructor_intern(options, xsink));
     if (*xsink) {
         return QoreValue();
     }
 
-    QoreTypeSafeReferenceHelper ref(pgm_args, xsink);
+    QoreTypeSafeReferenceHelper ref(arguments, xsink);
     if (!ref) {
         return QoreValue();
     }
@@ -541,7 +541,7 @@ const Opts = {
 hash<auto> o = GetOpt::parseEx(Opts, \ARGV);
     @endcode
 
-    @param opts a hash where each key defines the key value for the return hash if any arguments are given
+    @param options a hash where each key defines the key value for the return hash if any arguments are given
     corresponding to the string value of the key; The string value of each hash key follows the following pattern:\n
     <em>opts</em><tt>[(=|:)</tt><em>type</em><tt>[</tt><em>modifier</em><tt>]]</tt>\n
     Where the meaning of the above placeholders in italics is:\n
@@ -555,13 +555,13 @@ hash<auto> o = GetOpt::parseEx(Opts, \ARGV);
       - <em>d</em>: date
       - <em>b</em>: boolean
     - <em>modifier</em>: \c "@" specifies a list, \c "+" an additive value (sum; must be integer or float type)
-    @param pgm_args The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any
+    @param arguments The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any
     argument accepted by the object will be removed from the list
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is
     the value of the argument passed in the list argument.  An exception is thrown if there are any errors.
 
-    All arguments parsed will be removed from \a pgm_args, leaving only unparsed arguments (for example, file names).
+    All arguments parsed will be removed from \a arguments, leaving only unparsed arguments (for example, file names).
 
     If any errors are encountered, a \c GETOPT-ERROR exception is thrown.
 
@@ -571,13 +571,13 @@ hash<auto> o = GetOpt::parseEx(Opts, \ARGV);
     - @ref Qore::GetOpt::parse() "GetOpt::parse(hash<auto>, reference<list<string>>)"
     - @ref Qore::GetOpt::parseExit() "GetOpt::parseExit(hash<auto>, reference<list<string>>)"
 */
-static hash<auto> GetOpt::parseEx(hash<auto> opts, reference<list<string>> pgm_args) {
-    SimpleRefHolder<GetOpt> g(GETOPT_constructor_intern(opts, xsink));
+static hash<auto> GetOpt::parseEx(hash<auto> options, reference<list<string>> arguments) [flags=NAMED_ARGS] {
+    SimpleRefHolder<GetOpt> g(GETOPT_constructor_intern(options, xsink));
     if (*xsink) {
         return QoreValue();
     }
 
-    QoreTypeSafeReferenceHelper ref(pgm_args, xsink);
+    QoreTypeSafeReferenceHelper ref(arguments, xsink);
     if (!ref) {
         return QoreValue();
     }
@@ -608,7 +608,7 @@ const Opts = {
 hash<auto> o = GetOpt::parseExit(Opts, \ARGV);
     @endcode
 
-    @param opts a hash where each key defines the key value for the return hash if any arguments are given
+    @param options a hash where each key defines the key value for the return hash if any arguments are given
     corresponding to the string value of the key; The string value of each hash key follows the following pattern:\n
     <em>opts</em><tt>[(=|:)</tt><em>type</em><tt>[</tt><em>modifier</em><tt>]]</tt>\n
     Where the meaning of the above placeholders in italics is:\n
@@ -622,26 +622,26 @@ hash<auto> o = GetOpt::parseExit(Opts, \ARGV);
       - <em>d</em>: date
       - <em>b</em>: boolean
     - <em>modifier</em>: \c "@" specifies a list, \c "+" an additive value (sum; must be integer or float type)
-    @param pgm_args The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any
+    @param arguments The reference should point to a list of arguments to process (normally <tt>ARGV</tt>); any
     argument accepted by the object will be removed from the list
 
     @return A hash keyed by option names (as given in the hash to the GetOpt constructor), where each key's value is
     the value of the argument passed in the list argument.  Prints out an error message and exits the program if there
     are any errors.
 
-    All arguments parsed will be removed from \a pgm_args, leaving only unparsed arguments (for example, file names).
+    All arguments parsed will be removed from \a arguments, leaving only unparsed arguments (for example, file names).
 
     @see
     - @ref Qore::GetOpt::parse() "GetOpt::parse(hash<auto>, reference<list<string>>)"
     - @ref Qore::GetOpt::parseEx() "GetOpt::parseEx(hash<auto>, reference<list<string>>)"
 */
-static hash<auto> GetOpt::parseExit(hash<auto> opts, reference<list<string>> pgm_args) [dom=PROCESS] {
-    SimpleRefHolder<GetOpt> g(GETOPT_constructor_intern(opts, xsink));
+static hash<auto> GetOpt::parseExit(hash<auto> options, reference<list<string>> arguments) [flags=NAMED_ARGS;dom=PROCESS] {
+    SimpleRefHolder<GetOpt> g(GETOPT_constructor_intern(options, xsink));
     if (*xsink) {
         return QoreValue();
     }
 
-    QoreTypeSafeReferenceHelper ref(pgm_args, xsink);
+    QoreTypeSafeReferenceHelper ref(arguments, xsink);
     if (!ref) {
         return QoreValue();
     }

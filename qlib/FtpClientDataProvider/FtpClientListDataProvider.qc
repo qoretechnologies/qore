@@ -77,7 +77,7 @@ public class FtpClientListDataProvider inherits AbstractDataProvider {
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string path = FtpClientDataProvider::getPath(ftp, req.path);
-        return map FtpClientStatDataProvider::doStat(ftp, $1, True), ftp.nlst(path).split("\r\n");
+        return map FtpClientStatDataProvider::doStat(ftp, $1, True), ftp.nlst(path: path).split("\r\n");
     }
 
     #! Returns the description of a successful request message, if any

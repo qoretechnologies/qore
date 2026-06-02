@@ -57,7 +57,7 @@ context (ds.select(sql)) {
 
     @since %Qore 0.8.4
  */
-auto cx_value(string key) [flags=RET_VALUE_ONLY] {
+auto cx_value(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    Context* c = get_context_stack();
    if (!c)
       return cx_err("cx_value", xsink);

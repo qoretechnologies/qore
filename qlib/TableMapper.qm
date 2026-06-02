@@ -1235,11 +1235,11 @@ on_error table_mapper.rollback();
             # issue #1736: we need to iterate hash of lists with possible single constants in the hash as well
             if (output_log) {
                 if (rowcode)
-                    map (Mapper::logOutput($1), rowcode($1)), rv.contextIterator();
+                    map (Mapper::logOutput(asOutputRecord($1)), rowcode(asOutputRecord($1))), rv.contextIterator();
                 else
-                    map Mapper::logOutput($1), rv.contextIterator();
+                    map Mapper::logOutput(asOutputRecord($1)), rv.contextIterator();
             } else if (rowcode)
-                map rowcode($1), rv.contextIterator();
+                map rowcode(asOutputRecord($1)), rv.contextIterator();
 
             # return all data inserted/upserted
             return rv;
@@ -1252,6 +1252,10 @@ on_error table_mapper.rollback();
 
         #! ignore logging from Mapper since we may have to log sequence values; output logged manually in insertRow()
         logOutput(hash<auto> h) {
+        }
+
+        private hash<auto> asOutputRecord(auto h) {
+            return cast<hash<auto>>(h);
         }
 
         #! returns an iterator for the current object
@@ -1376,7 +1380,7 @@ InboundIdentityTableMapper mapper(table, DbMapper);
     }
 
     #! provides a hash iterator based on a @ref TableMapper::InboundTableMapper "InboundTableMapper" object and an iterator input source; for each iteration the iterted row is inserted into the @ref SqlUtil::Table "Table" target
-    public class InboundTableMapperIterator inherits Mapper::AbstractMapperIterator {
+    public class InboundTableMapperIterator inherits Mapper::AbstractMapperIterator<hash<auto>> {
         public {
         }
 
@@ -1637,7 +1641,7 @@ InboundTableMapperIterator i(input, mapper);
         - @ref hasBulk() returns @ref True
         - @ref mapBulk() fetches the number of rows requested and then maps to output values
     */
-    public class SqlStatementMapperIterator inherits Mapper::AbstractMapperIterator {
+    public class SqlStatementMapperIterator inherits Mapper::AbstractMapperIterator<hash<auto>> {
         public {
         }
 

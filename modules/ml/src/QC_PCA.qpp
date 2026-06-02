@@ -166,6 +166,33 @@ list<hash<PCAResult>> PCA::transformMatrix(list<list<float>> matrix) {
     return pca->transformMatrix(mat, xsink);
 }
 
+//! Transforms multiple rows in matrix form and returns dense column buffers
+/** @param matrix a list of lists of numeric values
+    @return a hash with \c components as a list of \c buffer<float64> columns
+            and \c total_explained_variance as a \c buffer<float64>
+
+    @par Example:
+    @code{.py}
+pca.fitMatrix(training_data);
+hash<auto> cols = pca.transformMatrixColumns(sensor_batch);
+DataFrame::DataFrame reduced({
+    "component_0": cols.components[0],
+    "component_1": cols.components[1],
+    "total_explained_variance": cols.total_explained_variance,
+});
+    @endcode
+
+    @throw ML-PCA-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+hash<auto> PCA::transformMatrixColumns(list<list<float>> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return pca->transformMatrixColumns(mat, xsink);
+}
+
 //! Fits the model and transforms data in one step
 /** @param data a list of hashes with numeric fields
     @return a list of @ref PCAResult hashes
@@ -196,6 +223,33 @@ list<hash<PCAResult>> PCA::fitTransformMatrix(list<list<float>> matrix) {
         return QoreValue();
     }
     return pca->fitTransformInternal(mat, xsink);
+}
+
+//! Fits the model and returns transformed dense column buffers
+/** @param matrix a list of lists of numeric values
+    @return a hash with \c components as a list of \c buffer<float64> columns
+            and \c total_explained_variance as a \c buffer<float64>
+
+    @par Example:
+    @code{.py}
+PCA pca({"n_components": 2});
+hash<auto> cols = pca.fitTransformMatrixColumns(sensor_history);
+DataFrame::DataFrame reduced({
+    "component_0": cols.components[0],
+    "component_1": cols.components[1],
+    "total_explained_variance": cols.total_explained_variance,
+});
+    @endcode
+
+    @throw ML-PCA-ERROR fitting or transformation failed
+    @throw ML-DATA-ERROR data format errors
+*/
+hash<auto> PCA::fitTransformMatrixColumns(list<list<float>> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return pca->fitTransformMatrixColumns(mat, xsink);
 }
 
 //! Returns True if the model has been fitted

@@ -40,7 +40,9 @@ This function:
 3. Raises the appropriate exception (`THREAD-CANCELLED` or `PROGRAM-INTERRUPTED`) if either is set
 4. Returns `false` with zero overhead when neither is active
 
-**This replaces `qore_check_io_interrupt()`**, which has been removed.
+**This replaces `qore_check_io_interrupt()`**.  The old function remains
+exported as a deprecated binary-compatibility wrapper that delegates to
+`qore_check_cancel()` so existing modules keep loading until they are rebuilt.
 
 ### Thread Cancellation Control
 
@@ -323,6 +325,7 @@ while (db_fetch_row(stmt)) {
 | mongodb (in-tree) | N/A (stream wrapper) | N/A | Yes | Yes (stream I/O) |
 
 All modules with existing `qore_check_io_interrupt()` calls need a mechanical replacement to `qore_check_cancel()`.
+The old symbol must remain exported until compatible module rebuilds are no longer required.
 
 ## Qore-Level API
 

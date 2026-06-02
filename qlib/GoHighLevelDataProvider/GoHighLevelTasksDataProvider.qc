@@ -110,7 +110,7 @@ public class GoHighLevelTasksDataProvider inherits GoHighLevelDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # contact_id is required for the tasks API
         string contact_id = search_options.contact_id;
@@ -121,7 +121,7 @@ public class GoHighLevelTasksDataProvider inherits GoHighLevelDataProviderBase {
         # If task_id provided, get single record
         if (search_options.task_id) {
             hash<auto> result = doGet("contacts/" + contact_id + "/tasks/" + search_options.task_id);
-            return new DefaultRecordIterator(new ListHashIterator((result.task,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result.task,)),
                 where_cond, search_options);
         }
 
@@ -131,7 +131,7 @@ public class GoHighLevelTasksDataProvider inherits GoHighLevelDataProviderBase {
             qparams.limit = search_options.limit;
         }
         hash<auto> response = doGet("contacts/" + contact_id + "/tasks", qparams);
-        return new DefaultRecordIterator(new ListHashIterator(response.tasks ?? ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.tasks ?? ()),
             where_cond, search_options);
     }
 

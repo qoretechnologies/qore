@@ -67,6 +67,9 @@ public:
         return new QoreInstanceOfOperatorNode(loc, n_exp.release(), ti);
     }
 
+    //! Returns the resolved type info for the instanceof check (for AOT serialization)
+    DLLLOCAL const QoreTypeInfo* getInstanceTypeInfo() const { return ti; }
+
 protected:
     QoreParseTypeInfo* r = nullptr;
     const QoreTypeInfo* ti = nullptr;

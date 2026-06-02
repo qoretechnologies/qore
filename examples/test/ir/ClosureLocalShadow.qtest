@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Regression test for source-stripped AOT closure IR deserialization.
+# A nested closure can declare a local with the same source name as an enclosing
+# local but with a different concrete type.  The deserializer must not resolve
+# that slot to the enclosing LocalVar solely by name.
+
+%modern
+%no-child-restrictions
+%disable-warning duplicate-local-vars
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%exec-class ClosureLocalShadowTest
+
+class ClosureLocalShadowTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ClosureLocalShadowTest", "1.0", \ARGV) {
+        addTestCase("closure local shadows enclosing string local", \testStringIntShadow());
+        addTestCase("closure local shadows enclosing object local", \testObjectStringShadow());
+        set_return_value(main());
+    }
+
+    testStringIntShadow() {
+        string value = "outer";
+        any seen;
+        code inner = sub () {
+            int value = 42;
+            seen = value;
+        };
+
+        inner();
+        assertEq(42, seen, "inner closure local should have its own integer slot");
+        assertEq("outer", value, "enclosing string local should be unchanged");
+    }
+
+    testObjectStringShadow() {
+        Socket client();
+        string seen;
+        code inner = sub () {
+            string client = "inner";
+            seen = client;
+        };
+
+        inner();
+        assertEq("inner", seen, "inner closure local should not reuse the enclosing object slot");
+        assertTrue(client instanceof Socket, "enclosing object local should remain a Socket");
+    }
+}

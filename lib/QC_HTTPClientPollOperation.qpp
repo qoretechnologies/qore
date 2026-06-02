@@ -38,7 +38,11 @@
 //! Socket poll operation object returned by @ref Qore::Socket::startPoll() "Socket::startPoll()"
 /** This class implements the polling logic for Sockets and the state machine behind it
 */
-qclass HTTPClientPollOperation [private_members=string goal; arg=HTTPClientPollOperation* op; vparent=AbstractPollOperation];
+qclass HTTPClientPollOperation [
+    private_members=string goal;
+    arg=HTTPClientPollOperation* op;
+    vparent=AbstractPollOperation<auto>
+];
 
 //! Creates the object with the given goal
 /** @param client the HTTPClient object to poll

@@ -65,21 +65,23 @@ qclass FileLineIterator [arg=FileLineIterator* i; ns=Qore; vparent=AbstractLineI
 //! Opens the given file for reading with the given options and creates the FileLineIterator object
 /** @param path the path to open for reading
     @param encoding character encoding of the data in the file; if not ASCII-compatible, all data will be converted to UTF-8; if not present, the @ref default_encoding "default character encoding" is assumed
-    @param eol the optional end of line character(s) to use to detect lines in the file; if this string is not passed, then the end of line character(s) are detected automatically, and can be either \c "\n", \c "\r", or \c "\r\n" (the last one is only automatically detected when not connected to a terminal device in order to keep the I/O from stalling); if this string is passed and has a different @ref character_encoding "character encoding" from this object's (as determined by the \c encoding parameter), then it will be converted to the FileLineIterator's @ref character_encoding "character encoding"
-    @param trim if @ref True the string return values for the lines iterated will be trimmed of the eol bytes
+    @param line_separator the optional end of line character(s) to use to detect lines in the file; if this string is not passed, then the end of line character(s) are detected automatically, and can be either \c "\n", \c "\r", or \c "\r\n" (the last one is only automatically detected when not connected to a terminal device in order to keep the I/O from stalling); if this string is passed and has a different @ref character_encoding "character encoding" from this object's (as determined by the \c encoding parameter), then it will be converted to the FileLineIterator's @ref character_encoding "character encoding"
+    @param trim_line if @ref True the string return values for the lines iterated will be trimmed of the line separator bytes
     @param nonblocking_open if @ref True, then the \c O_NONBLOCK flag will be set in the call to <tt>open() (2)</tt>
 
-    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the eol argument has a different @ref character_encoding "character encoding" from the File's and an error occurs during encoding conversion
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the \a line_separator argument has a different @ref character_encoding "character encoding" from the File's and an error occurs during encoding conversion
     @throw ILLEGAL-EXPRESSION FileLineIterator::constructor() cannot be called with a TTY target when @ref no-terminal-io "%no-terminal-io" is set
 
     @since %Qore 0.9.3 added the \a nonblocking_open flag
  */
-FileLineIterator::constructor(string path, *string encoding, *string eol, bool trim = True, *bool nonblocking_open) {
-    if (eol && eol->empty())
-        eol = 0;
+FileLineIterator::constructor(string path, *string encoding, *string line_separator, bool trim_line = True,
+        *bool nonblocking_open) [flags=NAMED_ARGS] {
+    if (line_separator && line_separator->empty())
+        line_separator = 0;
     int flags = nonblocking_open ? O_NONBLOCK : 0;
 
-    SimpleRefHolder<FileLineIterator> fli(new FileLineIterator(xsink, path, encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, eol, trim, flags));
+    SimpleRefHolder<FileLineIterator> fli(new FileLineIterator(xsink, path,
+        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, line_separator, trim_line, flags));
     if (*xsink)
         return;
 

@@ -99,7 +99,7 @@ public class LinearCommentsDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for comments on this issue
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching comments for issue id=%y", issueId));
         int pageSize = search_options.limit ?? DefaultPageSize;

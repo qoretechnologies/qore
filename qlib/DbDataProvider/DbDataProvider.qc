@@ -35,6 +35,7 @@ public class DbDataProvider inherits DbDataProviderBase {
             "type": "DbDataProvider",
             "supports_read": True,
             "supports_bulk_read": True,
+            "bulk_read_shapes": (DataProviderShape::BufferColumns, DataProviderShape::HashOfLists),
             "supports_children": True,
             "constructor_options": ConstructorOptions,
             "search_options": SearchOptions,
@@ -230,7 +231,7 @@ public class DbDataProvider inherits DbDataProviderBase {
 
         @see requestSearchRecordsImpl()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         return new DbSelectRecordIterator(db.getDatasource(), where_cond, search_options);
     }
 

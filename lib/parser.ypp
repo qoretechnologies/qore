@@ -77,15 +77,19 @@
 #include "qore/intern/qore_list_private.h"
 
 #include <cstdio>
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
 #define YYINITDEPTH 300
 //#define YYDEBUG 1
+
+static int check_strong_encapsulation(const QoreProgramLocation* loc, const char* type, const char* name);
 
 #define YYLLOC_DEFAULT(Current, Rhs, N)                         \
     do {                                                        \
@@ -224,6 +228,346 @@ public:
             parse_error(*loc, "a class may not have the name 'auto'; this name has a special meaning in complex types; please choose another name for your class");
     }
 };
+
+class ClassDeclParseInfo {
+private:
+    struct decl_free {
+        DLLLOCAL void operator()(char* p) const {
+            free(p);
+        }
+    };
+
+public:
+    std::string name;
+    std::vector<QoreGenericTypeParam> type_params;
+
+    DLLLOCAL ClassDeclParseInfo(const QoreProgramLocation* loc, char* raw_decl, const char* decl_kind = "class") {
+        std::unique_ptr<char, decl_free> raw(raw_decl);
+        std::string decl(raw.get());
+
+        size_t lt = decl.find('<');
+        size_t gt = decl.rfind('>');
+        if (lt == std::string::npos || gt == std::string::npos || gt < lt) {
+            parse_error(*loc, "invalid generic %s declaration '%s'; expected syntax like '%s Box<T>'",
+                decl_kind, decl.c_str(), decl_kind);
+            name = decl;
+            trim(name);
+            return;
+        }
+
+        for (size_t i = gt + 1; i < decl.size(); ++i) {
+            if (decl[i] != ' ' && decl[i] != '\t' && decl[i] != '\r') {
+                parse_error(*loc, "invalid generic %s declaration '%s'; unexpected text after type parameter list",
+                    decl_kind, decl.c_str());
+                break;
+            }
+        }
+
+        name = decl.substr(0, lt);
+        trim(name);
+        if (name.empty()) {
+            parse_error(*loc, "invalid generic %s declaration '%s'; missing %s name", decl_kind, decl.c_str(),
+                decl_kind);
+        }
+
+        std::string params = decl.substr(lt + 1, gt - lt - 1);
+        std::vector<std::string> param_decls;
+        splitTypeParams(params, param_decls);
+        bool default_seen = false;
+        for (std::string& param_decl : param_decls) {
+            trim(param_decl);
+            std::string param;
+            std::string bound_type;
+            std::string default_type;
+            size_t eq = findTopLevelChar(param_decl, '=');
+            if (eq == std::string::npos) {
+                param = param_decl;
+            } else {
+                param = param_decl.substr(0, eq);
+                default_type = param_decl.substr(eq + 1);
+                trim(param);
+                trim(default_type);
+                if (default_type.empty()) {
+                    parse_error(*loc, "invalid generic %s declaration '%s'; type parameter '%s' has an empty "
+                        "default type", decl_kind, decl.c_str(), param.c_str());
+                }
+            }
+
+            size_t colon = findTopLevelBoundColon(param);
+            if (colon != std::string::npos) {
+                bound_type = param.substr(colon + 1);
+                param = param.substr(0, colon);
+                trim(param);
+                trim(bound_type);
+                if (bound_type.empty()) {
+                    parse_error(*loc, "invalid generic %s declaration '%s'; type parameter '%s' has an empty "
+                        "bound type", decl_kind, decl.c_str(), param.c_str());
+                }
+            }
+
+            if (param.empty()) {
+                parse_error(*loc, "invalid generic %s declaration '%s'; empty type parameter name", decl_kind,
+                    decl.c_str());
+            } else if (!isIdentifier(param)) {
+                parse_error(*loc, "invalid type parameter name '%s' in generic %s declaration '%s'; type "
+                    "parameter names must be identifiers", param.c_str(), decl_kind, decl.c_str());
+            } else if (hasParam(param)) {
+                parse_error(*loc, "duplicate type parameter name '%s' in generic %s declaration '%s'",
+                    param.c_str(), decl_kind, decl.c_str());
+            } else if (default_type.empty() && default_seen) {
+                parse_error(*loc, "invalid generic %s declaration '%s'; type parameter '%s' is missing a default "
+                    "type after an earlier type parameter declared one", decl_kind, decl.c_str(), param.c_str());
+            } else {
+                if (!default_type.empty()) {
+                    default_seen = true;
+                }
+                type_params.emplace_back(std::move(param), std::move(default_type), std::move(bound_type));
+            }
+        }
+
+        for (const QoreGenericTypeParam& param : type_params) {
+            if (param.hasDefault()) {
+                for (const QoreGenericTypeParam& other : type_params) {
+                    if (typeStringContainsIdentifier(param.default_type, other.name)) {
+                        parse_error(*loc, "invalid generic %s declaration '%s'; default type '%s' for type parameter "
+                            "'%s' references type parameter '%s', which is not supported yet", decl_kind,
+                            decl.c_str(), param.default_type.c_str(), param.name.c_str(), other.name.c_str());
+                    }
+                }
+            }
+            if (param.hasBound()) {
+                for (const QoreGenericTypeParam& other : type_params) {
+                    if (typeStringContainsIdentifier(param.bound_type, other.name)) {
+                        parse_error(*loc, "invalid generic %s declaration '%s'; bound type '%s' for type parameter "
+                            "'%s' references type parameter '%s', which is not supported yet", decl_kind,
+                            decl.c_str(), param.bound_type.c_str(), param.name.c_str(), other.name.c_str());
+                    }
+                }
+            }
+        }
+    }
+
+    DLLLOCAL bool isScoped() const {
+        return name.find("::") != std::string::npos;
+    }
+
+    DLLLOCAL NamedScope* takeName() const {
+        return new NamedScope(strdup(name.c_str()));
+    }
+
+    DLLLOCAL void applyTypeParams(QoreClass* qc) const {
+        for (const QoreGenericTypeParam& param : type_params) {
+            qc->addTypeParameter(param.name.c_str(), param.getDefaultType(), param.getBoundType());
+        }
+    }
+
+    DLLLOCAL void applyTypeParams(typed_hash_decl_private* hp) const {
+        for (const QoreGenericTypeParam& param : type_params) {
+            hp->addTypeParameter(param.name.c_str(), param.getDefaultType(), param.getBoundType());
+        }
+    }
+
+    DLLLOCAL static void trim(std::string& str) {
+        size_t start = 0;
+        while (start < str.size() && (str[start] == ' ' || str[start] == '\t' || str[start] == '\r')) {
+            ++start;
+        }
+        size_t end = str.size();
+        while (end > start && (str[end - 1] == ' ' || str[end - 1] == '\t' || str[end - 1] == '\r')) {
+            --end;
+        }
+        str = str.substr(start, end - start);
+    }
+
+    DLLLOCAL static bool isIdentifier(const std::string& str) {
+        if (str.empty()) {
+            return false;
+        }
+        unsigned char first = static_cast<unsigned char>(str[0]);
+        if (!isalpha(first) && str[0] != '_') {
+            return false;
+        }
+        for (size_t i = 1; i < str.size(); ++i) {
+            unsigned char c = static_cast<unsigned char>(str[i]);
+            if (!isalnum(c) && str[i] != '_') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    DLLLOCAL bool hasParam(const std::string& param) const {
+        for (const QoreGenericTypeParam& existing : type_params) {
+            if (existing.name == param) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    DLLLOCAL static size_t findTopLevelChar(const std::string& str, char target) {
+        int angle_depth = 0;
+        int paren_depth = 0;
+        for (size_t i = 0; i < str.size(); ++i) {
+            char c = str[i];
+            if (c == '<' && paren_depth == 0) {
+                ++angle_depth;
+            } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+                --angle_depth;
+            } else if (c == '(') {
+                ++paren_depth;
+            } else if (c == ')' && paren_depth > 0) {
+                --paren_depth;
+            } else if (c == target && !angle_depth && !paren_depth) {
+                return i;
+            }
+        }
+        return std::string::npos;
+    }
+
+    DLLLOCAL static size_t findTopLevelBoundColon(const std::string& str) {
+        int angle_depth = 0;
+        int paren_depth = 0;
+        for (size_t i = 0; i < str.size(); ++i) {
+            char c = str[i];
+            if (c == '<' && paren_depth == 0) {
+                ++angle_depth;
+            } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+                --angle_depth;
+            } else if (c == '(') {
+                ++paren_depth;
+            } else if (c == ')' && paren_depth > 0) {
+                --paren_depth;
+            } else if (c == ':' && !angle_depth && !paren_depth) {
+                bool scope_left = i && str[i - 1] == ':';
+                bool scope_right = i + 1 < str.size() && str[i + 1] == ':';
+                if (!scope_left && !scope_right) {
+                    return i;
+                }
+            }
+        }
+        return std::string::npos;
+    }
+
+    DLLLOCAL static void splitTypeParams(const std::string& params, std::vector<std::string>& param_decls) {
+        size_t start = 0;
+        while (start <= params.size()) {
+            size_t comma = findTopLevelChar(params.substr(start), ',');
+            if (comma == std::string::npos) {
+                param_decls.push_back(params.substr(start));
+                break;
+            }
+            param_decls.push_back(params.substr(start, comma));
+            start += comma + 1;
+        }
+    }
+
+    DLLLOCAL static bool isIdentifierChar(char c) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        return isalnum(uc) || c == '_';
+    }
+
+    DLLLOCAL static bool typeStringContainsIdentifier(const std::string& type, const std::string& ident) {
+        size_t pos = 0;
+        while ((pos = type.find(ident, pos)) != std::string::npos) {
+            bool left = !pos || !isIdentifierChar(type[pos - 1]);
+            size_t end = pos + ident.size();
+            bool right = end == type.size() || !isIdentifierChar(type[end]);
+            if (left && right) {
+                return true;
+            }
+            ++pos;
+        }
+        return false;
+    }
+};
+
+static char* parse_generic_callable_decl_name(const QoreProgramLocation* loc, char* raw_name,
+        std::vector<QoreGenericTypeParam>& type_params, const char* decl_kind) {
+    if (!raw_name || !strchr(raw_name, '<')) {
+        return raw_name;
+    }
+
+    ClassDeclParseInfo cdi(loc, raw_name, decl_kind);
+    type_params = std::move(cdi.type_params);
+
+    if (!strcmp(decl_kind, "method")) {
+        const char* ident = cdi.name.c_str();
+        const char* scoped = strrchr(ident, ':');
+        if (scoped) {
+            ident = scoped + 1;
+        }
+        if (!strcmp(ident, "constructor") || !strcmp(ident, "destructor") || !strcmp(ident, "copy")) {
+            parse_error(*loc, "invalid generic method declaration '%s'; constructors, destructors, and copy methods "
+                "cannot declare method type parameters", cdi.name.c_str());
+            type_params.clear();
+        }
+    }
+
+    return strdup(cdi.name.c_str());
+}
+
+static void apply_callable_type_params(UserVariantBase* variant, std::vector<QoreGenericTypeParam>& type_params) {
+    if (!type_params.empty()) {
+        variant->setTypeParameters(std::move(type_params));
+    }
+}
+
+static char* parse_explicit_generic_call_name(const QoreProgramLocation* loc, char* raw_name,
+        ptype_vec_t& type_args) {
+    struct call_decl_free {
+        DLLLOCAL void operator()(char* p) const {
+            free(p);
+        }
+    };
+    std::unique_ptr<char, call_decl_free> raw(raw_name);
+    std::string decl(raw.get());
+    if (decl.empty() || decl.back() != '>') {
+        return strdup(decl.c_str());
+    }
+
+    int depth = 0;
+    size_t lt = std::string::npos;
+    for (size_t i = decl.size(); i > 0; --i) {
+        char c = decl[i - 1];
+        if (c == '>') {
+            ++depth;
+        } else if (c == '<') {
+            --depth;
+            if (!depth) {
+                lt = i - 1;
+                break;
+            }
+        }
+    }
+
+    if (lt == std::string::npos) {
+        parse_error(*loc, "invalid explicit generic call '%s'; missing opening '<'", decl.c_str());
+        return strdup(decl.c_str());
+    }
+
+    std::string name = decl.substr(0, lt);
+    ClassDeclParseInfo::trim(name);
+    std::string params = decl.substr(lt + 1, decl.size() - lt - 2);
+    std::vector<std::string> param_decls;
+    ClassDeclParseInfo::splitTypeParams(params, param_decls);
+    for (std::string& param_decl : param_decls) {
+        ClassDeclParseInfo::trim(param_decl);
+        if (param_decl.empty()) {
+            parse_error(*loc, "invalid explicit generic call '%s'; empty type argument", decl.c_str());
+            continue;
+        }
+        QoreParseTypeInfo* pti = qore_parse_type_string_to_pti(param_decl.c_str());
+        if (!pti) {
+            parse_error(*loc, "invalid explicit generic call '%s'; cannot parse type argument '%s'",
+                decl.c_str(), param_decl.c_str());
+            continue;
+        }
+        type_args.push_back(pti);
+    }
+
+    return strdup(name.c_str());
+}
 
 class HashDeclDef {
 public:
@@ -435,7 +779,11 @@ class ParseUserFunction : public ParseUserFunctionBase {
 public:
     char* name;
 
-    DLLLOCAL ParseUserFunction(const QoreProgramLocation* loc, char* n_name, UserFunctionVariant* n_variant) : ParseUserFunctionBase(loc, n_variant), name(n_name) {
+    DLLLOCAL ParseUserFunction(const QoreProgramLocation* loc, char* n_name, UserFunctionVariant* n_variant)
+            : ParseUserFunctionBase(loc, n_variant), name(nullptr) {
+        std::vector<QoreGenericTypeParam> type_params;
+        name = parse_generic_callable_decl_name(loc, n_name, type_params, "function");
+        apply_callable_type_params(variant, type_params);
     }
 
     DLLLOCAL ~ParseUserFunction() {
@@ -444,7 +792,13 @@ public:
     }
 
     DLLLOCAL void add(qore_ns_private& ns) {
-        qore_root_ns_private::addPendingVariant(ns, name, variant);
+        if (strstr(name, "::")) {
+            check_strong_encapsulation(loc, "function", name);
+            NamedScope scoped_name(strdup(name));
+            qore_root_ns_private::addPendingVariant(ns, scoped_name, variant);
+        } else {
+            qore_root_ns_private::addPendingVariant(ns, name, variant);
+        }
         variant = 0;
         // make sure definition was legal
         if (parse_check_parse_option(PO_NO_SUBROUTINE_DEFS)) {
@@ -458,9 +812,13 @@ public:
 
 class ParseScopedUserFunction : public ParseUserFunctionBase {
 public:
+    std::vector<QoreGenericTypeParam> type_params;
     NamedScope name;
 
-    DLLLOCAL ParseScopedUserFunction(const QoreProgramLocation* loc, char* n_name, UserFunctionVariant* n_variant) : ParseUserFunctionBase(loc, n_variant), name(n_name) {
+    DLLLOCAL ParseScopedUserFunction(const QoreProgramLocation* loc, char* n_name, UserFunctionVariant* n_variant)
+            : ParseUserFunctionBase(loc, n_variant),
+                name(parse_generic_callable_decl_name(loc, n_name, type_params, "function")) {
+        apply_callable_type_params(variant, type_params);
     }
 
     DLLLOCAL void add(qore_ns_private& ns) {
@@ -768,10 +1126,11 @@ static inline MethodVariantBase* new_method_variant(const QoreProgramLocation* l
 struct MethodDef {
     const QoreProgramLocation* loc;
     MethodVariantBase* m;
+    std::vector<QoreGenericTypeParam> type_params;
     NamedScope name;
     bool static_flag;
 
-    DLLLOCAL MethodDef(const QoreProgramLocation* loc, int mod, char* n, int n_sig_first_line, int n_sig_last_line, QoreValue params, BCAList* bcal, RetTypeInfo* returnTypeInfo, StatementBlock *b) : loc(loc), m(0), name(n), static_flag(mod & OFM_STATIC) {
+    DLLLOCAL MethodDef(const QoreProgramLocation* loc, int mod, char* n, int n_sig_first_line, int n_sig_last_line, QoreValue params, BCAList* bcal, RetTypeInfo* returnTypeInfo, StatementBlock *b) : loc(loc), m(0), name(parse_generic_callable_decl_name(loc, n, type_params, "method")), static_flag(mod & OFM_STATIC) {
         if (check_method(loc, name.getIdentifier(), bcal, returnTypeInfo)) {
             params.discard(nullptr);
             delete bcal;
@@ -781,6 +1140,7 @@ struct MethodDef {
         }
 
         m = new_method_variant(loc, name.getIdentifier(), mod, n_sig_first_line, n_sig_last_line, params, bcal, returnTypeInfo, b);
+        apply_callable_type_params(m->getUserVariantBase(), type_params);
     }
 
     DLLLOCAL ~MethodDef() {
@@ -1436,8 +1796,62 @@ public:
         }
     }
 
+    DLLLOCAL static QoreParseTypeInfo* getWildcardParseType(const QoreProgramLocation* loc, const char* id,
+            bool raise_error = true) {
+        std::string str(id);
+        while (!str.empty() && isspace(str.front())) {
+            str.erase(0, 1);
+        }
+        while (!str.empty() && isspace(str.back())) {
+            str.pop_back();
+        }
+        if (str == "?") {
+            return new QoreParseTypeInfo(QoreWildcardKind::Unbounded);
+        }
+
+        const char* extends_kw = "? extends ";
+        const char* super_kw = "? super ";
+        QoreWildcardKind kind;
+        const char* bound_str;
+        if (!strncmp(str.c_str(), extends_kw, strlen(extends_kw))) {
+            kind = QoreWildcardKind::Extends;
+            bound_str = str.c_str() + strlen(extends_kw);
+        } else if (!strncmp(str.c_str(), super_kw, strlen(super_kw))) {
+            kind = QoreWildcardKind::Super;
+            bound_str = str.c_str() + strlen(super_kw);
+        } else {
+            return nullptr;
+        }
+
+        while (*bound_str && isspace(*bound_str)) {
+            ++bound_str;
+        }
+        if (!*bound_str) {
+            if (raise_error) {
+                parse_error(*loc, "wildcard type argument '%s' is missing a bound type", str.c_str());
+            }
+            return new QoreParseTypeInfo(QoreWildcardKind::Unbounded);
+        }
+
+        QoreParseTypeInfo* bound = qore_parse_type_string_to_pti(bound_str);
+        if (!bound) {
+            if (raise_error) {
+                parse_error(*loc, "cannot parse wildcard bound type in '%s'", str.c_str());
+            }
+            return new QoreParseTypeInfo(QoreWildcardKind::Unbounded);
+        }
+        return new QoreParseTypeInfo(kind, bound);
+    }
+
     DLLLOCAL static QoreParseTypeInfo* getParseType(const QoreProgramLocation* loc, char* id, bool or_nothing, bool raise_error = true) {
         //printd(0, "gPT() '%s'\n", id);
+        if (!or_nothing) {
+            QoreParseTypeInfo* wildcard = getWildcardParseType(loc, id, raise_error);
+            if (wildcard) {
+                free(id);
+                return wildcard;
+            }
+        }
         char* p0 = strchr(id, '<');
         if (p0) {
             // Check if this is a callable signature with form: ReturnType(Params...)
@@ -1458,7 +1872,7 @@ public:
                 }
             }
             char* p1 = strrchr(id, '>');
-            if (p1 > (p0 + 1)) {
+            if (p1 > p0) {
                 // terminate main type string
                 *p0 = '\0';
                 // terminate type args
@@ -1514,6 +1928,7 @@ static AbstractQoreNode* process_dot(int sline, int eline, QoreValue l, QoreValu
             assert(!f->getFunction());
             if (!f->isFinalized()) {
                 MethodCallNode* m = new MethodCallNode(loc, f->takeName(), f->takeParseArgs());
+                m->moveExplicitTypeArgsFrom(*f);
                 f->deref();
 
                 return new QoreDotEvalOperatorNode(loc, l, m);
@@ -1554,6 +1969,38 @@ static void check_funcmod(const QoreProgramLocation* loc, int mod) {
         parse_error(*loc, "illegal 'final' modifier in function declaration");
     if (mod & OFM_ABSTRACT)
         parse_error(*loc, "illegal 'abstract' modifier in function declaration");
+}
+
+static constexpr int CCA_LEGACY_RAW_ACCEPTS = 1 << 0;
+static constexpr int CCA_LEGACY_RAW_CONSTRUCT = 1 << 1;
+
+static int parse_class_compat_attr(const QoreProgramLocation* loc, char* attr) {
+    int rv = 0;
+    if (!strcmp(attr, "legacy_raw_accepts")) {
+        rv = CCA_LEGACY_RAW_ACCEPTS;
+    } else if (!strcmp(attr, "legacy_raw_construct")) {
+        rv = CCA_LEGACY_RAW_CONSTRUCT;
+    } else if (!strcmp(attr, "legacy_raw")) {
+        rv = CCA_LEGACY_RAW_ACCEPTS | CCA_LEGACY_RAW_CONSTRUCT;
+    } else {
+        parseException(*loc, "PARSE-TYPE-ERROR",
+            "unknown class compatibility attribute '%s'; expected 'legacy_raw_accepts', "
+            "'legacy_raw_construct', or 'legacy_raw'", attr);
+    }
+    free(attr);
+    return rv;
+}
+
+static void apply_class_compat_attrs(const QoreProgramLocation* loc, int attrs, QoreClass& qc) {
+    if (!attrs) {
+        return;
+    }
+    if (!qc.hasTypeParameters()) {
+        parseException(*loc, "PARSE-TYPE-ERROR",
+            "legacy raw generic compatibility attributes require a generic class declaration");
+        return;
+    }
+    qc.setLegacyRawGenericCompatibility(attrs & CCA_LEGACY_RAW_ACCEPTS, attrs & CCA_LEGACY_RAW_CONSTRUCT);
 }
 
 static void check_classmod(const QoreProgramLocation* loc, int mod, QoreClass& qc) {
@@ -1762,7 +2209,24 @@ static QoreOperatorNode* process_weak_assignment(const QoreProgramLocation* loc,
    return static_cast<QoreOperatorNode*>(new QoreWeakAssignmentOperatorNode(loc, $1, $3));
 }
 
-static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QoreValue $3, const QoreProgramLocation* argloc) {
+static void add_named_call_arg(QoreParseListNode* l, char* name, QoreValue arg, const QoreProgramLocation* loc) {
+    if (l->hasArgName(name)) {
+        parseException(*loc, "NAMED-ARG-DUPLICATE", "duplicate named argument '%s' in named call", name);
+    }
+    l->addNamed(name, arg, loc);
+    free(name);
+}
+
+static QoreParseListNode* append_call_args(QoreParseListNode* positional, QoreParseListNode* named) {
+    if (!positional) {
+        return named;
+    }
+    positional->appendFrom(named);
+    named->deref();
+    return positional;
+}
+
+static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QoreParseListNode* args) {
     AbstractQoreNode* $$;
     const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(sline, eline);
 
@@ -1772,8 +2236,8 @@ static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QoreVal
         // take string from node and delete node
         char* str = b->takeString();
         b->deref();
-        printd(5, "parsing call %s() args: %s\n", str, $3.getTypeName());
-        $$ = new FunctionCallNode(loc, str, make_args(argloc, $3));
+        printd(5, "parsing call %s()\n", str);
+        $$ = new FunctionCallNode(loc, str, args);
     } else if (t == NT_CONSTANT) {
         ScopedRefNode* c = $1.get<ScopedRefNode>();
         // take NamedScope from node and delete node
@@ -1781,14 +2245,14 @@ static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QoreVal
         c->deref();
         assert(ns->size() > 1);
         printd(5, "parsing scoped call (static method, new object call, or program function call) %s()\n", ns->ostr);
-        $$ = new StaticMethodCallNode(loc, ns, make_args(argloc, $3));
+        $$ = new StaticMethodCallNode(loc, ns, args);
     } else if (t == NT_SELF_VARREF) {
         SelfVarrefNode* v = $1.get<SelfVarrefNode>();
         // take string from node and delete node
         char* str = v->takeString();
         v->deref();
         //printd(5, "parsing in-object method call %s()\n", str);
-        $$ = new SelfFunctionCallNode(loc, str, make_args(argloc, $3));
+        $$ = new SelfFunctionCallNode(loc, str, args);
     } else {
         QoreHashObjectDereferenceOperatorNode* hodon;
 
@@ -1811,7 +2275,7 @@ static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QoreVal
             assert(cstr);
             str->deref();
 
-            MethodCallNode* mc = new MethodCallNode(loc, cstr, make_args(argloc, $3));
+            MethodCallNode* mc = new MethodCallNode(loc, cstr, args);
 
             // destroy the original operator and create a new operator object
             assert(hodon->is_unique());
@@ -1826,15 +2290,18 @@ static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QoreVal
                 qore_var_t vartype = r->getType();
 
                 if (vartype != VT_UNRESOLVED) {
-                    $$ = r->makeNewCall($3);
+                    QoreValue arg_value(args);
+                    $$ = r->makeNewCall(arg_value);
                     //printd(5, "makeNewCall(%p) returned %p (%s)\n", $3, $$, get_type_name($$));
                     if (!$$) {
                         parseException(*loc, "INVALID-CODE-REFERENCE-CALL", "%s variable '%s' declared as a function reference call", r->getType() == VT_GLOBAL ? "global" : "local", r->getName());
+                    } else {
+                        args = nullptr;
                     }
                 }
             }
             if (!$$) {
-                $$ = new CallReferenceCallNode(loc, $1, make_args(argloc, $3));
+                $$ = new CallReferenceCallNode(loc, $1, args);
                 printd(5, "made new CallReferenceCallNode: %p exp: %s\n", $$, $1.getTypeName());
             }
         }
@@ -1922,6 +2389,7 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
     BCAList* bcalist;
     BCANode* bcanode;
     NamedScope *nscope;
+    QoreParseTypeInfo* parseTypeInfo;
     QoreRegex* Regex;
     QoreImplicitArgumentNode* implicit_arg;
     RetTypeInfo* returnTypeInfo;
@@ -1933,6 +2401,17 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
     TryModuleError* trymod;
     struct MethodDef* methoddef;
 }
+
+// Clean up heap-allocated parser values discarded during error recovery.
+// Without these, parse errors leak scanner-allocated nodes (DateTimeNode, etc.).
+%destructor { if ($$) $$->deref(nullptr); } <datetime>
+%destructor { if ($$) $$->deref(nullptr); } <String>
+%destructor { if ($$) $$->deref(nullptr); } <binary>
+%destructor { if ($$) $$->deref(nullptr); } <node>
+%destructor { if ($$) $$->deref(nullptr); } <num>
+%destructor { if ($$) delete $$; } <hash>
+%destructor { if ($$) delete $$; } <parse_list>
+%destructor { if ($$) free($$); } <string>
 
 %{
 #define LEX_PARAMETERS YYSTYPE *lvalp, YYLTYPE *loc, yyscan_t scanner
@@ -2106,6 +2585,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token <string> QORE_CAST "cast operator"
 %token <string> QORE_OR_NOTHING_CAST "cast (or nothing) operator"
 %token <string> CLASS_STRING "simple class declaration"
+%token <string> CLASS_GENERIC_STRING "generic class declaration"
 %token <datetime> DATETIME "date/time value"
 %token <String> QUOTED_WORD "quoted string"
 %token <binary> BINARY "binary constant value"
@@ -2162,6 +2642,9 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <qv>             exp_c
 %type <qv>             myexp
 %type <qv>             scalar
+%type <parse_list>     call_args
+%type <parse_list>     named_call_args
+%type <parse_list>     named_arg_list
 %type <hash>           hash
 %type <hash>           alt_hash
 %type <node>           immediate_typed_hash
@@ -2200,6 +2683,8 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <i4>             method_modifiers
 %type <i4>             method_modifier
 %type <i4>             nsc_modifiers
+%type <i4>             class_compat_attrs
+%type <i4>             class_compat_attr
 %type <returnTypeInfo> return_value
 %type <string>         optname
 %type <statement>      switch_statement
@@ -2208,11 +2693,12 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <sclist>         superclass_list
 %type <sclist>         inheritance_list
 %type <sclnode>        superclass
-%type <nscope>         hashdecl_inherits
+%type <parseTypeInfo>  hashdecl_inherits
 %type <bcalist>        base_constructor_list
 %type <bcalist>        base_constructors
 %type <bcanode>        base_constructor
 %type <string>         ident_openparen
+%type <string>         scoped_method_openparen
 %type <parsertype>     qtypedef
 %type <parsertype>     uncqtypedef
 %type <parsefunc>      sub_def
@@ -2224,8 +2710,8 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
  // destructor actions for elements that need deleting when parse errors occur
 %destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def enum_def enum_members enum_member top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash hashdecl_inherits
 %destructor { qore_class_private::get(*$$)->deref(true, true); } class_attributes
-%destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING optname ident_openparen HASHDECL_IDENTIFIER_OPENCURLY
-%destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER hashdecl_attrs list list_n
+%destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING CLASS_GENERIC_STRING optname ident_openparen scoped_method_openparen HASHDECL_IDENTIFIER_OPENCURLY
+%destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER hashdecl_attrs list list_n call_args named_call_args named_arg_list
 %destructor { if ($$) $$->deref(nullptr); } immediate_typed_hash
 %destructor { QoreValue($$).discard(nullptr); } scalar exp exp_n exp_c myexp
 
@@ -2688,12 +3174,12 @@ statement:
         $$ = new ExpressionStatement(loc, $1);
     }
     // this should be covered as an expression, but for some reason it isn't...
-    | SCOPED_REF '(' myexp ')' ';' {
+    | SCOPED_REF '(' call_args ')' ';' {
         NamedScope *ns = new NamedScope($1);
         assert(ns->size() > 1);
         printd(5, "statement: parsing static method call: %s() size=%d\n", ns->ostr, ns->size());
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
-        $$ = new ExpressionStatement(loc, new StaticMethodCallNode(loc, ns, make_args(qore_program_private::get(*getProgram())->getLocation(@3.first_line, @3.last_line), $3)));
+        $$ = new ExpressionStatement(loc, new StaticMethodCallNode(loc, ns, $3));
     }
     | try_statement
     { $$ = $1; }
@@ -2730,6 +3216,12 @@ statement:
         $$ = new ContextStatement(@1.first_line, @3.last_line, 0, 0, $2, $3);
     }
     | TOK_SUMMARIZE optname '(' exp ')' TOK_BY '(' exp ')' context_mods statement_or_block {
+        if (parse_check_parse_option(QoreParseOptions::NO_SUMMARIZE)) {
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())
+                ->getLocation(@1.first_line, @11.last_line);
+            parse_error(*loc, "the 'summarize' statement is not allowed when '%%no-summarize' is "
+                "set (implied by '%%modern'); rewrite as a 'context' loop with manual grouping");
+        }
         $$ = new SummarizeStatement(@1.first_line, @11.last_line, $2, $4, $10, $11, $8);
     }
     | TOK_CONTEXT optname '(' exp ')' context_mods statement_or_block {
@@ -2985,6 +3477,58 @@ myexp:  /* empty */  { $$ = QoreSimpleValue(); $$.bits = 0; }
     | error      { $$ = QoreSimpleValue(); $$.bits = 0; }
     ;
 
+call_args:
+    /* empty */ {
+        $$ = nullptr;
+    }
+    | exp {
+        $$ = make_args(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line), $1);
+    }
+    | named_call_args {
+        $$ = $1;
+    }
+    | error {
+        $$ = nullptr;
+    }
+    ;
+
+named_call_args:
+    named_arg_list {
+        $$ = $1;
+    }
+    | exp ',' named_arg_list {
+        QoreParseListNode* positional = make_args(qore_program_private::get(*getProgram())->getLocation(
+            @1.first_line, @1.last_line), $1);
+        $$ = append_call_args(positional, $3);
+    }
+    ;
+
+named_arg_list:
+    IDENTIFIER ':' exp {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
+            @1.first_line, @3.last_line);
+        $$ = new QoreParseListNode(loc);
+        add_named_call_arg($$, $1, $3, loc);
+    }
+    | named_arg_list ',' IDENTIFIER ':' exp {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
+            @3.first_line, @5.last_line);
+        add_named_call_arg($1, $3, $5, loc);
+        $$ = $1;
+    }
+    | named_arg_list ',' {
+        $$ = $1;
+    }
+    | named_arg_list ',' exp {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
+            @3.first_line, @3.last_line);
+        parseException(*loc, "NAMED-ARG-POSITIONAL-AFTER-NAMED",
+            "positional argument cannot follow a named argument in a named call");
+        QoreValue($3).discard(nullptr);
+        $$ = $1;
+    }
+    ;
+
 hashdecl_def:
     nsc_modifiers TOK_HASHDECL IDENTIFIER hashdecl_inherits '{' hashdecl_attrs '}' {
         fix_start_location($1, @$, @2);
@@ -2994,6 +3538,17 @@ hashdecl_def:
             $6->setParseParent($4);
         }
         $$ = new HashDeclDef(loc, $3, $6);
+    }
+    | nsc_modifiers TOK_HASHDECL ANGLE_IDENTIFIER hashdecl_inherits '{' hashdecl_attrs '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        ClassDeclParseInfo cdi(loc, $3, "hashdecl");
+        cdi.applyTypeParams($6);
+        check_hashdeclmod(loc, $1, *($6));
+        if ($4) {
+            $6->setParseParent($4);
+        }
+        $$ = new HashDeclDef(loc, cdi.takeName(), $6);
     }
     | nsc_modifiers TOK_HASHDECL SCOPED_REF hashdecl_inherits '{' hashdecl_attrs '}' {
         fix_start_location($1, @$, @2);
@@ -3008,10 +3563,15 @@ hashdecl_def:
 
 hashdecl_inherits:
     TOK_INHERITS IDENTIFIER {
-        $$ = new NamedScope($2);
+        $$ = new QoreParseTypeInfo($2);
+    }
+    | TOK_INHERITS ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line,
+            @2.last_line);
+        $$ = ParserTypeStruct::getParseType(loc, $2, false);
     }
     | TOK_INHERITS SCOPED_REF {
-        $$ = new NamedScope($2);
+        $$ = new QoreParseTypeInfo($2);
     }
     | /* empty */ {
         $$ = nullptr;
@@ -3081,61 +3641,129 @@ enum_member:
     ;
 
 class_def:
-    nsc_modifiers CLASS_STRING inheritance_list '{' class_attributes '}' {
+    nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list '{' class_attributes '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        check_classmod(loc, $1, *($6));
+        apply_class_compat_attrs(loc, $3, *($6));
+        qore_class_private::parseSetBaseClassList(*($6), $4);
+        $$ = new ObjClassDef(loc, $2, $6);
+    }
+    | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list '{' class_attributes '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        ClassDeclParseInfo cdi(loc, $2);
+        if (cdi.isScoped()) {
+            check_strong_encapsulation(loc, "class", cdi.name.c_str());
+        }
+        cdi.applyTypeParams($6);
+        check_classmod(loc, $1, *($6));
+        apply_class_compat_attrs(loc, $3, *($6));
+        qore_class_private::parseSetBaseClassList(*($6), $4);
+        $$ = new ObjClassDef(loc, cdi.takeName(), $6);
+    }
+    | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list '{' class_attributes '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        // see if strong encapsulation is enabled
+        check_strong_encapsulation(loc, "class", $2->ostr);
+        check_classmod(loc, $1, *($6));
+        apply_class_compat_attrs(loc, $3, *($6));
+        $$ = new ObjClassDef(loc, $2, $6);
+        qore_class_private::parseSetBaseClassList(*($6), $4);
+    }
+    | nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list ';' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+        $$ = new ObjClassDef(loc, $2, qc);
+    }
+    | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list ';' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        ClassDeclParseInfo cdi(loc, $2);
+        if (cdi.isScoped()) {
+            check_strong_encapsulation(loc, "class", cdi.name.c_str());
+        }
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        cdi.applyTypeParams(qc);
+        check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+        $$ = new ObjClassDef(loc, cdi.takeName(), qc);
+    }
+    | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list ';' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        // see if strong encapsulation is enabled
+        check_strong_encapsulation(loc, "class", $2->ostr);
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
+        $$ = new ObjClassDef(loc, $2, qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+    }
+    | nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list '{' '}' {
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
-        check_classmod(loc, $1, *($5));
-        qore_class_private::parseSetBaseClassList(*($5), $3);
-        $$ = new ObjClassDef(loc, $2, $5);
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+        $$ = new ObjClassDef(loc, $2, qc);
     }
-    | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' class_attributes '}' {
+    | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list '{' '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        ClassDeclParseInfo cdi(loc, $2);
+        if (cdi.isScoped()) {
+            check_strong_encapsulation(loc, "class", cdi.name.c_str());
+        }
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        cdi.applyTypeParams(qc);
+        check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+        $$ = new ObjClassDef(loc, cdi.takeName(), qc);
+    }
+    | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list '{' '}' {
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "class", $2->ostr);
-        check_classmod(loc, $1, *($5));
-        $$ = new ObjClassDef(loc, $2, $5);
-        qore_class_private::parseSetBaseClassList(*($5), $3);
-    }
-    | nsc_modifiers CLASS_STRING inheritance_list ';' {
-        fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
         // class name is set automatically from name saved in scanner
         QoreClass* qc = new QoreParseClass(loc);
         check_classmod(loc, $1, *qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
+        apply_class_compat_attrs(loc, $3, *qc);
         $$ = new ObjClassDef(loc, $2, qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
     }
-    | nsc_modifiers CLASS_SCOPED_REF inheritance_list ';' {
-        fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
-        // see if strong encapsulation is enabled
-        check_strong_encapsulation(loc, "class", $2->ostr);
-        // class name is set automatically from name saved in scanner
-        QoreClass* qc = new QoreParseClass(loc);
-        check_classmod(loc, $1, *qc);
-        $$ = new ObjClassDef(loc, $2, qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
+    ;
+
+class_compat_attrs:
+    // nothing
+    { $$ = 0; }
+    | class_compat_attrs class_compat_attr {
+        if (($1 | $2) == $1) {
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+            parse_error(*loc, "class compatibility attribute given twice");
+        }
+        $$ = $1 | $2;
     }
-    | nsc_modifiers CLASS_STRING inheritance_list '{' '}' {
-        fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
-        // class name is set automatically from name saved in scanner
-        QoreClass* qc = new QoreParseClass(loc);
-        check_classmod(loc, $1, *qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
-        $$ = new ObjClassDef(loc, $2, qc);
-    }
-    | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' '}' {
-        fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
-        // see if strong encapsulation is enabled
-        check_strong_encapsulation(loc, "class", $2->ostr);
-        // class name is set automatically from name saved in scanner
-        QoreClass* qc = new QoreParseClass(loc);
-        check_classmod(loc, $1, *qc);
-        $$ = new ObjClassDef(loc, $2, qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
+    ;
+
+class_compat_attr:
+    '[' IDENTIFIER ']' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        $$ = parse_class_compat_attr(loc, $2);
     }
     ;
 
@@ -3163,6 +3791,10 @@ superclass:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
         $$ = new BCNode(loc, $1, Public);
     }
+    | ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $1, false), Public);
+    }
     | SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
         $$ = new BCNode(loc, new NamedScope($1), Public);
@@ -3170,6 +3802,10 @@ superclass:
     | TOK_PUBLIC IDENTIFIER {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, $2, Public);
+    }
+    | TOK_PUBLIC ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Public);
     }
     | TOK_PUBLIC SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
@@ -3179,6 +3815,10 @@ superclass:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, $2, Private);
     }
+    | TOK_PRIVATE ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Private);
+    }
     | TOK_PRIVATE SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, new NamedScope($2), Private);
@@ -3187,6 +3827,10 @@ superclass:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, $2, Private);
     }
+    | TOK_PRIVATEHIERARCHY ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Private);
+    }
     | TOK_PRIVATEHIERARCHY SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, new NamedScope($2), Private);
@@ -3194,6 +3838,10 @@ superclass:
     | TOK_PRIVATEINTERNAL IDENTIFIER {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, $2, Internal);
+    }
+    | TOK_PRIVATEINTERNAL ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Internal);
     }
     | TOK_PRIVATEINTERNAL SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
@@ -3236,7 +3884,7 @@ hashdecl_member:
         $$ = new MemberInfo($2, new HashDeclMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1), $4));
         delete $1;
     }
-    | uncqtypedef IDENTIFIER '(' myexp ')' ';' {
+    | uncqtypedef IDENTIFIER '(' call_args ')' ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
@@ -3247,12 +3895,11 @@ hashdecl_member:
         else if (t)
             parse_error(*loc, "cannot call constructor for non-class base type '%s'", QoreTypeInfo::getName(t));
         else {
-            const QoreProgramLocation* aloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
-            if (pti->subtypes.size()) {
-                new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), make_args(aloc, $4));
+            if (pti->hasExplicitSubtypeList()) {
+                new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             }
             else {
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), make_args(aloc, $4));
+                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
             }
         }
 
@@ -3413,7 +4060,7 @@ classvardecl:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
         $$ = new ClassVarInfo($2, new QoreVarInfo(loc, nullptr, nullptr, $4));
     }
-    | TOK_STATIC uncqtypedef IDENTIFIER '(' myexp ')' ';' {
+    | TOK_STATIC uncqtypedef IDENTIFIER '(' call_args ')' ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($2);
         AbstractQoreNode* new_call = nullptr;
@@ -3422,13 +4069,11 @@ classvardecl:
         if (t) {
             parse_error(*loc, "cannot call constructor for non-class base type '%s'", QoreTypeInfo::getName(t));
         } else {
-            const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@5.first_line,
-                @5.last_line);
-            if (pti->subtypes.size()) {
-                new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), make_args(argsloc, $5));
+            if (pti->hasExplicitSubtypeList()) {
+                new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $5);
             } else {
                 new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)),
-                    make_args(argsloc, $5));
+                    $5);
             }
         }
         $$ = new ClassVarInfo($3, new QoreVarInfo(loc, t, pti, new_call));
@@ -3453,7 +4098,7 @@ member2:
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $2);
     }
-    | qtypedef SELF_REF '(' myexp ')' ';' {
+    | qtypedef SELF_REF '(' call_args ')' ';' {
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
@@ -3465,11 +4110,10 @@ member2:
         else if (t)
             parse_error(*loc, "cannot call constructor for non-class base type '%s'", QoreTypeInfo::getName(t));
         else {
-            const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
-            if (pti && pti->subtypes.size())
-                new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), make_args(argsloc, $4));
+            if (pti && pti->hasExplicitSubtypeList())
+                new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             else
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), make_args(argsloc, $4));
+                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
         }
 
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, t, pti, new_call));
@@ -3492,7 +4136,7 @@ member2:
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $2);
     }
-    | uncqtypedef IDENTIFIER '(' myexp ')' ';' {
+    | uncqtypedef IDENTIFIER '(' call_args ')' ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
@@ -3503,11 +4147,10 @@ member2:
         else if (t)
             parse_error(*loc, "cannot call constructor for non-class base type '%s'", QoreTypeInfo::getName(t));
         else {
-            const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
-            if (pti->subtypes.size())
-                new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), make_args(argsloc, $4));
+            if (pti->hasExplicitSubtypeList())
+                new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             else
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), make_args(argsloc, $4));
+                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
         }
 
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, t, pti, new_call));
@@ -3612,10 +4255,22 @@ ident_openparen:
     IDENTIFIER '(' {
         $$ = $1;
     }
+    | ANGLE_IDENTIFIER '(' {
+        $$ = $1;
+    }
     | TOK_KEYS '(' {
         $$ = strdup("keys");
     }
     | KW_IDENTIFIER_OPENPAREN {
+        $$ = $1;
+    }
+    ;
+
+scoped_method_openparen:
+    SCOPED_REF '(' {
+        $$ = $1;
+    }
+    | ANGLE_IDENTIFIER '(' {
         $$ = $1;
     }
     ;
@@ -3630,8 +4285,12 @@ inline_methoddef:
             else
                 parse_error(*loc, "'abstract' can only be used with no implementation (terminate the declaration with ';' instead of '{}')");
         }
-        check_method(loc, $2, $5, $6);
-        $$ = new MethodNode($2, new_method_variant(loc, $2, $1, @3.first_line, @3.last_line, $3, $5, $6, $7), $1 & OFM_STATIC);
+        std::vector<QoreGenericTypeParam> type_params;
+        char* name = parse_generic_callable_decl_name(loc, $2, type_params, "method");
+        check_method(loc, name, $5, $6);
+        MethodVariantBase* mv = new_method_variant(loc, name, $1, @3.first_line, @3.last_line, $3, $5, $6, $7);
+        apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        $$ = new MethodNode(name, mv, $1 & OFM_STATIC);
     }
     | nsc_modifiers uncqtypedef ident_openparen myexp ')' base_constructor_list block {
         fix_start_location($1, @$, @2);
@@ -3645,17 +4304,25 @@ inline_methoddef:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
-        check_method(loc, $3, $6, rt);
+        std::vector<QoreGenericTypeParam> type_params;
+        char* name = parse_generic_callable_decl_name(loc, $3, type_params, "method");
+        check_method(loc, name, $6, rt);
 
-        $$ = new MethodNode($3, new_method_variant(loc, $3, $1, @4.first_line, @4.last_line, $4, $6, rt, $7), $1 & OFM_STATIC);
+        MethodVariantBase* mv = new_method_variant(loc, name, $1, @4.first_line, @4.last_line, $4, $6, rt, $7);
+        apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        $$ = new MethodNode(name, mv, $1 & OFM_STATIC);
     }
     | nsc_modifiers ident_openparen myexp ')' base_constructor_list return_value ';' {
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
         if (!($1 & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
-        check_method(loc, $2, $5, $6);
-        $$ = new MethodNode($2, new_method_variant(loc, $2, $1, @3.first_line, @3.last_line, $3, $5, $6, 0), $1 & OFM_STATIC);
+        std::vector<QoreGenericTypeParam> type_params;
+        char* name = parse_generic_callable_decl_name(loc, $2, type_params, "method");
+        check_method(loc, name, $5, $6);
+        MethodVariantBase* mv = new_method_variant(loc, name, $1, @3.first_line, @3.last_line, $3, $5, $6, 0);
+        apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        $$ = new MethodNode(name, mv, $1 & OFM_STATIC);
     }
     | nsc_modifiers uncqtypedef ident_openparen myexp ')' base_constructor_list ';' {
         fix_start_location($1, @$, @2);
@@ -3665,28 +4332,32 @@ inline_methoddef:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
-        check_method(loc, $3, $6, rt);
+        std::vector<QoreGenericTypeParam> type_params;
+        char* name = parse_generic_callable_decl_name(loc, $3, type_params, "method");
+        check_method(loc, name, $6, rt);
 
-        $$ = new MethodNode($3, new_method_variant(loc, $3, $1, @4.first_line, @4.last_line, $4, $6, rt, 0), $1 & OFM_STATIC);
+        MethodVariantBase* mv = new_method_variant(loc, name, $1, @4.first_line, @4.last_line, $4, $6, rt, 0);
+        apply_callable_type_params(mv->getUserVariantBase(), type_params);
+        $$ = new MethodNode(name, mv, $1 & OFM_STATIC);
     }
     ;
 
 outofline_methoddef:
-    method_modifiers SCOPED_REF '(' myexp ')' base_constructor_list return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+    method_modifiers scoped_method_openparen myexp ')' base_constructor_list return_value block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
         if ($1 & OFM_ABSTRACT) {
-            if ($8)
+            if ($7)
                 parse_error(*loc, "'abstract' can only be used with no implementation (remove the body and terminate the declaration with ';' or remove the 'abstract')");
             else
                 parse_error(*loc, "'abstract' can only be used with no implementation (terminate the declaration with ';' instead of '{}')");
         }
 
-        $$ = new MethodDef(loc, $1, $2, @4.first_line, @4.last_line, $4, $6, $7, $8);
+        $$ = new MethodDef(loc, $1, $2, @3.first_line, @3.last_line, $3, $5, $6, $7);
     }
-    | method_modifiers uncqtypedef SCOPED_REF '(' myexp ')' base_constructor_list block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+    | method_modifiers uncqtypedef scoped_method_openparen myexp ')' base_constructor_list block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
         if ($1 & OFM_ABSTRACT) {
-            if ($8)
+            if ($7)
                 parse_error(*loc, "'abstract' can only be used with no implementation (remove the body and terminate the declaration with ';' or remove the 'abstract')");
             else
                 parse_error(*loc, "'abstract' can only be used with no implementation (terminate the declaration with ';' instead of '{}')");
@@ -3694,33 +4365,36 @@ outofline_methoddef:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
-        $$ = new MethodDef(loc, $1, $3, @5.first_line, @5.last_line, $5, $7, rt, $8);
+        $$ = new MethodDef(loc, $1, $3, @4.first_line, @4.last_line, $4, $6, rt, $7);
     }
-    | method_modifiers SCOPED_REF '(' myexp ')' base_constructor_list return_value ';' {
+    | method_modifiers scoped_method_openparen myexp ')' base_constructor_list return_value ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
         if (!($1 & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
-        $$ = new MethodDef(loc, $1, $2, @4.first_line, @4.last_line, $4, $6, $7, 0);
+        $$ = new MethodDef(loc, $1, $2, @3.first_line, @3.last_line, $3, $5, $6, 0);
     }
-    | method_modifiers uncqtypedef SCOPED_REF '(' myexp ')' base_constructor_list ';' {
+    | method_modifiers uncqtypedef scoped_method_openparen myexp ')' base_constructor_list ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
         if (!($1 & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
-        $$ = new MethodDef(loc, $1, $3, @5.first_line, @5.last_line, $5, $7, rt, 0);
+        $$ = new MethodDef(loc, $1, $3, @4.first_line, @4.last_line, $4, $6, rt, 0);
     }
-    | SCOPED_REF '(' myexp ')' base_constructor_list return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
-        $$ = new MethodDef(loc, 0, $1, @3.first_line, @3.last_line, $3, $5, $6, $7);
+    | scoped_method_openparen call_args ')' base_constructor_list return_value block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        if ($2 && $2->hasNamedArgs()) {
+            parse_error(*loc, "named arguments are not valid in method declarations");
+        }
+        $$ = new MethodDef(loc, 0, $1, @2.first_line, @2.last_line, $2, $4, $5, $6);
     }
-    | uncqtypedef SCOPED_REF '(' myexp ')' base_constructor_list block {
+    | uncqtypedef scoped_method_openparen myexp ')' base_constructor_list block {
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
-        $$ = new MethodDef(loc, 0, $2, @4.first_line, @4.last_line, $4, $6, rt, $7);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        $$ = new MethodDef(loc, 0, $2, @3.first_line, @3.last_line, $3, $5, rt, $6);
     }
     ;
 
@@ -3744,13 +4418,13 @@ base_constructors:
     ;
 
 base_constructor:
-    IDENTIFIER '(' myexp ')' {
+    IDENTIFIER '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
-        $$ = new BCANode($1, make_args(loc, $3), loc);
+        $$ = new BCANode($1, $3, loc);
     }
-    | SCOPED_REF '(' myexp ')' {
+    | SCOPED_REF '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
-        $$ = new BCANode(new NamedScope($1), make_args(loc, $3), loc);
+        $$ = new BCANode(new NamedScope($1), $3, loc);
     }
     ;
 
@@ -3854,36 +4528,36 @@ sub_def:
     ;
 
 scoped_sub_def:
-    TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
+    TOK_SUB scoped_method_openparen myexp ')' return_value block {
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
-        $$ = new ParseScopedUserFunction(loc, $2, new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, $6, false, flags));
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        $$ = new ParseScopedUserFunction(loc, $2, new UserFunctionVariant($6, @3.first_line, @3.last_line, $3, $5, false, flags));
     }
-    | uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
+    | uncqtypedef TOK_SUB scoped_method_openparen myexp ')' block {
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
 
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
-        $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($7, @5.first_line, @5.last_line, $5, rt, false, flags));
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($6, @4.first_line, @4.last_line, $4, rt, false, flags));
     }
-    | method_modifiers TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+    | method_modifiers TOK_SUB scoped_method_openparen myexp ')' return_value block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
         if ($1 & OFM_DEPRECATED)
             flags |= QCF_DEPRECATED;
 
-        $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($8, @5.first_line, @5.last_line, $5, $7, $1 & OFM_SYNCED, flags));
+        $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, $6, $1 & OFM_SYNCED, flags));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
-    | method_modifiers uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+    | method_modifiers uncqtypedef TOK_SUB scoped_method_openparen myexp ')' block {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
@@ -3893,7 +4567,7 @@ scoped_sub_def:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
         delete $2;
 
-        $$ = new ParseScopedUserFunction(loc, $4, new UserFunctionVariant($8, @6.first_line, @6.last_line, $6, rt, $1 & OFM_SYNCED, flags));
+        $$ = new ParseScopedUserFunction(loc, $4, new UserFunctionVariant($7, @5.first_line, @5.last_line, $5, rt, $1 & OFM_SYNCED, flags));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
@@ -3998,6 +4672,21 @@ exp_c:
     { $$ = $1; }
     | '(' hash ')'
     { $$ = $2; }
+    | ANGLE_IDENTIFIER '(' call_args ')' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
+            @4.last_line);
+        ptype_vec_t type_args;
+        char* name = parse_explicit_generic_call_name(loc, $1, type_args);
+        if (strstr(name, "::")) {
+            StaticMethodCallNode* node = new StaticMethodCallNode(loc, new NamedScope(name), $3);
+            node->setExplicitTypeArgs(std::move(type_args));
+            $$ = node;
+        } else {
+            FunctionCallNode* node = new FunctionCallNode(loc, name, $3);
+            node->setExplicitTypeArgs(std::move(type_args));
+            $$ = node;
+        }
+    }
     | SCOPED_REF
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
@@ -4339,19 +5028,18 @@ exp_c:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = (new QorePreDecrementOperatorNode(loc, $2));
     }
-    | BASE_CLASS_CALL '(' myexp ')' {
+    | BASE_CLASS_CALL '(' call_args ')' {
         printd(5, "parsing in-object base class method call %s()\n", $1->ostr);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
         if (!strcmp($1->getIdentifier(), "copy"))
             parse_error(*loc, "illegal call to base class copy method '%s'", $1->ostr);
 
-        $$ = (new SelfFunctionCallNode(loc, $1, make_args(qore_program_private::get(*getProgram())->getLocation(@3.first_line, @3.last_line), $3)));
+        $$ = (new SelfFunctionCallNode(loc, $1, $3));
     }
-    | KW_IDENTIFIER_OPENPAREN myexp ')' {
+    | KW_IDENTIFIER_OPENPAREN call_args ')' {
         printd(5, "parsing call %s()\n", $1);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
-        const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@2.first_line, @2.last_line);
-        $$ = (new FunctionCallNode(loc, $1, make_args(argsloc, $2)));
+        $$ = (new FunctionCallNode(loc, $1, $2));
     }
     | SELF_REF
     {
@@ -4412,29 +5100,26 @@ exp_c:
             }
         }
     }
-    | TOK_NEW IDENTIFIER '(' myexp ')' {
+    | TOK_NEW IDENTIFIER '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
         if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
-        const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
-        $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), make_args(argsloc, $4)));
+        $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $4));
     }
-    | TOK_NEW SCOPED_REF '(' myexp ')' {
+    | TOK_NEW SCOPED_REF '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
         if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
-        const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
-        $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), make_args(argsloc, $4)));
+        $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $4));
     }
-    | TOK_NEW ANGLE_IDENTIFIER '(' myexp ')' {
+    | TOK_NEW ANGLE_IDENTIFIER '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
         if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
-        const QoreProgramLocation* argsloc = qore_program_private::get(*getProgram())->getLocation(@4.first_line, @4.last_line);
-        $$ = (new ParseNewComplexTypeNode(loc, ParserTypeStruct::getParseType(loc, $2, false), make_args(argsloc, $4)));
+        $$ = (new ParseNewComplexTypeNode(loc, ParserTypeStruct::getParseType(loc, $2, false), $4));
     }
     | TOK_BACKGROUND exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
@@ -4581,7 +5266,7 @@ exp:
     | exp '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $1, $3, $5)); }
     | exp P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1)); } // post-increment
     | exp P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1)); } // post-decrement
-    | exp '(' myexp ')'                 { $$ = (processCall(@1.first_line, @4.last_line, $1, $3, qore_program_private::get(*getProgram())->getLocation(@3.first_line, @3.last_line))); }
+    | exp '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, $1, $3)); }
     | exp LOGICAL_AND exp               {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
         check_operator_log_or(loc, $1, "logical AND");
@@ -4687,7 +5372,7 @@ exp_n:
     | exp_n '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $1, $3, $5)); }
     | exp_n P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1)); } // post-increment
     | exp_n P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1)); } // post-decrement
-    | exp_n '(' myexp ')'                 { $$ = (processCall(@1.first_line, @4.last_line, $1, $3, qore_program_private::get(*getProgram())->getLocation(@3.first_line, @3.last_line))); }
+    | exp_n '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, $1, $3)); }
     | exp_n LOGICAL_AND exp               {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
         check_operator_log_or(loc, $1, "logical AND");

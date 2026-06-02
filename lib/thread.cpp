@@ -98,6 +98,9 @@ QoreCounter tp_thread_counter;
 
 ThreadCleanupList tclist;
 
+const TypedHashDecl* hashdeclQueueTryResult = nullptr;
+const TypedHashDecl* hashdeclChannelTryResult = nullptr;
+
 DLLLOCAL bool threads_initialized = false;
 
 // recursive mutex attribute
@@ -378,6 +381,9 @@ public:
 
     // current class context
     const qore_class_private* current_class = nullptr;
+
+    // current generic receiver type for static generic method bodies
+    const QoreTypeInfo* current_receiver_type_info = nullptr;
 
     // current program context
     QoreProgram* current_pgm = nullptr;
@@ -894,7 +900,7 @@ public:
             ThreadData* td = thread_data.get();
             call_obj = td->current_obj;
             class_ctx = td->current_class;
-            loc = td->runtime_loc;
+            loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
         }
 
         //printd(5, "BGThreadParams::BGThreadParams(f: %p (%s %d), t: %d) this: %p call_obj: %p '%s' cc: %p '%s' "
@@ -1235,6 +1241,7 @@ void thread_ref_remove(const lvalue_ref* r) {
 
 LocalVarValue* thread_instantiate_lvar() {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    assert(tlpd && "thread_instantiate_lvar called without tlpd - missing ProgramThreadCountContextHelper");
     LocalVarValue* var = tlpd->lvstack.instantiate();
     // Set declaration order for proper cleanup ordering (issue #5168)
     var->setDeclOrder(tlpd->getNextVarOrder());
@@ -1257,12 +1264,36 @@ LocalVarValue* thread_find_lvar(const char* id) {
     return td->tlpd->lvstack.find(id);
 }
 
+LocalVarValue* thread_try_find_lvar(const char* id) {
+    ThreadData* td = thread_data.get();
+    //printd(5, "thread_try_find_lvar() pgm: %p tlpd: %p id: %s\n", td->current_pgm, td->tlpd, id);
+    return td->tlpd->lvstack.findMaybe(id);
+}
+
+LocalVarValue* thread_find_lvar(const LocalVar* local) {
+    ThreadData* td = thread_data.get();
+    return td->tlpd->lvstack.find(local);
+}
+
+LocalVarValue* thread_try_find_lvar(const LocalVar* local) {
+    ThreadData* td = thread_data.get();
+    return td->tlpd->lvstack.findMaybe(local);
+}
+
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)
     uint64_t order = tlpd->getNextVarOrder();
     ClosureVarValue* cvv = tlpd->cvstack.instantiate(n_id, typeInfo, nval, assign, order);
     return cvv;
+}
+
+bool thread_closure_var_on_stack(const ClosureVarValue* cvv) {
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    if (!tlpd) {
+        return false;
+    }
+    return tlpd->cvstack.hasCvv(cvv);
 }
 
 void thread_instantiate_closure_var(ClosureVarValue* cvar) {
@@ -1282,6 +1313,14 @@ ClosureVarValue* thread_find_closure_var(const char* id) {
     return thread_data.get()->tlpd->cvstack.find(id);
 }
 
+ClosureVarValue* thread_try_find_closure_var(const char* id) {
+    return thread_data.get()->tlpd->cvstack.try_find(id);
+}
+
+ClosureVarValue* thread_try_find_closure_var_in_current_frame(const char* id) {
+    return thread_data.get()->tlpd->cvstack.try_find_in_current_frame(id);
+}
+
 const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current) {
     ThreadData* td = thread_data.get();
     const QoreClosureBase* rv = td->closure_rt_env;
@@ -1291,6 +1330,32 @@ const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* cur
 
 cvv_vec_t* thread_get_all_closure_vars() {
     return thread_data.get()->tlpd->cvstack.getAll();
+}
+
+cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist) {
+    if (!vlist || vlist->empty()) {
+        return nullptr;
+    }
+
+    cvv_vec_t* cv = nullptr;
+    for (lvar_set_t::const_iterator i = vlist->begin(), e = vlist->end(); i != e; ++i) {
+        LocalVar* lv = *i;
+        ClosureVarValue* frame_cvv = thread_try_find_closure_var_in_current_frame(lv->getName());
+        ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(lv);
+        ClosureVarValue* cvv = frame_cvv ? frame_cvv : env_cvv;
+        if (!cvv) {
+            cvv = thread_try_find_closure_var(lv->getName());
+        }
+        assert(cvv);
+        if (!cvv) {
+            continue;
+        }
+        if (!cv) {
+            cv = new cvv_vec_t;
+        }
+        cv->push_back(cvv->refSelf());
+    }
+    return cv;
 }
 
 const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti) {
@@ -1320,6 +1385,15 @@ ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id) {
     return thread_data.get()->closure_rt_env->find(id);
 }
 
+ClosureVarValue* thread_try_get_runtime_closure_var(const LocalVar* id) {
+    const QoreClosureBase* env = thread_data.get()->closure_rt_env;
+    return env ? env->find(id) : nullptr;
+}
+
+bool thread_has_runtime_closure_env() {
+    return thread_data.get()->closure_rt_env != nullptr;
+}
+
 ClosureParseEnvironment* thread_get_closure_parse_env() {
     return thread_data.get()->closure_parse_env;
 }
@@ -1346,6 +1420,7 @@ QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink) {
         tlpd->cvstack.getLocalVars(**rv, frame, xsink);
         if (*xsink)
             return nullptr;
+    } else {
     }
     return rv.release();
 }
@@ -1686,7 +1761,7 @@ const QoreProgramLocation* get_runtime_location() {
 }
 
 int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt, const QoreProgramLocation* loc,
-        const QoreParseOptions& po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
+        QoreParseOptions po, const AbstractStatement*& old_stmt, const QoreProgramLocation*& old_loc, QoreParseOptions& old_po) {
     ThreadData* td = thread_data.get();
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
@@ -1723,6 +1798,14 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
+}
+
+RuntimeLocationCache get_runtime_location_cache() {
+    ThreadData* td = thread_data.get();
+    return RuntimeLocationCache{
+        &td->runtime_loc,
+        &td->runtime_statement
+    };
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {
@@ -1818,6 +1901,21 @@ ThreadLocalProgramData* get_thread_local_program_data() {
    ThreadData* td = thread_data.get();
    assert(td);
    return td->tlpd;
+}
+
+void thread_ensure_local_program_data() {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    if (td->tlpd || !td->current_pgm) {
+        return;
+    }
+    // ProgramRuntimeParseContextHelper set td->current_pgm without
+    // td->tlpd. Set up td->tlpd via setThreadVarData so that runtime
+    // operations (e.g. object construction in AOT init functions) can
+    // instantiate local variables on the thread's lvstack.
+    qore_program_private::setThreadVarData(td->current_pgm, td->tpd, td->tlpd, false);
+    printd(5, "thread_ensure_local_program_data() set tlpd=%p for pgm=%p\n",
+        td->tlpd, td->current_pgm);
 }
 
 // pushes a new argv reference counter
@@ -2256,6 +2354,10 @@ const QoreListNode* thread_get_implicit_args() {
     return thread_data.get()->current_implicit_arg;
 }
 
+void thread_set_implicit_args(QoreListNode* argv) {
+    thread_data.get()->current_implicit_arg = argv;
+}
+
 bool runtime_in_object_method(const char* name, const QoreObject* o) {
     ThreadData* td = thread_data.get();
     return (td->current_obj == o && td->current_code == name) ? true : false;
@@ -2273,6 +2375,17 @@ void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& q
     ThreadData* td = thread_data.get();
     obj = td->current_obj;
     qc = td->current_class;
+}
+
+const QoreTypeInfo* runtime_get_receiver_type_info() {
+    return thread_data.get()->current_receiver_type_info;
+}
+
+const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti) {
+    ThreadData* td = thread_data.get();
+    const QoreTypeInfo* old = td->current_receiver_type_info;
+    td->current_receiver_type_info = ti;
+    return old;
 }
 
 ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
@@ -2303,7 +2416,9 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
 
-    qore_program_private::decThreadCount(*pgm, td->tid);
+    if (thread_count_incremented) {
+        qore_program_private::decThreadCount(*pgm, td->tid);
+    }
 }
 
 void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
@@ -2313,7 +2428,11 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     assert(!old_pgm);
 
     ThreadData* td = thread_data.get();
-    if (pgm == td->current_pgm) {
+    // ProgramRuntimeParseContextHelper can set current_pgm without setting
+    // tlpd.  User-code execution still needs tlpd for local and closure
+    // variable access, so only skip setup when the current program already has
+    // a live thread-local program data frame.
+    if (pgm == td->current_pgm && td->tlpd) {
         return;
     }
     old_pgm = td->current_pgm;
@@ -2326,10 +2445,17 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         old_pgm ? old_pgm->getProgramId() : -1, pgm, pgm?pgm->getProgramId():-1, old_tlpd, old_ctx,
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
-    // try to increment thread count
-    if (pp->incThreadCount(xsink)) {
-        printd(5, "ProgramThreadCountContextHelper::set() failed\n");
-        return;
+    // ProgramRuntimeParseContextHelper locks the current program for parsing
+    // without creating tlpd.  In that state we only need a local frame; calling
+    // incThreadCount() is invalid while parsing_in_progress is set.
+    const bool skip_thread_count = pgm == old_pgm && pp->parsingLocked();
+    if (!skip_thread_count) {
+        // try to increment thread count
+        if (pp->incThreadCount(xsink)) {
+            printd(5, "ProgramThreadCountContextHelper::set() failed\n");
+            return;
+        }
+        thread_count_incremented = true;
     }
 
     // set up thread stacks
@@ -2392,6 +2518,18 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
         // the initial instance has one "frame" beyond frame count (i.e. frame_count is -1)
         if (ch->init_tlpd) {
             frame--;
+        }
+        // The context we are ABOUT to pop past: its `old_pgm` is the
+        // Program whose frames become visible once we cross this
+        // boundary.  If that Program has `%no-debugging`, crossing it
+        // is forbidden even when the final landing Program allows
+        // debugging — otherwise a debugger-enabled inner Program
+        // could side-step a no-debugging outer Program by walking
+        // past an empty frame boundary and landing in a different
+        // Program behind it (e.g. a QUnit test-case callback Program
+        // that happens to allow debugging).  Check before swapping.
+        if (ch->old_pgm && !ch->old_pgm->checkAllowDebugging(xsink)) {
+            return nullptr;
         }
         pgm = ch->old_pgm;
         tlpd = ch->old_tlpd;
@@ -3380,6 +3518,7 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     // create Qore::Thread namespace
     QoreNamespace* Thread = new QoreNamespace("Qore::Thread");
 
+    hashdeclQueueTryResult = init_hashdecl_QueueTryResult(*Thread);
     Thread->addSystemClass(initQueueClass(*Thread));
     Thread->addSystemClass(initAbstractSmartLockClass(*Thread));
     Thread->addSystemClass(initMutexClass(*Thread));
@@ -3652,7 +3791,13 @@ void QoreThreadList::deleteDataRelease(int tid) {
 
 void QoreThreadList::deleteDataReleaseSignalThread() {
     thread_data.get()->del(nullptr);
-    deleteDataRelease(0);
+    delete thread_data.get();
+    thread_data.set(nullptr);
+
+    AutoLocker al(lck);
+    entry[0].thread_data = nullptr;
+    entry[0].joined = true;
+    releaseIntern(0);
 }
 
 unsigned QoreThreadList::cancelAllActiveThreads() {
@@ -3836,6 +3981,10 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     }
 
     return false;
+}
+
+bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel(xsink, operation);
 }
 
 int qore_cancel_thread(int tid, const char* reason) {

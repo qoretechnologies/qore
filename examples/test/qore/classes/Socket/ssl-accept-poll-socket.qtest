@@ -1,13 +1,12 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%require-types
-%strict-args
+%modern
 %enable-all-warnings
 
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
 
 %exec-class SslAcceptPollSocketTest
 

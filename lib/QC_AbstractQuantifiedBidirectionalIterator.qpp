@@ -33,4 +33,5 @@
 //! This class defines an abstract interface for bidirectional iterators where the size of the object is known in advance
 /** This class does not define any new methods but rather just combines two abstract interfaces into one.
  */
-qclass AbstractQuantifiedBidirectionalIterator [arg=AbstractQuantifiedBidirectionalIterator* i; ns=Qore; vparent=AbstractBidirectionalIterator,AbstractQuantifiedIterator];
+qclass AbstractQuantifiedBidirectionalIterator<T> [arg=AbstractQuantifiedBidirectionalIterator* i; ns=Qore;
+    vparent=AbstractBidirectionalIterator<T>,AbstractQuantifiedIterator<T>; legacy_raw];

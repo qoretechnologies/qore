@@ -38,10 +38,15 @@
 
 #include <cctype>
 
+static const QoreStringNode* get_pseudo_string_arg(const QoreValue& v) {
+    assert(v.getType() == NT_STRING && !v.isShortString());
+    return reinterpret_cast<const QoreStringNode*>(v.getInternalNode());
+}
+
 //! Methods in this pseudo-class can be executed on @ref string "strings"
 /**
  */
-qclass <string> [arg=const QoreStringNode* str = v.get<const QoreStringNode>();vparent=<value>];
+qclass <string> [arg=const QoreStringNode* str = get_pseudo_string_arg(v);vparent=<value>];
 
 //! Returns Qore::NT_STRING
 /**
@@ -240,10 +245,10 @@ string <string>::upr() [flags=CONSTANT] {
 }
 
 //! Retrieves the character position of a substring within a string
-/** The \a pos argument and the return value are in character positions; byte offsets may differ from the character offsets with multi-byte @ref character_encoding "character encodings".
+/** The \a offset argument and the return value are in character positions; byte offsets may differ from the character offsets with multi-byte @ref character_encoding "character encodings".
 
-    @param substr the substring to find in the string; if the @ref character_encoding "character encoding" of this string does not match \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before processing
-    @param pos the starting character position for the search
+    @param substring the substring to find in the string; if the @ref character_encoding "character encoding" of this string does not match \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before processing
+    @param offset the starting character position for the search
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
 
@@ -265,15 +270,15 @@ if (i == -1)
     - bindex(softstring, softstring, softint)
     - brindex(softstring, softstring, softint)
  */
-int <string>::find(softstring substr, softint pos = 0) [flags=RET_VALUE_ONLY] {
-   return str->index(*substr, pos, xsink);
+int <string>::find(softstring substring, softint offset = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return str->index(*substring, offset, xsink);
 }
 
 //! Retrieves the character position of a substring within a string, starting the search from the end of the string
-/** The \a pos argument and the return value are in character positions; byte offsets may differ from the character offsets with multi-byte @ref character_encoding "character encodings".
+/** The \a offset argument and the return value are in character positions; byte offsets may differ from the character offsets with multi-byte @ref character_encoding "character encodings".
 
-    @param substr the substring to find in \a str; if the @ref character_encoding "character encoding" of this string does not match \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before processing
-    @param pos the starting character position for the search, -1 means start from the end of the string
+    @param substring the substring to find in \a str; if the @ref character_encoding "character encoding" of this string does not match \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before processing
+    @param offset the starting character position for the search, -1 means start from the end of the string
 
     @return the character position of a substring within a string, -1 is returned if the substring is not found
 
@@ -295,8 +300,8 @@ if (i == -1)
     - bindex(softstring, softstring, softint)
     - brindex(softstring, softstring, softint)
  */
-int <string>::rfind(softstring substr, softint pos = -1) [flags=RET_VALUE_ONLY] {
-   return str->rindex(*substr, (qore_offset_t)pos, xsink);
+int <string>::rfind(softstring substring, softint offset = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return str->rindex(*substring, (qore_offset_t)offset, xsink);
 }
 
 //! Returns @ref False if the string is empty, @ref True if not
@@ -364,7 +369,7 @@ bool <string>::intp() [flags=CONSTANT] {
     @since %Qore 0.8.13; in previous versions the \link <value>::toInt() \endlink function (without the <b>base</b>
     argument) applied also to strings
   */
-int <string>::toInt(int base = 10) [flags=RET_VALUE_ONLY] {
+int <string>::toInt(int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (base < 0 || base == 1 || base > 36) {
         return xsink -> raiseException("INVALID-BASE", "base " QLLD " is invalid; base must be 0 or 2 - 36 inclusive",
             base);
@@ -407,7 +412,7 @@ string substr = str.substr(-10);
 
     @note equivalent to @ref Qore::substr(softstring, softint)
  */
-string <string>::substr(softint start) [flags=RET_VALUE_ONLY] {
+string <string>::substr(softint start) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNode* rv = str->substr(start, xsink);
     if (!rv)
         rv = new QoreStringNode(str->getEncoding());
@@ -418,7 +423,7 @@ string <string>::substr(softint start) [flags=RET_VALUE_ONLY] {
 /** Arguments can be negative, giving offsets from the end of the string. All offsets are character positions, not byte positions.
 
     @param start The starting character for the substring where the first character is at offset 0; if the offset is negative, it designates the number of characters from the end of the string
-    @param len The maximum number of characters to copy; if this value is negative, the rest of the string from \a start will be copied to the substring, except without - \a len characters from the end of the string
+    @param length The maximum number of characters to copy; if this value is negative, the rest of the string from \a start will be copied to the substring, except without - \a length characters from the end of the string
 
     @return the substring of the string according to the arguments passed; an emtpy string is returned if the argument cannot be satisfied
 
@@ -434,8 +439,8 @@ string substr = str.substr(10, -2);
 
     @since %Qore 0.8.5
  */
-string <string>::substr(softint start, softint len) [flags=RET_VALUE_ONLY] {
-    QoreStringNode* rv = str->substr(start, len, xsink);
+string <string>::substr(softint start, softint length) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreStringNode* rv = str->substr(start, length, xsink);
     if (!rv)
         rv = new QoreStringNode(str->getEncoding());
     return rv;
@@ -443,7 +448,7 @@ string <string>::substr(softint start, softint len) [flags=RET_VALUE_ONLY] {
 
 //! Splits a string into a list of components based on a separator string
 /**
-    @param sep the separator string; if the separator string is not found in the string to split, then a list with only one element containing the entire string argument is returned'; if this string has a different @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding"
+    @param separator the separator string; if the separator string is not found in the string to split, then a list with only one element containing the entire string argument is returned'; if this string has a different @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding"
     @param with_separator include the separator string in every element
 
     @return a list of each component of a string separated by a separator string, with the separator removed; the separator pattern will not be included in the elements of the list returned unless the \a with_separator argument is @ref True
@@ -460,9 +465,9 @@ list<string> list = str.split(":"); # returns ("some", "text", "here")
 
     @since %Qore 0.8.5
  */
-list<string> <string>::split(string sep, bool with_separator = False) [flags=RET_VALUE_ONLY] {
+list<string> <string>::split(string separator, bool with_separator = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
-    TempEncodingHelper temp(sep, str->getEncoding(), xsink);
+    TempEncodingHelper temp(separator, str->getEncoding(), xsink);
     if (*xsink)
         return QoreValue();
 
@@ -476,7 +481,7 @@ list<string> <string>::split(string sep, bool with_separator = False) [flags=RET
     @ref foldl.  Each yielded element is a view onto the original string's
     buffer, materialised lazily only if the caller mutates it.
 
-    @param sep the byte-wise delimiter; an empty delimiter yields the whole
+    @param separator the byte-wise delimiter; an empty delimiter yields the whole
            string once
 
     @return an @ref Qore::StringSplitIterator "StringSplitIterator"
@@ -488,11 +493,11 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::splitString(string sep) [flags=CONSTANT] {
+AbstractIterator<string> <string>::splitString(string separator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // Convert separator encoding if needed; use c_str()/size() on the source
     // (the iterator holds its own ref and walks bytes — encoding matters only
     // for the separator search).
-    TempEncodingHelper temp(sep, str->getEncoding(), xsink);
+    TempEncodingHelper temp(separator, str->getEncoding(), xsink);
     if (*xsink)
         return QoreValue();
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
@@ -519,7 +524,7 @@ int digits = foldl $1 + ($2 =~ /[0-9]/ ? 1 : 0), 0, str.splitChars();
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::splitChars() [flags=CONSTANT] {
+AbstractIterator<string> <string>::splitChars() [flags=CONSTANT] {
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
         new StringSplitIterator(str, nullptr, StringSplitIterator::SPLIT_CHARS));
 }
@@ -550,7 +555,7 @@ foreach int cp in (text.codePointIterator()) {
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::codePointIterator() [flags=CONSTANT] {
+AbstractIterator<int> <string>::codePointIterator() [flags=CONSTANT] {
     return new QoreObject(QC_STRINGCHARITERATOR, 0, new StringCharIterator(str));
 }
 
@@ -570,7 +575,7 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitLines();
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::splitLines() [flags=CONSTANT] {
+AbstractIterator<string> <string>::splitLines() [flags=CONSTANT] {
     QoreString nl("\n");
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
         new StringSplitIterator(str, &nl, StringSplitIterator::STRIP_TRAILING_CR));
@@ -589,7 +594,7 @@ AbstractIterator <string>::splitLines() [flags=CONSTANT] {
     @ref <string>::splitRegex when every piece is needed and
     throughput matters more than memory.
 
-    @param regex_sep the separator regular expression
+    @param separator_pattern the separator regular expression
     @param options regex options (e.g. \c RE_Caseless)
     @param with_separator include the separator match in each element
 
@@ -604,9 +609,9 @@ AbstractIterator <string>::splitLines() [flags=CONSTANT] {
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::splitLinesRegex(string regex_sep, int options = 0,
-        bool with_separator = False) [flags=RET_VALUE_ONLY] {
-    SimpleRefHolder<QoreRegex> re(new QoreRegex(*regex_sep, options, xsink));
+AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int options = 0,
+        bool with_separator = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    SimpleRefHolder<QoreRegex> re(new QoreRegex(*separator_pattern, options, xsink));
     if (*xsink) {
         return QoreValue();
     }
@@ -625,7 +630,7 @@ AbstractIterator <string>::splitLinesRegex(string regex_sep, int options = 0,
     Also the separator character can appear as a part of a field with this variant.
     This variant is useful for parsing CSV files, for example.
 
-    @param sep the separator string; if the separator string is not found in the string to split, then a list with
+    @param separator the separator string; if the separator string is not found in the string to split, then a list with
     only one element containing the entire string argument is returned'; if this string has a different
     @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s
     @ref character_encoding "character encoding"
@@ -652,8 +657,8 @@ list<string> list = "some,'text with spaces, and commas, here is another one! ,'
     - %Qore 0.8.5 added this pseudo-method
     - %Qore 0.8.6 added the \c trim_unquoted parameter
  */
-list<string> <string>::split(string sep, string quote, bool trim_unquoted = False) [flags=RET_VALUE_ONLY] {
-    return split_with_quote(xsink, sep, str, quote, trim_unquoted);
+list<string> <string>::split(string separator, string quote, bool trim_unquoted = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return split_with_quote(xsink, separator, str, quote, trim_unquoted);
 }
 
 //! Splits a string into a list of components based on a separator regular expression
@@ -664,7 +669,7 @@ string str = "some\\:text:here";
 list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "here")
     @endcode
 
-    @param regex_sep the separator regular expression; if the separator regular expression is not matched in the
+    @param separator_pattern the separator regular expression; if the separator regular expression is not matched in the
     string to split, then a list with only one element containing the entire string argument is returned'; if this
     string has a different @ref character_encoding "character encoding" than \a str, then it will be converted to
     <em>str</em>'s @ref character_encoding "character encoding"
@@ -683,8 +688,8 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     @since %Qore 1.0.7
     @since %Qore 2.3 added the \a limit parameter
  */
-list<string> <string>::splitRegex(string regex_sep, int options = 0, bool with_separator = False, int limit = -1) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex_sep, options, xsink);
+list<string> <string>::splitRegex(string separator_pattern, int options = 0, bool with_separator = False, int limit = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*separator_pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -700,7 +705,7 @@ string str = "some\\:text:here";
 list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "here")
     @endcode
 
-    @param regex_sep the separator regular expression; if the separator regular expression is not matched in the
+    @param separator_pattern the separator regular expression; if the separator regular expression is not matched in the
     string to split, then a list with only one element containing the entire string argument is returned'; if this
     string has a different @ref character_encoding "character encoding" than \a str, then it will be converted to
     <em>str</em>'s @ref character_encoding "character encoding"
@@ -718,8 +723,8 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     @since %Qore 1.0.7
     @since %Qore 2.3 added the \a limit parameter
  */
-list<string> <string>::splitRegex(string regex_sep, bool with_separator = False, int limit = -1) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex_sep, 0, xsink);
+list<string> <string>::splitRegex(string separator_pattern, bool with_separator = False, int limit = -1) [flags=RET_VALUE_ONLY] {
+    QoreRegex qr(*separator_pattern, 0, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -731,7 +736,7 @@ list<string> <string>::splitRegex(string regex_sep, bool with_separator = False,
 /** Strings are converted to UTF-8 for pattern-matching; if any invalid encodings are encountered, an
     \c ENCODING-CONVERSION-ERROR is raised
 
-    @param regex the regular expression pattern
+    @param pattern the regular expression pattern
     @param options regular expression options; see @ref regex_constants for possible values
 
     @return @ref True if the regular expression matches the string passed, otherwise returns @ref False
@@ -752,8 +757,8 @@ bool b = "hello".regex("^hel"); # returns True
 
     @since %Qore 0.8.5
  */
-bool <string>::regex(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex, options, xsink);
+bool <string>::regex(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -765,7 +770,7 @@ bool <string>::regex(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
 /** Strings are converted to UTF-8 for pattern-matching; if any invalid encodings are encountered, an
     \c ENCODING-CONVERSION-ERROR is raised
 
-    @param regex the regular expression to use for matching, elements should be given in parentheses
+    @param pattern the regular expression to use for matching, elements should be given in parentheses
     @param options regular expression options; see @ref regex_constants for possible values
 
     @return a list of substrings in a string based on matching patterns defined by a regular expression or
@@ -791,8 +796,8 @@ string str = "ns:element";
     @since %Qore 0.8.8 this function accepts the @ref Qore::RE_Global option to extract all occurrences of the
     pattern(s) in a string
  */
-*list<*string> <string>::regexExtract(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex, options, xsink);
+*list<*string> <string>::regexExtract(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*pattern, options, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -800,7 +805,7 @@ string str = "ns:element";
 }
 
 //! Returns the number of non-overlapping matches of a regular expression pattern in the string
-/** @param regex the regular expression pattern to count
+/** @param pattern the regular expression pattern to count
     @param options optional @ref regex_constants "regex option constants"
 
     @return the number of non-overlapping matches found; 0 if no match
@@ -819,8 +824,8 @@ int n = "abc 123 def 456".regexCount("\\d+"); # returns 2
 
     @see regex_count()
 */
-int <string>::regexCount(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex, options, xsink);
+int <string>::regexCount(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -830,7 +835,7 @@ int <string>::regexCount(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
 //! Extracts named capture groups from the string using a regular expression pattern
 /** Named groups are defined with \c (?<name>...) or \c (?P<name>...) syntax.
 
-    @param regex the regular expression pattern containing named groups
+    @param pattern the regular expression pattern containing named groups
     @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to extract all matches
 
     @return for non-global: \c *hash<string, *string> where keys are group names and values are matched text
@@ -852,8 +857,8 @@ auto h = "2026-04-08".regexExtractNamed("(?<year>\\d{4})-(?<month>\\d{2})-(?<day
 
     @see regex_extract_named()
 */
-auto <string>::regexExtractNamed(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex, options, xsink);
+auto <string>::regexExtractNamed(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -864,7 +869,7 @@ auto <string>::regexExtractNamed(string regex, int options = 0) [flags=RET_VALUE
 /** Returns a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes containing match text,
     offsets, captured groups, and named groups.
 
-    @param regex the regular expression pattern
+    @param pattern the regular expression pattern
     @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to find all matches
 
     @return a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes; @ref nothing if no match
@@ -885,8 +890,8 @@ auto <string>::regexExtractNamed(string regex, int options = 0) [flags=RET_VALUE
 
     @see regex_extract_detailed()
 */
-*list<hash<RegexMatchInfo>> <string>::regexExtractDetailed(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex, options, xsink);
+*list<hash<RegexMatchInfo>> <string>::regexExtractDetailed(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -905,10 +910,15 @@ string escaped = "price: $100".regexEscape(); # returns "price\\:\\ \\$100"
 
     @see regex_escape()
 */
-string <string>::regexEscape() [flags=CONSTANT] {
+string <string>::regexEscape() [flags=RET_VALUE_ONLY] {
     SimpleRefHolder<QoreStringNode> result(new QoreStringNode);
     const char* p = str->c_str();
+    size_t i = 0;
     while (*p) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "escaping regex string")) {
+            return QoreValue();
+        }
+        ++i;
         if (!isalnum((unsigned char)*p)) {
             (*result)->concat('\\');
         }
@@ -1201,7 +1211,7 @@ string base64 = str.toBase64(64);
     Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and
     <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param maxlinelen the maximum length of a line in the resulting output string in bytes; if this value is > 0 then
+    @param max_line_length the maximum length of a line in the resulting output string in bytes; if this value is > 0 then
     output lines will be separated by CRLF characters
 
     @return the base64-encoded string of the data passed
@@ -1212,9 +1222,9 @@ string base64 = str.toBase64(64);
     - <binary>::toBase64()
     - make_base64_string(string, softint)
 */
-string <string>::toBase64(softint maxlinelen = -1) [flags=CONSTANT] {
+string <string>::toBase64(softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode *rv = new QoreStringNode;
-    rv->concatBase64(str, maxlinelen);
+    rv->concatBase64(str, max_line_length);
     return rv;
 }
 
@@ -1226,6 +1236,8 @@ string <string>::toBase64(softint maxlinelen = -1) [flags=CONSTANT] {
 string base64 = str.toBase64Url();
     @endcode
 
+    @param max_line_length ignored for Base64-URL output; accepted for compatibility with <string>::toBase64()
+
     @return the base64-url-encoded string of the data passed
 
     @since %Qore 1.19.0
@@ -1234,7 +1246,7 @@ string base64 = str.toBase64Url();
     - <binary>::toBase64Url()
     - make_base64_url_string(string)
 */
-string <string>::toBase64Url(softint maxlinelen = -1) [flags=CONSTANT] {
+string <string>::toBase64Url(softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* rv = new QoreStringNode;
     rv->concatBase64Url(*str);
     return rv;
@@ -1243,10 +1255,10 @@ string <string>::toBase64Url(softint maxlinelen = -1) [flags=CONSTANT] {
 //! Compares the beginning of the current string with a shorter string passed as an argument
 /** @par Example:
     @code{.py}
-int i = str.comparePartial(ostr);
+int i = str.comparePartial(other_string);
     @endcode
 
-    @param ostr the partial string to compare the current string to
+    @param other_string the partial string to compare the current string to
 
     @return -1, 0, or 1 if the argument string is less than, equal, or greater than the beginning of the current
     string; returns also -1 if the argument string is equal to the beginning of the current string but the argument
@@ -1254,9 +1266,9 @@ int i = str.comparePartial(ostr);
 
     @since %Qore 0.8.8
 */
-int <string>::comparePartial(string ostr) [flags=RET_VALUE_ONLY] {
+int <string>::comparePartial(string other_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
-    TempEncodingHelper temp(ostr, str->getEncoding(), xsink);
+    TempEncodingHelper temp(other_string, str->getEncoding(), xsink);
     if (*xsink)
         return QoreValue();
 
@@ -1267,29 +1279,29 @@ int <string>::comparePartial(string ostr) [flags=RET_VALUE_ONLY] {
 //! Compares the beginning of the current string with a shorter string passed as an argument for equality only, returns @ref True "True" if the string argument matches the beginning of the string, @ref False "False" if not
 /** @par Example:
     @code{.py}
-bool b = str.equalPartial(ostr);
+bool b = str.equalPartial(other_string);
     @endcode
 
     This pseudo-method is slightly faster than comparePartial() since the length of the substring can be used to
     determine if the strings can match or not.
 
-    @param ostr the partial string to compare the current string to
+    @param other_string the partial string to compare the current string to
 
     @return @ref True "True" if the string argument matches the beginning of the string, @ref False "False" if not
 
     @since %Qore 0.8.8
 */
-bool <string>::equalPartial(string ostr) [flags=RET_VALUE_ONLY] {
-    return str->equalPartialSoft(ostr, xsink);
+bool <string>::equalPartial(string other_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return str->equalPartialSoft(other_string, xsink);
 }
 
 //! Compares the beginning of the current string assumed to be a path with a shorter string passed as an argument for equality only, returns @ref True "True" if the string argument matches the beginning of the string where either both strings are the same size or the current string has a '/' or '?' character after the point where the argument string stops, @ref False "False" if not
 /** @par Example:
     @code{.py}
-bool b = str.equalPartialPath(ostr);
+bool b = str.equalPartialPath(other_string);
     @endcode
 
-    @param ostr the partial string to compare the current string to
+    @param other_string the partial string to compare the current string to
 
     @return @ref True "True" if the string argument matches the beginning of the string where either both strings are
     the same size or the current string has a '/' or '?' character after the point where the argument string stops,
@@ -1297,8 +1309,8 @@ bool b = str.equalPartialPath(ostr);
 
     @since %Qore 0.8.8
 */
-bool <string>::equalPartialPath(string ostr) [flags=RET_VALUE_ONLY] {
-    return str->equalPartialPath(ostr, xsink);
+bool <string>::equalPartialPath(string other_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return str->equalPartialPath(other_string, xsink);
 }
 
 //! Returns a string with all accented characters removed
@@ -1334,7 +1346,7 @@ int uc = str.getUnicode(0);
 
     @since %Qore 0.8.8
 */
-int <string>::getUnicode(int offset = 0) [flags=RET_VALUE_ONLY] {
+int <string>::getUnicode(int offset = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return str->getUnicodePoint(offset, xsink);
 }
 
@@ -1361,7 +1373,7 @@ if (b == ord("#")) { ... }
 
     @since %Qore 2.3
 */
-*int <string>::getByte(int byte_offset) [flags=CONSTANT] {
+*int <string>::getByte(int byte_offset) [flags=CONSTANT,NAMED_ARGS] {
     int64 sz = (int64)str->size();
     int64 off = byte_offset < 0 ? sz + byte_offset : byte_offset;
     if (off < 0 || off >= sz) {
@@ -1382,15 +1394,15 @@ bool <string>::sizep() [flags=CONSTANT] {
 }
 
 //! Returns @ref True if the given string starts with the argument
-/** @param chars The characters to check at the beginning of the string
+/** @param prefix The characters to check at the beginning of the string
 
     @return @ref True if the given string starts with the argument
 
     @since %Qore 2.0
 */
-bool <string>::startsWith(string chars) [flags=CONSTANT] {
+bool <string>::startsWith(string prefix) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
-    TempEncodingHelper temp(chars, str->getEncoding(), xsink);
+    TempEncodingHelper temp(prefix, str->getEncoding(), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1398,15 +1410,15 @@ bool <string>::startsWith(string chars) [flags=CONSTANT] {
 }
 
 //! Returns @ref True if the given string ends with the argument
-/** @param chars The characters to check at the end of the string
+/** @param suffix The characters to check at the end of the string
 
     @return @ref True if the given string ends with the argument
 
     @since %Qore 2.0
 */
-bool <string>::endsWith(string chars) [flags=CONSTANT] {
+bool <string>::endsWith(string suffix) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
-    TempEncodingHelper temp(chars, str->getEncoding(), xsink);
+    TempEncodingHelper temp(suffix, str->getEncoding(), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1414,15 +1426,15 @@ bool <string>::endsWith(string chars) [flags=CONSTANT] {
 }
 
 //! Returns @ref True if the given string contains the argument
-/** @param chars The characters to check in the string
+/** @param substring The characters to check in the string
 
     @return @ref True if the given string contains the argument
 
     @since %Qore 2.0
 */
-bool <string>::contains(string chars) [flags=CONSTANT] {
+bool <string>::contains(string substring) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
-    TempEncodingHelper temp(chars, str->getEncoding(), xsink);
+    TempEncodingHelper temp(substring, str->getEncoding(), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1437,13 +1449,13 @@ bool <string>::contains(string chars) [flags=CONSTANT] {
 
     @param offset the offset in bytes from the beginning of the string; negative numbers give an offset from the end
     of the string
-    @param eol the optional end of line character(s) to use to detect lines in the buffer; if this string is not
+    @param line_separator the optional end of line character(s) to use to detect lines in the buffer; if this string is not
     passed, then the end of line character(s) are detected automatically, and can be either \c "\n", \c "\r", or
     \c "\r\n"; if this string is passed and has a different @ref character_encoding "character encoding" from this
     object's (as determined by the \c encoding parameter), then it will be converted to the string's
     @ref character_encoding "character encoding"
-    @param trim if @ref True the string return values for the lines iterated will be trimmed of the eol bytes
-    @param size an optional reference to an integer that returns the number of bytes in the line including the end of
+    @param trim_line if @ref True the string return values for the lines iterated will be trimmed of the eol bytes
+    @param byte_count an optional reference to an integer that returns the number of bytes in the line including the end of
     line characters
 
     @return the line found or @ref nothing if no end of line character(s) were found or no data was found after the
@@ -1451,7 +1463,8 @@ bool <string>::contains(string chars) [flags=CONSTANT] {
 
     @since %Qore 0.8.9
  */
-*string <string>::getLine(int offset = 0, *string eol, bool trim = True, *reference<int> size) [flags=CONSTANT] {
+*string <string>::getLine(int offset = 0, *string line_separator, bool trim_line = True,
+        *reference<int> byte_count) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (str->empty())
         return QoreValue();
 
@@ -1463,8 +1476,8 @@ bool <string>::contains(string chars) [flags=CONSTANT] {
         return QoreValue();
 
     TempEncodingHelper eolstr;
-    if (eol) {
-        eolstr.set(eol, str->getEncoding(), xsink);
+    if (line_separator) {
+        eolstr.set(line_separator, str->getEncoding(), xsink);
         if (*xsink)
             return QoreValue();
 
@@ -1480,7 +1493,7 @@ bool <string>::contains(string chars) [flags=CONSTANT] {
         const char* p = strstr(start, eolstr->c_str());
         if (p) {
             strsize = p - start + eolstr->size();
-            if (trim) {
+            if (trim_line) {
                 if (p != start)
                 rv->concat(start, p - start);
             } else
@@ -1491,21 +1504,26 @@ bool <string>::contains(string chars) [flags=CONSTANT] {
             strsize = rv->size() - strsize;
         }
     } else {
+        size_t i = 0;
         while (*start) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "getting line from string")) {
+                return QoreValue();
+            }
+            ++i;
             if (*start == '\r') {
                 ++strsize;
-                if (!trim)
+                if (!trim_line)
                 rv->concat(*start);
                 if (*(start + 1) == '\n') {
                 ++strsize;
-                if (!trim)
+                if (!trim_line)
                     rv->concat(*start);
                 }
                 break;
             }
             if (*start == '\n') {
                 ++strsize;
-                if (!trim)
+                if (!trim_line)
                 rv->concat(*start);
                 break;
             }
@@ -1515,8 +1533,8 @@ bool <string>::contains(string chars) [flags=CONSTANT] {
         }
     }
 
-    if (size) {
-        QoreTypeSafeReferenceHelper r(size, xsink);
+    if (byte_count) {
+        QoreTypeSafeReferenceHelper r(byte_count, xsink);
         if (!r)
             return QoreValue();
 
@@ -1533,15 +1551,15 @@ bool <string>::contains(string chars) [flags=CONSTANT] {
 string ns = string.getEncoded(CE_XML);
     @endcode
 
-    @param code an encoding bitfield argument; see @ref StringConcatEncoding for more information
+    @param encoding_flags an encoding bitfield argument; see @ref StringConcatEncoding for more information
 
     @see <string>::getDecoded()
 
     @since %Qore 0.8.12
  */
-string <string>::getEncoded(int code = CE_XHTML) {
+string <string>::getEncoded(int encoding_flags = CE_XHTML) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNodeHolder rv(new QoreStringNode(str->getEncoding()));
-    return rv->concatEncode(xsink, *str, code) ? nullptr : rv.release();
+    return rv->concatEncode(xsink, *str, encoding_flags) ? nullptr : rv.release();
 }
 
 //! returns a string based on the string value, decoded as per the \a code argument
@@ -1550,13 +1568,13 @@ string <string>::getEncoded(int code = CE_XHTML) {
 string ns = string.getDecoded(CE_XML);
     @endcode
 
-    @param code a decoding bitfield argument; see @ref StringConcatDecoding for more information
+    @param decoding_flags a decoding bitfield argument; see @ref StringConcatDecoding for more information
 
     @see <string>::getEncoded()
 
     @since %Qore 0.8.12
  */
-string <string>::getDecoded(int code = CD_ALL) {
+string <string>::getDecoded(int decoding_flags = CD_ALL) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNodeHolder rv(new QoreStringNode(str->getEncoding()));
-    return rv->concatDecode(xsink, *str, code) ? nullptr : rv.release();
+    return rv->concatDecode(xsink, *str, decoding_flags) ? nullptr : rv.release();
 }

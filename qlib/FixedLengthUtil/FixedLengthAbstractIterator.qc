@@ -25,7 +25,7 @@
 #! The FixedLengthUtil namespace contains all the definitions in the FixedLengthUtil module
 public namespace FixedLengthUtil {
 #! Structured line iterator for abstract data allowing efficient "pipelined" processing
-public class FixedLengthAbstractIterator inherits FixedLengthBase, Qore::AbstractIterator {
+public class FixedLengthAbstractIterator inherits FixedLengthBase, Qore::AbstractIterator<hash<auto>> {
     private {
         # rules keyed by field length then by record name
         hash<string, hash<string, list<hash<auto>>>> m_resolve_by_rule;
@@ -123,11 +123,11 @@ my hash $h = $i.getValue();
         - \c "type": a string giving the record type name
         - \c "record": a hash giving the parsed record data
     */
-    *hash<auto> getValue() {
+    hash<auto> getValue() {
         *string line = lineIterator.getValue();
 
-        if (!line)
-            return;
+        if (!exists line)
+            throw "INVALID-ITERATOR", "the iterator is not pointing at a valid record; call next() before getValue()";
 
         hash<auto> result = {};
 

@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
 
 %exec-class TreeMapTest
 
@@ -24,6 +25,7 @@ public class TreeMapTest inherits QUnit::Test {
         addTestCase("correct reference counting", \testRefCount());
         addTestCase("take", \testTake());
         addTestCase("getAll", \testGetAll());
+        addTestCase("generic value typing", \testGenericTyping());
         addTestCase("unmatched", \testUnmatched());
         addTestCase("DGC tests", \testDgc());
 
@@ -117,6 +119,44 @@ public class TreeMapTest inherits QUnit::Test {
         tm.put("a", 1);
         tm.put("b", 2);
         testAssertionValue("getAll", tm.getAll(), ("a": 1, "b": 2));
+    }
+
+    testGenericTyping() {
+        TreeMap<int> ints();
+
+        ints.put("a", 1);
+        ints.put(path: "b", value: 2);
+
+        *int a = ints.get("a");
+        *int missing = ints.get("missing");
+        testAssertionValue("typed get", a, 1);
+        testAssertionValue("typed missing get", missing);
+
+        *int b = ints.take("b");
+        testAssertionValue("typed take", b, 2);
+
+        *hash<string, int> all = ints.getAll();
+        testAssertionValue("typed getAll value", all, ("a": 1));
+        assertEq("hash<string, int>", all.fullType(), "typed getAll returns hash<string, int>");
+
+        TreeMap<hash<string, int>> records();
+        records.put("record", ("value": 3));
+        *hash<string, int> rec = records.get("record");
+        assertEq(3, rec.value, "nested hash value type is preserved");
+
+        TreeMap raw();
+        raw.put("text", "value");
+        raw.put("number", 42);
+        assertEq("value", raw.get("text"), "raw TreeMap remains heterogeneous");
+        assertEq(42, raw.get("number"), "raw TreeMap accepts non-string values");
+
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+            "sub t() { TreeMap<int> tm(); tm.put(\"bad\", \"value\"); }", "TreeMapGeneric"));
+
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p2.parse(), (
+            "sub t() { TreeMap<int> tm(); string s = tm.get(\"a\"); }", "TreeMapGeneric"));
     }
 
     testUnmatched() {

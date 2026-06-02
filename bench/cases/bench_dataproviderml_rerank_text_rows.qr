@@ -1,0 +1,59 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlRerankTextRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires DataProviderML
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlRerankTextRows {
+    constructor() {
+        string model_path = OnnxBench::tokenRerankerModelPath();
+        if (!OnnxBench::canRunTextOnnx(model_path)) {
+            printf("dataproviderml_rerank_text_rows: skipped (ONNX text fixtures not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_rerank_text_rows");
+        r.iterations = 4;
+        r.warmup = 1;
+
+        int rows = OnnxBench::textRows();
+        list<hash<auto>> records;
+        DataProviderML::QoreRerankerProcessor proc({
+            "query_field": "query",
+            "passage_field": "passage",
+            "top_k": rows,
+            "reranker_mode": "onnx",
+            "reranker_model_path": model_path,
+            "tokenizer_config_path": OnnxBench::tokenizerPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "max_length": 24,
+        });
+
+        r.setup = sub () {
+            records = OnnxBench::makeRerankRecords(rows);
+            r.bytes_processed = OnnxBench::approxTextBytes(rows);
+        };
+
+        r.measure = sub () {
+            list<auto> results;
+            foreach hash<auto> rec in (records) {
+                OnnxBench::collectResult(\results, proc.processRecord(rec));
+            }
+            *list<auto> flushed = proc.flushAndCollect();
+            if (flushed) {
+                results += flushed;
+            }
+            OnnxBench::verifyRerankRows("dataproviderml_rerank_text_rows", results, rows);
+        };
+
+        exit(r.run());
+    }
+}

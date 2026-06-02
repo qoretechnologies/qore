@@ -3,18 +3,19 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/MapperUtil.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/ServerSentEventClient
-%requires ../../../../qlib/ServerSentEventHandler
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires MapperUtil
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventClient
+%requires ServerSentEventHandler
 
 %try-module json >= 1.5
 %define NoJson
@@ -43,6 +44,7 @@ public class Main inherits QUnit::Test {
         }
         addTestCase("SSE response status", \sseResponseStatusTest());
         addTestCase("main test", \mainTest());
+        addTestCase("SSE client disconnect deregisters connection", \sseClientDisconnectDeregistersTest());
         addTestCase("SSE deterministic shutdown", \sseDeterministicShutdownTest());
         addTestCase("SSE multiple connections shutdown", \sseMultipleConnectionsShutdownTest());
         addTestCase("SSE shutdown during data delivery", \sseShutdownDuringDataTest());
@@ -130,6 +132,44 @@ public class Main inherits QUnit::Test {
         assertEq(200, rh.status_code);
         string ct = rh."content-type" ?? rh."Content-Type";
         assertTrue(ct && ct.lwr().startsWith(MimeTypeSse), "SSE Content-Type expected");
+    }
+
+    sseClientDisconnectDeregistersTest() {
+        checkModule();
+
+        ServerSentEventHandler test_sse({"logger": logger});
+        hash<HttpServerOptionInfo> test_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer test_http(test_opts);
+        on_exit test_http.stop();
+        test_http.setHandler("sse-handler", "", NOTHING, test_sse);
+        test_http.setDefaultHandler("sse-handler", test_sse);
+        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        ServerSentEventClient client({"url": "sse://localhost:" + test_port});
+        MyObserver observer();
+        client.registerObserver(observer);
+        client.observersReady();
+
+        int retries = 0;
+        while (!test_sse.getConnectionIds() && retries < 100) {
+            usleep(50ms);
+            ++retries;
+        }
+        assertEq(1, test_sse.getConnectionIds().size(), "SSE connection should be registered");
+        observer.waitForConnected();
+
+        client.disconnect();
+
+        retries = 0;
+        while (test_sse.getConnectionIds().size() > 0 && retries < 100) {
+            usleep(50ms);
+            ++retries;
+        }
+        assertEq(0, test_sse.getConnectionIds().size(),
+            "SSE connection should be deregistered after client disconnect");
     }
 
     #! Verifies that stop() completes deterministically with an active SSE connection.

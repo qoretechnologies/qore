@@ -3,14 +3,30 @@
 
 %modern
 %no-child-restrictions
+%allow-injection
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+public namespace ParentRedeclareNs {
+    public const SharedPort = 8001;
+    public const SharedName = "parent-api";
+
+    public class SharedClass {
+    }
+
+    public enum SharedEnum : string {
+        Value = "value",
+    }
+}
 
 %exec-class Test
 
 class Test inherits QUnit::Test {
     constructor() : QUnit::Test("ns", "1.0") {
         addTestCase("ns", \nsTests());
+        addTestCase("parented Program module public const redeclare",
+            \parentedProgramModulePublicConstRedeclare());
 
         set_return_value(main());
     }
@@ -33,5 +49,11 @@ class Test inherits QUnit::Test {
             list args = (code, "issue-538-2");
             testNullAssertion("issue-538-2", \p.parse(), args);
         }
+    }
+
+    parentedProgramModulePublicConstRedeclare() {
+        Program p(PO_DEFAULT, False);
+        p.loadApplyToUserModule(get_script_dir() + "/ParentRedeclare.qm", True);
+        assertTrue(True, "parented Program accepts public API redeclarations from loaded user module");
     }
 }

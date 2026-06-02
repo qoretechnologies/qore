@@ -1,0 +1,188 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Sweeps batch sizes to find the break-even point where device execution beats CPU,
+#! and where keeping outputs device-resident beats materializing them to host.
+#!
+#! Usage (from the bench/ directory, with the ml module + ORT libs on the paths):
+#!   qore onnx_device_breakeven.qr
+#!
+#! Prints a Markdown table of median wall-clock per batch size.  Columns are
+#! provider-dependent: CUDA on Linux/RTX hosts shows host-materialized and
+#! device-retained variants; CoreML on Apple Silicon shows only the
+#! EP-acceleration variant (CoreML manages its own memory and returns outputs
+#! to host, so there is no device-retained variant).
+
+%exec-class OnnxDeviceBreakeven
+
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class OnnxDeviceBreakeven {
+    private {
+        const InDim = 256;
+        const OutDim = 512;
+        const BatchSizes = (1, 8, 32, 128, 512);
+        const Iterations = 12;
+        const Warmup = 3;
+    }
+
+    constructor() {
+        string model_path = modelPath();
+        if (!is_file(model_path)) {
+            printf("skipped: %s not found (run modules/ml/test/data/gen_test_mlp.py)\n", model_path);
+            return;
+        }
+        if (!ML::ml_get_capabilities().has_onnx) {
+            printf("skipped: ONNX Runtime not available\n");
+            return;
+        }
+
+        bool have_cuda = cudaAvailable(model_path);
+        bool have_coreml = coreMLAvailable(model_path);
+        printf("# ONNX device-binding break-even (MLP X(b,%d) -> Y(b,%d))\n\n", InDim, OutDim);
+        printf("Median wall-clock over %d iterations (%d warmup); CUDA: %s; CoreML: %s\n\n",
+            Iterations, Warmup,
+            have_cuda ? "available" : "NOT available",
+            have_coreml ? "available" : "NOT available");
+        printf("| batch | CPU ms | CUDA host-materialized ms | CUDA device-retained ms | "
+            "CoreML ms | CUDA vs CPU | retained vs materialized | CoreML vs CPU |\n");
+        printf("|------:|-------:|--------------------------:|------------------------:|"
+            "---------:|------------:|-------------------------:|--------------:|\n");
+
+        ML::OnnxModel cpu_model(model_path, <ML::OnnxSessionConfig>{"providers": ()});
+
+        *ML::OnnxModel cuda_mat;
+        *ML::OnnxModel cuda_dev;
+        *ML::OnnxModel coreml_model;
+        if (have_cuda) {
+            cuda_mat = new ML::OnnxModel(model_path, <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+                "fail_on_provider_fallback": True,
+                "device_binding": <ML::OnnxDeviceBindingConfig>{
+                    "enabled": True, "materialize_outputs": True,
+                },
+            });
+            cuda_dev = new ML::OnnxModel(model_path, <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA", "options": {"device_id": "0"}},),
+                "fail_on_provider_fallback": True,
+                "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True},
+            });
+        }
+        if (have_coreml) {
+            coreml_model = new ML::OnnxModel(model_path, <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+                "fail_on_provider_fallback": True,
+            });
+        }
+
+        foreach int batch in (BatchSizes) {
+            ML::Tensor input = makeInput(batch);
+
+            float cpu_ms = timeMedian(sub () {
+                hash<auto> r = cpu_model.runTensors({"X": input});
+                r.Y.getShape();
+            });
+
+            string cuda_mat_s = "n/a";
+            string cuda_dev_s = "n/a";
+            string cuda_vs_cpu = "n/a";
+            string retained_vs_mat = "n/a";
+            string coreml_s = "n/a";
+            string coreml_vs_cpu = "n/a";
+            if (have_cuda) {
+                ML::OnnxIoBinding bmat = cuda_mat.createBinding();
+                bmat.bindInput("X", input);
+                bmat.bindOutputsDevice();
+                float mat_ms = timeMedian(sub () {
+                    hash<auto> r = bmat.run(tensors: True);
+                    r.Y.getShape();           # already host (materialize_outputs)
+                });
+
+                ML::OnnxIoBinding bdev = cuda_dev.createBinding();
+                bdev.bindInput("X", input);
+                bdev.bindOutputsDevice();
+                float dev_ms = timeMedian(sub () {
+                    hash<auto> r = bdev.run(tensors: True);
+                    r.Y.getShape();           # device-resident; shape only, no host read
+                });
+
+                cuda_mat_s = sprintf("%.3f", mat_ms);
+                cuda_dev_s = sprintf("%.3f", dev_ms);
+                cuda_vs_cpu = sprintf("%.2fx", cpu_ms / dev_ms);
+                retained_vs_mat = sprintf("%.2fx", mat_ms / dev_ms);
+            }
+
+            if (have_coreml) {
+                # CoreML: EP-acceleration only -- outputs return to host (no
+                # device-retained variant).  This is the truthful Apple Silicon
+                # "device-binding" path: provider_host_resolutions bumps for the
+                # output, no host<->device transfer counters move.
+                float coreml_ms = timeMedian(sub () {
+                    hash<auto> r = coreml_model.runTensors({"X": input});
+                    r.Y.getShape();
+                });
+                coreml_s = sprintf("%.3f", coreml_ms);
+                coreml_vs_cpu = sprintf("%.2fx", cpu_ms / coreml_ms);
+            }
+
+            printf("| %5d | %6.3f | %25s | %23s | %9s | %11s | %24s | %13s |\n",
+                batch, cpu_ms, cuda_mat_s, cuda_dev_s, coreml_s,
+                cuda_vs_cpu, retained_vs_mat, coreml_vs_cpu);
+        }
+    }
+
+    private bool coreMLAvailable(string model_path) {
+        try {
+            ML::OnnxModel m(model_path, <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CoreML"},),
+                "fail_on_provider_fallback": True,
+            });
+            return m.getEffectiveProviderReport().active_provider == "CoreMLExecutionProvider";
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    private float timeMedian(code measure) {
+        for (int i = 0; i < Warmup; ++i) {
+            measure();
+        }
+        list<int> us = ();
+        for (int i = 0; i < Iterations; ++i) {
+            date start = now_us();
+            measure();
+            push us, (now_us() - start).durationMicroseconds();
+        }
+        us = sort(us);
+        return us[us.size() / 2] / 1000.0;
+    }
+
+    private ML::Tensor makeInput(int batch) {
+        int total = batch * InDim;
+        buffer<float32> data = buffer<float32>::sized(total);
+        for (int i = 0; i < total; ++i) {
+            data[i] = (i % 13).toFloat() / 13.0;
+        }
+        return new ML::Tensor(data, (batch, InDim));
+    }
+
+    private bool cudaAvailable(string model_path) {
+        try {
+            ML::OnnxModel m(model_path, <ML::OnnxSessionConfig>{
+                "providers": (<ML::OnnxProviderConfig>{"name": "CUDA"},),
+                "fail_on_provider_fallback": True,
+            });
+            return m.getEffectiveProviderReport().active_provider == "CUDAExecutionProvider";
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    private string modelPath() {
+        string p = get_script_dir() + "/../modules/ml/test/data/test_mlp.onnx";
+        return is_file(p) ? p : "modules/ml/test/data/test_mlp.onnx";
+    }
+}

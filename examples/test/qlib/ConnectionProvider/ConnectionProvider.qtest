@@ -4,13 +4,15 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/ConnectionProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires FsUtil
+%requires QUnit
+%requires AsyncSocketIo
+%requires ConnectionProvider
+%requires ProviderIndexUtil
 
 %include ../../qore/classes/FtpServer.qc
 
@@ -39,6 +41,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         addTestCase("custom parseUrl", \customParseUrlTest());
         addTestCase("custom option validation", \customValidateOptions());
         addTestCase("polling monitor", \pollingMonitorTest());
+        addTestCase("indexed scheme fallback", \indexedSchemeFallbackTest());
         addTestCase("async HE cancel mid-race", \asyncHeCancelMidRaceTest());
 
         # Return for compatibility with a test harness that checks the return value
@@ -61,6 +64,27 @@ public class ConnectionProviderTest inherits QUnit::Test {
         assertGt(0, ConnectionSchemeCache::size());
         assertEq("FhirRestClient", ConnectionSchemeCache::SchemeMap.fhir);
         assertEq("FhirRestClient", ConnectionSchemeCache::SchemeMap.fhirs);
+    }
+
+    indexedSchemeFallbackTest() {
+        string dir = tmp_location() + "/scheme_index_test_" + get_random_string(8);
+        mkdir(dir);
+        on_exit {
+            unlink(dir + "/qore-data-index.yaml");
+            rmdir(dir);
+        }
+
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "schememap": {
+                "rest": {
+                    "DataProvider": True,
+                },
+            },
+        }, 0s, {});
+
+        hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme("rest");
+        assertEq(True, exists info.schemes.rest, "built-in scheme module loaded after stale indexed module");
     }
 
     ftpConnectionTest() {

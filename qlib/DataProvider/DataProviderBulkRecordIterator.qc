@@ -31,7 +31,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Defines the standard record iterator for bulk record iterators
-public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordIterator {
+public class DataProviderBulkRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The bulk iterator object
         AbstractDataProviderBulkRecordInterface bulk;

@@ -37,6 +37,8 @@
 #include <qore/QoreEnumDecl.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/qore_list_private.h"
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
@@ -156,6 +158,50 @@ QoreValue QoreValue::makeShortString(const char* str, size_t len) {
     assert(ok && "String too long for inline storage");
     (void)ok;
     return v;
+}
+
+QoreValue QoreValue::makeStringValue(const char* str, size_t len, const QoreEncoding* enc) {
+    if (!str) {
+        str = "";
+        len = 0;
+    }
+
+    const QoreEncoding* value_enc = enc ? enc : QCS_DEFAULT;
+    if (value_enc == QCS_UTF8) {
+        QoreValue v;
+        if (tryMakeShortString(v, str, len)) {
+            return v;
+        }
+    }
+    return QoreValue(new QoreStringNode(str, len, value_enc));
+}
+
+QoreValue QoreValue::makeStringValue(const char* str, size_t len) {
+    return makeStringValue(str, len, QCS_DEFAULT);
+}
+
+QoreValue QoreValue::makeStringValue(const char* str, const QoreEncoding* enc) {
+    return makeStringValue(str, str ? strlen(str) : 0, enc);
+}
+
+QoreValue QoreValue::makeStringValue(const char* str) {
+    return makeStringValue(str, str ? strlen(str) : 0, QCS_DEFAULT);
+}
+
+QoreValue QoreValue::makeStringValue(const std::string& str, const QoreEncoding* enc) {
+    return makeStringValue(str.data(), str.size(), enc);
+}
+
+QoreValue QoreValue::makeStringValue(const std::string& str) {
+    return makeStringValue(str.data(), str.size(), QCS_DEFAULT);
+}
+
+QoreValue QoreValue::makeUtf8StringValue(const char* str, size_t len) {
+    return makeStringValue(str, len, QCS_UTF8);
+}
+
+QoreValue QoreValue::makeUtf8StringValue(const char* str) {
+    return makeStringValue(str, str ? strlen(str) : 0, QCS_UTF8);
 }
 
 void QoreValue::getShortString(char* buf) const {
@@ -299,6 +345,9 @@ const char* QoreValue::getTypeName() const {
     if (isShortString()) {
         return "string";
     }
+    if (isNull()) {
+        return "NULL";
+    }
     if (isPointer()) {
         return get_type_name(getPointerUnsafe());
     }
@@ -432,12 +481,22 @@ bool QoreValue::isEqualHard(const QoreValue& other) const {
             double b = other.getAsFloat();
             return a == b;
         }
-        case NT_STRING:
-            // Short strings would have equal bits if equal, so must be node comparison
+        case NT_STRING: {
+            // Short strings have identical bits when equal.  If only one side
+            // is inline, compare string contents instead of falling through to
+            // pointer-only node comparison.
             if (isShortString() && other.isShortString()) {
-                return bits == other.bits;
+                return false;
             }
-            break;
+            ExceptionSink xsink;
+            QoreStringNodeValueHelper lhs(*this);
+            QoreStringNodeValueHelper rhs(other);
+            const QoreStringNode* lstr = *lhs;
+            const QoreStringNode* rstr = *rhs;
+            bool rv = lstr && rstr && lstr->equalSoft(*rstr, &xsink);
+            xsink.clear();
+            return rv;
+        }
         case NT_NOTHING:
         case NT_NULL:
             return true;
@@ -460,7 +519,7 @@ bool QoreValue::isEqualSoft(const QoreValue& other, ExceptionSink* xsink) const 
     return QoreLogicalEqualsOperatorNode::softEqual(*this, other, xsink);
 }
 
-bool QoreValue::isEqualValue(const QoreValue& other) {
+bool QoreValue::isEqualValue(const QoreValue& other) const {
     // Check if exactly the same value (for nodes, same pointer)
     return bits == other.bits;
 }
@@ -680,6 +739,10 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
                 ? &YamlNullString : &NothingTypeString);
         return 0;
     }
+    if (isNull()) {
+        qore_string_private::get(str)->concat(&NullTypeString);
+        return 0;
+    }
 
     if (isInt()) {
         str.sprintf(QLLD, getInt());
@@ -692,7 +755,13 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
     } else if (isShortString()) {
         char buf[8];
         getShortString(buf);
-        str.concat(buf);
+        QoreString tmp(buf, shortStringLen(), QCS_UTF8);
+        str.concat('"');
+        str.concatEscape(&tmp, '\"', '\\', xsink);
+        if (xsink && *xsink) {
+            return -1;
+        }
+        str.concat('"');
     } else if (isPointer()) {
         AbstractQoreNode* n = getPointerUnsafe();
         if (n) {
@@ -711,6 +780,10 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
         return (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
             ? &YamlNullString : &NothingTypeString;
     }
+    if (isNull()) {
+        del = false;
+        return &NullTypeString;
+    }
 
     if (isInt()) {
         del = true;
@@ -726,9 +799,12 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
     }
     if (isShortString()) {
         del = true;
-        char buf[8];
-        getShortString(buf);
-        return new QoreString(buf);
+        QoreString* rv = new QoreString(QCS_UTF8);
+        if (getAsString(*rv, format_offset, xsink)) {
+            delete rv;
+            return nullptr;
+        }
+        return rv;
     }
     if (isPointer()) {
         AbstractQoreNode* n = getPointerUnsafe();
@@ -833,10 +909,31 @@ const QoreTypeInfo* QoreValue::getFullTypeInfo() const {
     if (t == NT_HASH && isPointer()) {
         const QoreHashNode* h = reinterpret_cast<const QoreHashNode*>(getPointerUnsafe());
         if (h) {
+            // Check for hashdecl first (typed hash with specific structure)
             const TypedHashDecl* thd = h->getHashDecl();
             if (thd) {
                 return thd->getTypeInfo();
             }
+            // Check for complex type info (e.g., hash<StatInfo> from cast expressions)
+            const QoreTypeInfo* complex_type = qore_hash_private::get(*h)->complexTypeInfo;
+            if (complex_type) {
+                return complex_type;
+            }
+        }
+    }
+    if (t == NT_LIST && isPointer()) {
+        const QoreListNode* l = reinterpret_cast<const QoreListNode*>(getPointerUnsafe());
+        if (l) {
+            const QoreTypeInfo* complex_type = qore_list_private::get(*l)->complexTypeInfo;
+            if (complex_type) {
+                return complex_type;
+            }
+        }
+    }
+    if (t == NT_BUFFER && isPointer()) {
+        const QoreBufferNode* b = reinterpret_cast<const QoreBufferNode*>(getPointerUnsafe());
+        if (b) {
+            return b->getTypeInfo();
         }
     }
     return getTypeInfo();
@@ -857,6 +954,9 @@ const char* QoreValue::getFullTypeName() const {
     }
     if (isShortString()) {
         return "string";
+    }
+    if (isNull()) {
+        return "NULL";
     }
     if (isPointer()) {
         return get_full_type_name(getPointerUnsafe());
@@ -880,6 +980,9 @@ const char* QoreValue::getFullTypeName(bool with_namespaces) const {
     }
     if (isShortString()) {
         return "string";
+    }
+    if (isNull()) {
+        return "NULL";
     }
     if (isPointer()) {
         return get_full_type_name(getPointerUnsafe(), with_namespaces);
@@ -1064,7 +1167,9 @@ int ValueEvalOptimizedRefHolder::eval(const QoreValue& exp) {
         v = exp;
         return 0;
     }
-    needs_deref = true;
-    v = exp.eval(needs_deref, xsink);
+    this->needs_deref = true;
+    bool local_nd = true;
+    v = exp.eval(local_nd, xsink);
+    this->needs_deref = local_nd;
     return xsink && *xsink ? -1 : 0;
 }

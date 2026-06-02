@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+class AbstractInvokeDotEvalTarget {
+    abstract string getName();
+}
+
+class InvokeDotEvalTarget inherits AbstractInvokeDotEvalTarget {
+    string getName() {
+        return "ok";
+    }
+}
+
+AbstractInvokeDotEvalTarget t = new InvokeDotEvalTarget();
+
+try {
+    string name = t.getName();
+    if (name != "ok") {
+        throw "ABSTRACT-INVOKE-DOT-EVAL-ERROR", sprintf("unexpected result: %y", name);
+    }
+} catch (hash<ExceptionInfo> ex) {
+    rethrow;
+}
+
+printf("abstract invoke dot-eval method dispatch: ok\n");

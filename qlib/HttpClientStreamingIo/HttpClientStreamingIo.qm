@@ -25,7 +25,9 @@
 %requires HttpClientIo
 %requires DataProvider
 %requires AsyncSocketIo
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module HttpClientStreamingIo {
     version = "1.0";

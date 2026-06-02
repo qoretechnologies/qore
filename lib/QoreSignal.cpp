@@ -60,7 +60,7 @@ void QoreSignalHandler::runHandler(int sig, ExceptionSink *xsink) {
 }
 
 QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false), waiting(0), num_handlers(0),
-        thread_running(false), cmd(C_None) {
+        thread_running(false), cmd(C_None), thread_joinable(false) {
     //printd(5, "QoreSignalManager::QoreSignalManager() QORE_SIGNAL_MAX: %d\n", QORE_SIGNAL_MAX);
     // initilize handlers
     for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
@@ -143,7 +143,7 @@ void QoreSignalManager::del() {
 
     // remove all signal handlers to ensure that all Programs are dereferenced
     for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
-        if (i != QORE_STATUS_SIGNAL|| !handlers[i].isSet())
+        if (i == QORE_STATUS_SIGNAL || !handlers[i].isSet())
             continue;
         sigdelset(&mask, i);
         changed = true;
@@ -173,7 +173,7 @@ void QoreSignalManager::del() {
     // can be called if it's already stopped...
     stop_signal_thread_unlocked();
     sl.unlock();
-    tcount.waitForZero();
+    wait_signal_thread_stopped();
     assert(!num_handlers);
     //printd(5, "QoreSignalManager::del() all handlers deleted\n");
 }
@@ -221,7 +221,35 @@ void QoreSignalManager::stop_signal_thread() {
 
     // wait for thread to exit (may be already gone)
     sl.unlock();
+    wait_signal_thread_stopped();
+}
+
+void QoreSignalManager::wait_signal_thread_stopped() {
     tcount.waitForZero();
+
+    bool join = false;
+    pthread_t join_ptid;
+    {
+        AutoLocker al(&mutex);
+        if (thread_joinable) {
+            join_ptid = ptid;
+            thread_joinable = false;
+            join = true;
+        }
+    }
+
+    if (join && !pthread_equal(join_ptid, pthread_self())) {
+#ifdef DEBUG
+        int rc =
+#endif
+            pthread_join(join_ptid, nullptr);
+#ifdef DEBUG
+        if (rc) {
+            printd(0, "pthread_join() returned %d: %s\n", rc, strerror(rc));
+        }
+        assert(!rc);
+#endif
+    }
 }
 
 void QoreSignalManager::preFork() {
@@ -240,7 +268,7 @@ void QoreSignalManager::preFork() {
 
     // wait for thread to exit (may be already gone)
     sl.unlock();
-    tcount.waitForZero();
+    wait_signal_thread_stopped();
 
     printd(5, "QoreSignalManager::preFork() pid: %d signal handling thread stopped\n", getpid());
 }
@@ -386,15 +414,14 @@ void QoreSignalManager::signal_handler_thread() {
             // reacquire lock to check handler status
             sl.lock();
 
-            if (handlers[sig].status == QoreSignalHandler::SH_InProgress) {
+            // SH_InProgress: normal, no external mutation — reset and continue
+            // SH_OK: setHandler() replaced the handler (and reset status) while we ran — continue
+            // SH_Delete: removeHandler() (and no replacement) — proceed to cleanup
+            if (handlers[sig].status != QoreSignalHandler::SH_Delete) {
                 handlers[sig].status = QoreSignalHandler::SH_OK;
                 continue;
             }
 
-#ifdef DEBUG
-            if (handlers[sig].status != QoreSignalHandler::SH_Delete)
-                printd(0, "error: status: %d (sig: %d)\n", handlers[sig].status, sig);
-#endif
             assert(handlers[sig].status == QoreSignalHandler::SH_Delete);
             CodePgm old = handlers[sig].take();
             qore_program_private::delSignal(*old.pgm, sig);
@@ -418,10 +445,10 @@ void QoreSignalManager::signal_handler_thread() {
     // run thread cleanup handlers
     tclist.exec();
 
-    tcount.dec();
-
     // clean up thread-local storage before exiting (issue #5085)
     qore_thread_local_storage_cleanup();
+
+    tcount.dec();
 
     //fprintf(stderr, "signal handler thread stopped (count: %d) &ptid: %p\n", tcount.getCount(), &ptid);
     //fflush(stderr);
@@ -449,6 +476,8 @@ int QoreSignalManager::start_signal_thread(ExceptionSink *xsink) {
         tid = -1;
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create signal handler thread");
         thread_running = false;
+    } else {
+        thread_joinable = true;
     }
 
     printd(5, "QoreSignalManager::start_signal_thread() pid: %d, rc: %d\n", getpid(), rc);
@@ -489,6 +518,9 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
 
             //printd(5, "setting handler for signal %d, pgm: %p\n", sig, pgm);
             qore_program_private::addSignal(*pgm, sig);
+            // Reset status in case a prior take() left a stale SH_Delete state
+            // (signal fired while removing → SH_InProgress → take() → funcref=0 but status=SH_Delete)
+            handlers[sig].status = QoreSignalHandler::SH_OK;
             handlers[sig].set(fr, pgm);
             ++num_handlers;
         } else {
@@ -497,6 +529,15 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             if (old.pgm != pgm) {
                 qore_program_private::delSignal(*old.pgm, sig);
                 qore_program_private::addSignal(*pgm, sig);
+            }
+            // If the handler was being deleted (removed while active), the signal thread
+            // will see SH_Delete after our replace() and try to take() the new handler.
+            // Reset to SH_OK so the signal thread knows the handler is active again.
+            // Also restore the signal in the mask: removeHandler() called sigdelset() even
+            // though the handler was in-progress; we must add it back for the new handler.
+            if (handlers[sig].status == QoreSignalHandler::SH_Delete) {
+                handlers[sig].status = QoreSignalHandler::SH_OK;
+                already_set = false;  // force mask update below
             }
         }
 

@@ -3390,6 +3390,16 @@ public class AbstractHttpSocketHandlerInterface {
         }
     }
 
+    #! Called by the HTTP server when an async SSE stream is disconnected
+    /** The default implementation does nothing. SSE handlers that maintain a
+        connection registry should override this method and remove \a cid from
+        their registry.
+
+        @param cid the SSE connection ID
+    */
+    deregisterConnection(softstring cid) {
+    }
+
     #! called from the HTTP server after the handleRequest() method indicates that a dedicated connection should be established
     /** This method should not return until the connection is closed or the stop() (and therefore stopImpl()) method
         is called

@@ -84,6 +84,18 @@ public:
     QoreListNode* encodeBatch(const QoreListNode* texts,
         const QoreHashNode* options, ExceptionSink* xsink);
 
+    //! Encodes one text as dense int64 buffers ready for model tensor creation
+    QoreHashNode* encodeForModel(const QoreStringNode* text,
+        const QoreHashNode* options, ExceptionSink* xsink);
+
+    //! Encodes a batch of texts as dense int64 buffers ready for model tensor creation
+    QoreHashNode* encodeBatchForModel(const QoreListNode* texts,
+        const QoreHashNode* options, ExceptionSink* xsink);
+
+    //! Encodes a batch of text pairs as dense int64 buffers ready for model tensor creation
+    QoreHashNode* encodeBatchPairsForModel(const QoreListNode* texts,
+        const QoreListNode* text_pairs, const QoreHashNode* options, ExceptionSink* xsink);
+
     //! Returns the pad token ID (or -1 if no pad token)
     int getPadTokenId() const { return pad_token_id; }
 
@@ -187,9 +199,25 @@ private:
         std::vector<int> word_ids;  //!< pre-token word index; -1 = special/added token
     };
 
+    //! Internal model-input encoding with only fields required for dense tensor input
+    struct ModelInputEncoding {
+        std::vector<int> ids;
+        std::vector<int> token_type_ids;
+        std::vector<int> attention_mask;
+        size_t sequence_length = 0;
+    };
+
     //! Internal: encodeAdvanced without locking (caller must hold shared_lock)
     QoreHashNode* encodeAdvancedIntern(const QoreStringNode* text,
         const QoreHashNode* options, ExceptionSink* xsink);
+
+    //! Internal: encode a single text or text pair for model-input buffers
+    int encodeForModelIntern(const QoreStringNode* text, const QoreHashNode* options,
+        const QoreStringNode* text_pair_override, ModelInputEncoding& out, ExceptionSink* xsink) const;
+
+    //! Internal: build a dense model-input batch from texts and optional text pairs
+    QoreHashNode* encodeBatchForModelIntern(const QoreListNode* texts, const QoreListNode* text_pairs,
+        const QoreHashNode* options, ExceptionSink* xsink) const;
 
     //! Internal: encode pre-tokenized words (skip normalize + pre-tokenize)
     InternalEncoding encodePreTokenizedWords(

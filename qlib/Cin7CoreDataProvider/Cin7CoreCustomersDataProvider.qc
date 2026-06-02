@@ -125,7 +125,7 @@ public class Cin7CoreCustomersDataProvider inherits Cin7CoreDataProviderBase {
     }
 
     #! Searches for customers
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -161,7 +161,7 @@ public class Cin7CoreCustomersDataProvider inherits Cin7CoreDataProviderBase {
         hash<auto> response = doGet("/Customer", params);
         list<hash<auto>> records = response.CustomerList ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

@@ -61,10 +61,22 @@ public:
         return new QoreHashMapOperatorNode(loc, n_e0.release(), n_e1.release(), n_e2.release());
     }
 
-    DLLLOCAL static const QoreTypeInfo* setReturnTypeInfo(const QoreTypeInfo*& returnTypeInfo, const QoreTypeInfo* expTypeInfo2, const QoreTypeInfo* iteratorTypeInfo);
+    //! Compute the map operator's return type.
+    /** @param expectedTypeInfo optional lvalue hint (see
+        QoreParseContext::expected_type_info) — applied only when
+        expTypeInfo2 is auto/untyped so caller-supplied hash targets
+        can narrow through maps whose body inference degrades through
+        auto-typed iterators. */
+    DLLLOCAL static const QoreTypeInfo* setReturnTypeInfo(const QoreTypeInfo*& returnTypeInfo,
+            const QoreTypeInfo* expTypeInfo2, const QoreTypeInfo* iteratorTypeInfo,
+            const QoreTypeInfo* expectedTypeInfo = nullptr);
 
     DLLLOCAL virtual bool hasEffectAsRoot() const {
         return true;
+    }
+
+    inline DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return returnTypeInfo;
     }
 
 protected:
@@ -80,10 +92,6 @@ protected:
     }
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
-
-    inline DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return returnTypeInfo;
-    }
 
     DLLLOCAL QoreValue mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 

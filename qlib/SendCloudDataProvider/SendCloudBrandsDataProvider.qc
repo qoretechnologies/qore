@@ -78,7 +78,7 @@ public class SendCloudBrandsDataProvider inherits SendCloudDataProviderBase {
         return new SendCloudBrandDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.page_size) {
@@ -88,7 +88,7 @@ public class SendCloudBrandsDataProvider inherits SendCloudDataProviderBase {
             params.cursor = search_options.cursor;
         }
         list<auto> records = fetchAllCursorPages("brands", "brands", params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

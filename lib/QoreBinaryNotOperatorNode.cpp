@@ -29,10 +29,24 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 
 QoreString QoreBinaryNotOperatorNode::BinaryNot_str("binary not (~) operator expression");
+
+static void set_unary_analysis_bitwise(QoreParseContext& parse_context,
+        const QoreParseAnalysis& operand_analysis, const QorePluginResolvedOperationInfo* plugin_op = nullptr) {
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    if (!plugin_op || (!plugin_op->signature.return_nullable && !plugin_op->info.can_return_nothing)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
 
 // if del is true, then the returned QoreString * should be deleted, if false, then it must not be
 QoreString *QoreBinaryNotOperatorNode::getAsString(bool& del, int foff, ExceptionSink* xsink) const {
@@ -50,6 +64,15 @@ QoreValue QoreBinaryNotOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
     if (*xsink)
         return QoreValue();
 
+    if (qore_plugin_value_may_have_operation(*v)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_unary(getProgram(), "bit_not",
+            QorePluginHelperAbi::UnaryValue, *v, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
+
     return ~v->getAsBigInt();
 }
 
@@ -61,10 +84,30 @@ int QoreBinaryNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     assert(exp);
 
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
+
+    if (!err) {
+        QorePluginResolvedOperationInfo plugin_op;
+        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, parse_context.typeInfo,
+            nullptr, "bit_not", QorePluginHelperAbi::UnaryValue, plugin_op, parse_xsink);
+        if (plugin_rc < 0) {
+            err = -1;
+        } else if (!plugin_rc) {
+            parse_context.typeInfo = plugin_op.signature.return_type;
+            set_unary_analysis_bitwise(parse_context, operand_analysis, &plugin_op);
+            return err;
+        }
+    }
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
-        parse_context.typeInfo->doNonNumericWarning(loc, "the operand of the 'binary not' operator (^) expression " \
+        parse_context.typeInfo->doNonNumericWarning(loc, "the operand of the 'binary not' operator (~) expression " \
             "is ");
     }
 
@@ -81,6 +124,15 @@ int QoreBinaryNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             val = result;
             if (**xsink) {
                 err = -1;
+            } else {
+                parse_context.typeInfo = val.getFullTypeInfo();
+                parse_context.analysis.clear();
+                parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+                parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+                if (!val.isNothing()) {
+                    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+                }
+                parse_context.analysis.known_type = parse_context.typeInfo;
             }
         } else {
             // constants not resolved - skip parse-time folding, let runtime handle it
@@ -89,5 +141,6 @@ int QoreBinaryNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
+    set_unary_analysis_bitwise(parse_context, operand_analysis);
     return err;
 }

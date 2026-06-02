@@ -39,13 +39,13 @@ extern QoreClass* QC_HASHITERATOR;
 
     @par Example: HashPairIterator basic usage
     @code{.py}
-    hash<auto> data = {
+    hash<string, int> data = {
         "key1" : 1,
         "key2" : 2,
         "key3" : 3,
     };
 
-    HashPairIterator it(data);
+    HashPairIterator<int> it(data);
     while (it.next()) {
         printf("iter: %n\n", it.getValue());
     }
@@ -62,18 +62,20 @@ extern QoreClass* QC_HASHITERATOR;
 
     @see HashPairReverseIterator
  */
-qclass HashPairIterator [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator];
+qclass HashPairIterator<V> [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator<V>; legacy_raw];
 
 //! Creates the hash iterator object
-/** @param h the hash to iterate
+/** @param hash_value the hash to iterate
 
     @par Example:
     @code{.py}
-HashPairIterator hi(h);
+hash<string, int> h = {"key": 1};
+HashPairIterator<int> hi(h);
     @endcode
  */
-HashPairIterator::constructor(hash<auto> h) {
-   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(h), xsink);
+HashPairIterator::constructor(hash<string, V> hash_value) [flags=NAMED_ARGS] {
+   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(hash_value,
+      qore_get_hash_iterator_value_type(self->getInstantiatedTypeInfo())), xsink);
    p->setView(QoreHashIterator::VIEW_PAIR);
    self->setPrivate(CID_HASHPAIRITERATOR, p.release());
 }
@@ -81,12 +83,13 @@ HashPairIterator::constructor(hash<auto> h) {
 //! Creates an empty hash iterator object
 /** @par Example:
     @code{.py}
-*hash<auto> h = get_hash_or_nothing();
-HashPairIterator hi(h);
+*hash<string, int> h = get_hash_or_nothing();
+HashPairIterator<int> hi(h);
     @endcode
  */
 HashPairIterator::constructor() {
-   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator, xsink);
+   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(
+      qore_get_hash_iterator_value_type(self->getInstantiatedTypeInfo())), xsink);
    p->setView(QoreHashIterator::VIEW_PAIR);
    self->setPrivate(CID_HASHPAIRITERATOR, p.release());
 }
@@ -94,7 +97,7 @@ HashPairIterator::constructor() {
 //! Creates a copy of the HashPairIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-HashPairIterator ni = i.copy();
+HashPairIterator<int> ni = i.copy();
     @endcode
  */
 HashPairIterator::copy() {
@@ -108,7 +111,8 @@ HashPairIterator::copy() {
 
     @par Example:
     @code{.py}
-map printf("%s: %y\n", $1.key, $1.value), hash.pairIterator();
+hash<string, int> h = {"answer": 42};
+map printf("%s: %y\n", $1.key, $1.value), h.pairIterator();
     @endcode
 
     @throw INVALID-ITERATOR the iterator is not pointing at a valid element
@@ -116,7 +120,7 @@ map printf("%s: %y\n", $1.key, $1.value), hash.pairIterator();
 
     @since %Qore 0.8.6.2
  */
-hash<auto> HashPairIterator::getValue() [flags=RET_VALUE_ONLY] {
+hash<KeyValueInfo<V>> HashPairIterator::getValue() [flags=RET_VALUE_ONLY] {
     if (i->check(xsink))
         return QoreValue();
     return i->getReferencedValuePair(xsink);

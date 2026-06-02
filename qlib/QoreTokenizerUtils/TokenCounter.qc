@@ -61,9 +61,15 @@ public class TokenCounter {
 
     #! Creates a TokenCounter with the given tokenizer configuration
     /** @param tokenizer_config a parsed `tokenizer.json` hash (from `parse_json()`)
+        @param tokenizer_runtime_config optional parsed `tokenizer_config.json`
+            hash; when present, model-level tokenizer settings such as maximum
+            sequence length and chat templates are loaded into the tokenizer
     */
-    constructor(hash<auto> tokenizer_config) {
+    constructor(hash<auto> tokenizer_config, *hash<auto> tokenizer_runtime_config) {
         tokenizer = new Tokenizer::HFTokenizer(tokenizer_config);
+        if (tokenizer_runtime_config) {
+            tokenizer.loadConfig(tokenizer_runtime_config);
+        }
     }
 
     #! Counts the number of tokens in the given text

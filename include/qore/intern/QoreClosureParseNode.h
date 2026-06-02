@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,10 +45,17 @@ private:
     LVarSet* vlist;
     VNode* high_water_mark;
     ClosureParseEnvironment* prev;
+    class UserClosureFunction* owning_cf;   // pointer to the closure being parsed
 
 public:
-    DLLLOCAL ClosureParseEnvironment(LVarSet* n_vlist) : vlist(n_vlist), high_water_mark(getVStack()) {
+    DLLLOCAL ClosureParseEnvironment(LVarSet* n_vlist, class UserClosureFunction* cf = nullptr)
+            : vlist(n_vlist), high_water_mark(getVStack()), owning_cf(cf) {
         prev = thread_get_closure_parse_env();
+        // If we're nested inside another closure, mark the outer closure
+        // as having nested closures for correct background capture.
+        if (prev && prev->owning_cf) {
+            prev->owning_cf->setHasNestedClosures();
+        }
         thread_set_closure_parse_env(this);
     }
 
@@ -58,6 +65,10 @@ public:
 
     DLLLOCAL VNode* getHighWaterMark() {
         return high_water_mark;
+    }
+
+    DLLLOCAL ClosureParseEnvironment* getPrev() {
+        return prev;
     }
 
     DLLLOCAL void add(LocalVar* var) {
@@ -76,6 +87,13 @@ class QoreClosureParseNode : public ParseNode, public DeferredCodeObject {
 public:
     DLLLOCAL QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda = false);
 
+    //! AOT constructor: creates a closure parse node from pre-built function
+    DLLLOCAL QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf,
+            bool n_lambda, bool n_in_method)
+        : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(n_in_method) {
+        set_effect_as_root(false);
+    }
+
     DLLLOCAL ~QoreClosureParseNode();
 
     DLLLOCAL virtual int parseInitDeferred();
@@ -88,6 +106,8 @@ public:
     }
 
     DLLLOCAL bool isLambda() const { return lambda; }
+
+    DLLLOCAL bool isInMethod() const { return in_method; }
 
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
@@ -126,8 +146,8 @@ private:
         return runTimeClosureTypeInfo;
     }
 
-    DLLLOCAL QoreClosureNode* evalClosure() const;
-    DLLLOCAL QoreObjectClosureNode* evalObjectClosure() const;
+    DLLLOCAL QoreClosureBase* evalClosure() const;
+    DLLLOCAL QoreClosureBase* evalObjectClosure() const;
 };
 
 #endif

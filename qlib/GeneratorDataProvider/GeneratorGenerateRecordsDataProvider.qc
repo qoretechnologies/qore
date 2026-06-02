@@ -183,7 +183,7 @@ public class GeneratorGenerateRecordsDataProvider inherits DataProvider::Abstrac
 
         @return a record iterator that generates the configured number of records
     */
-    private DataProvider::AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private DataProvider::AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return makeIterator();
     }

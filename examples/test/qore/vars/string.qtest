@@ -7,7 +7,8 @@
 # tests are made where the return value is ignored
 %disable-warning return-value-ignored
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class StringTest
 
@@ -28,6 +29,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("Basic functions test", \testBasics());
         addTestCase("Comparison test", \testComparison());
         addTestCase("Encoding test", \testEncoding());
+        addTestCase("NUL string constants", \testNulStringConstants());
         addTestCase("UTF-16 test", \testUtf16());
         addTestCase("ASCII x UTF-8 string equality tests", \testASCIIUTF8Equality());
         addTestCase("Base64 and hex test", \testBase64Hex());
@@ -116,8 +118,15 @@ class StringTest inherits QUnit::Test {
         # basic semantics match eager split
         string s = "a,b,,c";
         list<string> expected = s.split(",");
-        list<auto> got = map $1, s.splitString(",");
+        list<string> got = map $1, s.splitString(",");
         assertEq(expected, got);
+
+        AbstractIterator<string> typed = s.splitString(",");
+        assertTrue(typed instanceof AbstractIterator<string>);
+        assertFalse(typed instanceof AbstractIterator<auto>);
+        assertTrue(typed.next());
+        string first = typed.getValue();
+        assertEq("a", first);
 
         # empty source string yields one empty piece (matches eager split())
         assertEq(("",), (map $1, "".splitString(",")));
@@ -153,7 +162,8 @@ class StringTest inherits QUnit::Test {
 
         # functional-operator composition (exercises the native fast path)
         assertEq(6, foldl $1 + $2, (map $1.size(), "aa,bb,cc".splitString(",")));
-        assertEq(("bb",), select "aa,bb,cc".splitString(","), $1 == "bb");
+        list<string> selected = select "aa,bb,cc".splitString(","), $1 == "bb";
+        assertEq(("bb",), selected);
     }
 
     testSplitLinesIter() {
@@ -315,8 +325,15 @@ class StringTest inherits QUnit::Test {
         list<auto> got = map $1, "abc".codePointIterator();
         assertEq((0x61, 0x62, 0x63), got);
 
+        AbstractIterator<int> typed = "abc".codePointIterator();
+        assertTrue(typed instanceof AbstractIterator<int>);
+        assertFalse(typed instanceof AbstractIterator<auto>);
+        assertTrue(typed.next());
+        int first = typed.getValue();
+        assertEq(0x61, first);
+
         # Empty string yields no elements
-        list<auto> empty = map $1, "".codePointIterator();
+        list<int> empty = map $1, "".codePointIterator();
         assertEq(0, empty.size());
 
         # UTF-8 multi-byte: "aéb" = U+0061, U+00E9, U+0062 (3 codepoints / 4 bytes)
@@ -353,9 +370,14 @@ class StringTest inherits QUnit::Test {
         assertEq(0x61 + 0x62 + 0x63, sum);
 
         # select for ASCII letter count
-        list<auto> letters = select "He llo, World!".codePointIterator(),
+        list<int> letters = select "He llo, World!".codePointIterator(),
             ($1 >= ord("A") && $1 <= ord("Z")) || ($1 >= ord("a") && $1 <= ord("z"));
         assertEq(10, letters.size());
+
+        Program p();
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(),
+            ("%new-style\nsub t(){list<string> cps = map $1, \"abc\".codePointIterator();}",
+                "codepoint-iterator-static-type-error"));
     }
 
     testScanner() {
@@ -615,6 +637,23 @@ class StringTest inherits QUnit::Test {
 
         assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("ß", "US-ASCII"));
         assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("汉字", "ISO-8859-1"));
+    }
+
+    private string makeNulPrefixedString() {
+        string str = "";
+        str += "\0";
+        str += "end";
+        return str;
+    }
+
+    testNulStringConstants() {
+        string str;
+        for (int i = 0; i < 1100; ++i) {
+            str = makeNulPrefixedString();
+        }
+
+        assertEq("\0end", str);
+        assertEq(4, str.size());
     }
 
     testUtf16() {
@@ -1107,7 +1146,11 @@ class StringTest inherits QUnit::Test {
     }
 
     testConversions() {
-        assertEq("", string(NULL));
+        # NULL is treated like NOTHING for soft types — rejected for non-optional softstring
+        assertThrows("PARSE-TYPE-ERROR", sub () {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse("string s = string(NULL);", "test", WARN_DEFAULT);
+        });
     }
 
     testTrim() {

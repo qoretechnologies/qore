@@ -238,8 +238,8 @@ int qore_value_to_bson_append(bson_t* doc, const char* key, const QoreValue& val
         }
 
         case NT_STRING: {
-            const QoreStringNode* str = value.get<const QoreStringNode>();
-            TempEncodingHelper utf8(str, QCS_UTF8, xsink);
+            QoreStringValueHelper str(value);
+            TempEncodingHelper utf8(*str, QCS_UTF8, xsink);
             if (*xsink) {
                 return -1;
             }

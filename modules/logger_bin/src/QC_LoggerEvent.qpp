@@ -73,7 +73,8 @@ LoggerEvent::constructor(object logger, LoggerLevel[QoreLoggerLevel] level, stri
     assert(v);
     assert(v->getType() == NT_STRING);
 
-    self->setPrivate(CID_LOGGEREVENT, new QoreLoggerEvent(logger, v->get<const QoreStringNode>(), obj_level, *level,
+    QoreStringNodeValueHelper category(*v);
+    self->setPrivate(CID_LOGGEREVENT, new QoreLoggerEvent(logger, *category, obj_level, *level,
         message, msg_args, 0, location_info, thread_id, time_stamp ? time_stamp : *ts, throwable));
 
     self->setValue("logger", logger->objectRefSelf(), nullptr);

@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+namespace RuntimeConstantReferenceTest {
+    const BaseAllowedValues = ("completed", "failed", "queued");
+    const AliasAllowedValues = BaseAllowedValues;
+    const ChainedAllowedValues = AliasAllowedValues;
+
+    class EventType {
+        public {
+            const Fields = {
+                "status": {
+                    "allowed_values": ChainedAllowedValues,
+                },
+            };
+        }
+    }
+}
+
+list actual = RuntimeConstantReferenceTest::EventType::Fields.status.allowed_values;
+if (actual != RuntimeConstantReferenceTest::BaseAllowedValues) {
+    throw "RUNTIME-CONSTANT-REFERENCE-ERROR",
+        sprintf("runtime constant reference chain resolved to %y", actual);
+}

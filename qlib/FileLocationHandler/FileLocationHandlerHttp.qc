@@ -165,7 +165,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         string path;
         HTTPClient hc = getHttpClient(scheme, location, opts, \path);
 
-        StreamPipe pipe(False);
+        StreamPipe pipe(sync_close: False);
 
         # run the I/O operation in the background
         background sub () {
@@ -193,7 +193,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         string path;
         HTTPClient hc = getHttpClient(scheme, location, opts, \path);
 
-        StreamPipe pipe(False);
+        StreamPipe pipe(sync_close: False);
 
         # run the I/O operation in the background
         background sub () {
@@ -240,7 +240,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         string path;
         HTTPClient hc = getHttpClient(scheme, location, opts, \path);
 
-        StreamPipe pipe(False);
+        StreamPipe pipe(sync_close: False);
 
         WaitGroup io_counter();
         io_counter.add();

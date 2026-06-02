@@ -75,6 +75,8 @@ struct dbi_cap_hash dbi_cap_list[] =
   { DBI_CAP_HAS_DESCRIBE,           "HasDescribe" },
   { DBI_CAP_HAS_ARRAY_BIND,         "HasArrayBind" },
   { DBI_CAP_HAS_RESULTSET_OUTPUT,   "HasResultsetOutput" },
+  { DBI_CAP_HAS_TYPED_SELECT,       "HasTypedSelect" },
+  { DBI_CAP_HAS_COLUMNAR_SELECT,    "HasColumnarSelect" },
 };
 
 #define NUM_DBI_CAPS (sizeof(dbi_cap_list) / sizeof(dbi_cap_hash))
@@ -118,9 +120,17 @@ void qore_dbi_method_list::add(int code, q_dbi_close_t method) {
     priv->l[code] = (void*)method;
 }
 
-// covers select, select_rows, and exec
+// covers select, select_rows, typed select, typed select_rows, and exec
 void qore_dbi_method_list::add(int code, q_dbi_select_t method) {
-    assert(code == QDBI_METHOD_SELECT || code == QDBI_METHOD_SELECT_ROWS || code == QDBI_METHOD_EXEC || code == QDBI_METHOD_DESCRIBE);
+    assert(code == QDBI_METHOD_SELECT || code == QDBI_METHOD_SELECT_ROWS || code == QDBI_METHOD_SELECT_TYPED
+        || code == QDBI_METHOD_SELECT_ROWS_TYPED || code == QDBI_METHOD_EXEC || code == QDBI_METHOD_DESCRIBE);
+    assert(priv->l.find(code) == priv->l.end());
+    priv->l[code] = (void*)method;
+}
+
+// covers select_columnar
+void qore_dbi_method_list::add(int code, q_dbi_select_columnar_t method) {
+    assert(code == QDBI_METHOD_SELECT_COLUMNAR);
     assert(priv->l.find(code) == priv->l.end());
     priv->l[code] = (void*)method;
 }
@@ -213,6 +223,13 @@ void qore_dbi_method_list::add(int code, q_dbi_stmt_fetch_columns_t method) {
     priv->l[code] = (void*)method;
 }
 
+// covers stmt fetch_columnar
+void qore_dbi_method_list::add(int code, q_dbi_stmt_fetch_columnar_t method) {
+    assert(code == QDBI_METHOD_STMT_FETCH_COLUMNAR);
+    assert(priv->l.find(code) == priv->l.end());
+    priv->l[code] = (void*)method;
+}
+
 // covers stmt next
 void qore_dbi_method_list::add(int code, q_dbi_stmt_next_t method) {
     assert(code == QDBI_METHOD_STMT_NEXT);
@@ -299,6 +316,21 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
                 assert(!f.selectRows);
                 f.selectRows = (q_dbi_select_rows_t)(*i).second;
                 break;
+            case QDBI_METHOD_SELECT_TYPED:
+                assert(!f.selectTyped);
+                f.selectTyped = (q_dbi_select_typed_t)(*i).second;
+                cps |= DBI_CAP_HAS_TYPED_SELECT;
+                break;
+            case QDBI_METHOD_SELECT_ROWS_TYPED:
+                assert(!f.selectRowsTyped);
+                f.selectRowsTyped = (q_dbi_select_rows_typed_t)(*i).second;
+                cps |= DBI_CAP_HAS_TYPED_SELECT;
+                break;
+            case QDBI_METHOD_SELECT_COLUMNAR:
+                assert(!f.selectColumnar);
+                f.selectColumnar = (q_dbi_select_columnar_t)(*i).second;
+                cps |= DBI_CAP_HAS_COLUMNAR_SELECT;
+                break;
             case QDBI_METHOD_SELECT_ROW:
                 assert(!f.selectRow);
                 f.selectRow = (q_dbi_select_row_t)(*i).second;
@@ -382,6 +414,11 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
             case QDBI_METHOD_STMT_FETCH_COLUMNS:
                 assert(!f.stmt.fetch_columns);
                 f.stmt.fetch_columns = (q_dbi_stmt_fetch_columns_t)(*i).second;
+                break;
+            case QDBI_METHOD_STMT_FETCH_COLUMNAR:
+                assert(!f.stmt.fetch_columnar);
+                f.stmt.fetch_columnar = (q_dbi_stmt_fetch_columnar_t)(*i).second;
+                cps |= DBI_CAP_HAS_COLUMNAR_SELECT;
                 break;
             case QDBI_METHOD_STMT_DESCRIBE:
                 assert(!f.stmt.describe);
@@ -598,7 +635,8 @@ void DBI_concat_numeric(QoreString* str, QoreValue v) {
     }
 
     qore_type_t t = v.getType();
-    if (t == NT_FLOAT || (t == NT_STRING && strchr((v.get<const QoreStringNode>())->c_str(), '.'))) {
+    QoreStringValueHelper string_value(v);
+    if (t == NT_FLOAT || (t == NT_STRING && strchr(string_value->c_str(), '.'))) {
         size_t offset = str->size();
         str->sprintf("%g", v.getAsFloat());
         // issue 1556: external modules that call setlocale() can change
@@ -869,8 +907,9 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
 QoreStringNode* makeConfigString(const QoreHashNode* h, ExceptionSink* xsink) {
     // "type" key is required
     QoreValue type_val = h->getKeyValue("type");
+    QoreStringValueHelper type_str(type_val);
     if (type_val.isNullOrNothing() || (type_val.getType() == NT_STRING
-        && !type_val.get<const QoreStringNode>()->size())) {
+        && !type_str->size())) {
         xsink->raiseException("MAKE-DATASOURCE-STRING-ERROR",
             "missing or empty 'type' key in datasource configuration hash");
         return nullptr;
@@ -881,22 +920,24 @@ QoreStringNode* makeConfigString(const QoreHashNode* h, ExceptionSink* xsink) {
         return nullptr;
     }
 
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(type_val.get<const QoreStringNode>()->c_str()));
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(type_str->c_str()));
     str->concat(':');
 
     // user
     QoreValue user_val = h->getKeyValue("user");
+    QoreStringValueHelper user_str(user_val);
     if (!user_val.isNullOrNothing() && user_val.getType() == NT_STRING
-        && user_val.get<const QoreStringNode>()->size()) {
-        str->concat(user_val.get<const QoreStringNode>()->c_str());
+        && user_str->size()) {
+        str->concat(user_str->c_str());
     }
 
     // password
     QoreValue pass_val = h->getKeyValue("pass");
+    QoreStringValueHelper pass_str(pass_val);
     if (!pass_val.isNullOrNothing() && pass_val.getType() == NT_STRING
-        && pass_val.get<const QoreStringNode>()->size()) {
+        && pass_str->size()) {
         str->concat('/');
-        str->concat(pass_val.get<const QoreStringNode>()->c_str());
+        str->concat(pass_str->c_str());
     }
 
     // '@' is always present
@@ -904,24 +945,27 @@ QoreStringNode* makeConfigString(const QoreHashNode* h, ExceptionSink* xsink) {
 
     // db
     QoreValue db_val = h->getKeyValue("db");
+    QoreStringValueHelper db_str(db_val);
     if (!db_val.isNullOrNothing() && db_val.getType() == NT_STRING
-        && db_val.get<const QoreStringNode>()->size()) {
-        str->concat(db_val.get<const QoreStringNode>()->c_str());
+        && db_str->size()) {
+        str->concat(db_str->c_str());
     }
 
     // charset
     QoreValue charset_val = h->getKeyValue("charset");
+    QoreStringValueHelper charset_str(charset_val);
     if (!charset_val.isNullOrNothing() && charset_val.getType() == NT_STRING
-        && charset_val.get<const QoreStringNode>()->size()) {
-        str->sprintf("(%s)", charset_val.get<const QoreStringNode>()->c_str());
+        && charset_str->size()) {
+        str->sprintf("(%s)", charset_str->c_str());
     }
 
     // host
     bool has_host = false;
     QoreValue host_val = h->getKeyValue("host");
+    QoreStringValueHelper host_str(host_val);
     if (!host_val.isNullOrNothing() && host_val.getType() == NT_STRING
-        && host_val.get<const QoreStringNode>()->size()) {
-        str->sprintf("%%%s", host_val.get<const QoreStringNode>()->c_str());
+        && host_str->size()) {
+        str->sprintf("%%%s", host_str->c_str());
         has_host = true;
     }
 

@@ -22,6 +22,8 @@ echo "export QORE_GID=1000" >> ${ENV_FILE}
 
 . ${ENV_FILE}
 
+${QORE_SRC_DIR}/test/docker_test/print-ci-provenance.sh || true
+
 if [ -z "${QORE_DB_CONNSTR_PGSQL}" ]; then
     apk add --no-cache postgresql-client
     . examples/test/docker_test/postgres_lib.sh
@@ -39,35 +41,151 @@ fi
 
 find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \; 2>/dev/null || true
 
+export MAKE_JOBS=${MAKE_JOBS:-6}
+NEED_RELEASE_BUILD=1
+if [ "${QORE_EXCLUDE_PERF_TESTS}" = "1" ]; then
+    NEED_RELEASE_BUILD=0
+fi
+
+# ensure LLVM static libraries are installed (needed for JIT/AOT linking)
+# Alpine splits static libs into -static and -gtest packages
+echo "-- ensuring LLVM static libraries --"
+apk update
+LLVM_VER=$(ls -d /usr/lib/llvm* 2>/dev/null | sed 's|.*/llvm||' | sort -n | tail -1)
+if [ -n "$LLVM_VER" ]; then
+    apk add --no-cache llvm${LLVM_VER}-static llvm${LLVM_VER}-gtest
+fi
+
+# ensure CMAKE_PREFIX_PATH includes LLVM (for images without it in env.sh)
+if [ -z "${CMAKE_PREFIX_PATH}" ]; then
+    LLVM_PREFIX=$(ls -d /usr/lib/llvm* 2>/dev/null | sort -V | tail -1)
+    if [ -n "$LLVM_PREFIX" ]; then
+        export CMAKE_PREFIX_PATH="${LLVM_PREFIX}"
+    fi
+fi
+
+cd ${QORE_SRC_DIR}
+
 if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi libcares; then
     echo && echo "-- installing Kerberos 5 and c-ares development headers --"
     apk add --no-cache krb5-dev c-ares-dev
 fi
 
+if [ ! -f /usr/share/eigen3/cmake/Eigen3Config.cmake ] \
+    && [ ! -f /usr/lib/cmake/eigen3/Eigen3Config.cmake ] \
+    && [ ! -f /usr/lib64/cmake/eigen3/Eigen3Config.cmake ] \
+    && [ ! -f /usr/lib/x86_64-linux-gnu/cmake/eigen3/Eigen3Config.cmake ]; then
+    echo && echo "-- installing Eigen3 development headers --"
+    apk add --no-cache eigen-dev
+fi
+
+if ! command -v protoc > /dev/null 2>&1 \
+    && [ ! -f /usr/lib/cmake/protobuf/protobuf-config.cmake ] \
+    && [ ! -f /usr/lib64/cmake/protobuf/protobuf-config.cmake ] \
+    && [ ! -f /usr/lib/x86_64-linux-gnu/cmake/protobuf/protobuf-config.cmake ]; then
+    echo && echo "-- installing Protobuf development files --"
+    apk add --no-cache protobuf-dev
+fi
+
+if ! pkg-config --exists libutf8proc 2>/dev/null \
+    && [ ! -f /usr/include/utf8proc.h ] \
+    && [ ! -f /usr/local/include/utf8proc.h ]; then
+    echo && echo "-- installing utf8proc development files --"
+    apk add --no-cache utf8proc-dev
+fi
+
 # build or install Qore
 if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
-    # Pre-built artifact from build stage - just install
-    echo && echo "-- installing pre-built Qore --"
-    cd ${QORE_SRC_DIR}/build
-    cmake --install .
+    if [ "$NEED_RELEASE_BUILD" = "1" ]; then
+        # Pre-built debug artifact from build stage — install it, then build release in parallel
+        echo && echo "-- installing pre-built Qore (debug) and building release --"
+        (cd ${QORE_SRC_DIR}/build && cmake --install .) &
+        INSTALL_PID=$!
+
+        # install tree-sitter CLI for astparser module build (needed for release cmake)
+        if ! command -v tree-sitter > /dev/null 2>&1; then
+            echo && echo "-- installing tree-sitter CLI --"
+            cargo install tree-sitter-cli@0.26.5
+        fi
+
+        (
+            echo "Building Release mode..."
+            mkdir -p build-release
+            cd build-release
+            cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            make -j${MAKE_JOBS}
+            echo "Release build complete"
+        ) &
+        RELEASE_BUILD_PID=$!
+
+        if ! wait $INSTALL_PID; then
+            echo "Debug install failed"
+            exit 1
+        fi
+        if ! wait $RELEASE_BUILD_PID; then
+            echo "Release build failed"
+            exit 1
+        fi
+        echo "Install and release build completed successfully"
+    else
+        echo && echo "-- installing pre-built Qore (debug); perf tests excluded, skipping release build --"
+        cd ${QORE_SRC_DIR}/build
+        cmake --install .
+        cd ${QORE_SRC_DIR}
+    fi
 else
-    # No pre-built artifact - full build
     # install tree-sitter CLI for astparser module build
     if ! command -v tree-sitter > /dev/null 2>&1; then
         echo && echo "-- installing tree-sitter CLI --"
         cargo install tree-sitter-cli@0.26.5
     fi
 
-    export MAKE_JOBS=${MAKE_JOBS:-6}
+    if [ "$NEED_RELEASE_BUILD" = "1" ]; then
+        echo && echo "-- building Qore Debug and Release in parallel --"
 
-    echo && echo "-- building Qore --"
-    cd ${QORE_SRC_DIR}
-    mkdir -p build
-    cd build
-    cmake .. -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-debug} -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
-    make -j${MAKE_JOBS}
-    make install
+        (
+            echo "Building Debug mode..."
+            mkdir -p build
+            cd build
+            cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            make -j${MAKE_JOBS}
+            make install
+            echo "Debug build complete"
+        ) &
+        DEBUG_BUILD_PID=$!
+
+        (
+            echo "Building Release mode..."
+            mkdir -p build-release
+            cd build-release
+            cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            make -j${MAKE_JOBS}
+            echo "Release build complete"
+        ) &
+        RELEASE_BUILD_PID=$!
+
+        echo "Waiting for builds to complete..."
+        if ! wait $DEBUG_BUILD_PID; then
+            echo "Debug build failed"
+            exit 1
+        fi
+        if ! wait $RELEASE_BUILD_PID; then
+            echo "Release build failed"
+            exit 1
+        fi
+        echo "Both builds completed successfully"
+    else
+        echo && echo "-- building Qore Debug; perf tests excluded, skipping release build --"
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+        make -j${MAKE_JOBS}
+        make install
+        cd ${QORE_SRC_DIR}
+        echo "Debug build complete"
+    fi
 fi
+
 
 # add Qore user and group
 if ! grep -q "^qore:x:${QORE_GID}" /etc/group; then
@@ -121,7 +239,47 @@ chown -R qore:qore ${QORE_SRC_DIR}
 # run the tests
 export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
 cd ${QORE_SRC_DIR}
-gosu qore:qore ./run_tests.sh
+
+export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
+export QORE_LIBDIR="${QORE_SRC_DIR}/build"
+TEST_LD_LIBRARY_PATH="${QORE_SRC_DIR}/build:${QORE_SRC_DIR}/build/lib:${QORE_SRC_DIR}/build/lib/.libs"
+if [ "$NEED_RELEASE_BUILD" = "1" ]; then
+    # Set up binary selector that uses Release for performance-sensitive tests
+    chmod +x ./test/docker_test/qore_binary_selector.sh
+    export QORE_RELEASE_BINARY="${QORE_SRC_DIR}/build-release/qore"
+    export QORE_BINARY="${QORE_SRC_DIR}/test/docker_test/qore_binary_selector.sh"
+    TEST_LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${QORE_SRC_DIR}/build-release:${QORE_SRC_DIR}/build-release/lib:${QORE_SRC_DIR}/build-release/lib/.libs"
+else
+    export QORE_RELEASE_BINARY=""
+    export QORE_BINARY="${QORE_DEBUG_BINARY}"
+fi
+
+# Set up LIBQORE path for run_tests.sh (installed from Debug build)
+if [ -f "${QORE_SRC_DIR}/build/libqore.so" ]; then
+    export LIBQORE_BINARY="${QORE_SRC_DIR}/build/libqore.so"
+elif [ -f "${QORE_SRC_DIR}/build/libqore.dylib" ]; then
+    export LIBQORE_BINARY="${QORE_SRC_DIR}/build/libqore.dylib"
+fi
+
+# Run tests with binary selector only when perf tests are included.
+# Pass environment variables explicitly to gosu to ensure they're available in the test process
+# Set LD_LIBRARY_PATH to ensure binaries use the correct libqore.so from build directory
+if [ "$NEED_RELEASE_BUILD" = "1" ]; then
+    echo && echo "-- running all tests (performance tests in Release mode, others in Debug) --"
+else
+    echo && echo "-- running tests with pre-built Debug Qore; performance tests excluded --"
+fi
+gosu qore:qore env \
+    QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
+    QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
+    QORE_BINARY="${QORE_BINARY}" \
+    QORE_LIBDIR="${QORE_LIBDIR}" \
+    QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
+    QORE_EXCLUDE_PERF_TESTS="${QORE_EXCLUDE_PERF_TESTS}" \
+    QORE_PERF_TESTS_ONLY="${QORE_PERF_TESTS_ONLY}" \
+    LIBQORE_BINARY="${LIBQORE_BINARY}" \
+    LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
+    ./run_tests.sh
 
 if [ "${drop_pgsql_schema}" = "1" ]; then
     cleanup_postgres_on_host

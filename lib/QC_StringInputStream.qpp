@@ -61,10 +61,10 @@ qclass StringInputStream [arg=StringInputStream* is; ns=Qore; vparent=InputStrea
 
 //! Creates the StringInputStream based on the \ref string given
 /**
-    @param src the \ref string to read bytes from
+    @param source the \ref string to read bytes from
  */
-StringInputStream::constructor(string src) {
-   SimpleRefHolder<StringInputStream> sis(new StringInputStream(src));
+StringInputStream::constructor(string source) [flags=NAMED_ARGS] {
+   SimpleRefHolder<StringInputStream> sis(new StringInputStream(source));
    self->setPrivate(CID_STRINGINPUTSTREAM, sis.release());
 }
 
@@ -90,7 +90,7 @@ StringInputStream::constructor(string src) {
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-*binary StringInputStream::read(int limit) {
+*binary StringInputStream::read(int limit) [flags=NAMED_ARGS] {
    return is->readHelper(limit, xsink);
 }
 

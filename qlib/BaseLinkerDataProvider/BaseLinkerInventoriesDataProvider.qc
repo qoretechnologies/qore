@@ -40,11 +40,11 @@ public class BaseLinkerInventoriesDataProvider inherits BaseLinkerDataProviderBa
         return (new BaseLinkerInventoryDataType()).getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> response = callMethod("getInventories", NOTHING);
         list<auto> records = response.inventories ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerInventoryDataType()).getFields());
     }
 

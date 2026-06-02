@@ -189,6 +189,9 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
     private {
         #! the writer object
         AbstractCsvWriter writer;
+
+        #! stable object name for path-backed providers
+        *string object_name;
     }
 
     #! Creates the CsvWriteDataProvider with the output path and optionally an option hash
@@ -198,6 +201,7 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @throw CSVFILEWRITER-ERROR option error
     */
     constructor(string path, *hash<auto> opts) {
+        object_name = path;
         writer = new CsvFileWriter(path, opts);
     }
 
@@ -213,9 +217,7 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Returns the object name
     string getName() {
-        return writer instanceof CsvFileWriter
-            ? (writer.getFileName() ?? sprintf("stream %s", self.uniqueHash()))
-            : sprintf("stream %s", self.uniqueHash());
+        return object_name ?? sprintf("stream %s", self.uniqueHash());
     }
 
     #! Creates the object from constructor options
@@ -226,6 +228,7 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 error("CONSTRUCTOR-ERROR", "cannot provide both \"stream\" and \"path\" options; use either one or "
                     "the other");
             }
+            object_name = copts.path;
             writer = new CsvWriter(FileLocationHandler::getOutputStreamForLocation(copts.path),
                 copts{CsvGenerationOptionList});
             return;

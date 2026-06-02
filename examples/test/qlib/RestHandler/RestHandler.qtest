@@ -3,22 +3,23 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/MapperUtil.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/Swagger.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/SwaggerDataProvider
-%requires ../../../../qlib/RestHandler.qm
-%requires ../../../../qlib/Mapper.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires MapperUtil
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestSchemaValidator
+%requires Swagger
+%requires RestClient
+%requires SwaggerDataProvider
+%requires RestHandler
+%requires Mapper
 
 %try-module xml >= 1.3
 %define NoXml
@@ -383,6 +384,7 @@ public class RestHandlerTest inherits QUnit::Test {
     }
 
     constructor() : Test("RestHandlerTest", "1.0") {
+        addTestCase("constructor defaults", \constructorDefaultsTest());
         addTestCase("pre-encoded-URLs test", \preEncodedUrlsTest());
         addTestCase("test bad request", \badRequestTest());
         addTestCase("Test direct interface", \directTest());
@@ -426,6 +428,22 @@ public class RestHandlerTest inherits QUnit::Test {
         port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
         mClient = new RestClient({"url": "http://localhost:" + port});
+    }
+
+    constructorDefaultsTest() {
+        RestHandler h();
+        assertTrue(h.getRestSchemaValidator() instanceof NullRestSchemaValidator,
+            "default constructor creates a null schema validator");
+
+        Logger logger("rest-handler-constructor-test", LoggerLevel::getLevelInfo());
+        RestHandler logged(logger);
+        assertTrue(logged.getRestSchemaValidator() instanceof NullRestSchemaValidator,
+            "logger constructor creates a null schema validator");
+
+        NullRestSchemaValidator validator();
+        RestHandler explicit(NOTHING, validator);
+        assertTrue(explicit.getRestSchemaValidator() instanceof NullRestSchemaValidator,
+            "explicit validator constructor accepts a schema validator");
     }
 
     globalTearDown() {

@@ -11,7 +11,13 @@
 #include "qore/Qore.h"
 
 //! DataFrame shape information
-/** @since dataframe 1.0
+/** @par Example:
+    @code{.py}
+hash<DataFrame::DataFrameShape> shape = df.shape();
+printf("rows=%d cols=%d\n", shape.rows, shape.cols);
+    @endcode
+
+    @since dataframe 1.0
 */
 hashdecl Qore::DataFrame::DataFrameShape {
     //! Number of rows
@@ -23,6 +29,13 @@ hashdecl Qore::DataFrame::DataFrameShape {
 //! Per-column descriptive statistics
 /** Returned by @ref DataFrame::describe()
 
+    @par Example:
+    @code{.py}
+list<hash<DataFrame::ColumnStats>> stats = df.describe();
+foreach hash<DataFrame::ColumnStats> stat in (stats) {
+    printf("%s: count=%d nulls=%d\n", stat.name, stat.count, stat.null_count);
+}
+    @endcode
 */
 hashdecl Qore::DataFrame::ColumnStats {
     //! Column name
@@ -52,7 +65,16 @@ hashdecl Qore::DataFrame::ColumnStats {
 }
 
 //! CSV read/write options
-/** @since dataframe 1.0
+/** @par Example:
+    @code{.py}
+hash<DataFrame::CsvOptions> options = {
+    "separator": "\t",
+    "header": True,
+};
+DataFrame::DataFrame df = DataFrame::DataFrame::readCSV("input.tsv", options);
+    @endcode
+
+    @since dataframe 1.0
 */
 hashdecl Qore::DataFrame::CsvOptions {
     //! Field separator (default ",")
@@ -67,4 +89,71 @@ hashdecl Qore::DataFrame::CsvOptions {
     *int skip_rows;
     //! Maximum number of data rows to read
     *int max_rows;
+}
+
+//! Parquet read options
+/** @par Example:
+    @code{.py}
+hash<DataFrame::ParquetReadOptions> options = {
+    "columns": ("order_id", "customer_name", "total"),
+    "filters": ({
+        "column": "status",
+        "op": "in",
+        "value": ("complete", "shipped"),
+    }, {
+        "column": "total",
+        "op": ">=",
+        "value": 1000.0,
+    }),
+    "use_threads": True,
+};
+DataFrame::DataFrame df = DataFrame::DataFrame::readParquet("orders.parquet", options);
+    @endcode
+
+    @since dataframe 1.0
+*/
+hashdecl Qore::DataFrame::ParquetReadOptions {
+    //! Top-level column names to read; omitted means all columns
+    *list<string> columns;
+    //! Parquet row group numbers to read; omitted means all row groups
+    *list<int> row_groups;
+    //! Number of records read per Arrow batch; omitted uses Arrow defaults
+    *int batch_size;
+    //! Whether Arrow may use worker threads while reading multiple columns
+    *bool use_threads;
+    //! ANDed filter hashes with keys "column", "op", and optional "value"; "in" and "not_in" use list values; safe primitive, decimal128, and logical timestamp/date forms prune Parquet row groups with statistics, and all forms are applied exactly after the read
+    *list<hash<auto>> filters;
+    //! Whether Parquet row-group statistics may be used to prune filters (default True)
+    *bool use_statistics;
+}
+
+//! Parquet write options
+/** @par Example:
+    @code{.py}
+hash<DataFrame::ParquetWriteOptions> options = {
+    "compression": "zstd",
+    "row_group_size": 100000,
+    "use_dictionary": True,
+    "write_page_index": True,
+};
+df.writeParquet("orders.parquet", options);
+    @endcode
+
+    @since dataframe 1.0
+*/
+hashdecl Qore::DataFrame::ParquetWriteOptions {
+    //! Compression codec: "none", "snappy", "gzip", "brotli", "zstd", "lz4", or "lz4_frame"
+    *string compression;
+    //! Maximum rows per Parquet row group
+    *int row_group_size;
+    //! Whether dictionary encoding is enabled globally
+    *bool use_dictionary;
+    //! Whether column statistics are written
+    *bool write_statistics;
+    //! Whether Parquet page-index metadata is written for downstream page-level pruning
+    *bool write_page_index;
+    //! Whether Arrow may use worker threads while writing columns
+    *bool use_threads;
+    //! Whether to store serialized Arrow schema metadata in the Parquet file
+    *bool store_schema;
 }

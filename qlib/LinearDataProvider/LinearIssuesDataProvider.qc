@@ -149,12 +149,12 @@ public class LinearIssuesDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for issues
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Handle single-record lookup by ID
         if (search_options.id) {
             hash<auto> data = doGraphQL(GetIssueQuery, {"id": search_options.id});
-            return new DefaultRecordIterator(new ListHashIterator(data.issue
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data.issue
                 ? (flattenConnections(data.issue),) : ()), where_cond, search_options,
                 recordType.getFields());
         }

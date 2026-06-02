@@ -32,14 +32,425 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreBufferNode.h>
 #include "qore/intern/qore_dbi_private.h"
 #include "qore/intern/qore_ds_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreSQLStatement.h"
 #include "qore/intern/QC_SQLStatement.h"
+#include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/xxhash.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
+#include <string>
+#include <vector>
+
+namespace {
+enum class DbiTypedStorage {
+    List,
+    Buffer,
+};
+
+struct DbiTypedShape {
+    DbiTypedStorage storage = DbiTypedStorage::List;
+    QoreBufferElementType buffer_type = QoreBufferElementType::Invalid;
+    const QoreTypeInfo* element_type = autoTypeInfo;
+    bool nullable = false;
+
+    const QoreTypeInfo* getElementType() const {
+        return nullable ? qore_get_or_nothing_type(element_type) : element_type;
+    }
+
+    const QoreTypeInfo* getColumnType() const {
+        if (storage == DbiTypedStorage::Buffer) {
+            return qore_get_complex_buffer_type(buffer_type, nullable);
+        }
+        return qore_get_complex_list_type(getElementType());
+    }
+
+    const QoreTypeInfo* getRowType() const {
+        if (storage == DbiTypedStorage::Buffer) {
+            return qore_buffer_element_scalar_type_info(buffer_type, nullable);
+        }
+        return getElementType();
+    }
+};
+
+static std::string dbi_lower_type(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](unsigned char c) -> char { return static_cast<char>(std::tolower(c)); });
+
+    size_t begin = 0;
+    while (begin < value.size() && std::isspace(static_cast<unsigned char>(value[begin]))) {
+        ++begin;
+    }
+
+    size_t end = value.size();
+    while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+
+    value = value.substr(begin, end - begin);
+    size_t paren = value.find('(');
+    if (paren != std::string::npos) {
+        value.resize(paren);
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
+            value.pop_back();
+        }
+    }
+    return value;
+}
+
+static bool dbi_type_is_one_of(const std::string& value, std::initializer_list<const char*> names) {
+    for (const char* name : names) {
+        if (value == name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static std::string dbi_get_string_value(QoreValue value) {
+    if (value.getType() != NT_STRING) {
+        return std::string();
+    }
+
+    ExceptionSink xsink;
+    QoreString str;
+    value.getAsString(str, 0, &xsink);
+    return xsink ? std::string() : std::string(str.c_str());
+}
+
+static std::string dbi_get_desc_string(const QoreHashNode* desc, const char* key) {
+    return desc ? dbi_get_string_value(desc->getKeyValue(key)) : std::string();
+}
+
+static int64 dbi_get_desc_int(const QoreHashNode* desc, const char* key, int64 def = 0) {
+    if (!desc) {
+        return def;
+    }
+
+    QoreValue value = desc->getKeyValue(key);
+    return value.getType() == NT_INT ? value.getAsBigInt() : def;
+}
+
+static bool dbi_get_desc_nullable(const QoreHashNode* desc) {
+    if (!desc) {
+        return false;
+    }
+
+    QoreValue value = desc->getKeyValue("nullable");
+    return value.getType() == NT_BOOLEAN ? value.getAsBool() : false;
+}
+
+static const QoreHashNode* dbi_get_desc_column(const QoreHashNode* desc, const char* key) {
+    if (!desc) {
+        return nullptr;
+    }
+
+    QoreValue value = desc->getKeyValue(key);
+    return value.getType() == NT_HASH ? value.get<const QoreHashNode>() : nullptr;
+}
+
+static bool dbi_shape_from_native_type(const std::string& native_type, int64 maxsize, DbiTypedShape& shape) {
+    std::string type = dbi_lower_type(native_type);
+    if (type.empty()) {
+        return false;
+    }
+
+    if (type.size() > 2 && type.compare(type.size() - 2, 2, "[]") == 0) {
+        shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, autoTypeInfo, true};
+        return true;
+    }
+
+    if (!type.empty() && type[0] == '_') {
+        shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, autoTypeInfo, true};
+        return true;
+    }
+
+    if (dbi_type_is_one_of(type, {"bool", "boolean", "bit", "sql_bit"})) {
+        shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Bool, boolTypeInfo, false};
+        return true;
+    }
+
+    if (dbi_type_is_one_of(type, {"tinyint", "int1", "sql_tinyint"})) {
+        shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Int8, bigIntTypeInfo, false};
+        return true;
+    }
+
+    if (dbi_type_is_one_of(type, {"smallint", "int2", "sql_smallint"})) {
+        shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Int16, bigIntTypeInfo, false};
+        return true;
+    }
+
+    if (dbi_type_is_one_of(type, {"integer", "int", "int4", "serial", "mediumint", "sql_integer"})) {
+        shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Int32, bigIntTypeInfo, false};
+        return true;
+    }
+
+    if (dbi_type_is_one_of(type, {"bigint", "int8", "bigserial", "longlong", "sql_bigint"})) {
+        shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Int64, bigIntTypeInfo, false};
+        return true;
+    }
+
+    if (dbi_type_is_one_of(type, {"real", "float4", "sql_real", "binary_float"})) {
+        shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Float32, floatTypeInfo, false};
+        return true;
+    }
+
+    if (dbi_type_is_one_of(type, {"double", "double precision", "float8", "sql_double", "binary_double"})) {
+        shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Float64, floatTypeInfo, false};
+        return true;
+    }
+
+    if (type == "float") {
+        shape = {DbiTypedStorage::Buffer,
+            maxsize == 4 ? QoreBufferElementType::Float32 : QoreBufferElementType::Float64, floatTypeInfo, false};
+        return true;
+    }
+
+    if (dbi_type_is_one_of(type, {"numeric", "decimal", "number", "sql_numeric", "sql_decimal"})) {
+        shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, numberTypeInfo, false};
+        return true;
+    }
+
+    if (type.find("char") != std::string::npos || type.find("text") != std::string::npos
+            || type.find("clob") != std::string::npos || type == "string" || type == "enum"
+            || type == "set" || type == "uuid" || type == "xml") {
+        shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, stringTypeInfo, true};
+        return true;
+    }
+
+    if (type.find("date") != std::string::npos || type.find("time") != std::string::npos) {
+        shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, dateTypeInfo, false};
+        return true;
+    }
+
+    if (type.find("binary") != std::string::npos || type.find("blob") != std::string::npos
+            || type == "bytea" || type == "raw" || type == "varbinary") {
+        shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, binaryTypeInfo, false};
+        return true;
+    }
+
+    if (type == "json" || type == "jsonb" || type == "geometry" || type == "geography") {
+        shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, autoTypeInfo, true};
+        return true;
+    }
+
+    return false;
+}
+
+static bool dbi_shape_from_desc(const QoreHashNode* desc, DbiTypedShape& shape) {
+    if (!desc) {
+        return false;
+    }
+
+    if (dbi_shape_from_native_type(dbi_get_desc_string(desc, "native_type"), dbi_get_desc_int(desc, "maxsize"), shape)) {
+        shape.nullable = shape.nullable || dbi_get_desc_nullable(desc);
+        return true;
+    }
+
+    switch (dbi_get_desc_int(desc, "type", NT_NOTHING)) {
+        case NT_BOOLEAN:
+            shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Bool, boolTypeInfo, dbi_get_desc_nullable(desc)};
+            return true;
+        case NT_INT:
+            shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Int64, bigIntTypeInfo, dbi_get_desc_nullable(desc)};
+            return true;
+        case NT_FLOAT:
+            shape = {DbiTypedStorage::Buffer, QoreBufferElementType::Float64, floatTypeInfo, dbi_get_desc_nullable(desc)};
+            return true;
+        case NT_NUMBER:
+            shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, numberTypeInfo, dbi_get_desc_nullable(desc)};
+            return true;
+        case NT_STRING:
+            shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, stringTypeInfo, true};
+            return true;
+        case NT_DATE:
+            shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, dateTypeInfo, dbi_get_desc_nullable(desc)};
+            return true;
+        case NT_BINARY:
+            shape = {DbiTypedStorage::List, QoreBufferElementType::Invalid, binaryTypeInfo,
+                dbi_get_desc_nullable(desc)};
+            return true;
+        default:
+            break;
+    }
+
+    return false;
+}
+
+enum class DbiInferredKind {
+    Unknown,
+    Bool,
+    Int,
+    Float,
+    Number,
+    String,
+    Date,
+    Binary,
+    Auto,
+};
+
+static DbiInferredKind dbi_value_kind(QoreValue value) {
+    switch (value.getType()) {
+        case NT_BOOLEAN:
+            return DbiInferredKind::Bool;
+        case NT_INT:
+            return DbiInferredKind::Int;
+        case NT_FLOAT:
+            return DbiInferredKind::Float;
+        case NT_NUMBER:
+            return DbiInferredKind::Number;
+        case NT_STRING:
+            return DbiInferredKind::String;
+        case NT_DATE:
+            return DbiInferredKind::Date;
+        case NT_BINARY:
+            return DbiInferredKind::Binary;
+        default:
+            return DbiInferredKind::Auto;
+    }
+}
+
+static void dbi_merge_kind(DbiInferredKind& current, DbiInferredKind value) {
+    if (current == DbiInferredKind::Unknown) {
+        current = value;
+        return;
+    }
+    if (current == value) {
+        return;
+    }
+    if ((current == DbiInferredKind::Int && value == DbiInferredKind::Float)
+            || (current == DbiInferredKind::Float && value == DbiInferredKind::Int)) {
+        current = DbiInferredKind::Float;
+        return;
+    }
+    if ((current == DbiInferredKind::Int || current == DbiInferredKind::Float
+            || current == DbiInferredKind::Number)
+            && (value == DbiInferredKind::Int || value == DbiInferredKind::Float
+                || value == DbiInferredKind::Number)) {
+        current = DbiInferredKind::Number;
+        return;
+    }
+    current = DbiInferredKind::Auto;
+}
+
+static DbiTypedShape dbi_shape_from_kind(DbiInferredKind kind, bool nullable) {
+    switch (kind) {
+        case DbiInferredKind::Bool:
+            return {DbiTypedStorage::Buffer, QoreBufferElementType::Bool, boolTypeInfo, nullable};
+        case DbiInferredKind::Int:
+            return {DbiTypedStorage::Buffer, QoreBufferElementType::Int64, bigIntTypeInfo, nullable};
+        case DbiInferredKind::Float:
+            return {DbiTypedStorage::Buffer, QoreBufferElementType::Float64, floatTypeInfo, nullable};
+        case DbiInferredKind::Number:
+            return {DbiTypedStorage::List, QoreBufferElementType::Invalid, numberTypeInfo, nullable};
+        case DbiInferredKind::String:
+            return {DbiTypedStorage::List, QoreBufferElementType::Invalid, stringTypeInfo, nullable};
+        case DbiInferredKind::Date:
+            return {DbiTypedStorage::List, QoreBufferElementType::Invalid, dateTypeInfo, nullable};
+        case DbiInferredKind::Binary:
+            return {DbiTypedStorage::List, QoreBufferElementType::Invalid, binaryTypeInfo, nullable};
+        default:
+            return {DbiTypedStorage::List, QoreBufferElementType::Invalid, autoTypeInfo, true};
+    }
+}
+
+static DbiTypedShape dbi_infer_list_shape(const QoreListNode* list, ExceptionSink* xsink) {
+    DbiInferredKind kind = DbiInferredKind::Unknown;
+    bool nullable = false;
+
+    ConstListIterator i(list);
+    while (i.next()) {
+        if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink, "typed DBI result inference")) {
+            return dbi_shape_from_kind(DbiInferredKind::Auto, true);
+        }
+
+        QoreValue value = i.getValue();
+        if (value.getType() == NT_NOTHING || value.getType() == NT_NULL) {
+            nullable = true;
+            continue;
+        }
+        dbi_merge_kind(kind, dbi_value_kind(value));
+    }
+
+    return dbi_shape_from_kind(kind, nullable);
+}
+
+static bool dbi_list_has_nulls(const QoreListNode* list, ExceptionSink* xsink) {
+    ConstListIterator i(list);
+    while (i.next()) {
+        if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink, "typed DBI result null scan")) {
+            return true;
+        }
+        qore_type_t value_type = i.getValue().getType();
+        if (value_type == NT_NOTHING || value_type == NT_NULL) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static QoreListNode* dbi_make_typed_list(const QoreListNode* source, const QoreTypeInfo* element_type,
+        ExceptionSink* xsink) {
+    if (element_type == autoTypeInfo) {
+        return source->listRefSelf();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(element_type), xsink);
+    ConstListIterator i(source);
+    while (i.next()) {
+        if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink, "typed DBI list conversion")) {
+            return nullptr;
+        }
+
+        rv->push(i.getReferencedValue(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    return rv.release();
+}
+
+static QoreValue dbi_make_column_value(const QoreListNode* source, const DbiTypedShape& shape,
+        ExceptionSink* xsink) {
+    if (shape.storage == DbiTypedStorage::Buffer) {
+        return new QoreBufferNode(shape.buffer_type, shape.nullable, source, xsink);
+    }
+
+    return dbi_make_typed_list(source, shape.getElementType(), xsink);
+}
+
+static bool dbi_append_signature(std::string& signature, const qore_dbi_typed_result_members_t& members,
+        ExceptionSink* xsink) {
+    signature = "typed-dbi-result-v1|";
+    for (size_t i = 0; i < members.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "typed DBI result signature")) {
+            return true;
+        }
+        signature += std::to_string(i);
+        signature += ':';
+        signature += members[i].first;
+        signature += ':';
+        signature += QoreTypeInfo::getPath(members[i].second);
+        signature += ';';
+    }
+    return false;
+}
+
+struct DbiTypedColumnInfo {
+    std::string name;
+    const QoreListNode* source = nullptr;
+    DbiTypedShape shape;
+};
+}
 
 void qore_ds_private::statementExecuted(int rc) {
     // we always assume we are in a transaction after executing a transaction-relevant statement
@@ -55,6 +466,58 @@ void qore_ds_private::statementExecuted(int rc) {
     }
     else if (!rc && !active_transaction)
         active_transaction = true;
+}
+
+void qore_ds_private::clearTypedResultHashDeclCache() {
+    AutoLocker al(m);
+    size_t count = 0;
+    for (auto& i : typed_result_hashdecl_cache) {
+        if (count && !(count % 100)) {
+            qore_check_cancel(nullptr, "typed DBI result hashdecl cache cleanup");
+        }
+        typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(i.second))->deref();
+        ++count;
+    }
+    typed_result_hashdecl_cache.clear();
+}
+
+const TypedHashDecl* qore_ds_private::getTypedResultHashDecl(const char* driver_name, const std::string& signature,
+        const qore_dbi_typed_result_members_t& members, ExceptionSink* xsink) {
+    AutoLocker al(m);
+
+    auto i = typed_result_hashdecl_cache.find(signature);
+    if (i != typed_result_hashdecl_cache.end()) {
+        return i->second;
+    }
+
+    std::string safe_driver;
+    if (driver_name) {
+        for (const char* p = driver_name; *p; ++p) {
+            unsigned char c = static_cast<unsigned char>(*p);
+            safe_driver += std::isalnum(c) ? static_cast<char>(c) : '_';
+        }
+    }
+    if (safe_driver.empty()) {
+        safe_driver = "dbi";
+    }
+
+    unsigned hash = XXH32(signature.data(), signature.size(), 0);
+    char hash_str[9];
+    snprintf(hash_str, sizeof(hash_str), "%08x", hash);
+
+    std::string name = "__minted_" + safe_driver + "_" + hash_str;
+    TypedHashDeclHolder hd_holder(new TypedHashDecl(name.c_str(), name.c_str()));
+    TypedHashDecl* hd = *hd_holder;
+    for (size_t n = 0; n < members.size(); ++n) {
+        if (n && !(n % 100) && qore_check_cancel(xsink, "typed DBI result hashdecl creation")) {
+            return nullptr;
+        }
+        const auto& member = members[n];
+        hd->addMember(member.first.c_str(), member.second, QoreValue());
+    }
+
+    typed_result_hashdecl_cache[signature] = hd_holder.release();
+    return hd;
 }
 
 QoreHashNode* qore_ds_private::getCurrentOptionHash(bool ensure_hash) const {
@@ -285,6 +748,212 @@ void Datasource::setAutoCommit(bool ac) {
     priv->autocommit = ac;
 }
 
+QoreHashNode* qore_dbi_make_typed_select_result(Datasource* ds, const QoreHashNode* columns,
+        const QoreHashNode* desc, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!ds || !columns) {
+        xsink->raiseException("DBI-TYPED-SELECT-ERROR", "typed select result creation requires a Datasource and "
+            "a column result hash");
+        return nullptr;
+    }
+
+    std::vector<DbiTypedColumnInfo> column_info;
+    qore_dbi_typed_result_members_t members;
+    column_info.reserve(columns->size());
+    members.reserve(columns->size());
+
+    ConstHashIterator i(columns);
+    while (i.next()) {
+        if (column_info.size() && !(column_info.size() % 100)
+                && qore_check_cancel(xsink, "typed DBI column result inference")) {
+            return nullptr;
+        }
+
+        QoreValue value = i.get();
+        if (value.getType() != NT_LIST) {
+            return columns->hashRefSelf();
+        }
+
+        const QoreListNode* source = value.get<const QoreListNode>();
+        DbiTypedShape shape;
+        const QoreHashNode* column_desc = dbi_get_desc_column(desc, i.getKey());
+        if (dbi_shape_from_desc(column_desc, shape)) {
+            shape.nullable = shape.nullable || dbi_list_has_nulls(source, xsink);
+        } else {
+            shape = dbi_infer_list_shape(source, xsink);
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+
+        column_info.push_back({i.getKey(), source, shape});
+        members.push_back({i.getKey(), shape.getColumnType()});
+    }
+
+    std::string signature;
+    if (dbi_append_signature(signature, members, xsink)) {
+        return nullptr;
+    }
+    const TypedHashDecl* hd = qore_ds_private::get(*ds)->getTypedResultHashDecl(ds->getDriverName(), signature,
+        members, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hd, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    for (size_t n = 0; n < column_info.size(); ++n) {
+        if (n && !(n % 100) && qore_check_cancel(xsink, "typed DBI column result conversion")) {
+            return nullptr;
+        }
+
+        ValueHolder column_value(dbi_make_column_value(column_info[n].source, column_info[n].shape, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        rv->setKeyValue(column_info[n].name.c_str(), column_value.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    return rv.release();
+}
+
+QoreListNode* qore_dbi_make_typed_select_rows_result(Datasource* ds, const QoreListNode* rows,
+        const QoreHashNode* desc, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!ds || !rows) {
+        xsink->raiseException("DBI-TYPED-SELECT-ERROR", "typed select row result creation requires a Datasource and "
+            "a row result list");
+        return nullptr;
+    }
+
+    if (rows->empty() && (!desc || desc->empty())) {
+        return rows->listRefSelf();
+    }
+
+    std::vector<std::string> names;
+    if (desc && !desc->empty()) {
+        ConstHashIterator hi(desc);
+        while (hi.next()) {
+            if (names.size() && !(names.size() % 100)
+                    && qore_check_cancel(xsink, "typed DBI row result column collection")) {
+                return nullptr;
+            }
+            names.push_back(hi.getKey());
+        }
+    } else {
+        QoreValue first = rows->retrieveEntry(0);
+        if (first.getType() != NT_HASH) {
+            return rows->listRefSelf();
+        }
+
+        ConstHashIterator hi(first.get<const QoreHashNode>());
+        while (hi.next()) {
+            if (names.size() && !(names.size() % 100)
+                    && qore_check_cancel(xsink, "typed DBI row result column collection")) {
+                return nullptr;
+            }
+            names.push_back(hi.getKey());
+        }
+    }
+
+    qore_dbi_typed_result_members_t members;
+    members.reserve(names.size());
+
+    for (size_t n = 0; n < names.size(); ++n) {
+        if (n && !(n % 100) && qore_check_cancel(xsink, "typed DBI row result inference")) {
+            return nullptr;
+        }
+
+        DbiTypedShape shape;
+        bool has_desc_shape = dbi_shape_from_desc(dbi_get_desc_column(desc, names[n].c_str()), shape);
+        DbiInferredKind kind = DbiInferredKind::Unknown;
+        bool nullable = has_desc_shape ? shape.nullable : false;
+
+        ConstListIterator li(rows);
+        while (li.next()) {
+            if (li.index() && !(li.index() % 100) && qore_check_cancel(xsink, "typed DBI row result scan")) {
+                return nullptr;
+            }
+
+            QoreValue row_value = li.getValue();
+            if (row_value.getType() != NT_HASH) {
+                return rows->listRefSelf();
+            }
+
+            bool exists = false;
+            QoreValue value = row_value.get<const QoreHashNode>()->getKeyValueExistence(names[n].c_str(), exists);
+            if (!exists || value.getType() == NT_NOTHING || value.getType() == NT_NULL) {
+                nullable = true;
+                continue;
+            }
+
+            if (!has_desc_shape) {
+                dbi_merge_kind(kind, dbi_value_kind(value));
+            }
+        }
+
+        if (has_desc_shape) {
+            shape.nullable = nullable;
+        } else {
+            shape = dbi_shape_from_kind(kind, nullable);
+        }
+        members.push_back({names[n], shape.getRowType()});
+    }
+
+    std::string signature;
+    if (dbi_append_signature(signature, members, xsink)) {
+        return nullptr;
+    }
+    const TypedHashDecl* hd = qore_ds_private::get(*ds)->getTypedResultHashDecl(ds->getDriverName(), signature,
+        members, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(hd->getTypeInfo()), xsink);
+    ConstListIterator li(rows);
+    while (li.next()) {
+        if (li.index() && !(li.index() % 100) && qore_check_cancel(xsink, "typed DBI row result conversion")) {
+            return nullptr;
+        }
+
+        QoreValue row_value = li.getValue();
+        if (row_value.getType() != NT_HASH) {
+            return rows->listRefSelf();
+        }
+
+        const QoreHashNode* source = row_value.get<const QoreHashNode>();
+        ReferenceHolder<QoreHashNode> row(new QoreHashNode(hd, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        for (size_t n = 0; n < names.size(); ++n) {
+            if (n && !(n % 100) && qore_check_cancel(xsink, "typed DBI row result member conversion")) {
+                return nullptr;
+            }
+            const std::string& name = names[n];
+            row->setKeyValue(name.c_str(), source->getKeyValue(name.c_str()).refSelf(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+
+        rv->push(row.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    return rv.release();
+}
+
 QoreValue Datasource::select(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
     QoreValue rv = qore_dbi_private::get(*priv->dsl)->select(this, query_str, args, xsink);
@@ -298,9 +967,49 @@ QoreValue Datasource::select(const QoreString* query_str, const QoreListNode* ar
     return rv;
 }
 
+QoreValue Datasource::selectTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
+    assert(xsink);
+    QoreValue rv = qore_dbi_private::get(*priv->dsl)->selectTyped(this, query_str, args, xsink);
+    autoCommit(xsink);
+
+    // set active_transaction flag if in a transaction and the active_transaction flag
+    // has not yet been set and no exception was raised
+    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+        priv->active_transaction = true;
+
+    return rv;
+}
+
+QoreColumnarResult* Datasource::selectColumnar(const QoreString* query_str, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    QoreColumnarResult* rv = qore_dbi_private::get(*priv->dsl)->selectColumnar(this, query_str, args, xsink);
+    autoCommit(xsink);
+
+    // set active_transaction flag if in a transaction and the active_transaction flag
+    // has not yet been set and no exception was raised
+    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+        priv->active_transaction = true;
+
+    return rv;
+}
+
 QoreValue Datasource::selectRows(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
     QoreValue rv = qore_dbi_private::get(*priv->dsl)->selectRows(this, query_str, args, xsink);
+    autoCommit(xsink);
+
+    // set active_transaction flag if in a transaction and the active_transaction flag
+    // has not yet been set and no exception was raised
+    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+        priv->active_transaction = true;
+
+    return rv;
+}
+
+QoreValue Datasource::selectRowsTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
+    assert(xsink);
+    QoreValue rv = qore_dbi_private::get(*priv->dsl)->selectRowsTyped(this, query_str, args, xsink);
     autoCommit(xsink);
 
     // set active_transaction flag if in a transaction and the active_transaction flag

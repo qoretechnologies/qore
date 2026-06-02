@@ -59,6 +59,10 @@ public:
         return true;
     }
 
+    DLLLOCAL QoreValue getArgs() const {
+        return args;
+    }
+
 private:
     QoreValue args{};
 

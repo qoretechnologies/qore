@@ -124,7 +124,7 @@ public namespace DebugProgramControl {
         public registerConnection(hash<auto> cx) {
             rwlConnection.writeLock();
             on_exit rwlConnection.writeUnlock();
-            ctxConnection{cx.id} = {};
+            ctxConnection{cx.id} = {"program": {}};
             # Note: we cannot sendDataImpl/broadcaseDataImpl as cx.id not registered in WebSocketHandler
         }
 

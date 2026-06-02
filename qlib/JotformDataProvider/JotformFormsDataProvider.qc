@@ -120,7 +120,7 @@ public class JotformFormsDataProvider inherits JotformDataProviderBase {
     }
 
     #! Searches for forms
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If a specific form ID is requested, get just that form
         if (search_options.formID) {
@@ -130,7 +130,7 @@ public class JotformFormsDataProvider inherits JotformDataProviderBase {
             if (response.content) {
                 records = (response.content,);
             }
-            return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
                 recordType.getFields());
         }
 

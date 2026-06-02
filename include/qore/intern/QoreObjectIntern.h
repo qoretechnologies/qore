@@ -192,6 +192,7 @@ class VRMutex;
 class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
+    const QoreTypeInfo* instantiated_type = nullptr;
     int status = OS_OK;
 
     KeyList* privateData = nullptr;
@@ -218,7 +219,8 @@ public:
     //! chain consumes stack that can push deep recursion past the stack guard).
     mutable std::atomic<QoreStringNode*> unique_hash{nullptr};
 
-    DLLLOCAL qore_object_private(QoreObject* n_obj, const QoreClass *oc, QoreProgram* p, QoreHashNode* n_data);
+    DLLLOCAL qore_object_private(QoreObject* n_obj, const QoreClass *oc, QoreProgram* p, QoreHashNode* n_data,
+            const QoreTypeInfo* n_instantiated_type = nullptr);
 
     DLLLOCAL ~qore_object_private();
 
@@ -386,7 +388,8 @@ public:
             }
 
             member_class_ctx = mi->getClassContext(class_ctx);
-            typeInfo = mi->getTypeInfo();
+            typeInfo = qore_substitute_type_params_if_needed(mi->getTypeInfo(),
+                instantiated_type ? instantiated_type : theclass->getTypeInfo());
             return 0;
         }
 

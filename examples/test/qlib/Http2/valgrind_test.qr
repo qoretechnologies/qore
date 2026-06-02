@@ -18,10 +18,11 @@
 # all copies or substantial portions of the Software.
 
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
 
 # HTTP/2 test certificate and key (PEM format)
 const CertPem = "-----BEGIN CERTIFICATE-----

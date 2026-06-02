@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../qlib/SqlUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires SqlUtil
 
 %requires QUnit
 

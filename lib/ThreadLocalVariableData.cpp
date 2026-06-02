@@ -76,6 +76,10 @@ void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, Exception
             const LocalVarValue& var = w->var[p];
             if (var.frame_boundary)
                 return;
+            // Skip pre-instantiated block-scoped locals that were cleared at
+            // block exit — they stay on the stack but are no longer active
+            if (var.block_cleared)
+                continue;
 
             ReferenceHolder<QoreHashNode> v(new QoreHashNode(autoTypeInfo), xsink);
             v->setKeyValue("type", new QoreStringNode("local"), xsink);

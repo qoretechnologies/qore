@@ -80,13 +80,13 @@ public class DeelLegalEntitiesDataProvider inherits DeelDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
         list<hash<auto>> all_records = fetchAllPages("legal-entities", "legal-entities",
             params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

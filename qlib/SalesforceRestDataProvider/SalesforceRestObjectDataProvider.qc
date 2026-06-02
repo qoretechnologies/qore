@@ -190,7 +190,7 @@ public class SalesforceRestObjectDataProvider inherits SalesforceRestDataProvide
 
         @see requestSearchRecordsImpl()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         where_cond = fixSalesforceRecord(where_cond);
         return new SalesforceRestRecordIterator(rest, name, record_info, where_cond, search_options);
     }

@@ -20,23 +20,56 @@
     - <a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> reduces value-storage
       overhead from 16 to 8 bytes (50% smaller) with small-string optimisation for short strings
       stored inline
+    - LLVM-backed @ref execution_modes "execution modes" add an IR interpreter,
+      tiered JIT native code for hot paths, and AOT output for standalone executables
+      and binary modules
+    - standard user modules are now built and installed as AOT-compiled \c .qmod
+      artifacts by default for better startup and runtime performance
     - native fast-path dispatch for the iterator pseudo-method family
       (@ref <list>::map() "<list>::map()", @ref <list>::select() "<list>::select()",
       @ref <list>::foldl() "<list>::foldl()", and the hash/object analogues) bypasses
       per-element virtual calls for built-in iterators
+    - new dense \c buffer<T> values store primitive arrays without per-element boxing and
+      new typed DBI select APIs can return numeric, boolean, and string result columns as buffers
     - copy-on-write @ref string_views "string view" layer makes
       @ref <string>::substr() "<string>::substr()" and
       @ref string_slicing "[] slice operations" allocation-free for read-only consumers
     - regex matching skips per-call UTF-8 re-validation in PCRE2 inner loops
 
     <i>Language features:</i>
-    - new @ref modern "%modern" parse directive and \c .qr file extension that bundle
-      the recommended parse options into one
+    - new @ref modern "%modern" parse directive, \c .qr file extension, and modern-by-default
+      parsing for non-\c .q source files; together these bundle the recommended parse options
+      into one
     - parse-time type narrowing for @ref hash_type "hash<auto>" / @ref list_type "list<auto>",
       with @ref auto_no_narrow "auto!" opt-out
     - new @ref enums "enum" and @ref typedef_keyword "typedef" keywords
     - new @ref code_complex_type "code<ReturnType(ParamTypes...)>" typed callable syntax
+    - new @ref function_named_arguments "named-argument call syntax" for parse-time-resolved functions, methods,
+      constructors, and base constructors
     - new @ref union_type "union<...>" explicit union type syntax
+    - source-defined generic classes now support generic inheritance,
+      source-level raw compatibility attributes
+      (<tt>[legacy_raw_accepts]</tt>, <tt>[legacy_raw_construct]</tt>, and
+      <tt>[legacy_raw]</tt>), and AOT metadata preservation for generic base
+      and raw-compatibility information
+    - source-defined generic class static methods can now be called with
+      parameterized receivers such as <tt>Factory&lt;int&gt;::make(...)</tt>, and
+      source-defined hashdecls can now declare type parameters for typed result
+      records such as <tt>hash&lt;Result&lt;int&gt;&gt;</tt>
+    - generic class and hashdecl annotations now support wildcard type
+      arguments with <tt>?</tt>, <tt>? extends Type</tt>, and
+      <tt>? super Type</tt> syntax
+    - generic class constructor calls can infer class type arguments from
+      constructor arguments and expected result types, and static factory calls
+      can infer a generic receiver from assignment or return context when the
+      target type is concrete
+    - generic class, hashdecl, function, method, and static method type
+      parameters can declare defaults and upper bounds; functions and methods
+      can also infer method-level type arguments or accept explicit call type
+      arguments such as <tt>identity&lt;string&gt;(...)</tt>
+    - IR/JIT execution can internally specialize source generic method and
+      function bodies for concrete receiver and call type arguments, while AOT
+      metadata keeps generic type paths and resolves them at runtime
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH string-literal escapes
     - new \c %%Y printf format specifier for multi-line pseudo-YAML output
@@ -74,12 +107,63 @@
       asynchronous I/O across HTTP/1.x, HTTP/2, and HTTP/3
     - WebSocket-over-HTTP/2 (RFC 8441) and WebSocket-over-HTTP/3 (RFC 9220), Server-Sent Events
       over all three HTTP versions
+    - server-side HTTP/2 \c Socket methods are now async-safe and integrate with the
+      @ref HttpServerAsyncIo "HttpServerAsyncIo" body-streaming queue model
     - @ref Qore::HTTPClient "HTTPClient" automatically uses HTTP/2 via
       <a href="https://datatracker.ietf.org/doc/html/rfc7301">ALPN</a> and HTTP/3 via
       <a href="https://datatracker.ietf.org/doc/html/rfc7838">Alt-Svc</a>; per-instance and
       process-wide mode controls (@ref Qore::HTTPClient::setHttp2Mode() "setHttp2Mode()",
       @ref Qore::HTTPClient::setHttp3Mode() "setHttp3Mode()",
       @ref Qore::set_global_http2_mode() "set_global_http2_mode()")
+    - @ref Qore::SQL::Datasource::selectTyped() "Datasource::selectTyped()" /
+      @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" and the
+      corresponding @ref Qore::SQL::DatasourcePool "DatasourcePool" methods expose typed DBI
+      result values with runtime hashdecls and dense buffers where possible
+    - new @ref Qore::SQL::ColumnarResult "ColumnarResult" SQL result container and
+      @ref Qore::SQL::Datasource::selectColumnar() "Datasource::selectColumnar()" /
+      @ref Qore::SQL::DatasourcePool::selectColumnar() "DatasourcePool::selectColumnar()" /
+      @ref Qore::SQL::SQLStatement::fetchColumnar() "SQLStatement::fetchColumnar()" APIs expose
+      query results as ordered typed columns for DataFrame and analytics workloads; drivers without
+      native support use a libqore compatibility fallback, and DataFrame::fromQuery() uses the
+      columnar API automatically when available; ColumnarResult values can now be filtered with
+      dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
+      columns; date, timestamp, and interval columns use dense \c buffer<int64> microsecond
+      storage when ColumnarResult schema or DBI metadata identifies a temporal column, while
+      row/list APIs materialize normal Qore \c date values; ColumnarResult::fromColumnHash() and
+      ColumnarResult::fromRows() provide explicit
+      constructors for projected or row-compatible columnar blocks; ColumnarResult::stringPredicateMask()
+      builds dense masks for common string predicates without materializing row hashes
+    - C++ modules can import and export ColumnarResult values through the Arrow C Data Interface
+      with \c qore_columnar_result_export_arrow_c_data() and
+      \c qore_columnar_result_import_arrow_c_data(); fixed-width primitive, boolean, and
+      \c decimal128 top-level columns use zero-copy \c buffer<T> storage when host memory is
+      compatible, including sliced record batches with non-zero top-level offsets; microsecond
+      timestamp and duration arrays also map directly to \c buffer<int64> while preserving Arrow
+      temporal schema, while string, binary, list, fixed-size-list, struct, map, and
+      dictionary-encoded values preserve schema and values through owned Arrow-compatible buffers
+      or Qore containers
+    - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper now support shaped columnar bulk blocks: DB providers can
+      return \c ColumnarResult values from \c getShapedValue(), bulk DB writes can accept \c ColumnarResult and
+      hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
+      \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
+      autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
+      expression-to-expression predicates such as \c @amount \c >= \c @target, numeric, trim/concat/null-handling,
+      case-folding, date-part, and row-independent date arithmetic expressions, native string predicates including
+      \c containsAny, list membership predicates, list/hash accessors, structured ternary values, and
+      ICU-backed locale-sensitive string predicates when a DataProvider expression passes an \c i18n locale options hash
+    - the dataframe benchmark suite shows Qore outperforming pandas for the
+      included typed column construction, filtering, aggregation, join,
+      value counting, missing-data cleanup, reshape, Arrow/Parquet roundtrip,
+      SQL read/write, DataProvider pipeline, and ML analytics cases; the
+      fastest SQL-read path requires a DBI driver with native columnar support
+    - new experimental @ref plugin_types "plugin-type" registration ABI
+      foundation for future module-defined dense data types, including
+      descriptor validation, module-init registration staging, runtime helper
+      dispatch, QORD helper-reference metadata, serialized plugin value
+      instances, lowering pattern hooks, optional LLVM codegen extension hooks,
+      per-operation FP reassociation metadata gated by the new
+      @ref fp-fast-math "%fp-fast-math" parse directive, verifier diagnostics, trace controls, and
+      @ref Qore::Reflection::PluginRegistry "PluginRegistry" introspection
     - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a>
       and QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mTLS</a>
     - <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> dual-stack
@@ -124,6 +208,13 @@
       @ref sglangrestclientintro "SGLang"), e-commerce, CRM, ERP, observability, ML/DataFrame,
       Parquet, ONNX, and gRPC/Protobuf integrations — see
       @ref qore_2_3_0_new_user_modules "New User Modules"
+    - QoreModelRegistry and DataProviderML now support versioned AI model packages
+      with named artifacts, safe HuggingFace/PyTorch metadata inspection,
+      registry-hosted \c tokenizer.json and \c tokenizer_config.json files,
+      normalized ONNX execution plans, preprocessing/postprocessing contracts,
+      output-shape and tensor-contract metadata, actionable ONNX diagnostics,
+      tensor-backed ONNX inference, and DataProvider-native package/artifact
+      creation workflows
     - cryptography: new @ref qorecryptointro "QoreCrypto" envelope-encryption module
     - existing modules updated extensively (DataProvider, RestClient, HttpServer,
       WebSocketClient/Handler/Util, Logger, SqlUtil, etc.) — see
@@ -132,6 +223,9 @@
     <i>Tooling:</i>
     - integrated REPL mode in the \c qore binary with the @ref qorereplintro "QoreRepl" module
     - new @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" parse option for REPL functionality
+    - new @ref prepend-module-path "%prepend-module-path" and
+      @ref append-module-path "%append-module-path" directives for per-program module search paths,
+      including paths persisted in AOT binaries
     - \c qpp \c --metadata flag emits structured \c .meta.json files for builtin classes,
       methods, functions, constants, hashdecls, and enums
     - tree-sitter-based parser backend in the @ref astparserintro "astparser" module
@@ -219,6 +313,158 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - Ensure closures and call references match the expected signature
     @endparblock
 
+    @par Named Arguments
+    @parblock
+    Calls can now pass arguments by parameter name with <tt>name: expression</tt> syntax when the target signature is
+    resolved at parse time:
+
+    @code{.py}
+sub connect(string host, int port = 443, *int timeout = NOTHING) {
+    # ...
+}
+
+connect(host: "example.com", timeout: 30);
+connect("example.com", port: 8443, timeout: 10);
+    @endcode
+
+    Named arguments may follow positional arguments, are evaluated in source order, and use normal default-argument
+    handling for omitted parameters. Calls through untyped call references or runtime-only dispatch are rejected with
+    \c NAMED-CALL-NOT-SUPPORTED. Builtin variants accept named arguments only when they opt in with the new
+    @ref NAMED_ARGS "NAMED_ARGS" code flag; user-defined variants accept named arguments automatically when resolved
+    at parse time.
+
+    <b>Compatibility note:</b> parameter names become part of the public calling interface for named callers.
+    Renaming a public parameter can now break callers that use named arguments.
+
+    Named arguments are also supported for methods, constructors, and base constructors when the target is resolved at
+    parse time:
+
+    @code{.py}
+class Reader {
+    constructor(string path, string encoding = "UTF-8", bool strict = True) {
+    }
+}
+
+class CsvReader inherits Reader {
+    constructor(string path, string encoding = "UTF-8")
+        : Reader(path: path, encoding: encoding, strict: False) {
+    }
+}
+
+Reader r(path: "data.csv", encoding: "UTF-8");
+    @endcode
+
+    Builtin functions and methods opt in per variant with the new
+    @ref NAMED_ARGS "NAMED_ARGS" code flag, allowing examples such as:
+
+    @code{.py}
+string decoded = binary_to_string(value: body, encoding: "UTF-8");
+binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: False, fin: True);
+    @endcode
+    @endparblock
+
+    @par Generic Builtin Classes and Result Records
+    @parblock
+    Builtin generic class types are now available for thread value
+    containers, iterators, and poll operations:
+    - @ref Qore::Thread::Queue "Queue<T>"
+    - @ref Qore::Thread::Channel "Channel<T>"
+    - @ref Qore::Thread::Promise "Promise<T>"
+    - @ref Qore::Thread::Future "Future<T>"
+    - @ref Qore::TreeMap "TreeMap<V>" for typed path-prefix maps
+    - <tt>MongoCursor&lt;DocT&gt;</tt> for typed MongoDB
+      document cursor iteration in the builtin mongodb module
+    - @ref Qore::AbstractIterator "AbstractIterator<T>" and concrete list,
+      hash, channel, and single-value iterators
+    - @ref Qore::AbstractPollOperation "AbstractPollOperation<T>" and
+      @ref Qore::SocketPollOperationBase "SocketPollOperationBase<T>"
+    - generic result hashdecls such as
+      @ref Qore::Thread::QueueTryResult "QueueTryResult<T>",
+      @ref Qore::Thread::ChannelTryResult "ChannelTryResult<T>", and
+      @ref Qore::KeyValueInfo "KeyValueInfo<T>"
+
+    @code{.py}
+Queue<int> q();
+q.push(value: 10);
+int value = q.pop(timeout_ms: 0);
+
+Promise<string> p();
+Future<string> f = p.getFuture();
+p.set(value: "complete");
+string result = f.get(timeout_ms: 1s);
+
+hash<string, int> values = {"one": 1};
+HashIterator<int> it(values);
+while (it.next()) {
+    int item = it.getValue();
+}
+
+TreeMap<code> handlers();
+handlers.put(path: "api/v1", value: \handleApiV1());
+*code handler = handlers.get(path: "api/v1/users");
+
+AbstractPollOperation<auto> connect = sock.startPollConnect(target: "example.com:443");
+    @endcode
+
+    Generic builtin class types are reified and runtime checked. Existing raw
+    declarations such as <tt>Queue q()</tt> and <tt>Future f</tt> remain source
+    compatible and behave as value-erased <tt>&lt;auto&gt;</tt> instances for
+    migrated classes.
+
+    Object serialization preserves specialized generic class types, reflection
+    exposes type parameters, defaults, and bounds for generic classes and
+    hashdecls, and QoreApiMetadata merges generic metadata from AST parsing,
+    reflection, and qpp metadata. QoreApiMetadata also exposes structured
+    type-use metadata for generic arguments and wildcards, including
+    unbounded, upper-bound, and lower-bound wildcard entries for parameters,
+    members, returns, and inherited class/hashdecl types. The astparser and
+    QoreCodeFormat modules
+    preserve generic class/hashdecl declarations, wildcards, defaults, bounds,
+    and parameterized inheritance.
+    @endparblock
+
+    @par Source-Defined Generic Classes
+    @parblock
+    Source-defined classes can now declare formal type parameters and use them
+    in members, methods, constructors, locals, and generic base classes:
+
+    @code{.py}
+class Box<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Box<int> box(42);
+int value = box.get();
+
+class Base<T> {
+    T echo(T value) {
+        return value;
+    }
+}
+
+class Child<T> inherits Base<T> {
+}
+
+Child<int> child();
+int echoed = child.echo(value);
+    @endcode
+
+    Source-defined generic class types are runtime checked and invariant. AOT
+    metadata preserves generic class parameters and parameterized base-class
+    inheritance so compiled code uses the same type substitutions as source
+    execution.
+    @endparblock
+
     @par Removal of %strict-types Support
     @parblock
     The @ref strict-types "%strict-types" parse directive and @ref Qore::PO_STRICT_TYPES "PO_STRICT_TYPES"
@@ -272,6 +518,120 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       (for example: \c LoggerAppenderQueue(-1)) to explicitly
 \endif
       create an unlimited queue (not recommended for production)
+    @endparblock
+
+    @par Soft Type NULL Value Handling
+    @parblock
+    %Qore now strictly rejects SQL NULL values for non-optional soft types
+    (@ref softint_type "softint", @ref softnumber_type "softnumber", @ref softstring_type "softstring",
+    @ref softbool_type "softbool", @ref softdate_type "softdate", @ref softlist_type "softlist",
+    @ref softhash_type "softhash", @ref softobject_type "softobject", @ref softcoding_type "softcoding",
+    @ref softbinary_type "softbinary"). In pre-2.3 versions, soft types accepted SQL NULL and treated it like
+    @ref nothing "NOTHING".
+
+    Code that relied on soft types accepting NULL will now encounter \c RUNTIME-TYPE-ERROR when NULL values
+    are passed to soft type parameters or assigned to soft type variables during type validation.
+
+    <b>Workarounds:</b>
+    - Use optional soft types (e.g., @ref softint_or_nothing_type "*softint") to accept NULL values
+    - Use the @ref broken-soft-types "%broken-soft-types" parse directive to restore pre-2.3 behavior (AST-only)
+    - Use @ref Qore::QoreParseOptions::BROKEN_SOFT_TYPES "QoreParseOptions::BROKEN_SOFT_TYPES" when setting up a
+      @ref Qore::Program "Program" object (AST-only)
+
+    <b>Note:</b> The @ref broken-soft-types "%broken-soft-types" option is AST-only and not supported in IR/JIT execution modes.
+    @endparblock
+
+    @par %modern Is Now the Default for Non-.q Files
+    @parblock
+    Starting with %Qore 2.3, source files with any extension other than \c .q (for example \c .qr, \c .qc,
+    \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore), as well as files with no extension at all,
+    automatically enable @ref modern "%modern" mode (plus all non-strict warnings) during parsing. Only
+    files whose name ends in exactly \c .q stay in legacy mode by default, preserving the pre-2.3 behavior
+    for the large corpus of existing scripts.
+
+    Code that previously relied on files without explicit parse directives parsing in legacy mode will now
+    encounter parse errors such as "\c reference to variable ... with the '$' sign is not allowed when
+    parse option 'allow-bare-refs' is set" or "\c local variable ... declared without '$' prefix..." depending
+    on which style the legacy code assumed.
+
+    <b>Workarounds:</b>
+    - Rename the affected script to end in \c .q to opt it back into legacy mode
+    - Set the environment variable \c QORE_OLD_STYLE_DEFAULT to any non-empty value (for example \c 1) to
+      disable the extension-based auto-enable globally; under this setting only explicit \c \%modern
+      directives, the \c -M command-line flag, or a programmatic @ref Qore::PO_MODERN option will enable
+      modern mode. This is the recommended approach for users migrating large legacy code bases forward
+      without renaming every source file.
+    - Add an explicit \c \%old-style or \c \%require-dollar directive at the top of the script to override
+      the automatic \c \%new-style bits selectively
+
+    <b>Note:</b> This change only affects scripts loaded via the command-line binary and
+    @ref Qore::Program::parseFile "Program::parseFile()". Module loading via @ref Qore::load_module
+    "load_module()" or \c %%requires is unaffected — modules continue to control their own parse options
+    through directives inside the \c .qm file.
+    @endparblock
+
+    @par summarize Statement Rejected Under %modern
+    @parblock
+    The @ref context "summarize" statement is now rejected at parse time when @ref modern "%modern" is in effect.
+    \c %modern now implies the new @ref no-summarize "%no-summarize" parse option. Code that uses \c summarize
+    inside a program parsed with \c %modern, via the \c -M command-line flag, the \c .qr file extension, or
+    @ref Qore::PO_MODERN will now fail parse with a \c PARSE-EXCEPTION.
+
+    <b>Workarounds:</b>
+    - Drop \c %modern and use @ref new-style "%new-style" (plus other directives) directly — \c summarize
+      remains available without \c %modern
+    - Rewrite the \c summarize block as a plain @ref context "context" loop with manual grouping
+    @endparblock
+
+    @par HTTP/2 Server Socket API Is Now Async-Safe
+    @parblock
+    The server-side HTTP/2 \c Socket API has been reworked end-to-end so
+    that handler threads never hold the socket wrapper lock during frame
+    submission.  Every surviving server-side method now acquires
+    @c priv->m only briefly to copy the @ref Qore::Http2Session shared
+    pointer and then does its actual work under the session's own
+    recursive mutex.  This eliminates the close-vs-poll lock inversion
+    and the handler-vs-I/O-thread contention that the previous sync
+    design suffered from.
+
+    The following server-side \c Socket methods were removed outright
+    (their functionality is covered by the @ref HttpServerAsyncIo
+    "HttpServerAsyncIo" stack — \c register_body_queue for inbound DATA,
+    plus the renamed response methods below):
+    \c readHttp2StreamData(), \c readHttp2StreamDataBlock(),
+    \c isHttp2StreamComplete(), \c flushHttp2(),
+    \c queueHttp2StreamData(), \c setHttp2ActiveStream(), and
+    \c getHttp2ActiveStream().
+
+    The following server-side \c Socket methods kept their names but
+    switched to the async-safe implementation described above:
+\if QORE_LANG_FINAL
+    @ref Qore::Socket::submitHttp2StreamingResponseHeaders() "submitHttp2StreamingResponseHeaders()",
+    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()",
+    @ref Qore::Socket::sendHttp2Trailers() "sendHttp2Trailers()",
+    @ref Qore::Socket::cleanupHttp2Stream() "cleanupHttp2Stream()", and
+    @ref Qore::Socket::resetHttp2Stream() "resetHttp2Stream()".
+\else
+    \c submitHttp2StreamingResponseHeaders(), \c sendHttp2StreamData(),
+    \c sendHttp2Trailers(), \c cleanupHttp2Stream(), and
+    \c resetHttp2Stream().
+\endif
+    Because the underlying frames are enqueued on the session and not
+    pushed to the wire synchronously, callers should follow each call
+    with \c io_wake() (provided by @ref HttpServerAsyncIo via
+    \c cx."header-info".io_wake) to flush promptly; under the
+    @ref HttpServerAsyncIo controller the flush is driven by the I/O
+    thread's existing HTTP/2 flush poll operation.
+
+    For inbound DATA on body-streaming dispatches, handlers opt in by
+    registering a @ref Queue "Queue" via
+    \c cx."header-info".register_body_queue; the I/O thread pushes one
+    binary chunk per DATA frame and a @ref nothing sentinel at
+    END_STREAM — no handler-thread socket reads.
+
+    \c HTTPClient HTTP/2 client-side methods (\c sendHttp2StreamData(),
+    \c isHttp2StreamClosed() etc.) are unaffected — this change only
+    reshapes the server-side \c Socket bindings.
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore
@@ -351,6 +711,90 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - <b>macOS (Homebrew):</b> \c onnxruntime
     @endparblock
 
+    @par LLVM-backed Execution and AOT Compilation
+    @parblock
+    %Qore now uses a shared IR pipeline for the IR interpreter, LLVM JIT,
+    tiered execution, and AOT compilation.  The default execution mode is
+    @ref exec_mode_tiered "tiered", which starts quickly and promotes hot
+    functions through IR and JIT tiers.
+
+    The new @ref qcc_tool "qcc" compiler provides the full AOT workflow:
+    script executables, binary user modules (\c .qmod), relocatable Qore
+    objects (\c .qo), static archives (\c .qoa), generated link-mode
+    executables, dependency files, and artifact inspection with
+    \c --dump-info.
+
+    LLVM 16 or later is required for JIT and AOT support.  See
+    @ref execution_modes "Execution Modes" for execution-mode semantics,
+    qcc options, artifact types, source-stripping behavior, and debugging
+    notes.
+    @endparblock
+
+    @par AOT-compiled User Modules by Default
+    @parblock
+    The standard CMake build now compiles user modules to \c .qmod artifacts
+    with \c qcc and installs those compiled artifacts in the
+    architecture-specific module directory.  Source \c .qm modules remain
+    installed in the user-module source directory.  \c QORE_BUILD_AOT_MODULES
+    defaults to \c ON.
+
+    Module lookup checks compiled module directories before the corresponding
+    source module directories, so installed user modules use the AOT-compiled
+    version for better startup and runtime performance by default.  Source
+    modules remain installed for documentation, inspection, and development
+    workflows.
+
+    Disable this behavior with \c -DQORE_BUILD_AOT_MODULES=OFF.  See
+    @ref qore_modules "Qore Modules" and @ref exec_mode_aot "AOT
+    Compilation" for details.
+    @endparblock
+
+    @par Program-owned Module Path Directives
+    @parblock
+    @ref prepend-module-path "%prepend-module-path" and the new quoted form of
+    @ref append-module-path "%append-module-path" let programs declare their
+    own module search paths.  The expanded per-program path lists are persisted
+    in AOT artifacts and restored before dependency modules load.
+
+    See @ref prepend-module-path "%prepend-module-path",
+    @ref append-module-path "%append-module-path", and
+    @ref no-module-path-directives "%no-module-path-directives".
+    @endparblock
+
+    @par Native IR Lowering for context Statement
+    @parblock
+    The @ref context "context" statement, including contextual column
+    references and the \c %% row reference, now runs through the shared IR,
+    JIT, and AOT pipeline instead of falling back to AST execution.
+
+    This is a semantic-preserving change that allows modules using
+    \c context loops to be AOT-compiled to \c .qmod.  See @ref context
+    and @ref execution_modes "Execution Modes" for details.
+    @endparblock
+
+    @par Programmatic Execution Mode Control
+    @parblock
+    The @ref Qore::ExecMode "ExecMode" enum and @ref Qore::Program "Program" class methods provide
+    type-safe programmatic control over execution modes:
+
+    - new @ref Qore::ExecMode "ExecMode" enum with values @ref Qore::ExecMode::EM_AST "EM_AST",
+      @ref Qore::ExecMode::EM_IR "EM_IR", @ref Qore::ExecMode::EM_JIT "EM_JIT", and
+      @ref Qore::ExecMode::EM_TIERED "EM_TIERED"
+    - new @ref Qore::Program::setExecMode() "Program::setExecMode(enum<ExecMode>)" method to set the
+      execution mode for a @ref Qore::Program "Program" object
+    - new @ref Qore::Program::getExecMode() "Program::getExecMode()" method to query the current
+      execution mode
+
+    Example:
+    @code{.py}
+    Program pgm(PO_MODERN);
+    pgm.setExecMode(ExecMode::EM_JIT);  # Use JIT for this program
+    pgm.parse("int sub compute() { return 42; }", "code");
+    @endcode
+
+    See @ref execution_modes for complete documentation of execution modes.
+    @endparblock
+
     @par New Build Requirement: Rust Toolchain and tree-sitter CLI
     @parblock
     The @ref astparserintro "astparser" module now uses a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based
@@ -420,13 +864,29 @@ cargo install tree-sitter-cli@0.26.5
       - supports or-nothing variant: \c *code<int(string)>
       - works with complex types: \c code<list<int>(hash<string, \c int>)>
       - incompatible signature assignments cause parse-time \c PARSE-TYPE-ERROR
+    - new @ref function_named_arguments "named-argument call syntax"
+      - syntax: \c connect(host: \c "example.com", \c timeout: \c 30)
+      - supported for parse-time-resolved functions, methods, constructors, and base constructors
+      - positional arguments may appear before named arguments; positional arguments after named arguments are errors
+      - duplicate, unknown, and positional-overwriting names raise concrete \c NAMED-ARG-* diagnostics
+      - builtin variants must opt in with the new @ref NAMED_ARGS "NAMED_ARGS" code flag
     - new @ref union_type "union<...>" explicit union type syntax
       - syntax: \c union<int, \c string> for a type accepting either int or string
       - supports or-nothing modifier: \c *union<int, \c string> accepts NOTHING as well
       - works with complex types: \c list<union<int, \c string>>, \c hash<string, \c union<int, \c bool>>
+      - supports alternatives with the same outer container type, such as
+        <tt>union&lt;list&lt;string&gt;, list&lt;int&gt;&gt;</tt> and
+        <tt>union&lt;hash&lt;string, string&gt;, hash&lt;string, int&gt;&gt;</tt>
       - integrates with typedef: \c typedef \c IntOrString \c = \c union<int, \c string>;
       - supports parse-time type narrowing after type checks
       - constraints: maximum 100 member types, at most one soft type, no soft+non-soft of same base type
+    - @ref Qore::Dir "Dir" directory-listing methods now expose stronger return types:
+      - no-\c full file/directory listing calls return concrete \c list<string> values
+      - \c full variants return <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>
+      - new concrete helper methods @ref Qore::Dir::listNames() "listNames()",
+        @ref Qore::Dir::listInfo() "listInfo()", @ref Qore::Dir::listFileNames() "listFileNames()",
+        @ref Qore::Dir::listFileInfo() "listFileInfo()", @ref Qore::Dir::listDirNames() "listDirNames()",
+        and @ref Qore::Dir::listDirInfo() "listDirInfo()" avoid boolean-dependent return types
     - new @ref auto_no_narrow "auto!" syntax to disable parse-time type narrowing
       (<a href="https://github.com/qoretechnologies/qore/issues/5080">issue 5080</a>)
       - @ref auto_no_narrow "auto!", @ref auto_no_narrow "hash<auto!>", @ref auto_no_narrow "list<auto!>" prevent parse-time type inference errors
@@ -797,6 +1257,178 @@ cargo install tree-sitter-cli@0.26.5
     element semantics are not statically known.
     @endparblock
 
+    @par Dense Buffers and Typed DBI Results
+    @parblock
+    %Qore now has a dense \c buffer<T> value type for primitive column data and typed DBI result APIs that can
+    expose query results with runtime hashdecl metadata.
+
+    The new \c buffer<T> type stores \c int8, \c int16, \c int32, \c int64, \c float32, \c float64,
+    \c bool, \c string, and \c decimal128 values without per-element boxing.  Nullable buffers use \c buffer<*T>
+    and preserve SQL NULL / Qore NOTHING as null elements:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30));
+buffer<int64> zeros = buffer<int64>::sized(1000);
+buffer<int64> retry_counts = buffer<int64>::filled(1000, 3);
+buffer<int64> retry_counts_named = buffer<int64>::filled(size: 1000, value: 3);
+buffer<*float64> scores = new buffer<*float64>((1.5, NULL, 4.25));
+buffer<*float64> missing_scores = buffer<*float64>::filled(1000, NOTHING);
+buffer<*string> names = new buffer<*string>(("Alice", NOTHING, "Carol"));
+buffer<decimal128> amounts = new buffer<decimal128>((12.34n, 56.70n));
+
+buffer<int64> middle = ids.view(start: 1, count: 2);
+middle[0] = 25;     # updates ids[1]
+
+printf("rows=%d total=%d\n", ids.size(), ids.sum());
+printf("amount=%n\n", amounts.sum());
+list<*float> boxed = scores.toList();
+    @endcode
+
+    Native modules can wrap immutable external host or device storage in
+    \c buffer<T> values. Device-backed buffers expose \c deviceStorage(),
+    \c hostStorage(), and \c materialize() so Qore code can make transfer
+    points explicit when an API requires raw host memory. Writes preserve value
+    semantics by detaching provider-owned storage into an owned host buffer.
+    \c buffer<T> remains a primitive dense-vector type; nested arrays and
+    structs are carried by ColumnarResult schema metadata with list/hash values
+    and by Arrow/Parquet round-trip metadata.
+
+    Buffers support elementwise arithmetic and comparisons. Numeric buffers can be combined with another numeric
+    buffer of the same length or with a scalar \c int / \c float value; comparisons produce dense boolean masks and
+    nullable inputs propagate nullable result elements:
+    @code{.py}
+buffer<int64> ids = new buffer<int64>((10, 20, 30));
+buffer<int64> offsets = new buffer<int64>((1, 2, 3));
+
+buffer<int64> adjusted = ids + offsets;    # buffer<int64>((11, 22, 33))
+buffer<int64> doubled = ids * 2;           # buffer<int64>((20, 40, 60))
+buffer<bool> high = adjusted > 20;         # buffer<bool>((False, True, True))
+
+buffer<*float64> scores = new buffer<*float64>((1.5, NOTHING, 4.25));
+buffer<*bool> passing = scores >= 2.0;     # buffer<*bool>((False, NOTHING, True))
+
+buffer<string> names = new buffer<string>(("Alice", "Bob", "Carol"));
+buffer<bool> named_bob = names == "Bob";   # buffer<bool>((False, True, False))
+    @endcode
+
+    The new @ref Qore::SQL::Datasource::selectTyped() "Datasource::selectTyped()" and
+    @ref Qore::SQL::Datasource::selectRowsTyped() "Datasource::selectRowsTyped()" methods, plus the corresponding
+    @ref Qore::SQL::DatasourcePool "DatasourcePool" methods, opt into typed query results without changing existing
+    \c select() / \c selectRows() behavior:
+    @code{.py}
+hash<auto> result = db.selectTyped(
+    "select customer_id, balance, customer_name from customer where status = %v",
+    "active");
+
+buffer<int64> customer_ids = result.customer_id;
+buffer<*float64> balances = result.balance;      # driver metadata can preserve SQL width/nullability
+buffer<*string> names = result.customer_name;     # text columns can remain dense through columnar paths
+    @endcode
+
+    When a driver does not yet provide native typed select support, libqore falls back to the ordinary driver result
+    and infers useful runtime types from the returned values.  That fallback preserves behavior but cannot recover
+    metadata that was not present in the values; for example unannotated integers become \c buffer<int64>.
+    Drivers can advertise native support with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT
+    "DBI_CAP_HAS_TYPED_SELECT".
+
+    ColumnarResult blocks also support dense mask filtering and native mask composition:
+    @code{.py}
+ColumnarResult result = db.selectColumnar(
+    "select id, score, active from customer_scores");
+
+buffer<bool> high = result.getColumn("score") >= 90.0;
+buffer<bool> active = result.getColumn("active") == True;
+ColumnarResult selected = result.filter(result.combineMasks(high, active, "&&"));
+ColumnarResult missing_scores = result.filter(result.nullMask("score"));
+ColumnarResult first_page = result.slice(offset: 0, count: 1000);
+    @endcode
+
+    The dataframe module can consume these blocks directly and preserve primitive
+    buffer-backed columns for dense access and columnar export:
+    @code{.py}
+DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
+buffer<int64> ids = df.getColumnBuffer("id");
+ColumnarResult again = df.toColumnarResult();
+    @endcode
+
+    C++ modules can use \c QORE_HAVE_ARROW_C_DATA_INTEROP to detect libqore's
+    Arrow C Data Interface bridge for ColumnarResult and
+    \c QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS to detect dense temporal buffer
+    support.  The bridge allows Arrow,
+    Flight, JDBC, and other binary modules to exchange columnar blocks without
+    depending on Arrow C++ in libqore itself.  Fixed-width primitive, boolean,
+    and \c decimal128 top-level columns are wrapped as \c buffer<T> where
+    possible, including sliced record batches with non-zero top-level offsets;
+    microsecond timestamp and duration arrays also map directly to
+    \c buffer<int64> while preserving temporal Arrow schema; strings, binary
+    values, lists, fixed-size lists, structs, maps, and dictionary-encoded
+    Arrow arrays use owned Arrow-compatible buffers or materialized Qore
+    containers so schema and nullability are still preserved.
+    @endparblock
+
+    @par Experimental Plugin-Type ABI
+    @parblock
+    Binary modules can now register experimental plugin-type descriptors with
+    libqore. The v1 ABI covers descriptor validation, all-or-nothing
+    module-init registration, operation metadata, runtime helper dispatch,
+    persisted QORD helper references, verifier diagnostics, trace controls, and
+    reflection through @ref Qore::Reflection::PluginRegistry "PluginRegistry".
+
+    Module authors pass the module-init plugin handle to
+    \c qore_register_plugin_types_v1():
+    @code{.cpp}
+QorePluginRegistrationContextV1 plugin_ctx{
+    .struct_size   = sizeof(plugin_ctx),
+    .flags         = 0,
+    .module_path   = module_ctx.path.c_str(),
+    .module_handle = module_ctx.plugin_module_handle,
+};
+
+if (qore_register_plugin_types_v1(&plugin_ctx, &my_plugin_registration, &xsink)) {
+    return;
+}
+    @endcode
+
+    Qore code can inspect committed registrations:
+    @code{.py}
+%modern
+%requires reflection
+
+PluginRegistry registry = PluginRegistry::getProcessRegistry();
+foreach string module_name in (registry.getProcessModules()) {
+    foreach hash<auto> op in (registry.getOperations(module_name)) {
+        printf("%s::%s -> %s\n",
+            module_name, op.operation_name, op.return_type);
+    }
+}
+    @endcode
+
+    Trace variables such as \c QORE_PLUGIN_REGISTER_TRACE,
+    \c QORE_PLUGIN_DISPATCH_TRACE, \c QORE_PLUGIN_VERIFY_TRACE,
+    \c QORE_PLUGIN_QORD_TRACE, and \c QORE_PLUGIN_CROSS_TYPE_TRACE expose
+    registration, dispatch, verification, QORD, and operation-resolution
+    decisions. \c QORE_PLUGIN_FALLBACK_BUFFER controls the capacity of each
+    Program's rolling fallback-site buffer used by
+    \c PluginRegistry::getRecentFallbackSites(). Dense-buffer helper dispatch
+    now has dedicated IR opcodes that validate \c buffer<T> operands before
+    passing raw frames to module helpers. Plugin value nodes can be wrapped with
+    \c qore_plugin_make_value_v1(), serialized as \c VT_PLUGIN_INSTANCE in QORD,
+    and round-tripped through \c Serializable using the registered plugin
+    serializer callbacks. Modules can opt into inline LLVM lowering with the
+    \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension from
+    \c <qore/QorePluginLLVM.h>; callbacks receive operation metadata plus the
+    gated \c fp_reassociation_enabled decision, incompatible optional LLVM
+    extensions fall back to runtime-helper dispatch, and required mismatches
+    fail registration.
+    Registered operations can also provide \c QorePluginLoweringCallback
+    pattern matchers so IR lowering can emit plugin-dispatch IR before generic
+    \c any fallback; claimed-node \c NotApplicable results fail with
+    \c PLUGIN-LOWERING-CLAIM-VIOLATED.
+    See @ref plugin_types for the complete module-author
+    overview, current limitations, the
+    \c examples/plugins/sample-buffer reference module, and the advisory
+    \c examples/plugins/qore-plugin-lint descriptor linter.
+    @endparblock
+
     @par RFC 7231 / RFC 2822 Date Parsing
     The @ref Qore::date(string) "date(string)" function and @ref Qore::TimeZone::date(string) "TimeZone::date(string)"
     method now support parsing HTTP and email date formats in addition to ISO-8601:
@@ -848,6 +1480,9 @@ cargo install tree-sitter-cli@0.26.5
       - added \c -M / \c --modern and \c -G / \c --enable-debug short command-line options
       - unqualified symbol resolution now prioritizes \c ::Qore entries to prevent user namespace overrides of
         system symbols
+      - fixed runtime assignment and return-value selection for union types whose alternatives share the same
+        complex container base type but have different value types, such as
+        <tt>union&lt;list&lt;string&gt;, list&lt;int&gt;&gt;</tt>
       - fixed non-blocking file and socket poll reads to ensure NUL-terminated strings when converting poll buffers
       - fixed scheduling of closure values created in object scope with the @ref background "background operator" so
         stale captured objects are rejected before thread creation and valid captured objects stay alive until the
@@ -1069,6 +1704,9 @@ cargo install tree-sitter-cli@0.26.5
       - added module-conditional expression registration for YAML, JSON, and XML serialization
         functions (registered when the corresponding modules are available)
       - added \c dp_get_all_expression_info() public function to retrieve all expression metadata
+      - \c QoreFilterRecordsProcessor now accepts direct DPQL string filters through \c dpql_where and string-valued
+        \c where_cond constructor options and shares DataFrame / ColumnarResult expression execution with
+        DataFrame-backed providers
 
     - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
       - added @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database
@@ -1302,19 +1940,71 @@ cargo install tree-sitter-cli@0.26.5
     - @ref dataframeintro "dataframe" module
       - new builtin module providing a columnar DataFrame with typed columns (int64, float64,
         string, bool, date) and null/missing value support
-      - construction from records (\c list<hash>), column hash, CSV files, database queries, Parquet
-        files (optional Apache Arrow dependency), or numeric matrices
-      - SQL-like query operations: select, filter (11 operators), sort, fillna, dropna
+      - construction from records (\c list<hash>), column hash, CSV files, database queries,
+        Parquet files via Apache Arrow, or numeric matrices
+      - SQL-like query operations: select, filter (11 operators), sort, fillna, dropna,
+        valueCounts, and nunique
       - groupBy with 10 aggregation functions (sum, mean, median, std, min, max, count, first,
         last, nunique) and GroupedDataFrame class
       - join operations: inner, left, right, outer, cross with hash join algorithm
-      - reshape: pivot (long to wide), melt (wide to long), withColumn (immutable column add)
+      - reshape: pivot (long to wide), melt (wide to long), withColumn (immutable column add);
+        pivot has optimized typed-key paths for common long-to-wide numeric reshapes
       - window functions: rowNumber, lag, lead, cumSum, rollingMean with partition/order support
+      - native plugin-operator access: \c df["column"] returns a column list, \c df[row]
+        returns a row hash, and \c df[start..stop] returns an inclusive row-range DataFrame
+      - native plugin predicate operators: \c df.column("column") returns a
+        \c ColumnRef, comparisons such as \c df.column("score") >= 90.0 return
+        a \c RowMask, and row masks can filter frames with \c df[mask] or
+        \c df.filter(mask); row masks can be composed with \c &, \c |, \c ^,
+        and \c ~ or with the named \c intersect(), \c unionWith(),
+        \c symmetricDifference(), and \c invert() methods before filtering;
+        the hot column/row/mask subscript, comparison, and mask-composition
+        operators also register direct LLVM helper callbacks for JIT/AOT code
+        while retaining the normal runtime-helper fallback
+      - dense columnar interop: DataFrames can be constructed from \c buffer<T>
+        columns, expose primitive columns with \c getColumnBuffer(), round-trip
+        through \c ColumnarResult with \c toColumnarResult() and
+        \c fromColumnarResult(), and preserve buffer-backed columns under Qore
+        copy-on-write semantics where possible; temporal ColumnarResult columns
+        use \c buffer<int64> microsecond storage with schema metadata and
+        materialize Qore \c date values when read as rows/lists
+      - optimized typed-column construction, dense predicate masks, direct
+        ColumnarResult conversion, and native columnar DBI reads are designed
+        for production ETL and analytics workloads that benefit from keeping
+        data columnar instead of materializing row hashes
+      - \c ColumnarResult::filter(), \c ColumnarResult::slice(),
+        \c ColumnarResult::take(), \c DataFrame::takeRows(),
+        \c ColumnarResult::combineMasks(), \c ColumnarResult::invertMask(),
+        \c ColumnarResult::nullMask(), and \c ColumnarResult::stringPredicateMask()
+        provide dense filtering, contiguous slicing, ordered row gathering,
+        boolean-mask composition, and native string-predicate masks for
+        SQL/DataFrame analytics flows
+      - DataFrame-backed DataProvider searches accept DPQL strings and structured
+        \c hash<DataProviderExpression> filters directly while preserving \c DataFrameBlock shape for bulk reads
+      - \c DataFrame::concat(axis:1) implements horizontal concat with row-count
+        validation, duplicate-column diagnostics, and shared column storage
+        where possible
       - streaming CSV reader with type inference from first 100 rows
-      - Parquet I/O via Apache Arrow (\c #ifdef \c HAVE_ARROW gated, \c MISSING-FEATURE-ERROR fallback)
+      - Parquet I/O via Apache Arrow and Parquet, including top-level column
+        projection, row-group selection, ANDed read filters with safe
+        statistics-based row-group pruning for primitive, decimal128, and
+        logical timestamp/date equality and range predicates plus exact
+        fallback filtering,
+        reader batch/thread controls, and writer options for compression,
+        row-group size, dictionary encoding, statistics, threaded column
+        writes, and Arrow schema metadata storage; fixed-width primitive,
+        decimal128, and microsecond timestamp/duration columns use dense
+        Arrow-compatible buffers without copying value storage when metadata
+        and null bitmaps allow it
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)
       - ML integration: toMatrix, toVector, fromMatrix for zero-overhead ML algorithm feeding
       - describe() for per-column descriptive statistics (mean, std, quartiles, unique count)
+      - DataFrame-returning methods, GroupedDataFrame-returning methods, CSV options, shape()
+        results, and describe() statistics now have explicit API metadata types, including
+        <tt>DataFrame</tt>, <tt>GroupedDataFrame</tt>, <tt>hash&lt;DataFrameShape&gt;</tt>,
+        <tt>list&lt;hash&lt;ColumnStats&gt;&gt;</tt>, <tt>hash&lt;CsvOptions&gt;</tt>,
+        <tt>hash&lt;ParquetReadOptions&gt;</tt>, and
+        <tt>hash&lt;ParquetWriteOptions&gt;</tt>
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
@@ -1330,6 +2020,9 @@ cargo install tree-sitter-cli@0.26.5
         negotiation for HTTP/API workflows
       - explicit-locale number parsing/formatting, currency formatting, date/time style and skeleton formatting,
         collation compare/sort-key APIs, and backend version introspection
+      - locale-sensitive \c string_predicate() and \c string_predicate_mask() APIs for \c contains,
+        \c starts-with, \c ends-with, and \c equals checks with ICU collation strength, normalization, and
+        case-level options; DataProvider string predicates can use the same options for row and columnar filtering
       - thread-local locale controls and explicit locale-context capture/apply helpers using the
         \c LOCALE_CONTROL functional domain; catalog file APIs use \c FILESYSTEM
       - \c qore-i18n tool for AST-based extraction, catalog statistics, pseudolocalization, and simple PO
@@ -1366,8 +2059,53 @@ cargo install tree-sitter-cli@0.26.5
       - Holt-Winters triple exponential smoothing for time series forecasting
       - Seasonal Decomposition for decomposing time series into trend, seasonal, and residual components
       - optional ONNX Runtime support for running pre-trained models (OnnxModel class)
+      - ML::OnnxSessionPool provides bounded immutable ONNX session pools for
+        concurrent service workloads, including max session/concurrency limits,
+        queue depth, acquisition timeout, cancellation checks, pool statistics,
+        Future-returning async inference APIs, cross-caller dynamic batching with
+        dynamic_batch_wait_ms, and ordered batch chunking with dynamic_batch_size
+      - ML::Tensor and OnnxModel::runTensors() provide dense buffer-backed ONNX
+        inference with explicit tensor shape metadata
+      - ML::Tensor::fromBuffer() and the ML::Tensor constructor accept
+        \c zero_copy: True for caller-controlled \c buffer<T> inputs, allowing
+        tokenizer, registry, Arrow-compatible, and DataProvider pipelines to
+        build tensor inputs without copying dense buffers while preserving
+        ordinary buffer copy-on-write behavior for later writes
+      - OnnxModel::runTensors() and reusable I/O binding tensor output mode wrap
+        exact CPU ONNX Runtime \c float32, \c float64, \c int8, \c int16,
+        \c int32, and \c int64 outputs as immutable external \c buffer<T>
+        storage instead of copying value buffers
+      - OnnxModel::run(), OnnxModel::runTensors(), OnnxModel::runBatch(), and
+        synchronous OnnxSessionPool inference methods accept selected ONNX
+        output names so multi-output models can avoid materializing unused
+        labels, scores, logits, or embeddings
+      - ML::Tensor::fromColumns() packs equal-length dense column buffers into
+        row-major tensors for multi-feature model inputs without row hash or
+        nested list materialization
+      - ML::Tensor::reshape(), ML::Tensor::sliceRows(), and
+        ML::Tensor::concatRows() support zero-copy tensor reshaping, row slicing,
+        and native mini-batch assembly for model execution
+      - ML::Tensor::sigmoid(), ML::Tensor::softmax(), ML::Tensor::argmax(),
+        ML::Tensor::topK(), ML::Tensor::poolTokenEmbeddings(), and
+        ML::Tensor::l2NormalizeRows() provide dense ONNX postprocessing for
+        classifier logits, top-k selection, and transformer embedding pooling
+        without nested list materialization
+      - ML::Tensor::toColumnBuffers() splits rank-1 and rank-2 tensor outputs
+        into dense column buffers so DataFrame and DataProviderML column output
+        modes can avoid nested row-list materialization for vector outputs
+      - QoreTokenizerUtils::EmbeddingModel::embedBatchTensor() and
+        DataProviderML \c embed-text \c output_mode = "columns" keep local ONNX
+        embedding output in dense tensor/buffer form for DataFrame and
+        BufferColumns pipelines
+      - ONNX inference supports float, double, int8, int16, int32, int64, and bool
+        tensor input/output conversion
+      - OnnxModel automatic provider selection falls back to CPU when an advertised
+        GPU provider cannot create a session, for example when CUDA libraries are
+        not installed; explicit provider configurations still report provider errors
       - StandardScaler for zero-mean unit-variance feature normalization
       - MinMaxScaler for configurable-range feature scaling
+      - StandardScaler and MinMaxScaler provide dense column-buffer matrix transforms for
+        DataFrame-oriented pipeline output without row-hash materialization
       - Imputer for missing value replacement (mean, median, most_frequent, constant strategies)
       - LogisticRegression for binary and multiclass classification with L2 regularization
       - KNN (k-Nearest Neighbors) for classification and regression by similarity
@@ -1405,10 +2143,16 @@ cargo install tree-sitter-cli@0.26.5
       - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
         regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
         Davies-Bouldin, Calinski-Harabasz), and CrossValidator for k-fold cross-validation
+      - DataFrame and columnar workflows are supported through DataFrame::toMatrix()
+        for direct model APIs and through shape-aware DataProviderML processors for
+        DataProvider pipelines
 
     - @ref mongodbintro "mongodb" module
       - new builtin module providing <a href="https://www.mongodb.com/">MongoDB</a> client connectivity using libmongoc
       - provides MongoClient, MongoDatabase, MongoCollection, MongoCursor, and ObjectId classes
+      - MongoCursor is now generic as <tt>MongoCursor<DocT: hash<auto> = hash<auto>></tt>; MongoCollection::find()
+        and MongoCollection::aggregate() return <tt>MongoCursor<hash<auto>></tt>, and cursor next()/toList() preserve
+        the document type parameter
       - full CRUD operations support (insertOne, insertMany, find, findOne, updateOne, updateMany, deleteOne,
         deleteMany)
       - aggregation pipeline support
@@ -1440,6 +2184,7 @@ cargo install tree-sitter-cli@0.26.5
       - pre-tokenized input (\c encodePreTokenized) for domain-specific tokenization
       - dynamic vocabulary extension (\c addTokens) with \c std::shared_mutex thread safety
       - full Unicode \\p{N} digit support and Unicode punctuation decoder cleanup
+      - \c Replace normalizers support HuggingFace \c {"Regex": "..."} patterns
       - O(n log n) BPE merge algorithm using priority queue + doubly linked list
       - Precompiled normalizer supporting SentencePiece Darts DoubleArray trie format
       - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
@@ -1793,9 +2538,43 @@ cargo install tree-sitter-cli@0.26.5
 
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
-      - wraps DataFrame as a record-oriented DataProvider for Qorus data pipeline integration
+      - wraps DataFrame as a record-oriented DataProvider for data pipeline integration
       - supports searchRecords with hash-based where conditions (equality and comparison operators)
+      - DataProvider pipelines recognize \c ColumnarResult values as
+        \c BufferColumns shape and can convert between BufferColumns,
+        DataFrameBlock, HashOfLists, and RowRecords
+      - QoreFilterRecordsProcessor compiles supported DataProvider/DPQL filters
+        over DataFrameBlock and BufferColumns values to vectorized DataFrame
+        row masks or dense ColumnarResult boolean masks, including computed
+        scalar comparisons, expression-to-expression comparisons, numeric,
+        trim/concat/null-handling, case-folding, date-part, and row-independent
+        date arithmetic expressions, structured strict equality/inequality,
+        truthy field checks, computed \c between
+        and \c in / \c not \c in forms, \c inRange, null checks, temporal date
+        comparisons, selected string predicates including \c containsAny, list
+        membership predicates, list/hash accessors, structured ternary values,
+        and BufferColumns \c like, \c =~, and \c !~ predicates; unsupported expressions fall back to
+        generic row semantics
+      - QoreGroupByProcessor preserves BufferColumns output for ColumnarResult
+        inputs when used through shape-aware pipeline flushing
+      - QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor, and
+        QoreRecordLimitProcessor preserve DataFrameBlock and BufferColumns
+        values for simple top-level field projection/removal and contiguous
+        limiting
+      - QoreSetFieldsProcessor and QoreSearchReplaceProcessor preserve
+        DataFrameBlock and BufferColumns values for top-level constant-field and
+        string-column updates
+      - analytics processors, including QoreCorrelationProcessor and
+        QoreCrossCorrelationProcessor, accept DataFrameBlock and BufferColumns
+        input and preserve shaped rectangular event blocks, including
+        flush-time output from partial windows; this covers the full
+        AbstractAnalyticsProcessor family, and top-level configured fields are
+        read directly from selected columns without full-block hash-of-lists
+        materialization
       - record type reflects DataFrame column schema (int, float, string, bool, date)
+      - record iterator APIs declare
+        <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt>
+        because DataFrame row shape is runtime-schema driven
       - factory registered as "dataframe" in DataProvider FactoryMap
 
     - @ref dataprovidermlintro "DataProviderML" module
@@ -1814,6 +2593,35 @@ cargo install tree-sitter-cli@0.26.5
       - guardrail-transform pipeline processor (DPC_TRANSFORM) for annotating and redacting records
       - ocr pipeline processor for text extraction from images via Tesseract or HTTP
       - vision-extraction pipeline processor for multimodal LLM image analysis
+      - processors accept \c DataFrameBlock, \c BufferColumns, and
+        \c HashOfLists input shapes through the DataProvider pipeline shape API
+      - tokenize, chunk-text, embed-text, rerank-text, semantic-chunk-text, and
+        registry-model processors can load tokenizer, tokenizer_config, and ONNX artifacts directly
+        from QoreModelRegistry packages
+      - onnx-model and registry-model processors use tensor execution for complete
+        shaped ONNX windows and preserve shaped bulk outputs where the result is rectangular
+      - onnx-model and registry-model processors support explicit \c input_map
+        configuration for ONNX models with multiple named input tensors, and compact
+        \c output_mode values for dense column or raw tensor outputs
+      - onnx-model and registry-backed ONNX registry-model processors accept
+        \c output_names to request selected ONNX outputs only, reducing
+        materialization for multi-output models
+      - multi-column dense ONNX input frames use native tensor column packing to
+        avoid row hash and nested list materialization in DataProviderML
+      - shaped ONNX inputs smaller than the configured \c window_size, and final
+        remainder windows, are processed directly as tensor batches instead of
+        falling back through row buffering
+      - text-normalize, tokenize, schema-validation, embed-text, and
+        rerank-text preserve \c DataFrameBlock, \c BufferColumns, and
+        \c HashOfLists inputs by reading top-level columns directly;
+        text-normalize appends a normalized text column, tokenize appends a
+        token-count column, schema-validation appends validation columns or
+        filters invalid rows, embed-text appends an \c embedding column, and
+        rerank-text emits top-k rows with \c reranker_score and
+        \c reranker_rank columns without per-row hash materialization
+      - embed-text and rerank-text accept \c onnx_session_config and inherit
+        QoreModelRegistry package execution config for ONNX Runtime provider,
+        threading, and graph-optimization settings
       - action catalog integration with the "ML Analytics" app
 
     - @ref deeldataproviderintro "DeelDataProvider" module
@@ -2295,6 +3103,9 @@ cargo install tree-sitter-cli@0.26.5
       - aggregation pipeline support via aggregate data provider
       - bulk write operations support via bulk data provider
       - record-based interface for collections with search, create, update, upsert, and delete operations
+      - record iterators and internal cursors use
+        <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt> and
+        <tt>MongoCursor&lt;hash&lt;auto&gt;&gt;</tt>
       - <b>Atlas Vector Search support</b>: new `MongoDbVectorSearchDataProvider` exposes a `vector-search` DPAT_API action that wraps the `$vectorSearch` aggregation stage, plus a `mongo-atlas` vector-store backend registered with @ref qoreragutilsintro "QoreRagUtils" via `MongoAtlasVectorStore`
       - connection support with \c mongodb:// URL scheme
 
@@ -2410,6 +3221,10 @@ cargo install tree-sitter-cli@0.26.5
       - @ref QoreApiMetadata::SymbolMerger "SymbolMerger" for merging all pipelines with priority
       - @ref QoreApiMetadata::QoreApiMetadata "QoreApiMetadata" facade with search, serialization
         (JSON/YAML), and the full merge pipeline
+      - class and hashdecl metadata includes generic type parameters, defaults, bounds, and
+        migrated raw-compatibility flags when available
+      - parameter, member, return, parent-class, and parent-hashdecl metadata includes
+        structured type-use fields and flattened wildcard argument metadata
 
     - @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" module
       - new module providing a provider-neutral async-job polling helper
@@ -2425,6 +3240,8 @@ cargo install tree-sitter-cli@0.26.5
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
       - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)
+      - dot-access and scope completion understand parameterized targets such as
+        <tt>Factory&lt;int&gt;::make</tt>
       - abstract provider interface for pluggable symbol resolution backends
       - %Qore keyword and built-in type completions
 
@@ -2434,6 +3251,8 @@ cargo install tree-sitter-cli@0.26.5
       - line-length-aware wrapping (120 character default) with intelligent binary expression chain and ternary
         operator wrapping
       - preserves comments, parse directives, and string literals
+      - preserves generic class and hashdecl declarations, type defaults and bounds, wildcard
+        annotations, generic call type arguments, and parameterized inheritance
       - idempotent formatting (formatting already-formatted code produces identical output)
 
     - @ref qorecryptointro "QoreCrypto" module
@@ -2495,6 +3314,64 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a filesystem-backed ML model registry for versioning,
         tagging, comparison, and deployment management of trained models
       - multi-tenant support with optional \c tenant_id for tenant-isolated model storage
+      - package-aware registry versions with named artifacts, manifests,
+        tokenizer metadata, execution metadata, and pluggable filesystem/database/REST backends
+      - safe HuggingFace/PyTorch package inspection: JSON and SafeTensors metadata
+        can be parsed, while PyTorch pickle artifacts are recorded but never executed
+      - \c loadExecutable(), \c loadJsonArtifact(), \c loadTokenizerConfig(), and
+        \c loadTokenizerPackageConfig() simplify local ONNX execution and tokenizer reuse
+      - ModelExecutableAdapter provides row-major and tensor ONNX feature-matrix
+        execution, explicit multi-input \c runTensors() calls, and provider
+        diagnostics for registry-backed inference
+      - ONNX session configuration is stored in execution metadata, and packages
+        with adjacent external-data artifacts are materialized automatically for
+        session creation
+      - ONNX optimized and quantized artifacts can be registered as named
+        artifacts with source version/artifact lineage metadata
+      - the \c qore-onnx tool can assemble deterministic ONNX package
+        directories with companion artifact classification and manifest metadata
+      - ONNX Runtime profile JSON can be summarized by operator, provider,
+        node, and session event through QoreOnnxTools and \c qore-onnx profile
+      - DataProviderML ONNX processors expose provider diagnostics, inference
+        counters, and optional profile summaries through \c getDiagnostics()
+      - QoreModelRegistry exposes optimized and quantized ONNX deployment
+        artifact lists and can load named optimized/quantized ONNX artifacts
+        with provider compatibility checks
+      - QoreModelRegistry ONNX package manifests now expose task-aware
+        execution-plan metadata through \c task, \c execution.task, and
+        \c execution.plan; DataProviderML \c embed-text and \c rerank-text can
+        infer registry-backed ONNX mode from \c embedding and \c reranker plans
+      - QoreOnnxTools static quantization plans record SHA-256 calibration data
+        fingerprints, and QoreModelRegistry stores those fingerprints in
+        quantized artifact lineage metadata
+      - QoreModelRegistry ModelExecutableAdapter ONNX execution methods accept
+        selected output names for registry-backed multi-output ONNX packages
+      - DataProviderML ONNX processors and QoreModelRegistry ModelExecutableAdapter
+        tensor execution paths reuse \c ML::OnnxIoBinding for stable input/output
+        signatures and expose binding diagnostics for optimized registry-backed
+        inference
+      - ONNX package manifests now expose a complete deployment contract for
+        model registry users: \c opset, producer metadata,
+        \c minimum_onnxruntime_version, tensor input/output contracts,
+        dynamic axes, external-data files, preprocessing/postprocessing
+        metadata, provider diagnostics, validation diagnostics, benchmark
+        metadata, and golden vectors
+      - QoreModelRegistry adds packaged ONNX action methods to inspect,
+        validate, benchmark, and compare registered ONNX model versions while
+        automatically materializing external-data companion artifacts
+      - DataProviderML \c registry-model event output applies \c regression,
+        \c classification, and \c sequence-classification execution plans to
+        produce stable task fields while preserving raw ONNX outputs
+      - DataProviderML \c registry-model supports initial \c causal-lm ONNX
+        execution plans with registry tokenizer loading, \c input_ids and
+        \c attention_mask tensor construction, greedy decoding, stop-token
+        handling, generated token metadata, and KV-cache reuse for matching
+        ONNX \c past* input and \c present* output tensor pairs; compact
+        \c columns and \c dataframe output modes return
+        prompt-aligned generated text and token metadata without per-row event
+        hash materialization
+      - QoreOnnxTools and \c qore-onnx compare can compare two ONNX/ORT
+        artifacts for output compatibility and optional latency differences
 
     - @ref qoreocrutilsintro "QoreOcrUtils" module
       - new module providing an OCR abstraction layer with native and HTTP backends
@@ -2506,6 +3383,14 @@ cargo install tree-sitter-cli@0.26.5
       - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+
+    - @ref qoreonnxtoolsintro "QoreOnnxTools" module
+      - new module providing ONNX deployment tooling helpers for quantization workflows
+      - OnnxQuantizer checks Python ONNX Runtime quantization dependencies and reports actionable installation guidance
+      - supports dynamic quantization and static quantization orchestration with JSON calibration records
+      - dry-run planning records the command, source model metadata, and selected options without invoking external tooling
+      - OnnxModelTools adds ONNX model inspection, validation, optimized artifact creation, and generated-input benchmarking
+      - the new \c qore-onnx command exposes dependency checks, inspection, validation, benchmarking, optimization, and quantization from the shell
 
     - @ref qoreragtypesintro "QoreRagTypes" module
       - new module providing the provider-neutral hashdecls and abstract embedder /
@@ -2557,6 +3442,15 @@ cargo install tree-sitter-cli@0.26.5
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
       - ONNX backend implemented for EmbeddingModel: batch tokenize, mean-pool, L2-normalize
       - ONNX backend implemented for CrossEncoderReranker: sentence-pair tokenization, sigmoid scoring
+      - EmbeddingModel and CrossEncoderReranker accept in-memory ONNX model artifacts
+        from registries in addition to filesystem paths
+      - EmbeddingModel and CrossEncoderReranker now feed local ONNX models with
+        dense \c ML::Tensor token inputs and skip optional tokenizer tensors that
+        are not declared by the model
+      - EmbeddingModel and CrossEncoderReranker accept \c session_config for
+        ONNX Runtime provider, threading, and graph-optimization settings
+      - TokenCounter, DocumentChunker, EmbeddingModel, and CrossEncoderReranker can
+        apply tokenizer_config.json companion settings from registry model packages
       - new module providing document chunking and token counting for RAG pipelines
       - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
       - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries

@@ -226,26 +226,21 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
 
     if (options) {
         QoreValue v = options->getKeyValue("separator");
-        if (v.getType() == NT_STRING) {
-            const char* s = v.get<const QoreStringNode>()->c_str();
-            if (s[0]) {
-                sep = s[0];
-            }
+        std::string s;
+        if (getDataFrameString(v, s) && !s.empty()) {
+            sep = s[0];
         }
         v = options->getKeyValue("quote_char");
-        if (v.getType() == NT_STRING) {
-            const char* s = v.get<const QoreStringNode>()->c_str();
-            if (s[0]) {
-                quote_char = s[0];
-            }
+        if (getDataFrameString(v, s) && !s.empty()) {
+            quote_char = s[0];
         }
         v = options->getKeyValue("header");
         if (!v.isNullOrNothing()) {
             has_header = v.getAsBool();
         }
         v = options->getKeyValue("null_string");
-        if (v.getType() == NT_STRING) {
-            null_string = v.get<const QoreStringNode>()->c_str();
+        if (getDataFrameString(v, s)) {
+            null_string = s;
         }
         v = options->getKeyValue("skip_rows");
         if (!v.isNullOrNothing()) {
@@ -421,11 +416,9 @@ void QoreDataFrame::writeCSV(const std::string& path,
     char sep = ',';
     if (options) {
         QoreValue v = options->getKeyValue("separator");
-        if (v.getType() == NT_STRING) {
-            const char* s = v.get<const QoreStringNode>()->c_str();
-            if (s[0]) {
-                sep = s[0];
-            }
+        std::string s;
+        if (getDataFrameString(v, s) && !s.empty()) {
+            sep = s[0];
         }
     }
 

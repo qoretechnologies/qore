@@ -106,13 +106,18 @@ static QoreValue check_background_closure_capture(QoreValue v, ExceptionSink* xs
     return v;
 }
 
-AbstractQoreNode::AbstractQoreNode(qore_type_t t, bool n_value, bool n_needs_eval, bool n_there_can_be_only_one, bool n_custom_reference_handlers) : type(t), value(n_value), needs_eval_flag(n_needs_eval), there_can_be_only_one(n_there_can_be_only_one), custom_reference_handlers(n_custom_reference_handlers) {
+AbstractQoreNode::AbstractQoreNode(qore_type_t t, bool n_value, bool n_needs_eval, bool n_there_can_be_only_one,
+        bool n_custom_reference_handlers) : type(t), value(n_value), needs_eval_flag(n_needs_eval),
+        there_can_be_only_one(n_there_can_be_only_one), custom_reference_handlers(n_custom_reference_handlers),
+        spare_flag(false) {
 #if TRACK_REFS
    printd(REF_LVL, "AbstractQoreNode::ref() %p type: %d (0->1)\n", this, type);
 #endif
 }
 
-AbstractQoreNode::AbstractQoreNode(const AbstractQoreNode& v) : type(v.type), value(v.value), needs_eval_flag(v.needs_eval_flag), there_can_be_only_one(v.there_can_be_only_one), custom_reference_handlers(v.custom_reference_handlers) {
+AbstractQoreNode::AbstractQoreNode(const AbstractQoreNode& v) : type(v.type), value(v.value),
+        needs_eval_flag(v.needs_eval_flag), there_can_be_only_one(v.there_can_be_only_one),
+        custom_reference_handlers(v.custom_reference_handlers), spare_flag(false) {
 #if TRACK_REFS
    printd(REF_LVL, "AbstractQoreNode::ref() %p type: %d (0->1)\n", this, type);
 #endif

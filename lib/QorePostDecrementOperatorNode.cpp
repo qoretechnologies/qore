@@ -38,6 +38,12 @@ int QorePostDecrementOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
     // version for local var
     if ((parse_context.typeInfo == bigIntTypeInfo || parse_context.typeInfo == softBigIntTypeInfo)) {
         val = makeSpecialization<QoreIntPostDecrementOperatorNode>();
+        if (val.hasNode()) {
+            auto* parse_node = dynamic_cast<ParseNode*>(val.getInternalNode());
+            if (parse_node) {
+                parse_node->setParseAnalysis(parse_context.analysis);
+            }
+        }
     }
 
     return err;

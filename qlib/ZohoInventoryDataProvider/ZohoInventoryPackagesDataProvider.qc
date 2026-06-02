@@ -79,7 +79,7 @@ public class ZohoInventoryPackagesDataProvider inherits ZohoInventoryDataProvide
     }
 
     #! Searches for packages
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
             params.organization_id = search_options.organization_id;
@@ -91,7 +91,7 @@ public class ZohoInventoryPackagesDataProvider inherits ZohoInventoryDataProvide
             params.package_number = search_options.package_number;
         }
         hash<auto> response = doGet("/packages", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.packages ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.packages ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

@@ -149,12 +149,12 @@ public class UnbouncePagesDataProvider inherits UnbounceDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If page_id provided, get single record
         if (search_options.page_id) {
             hash<auto> result = doGet("pages/" + search_options.page_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
@@ -178,7 +178,7 @@ public class UnbouncePagesDataProvider inherits UnbounceDataProviderBase {
 
         list<hash<auto>> all_records = fetchAllPages("pages", "pages", params,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

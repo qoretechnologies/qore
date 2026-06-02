@@ -42,7 +42,7 @@ QoreGuardrailTransformProcessor proc({
     @endcode
 
 */
-public class QoreGuardrailTransformProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreGuardrailTransformProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -162,9 +162,9 @@ public class QoreGuardrailTransformProcessor inherits DataProvider::AbstractData
         return result;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

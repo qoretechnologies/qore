@@ -32,6 +32,22 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QoreQueueIntern.h"
+#include "qore/intern/QoreTypeInfo.h"
+
+static const QoreTypeInfo* get_queue_value_type(const QoreTypeInfo* queue_type_info) {
+    const QoreParameterizedClassTypeInfo* queue_type = QoreTypeInfo::getParameterizedClassType(queue_type_info);
+    return queue_type && queue_type->getArgCount() ? queue_type->getTypeArgs()[0] : autoTypeInfo;
+}
+
+static const TypedHashDecl* get_queue_try_result_hashdecl(const QoreTypeInfo* queue_type_info) {
+    const QoreTypeInfo* value_type = get_queue_value_type(queue_type_info);
+    if (!QoreTypeInfo::hasType(value_type)) {
+        value_type = autoTypeInfo;
+    }
+    type_vec_t type_args;
+    type_args.push_back(value_type);
+    return hashdeclQueueTryResult->getParameterizedHashDecl(type_args);
+}
 
 static int pre_check_timeout(int64 timeout_ms, ExceptionSink* xsink) {
     if (timeout_ms < INT_MIN) {
@@ -59,6 +75,19 @@ static int queue_check_timeout(bool to, int timeout_ms, ExceptionSink* xsink) {
     return 0;
 }
 
+//! Nonblocking Queue receive result
+/** @par Example:
+    @code{.py}
+*hash<QueueTryResult<int>> result = queue.tryGet();
+    @endcode
+
+    @since %Qore 2.3
+ */
+hashdecl Qore::Thread::QueueTryResult<T> {
+    //! The value received from the Queue
+    T value;
+}
+
 //! %Queue objects provide a blocking, thread-safe message-passing object to %Qore programs
 /** %Queue objects can also be used as a stack or as a blocking message channel, if a maximum size is given to
     Queue::constructor() when the object is created.\n
@@ -73,13 +102,13 @@ static int queue_check_timeout(bool to, int timeout_ms, ExceptionSink* xsink) {
 
     @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option
  */
-qclass Queue [dom=THREAD_CLASS; arg=Queue *q; ns=Qore::Thread];
+qclass Queue<T> [dom=THREAD_CLASS; arg=Queue *q; ns=Qore::Thread; legacy_raw];
 
 //! Creates the Queue object
 /** @par Example:
-    @code{.py} Queue queue(); @endcode
+    @code{.py} Queue<int> queue(); @endcode
 
-    @param max the maximum size of the Queue; -1 means no limit; if 0 or a negative number other than -1 is passed
+    @param max_size the maximum size of the Queue; -1 means no limit; if 0 or a negative number other than -1 is passed
     then a \c QUEUE-SIZE-ERROR exception will be thrown
 
     @throw QUEUE-SIZE-ERROR the size cannot be zero or any negative number except for -1 or a number that cannot fit
@@ -89,11 +118,11 @@ qclass Queue [dom=THREAD_CLASS; arg=Queue *q; ns=Qore::Thread];
 
     @since %Qore 0.8.4 this method takes a maximum size parameter and can throw exceptions if the parameter is invalid
  */
-Queue::constructor(int max = -1) {
-    if (!max || (max < 0 && max != -1) || max > 0x7fffffff)
-        xsink->raiseException("QUEUE-SIZE-ERROR", QLLD" is an invalid size for a Queue", max);
+Queue::constructor(int max_size = -1) [flags=NAMED_ARGS] {
+    if (!max_size || (max_size < 0 && max_size != -1) || max_size > 0x7fffffff)
+        xsink->raiseException("QUEUE-SIZE-ERROR", QLLD" is an invalid size for a Queue", max_size);
     else
-        self->setPrivate(CID_QUEUE, new Queue(max));
+        self->setPrivate(CID_QUEUE, new Queue(max_size));
 }
 
 //! Destroys the Queue object
@@ -116,9 +145,9 @@ Queue::copy() {
 
 //! Pushes a value on the end of the queue
 /** @par Example:
-    @code{.py} queue.push(value); @endcode
+    @code{.py} queue.push(value: 42); @endcode
 
-    @param arg value to be put on the queue
+    @param value value to be put on the queue
     @param timeout_ms a timeout value to wait for a free entry to become available on the queue; integers are
     interpreted as milliseconds; relative date/time values are interpreted literally with a maximum resolution of
     milliseconds.  A negative timeout value causes the call to time out immediately with a \c QUEUE-TIMEOUT exception
@@ -134,20 +163,20 @@ Queue::copy() {
 
     @since %Qore 0.8.4 this method takes a timeout parameter
  */
-nothing Queue::push(auto arg, timeout timeout_ms = 0) {
+nothing Queue::push(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
         return QoreValue();
     }
     bool to;
-    q->push(xsink, self, arg.refSelf(), timeout_ms, &to);
+    q->push(xsink, self, value.refSelf(), timeout_ms, &to);
     queue_check_timeout(to, timeout_ms, xsink);
 }
 
 //! Inserts a value at the beginning of the queue
 /** @par Example:
-    @code{.py} queue.insert(value); @endcode
+    @code{.py} queue.insert(value: 42); @endcode
 
-    @param arg value to be put on the queue
+    @param value value to be put on the queue
     @param timeout_ms a timeout value to wait for a free entry to become available on the queue; integers are interpreted as milliseconds; relative date/time values are interpreted literally with a maximum resolution of milliseconds.  A negative timeout value causes the call to time out immediately with a \c QUEUE-TIMEOUT exception if the call would otherwise block.  If a positive timeout argument is passed, and the queue has already reached its maximum size and does not go below the maximum size within the timeout period, a \c "QUEUE-TIMEOUT" exception is thrown.  If no value or a value that converts to integer 0 is passed as the argument, then the call does not timeout until a slot becomes available on the queue.  Queue slots are only limited if a maximum size is passed to Queue::constructor().
 
     @throw QUEUE-TIMEOUT The timeout value was exceeded
@@ -156,18 +185,18 @@ nothing Queue::push(auto arg, timeout timeout_ms = 0) {
 
     @since %Qore 0.8.4 this method takes a timeout parameter
  */
-nothing Queue::insert(auto arg, timeout timeout_ms = 0) {
+nothing Queue::insert(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
         return QoreValue();
     }
     bool to;
-    q->insert(xsink, self, arg.refSelf(), timeout_ms, &to);
+    q->insert(xsink, self, value.refSelf(), timeout_ms, &to);
     queue_check_timeout(to, timeout_ms, xsink);
 }
 
 //! Blocks until at least one entry is available on the queue, then returns the first entry in the queue. If a timeout occurs, an exception is thrown. If the timeout value equal to zero, then the call does not timeout until data is available, while negative timeout values cause the call to timeout immediately if the call would otherwise block
 /** @par Example:
-    @code{.py} auto data = queue.get();@endcode
+    @code{.py} int data = queue.get();@endcode
 
     @param timeout_ms a timeout value to wait for data to become available on the queue; integers are interpreted as
     milliseconds; relative date/time values are interpreted literally with a maximum resolution of milliseconds.  A
@@ -187,7 +216,7 @@ nothing Queue::insert(auto arg, timeout timeout_ms = 0) {
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-auto Queue::get(timeout timeout_ms = 0) {
+T Queue::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
         return QoreValue();
     }
@@ -246,7 +275,7 @@ auto Queue::get(timeout timeout_ms = 0) {
 
 //! Blocks until at least one entry is available on the queue, then returns the last entry in the queue. If a timeout occurs, an exception is thrown. If the timeout is less than or equal to zero, then the call does not timeout until data is available
 /** @par Example:
-    @code{.py} auto data = queue.pop(); @endcode
+    @code{.py} int data = queue.pop(); @endcode
 
     @param timeout_ms a timeout value to wait for data to become available on the queue; integers are interpreted as
     milliseconds; relative date/time values are interpreted literally with a maximum resolution of milliseconds.  A
@@ -266,7 +295,7 @@ auto Queue::get(timeout timeout_ms = 0) {
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-auto Queue::pop(timeout timeout_ms = 0) {
+T Queue::pop(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
         return QoreValue();
     }
@@ -349,7 +378,7 @@ if (exists result) {
 
     @since %Qore 2.3
  */
-auto Queue::tryGet() {
+*hash<QueueTryResult<T>> Queue::tryGet() {
     bool to;
     QoreValue rv = q->shift(xsink, self, -1, &to);
     if (*xsink) {
@@ -359,9 +388,16 @@ auto Queue::tryGet() {
         // Queue is empty
         return QoreValue();
     }
-    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(get_queue_try_result_hashdecl(self->getInstantiatedTypeInfo()),
+        xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     h->setKeyValue("value", rv, xsink);
-    return h;
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
 }
 
 //! Non-blocking pop: returns the last entry in the queue if available, or @ref nothing if the queue is empty
@@ -390,7 +426,7 @@ if (exists result) {
 
     @since %Qore 2.3
  */
-auto Queue::tryPop() {
+*hash<QueueTryResult<T>> Queue::tryPop() {
     bool to;
     QoreValue rv = q->pop(xsink, self, -1, &to);
     if (*xsink) {
@@ -400,9 +436,16 @@ auto Queue::tryPop() {
         // Queue is empty
         return QoreValue();
     }
-    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(get_queue_try_result_hashdecl(self->getInstantiatedTypeInfo()),
+        xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     h->setKeyValue("value", rv, xsink);
-    return h;
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
 }
 
 //! Clears the Queue of all data
@@ -502,8 +545,8 @@ int Queue::getWriteWaiting() [flags=CONSTANT] {
     @code{.py} queue.setError("INVALID-OPERATION", "the data queue has been closed");
     @endcode
 
-    @param err the exception error code string
-    @param desc the exception description string
+    @param error the exception error code string
+    @param description the exception description string
 
     Any threads blocked on this Queue will be woken up immediately and have the given exception thrown
 
@@ -513,8 +556,8 @@ int Queue::getWriteWaiting() [flags=CONSTANT] {
 
     @since %Qore 0.8.12
 */
-Queue::setError(string err, string desc) {
-    q->setError(err->c_str(), desc, self, xsink);
+Queue::setError(string error, string description) [flags=NAMED_ARGS] {
+    q->setError(error->c_str(), description, self, xsink);
 }
 
 //! clears the error setting from the Queue; if error information is set, then after this call, the Queue is usable again

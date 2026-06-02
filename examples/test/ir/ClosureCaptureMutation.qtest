@@ -1,0 +1,261 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Regression tests for IR-mode closure-captured variable mutation via the
+# HashKeyStore / HashKeyStoreDynamic / ListIndexStore fast paths.
+#
+# Bug: the IR interpreter's `closures` cache for LoadClosure was not
+# invalidated when these fast-path opcodes mutated the underlying CVV
+# via assign*Transfer.  Subsequent LoadClosure reads returned the
+# stale pre-mutation value (often NOTHING from auto-vivify), causing
+# `ref = captured_hash` assignments to see NOTHING and raise
+# `<lvalue path assign>` RUNTIME-TYPE-ERRORs.
+#
+# Originally surfaced in Qorus `TypeScriptActionInterface::sortOptions`
+# where a typed-hash local was captured by a validator closure and
+# mutated key-by-key in the outer foreach.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class ClosureCaptureMutationTest
+
+class ClosureCaptureMutationTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ClosureCaptureMutationTest", "1.0", \ARGV) {
+        addTestCase("hash key write to captured local", \testHashKeyWriteCaptured());
+        addTestCase("hash dynamic key write to captured local", \testHashKeyDynamicWriteCaptured());
+        addTestCase("list index write to captured local", \testListIndexWriteCaptured());
+        addTestCase("auto-vivify captured hash local via foreach", \testAutoVivifyForeach());
+        addTestCase("TSAI sortOptions pattern", \testSortOptionsPattern());
+        addTestCase("COW write to captured hash", \testCowWriteCaptured());
+        addTestCase("path assign on captured nested hash", \testPathAssignCaptured());
+        addTestCase("compound op on captured hash key", \testCompoundHashKeyCaptured());
+        addTestCase("compound op on captured list index", \testCompoundListIndexCaptured());
+        addTestCase("unary op on captured hash key", \testUnaryHashKeyCaptured());
+        addTestCase("binary mutation on captured nested list", \testBinaryMutationCaptured());
+        addTestCase("extract on captured nested list", \testExtractCaptured());
+        set_return_value(main());
+    }
+
+    private string runInMode(string code, string mode) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return "";
+        }
+        TmpFile script();
+        script.file.write("%modern\n" + code);
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+        string cmd = sprintf("%s --exec-mode=%s %s > %s 2> %s",
+            qore_bin, mode, script.path, out.path, err.path);
+        int rc = system(cmd);
+        if (rc != 0) {
+            string err_output = ReadOnlyFile::readTextFile(err.path) ?? "";
+            if (err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+                testSkip("exec-mode option not supported");
+                return "";
+            }
+        }
+        return ReadOnlyFile::readTextFile(out.path) ?? "";
+    }
+
+    private assertSameInAllModes(string code, string expected, string desc) {
+        foreach string mode in ("ast", "ir") {
+            string result = runInMode(code, mode);
+            assertEq(expected, result, sprintf("%s (%s)", desc, mode));
+        }
+    }
+
+    testHashKeyWriteCaptured() {
+        # Outer scope writes a const-key hash entry on a closure-captured local.
+        # Before fix: IR mode read NOTHING because LoadClosure cache was stale.
+        string code = "
+hash<auto> new_opts;
+code cap = sub () {
+    any _dummy = new_opts;
+};
+new_opts{\"a\"} = 1;
+printf(\"%y\\n\", new_opts);
+";
+        assertSameInAllModes(code, "{a: 1}\n", "hash{const} write to captured");
+    }
+
+    testHashKeyDynamicWriteCaptured() {
+        # Same pattern but with a dynamic key (exercises HashKeyStoreDynamic).
+        string code = "
+hash<auto> cap_hash;
+code cap = sub () {
+    any _dummy = cap_hash;
+};
+string k = \"dyn\";
+cap_hash{k} = 42;
+printf(\"%y\\n\", cap_hash);
+";
+        assertSameInAllModes(code, "{dyn: 42}\n", "hash{dyn} write to captured");
+    }
+
+    testListIndexWriteCaptured() {
+        # Same pattern, ListIndexStore fast path.
+        string code = "
+list<auto> cap_list = (0, 0, 0);
+code cap = sub () {
+    any _dummy = cap_list;
+};
+cap_list[1] = 99;
+printf(\"%y\\n\", cap_list);
+";
+        assertSameInAllModes(code, "[0, 99, 0]\n", "list[const] write to captured");
+    }
+
+    testAutoVivifyForeach() {
+        # Outer foreach populates a captured hash key-by-key — the original TSAI pattern.
+        string code = "
+hash<auto> src = {\"a\": 1, \"b\": 2};
+hash<auto> new_opts;
+code cap = sub () {
+    any _dummy = new_opts;
+};
+foreach hash<auto> i in (src.pairIterator()) {
+    new_opts{i.key} = i.value;
+}
+printf(\"size=%d a=%y b=%y\\n\", new_opts.size(), new_opts.a, new_opts.b);
+";
+        assertSameInAllModes(code, "size=2 a=1 b=2\n", "auto-vivify captured hash in foreach");
+    }
+
+    testSortOptionsPattern() {
+        # Faithful shape of TypeScriptActionInterface::sortOptions — reference<hash>
+        # parameter, closure-captured typed hash local, outer foreach populates it,
+        # reference assign at the end reads it.
+        string code = "
+sub work(reference<hash<auto>> opts) {
+    hash<auto> new_opts;
+    code check_dep = sub (string opt, string dep) {
+        if (new_opts{dep}) { return; }
+        *hash<auto> depval = opts{dep};
+        if (!exists depval) { throw \"ERR\", sprintf(\"missing %y\", dep); }
+        map check_dep(dep, \$1), depval.depends_on;
+        new_opts{dep} = depval;
+    };
+    foreach hash<auto> i in (opts.pairIterator()) {
+        if (new_opts{i.key}) { continue; }
+        map check_dep(i.key, \$1), i.value.depends_on;
+        new_opts{i.key} = i.value;
+    }
+    opts = new_opts;
+}
+hash<auto> h = {
+    \"a\": {\"name\": \"a\"},
+    \"b\": {\"name\": \"b\", \"depends_on\": (\"a\",)},
+    \"c\": {\"name\": \"c\", \"depends_on\": (\"a\", \"b\")},
+};
+work(\\h);
+printf(\"%d %s %s %s\\n\", h.size(), h.a.name, h.b.name, h.c.name);
+";
+        assertSameInAllModes(code, "3 a b c\n", "sortOptions pattern");
+    }
+
+    testCowWriteCaptured() {
+        # COW path: an external reference keeps the hash's refcount > 1, so
+        # HashKeyStore takes the COW branch, copies, and assigns via *Transfer.
+        # Exercises COW-branch closures-cache invalidation.
+        string code = "
+hash<auto> cap_hash = {\"pre\": 1};
+code cap = sub () {
+    any _dummy = cap_hash;
+};
+hash<auto> alias = cap_hash;  # bumps refcount
+cap_hash{\"post\"} = 2;
+printf(\"alias=%y captured=%y\\n\", alias, cap_hash);
+";
+        assertSameInAllModes(code,
+            "alias={pre: 1} captured={pre: 1, post: 2}\n",
+            "COW write to captured");
+    }
+
+    testCompoundHashKeyCaptured() {
+        # LValuePathCompound mutates the captured hash through the CVV stack;
+        # the interpreter's LoadClosure cache must be invalidated as well.
+        string code = "
+hash<auto> h = {\"n\": 10};
+code cap = sub () {
+    any _dummy = h;
+};
+h{\"n\"} += 5;
+h{\"n\"} *= 2;
+printf(\"%y\\n\", h);
+";
+        assertSameInAllModes(code, "{n: 30}\n", "compound op on captured hash key");
+    }
+
+    testCompoundListIndexCaptured() {
+        # Same LValuePathCompound cache-coherency check for list indices.
+        string code = "
+list<auto> l = (10, 20, 30);
+code cap = sub () {
+    any _dummy = l;
+};
+l[1] += 5;
+l[0] *= 3;
+printf(\"%y\\n\", l);
+";
+        assertSameInAllModes(code, "[30, 25, 30]\n", "compound op on captured list index");
+    }
+
+    testPathAssignCaptured() {
+        string code = "
+hash<auto> h = {\"outer\": {}};
+code<nothing()> cap = sub () {
+    any _dummy = h;
+};
+h{\"outer\"}{\"n\"} = 7;
+printf(\"%y\\n\", h);
+";
+        assertSameInAllModes(code, "{outer: {n: 7}}\n", "path assign on captured nested hash");
+    }
+
+    testUnaryHashKeyCaptured() {
+        string code = "
+hash<auto> h = {\"n\": 10};
+code<nothing()> cap = sub () {
+    any _dummy = h;
+};
+++h{\"n\"};
+h{\"n\"}++;
+printf(\"%y\\n\", h);
+";
+        assertSameInAllModes(code, "{n: 12}\n", "unary op on captured hash key");
+    }
+
+    testBinaryMutationCaptured() {
+        string code = "
+hash<auto> h = {\"items\": (1, 2)};
+code<nothing()> cap = sub () {
+    any _dummy = h;
+};
+push h.items, 3;
+printf(\"%y\\n\", h.items);
+";
+        assertSameInAllModes(code, "[1, 2, 3]\n", "binary mutation on captured nested list");
+    }
+
+    testExtractCaptured() {
+        string code = "
+hash<auto> h = {\"items\": (1, 2, 3, 4)};
+code<nothing()> cap = sub () {
+    any _dummy = h;
+};
+list<auto> r = extract h.items, 1, 2;
+printf(\"r=%y h=%y\\n\", r, h.items);
+";
+        assertSameInAllModes(code, "r=[2, 3] h=[1, 4]\n", "extract on captured nested list");
+    }
+}

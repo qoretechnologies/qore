@@ -87,7 +87,7 @@ QoreObject* get_type_object(const QoreTypeInfo* t, QoreProgram* source_pgm) {
 static QoreHashNode* Type_serializer(const QoreObject& self, const QoreType& t, QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
     (void)rc;
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-    rv->setKeyValue("type", new QoreStringNode(qore_type_get_name(t.typeInfo)), xsink);
+    rv->setKeyValue("type", new QoreStringNode(qore_type_get_path(t.typeInfo)), xsink);
     return rv.release();
 }
 
@@ -100,7 +100,8 @@ static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreD
             xsink->raiseException("DESERIALIZATION-ERROR", "Type serialization key 'type' has type '%s'; expecting 'string'", val.getTypeName());
             return;
         }
-        const QoreTypeInfo* type = qore_get_type_from_string(val.get<const QoreStringNode>()->c_str(), *xsink);
+        QoreStringValueHelper type_name(val);
+        const QoreTypeInfo* type = qore_get_type_from_string(type_name->c_str(), *xsink);
         if (*xsink) {
             return;
         }
@@ -490,6 +491,23 @@ string Type::getName() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(qore_type_get_name(t->typeInfo));
 }
 
+//! returns the type's full namespace path name
+/** @par Example:
+    @code{.py}
+string path = t.getPathName();
+    @endcode
+
+    @return the type's full namespace path name; for complex types, nested class, hashdecl, enum, and parameterized
+    class types use their canonical namespace-qualified paths
+
+    @see getName()
+
+    @since %Qore 2.4
+ */
+string Type::getPathName() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(qore_type_get_path(t->typeInfo));
+}
+
 //! Returns @ref True if the Type object passed as an argument is equal to the current object; @ref False if not
 /** @par Example:
     @code{.py}
@@ -792,6 +810,44 @@ Type Type::getMandatoryType() [flags=CONSTANT] {
     }
     // preserve the source program to keep it alive while the Type object exists (issue #4816)
     return get_type_object(element_type, t->source_pgm);
+}
+
+//! Returns @ref Qore::True "True" if this type is a parameterized class type
+/** @par Example:
+    @code{.py}
+bool b = new Type("Queue<int>").isParameterized();
+    @endcode
+
+    @return @ref Qore::True "True" if this type is a parameterized class type, @ref Qore::False "False" if not
+
+    @since %Qore 2.4
+*/
+bool Type::isParameterized() [flags=CONSTANT] {
+    return qore_type_is_parameterized(t->typeInfo);
+}
+
+//! Returns the type arguments for a parameterized class type, if any, otherwise returns @ref nothing
+/** @par Example:
+    @code{.py}
+list<Type> args = new Type("Queue<int>").getTypeArguments();
+# args[0].getName() == "int"
+    @endcode
+
+    @return the type arguments for a parameterized class type, if any, otherwise returns @ref nothing
+
+    @since %Qore 2.4
+*/
+*list<Type> Type::getTypeArguments() [flags=CONSTANT] {
+    const type_vec_t* type_args = qore_type_get_type_arguments(t->typeInfo);
+    if (!type_args) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_TYPE->getTypeInfo()), xsink);
+    // preserve the source program to keep it alive while the Type object exists (issue #4816)
+    for (const QoreTypeInfo* ti : *type_args) {
+        rv->push(get_type_object(ti, t->source_pgm), xsink);
+    }
+    return rv.release();
 }
 
 //! Returns the TypedHash for the type, if the type specifies a typed hash

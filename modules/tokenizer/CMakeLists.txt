@@ -37,8 +37,10 @@ if (NOT UTF8PROC_FOUND)
 endif()
 
 if (NOT UTF8PROC_FOUND)
-    message(STATUS "utf8proc not found - tokenizer module will NOT be built")
-    return()
+    message(FATAL_ERROR
+        "utf8proc development files are required to build the tokenizer module. "
+        "Install libutf8proc-dev (Debian/Ubuntu), utf8proc-dev (Alpine), or "
+        "utf8proc-devel (RHEL/Fedora).")
 endif()
 
 message(STATUS "utf8proc found - building tokenizer module")

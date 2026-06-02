@@ -32,6 +32,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QorePluginRegistry.h"
 
 QoreString QoreSquareBracketsOperatorNode::op_str("[] operator expression");
 
@@ -43,18 +44,53 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
 
     assert(!typeInfo);
 
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* lti = parse_context.typeInfo;
     {
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.unsetFlags(PF_FOR_ASSIGNMENT);
 
         parse_context.typeInfo = nullptr;
+        QoreParseContextAnalysisHelper ah(parse_context);
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
+
+    if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
+        QorePluginResolvedOperationInfo plugin_op;
+        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, rti, "subscript",
+            QorePluginHelperAbi::SubscriptValue, plugin_op, parse_xsink);
+        if (plugin_rc < 0 && !err) {
+            err = -1;
+        } else if (!plugin_rc) {
+            typeInfo = plugin_op.signature.return_type;
+            parse_context.typeInfo = typeInfo;
+            parse_context.analysis.clear();
+            if (parse_context.typeInfo) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+                parse_context.analysis.known_type = parse_context.typeInfo;
+                if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+                    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+                }
+            }
+            if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            }
+            return err;
+        }
+    }
 
     bool rti_is_list = QoreTypeInfo::isType(rti, NT_LIST);
     bool rti_can_be_list = rti_is_list ? true : QoreTypeInfo::parseReturns(rti, NT_LIST);
@@ -63,15 +99,24 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         // if we are trying to convert to a list
         if (parse_context.pflag & PF_FOR_ASSIGNMENT) {
             // only throw a parse exception if parse exceptions are enabled
-            if (!QoreTypeInfo::parseAcceptsReturns(lti, NT_LIST)) {
+            bool accepts_list = QoreTypeInfo::parseAcceptsReturns(lti, NT_LIST);
+            bool accepts_buffer = QoreTypeInfo::parseAcceptsReturns(lti, NT_BUFFER);
+            if (!accepts_list && !accepts_buffer) {
                 if (getProgram()->getParseExceptionSink()) {
                     QoreStringNode* edesc = new QoreStringNode("cannot convert lvalue defined as ");
                     QoreTypeInfo::getThisType(lti, *edesc);
-                    edesc->sprintf(" to a list using the '[]' operator in an assignment expression");
+                    edesc->sprintf(" to a list or buffer using the '[]' operator in an assignment expression");
                     qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", edesc);
                 }
                 if (!err) {
                     err = -1;
+                }
+            } else if (accepts_buffer && !rti_can_be_list) {
+                const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexBufferOrNothing(lti);
+                if (ti) {
+                    typeInfo = QoreTypeInfo::getComplexBufferValueType(ti);
+                } else if (!accepts_list) {
+                    typeInfo = autoTypeInfo;
                 }
             }
         } else {
@@ -87,12 +132,13 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
                 // it could be int, binary, or NOTHING
             } else if (!QoreTypeInfo::parseAccepts(listTypeInfo, lti)
                      && !QoreTypeInfo::parseAccepts(stringTypeInfo, lti)
-                     && !QoreTypeInfo::parseAccepts(binaryTypeInfo, lti)) {
+                     && !QoreTypeInfo::parseAccepts(binaryTypeInfo, lti)
+                     && !QoreTypeInfo::parseAccepts(bufferTypeInfo, lti)) {
                 QoreStringNode* edesc = new QoreStringNode("left-hand side of the expression with the '[]' " \
                     "operator is ");
                 QoreTypeInfo::getThisType(lti, *edesc);
                 edesc->concat(" and so this expression will always return NOTHING; the '[]' operator only returns " \
-                    "a value within the legal bounds of lists, strings, and binary objects");
+                    "a value within the legal bounds of lists, strings, binary objects, and buffers");
                 qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION,
                     "INVALID-OPERATION", edesc);
                 typeInfo = nothingTypeInfo;
@@ -122,6 +168,12 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
                     // not present
                     typeInfo = get_or_nothing_type_check(ti);
                 }
+            }
+        }
+        if (!typeInfo && !rti_can_be_list && QoreTypeInfo::parseAccepts(bufferTypeInfo, lti)) {
+            const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexBufferOrNothing(lti);
+            if (ti) {
+                typeInfo = get_or_nothing_type_check(QoreTypeInfo::getComplexBufferValueType(ti));
             }
         }
     }
@@ -186,6 +238,13 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         if (!result.isNothing() || **xsink) {
             val = result;
             parse_context.typeInfo = typeInfo = val.getFullTypeInfo();
+            parse_context.analysis.clear();
+            parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+            parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+            if (!val.isNothing()) {
+                parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+            }
+            parse_context.analysis.known_type = parse_context.typeInfo;
             return **xsink ? -1 : 0;
         }
         // constants not resolved - skip parse-time folding, let runtime handle it
@@ -193,6 +252,18 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     }
 
     parse_context.typeInfo = typeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 
@@ -260,6 +331,15 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
+
+    if (qore_plugin_value_may_have_operation(*lh)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "subscript",
+            QorePluginHelperAbi::SubscriptValue, *lh, *rh, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
 
     return doSquareBrackets(*lh, *rh, true, xsink);
 }
@@ -351,8 +431,10 @@ int QoreSquareBracketsOperatorNode::doString(SimpleRefHolder<QoreStringNode>& re
     ValueHolder entry(doSquareBrackets(l, r, list_ok, xsink), xsink);
     if (*xsink)
         return -1;
-    if (!entry->isNothing())
-        qore_string_private::get(*ret)->concat(entry->get<QoreStringNode>());
+    if (!entry->isNothing()) {
+        QoreStringValueHelper str(*entry);
+        qore_string_private::get(*ret)->concat(*str);
+    }
     return 0;
 }
 
@@ -458,14 +540,23 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
             return l.get<const QoreListNode>()->getReferencedEntry(offset);
         }
 
-        case NT_STRING:
-            return l.get<const QoreStringNode>()->substr(offset, 1, xsink);
+        case NT_STRING: {
+            QoreStringNodeValueHelper str(l);
+            return str->substr(offset, 1, xsink);
+        }
 
         case NT_BINARY: {
             const BinaryNode* b = l.get<const BinaryNode>();
             if (offset < 0 || (size_t)offset >= b->size())
                 return QoreValue();
             return (int64)(((unsigned char*)b->getPtr())[offset]);
+        }
+
+        case NT_BUFFER: {
+            if (offset < 0) {
+                return QoreValue();
+            }
+            return l.get<const QoreBufferNode>()->getReferencedEntry(offset, xsink);
         }
     }
 
@@ -536,6 +627,7 @@ const QoreTypeInfo* QoreFunctionalSquareBracketsOperator::getValueTypeImpl() con
         case NT_LIST: return leftValue->get<const QoreListNode>()->getValueTypeInfo();
         case NT_STRING: return stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
+        case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
     }
     return nothingTypeInfo;
 }
@@ -584,6 +676,7 @@ const QoreTypeInfo* QoreFunctionalSquareBracketsComplexOperator::getValueTypeImp
         case NT_LIST: return leftValue->get<const QoreListNode>()->getValueTypeInfo();
         case NT_STRING: return stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
+        case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
     }
     return nothingTypeInfo;
 }

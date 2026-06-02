@@ -9,8 +9,9 @@
 %define NoXml
 %endtry
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Qorize.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Qorize
 
 %exec-class QorizeRealWorldTest
 

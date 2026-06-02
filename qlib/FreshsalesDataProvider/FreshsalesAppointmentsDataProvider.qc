@@ -113,12 +113,12 @@ public class FreshsalesAppointmentsDataProvider inherits FreshsalesDataProviderB
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.id) {
             hash<auto> result = doGet("appointments/" + string(search_options.id));
             hash<auto> appointment = result.appointment ?? result;
-            return new DefaultRecordIterator(new ListHashIterator((appointment,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((appointment,)),
                 where_cond, search_options);
         }
 
@@ -131,7 +131,7 @@ public class FreshsalesAppointmentsDataProvider inherits FreshsalesDataProviderB
 
         list<hash<auto>> all_records = fetchAllPages("appointments", "appointments", params,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records),
             where_cond, search_options);
     }
 

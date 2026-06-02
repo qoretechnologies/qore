@@ -28,13 +28,13 @@ public class ZohoBooksItemsDataProvider inherits ZohoBooksDataProviderBase {
     constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "items"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksItemDataType().getFields(); }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
             params.organization_id = search_options.organization_id;
         }
         hash<auto> response = doGet("/items", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.items ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.items ?? ()), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

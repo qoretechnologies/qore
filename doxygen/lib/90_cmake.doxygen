@@ -53,6 +53,7 @@
     <tr><td>\c QORE_LIBRARIES</td><td>CMake standard alias for QORE_LIBRARY</td></tr>
     <tr><td>\c QORE_MODULES_DIR</td><td>Location of Qore binary modules</td></tr>
     <tr><td>\c QORE_API_VERSION</td><td>Qore binary module API version</td></tr>
+    <tr><td>\c QORE_HAVE_GENERIC_CLASSES</td><td>Set to \c 1 when the installed Qore headers and library expose the generic class type metadata API</td></tr>
     <tr><td>\c QORE_EXECUTABLE</td><td>Qore language interpret binary location, including executable name</td></tr>
     <tr><td>\c QORE_QPP_EXECUTABLE</td><td>Qore QPP binary location, including executable name</td></tr>
     <tr><td>\c QORE_BUILD_TYPE_LWR</td><td>A lower-cased \c CMAKE_BUILD_TYPE value</td></tr>

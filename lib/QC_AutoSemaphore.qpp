@@ -85,7 +85,7 @@ Semaphore sem(1);
 qclass AutoSemaphore [dom=THREAD_CLASS; arg=QoreAutoSemaphore* as; ns=Qore::Thread];
 
 //! Creates the AutoSemaphore and acquires a permit from the given Semaphore
-/** @param sem the @ref Qore::Thread::Semaphore "Semaphore" to acquire from
+/** @param semaphore the @ref Qore::Thread::Semaphore "Semaphore" to acquire from
 
     @par Example:
     @code{.py}
@@ -99,7 +99,7 @@ qclass AutoSemaphore [dom=THREAD_CLASS; arg=QoreAutoSemaphore* as; ns=Qore::Thre
     @throw SEMAPHORE-TIMEOUT timed out waiting for a permit
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the constructor is blocked
  */
-AutoSemaphore::constructor(Semaphore[QoreSemaphore] sem) {
+AutoSemaphore::constructor(Semaphore[QoreSemaphore] semaphore) [flags=NAMED_ARGS] {
     // Acquire the semaphore with polling for cancellation support
     const int poll_ms = 500;
     while (true) {
@@ -107,14 +107,14 @@ AutoSemaphore::constructor(Semaphore[QoreSemaphore] sem) {
             return;
         }
         bool timed_out = false;
-        int rc = sem->acquire(poll_ms, xsink, timed_out);
+        int rc = semaphore->acquire(poll_ms, xsink, timed_out);
         if (*xsink) {
             // Real error (deleted, etc.) — propagate
             return;
         }
         if (rc == 0) {
             // Acquired — create the AutoSemaphore
-            QoreAutoSemaphore* qas = new QoreAutoSemaphore(sem.release());
+            QoreAutoSemaphore* qas = new QoreAutoSemaphore(semaphore.release());
             self->setPrivate(CID_AUTOSEMAPHORE, qas);
             return;
         }
@@ -166,6 +166,6 @@ as.acquire();
     @throw SEMAPHORE-ERROR Semaphore has been deleted
     @throw SEMAPHORE-TIMEOUT timed out waiting for a permit
  */
-nothing AutoSemaphore::acquire(timeout timeout_ms = 0) {
+nothing AutoSemaphore::acquire(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     as->acquire(timeout_ms, xsink);
 }

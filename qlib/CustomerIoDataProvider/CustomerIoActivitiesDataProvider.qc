@@ -115,7 +115,7 @@ public class CustomerIoActivitiesDataProvider inherits CustomerIoDataProviderBas
     }
 
     #! Searches for activities
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -146,7 +146,7 @@ public class CustomerIoActivitiesDataProvider inherits CustomerIoDataProviderBas
         auto response = doGet("/activities", params);
         list<hash<auto>> records = response.activities ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

@@ -41,8 +41,10 @@
 #include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/WeakHashReferenceNode.h"
 #include "qore/intern/WeakListReferenceNode.h"
+#include "qore/intern/qore_debug_narrowing.h"
 
 #include <atomic>
+#include <memory>
 
 template <class T>
 class LocalRefHelper : public RuntimeReferenceHelper {
@@ -98,18 +100,21 @@ protected:
 public:
     QoreLValueGeneric val;
     const char* id;
+    const void* local_var;
     // declaration order for proper cleanup ordering (issue #5168)
     uint64_t decl_order = 0;
+    int frame_marker_id = -1;  // frame count value at time of pushFrameBoundary(), -1 if not a marker
     bool finalized : 1;
     bool frame_boundary : 1;
+    bool block_cleared : 1;  // set by del() when block-scoped var is cleared at block exit
 
-    DLLLOCAL VarValueBase(const char* n_id, valtype_t t = QV_Node) : val(t), id(n_id), finalized(false), frame_boundary(false) {
+    DLLLOCAL VarValueBase(const char* n_id, valtype_t t = QV_Node) : val(t), id(n_id), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
-    DLLLOCAL VarValueBase(const char* n_id, const QoreTypeInfo* varTypeInfo) : val(varTypeInfo), id(n_id), finalized(false), frame_boundary(false) {
+    DLLLOCAL VarValueBase(const char* n_id, const QoreTypeInfo* varTypeInfo) : val(varTypeInfo), id(n_id), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
-    DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), finalized(false), frame_boundary(false) {
+    DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
     DLLLOCAL void setDeclOrder(uint64_t order) {
@@ -126,7 +131,16 @@ public:
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
-        val.removeValue(true).discard(xsink);
+        // Discarding the value can re-enter deref() and delete this CVV for
+        // self-capturing closures, so do not touch members after discard().
+        block_cleared = true;
+        if (val.static_assignment) {
+            // static_assignment variables (e.g. "self") have borrowed references
+            // that must not be decremented; use unassignIgnore() to clear safely
+            val.unassignIgnore();
+        } else {
+            val.removeValue(true).discard(xsink);
+        }
     }
 
     DLLLOCAL bool isRef() const {
@@ -144,14 +158,60 @@ public:
 };
 
 class LocalVarValue : public VarValueBase {
+private:
+    struct TypeSubstitutionCache {
+        const QoreTypeInfo* inputTypeInfo = nullptr;
+        const QoreTypeInfo* inputRefTypeInfo = nullptr;
+        const QoreTypeInfo* receiverTypeInfo = nullptr;
+        const UserSignature* typeParamOwner = nullptr;
+        type_vec_t typeParamArgs;
+        const QoreTypeInfo* resolvedTypeInfo = nullptr;
+        const QoreTypeInfo* resolvedRefTypeInfo = nullptr;
+
+        DLLLOCAL bool matches(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
+                const QoreTypeInfo* receiverTypeInfo, const QoreTypeParamInstantiation* typeParamInst) const;
+        DLLLOCAL void set(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
+                const QoreTypeInfo* receiverTypeInfo, const QoreTypeParamInstantiation* typeParamInst,
+                const QoreTypeInfo* resolvedTypeInfo, const QoreTypeInfo* resolvedRefTypeInfo);
+    };
+
+    mutable std::unique_ptr<TypeSubstitutionCache> type_substitution_cache;
+
 public:
-    DLLLOCAL void set(const char* n_id, const QoreTypeInfo* varTypeInfo, QoreValue nval, bool assign,
+    DLLLOCAL void set(const char* n_id, const void* n_local_var, const QoreTypeInfo* varTypeInfo, QoreValue nval, bool assign,
             bool static_assignment) {
         //printd(5, "LocalVarValue::set() this: %p id: '%s' type: '%s' code: %d static_assignment: %d\n", this, n_id,
         //    QoreTypeInfo::getName(typeInfo), nval.getType(), static_assignment);
         assert(!finalized);
 
+        // If this LocalVarValue is being reused (same memory location for a different variable),
+        // we need to clear the old state first. The ThreadLocalVariableData stack reuses memory
+        // locations when variables go out of scope, but the LocalVarValue object retains the
+        // old variable's state. We reset the val member to a clean state before reusing it.
+        // This happens due to the stack-based allocation strategy in ThreadLocalVariableData,
+        // where instantiate() returns &curr->var[curr->pos++] and variables are recycled
+        // when uninstantiate() decrements pos.
+        if (id) {
+            // Clean up stale state from slot reuse.
+            // Handle static_assignment (e.g. from instantiateSelf) by using
+            // reset_to_empty() which avoids the removeValue() assertion.
+            if (val.assigned) {
+                if (val.static_assignment) {
+                    val.reset_to_empty();
+                } else {
+                    QoreValue old_val = val.removeValue(true);
+                    old_val.discard(nullptr);
+                    val.reset_to_empty();
+                }
+            } else {
+                val.reset_to_empty();
+            }
+        }
+
         id = n_id;
+        local_var = n_local_var;
+        type_substitution_cache.reset();
+        block_cleared = false;
 
         // try to set an optimized value type for the value holder if possible
         val.set(varTypeInfo);
@@ -176,7 +236,18 @@ public:
 
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
             const QoreTypeInfo* refTypeInfo) const;
+    DLLLOCAL void resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const QoreTypeInfo*& refTypeInfo,
+            bool typeInfoNeedsSubstitution, bool refTypeInfoNeedsSubstitution) const;
     DLLLOCAL void remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInfo);
+
+    DLLLOCAL void syncValue(QoreValue nval, ExceptionSink* xsink) {
+        if (checkFinalized(xsink)) {
+            nval.discard(xsink);
+            return;
+        }
+        discard(val.assign(nval), xsink);
+        block_cleared = false;
+    }
 
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         //printd(5, "LocalVarValue::eval() this: %p '%s' type: %d '%s'\n", this, id, val.getType(),
@@ -184,11 +255,27 @@ public:
         if (val.getType() == NT_REFERENCE) {
             ReferenceNode* ref = const_cast<ReferenceNode*>(val.get<ReferenceNode>());
             LocalRefHelper<LocalVarValue> helper(this, *ref, xsink);
-            if (!helper)
+            if (!helper) {
                 return QoreValue();
+            }
 
-            ValueEvalOptimizedRefHolder erh(lvalue_ref::get(ref)->vexp, xsink);
-            return erh.takeValue(needs_deref);
+            lvalue_ref* lr = lvalue_ref::get(ref);
+            ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            QoreValue rv = erh.takeValue(needs_deref);
+            if (rv.needsEval()) {
+                bool ref_needs_deref = needs_deref;
+                bool eval_needs_deref = true;
+                QoreValue resolved = rv.eval(eval_needs_deref, xsink);
+                if (ref_needs_deref) {
+                    rv.discard(xsink);
+                }
+                needs_deref = eval_needs_deref;
+                return *xsink ? QoreValue() : resolved;
+            }
+            return rv;
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -217,7 +304,11 @@ public:
                 return QoreValue();
 
             ValueEvalOptimizedRefHolder erh(lvalue_ref::get(ref)->vexp, xsink);
-            return *xsink ? QoreValue() : erh.takeReferencedValue();
+            if (*xsink) {
+                return QoreValue();
+            }
+            ValueHolder rv(erh.takeReferencedValue(), xsink);
+            return rv && rv->needsEval() ? rv->eval(xsink) : rv.release();
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -291,13 +382,47 @@ public:
         return VarValueBase::finalize();
     }
 
+    //! Clears the variable's value under the write lock
+    /** Unlike finalize(), this does not set the finalized flag — it just clears the value.
+        Used at block scope exit to trigger timely destruction without popping the cvstack.
+        The value is removed under the write lock but discarded OUTSIDE the lock to prevent
+        self-deadlock when a closure's cvec references this same CVV (the deref path tries
+        to acquire a read lock for DGC scanning).
+    */
+    DLLLOCAL void clearValue(ExceptionSink* xsink) {
+        QoreValue v;
+        {
+            QoreSafeVarRWWriteLocker sl(rml);
+            v = val.removeValue(true);
+        }
+        v.discard(xsink);
+    }
+
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         QoreSafeVarRWReadLocker sl(rml);
         if (val.getType() == NT_REFERENCE) {
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
             sl.unlock();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
-            return helper ? lvalue_ref::get(*ref)->vexp.eval(needs_deref, xsink) : QoreValue();
+            if (!helper) {
+                return QoreValue();
+            }
+            ValueEvalOptimizedRefHolder erh(lvalue_ref::get(*ref)->vexp, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            QoreValue rv = erh.takeValue(needs_deref);
+            if (rv.needsEval()) {
+                bool ref_needs_deref = needs_deref;
+                bool eval_needs_deref = true;
+                QoreValue resolved = rv.eval(eval_needs_deref, xsink);
+                if (ref_needs_deref) {
+                    rv.discard(xsink);
+                }
+                needs_deref = eval_needs_deref;
+                return *xsink ? QoreValue() : resolved;
+            }
+            return rv;
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -324,7 +449,15 @@ public:
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
             sl.unlock();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
-            return helper ? lvalue_ref::get(*ref)->vexp.eval(xsink) : QoreValue();
+            if (!helper) {
+                return QoreValue();
+            }
+            ValueEvalOptimizedRefHolder erh(lvalue_ref::get(*ref)->vexp, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            ValueHolder rv(erh.takeReferencedValue(), xsink);
+            return rv && rv->needsEval() ? rv->eval(xsink) : rv.release();
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -364,12 +497,15 @@ public:
         is_auto_type = isAutoTypeInfo(base_ti);
         typeInfo = base_ti;
         refTypeInfo = QoreTypeInfo::getReferenceTarget(base_ti);
+        updateTypeSubstitutionFlags();
     }
 
     DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), closure_use(old.closure_use),
-            parse_assigned(old.parse_assigned), is_self(old.is_self), is_auto_type(old.is_auto_type),
-            no_narrowing(old.no_narrowing), typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
-            narrowedTypeInfo(old.narrowedTypeInfo) {
+            parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
+            is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing),
+            typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
+            narrowedTypeInfo(old.narrowedTypeInfo), type_info_needs_substitution(old.type_info_needs_substitution),
+            ref_type_info_needs_substitution(old.ref_type_info_needs_substitution) {
     }
 
     DLLLOCAL ~LocalVar() {
@@ -401,17 +537,17 @@ public:
         instantiateIntern(nval, true);
     }
 
-    DLLLOCAL void instantiateIntern(QoreValue nval, bool assign) {
-        //printd(5, "LocalVar::instantiateIntern(%s, %d) this: %p '%s' value closure_use: %s pgm: %p val: %s "
-        //    "type: '%s' rti: '%s'\n", nval.getTypeName(), assign, this, name.c_str(),
-        //    closure_use ? "true" : "false", getProgram(), nval.getTypeName(), QoreTypeInfo::getName(typeInfo),
-        //    QoreTypeInfo::getName(refTypeInfo));
+    DLLLOCAL void instantiate(QoreValue nval, const QoreTypeInfo* runtimeTypeInfo) {
+        instantiateIntern(nval, true, runtimeTypeInfo);
+    }
 
+    DLLLOCAL void instantiateIntern(QoreValue nval, bool assign, const QoreTypeInfo* runtimeTypeInfo = nullptr) {
+        const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : typeInfo;
         if (!closure_use) {
             LocalVarValue* val = thread_instantiate_lvar();
-            val->set(name.c_str(), typeInfo, nval, assign, false);
+            val->set(name.c_str(), this, ti, nval, assign, false);
         } else {
-            thread_instantiate_closure_var(name.c_str(), typeInfo, nval, assign);
+            thread_instantiate_closure_var(name.c_str(), ti, nval, assign);
         }
     }
 
@@ -419,7 +555,7 @@ public:
         printd(5, "LocalVar::instantiateSelf(%p) this: %p '%s'\n", value, this, name.c_str());
         if (!closure_use) {
             LocalVarValue* val = thread_instantiate_lvar();
-            val->set(name.c_str(), typeInfo, value, true, true);
+            val->set(name.c_str(), this, typeInfo, value, true, true);
         } else {
             QoreValue val(value->refSelf());
             thread_instantiate_closure_var(name.c_str(), typeInfo, val, true);
@@ -427,9 +563,6 @@ public:
     }
 
     DLLLOCAL void uninstantiate(ExceptionSink* xsink) const  {
-        //printd(5, "LocalVar::uninstantiate() this: %p '%s' closure_use: %s pgm: %p\n", this, name.c_str(),
-        //    closure_use ? "true" : "false", getProgram());
-
         if (!closure_use) {
             thread_uninstantiate_lvar(xsink);
         } else {
@@ -446,14 +579,86 @@ public:
     }
 
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
+        if (is_self || (name == "self")) {
+            if (QoreObject* obj = runtime_get_stack_object()) {
+                needs_deref = true;
+                return QoreValue(obj->refSelf());
+            }
+        }
+
         if (!closure_use) {
             LocalVarValue* val = get_var();
+            if (!val) {
+                // Variable not on the current thread's lvstack (IR-managed context);
+                // return NOTHING with no deref needed
+                needs_deref = false;
+                return QoreValue();
+            }
             //printd(5, "LocalVar::eval '%s' typeInfo: %p '%s'\n", name.c_str(), typeInfo,
             //    QoreTypeInfo::getName(typeInfo));
             return val->eval(needs_deref, xsink);
         }
 
-        ClosureVarValue* val = thread_find_closure_var(name.c_str());
+        // Lookup priority is tricky because we must handle three cases correctly:
+        //  1. Direct closure body (possibly on a worker thread): must use the
+        //     captured CVV from closure env — the worker thread's cvstack only
+        //     has what CVecInstantiator pushed.
+        //  2. Direct function body (no closure env): use cvstack (topmost =
+        //     current function's own variable).
+        //  3. Nested function call from closure body: a new CVV has been pushed
+        //     on cvstack (by the nested function's own instantiation) and sits
+        //     on top of the closure's captured CVV. We must use the NEW CVV
+        //     (the nested function's own var), NOT the captured one. This is
+        //     the key difference vs case 1.
+        //
+        // Strategy: look up both frame_cvv (by name, in the current call frame)
+        // and env_cvv (by LocalVar* in closure's cmap). If frame_cvv != env_cvv,
+        // we're in case 3 and must use frame_cvv. Otherwise use env_cvv if
+        // present. A same-named CVV from an older frame is not a nested callee's
+        // own variable and must not override the lexical closure environment.
+        ClosureVarValue* val = nullptr;
+        if (thread_has_runtime_closure_env()) {
+            ClosureVarValue* frame_cvv = thread_try_find_closure_var_in_current_frame(name.c_str());
+            ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(this);
+            if (frame_cvv && env_cvv && frame_cvv != env_cvv) {
+                // Case 3: nested function pushed its own CVV after the closure's
+                // captured one. Prefer the nested function's own variable.
+                val = frame_cvv;
+            } else if (env_cvv) {
+                // Case 1: direct closure body (or env_cvv == frame_cvv on
+                // same thread). Use the closure's captured CVV.
+                val = env_cvv;
+            } else {
+                // Closure env doesn't have this LocalVar (nested function's
+                // own local not in any outer closure's capture set).
+                val = frame_cvv;
+                if (!val) {
+                    val = thread_try_find_closure_var(name.c_str());
+                }
+            }
+        } else {
+            // Case 2: direct function body. Prefer cvstack (by name, topmost).
+            // Use try_find() to avoid crashing if the variable hasn't been
+            // instantiated yet (AOT mode skips closure-use var pre-instantiation
+            // in evalTiered, relying on LLVM codegen for lazy instantiation).
+            val = thread_try_find_closure_var(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+            if (!val) {
+                // Lazily instantiate when NOT inside a closure body.  In a
+                // closure body on a worker thread, the variable must be found
+                // via the runtime closure environment — instantiating a new CVV
+                // on the worker thread would create a separate copy invisible
+                // to the declaring function's thread.
+                const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
+                val = thread_try_find_closure_var(name.c_str());
+            }
+        }
+        if (!val) {
+            needs_deref = false;
+            return QoreValue();
+        }
         return val->eval(needs_deref, xsink);
     }
 
@@ -479,52 +684,148 @@ public:
     }
 
     DLLLOCAL bool isRef() const {
-        return !closure_use ? get_var()->isRef() : thread_find_closure_var(name.c_str())->isRef();
+        if (!closure_use) {
+            LocalVarValue* val = get_var();
+            if (!val) {
+                return false;
+            }
+            return val->isRef();
+        }
+        ClosureVarValue* val = nullptr;
+        if (thread_has_runtime_closure_env()) {
+            val = thread_try_find_closure_var_in_current_frame(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        } else {
+            val = thread_try_find_closure_var(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        }
+        return val ? val->isRef() : false;
     }
 
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
         //printd(5, "LocalVar::getLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
         if (!closure_use) {
+            LocalVarValue* val = get_var();
+            if (!val) {
+                // Variable not on the current thread's lvstack (IR-managed context)
+                return -1;
+            }
             // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
-            return get_var()->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
+            const QoreTypeInfo* ti = getTypeInfoForLValue();
+            const QoreTypeInfo* rti = refTypeInfo;
+            if (type_info_needs_substitution || ref_type_info_needs_substitution) {
+                val->resolveLValueTypeInfo(ti, rti, type_info_needs_substitution,
+                    ref_type_info_needs_substitution);
+            }
+            return val->getLValue(lvh, for_remove, ti, rti);
         }
 
-        return thread_find_closure_var(name.c_str())->getLValue(lvh, for_remove);
+        ClosureVarValue* val = nullptr;
+        if (thread_has_runtime_closure_env()) {
+            // Prefer only the current frame's own CVV over the lexical closure
+            // environment; older same-named CVVs belong to outer frames.
+            val = thread_try_find_closure_var_in_current_frame(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        } else {
+            // Prefer cvstack lookup (topmost = current function's own variable).
+            // Use try_find() for AOT safety (see eval() comment).
+            val = thread_try_find_closure_var(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        }
+        if (!val && !thread_has_runtime_closure_env()) {
+            // Only lazily instantiate when NOT inside a closure body (see eval() comment)
+            const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
+            val = thread_try_find_closure_var(name.c_str());
+        }
+        if (!val) {
+            return -1;
+        }
+        return val->getLValue(lvh, for_remove);
     }
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh) {
         if (!closure_use) {
-            return get_var()->remove(lvrh, typeInfo);
+            LocalVarValue* val = get_var();
+            if (!val) {
+                return;
+            }
+            return val->remove(lvrh, typeInfo);
         }
 
-        return thread_find_closure_var(name.c_str())->remove(lvrh);
+        ClosureVarValue* val = nullptr;
+        if (thread_has_runtime_closure_env()) {
+            val = thread_try_find_closure_var_in_current_frame(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        } else {
+            // Prefer cvstack lookup (topmost = current function's own variable).
+            // Use try_find() for AOT safety (see eval() comment).
+            val = thread_try_find_closure_var(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+        }
+        if (!val) {
+            return;
+        }
+        return val->remove(lvrh);
     }
 
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
         return typeInfo;
     }
 
+    DLLLOCAL void setTypeInfo(const QoreTypeInfo* ti) {
+        const QoreTypeInfo* base_ti;
+        no_narrowing = isNoNarrowMarkerType(ti, base_ti);
+        is_auto_type = isAutoTypeInfo(base_ti);
+        typeInfo = base_ti;
+        refTypeInfo = QoreTypeInfo::getReferenceTarget(base_ti);
+        narrowedTypeInfo = nullptr;
+        updateTypeSubstitutionFlags();
+    }
+
+    //! Returns the type info for this variable at parse time
+    /** Always returns the declared type (or narrowed type for auto variables).
+        For unassigned variables, returns the declared type — callers that need
+        to distinguish assigned vs unassigned should check isAssigned() separately.
+    */
     DLLLOCAL const QoreTypeInfo* parseGetTypeInfo() const {
         // If this is a reference type with a target type, return that
-        if (parse_assigned && refTypeInfo) {
+        // but only if the reference has been assigned (bound); an unbound reference
+        // should not have type info since it's not yet pointing at anything
+        if (refTypeInfo && parse_assigned) {
+            QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), refTypeInfo, "reference type");
             return refTypeInfo;
         }
         // If this is an auto type with a narrowed type, return the narrowed type
-        // unless PO_BROKEN_NARROWED_TYPES is set
+        // unless PO_BROKEN_NARROWED_TYPES is set.
         // NOTE: For or-nothing types (types that can return NOTHING), we don't return
         // the narrowed type because narrowing loses the or-nothing semantics which are
-        // important for type checking
+        // important for type checking in other code (e.g., closures capturing auto vars)
         if (is_auto_type && narrowedTypeInfo) {
             QoreProgram* pgm = getProgram();
             if (!pgm || !(pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES)) {
                 // Don't return narrowed type if declared type is or-nothing
                 if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) != QTI_NOT_EQUAL) {
+                    QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), typeInfo, "declared type (or-nothing)");
                     return typeInfo;
                 }
+                QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), narrowedTypeInfo, "narrowed auto");
                 return narrowedTypeInfo;
             }
         }
+        QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), typeInfo, "declared type");
         return typeInfo;
     }
 
@@ -533,11 +834,21 @@ public:
     }
 
     DLLLOCAL qore_type_t getValueType() const {
-        return !closure_use ? get_var()->val.getType() : thread_find_closure_var(name.c_str())->val.getType();
+        if (!closure_use) {
+            LocalVarValue* val = get_var();
+            return val ? val->val.getType() : NT_NOTHING;
+        }
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
+        return val ? val->val.getType() : NT_NOTHING;
     }
 
     DLLLOCAL const char* getValueTypeName() const {
-        return !closure_use ? get_var()->val.getTypeName() : thread_find_closure_var(name.c_str())->val.getTypeName();
+        if (!closure_use) {
+            LocalVarValue* val = get_var();
+            return val ? val->val.getTypeName() : "nothing";
+        }
+        ClosureVarValue* cvv = thread_try_find_closure_var(name.c_str());
+        return cvv ? cvv->val.getTypeName() : "nothing";
     }
 
     DLLLOCAL bool isSelf() const {
@@ -548,6 +859,14 @@ public:
         assert(!is_self);
         assert(name == "self");
         is_self = true;
+    }
+
+    DLLLOCAL void setTopLevel() {
+        is_top_level = true;
+    }
+
+    DLLLOCAL bool isTopLevel() const {
+        return is_top_level;
     }
 
     //! Returns true if the variable has an auto type that can be narrowed
@@ -606,15 +925,23 @@ private:
     bool closure_use = false,
         parse_assigned = false,
         is_self = false,
+        is_top_level = false,
         is_auto_type = false,       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
         no_narrowing = false;       // true if declared with auto! to disable type narrowing
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
+    bool type_info_needs_substitution = false;
+    bool ref_type_info_needs_substitution = false;
 
     DLLLOCAL LocalVarValue* get_var() const {
-        return thread_find_lvar(name.c_str());
+        return thread_try_find_lvar(this);
+    }
+
+    DLLLOCAL void updateTypeSubstitutionFlags() {
+        type_info_needs_substitution = qore_type_contains_type_parameter(typeInfo);
+        ref_type_info_needs_substitution = qore_type_contains_type_parameter(refTypeInfo);
     }
 
     //! Helper to detect if a type is an auto type that can be narrowed

@@ -4,9 +4,10 @@
 %modern
 %allow-debugger
 
-%requires ../../../../qlib/DebugUtil.qm
-%requires ../../../../qlib/DebugProgramControl.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires DebugUtil
+%requires DebugProgramControl
+%requires QUnit
 
 %exec-class DebugProgramControlTest
 

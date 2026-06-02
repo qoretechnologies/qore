@@ -177,7 +177,9 @@ int q_gethostbyname(const char* host, struct in_addr* sin_addr) {
     return -1;
 }
 
-static const char* q_af_to_str(int af) {
+// Used by QoreSocket.cpp via the extern declaration in QoreNet.h.  Cannot be
+// static — non-SCU builds compile QoreSocket.cpp and QoreNet.cpp as separate TUs.
+const char* q_af_to_str(int af) {
    switch (af) {
       case AF_INET:
          return "ipv4";

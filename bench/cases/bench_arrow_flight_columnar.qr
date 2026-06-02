@@ -1,0 +1,127 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchArrowFlightColumnar
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+
+%try-module grpc
+%define NoGrpc
+%endtry
+
+%try-module GrpcUtil
+%define NoGrpc
+%endtry
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+%ifdef NoGrpc
+class BenchArrowFlightColumnar {
+    constructor() {
+        printf("arrow_flight_columnar: skipped (grpc / GrpcUtil modules not available)\n");
+        exit(0);
+    }
+}
+%else
+class BenchArrowFlightColumnarHandler inherits ArrowFlightDatasetHandler {
+    private {
+        int rows;
+        int batch_size;
+        ArrowSchema schema;
+    }
+
+    constructor(int n_rows, int n_batch_size) {
+        rows = n_rows;
+        batch_size = n_batch_size;
+        schema = new ArrowSchema((
+            {"name": "id", "type": "int64"},
+            {"name": "amount", "type": "float64"},
+            {"name": "flag", "type": "bool"},
+        ));
+    }
+
+    ArrowSchema getSchema() {
+        return schema;
+    }
+
+    hash<auto> getFlightInfo(hash<auto> descriptor) {
+        return {
+            "schema": ArrowIpc::writeSchema(schema),
+            "flight_descriptor": descriptor,
+            "total_records": rows,
+            "total_bytes": DataFrameBench::approxBytes(rows),
+        };
+    }
+
+    nothing doGet(hash<auto> ticket, GrpcServerStream stream) {
+        stream.write(ArrowFlightHelper::schemaToFlightData(schema));
+        for (int offset = 0; offset < rows; offset += batch_size) {
+            int count = min(batch_size, rows - offset);
+            buffer<int64> ids = buffer<int64>::sized(count);
+            buffer<float64> amounts = buffer<float64>::sized(count);
+            buffer<bool> flags = buffer<bool>::sized(count);
+            for (int i = 0; i < count; ++i) {
+                int row = offset + i;
+                ids[i] = row;
+                amounts[i] = DataFrameBench::amountFor(row);
+                flags[i] = (row % 7) == 0;
+            }
+            ColumnarResult columns = ColumnarResult::fromColumnHash({
+                "id": ids,
+                "amount": amounts,
+                "flag": flags,
+            });
+            stream.write(ArrowFlightHelper::batchToFlightData(new ArrowRecordBatch(columns)));
+        }
+    }
+}
+
+class BenchArrowFlightColumnar {
+    constructor() {
+        Bench::BenchRunner r("arrow_flight_columnar");
+        r.iterations = 5;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::defaultRows();
+        int batch_size = ENV.QORE_BENCH_FLIGHT_BATCH_SIZE ? ENV.QORE_BENCH_FLIGHT_BATCH_SIZE.toInt() : 8192;
+        ArrowFlightServer server;
+        GrpcChannel channel;
+
+        r.setup = sub () {
+            server = new ArrowFlightServer();
+            server.registerDataset("bench", new BenchArrowFlightColumnarHandler(rows, batch_size));
+            int port = server.addInsecurePort("localhost:0");
+            server.start();
+            channel = new GrpcChannel("http://localhost:" + port);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            ArrowFlightClient flight(channel);
+            ArrowFlightStreamReader reader = flight.doGet({"ticket": binary("bench")});
+            reader.schema();
+            int received = 0;
+            while (*auto columns = reader.readColumnarResult(30s)) {
+                received += columns.numRows();
+            }
+            reader.finish();
+            if (received != rows) {
+                throw "BENCHMARK-ERROR", sprintf(
+                    "arrow_flight_columnar received %d rows, expected %d", received, rows);
+            }
+        };
+
+        int rc = r.run();
+        if (channel) {
+            channel.shutdown();
+        }
+        if (server) {
+            server.shutdown();
+        }
+        exit(rc);
+    }
+}
+%endif

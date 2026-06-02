@@ -47,6 +47,22 @@ public:
     }
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
+    DLLLOCAL QoreValue getCond() const {
+        return cond;
+    }
+
+    DLLLOCAL StatementBlock* getIfCode() const {
+        return if_code;
+    }
+
+    DLLLOCAL StatementBlock* getElseCode() const {
+        return else_code;
+    }
+
+    DLLLOCAL const LVList* getLVList() const {
+        return lvars;
+    }
+
 private:
     QoreValue cond{};
     StatementBlock* if_code;

@@ -109,11 +109,12 @@ module AsyncSocketIo {
       @ref Qore::EventNotifier "EventNotifier".  The fd wait runs on the I/O
       thread; the caller blocks on the submit Queue via condition variable.
       Used by @ref HttpClientIo "HttpClientIo" happy-eyeballs connection
-      racing to replace the former handler-thread \c Socket::poll() wait in
-      that module.
-    - thread scaling: I/O thread and callback worker thread counts are capped at
-      \c hardware_concurrency() (the number of logical CPUs), adapting automatically to the
-      host CPU count; the \c QORE_IO_THREADS environment variable overrides this default.
+      racing to eliminate the last remaining handler-thread sync I/O in that
+      module.
+    - thread scaling: the I/O thread count adapts automatically to the host CPU count and can
+      be overridden with the \c QORE_IO_THREADS environment variable; callback workers and
+      tasks submitted with @ref AsyncSocketIo::AsyncSocketIoController::submitTask()
+      "submitTask()" are bounded by default to \c hardware_concurrency() * 4 capped at 512.
     - autostop race fix: eliminated a race condition where the I/O thread could exit during the
       autostop grace period while new operations were being submitted
     - \c onComplete/abort refactor: poll operations implement

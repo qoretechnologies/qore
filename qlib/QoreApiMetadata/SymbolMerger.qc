@@ -182,6 +182,7 @@ public class SymbolMerger {
         # try AST class docs first
         if (exists ast_classes{ci.full_name}) {
             hash<auto> ast = ast_classes{ci.full_name};
+            SymbolMerger::applyClassGenericMetadata(\result, ast);
             if (!exists result.description && exists ast.description) {
                 result.description = string(ast.description);
             }
@@ -193,6 +194,7 @@ public class SymbolMerger {
         # try doc_index class docs as fallback
         if (!exists result.description && exists doc_index{ci.full_name}) {
             hash<auto> qpp = doc_index{ci.full_name};
+            SymbolMerger::applyClassGenericMetadata(\result, qpp);
             if (exists qpp.description) {
                 *hash<auto> parsed =
                     DocCommentParser::parse(string(qpp.description));
@@ -200,6 +202,10 @@ public class SymbolMerger {
                     result.description = string(parsed.description);
                 }
             }
+        }
+        if (exists doc_index{ci.full_name}) {
+            SymbolMerger::applyClassGenericMetadata(\result,
+                doc_index{ci.full_name});
         }
 
         # enrich methods
@@ -424,6 +430,7 @@ public class SymbolMerger {
         # try AST hashdecl docs first
         if (exists ast_hashdecls{hi.full_name}) {
             hash<auto> ast = ast_hashdecls{hi.full_name};
+            SymbolMerger::applyHashdeclGenericMetadata(\result, ast);
             if (!exists result.description && exists ast.description) {
                 result.description = string(ast.description);
             }
@@ -437,6 +444,9 @@ public class SymbolMerger {
                 # qpp hashdecls often have no namespace path
                 qpp = SymbolMerger::findInDocIndex(
                     doc_index, hi.name, "hashdecl");
+            }
+            if (exists qpp) {
+                SymbolMerger::applyHashdeclGenericMetadata(\result, qpp);
             }
             if (exists qpp && exists qpp.description) {
                 hash<auto> parsed =
@@ -467,6 +477,83 @@ public class SymbolMerger {
         }
 
         return result;
+    }
+
+    #! Applies generic class metadata from AST or qpp metadata
+    private static applyClassGenericMetadata(reference<hash<ClassInfo>> result,
+            hash<auto> source) {
+        *list<string> params =
+            SymbolMerger::getTypeParameters(source);
+        if (exists params && params.size() && !result.type_parameters.size()) {
+            result.type_parameters = params;
+        }
+
+        *hash<string, string> defaults =
+            SymbolMerger::getStringHashField(source, "type_parameter_defaults");
+        if (exists defaults && defaults.size()
+                && !result.type_parameter_defaults.size()) {
+            result.type_parameter_defaults = defaults;
+        }
+
+        *hash<string, string> bounds =
+            SymbolMerger::getStringHashField(source, "type_parameter_bounds");
+        if (exists bounds && bounds.size()
+                && !result.type_parameter_bounds.size()) {
+            result.type_parameter_bounds = bounds;
+        }
+
+        if (exists source.raw_accepts_parameterized
+                && source.raw_accepts_parameterized) {
+            result.raw_accepts_parameterized = True;
+        }
+        if (exists source.raw_construction_defaults_to_auto
+                && source.raw_construction_defaults_to_auto) {
+            result.raw_construction_defaults_to_auto = True;
+        }
+    }
+
+    #! Applies generic hashdecl metadata from AST or qpp metadata
+    private static applyHashdeclGenericMetadata(
+            reference<hash<HashdeclInfo>> result, hash<auto> source) {
+        *list<string> params =
+            SymbolMerger::getTypeParameters(source);
+        if (exists params && params.size() && !result.type_parameters.size()) {
+            result.type_parameters = params;
+        }
+
+        *hash<string, string> defaults =
+            SymbolMerger::getStringHashField(source, "type_parameter_defaults");
+        if (exists defaults && defaults.size()
+                && !result.type_parameter_defaults.size()) {
+            result.type_parameter_defaults = defaults;
+        }
+
+        *hash<string, string> bounds =
+            SymbolMerger::getStringHashField(source, "type_parameter_bounds");
+        if (exists bounds && bounds.size()
+                && !result.type_parameter_bounds.size()) {
+            result.type_parameter_bounds = bounds;
+        }
+    }
+
+    #! Reads type parameter names from the current or legacy qpp metadata key
+    private static *list<string> getTypeParameters(hash<auto> source) {
+        if (exists source.type_parameters) {
+            return cast<list<string>>(source.type_parameters);
+        }
+        if (exists source.type_params) {
+            return cast<list<string>>(source.type_params);
+        }
+        return NOTHING;
+    }
+
+    #! Reads a hash<string, string> metadata field when present
+    private static *hash<string, string> getStringHashField(hash<auto> source,
+            string field) {
+        if (!exists source{field}) {
+            return NOTHING;
+        }
+        return cast<hash<string, string>>(source{field});
     }
 
     #! Enrich an enum with documentation

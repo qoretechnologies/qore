@@ -3,9 +3,10 @@
 
 %modern
 
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/TelnetClient.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ConnectionProvider
+%requires TelnetClient
+%requires QUnit
 
 %exec-class TelnetClientTest
 

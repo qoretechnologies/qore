@@ -42,6 +42,12 @@ protected:
     QoreParseListNode* parse_args = nullptr;
     QoreListNode* args = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    QoreTypeParamInstantiation type_param_instantiation;
+    ptype_vec_t explicit_parse_type_args;
+    type_vec_t explicit_type_args;
+    QoreTypeParamInstantiation explicit_runtime_type_param_instantiation;
+    bool has_explicit_type_args = false;
 
 public:
     DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
@@ -51,11 +57,28 @@ public:
     DLLLOCAL FunctionCallBase(const FunctionCallBase& old) :
         parse_args(old.parse_args ? old.parse_args->listRefSelf() : nullptr),
         args(old.args ? old.args->listRefSelf() : nullptr),
-        variant(old.variant) {
+        variant(old.variant),
+        receiver_type_info(old.receiver_type_info),
+        type_param_instantiation(old.type_param_instantiation),
+        explicit_type_args(old.explicit_type_args),
+        explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
+        has_explicit_type_args(old.has_explicit_type_args) {
+        explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
+        for (const QoreParseTypeInfo* pti : old.explicit_parse_type_args) {
+            explicit_parse_type_args.push_back(pti ? pti->copy() : nullptr);
+        }
     }
 
     DLLLOCAL FunctionCallBase(const FunctionCallBase& old, QoreListNode* n_args) : args(n_args),
-            variant(old.variant) {
+            variant(old.variant), receiver_type_info(old.receiver_type_info),
+            type_param_instantiation(old.type_param_instantiation),
+            explicit_type_args(old.explicit_type_args),
+            explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
+            has_explicit_type_args(old.has_explicit_type_args) {
+        explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
+        for (const QoreParseTypeInfo* pti : old.explicit_parse_type_args) {
+            explicit_parse_type_args.push_back(pti ? pti->copy() : nullptr);
+        }
     }
 
     DLLLOCAL ~FunctionCallBase() {
@@ -63,6 +86,9 @@ public:
             parse_args->deref();
         if (args)
             args->deref(nullptr);
+        for (QoreParseTypeInfo* pti : explicit_parse_type_args) {
+            delete pti;
+        }
     }
 
     DLLLOCAL const QoreParseListNode* getParseArgs() const { return parse_args; }
@@ -71,11 +97,73 @@ public:
 
     // ns can be nullptr if the function is a method
     DLLLOCAL int parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context, QoreFunction* func,
-            qore_ns_private* ns);
+            qore_ns_private* ns, bool infer_class_receiver_from_args = false,
+            const char* receiver_inference_call_desc = nullptr);
 
     DLLLOCAL const AbstractQoreFunctionVariant* getVariant() const {
         return variant;
     }
+
+    DLLLOCAL const QoreTypeInfo* getReceiverTypeInfo() const {
+        return receiver_type_info;
+    }
+
+    DLLLOCAL const QoreTypeParamInstantiation* getTypeParamInstantiation() const {
+        return type_param_instantiation.empty() ? nullptr : &type_param_instantiation;
+    }
+
+    DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
+        if (!has_explicit_type_args) {
+            return nullptr;
+        }
+        if (!explicit_runtime_type_param_instantiation.type_args.empty()) {
+            return &explicit_runtime_type_param_instantiation;
+        }
+        if (!type_param_instantiation.type_args.empty()) {
+            return &type_param_instantiation;
+        }
+        return nullptr;
+    }
+
+    DLLLOCAL bool hasExplicitTypeArgs() const {
+        return has_explicit_type_args;
+    }
+
+    DLLLOCAL void setExplicitTypeArgs(ptype_vec_t&& type_args) {
+        has_explicit_type_args = true;
+        explicit_parse_type_args = std::move(type_args);
+        explicit_type_args.clear();
+        explicit_runtime_type_param_instantiation.clear();
+    }
+
+    DLLLOCAL void moveExplicitTypeArgsFrom(FunctionCallBase& old) {
+        has_explicit_type_args = old.has_explicit_type_args;
+        explicit_parse_type_args = std::move(old.explicit_parse_type_args);
+        explicit_type_args = std::move(old.explicit_type_args);
+        explicit_runtime_type_param_instantiation = std::move(old.explicit_runtime_type_param_instantiation);
+        type_param_instantiation = std::move(old.type_param_instantiation);
+        old.has_explicit_type_args = false;
+        old.explicit_runtime_type_param_instantiation.clear();
+        old.type_param_instantiation.clear();
+    }
+
+    DLLLOCAL void setVariant(const AbstractQoreFunctionVariant* v) {
+        variant = v;
+    }
+
+    DLLLOCAL void setReceiverTypeInfo(const QoreTypeInfo* typeInfo) {
+        receiver_type_info = typeInfo;
+    }
+
+    //! Resolves parse_args into evaluated args for AOT-deserialized nodes
+    /** AOT EXPR_TREE deserialization creates nodes with parse_args that may contain
+        unevaluated AST sub-expressions (e.g., StaticMethodCallNode). This method
+        copies them into the evaluated args list, marking it as needing evaluation
+        when any entry is an AST node. Must be called after deserialization.
+    */
+    DLLLOCAL void resolveParseArgs();
+
+    DLLLOCAL int resolveExplicitTypeArgs(const QoreProgramLocation* loc);
 };
 
 class AbstractFunctionCallNode : public ParseNode, public FunctionCallBase {
@@ -123,8 +211,10 @@ public:
     }
 
     // ns can be nullptr if the function is a method
-    DLLLOCAL int parseArgs(QoreParseContext& parse_context, QoreFunction* func, qore_ns_private* ns) {
-        int err = parseArgsVariant(loc, parse_context, func, ns);
+    DLLLOCAL int parseArgs(QoreParseContext& parse_context, QoreFunction* func, qore_ns_private* ns,
+            bool infer_class_receiver_from_args = false, const char* receiver_inference_call_desc = nullptr) {
+        int err = parseArgsVariant(loc, parse_context, func, ns, infer_class_receiver_from_args,
+            receiver_inference_call_desc);
         // clear "effect" flag if possible, only if QCF_CONSTANT is set on the variant or function
         if (variant) {
             doFlags(variant->getFlags());
@@ -139,10 +229,18 @@ public:
 
 class NewObjectCallNode : public AbstractQoreNode, public FunctionCallBase {
 public:
-    DLLLOCAL NewObjectCallNode(const QoreClass* qc, QoreListNode* args = nullptr);
+    DLLLOCAL NewObjectCallNode(const QoreClass* qc, QoreListNode* args = nullptr,
+            const QoreTypeInfo* object_type_info = nullptr);
+
+    //! Returns the class for the new object
+    DLLLOCAL const QoreClass* getClass() const { return qc; }
+
+    //! Returns the resolved instantiated object type, if one was explicit in the construction expression
+    DLLLOCAL const QoreTypeInfo* getObjectTypeInfo() const { return object_type_info; }
 
 protected:
     const QoreClass* qc;
+    const QoreTypeInfo* object_type_info;
 
     using AbstractQoreNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
@@ -168,7 +266,7 @@ protected:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return qc->getTypeInfo();
+        return object_type_info ? object_type_info : qc->getTypeInfo();
     }
 
     DLLLOCAL virtual const char* getName() const {
@@ -176,7 +274,7 @@ protected:
     }
 
     DLLLOCAL virtual AbstractQoreNode* realCopy() const {
-        return new NewObjectCallNode(qc, args ? args->listRefSelf() : nullptr);
+        return new NewObjectCallNode(qc, args ? args->listRefSelf() : nullptr, object_type_info);
     }
 
     DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -236,6 +334,17 @@ public:
 
     DLLLOCAL const QoreFunction* getFunction() const {
         return fe ? fe->getFunction() : nullptr;
+    }
+
+    //! Accessor for AOT serialization: lets the writer emit the
+    //! namespace-qualified name of the resolved function so runtime
+    //! deserialization finds the same target even when the caller's
+    //! own scope declares a wrapper function of the same base name
+    //! (e.g. `OMQ::substitute_env_vars` wrapping `Util::substitute_env_vars`
+    //! — without the qualified emission, bare-name lookup at runtime
+    //! resolved to the self-same wrapper and infinite-recursed).
+    DLLLOCAL const FunctionEntry* getFunctionEntry() const {
+        return fe;
     }
 
     // FIXME: delete when unresolved function call node implemented properly
@@ -363,6 +472,12 @@ public:
         //    args ? args->size() : -1);
     }
 
+    DLLLOCAL MethodCallNode(const QoreProgramLocation* loc, char* name, QoreListNode* n_args)
+            : AbstractMethodCallNode(loc, NT_METHOD_CALL, nullptr), c_str(name) {
+        args = n_args;
+        tmp_args = true;
+    }
+
     DLLLOCAL MethodCallNode(const MethodCallNode& old, QoreListNode* n_args)
             : AbstractMethodCallNode(old, n_args), c_str(old.c_str ? strdup(old.c_str) : nullptr),
             pseudo(old.pseudo), sourceTypeInfo(old.sourceTypeInfo) {
@@ -441,6 +556,7 @@ public:
     */
     DLLLOCAL void setSourceType(const QoreTypeInfo* ti) {
         sourceTypeInfo = ti;
+        setReceiverTypeInfo(ti);
     }
 
     //! Returns the source type info (type of object the method is called on)
@@ -480,7 +596,8 @@ public:
     }
 
     DLLLOCAL SelfFunctionCallNode(const QoreProgramLocation* loc, char* n, QoreParseListNode* n_args,
-            const QoreClass* n_qc) : AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc), ns(n), is_copy(false) {
+            const QoreClass* n_qc, bool n_is_copy = false)
+            : AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc), ns(n), is_copy(n_is_copy) {
     }
 
     DLLLOCAL SelfFunctionCallNode(const QoreProgramLocation* loc, NamedScope* n_ns, QoreParseListNode* n_args)
@@ -488,7 +605,8 @@ public:
     }
 
     DLLLOCAL SelfFunctionCallNode(const SelfFunctionCallNode& old, QoreListNode* n_args)
-            : AbstractMethodCallNode(old, n_args), ns(old.ns), is_copy(old.is_copy) {
+            : AbstractMethodCallNode(old, n_args), ns(old.ns), class_ctx(old.class_ctx),
+              is_copy(old.is_copy), is_abstract(old.is_abstract) {
     }
 
     DLLLOCAL int parseInitCall(QoreValue& val, QoreParseContext& parse_context);
@@ -512,6 +630,22 @@ public:
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
 
     DLLLOCAL AbstractQoreNode* makeReferenceNodeAndDeref();
+
+    DLLLOCAL bool hasSingleName() const {
+        return ns.size() == 1;
+    }
+
+    DLLLOCAL const qore_class_private* getClassContext() const {
+        return class_ctx;
+    }
+
+    DLLLOCAL bool isCopyCall() const {
+        return is_copy;
+    }
+
+    DLLLOCAL bool isAbstractCall() const {
+        return is_abstract;
+    }
 
 protected:
     NamedScope ns;
@@ -567,7 +701,8 @@ public:
 
     // used when copying (for background expressions with processed arguments)
     DLLLOCAL StaticMethodCallNode(const StaticMethodCallNode& old, QoreListNode* args)
-            : AbstractFunctionCallNode(old, args), method(old.method) {
+            : AbstractFunctionCallNode(old, args), scope(old.scope ? old.scope->copy() : nullptr),
+            method(old.method) {
     }
 
     DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, const QoreMethod* m, QoreParseListNode* args)

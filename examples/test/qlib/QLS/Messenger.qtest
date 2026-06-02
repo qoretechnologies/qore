@@ -24,7 +24,8 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 %requires json
 
 %exec-class MessengerTest
@@ -52,11 +53,21 @@ class MessengerTest inherits QUnit::Test {
 
     #! Run a Qore script in a subprocess with QLS module available
     private string runSubprocess(string scriptPath, *string stdinFile) {
-        string cmd = sprintf("QORE_MODULE_DIR=%s qore %s", qlibDir, scriptPath);
+        string modulePath = qlibDir;
+        if ((ENV.QORE_MODULE_DIR ?? "").val()) {
+            modulePath += ":" + ENV.QORE_MODULE_DIR;
+        }
+        string qoreExe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? "qore";
+        string cmd = sprintf("QORE_MODULE_DIR=%s %s %s",
+            shellQuote(modulePath), shellQuote(qoreExe), shellQuote(scriptPath));
         if (stdinFile) {
-            cmd += " < " + stdinFile;
+            cmd += " < " + shellQuote(stdinFile);
         }
         return backquote(cmd);
+    }
+
+    private string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
     }
 
     #! Write a temp Qore script; returns the file path

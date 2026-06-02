@@ -4,7 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class BreakAndContinueTest
 
@@ -38,7 +39,6 @@ class  BreakAndContinueTest inherits QUnit::Test {
         switch(0) { case 0: break; }
         while (True) { break; }
         for (;;) { break; }
-        summarize ({'a': (1)}) by (%a) { break; }
         do { break; } while (True);
         foreach int i in (0, 1) { if (i == 0) { break; } }
         context ({'a': (1)}) { break; }
@@ -62,7 +62,6 @@ class  BreakAndContinueTest inherits QUnit::Test {
     continueAllowed() {
         while (!(int i)) { i = 1; continue; }
         for (int i; !i; ++i) { continue; }
-        summarize ({'a': (1)}) by (%a) { continue; }
         do { continue; } while (False);
         foreach int i in (0, 1) { if (i == 0) { continue; } }
         context ({'a': (1)}) { continue; }

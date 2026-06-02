@@ -44,7 +44,7 @@ public namespace CsvUtil {
         constructor(Qore::OutputStream output, *hash opts) : AbstractCsvWriter("STREAM", opts) {
             # we do not use the encoding option with the StreamWriter constructor() here, because we always generate output data
             # with the output encoding in any case
-            self.output = new StreamWriter(output);
+            self.output = new StreamWriter(output_stream: output);
             writeHeaders();
         }
 
@@ -59,7 +59,7 @@ public namespace CsvUtil {
         constructor(Qore::OutputStream output, hash spec, hash opts) : AbstractCsvWriter("STREAM", spec, opts) {
             # we do not use the encoding option with the StreamWriter constructor() here, because we always generate output data
             # with the output encoding in any case
-            self.output = new StreamWriter(output);
+            self.output = new StreamWriter(output_stream: output);
             writeHeaders();
         }
 

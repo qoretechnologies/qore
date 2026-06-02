@@ -8,10 +8,10 @@
 
     To load a module at parse time (normally required for most modules), use the @ref requires "%requires" or @ref try-module "%try-module" parse directive. If the named feature is not already present in %Qore, %Qore will try to load the module from its list of module directories (module path). This list contains the following directories:\n
     -# directories listed in the environment variable \c QORE_MODULE_DIR (see @ref environment_variables)
-    -# \c USER_MODULE_VER_DIR - build variable set to directory where Qore user modules of the specific Qore version should be installed (ex: \c /usr/share/qore-modules/0.8.12)
-    -# \c MODULE_VER_DIR - build variable set to directory where Qore binary modules of the specific Qore version should be installed (ex: \c /usr/lib/x86_64-linux-gnu/qore-modules/0.8.12)
-    -# \c USER_MODULE_DIR - build variable set to directory where user modules of external binary modules should be installed (ex: \c /usr/share/qore-modules)
+    -# \c MODULE_VER_DIR - build variable set to directory where Qore binary modules and AOT-compiled user module artifacts of the specific Qore version should be installed (ex: \c /usr/lib/x86_64-linux-gnu/qore-modules/0.8.12)
+    -# \c USER_MODULE_VER_DIR - build variable set to directory where Qore user module source files of the specific Qore version should be installed (ex: \c /usr/share/qore-modules/0.8.12)
     -# \c MODULE_DIR - build variable set to directory where external binary modules should be installed (ex: \c /usr/lib/x86_64-linux-gnu/qore-modules)
+    -# \c USER_MODULE_DIR - build variable set to directory where user modules of external binary modules should be installed (ex: \c /usr/share/qore-modules)
     -# directories added using @ref append-module-path "%append-module-path"
 
     Modules can also be loaded directly by using a path relative to the Qore script or module requiring them when using @ref requires "%requires" or @ref try-module "%try-module" parse directives:
@@ -171,13 +171,13 @@ ModuleName/
         communicating with <a href="https://customer.io">Customer.io</a>'s REST API
     |binary|<a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a>|Provides a columnar \
         DataFrame with typed columns, SQL-like query operations (select, filter, sort, groupby, join, pivot, \
-        melt, window functions), CSV/Parquet/database I/O, and ML integration
+        melt, window functions), dense ColumnarResult interop, CSV/Parquet/database I/O, and ML integration
     |user|<a href="../../modules/DataProvider/html/index.html#dataproviderintro">DataProvider</a>|Provides a generic API for data \
         providers
     |user|<a href="../../modules/DataProviderDataFrame/html/index.html#dataproviderdataframeintro">DataProviderDataFrame</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
         <a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a> columnar DataFrames \
-        with searchable record iteration and filtering
+        with searchable record iteration, filtering, and pipeline shape preservation
     |user|<a href="../../modules/DataProviderML/html/index.html#dataprovidermlintro">DataProviderML</a>|Provides \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> pipeline \
         processors wrapping the <a href="../../modules/ml/html/index.html#mlintro">ml</a> module's machine \
@@ -584,12 +584,16 @@ ModuleName/
         (PermutationImportance) for ML model tuning and explainability
     |user|<a href="../../modules/QoreModelRegistry/html/index.html#qoremodelregistryintro">QoreModelRegistry</a>|Provides \
         an ML model registry with pluggable storage backends (filesystem, database, REST) for versioning, \
-        tagging, pruning, and deployment management with multi-tenant support and DataProvider integration
+        tagging, pruning, named model package artifacts, safe HuggingFace/PyTorch metadata inspection, \
+        tokenizer reuse, and deployment management with multi-tenant support and DataProvider integration
     |user|<a href="../../modules/QoreOcrUtils/html/index.html#qoreocrutilsintro">QoreOcrUtils</a>|Provides \
         an OCR abstraction layer with native (Tesseract) and HTTP backends, plus scanned PDF detection
     |user|<a href="../../modules/QoreOnnxExport/html/index.html#qoreonnxexportintro">QoreOnnxExport</a>|Provides \
         ONNX model export for 11 trained ML algorithms including tree ensembles \
         (DecisionTree, RandomForest, GradientBoostedTrees), linear models, preprocessing, and clustering
+    |user|<a href="../../modules/QoreOnnxTools/html/index.html#qoreonnxtoolsintro">QoreOnnxTools</a>|Provides \
+        ONNX deployment tooling helpers for quantization, dependency diagnostics, dry-run execution plans, \
+        and reproducible command metadata
     |user|<a href="../../modules/QoreRagTypes/html/index.html#qoreragtypesintro">QoreRagTypes</a>|Provides \
         the provider-neutral type and abstract-class layer shared by QoreRagUtils \
         and individual RAG REST client modules
@@ -603,8 +607,8 @@ ModuleName/
         LLM-based structured information extraction with schema enforcement and built-in templates \
         for NER, invoice, contact, and sentiment analysis
     |user|<a href="../../modules/QoreTokenizerUtils/html/index.html#qoretokenizerutilsintro">QoreTokenizerUtils</a>|Provides \
-        document chunking (DocumentChunker) and token counting (TokenCounter) for RAG text ingestion \
-        pipelines using HuggingFace-compatible tokenizers
+        document chunking, token counting, embedding, and re-ranking utilities for RAG text ingestion \
+        pipelines using HuggingFace-compatible tokenizers and local/registry-backed ONNX models
     |user|<a href="../../modules/QoreVisionExtraction/html/index.html#qorevisionextractionintro">QoreVisionExtraction</a>|Provides \
         multimodal LLM vision extraction for image description, table extraction, and text extraction
     |user|<a href="../../modules/Qorize/html/index.html#qorizeintro">Qorize</a>|Provides basic support for \
@@ -1007,13 +1011,11 @@ ModuleName/
         %Qore and <a href="https://www.python.org/">Python</a>, enabling %Qore code to call Python modules and \
         Python code to call %Qore APIs, including cross-language inheritance
     |binary|<a href="https://github.com/qoretechnologies/module-sqlite3">sqlite3</a>|Provides an SQLite3 DBI driver
-    |binary|<a href="https://github.com/qoretechnologies/module-ssh">ssh</a>|Provides an embedded SSH/SFTP client and \
-        server implementation for %Qore including SSH sessions, command channels, SFTP, and a pluggable SSH server \
-        framework, also provides the following user modules:\n\
-        - <a href="https://github.com/qoretechnologies/module-ssh">QorusSshIntegration</a>: \
-            reserved module name used by Qorus-specific SSH adapters\n\
-        - <a href="https://github.com/qoretechnologies/module-ssh">SftpServerDataProvider</a>: \
-            provides virtual SFTP filesystem and atomic exchange helpers for the \c ssh module\n\
+	    |binary|<a href="https://github.com/qoretechnologies/module-ssh">ssh</a>|Provides an embedded SSH/SFTP client and \
+	        server implementation for %Qore including SSH sessions, command channels, SFTP, and a pluggable SSH server \
+	        framework, also provides the following user modules:\n\
+	        - <a href="https://github.com/qoretechnologies/module-ssh">SftpServerDataProvider</a>: \
+	            provides virtual SFTP filesystem and atomic exchange helpers for the \c ssh module\n\
         - <a href="https://github.com/qoretechnologies/module-ssh">SshServerAuthProvider</a>: \
             provides typed auth-provider abstractions and built-in config-driven SSH auth implementations\n\
         - <a href="https://github.com/qoretechnologies/module-ssh">SshServerCommandProvider</a>: \
@@ -1045,7 +1047,7 @@ ModuleName/
         <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> with support for Python, Java, \
         JSON, YAML, JavaScript, Kotlin, TypeScript, and %Qore
     |binary|<a href="https://github.com/qoretechnologies/module-uuid">uuid</a>|Provices an API for generating UUIDs
-    |binary|<a href="https://qoretechnologies.com/manual/qorus/current/v8/v8/html">v8</a>|Provides the ability to \
+	    |binary|<a href="https://github.com/qoretechnologies/module-v8">v8</a>|Provides the ability to \
         embed, compile, and execute JavaScript code, also provides the following user modules:\n\
         - <a href="https://github.com/qoretechnologies/module-v8">TypeScriptActionInterface</a>: \
             provides an API for %Qore \
@@ -1149,6 +1151,25 @@ ModuleName/
     @section user_modules User Modules
 
     User modules are written in %Qore and delivered in source form. They must have the extension \c "*.qm".
+
+    Starting with %Qore 2.3, the standard build also compiles user modules to AOT
+    binary module artifacts (\c "*.qmod") when \c QORE_BUILD_AOT_MODULES is enabled.
+    This CMake option defaults to \c ON.  The compiled module is installed in the
+    architecture-specific module directory, while the source module remains
+    installed in the user-module source directory.  Module lookup checks the
+    compiled module directories before the corresponding source module
+    directories, so installed user modules use the faster AOT path by default
+    while preserving source modules for documentation, inspection, and
+    development workflows.
+
+    To disable AOT user-module artifacts in a source build:
+
+    @code{.sh}
+cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
+    @endcode
+
+    See @ref exec_mode_aot "AOT Compilation" and @ref qcc_tool "qcc" for
+    details on compiled module artifacts.
 
     User modules will have their own dedicated @ref Qore::Program "Program" object; the @ref Qore::Program "Program"
     object is created automatically when the module is loaded and initialized.  The module's

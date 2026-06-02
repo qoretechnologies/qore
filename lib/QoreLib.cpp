@@ -547,6 +547,7 @@ bool qore_has_debug() {
 }
 
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
+    parse_context.analysis.clear();
     if (val.hasNode()) {
         AbstractQoreNode* n = val.getInternalNode();
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
@@ -554,6 +555,12 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     }
 
     parse_context.typeInfo = val.getFullTypeInfo();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    if (!val.isNothing()) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+    parse_context.analysis.known_type = parse_context.typeInfo;
     return 0;
 }
 
@@ -589,6 +596,7 @@ FeatureList::FeatureList() {
    push_back("NaNBoxing");
    push_back("HTTP2");
    push_back("HTTP3");
+   push_back("JIT");
 #ifdef DEBUG
    push_back("debug");
 #endif
@@ -664,7 +672,7 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
     qore_type_t t = qv.getType();
 #ifdef DEBUG
     if (t == NT_STRING) {
-        const QoreStringNode* nstr = qv.get<const QoreStringNode>();
+        QoreStringValueHelper nstr(qv);
         printd(5, "process_opt() %p (%d) \"%s\"\n", nstr->getBuffer(), nstr->strlen(), nstr->getBuffer());
     }
 #endif
@@ -876,7 +884,8 @@ QoreStringNode* q_sprintf(const QoreListNode* params, int field, int offset, Exc
         return new QoreStringNode;
     }
 
-    return qore_sprintf_intern(xsink, pv.get<const QoreStringNode>(), params, offset + 1, field, -1, false);
+    QoreStringNodeValueHelper fmt(pv);
+    return qore_sprintf_intern(xsink, *fmt, params, offset + 1, field, -1, false);
 }
 
 QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, ExceptionSink* xsink) {
@@ -886,7 +895,7 @@ QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, Ex
         return new QoreStringNode;
     }
 
-    const QoreStringNode* fmt = pv.get<QoreStringNode>();
+    QoreStringNodeValueHelper fmt(pv);
 
     pv = get_param_value(params, offset + 1);
     int arg_offset;
@@ -912,7 +921,7 @@ QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, Ex
         }
     }
 
-    return qore_sprintf_intern(xsink, fmt, arg_list, arg_offset, field, last_arg, ignore_broken_sprintf);
+    return qore_sprintf_intern(xsink, *fmt, arg_list, arg_offset, field, last_arg, ignore_broken_sprintf);
 }
 
 static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
@@ -1590,6 +1599,33 @@ int64 q_epoch_us(int &us) {
     return ts.tv_sec;
 }
 
+// returns a monotonic-clock timestamp in microseconds (immune to realtime clock adjustments).
+// Used for deadline arithmetic and elapsed-time measurements where CLOCK_REALTIME would be
+// fragile under NTP slewing / VM time sync / chronyd corrections.  Falls back to CLOCK_REALTIME
+// only on systems that lack a monotonic clock (extremely rare modern systems).
+int64 q_get_monotonic_us() {
+#if (defined(DARWIN) && defined(CLOCK_UPTIME_RAW)) || defined(CLOCK_MONOTONIC)
+    struct timespec ts;
+#endif
+#if defined(DARWIN) && defined(CLOCK_UPTIME_RAW)
+    // CLOCK_UPTIME_RAW: monotonic, does not advance while sleeping (preferred for deadlines).
+    // CLOCK_MONOTONIC on Darwin advances while suspended, which is fine for our use too -
+    // either is correct here.
+    if (clock_gettime(CLOCK_UPTIME_RAW, &ts) == 0) {
+        return (int64)ts.tv_sec * 1000000LL + (int64)(ts.tv_nsec / 1000);
+    }
+#endif
+#if defined(CLOCK_MONOTONIC)
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+        return (int64)ts.tv_sec * 1000000LL + (int64)(ts.tv_nsec / 1000);
+    }
+#endif
+    // Fallback: realtime clock (vulnerable to adjustments, but better than nothing).
+    int us;
+    int64 secs = q_epoch_us(us);
+    return secs * 1000000LL + us;
+}
+
 // returns seconds since epoch and gets nanoseconds
 int64 q_epoch_ns(int &ns) {
 #ifdef HAVE_CLOCK_GETTIME
@@ -1629,16 +1665,21 @@ QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {
     return l;
 }
 
-const char* check_hash_key(const QoreHashNode* h, const char* key, const char* err, ExceptionSink* xsink) {
+bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std::string& value,
+        ExceptionSink* xsink) {
+   value.clear();
    QoreValue p = h->getKeyValue(key);
-   if (p.isNothing())
-      return nullptr;
+   if (p.isNothing()) {
+      return false;
+   }
 
    if (p.getType() != NT_STRING) {
       xsink->raiseException(err, "'%s' key is not type 'string' but is type '%s'", key, p.getTypeName());
-      return nullptr;
+      return false;
    }
-   return p.get<const QoreStringNode>()->c_str();
+   QoreStringValueHelper str(p);
+   value = str->c_str();
+   return true;
 }
 
 // Handle GNU strerror_r() which returns char*
@@ -2012,9 +2053,11 @@ void LVarSet::add(LocalVar* var) {
 }
 
 bool q_parse_bool(QoreValue n) {
-    return n.getType() == NT_STRING
-        ? q_parse_bool(n.get<const QoreStringNode>()->c_str())
-        : n.getAsBool();
+    if (n.getType() == NT_STRING) {
+        QoreStringValueHelper str(n);
+        return q_parse_bool(str->c_str());
+    }
+    return n.getAsBool();
 }
 
 bool q_parse_bool(const char* str) {
@@ -2137,15 +2180,7 @@ int64 q_clock_getmicros() {
 }
 
 int64 q_clock_getmicros_monotonic() {
-#ifdef HAVE_CLOCK_GETTIME
-    struct timespec ts;
-    if (!clock_gettime(CLOCK_MONOTONIC, &ts)) {
-        return (int64)ts.tv_sec * 1000000ll + ts.tv_nsec / 1000;
-    }
-    printd(0, "clock_gettime(CLOCK_MONOTONIC) failed: %s\n", strerror(errno));
-#endif
-    // fall back to the wall clock if a monotonic clock is unavailable
-    return q_clock_getmicros();
+    return q_get_monotonic_us();
 }
 
 int64 q_clock_getnanos() {
@@ -2532,6 +2567,14 @@ void ensure_unique(AbstractQoreNode* *v, ExceptionSink* xsink) {
 }
 
 void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
+    if (v.isShortString()) {
+        char buf[7];
+        v.getShortString(buf);
+        size_t len = v.shortStringLen();
+        v = new QoreStringNode(buf, len, QCS_UTF8);
+        return;
+    }
+
     if (!v.hasNode()) {
         return;
     }
@@ -2961,12 +3004,18 @@ bool ThreadBlock<ClosureStackEntry>::frameBoundary(int p) {
     return var[p].isFrameBoundary();
 }
 
-int q_get_data(const QoreValue& data, const char*& ptr, size_t& len) {
+int q_get_data(const QoreValue& data, const char*& ptr, size_t& len, std::string& string_storage) {
     switch (data.getType()) {
         case NT_STRING: {
-            const QoreStringNode* str = data.get<const QoreStringNode>();
-            ptr = str->getBuffer();
-            len = str->size();
+            QoreStringValueHelper str(data);
+            if (str.is_temp()) {
+                string_storage.assign(str->c_str(), str->size());
+                ptr = string_storage.data();
+                len = string_storage.size();
+            } else {
+                ptr = str->getBuffer();
+                len = str->size();
+            }
             return 0;
         }
         case NT_BINARY: {
@@ -2977,6 +3026,11 @@ int q_get_data(const QoreValue& data, const char*& ptr, size_t& len) {
         }
     }
     return -1;
+}
+
+int q_get_data(const QoreValue& data, const char*& ptr, size_t& len) {
+    thread_local std::string string_storage;
+    return q_get_data(data, ptr, len, string_storage);
 }
 
 static const char* get_full_type_name(const AbstractQoreNode* n, bool with_namespaces, QoreString* scratch) {
@@ -3003,6 +3057,10 @@ static const char* get_full_type_name(const AbstractQoreNode* n, bool with_names
                     : QoreTypeInfo::getName(l->complexTypeInfo);
             }
             break;
+        }
+        case NT_BUFFER: {
+            const QoreTypeInfo* ti = static_cast<const QoreBufferNode*>(n)->getTypeInfo();
+            return with_namespaces ? QoreTypeInfo::getPath(ti) : QoreTypeInfo::getName(ti);
         }
         case NT_OBJECT: {
             const char* clsname = with_namespaces

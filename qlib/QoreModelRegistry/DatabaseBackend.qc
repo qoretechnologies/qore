@@ -24,7 +24,7 @@
 #! Main QoreModelRegistry namespace
 public namespace QoreModelRegistry {
 
-%ifndef NoSqlUtil
+%ifndef NoJson
 
 #! Database-backed model registry storage backend using SqlUtil
 /** Stores model artifacts and metadata in database tables via SqlUtil.
@@ -138,6 +138,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
             "training_data_hash": metadata.training_data_hash,
             "description": metadata.description,
             "config": metadata.config ? make_json(metadata.config) : NOTHING,
+            "metadata": make_json(metadata),
             "created": now_us(),
         };
         versions_table.insert(version_insert);
@@ -152,9 +153,21 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
         });
 
         # Insert artifact blob
+        hash<ModelArtifactInfo> artifact_info = metadata.artifacts
+            ? metadata.artifacts[0]
+            : <ModelArtifactInfo>{
+                "name": "model",
+                "role": "model",
+                "format": metadata.format ?? "qml",
+                "size": artifact.size(),
+                "safe_to_parse": True,
+                "executable": True,
+            };
         blobs_table.insert({
             "tenant_id": eff_tenant,
             "versionid": ver_row.versionid,
+            "artifact_name": artifact_info.name ?? "model",
+            "artifact_metadata": make_json(artifact_info),
             "data": artifact,
         });
 
@@ -163,47 +176,114 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
     }
 
     binary loadArtifact(string name, string version_id) {
+        return loadNamedArtifact(name, version_id, "model");
+    }
+
+    nothing registerNamedArtifact(string name, string version_id, string artifact_name,
+            binary artifact, hash<ModelArtifactInfo> metadata) {
+        validateArtifactName(artifact_name);
         string eff_tenant = tenant_id ?? "";
+        hash<auto> ver_row = getVersionRow(name, version_id, eff_tenant);
 
-        # Look up model
-        *hash<auto> model_row = models_table.selectRow({
+        metadata.name = artifact_name;
+        metadata.size = artifact.size();
+        *hash<auto> existing = blobs_table.selectRow({
             "where": {
                 "tenant_id": eff_tenant,
-                "name": name,
+                "versionid": ver_row.versionid,
+                "artifact_name": artifact_name,
             },
         });
-        if (!model_row) {
-            throw "ML-REGISTRY-ERROR", sprintf("model '%s' not found%s", name,
-                tenant_id ? sprintf(" (tenant '%s')", tenant_id) : "");
+        hash<auto> values = {
+            "tenant_id": eff_tenant,
+            "versionid": ver_row.versionid,
+            "artifact_name": artifact_name,
+            "artifact_metadata": make_json(metadata),
+            "data": artifact,
+        };
+        if (existing) {
+            blobs_table.update(values, {"blobid": existing.blobid});
+        } else {
+            blobs_table.insert(values);
         }
 
-        # Look up version
-        *hash<auto> ver_row = versions_table.selectRow({
-            "where": {
-                "tenant_id": eff_tenant,
-                "modelid": model_row.modelid,
-                "version_id": version_id,
-            },
-        });
-        if (!ver_row) {
-            throw "ML-REGISTRY-ERROR",
-                sprintf("version '%s' of model '%s' not found", version_id, name);
+        hash<ModelVersionInfo> version_meta = getVersionMetadata(name, version_id);
+        list<hash<ModelArtifactInfo>> artifacts = listArtifacts(name, version_id);
+        bool replaced = False;
+        for (int i = 0; i < artifacts.size(); ++i) {
+            if (artifacts[i].name == artifact_name) {
+                artifacts[i] = metadata;
+                replaced = True;
+                break;
+            }
         }
+        if (!replaced) {
+            push artifacts, metadata;
+        }
+        version_meta.artifacts = artifacts;
+        versions_table.update({"metadata": make_json(version_meta)}, {
+            "versionid": ver_row.versionid,
+        });
+
+        ds.commit();
+    }
+
+    binary loadNamedArtifact(string name, string version_id, string artifact_name) {
+        validateArtifactName(artifact_name);
+        string eff_tenant = tenant_id ?? "";
+        hash<auto> ver_row = getVersionRow(name, version_id, eff_tenant);
 
         # Load blob
         *hash<auto> blob_row = blobs_table.selectRow({
             "where": {
                 "tenant_id": eff_tenant,
                 "versionid": ver_row.versionid,
+                "artifact_name": artifact_name,
             },
         });
+        if (!blob_row && artifact_name == "model") {
+            # Compatibility with old schemas/data that had one unnamed blob
+            blob_row = blobs_table.selectRow({
+                "where": {
+                    "tenant_id": eff_tenant,
+                    "versionid": ver_row.versionid,
+                },
+            });
+        }
         if (!blob_row) {
             throw "ML-REGISTRY-ERROR",
-                sprintf("artifact for version '%s' of model '%s' not found",
-                    version_id, name);
+                sprintf("artifact '%s' for version '%s' of model '%s' not found",
+                    artifact_name, version_id, name);
         }
 
         return blob_row.data;
+    }
+
+    list<hash<ModelArtifactInfo>> listArtifacts(string name, string version_id) {
+        string eff_tenant = tenant_id ?? "";
+        hash<auto> ver_row = getVersionRow(name, version_id, eff_tenant);
+
+        *list<auto> rows = blobs_table.selectRows({
+            "where": {
+                "tenant_id": eff_tenant,
+                "versionid": ver_row.versionid,
+            },
+        });
+        list<hash<ModelArtifactInfo>> result();
+        foreach hash<auto> row in (rows) {
+            if (row.artifact_metadata) {
+                push result, AbstractModelRegistryBackend::normalizeArtifactInfo(
+                    parse_json(row.artifact_metadata));
+            } else {
+                push result, <ModelArtifactInfo>{
+                    "name": row.artifact_name ?? "model",
+                    "role": "model",
+                    "format": "binary",
+                    "size": row.data.size(),
+                };
+            }
+        }
+        return result;
     }
 
     list<hash<ModelVersionInfo>> listVersions(string name) {
@@ -229,21 +309,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
 
         list<hash<ModelVersionInfo>> result();
         foreach hash<auto> row in (rows) {
-            push result, cast<hash<ModelVersionInfo>>({
-                "version_id": string(row.version_id),
-                "name": name,
-                "algorithm": string(row.algorithm),
-                "created": format_date("YYYY-MM-DDTHH:mm:ssZ", row.created),
-                "description": row.description ? string(row.description) : NOTHING,
-                "metrics": row.metrics ? parse_json(row.metrics) : NOTHING,
-                "tags": row.tags ? parse_json(row.tags) : (),
-                "file_size": int(row.artifact_size),
-                "format": string(row.format ?? "qml"),
-                "training_data_hash": row.training_data_hash
-                    ? string(row.training_data_hash) : NOTHING,
-                "tenant_id": tenant_id,
-                "config": row.config ? parse_json(row.config) : NOTHING,
-            });
+            push result, buildVersionInfo(row, name);
         }
         return result;
     }
@@ -420,21 +486,22 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                 sprintf("version '%s' not found for model '%s'", version_id, name);
         }
 
-        return cast<hash<ModelVersionInfo>>({
-            "version_id": string(row.version_id),
-            "name": name,
-            "algorithm": string(row.algorithm),
-            "created": format_date("YYYY-MM-DDTHH:mm:ssZ", row.created),
-            "description": row.description ? string(row.description) : NOTHING,
-            "metrics": row.metrics ? parse_json(row.metrics) : NOTHING,
-            "tags": row.tags ? parse_json(row.tags) : (),
-            "file_size": int(row.artifact_size),
-            "format": string(row.format ?? "qml"),
-            "training_data_hash": row.training_data_hash
-                ? string(row.training_data_hash) : NOTHING,
-            "tenant_id": tenant_id,
-            "config": row.config ? parse_json(row.config) : NOTHING,
-        });
+        return buildVersionInfo(row, name);
+    }
+
+    hash<ModelVersionInfo> getVersionManifest(string name, string version_id) {
+        hash<ModelVersionInfo> meta = getVersionMetadata(name, version_id);
+        meta.artifacts = listArtifacts(name, version_id);
+        if (!meta.execution) {
+            meta.execution = <ModelExecutionInfo>{
+                "runtime": meta.runtime ?? (meta.format == "qml" ? "qore-ml"
+                    : (meta.format == "onnx" ? "onnxruntime" : "metadata-only")),
+                "local_executable": meta.executable,
+                "entry_artifact": "model",
+                "requires": meta.format == "onnx" ? ("ml",) : (),
+            };
+        }
+        return meta;
     }
 
     list<string> listTenants() {
@@ -554,6 +621,8 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                         "comment": "Version description"},
                     "config": {"type": "clob",
                         "comment": "Version configuration JSON (e.g., tokenizer config)"},
+                    "metadata": {"type": "clob",
+                        "comment": "Full ModelVersionInfo metadata JSON"},
                     "created": {"type": "timestamp", "notnull": True,
                         "comment": "Creation timestamp"},
                 },
@@ -589,12 +658,17 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                         "comment": "FK to versions table"},
                     "data": {"type": "blob",
                         "comment": "Serialized model artifact; NULL for remote models"},
+                    "artifact_name": {"type": "varchar", "size": 255,
+                        "notnull": True, "default_value": "model",
+                        "comment": "Package-local artifact name"},
+                    "artifact_metadata": {"type": "clob",
+                        "comment": "Named artifact metadata JSON"},
                 },
                 "primary_key": {"name": "pk_" + prefix + "blobs",
                     "columns": ("blobid",)},
                 "indexes": {
                     ("uk_" + prefix + "blobs_tv"): {
-                        "columns": ("tenant_id", "versionid"),
+                        "columns": ("tenant_id", "versionid", "artifact_name"),
                         "unique": True,
                     },
                 },
@@ -642,6 +716,42 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
         return ver_row;
     }
 
+    #! Private: builds typed version metadata from a database row
+    private hash<ModelVersionInfo> buildVersionInfo(hash<auto> row, string name) {
+        hash<auto> meta;
+        if (row.metadata) {
+            meta = parse_json(row.metadata);
+        } else {
+            meta = {};
+        }
+
+        meta.version_id = string(row.version_id);
+        meta.name = name;
+        meta.algorithm = string(row.algorithm);
+        meta.created = format_date("YYYY-MM-DDTHH:mm:ssZ", row.created);
+        meta.description = row.description ? string(row.description) : NOTHING;
+        meta.metrics = row.metrics ? parse_json(row.metrics) : NOTHING;
+        meta.tags = row.tags ? parse_json(row.tags) : ();
+        meta.file_size = int(row.artifact_size);
+        meta.format = string(row.format ?? "qml");
+        meta.training_data_hash = row.training_data_hash
+            ? string(row.training_data_hash) : NOTHING;
+        meta.tenant_id = tenant_id;
+        meta.config = row.config ? parse_json(row.config) : NOTHING;
+        if (!meta.framework.val()) {
+            meta.framework = meta.format == "qml" ? "qore" : meta.format;
+        }
+        if (!meta.artifact_kind.val()) {
+            meta.artifact_kind = meta.format == "qml" || meta.format == "onnx"
+                ? "executable" : "metadata-only";
+        }
+        if (!meta.runtime.val()) {
+            meta.runtime = meta.format == "qml" ? "qore-ml"
+                : (meta.format == "onnx" ? "onnxruntime" : "metadata-only");
+        }
+        return AbstractModelRegistryBackend::normalizeVersionInfo(meta);
+    }
+
     #! Private: deletes a single version and its blob
     private nothing deleteVersionByIdInternal(string name, string version_id,
             string eff_tenant) {
@@ -669,8 +779,21 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
         blobs_table.del({"versionid": ver_row.versionid});
         versions_table.del({"versionid": ver_row.versionid});
     }
+
+    #! Private: validates an artifact name as a package-local filename
+    private static nothing validateArtifactName(string artifact_name) {
+        if (!artifact_name.val()) {
+            throw "ML-REGISTRY-ERROR", "artifact name must not be empty";
+        }
+        if (artifact_name == "." || artifact_name == ".."
+                || artifact_name =~ /[\\\/]/) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("invalid artifact name '%s': path separators and traversal "
+                    "segments are not allowed", artifact_name);
+        }
+    }
 }
 
-%endif # NoSqlUtil
+%endif # NoJson
 
 } # namespace QoreModelRegistry

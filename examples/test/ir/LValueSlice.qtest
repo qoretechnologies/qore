@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# LValuePath slice integration tests — verifies multi-key hash slice and
+# multi-index list/string/binary slice behavior is identical across
+# ast/ir/jit modes.  These shapes used to trampoline through evalAndRef
+# in the IR interpreter; D5 lowers them natively via HashKeySlice /
+# ListIndexSlice LVPathStep kinds.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class LValueSliceTest
+
+class LValueSliceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LValueSliceTest", "1.0", \ARGV) {
+        addTestCase("hash multi-key remove", \testHashMultiKeyRemove());
+        addTestCase("hash multi-key delete", \testHashMultiKeyDelete());
+        addTestCase("hash multi-key remove return value", \testHashMultiKeyRemoveReturn());
+        addTestCase("hash multi-key nonexistent keys", \testHashMultiKeyMissing());
+        addTestCase("nested hash multi-key remove", \testNestedHashMultiKeyRemove());
+        addTestCase("list multi-index remove", \testListMultiIndexRemove());
+        addTestCase("list multi-index remove unordered", \testListMultiIndexUnordered());
+        addTestCase("list range remove", \testListRangeRemove());
+        addTestCase("list multi-index delete", \testListMultiIndexDelete());
+        addTestCase("list multi-index out of range", \testListMultiIndexOutOfRange());
+        addTestCase("string multi-index remove", \testStringMultiIndexRemove());
+        addTestCase("binary multi-index remove", \testBinaryMultiIndexRemove());
+        addTestCase("member hash multi-key remove", \testMemberHashMultiKeyRemove());
+        addTestCase("self member hash multi-key remove", \testSelfMemberHashMultiKeyRemove());
+        set_return_value(main());
+    }
+
+    private string runInMode(string code, string mode) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return "";
+        }
+        TmpFile script();
+        script.file.write("%modern\n" + code);
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+        string cmd = sprintf("%s --exec-mode=%s %s > %s 2> %s",
+            qore_bin, mode, script.path, out.path, err.path);
+        int rc = system(cmd);
+        if (rc != 0) {
+            string err_output = ReadOnlyFile::readTextFile(err.path) ?? "";
+            if (err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+                testSkip("exec-mode option not supported");
+                return "";
+            }
+        }
+        return ReadOnlyFile::readTextFile(out.path) ?? "";
+    }
+
+    private assertSameInAllModes(string code, string expected, string desc) {
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string result = runInMode(code, mode);
+            assertEq(expected, result, sprintf("%s (%s)", desc, mode));
+        }
+    }
+
+    testHashMultiKeyRemove() {
+        string code = "
+hash<auto> h = {\"a\": 1, \"b\": 2, \"c\": 3};
+remove h{\"a\",\"c\"};
+printf(\"%d/%y\\n\", h.size(), h);
+";
+        assertSameInAllModes(code, "1/{b: 2}\n", "multi-key hash remove drops keys");
+    }
+
+    testHashMultiKeyDelete() {
+        string code = "
+hash<auto> h = {\"x\": 10, \"y\": 20, \"z\": 30};
+delete h{\"x\",\"z\"};
+printf(\"%d/%y\\n\", h.size(), h);
+";
+        assertSameInAllModes(code, "1/{y: 20}\n", "multi-key hash delete drops keys");
+    }
+
+    testHashMultiKeyRemoveReturn() {
+        string code = "
+hash<auto> h = {\"a\": 1, \"b\": 2, \"c\": 3};
+auto rv = (remove h{\"a\",\"c\"});
+printf(\"%y/%d\\n\", rv, h.size());
+";
+        assertSameInAllModes(code, "{a: 1, c: 3}/1\n", "multi-key remove aggregates removed entries");
+    }
+
+    testHashMultiKeyMissing() {
+        # Nonexistent keys must be silently skipped — matching issue #4122 semantics
+        string code = "
+hash<auto> h = {\"a\": 1, \"b\": 2};
+auto rv = (remove h{\"a\",\"missing\",\"b\",\"gone\"});
+printf(\"%y/%d\\n\", rv, h.size());
+";
+        assertSameInAllModes(code, "{a: 1, b: 2}/0\n", "multi-key remove skips missing keys");
+    }
+
+    testNestedHashMultiKeyRemove() {
+        string code = "
+hash<auto> h = {\"inner\": {\"a\": 1, \"b\": 2, \"c\": 3}};
+remove h.inner{\"a\",\"b\"};
+printf(\"%y\\n\", h);
+";
+        assertSameInAllModes(code, "{inner: {c: 3}}\n", "nested hash multi-key remove");
+    }
+
+    testListMultiIndexRemove() {
+        string code = "
+list<auto> l = (10, 20, 30, 40, 50);
+auto rv = (remove l[1,3]);
+printf(\"%y/%y\\n\", rv, l);
+";
+        assertSameInAllModes(code, "[20, 40]/[10, 30, 50]\n", "multi-index list remove");
+    }
+
+    testListMultiIndexUnordered() {
+        # Unordered indices must produce stable behaviour (result order matches
+        # the order the operand list was written, but removal is safe).
+        string code = "
+list<auto> l = (\"a\", \"b\", \"c\", \"d\", \"e\");
+auto rv = (remove l[3,0,2]);
+printf(\"%y/%y\\n\", rv, l);
+";
+        assertSameInAllModes(code, "[\"d\", \"a\", \"c\"]/[\"b\", \"e\"]\n",
+            "multi-index list remove unordered");
+    }
+
+    testListRangeRemove() {
+        string code = "
+list<auto> l = (0, 1, 2, 3, 4, 5, 6);
+auto rv = (remove l[1, 3..5]);
+printf(\"%y/%y\\n\", rv, l);
+";
+        assertSameInAllModes(code, "[1, 3, 4, 5]/[0, 2, 6]\n", "list range remove");
+    }
+
+    testListMultiIndexDelete() {
+        string code = "
+list<auto> l = (10, 20, 30, 40, 50);
+delete l[0,2,4];
+printf(\"%y\\n\", l);
+";
+        assertSameInAllModes(code, "[20, 40]\n", "multi-index list delete");
+    }
+
+    testListMultiIndexOutOfRange() {
+        string code = "
+list<auto> l = (10, 20, 30);
+auto rv = (remove l[0, 99, 2]);
+printf(\"%y/%y\\n\", rv, l);
+";
+        # AST emits NOTHING (renders as 'null' via %y) for out-of-range
+        # non-range indices
+        assertSameInAllModes(code, "[10, null, 30]/[20]\n",
+            "multi-index list remove out-of-range gives NOTHING slot");
+    }
+
+    testStringMultiIndexRemove() {
+        string code = "
+string s = \"hello world\";
+auto rv = (remove s[0, 6, 10]);
+printf(\"%y/%y\\n\", rv, s);
+";
+        assertSameInAllModes(code, "\"hwd\"/\"ello orl\"\n",
+            "multi-index string remove strips characters");
+    }
+
+    testBinaryMultiIndexRemove() {
+        string code = "
+binary b = <0102030405>;
+auto rv = (remove b[1, 3]);
+printf(\"%y/%y\\n\", rv, b);
+";
+        # binary renders via !!binary AgQ= style base64 through %y
+        assertSameInAllModes(code, "!!binary AgQ=/!!binary AQMF\n",
+            "multi-index binary remove strips bytes");
+    }
+
+    testMemberHashMultiKeyRemove() {
+        string code = "
+class Holder {
+    public { hash<auto> data = {\"a\": 1, \"b\": 2, \"c\": 3}; }
+    trim() { remove data{\"a\",\"c\"}; }
+}
+Holder h();
+h.trim();
+printf(\"%y\\n\", h.data);
+";
+        assertSameInAllModes(code, "{b: 2}\n", "member hash multi-key remove");
+    }
+
+    testSelfMemberHashMultiKeyRemove() {
+        string code = "
+class SelfMember {
+    public { hash<auto> cfg = {\"x\": 10, \"y\": 20, \"z\": 30}; }
+    auto take() { return (remove self.cfg{\"x\",\"z\"}); }
+}
+SelfMember s();
+auto removed = s.take();
+printf(\"%y/%y\\n\", removed, s.cfg);
+";
+        assertSameInAllModes(code, "{x: 10, z: 30}/{y: 20}\n",
+            "self.member hash multi-key remove");
+    }
+}

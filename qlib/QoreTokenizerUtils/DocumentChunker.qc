@@ -83,11 +83,16 @@ public class DocumentChunker {
           chunk_size)
         - \c add_special_tokens (bool): whether to include special tokens like `[CLS]`
           and `[SEP]` in each chunk (default: `True`)
+        - \c tokenizer_runtime_config (hash): optional parsed `tokenizer_config.json`
+          companion settings to load into the tokenizer
 
         @throw DOCUMENT-CHUNKER-ERROR if chunk_size <= 0 or chunk_overlap >= chunk_size
     */
     constructor(hash<auto> tokenizer_config, *hash<auto> options) {
         tokenizer = new Tokenizer::HFTokenizer(tokenizer_config);
+        if (options.tokenizer_runtime_config) {
+            tokenizer.loadConfig(options.tokenizer_runtime_config);
+        }
         chunk_size = options.chunk_size ?? 512;
         chunk_overlap = options.chunk_overlap ?? 64;
         add_special_tokens = options.add_special_tokens ?? True;

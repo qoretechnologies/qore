@@ -339,7 +339,7 @@ public class ServiceNowTableDataProvider inherits ServiceNowRestDataProviderBase
 
         @see requestSearchRecordsImpl()
     */
-    private DataProvider::AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private DataProvider::AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
        return new ServiceNowRestRecordIterator(rest, name, record_info, where_cond, search_options);
     }

@@ -41,8 +41,8 @@ DLLEXPORT void* qore_tokenizer_create(const QoreHashNode* config,
         if (error_buf && error_buf_len > 0) {
             const QoreValue desc = xsink.getExceptionDesc();
             if (desc.getType() == NT_STRING) {
-                snprintf(error_buf, error_buf_len, "%s",
-                    desc.get<const QoreStringNode>()->c_str());
+                QoreStringValueHelper str(desc);
+                snprintf(error_buf, error_buf_len, "%s", str->c_str());
             } else {
                 snprintf(error_buf, error_buf_len, "tokenizer initialization failed");
             }
@@ -129,7 +129,7 @@ DLLEXPORT char** qore_tokenizer_tokenize(void* handle,
     for (int32_t i = 0; i < n; ++i) {
         QoreValue tv = tokens->retrieveEntry(i);
         if (tv.getType() == NT_STRING) {
-            const QoreStringNode* s = tv.get<const QoreStringNode>();
+            QoreStringValueHelper s(tv);
             token_array[i] = strdup(s->c_str());
         } else {
             token_array[i] = strdup("");

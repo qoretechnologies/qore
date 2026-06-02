@@ -3,17 +3,18 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FileLocationHandler
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/WebUtil.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestHandler.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+%requires FileLocationHandler
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebUtil
+%requires RestClient
+%requires RestHandler
 
 %include  ../../qore/classes/FtpServer.qc
 

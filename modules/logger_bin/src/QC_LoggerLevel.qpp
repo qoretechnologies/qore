@@ -62,8 +62,9 @@ static void LoggerLevel_deserializer(QoreObject& self, const QoreHashNode* sdata
             return;
         }
 
+        QoreStringNodeValueHelper str(val);
         self.setPrivate(CID_LOGGERLEVEL,
-            new QoreLoggerLevel(code, val.get<const QoreStringNode>()->stringRefSelf()));
+            new QoreLoggerLevel(code, str->stringRefSelf()));
         return;
     }
 

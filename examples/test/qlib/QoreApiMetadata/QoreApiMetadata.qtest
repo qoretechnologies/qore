@@ -24,14 +24,16 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreApiMetadata
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreApiMetadata
 
 %exec-class QoreApiMetadataTest
 
 class QoreApiMetadataTest inherits QUnit::Test {
     constructor() : QUnit::Test("QoreApiMetadata", "1.0") {
         addTestCase("hashdecl defaults", \testHashdeclDefaults());
+        addTestCase("type metadata: wildcard parsing", \testTypeMetadataWildcardParsing());
         addTestCase("doc comment: block comment basic", \testBlockCommentBasic());
         addTestCase("doc comment: line comment basic", \testLineCommentBasic());
         addTestCase("doc comment: hash comment basic", \testHashCommentBasic());
@@ -54,7 +56,9 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doc comment: star-prefixed lines", \testStarPrefixedLines());
         addTestCase("ast: class extraction", \testAstClassExtraction());
         addTestCase("ast: function extraction", \testAstFunctionExtraction());
+        addTestCase("ast: named argument metadata", \testAstNamedArgumentMetadata());
         addTestCase("ast: hashdecl extraction", \testAstHashdeclExtraction());
+        addTestCase("ast: generic metadata", \testAstGenericMetadata());
         addTestCase("ast: enum extraction", \testAstEnumExtraction());
         addTestCase("ast: namespace hierarchy", \testAstNamespaceHierarchy());
         addTestCase("ast: doc comments on members", \testAstDocComments());
@@ -62,11 +66,15 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("ast: empty source", \testAstEmptySource());
         addTestCase("reflection: builtin class", \testReflectionBuiltinClass());
         addTestCase("reflection: builtin functions", \testReflectionBuiltinFunctions());
+        addTestCase("reflection: named argument metadata", \testReflectionNamedArgumentMetadata());
         addTestCase("reflection: namespace hierarchy", \testReflectionNamespaceHierarchy());
         addTestCase("reflection: method variants", \testReflectionMethodVariants());
         addTestCase("reflection: typed hashes", \testReflectionTypedHashes());
+        addTestCase("reflection: generic metadata", \testReflectionGenericMetadata());
         addTestCase("reflection: no documentation", \testReflectionNoDocs());
         addTestCase("qpp doc index: build from meta files", \testQppBuildFromMetaFiles());
+        addTestCase("qpp doc index: named argument metadata", \testQppNamedArgumentMetadata());
+        addTestCase("qpp doc index: generic metadata", \testQppGenericMetadata());
         addTestCase("qpp doc index: build from directory", \testQppBuildFromDirectory());
         addTestCase("qpp doc index: class indexing", \testQppClassIndexing());
         addTestCase("qpp doc index: function indexing", \testQppFunctionIndexing());
@@ -78,6 +86,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("merger: reflection + qpp docs", \testMergerReflectionQpp());
         addTestCase("merger: ast priority over qpp", \testMergerAstPriorityOverQpp());
         addTestCase("merger: param description enrichment", \testMergerParamEnrichment());
+        addTestCase("merger: generic metadata", \testMergerGenericMetadata());
         addTestCase("facade: fromSourceString", \testFacadeFromSourceString());
         addTestCase("facade: fromRuntime", \testFacadeFromRuntime());
         addTestCase("facade: searchSymbols", \testFacadeSearchSymbols());
@@ -182,6 +191,40 @@ class QoreApiMetadataTest inherits QUnit::Test {
             "full_name": "MyHash",
         });
         assertEq(0, hi.members.size());
+    }
+
+    testTypeMetadataWildcardParsing() {
+        hash<QoreApiMetadata::TypeUseInfo> nested =
+            QoreApiMetadata::TypeMetadata::parseTypeUse(
+                "hash<Result<? extends int>>");
+        assertEq("hash<Result<? extends int>>", nested.text);
+        assertEq("hash", nested.base_type);
+        assertEq(1, nested.type_arguments.size());
+        assertEq(1, nested.wildcard_arguments.size());
+        hash<QoreApiMetadata::WildcardTypeArgumentInfo> nested_wildcard =
+            nested.wildcard_arguments[0];
+        assertEq("0.0", nested_wildcard.path);
+        assertEq("Result", nested_wildcard.owner_type);
+        assertEq(0, nested_wildcard.argument_index);
+        assertEq("extends", nested_wildcard.kind);
+        assertEq("int", nested_wildcard.bound_type);
+        assertEq("int", nested_wildcard.bound_type_info.base_type);
+
+        hash<QoreApiMetadata::TypeUseInfo> optional =
+            QoreApiMetadata::TypeMetadata::parseTypeUse(
+                "*Queue<? super string>");
+        assertTrue(optional.is_optional);
+        assertEq("Queue", optional.base_type);
+        assertEq(1, optional.wildcard_arguments.size());
+        assertEq("super", optional.wildcard_arguments[0].kind);
+        assertEq("string", optional.wildcard_arguments[0].bound_type);
+
+        hash<QoreApiMetadata::TypeUseInfo> unbounded =
+            QoreApiMetadata::TypeMetadata::parseTypeUse(
+                "AbstractPollOperation<?>");
+        assertEq("AbstractPollOperation", unbounded.base_type);
+        assertEq("unbounded", unbounded.wildcard_arguments[0].kind);
+        assertEq(NOTHING, unbounded.wildcard_arguments[0].bound_type);
     }
 
     testBlockCommentBasic() {
@@ -460,9 +503,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstClassExtraction() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "class MyClass {\n"
             "    public {\n"
@@ -512,9 +553,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstFunctionExtraction() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! Add two numbers\n"
             "/** @param a the first number\n"
@@ -535,10 +574,40 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertRegex("add", fi.signature);
     }
 
+    testAstNamedArgumentMetadata() {
+        string source = "%modern\n"
+            "\n"
+            "class Reader {\n"
+            "    constructor(string path, string encoding = \"UTF-8\") {\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "string sub render(string source, string target, bool overwrite = False) {\n"
+            "    return target;\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.functions.size());
+        hash<QoreApiMetadata::FunctionInfo> fi = result.functions[0];
+        assertTrue(fi.named_callable);
+        assertEq(("source", "target", "overwrite"), fi.named_parameters);
+
+        assertEq(1, result.classes.size());
+        bool found_constructor = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (result.classes[0].instance_methods) {
+            if (m.name == "constructor") {
+                found_constructor = True;
+                assertTrue(m.named_callable);
+                assertEq(("path", "encoding"), m.named_parameters);
+            }
+        }
+        assertTrue(found_constructor);
+    }
+
     testAstHashdeclExtraction() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! A person record\n"
             "hashdecl PersonInfo {\n"
@@ -571,10 +640,86 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertTrue(found_age);
     }
 
+    testAstGenericMetadata() {
+        string source = "%modern\n"
+            "\n"
+            "class Box<T: int = int> [legacy_raw] {\n"
+            "    T value;\n"
+            "    nothing accept(AbstractPollOperation<?> op, Queue<? extends int> source) {}\n"
+            "}\n"
+            "\n"
+            "hashdecl Result<T: int = int> {\n"
+            "    T value;\n"
+            "    Queue<? super string> sink;\n"
+            "}\n"
+            "\n"
+            "hashdecl Child<T> inherits Result<T> {\n"
+            "    string name;\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.classes.size());
+        hash<QoreApiMetadata::ClassInfo> ci = result.classes[0];
+        assertEq(("T",), ci.type_parameters);
+        assertEq("int", ci.type_parameter_defaults.T);
+        assertEq("int", ci.type_parameter_bounds.T);
+        assertTrue(ci.raw_accepts_parameterized);
+        assertTrue(ci.raw_construction_defaults_to_auto);
+
+        bool found_accept_method = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (ci.instance_methods) {
+            if (m.name == "accept") {
+                found_accept_method = True;
+                assertEq(1, m.params[0].wildcard_type_arguments.size());
+                assertEq("AbstractPollOperation",
+                    m.params[0].wildcard_type_arguments[0].owner_type);
+                assertEq("unbounded",
+                    m.params[0].wildcard_type_arguments[0].kind);
+                assertEq(1, m.params[1].wildcard_type_arguments.size());
+                assertEq("Queue",
+                    m.params[1].wildcard_type_arguments[0].owner_type);
+                assertEq("extends",
+                    m.params[1].wildcard_type_arguments[0].kind);
+                assertEq("int",
+                    m.params[1].wildcard_type_arguments[0].bound_type);
+                break;
+            }
+        }
+        assertTrue(found_accept_method);
+
+        assertEq(2, result.hashdecls.size());
+        hash<QoreApiMetadata::HashdeclInfo> result_info;
+        hash<QoreApiMetadata::HashdeclInfo> child_info;
+        foreach hash<QoreApiMetadata::HashdeclInfo> hi in (result.hashdecls) {
+            if (hi.name == "Result") {
+                result_info = hi;
+            } else if (hi.name == "Child") {
+                child_info = hi;
+            }
+        }
+        assertEq(("T",), result_info.type_parameters);
+        assertEq("int", result_info.type_parameter_defaults.T);
+        assertEq("int", result_info.type_parameter_bounds.T);
+        bool found_sink_member = False;
+        foreach hash<QoreApiMetadata::MemberInfo> m in (result_info.members) {
+            if (m.name == "sink") {
+                found_sink_member = True;
+                assertEq(1, m.wildcard_type_arguments.size());
+                assertEq("super", m.wildcard_type_arguments[0].kind);
+                assertEq("string", m.wildcard_type_arguments[0].bound_type);
+                break;
+            }
+        }
+        assertTrue(found_sink_member);
+        assertEq(("T",), child_info.type_parameters);
+        assertEq("Result<T>", child_info.parent_name);
+        assertEq("Result", child_info.parent_type_info.base_type);
+    }
+
     testAstEnumExtraction() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! Color values\n"
             "enum Color {\n"
@@ -593,9 +738,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstNamespaceHierarchy() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "namespace Outer {\n"
             "    namespace Inner {\n"
@@ -644,9 +787,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstDocComments() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! A documented class\n"
             "class DocClass {\n"
@@ -687,9 +828,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testAstMultipleClasses() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "class Foo {\n"
             "    int x() { return 1; }\n"
@@ -769,6 +908,35 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertTrue(result.constants.size() > 100);
     }
 
+    testReflectionNamedArgumentMetadata() {
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
+
+        bool found_type = False;
+        foreach hash<QoreApiMetadata::FunctionInfo> f in (result.functions) {
+            if (f.name == "type") {
+                found_type = True;
+                assertTrue(f.named_callable);
+                assertEq(("value",), f.named_parameters);
+                break;
+            }
+        }
+        assertTrue(found_type);
+
+        hash<QoreApiMetadata::ClassInfo> ci =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractClass("Semaphore");
+        bool found_acquire = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (ci.instance_methods) {
+            if (m.name == "acquire") {
+                found_acquire = True;
+                assertTrue(m.named_callable);
+                assertEq(("timeout_ms",), m.named_parameters);
+                break;
+            }
+        }
+        assertTrue(found_acquire);
+    }
+
     testReflectionNamespaceHierarchy() {
         hash<QoreApiMetadata::NamespaceInfo> result =
             QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
@@ -832,6 +1000,44 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertTrue(found);
     }
 
+    testReflectionGenericMetadata() {
+        hash<QoreApiMetadata::ClassInfo> queue =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractClass("Queue");
+        assertEq(("T",), queue.type_parameters);
+        assertEq(0, queue.type_parameter_defaults.size());
+        assertEq(0, queue.type_parameter_bounds.size());
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
+        bool found = False;
+        foreach hash<QoreApiMetadata::HashdeclInfo> hi in (result.hashdecls) {
+            if (hi.name == "KeyValueInfo") {
+                found = True;
+                assertEq(("V",), hi.type_parameters);
+                break;
+            }
+        }
+        assertTrue(found);
+
+        hash<QoreApiMetadata::ClassInfo> delegating =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractClass(
+                "DelegatingPollOperation");
+        bool found_wildcard_param = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (delegating.instance_methods) {
+            if (m.name == "constructor" && m.params.size()
+                    && m.params[0].name == "operation") {
+                found_wildcard_param = True;
+                assertEq(1, m.params[0].wildcard_type_arguments.size());
+                assertEq("AbstractPollOperation",
+                    m.params[0].wildcard_type_arguments[0].owner_type);
+                assertEq("unbounded",
+                    m.params[0].wildcard_type_arguments[0].kind);
+                break;
+            }
+        }
+        assertTrue(found_wildcard_param);
+    }
+
     testReflectionNoDocs() {
         # reflection doesn't provide documentation — verify fields are empty
         hash<QoreApiMetadata::ClassInfo> ci =
@@ -876,6 +1082,57 @@ class QoreApiMetadataTest inherits QUnit::Test {
         # should have indexed Mutex methods
         assertTrue(exists index."Qore::Thread::Mutex::lock");
         assertEq("method", index."Qore::Thread::Mutex::lock".symbol_type);
+    }
+
+    testQppNamedArgumentMetadata() {
+        string meta_dir = getMetaDir();
+        string semaphore_path = meta_dir + "/QC_Semaphore.meta.json";
+        if (!is_readable(semaphore_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles((semaphore_path,));
+
+        assertTrue(exists index."Qore::Thread::Semaphore::acquire");
+        hash<auto> acquire = index."Qore::Thread::Semaphore::acquire";
+        assertTrue(acquire.named_callable);
+        assertEq(("timeout_ms",), acquire.named_parameters);
+    }
+
+    testQppGenericMetadata() {
+        string meta_dir = getMetaDir();
+        string queue_path = meta_dir + "/QC_Queue.meta.json";
+        string hash_iterator_path = meta_dir + "/QC_HashIterator.meta.json";
+        string delegating_path =
+            meta_dir + "/QC_DelegatingPollOperation.meta.json";
+        if (!is_readable(queue_path) || !is_readable(hash_iterator_path)
+                || !is_readable(delegating_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles(
+                (queue_path, hash_iterator_path, delegating_path));
+
+        assertTrue(exists index."Qore::Thread::Queue");
+        hash<auto> queue = index."Qore::Thread::Queue";
+        assertEq(("T",), cast<list<string>>(queue.type_parameters));
+        assertTrue(queue.raw_accepts_parameterized);
+        assertTrue(queue.raw_construction_defaults_to_auto);
+
+        assertTrue(exists index."Qore::KeyValueInfo");
+        hash<auto> key_value_info = index."Qore::KeyValueInfo";
+        assertEq(("V",), cast<list<string>>(key_value_info.type_parameters));
+
+        assertTrue(exists index."Qore::DelegatingPollOperation::constructor");
+        hash<auto> constructor =
+            index."Qore::DelegatingPollOperation::constructor";
+        assertEq(1, constructor.params[0].wildcard_type_arguments.size());
+        assertEq("AbstractPollOperation",
+            constructor.params[0].wildcard_type_arguments[0].owner_type);
+        assertEq("unbounded",
+            constructor.params[0].wildcard_type_arguments[0].kind);
     }
 
     testQppBuildFromDirectory() {
@@ -1326,10 +1583,45 @@ class QoreApiMetadataTest inherits QUnit::Test {
             merged.functions[0].params[0].description);
     }
 
+    testMergerGenericMetadata() {
+        hash<QoreApiMetadata::NamespaceInfo> refl = buildMockReflection();
+        hash<string, hash<auto>> doc_index = {
+            "Test::Foo": {
+                "symbol_type": "class",
+                "name": "Foo",
+                "type_parameters": ("T",),
+                "type_parameter_defaults": {"T": "int"},
+                "type_parameter_bounds": {"T": "number"},
+                "raw_accepts_parameterized": True,
+                "raw_construction_defaults_to_auto": True,
+            },
+            "Test::MyInfo": {
+                "symbol_type": "hashdecl",
+                "name": "MyInfo",
+                # Also accept the legacy qpp metadata key while older generated
+                # metadata may still exist in a build tree.
+                "type_params": ("V",),
+                "type_parameter_defaults": {"V": "string"},
+            },
+        };
+
+        hash<QoreApiMetadata::NamespaceInfo> merged =
+            QoreApiMetadata::SymbolMerger::merge(refl, NOTHING, doc_index);
+
+        hash<QoreApiMetadata::ClassInfo> ci = merged.classes[0];
+        assertEq(("T",), ci.type_parameters);
+        assertEq("int", ci.type_parameter_defaults.T);
+        assertEq("number", ci.type_parameter_bounds.T);
+        assertTrue(ci.raw_accepts_parameterized);
+        assertTrue(ci.raw_construction_defaults_to_auto);
+
+        hash<QoreApiMetadata::HashdeclInfo> hi = merged.hashdecls[0];
+        assertEq(("V",), hi.type_parameters);
+        assertEq("string", hi.type_parameter_defaults.V);
+    }
+
     testFacadeFromSourceString() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "#! A simple class\n"
             "class Simple {\n"
@@ -1404,9 +1696,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testFacadeJsonRoundtrip() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "class JsonTest {\n"
             "    int getValue() { return 1; }\n"
@@ -1430,9 +1720,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
     }
 
     testFacadeYamlRoundtrip() {
-        string source = "%new-style\n"
-            "%strict-args\n"
-            "%require-types\n"
+        string source = "%modern\n"
             "\n"
             "class YamlTest {\n"
             "    int getValue() { return 1; }\n"

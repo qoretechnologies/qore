@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class TypeNarrowingTest
 
@@ -63,6 +64,8 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("list<auto!> runtime type stripping", \listAutoNoNarrowRuntimeTest());
         addTestCase("hash<auto!> from reference", \hashAutoNoNarrowFromRefTest());
         addTestCase("list<auto!> from reference", \listAutoNoNarrowFromRefTest());
+        addTestCase("reference<hash<auto!>> write-through", \hashAutoNoNarrowReferenceWriteThroughTest());
+        addTestCase("reference<list<auto!>> write-through", \listAutoNoNarrowReferenceWriteThroughTest());
         addTestCase("hash<auto> runtime type stripping", \hashAutoRuntimeTest());
         addTestCase("list<auto> runtime type stripping", \listAutoRuntimeTest());
         addTestCase("hashdecl type preservation", \hashdeclPreservationTest());
@@ -1596,6 +1599,36 @@ sub test() {
         # Verify we can add different types
         l += "string";
         assertEq("string", l[3]);
+        assertEq("list<auto>", l.fullType());
+    }
+
+    assignHashAutoNoNarrowReference(reference<hash<auto!>> h) {
+        h = {"a": 1};
+    }
+
+    hashAutoNoNarrowReferenceWriteThroughTest() {
+        hash<auto> h;
+
+        assignHashAutoNoNarrowReference(\h);
+
+        assertEq("hash<auto>", h.fullType(), "reference<hash<auto!>> assignment should not narrow target hash");
+        h.b = "string";
+        assertEq("string", h.b);
+        assertEq("hash<auto>", h.fullType());
+    }
+
+    assignListAutoNoNarrowReference(reference<list<auto!>> l) {
+        l = (1,);
+    }
+
+    listAutoNoNarrowReferenceWriteThroughTest() {
+        list<auto> l;
+
+        assignListAutoNoNarrowReference(\l);
+
+        assertEq("list<auto>", l.fullType(), "reference<list<auto!>> assignment should not narrow target list");
+        l += "string";
+        assertEq("string", l[1]);
         assertEq("list<auto>", l.fullType());
     }
 

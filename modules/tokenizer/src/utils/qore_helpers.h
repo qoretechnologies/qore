@@ -33,18 +33,18 @@ inline const QoreListNode* safeGetList(QoreValue v) {
     return v.get<const QoreListNode>();
 }
 
-//! Safely gets a string value from a QoreValue
-inline const QoreStringNode* safeGetString(QoreValue v) {
+//! Safely gets a string value from a QoreValue.
+inline std::string safeGetStdString(QoreValue v) {
     if (v.isNullOrNothing() || v.getType() != NT_STRING) {
-        return nullptr;
+        return {};
     }
-    return v.get<const QoreStringNode>();
+    QoreStringValueHelper s(v);
+    return s->c_str();
 }
 
 //! Safely gets a string from a hash key (returns empty string if not found or not a string)
 inline std::string safeGetStringKey(const QoreHashNode* h, const char* key) {
-    const QoreStringNode* s = safeGetString(h->getKeyValue(key));
-    return s ? s->c_str() : "";
+    return safeGetStdString(h->getKeyValue(key));
 }
 
 //! Safely gets a bool from a hash key (returns default_val if not found)

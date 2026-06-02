@@ -28,8 +28,9 @@
 %modern
 %no-child-restrictions
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
 
 %exec-class UnionTypeTest
 
@@ -42,6 +43,7 @@ class UnionTypeTest inherits QUnit::Test {
         addTestCase("Union in function signature", \testUnionInFunction());
         addTestCase("Union in class", \testUnionInClass());
         addTestCase("Union with complex types", \testUnionComplexTypes());
+        addTestCase("Union with same container base types", \testUnionSameContainerBaseTypes());
         addTestCase("Union with typedef", \testUnionWithTypedef());
         addTestCase("Union type checking", \testUnionTypeChecking());
         addTestCase("Union error - empty", \testUnionEmptyError());
@@ -224,6 +226,62 @@ class UnionTypeTest inherits QUnit::Test {
         assertEq(3, result[1]);
     }
 
+    testUnionSameContainerBaseTypes() {
+        # Test union alternatives that share the same outer container type but have different value types
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            union<list<string>, list<int>> sub getList(bool ints) {
+                if (ints) {
+                    return (1, 2, 3);
+                }
+                return ('a', 'b');
+            }
+
+            union<hash<string, string>, hash<string, int>> sub getHash(bool ints) {
+                if (ints) {
+                    return {'a': 1};
+                }
+                return {'a': 'x'};
+            }
+
+            auto sub test() {
+                union<list<string>, list<int>> ints = (1, 2, 3);
+                union<list<string>, list<int>> strings = ('a', 'b');
+                union<hash<string, string>, hash<string, int>> int_hash = {'a': 1};
+                union<hash<string, string>, hash<string, int>> string_hash = {'a': 'x'};
+                list<auto> auto_ints = (1, 2, 3);
+                hash<auto> auto_hash = {'a': 1};
+                union<list<string>, list<int>> ints_from_auto = auto_ints;
+                union<hash<string, string>, hash<string, int>> int_hash_from_auto = auto_hash;
+
+                return (
+                    ints.fullType(),
+                    strings.fullType(),
+                    int_hash.fullType(),
+                    string_hash.fullType(),
+                    getList(True).fullType(),
+                    getList(False).fullType(),
+                    getHash(True).fullType(),
+                    getHash(False).fullType(),
+                    ints_from_auto.fullType(),
+                    int_hash_from_auto.fullType()
+                );
+            }
+        ", "test");
+        p.run();
+        list<auto> result = p.callFunction("test");
+        assertEq("list<int>", result[0]);
+        assertEq("list<string>", result[1]);
+        assertEq("hash<string, int>", result[2]);
+        assertEq("hash<string, string>", result[3]);
+        assertEq("list<int>", result[4]);
+        assertEq("list<string>", result[5]);
+        assertEq("hash<string, int>", result[6]);
+        assertEq("hash<string, string>", result[7]);
+        assertEq("list<int>", result[8]);
+        assertEq("hash<string, int>", result[9]);
+    }
+
     testUnionWithTypedef() {
         # Test union type with typedef
         Program p(PO_NEW_STYLE);
@@ -276,7 +334,7 @@ class UnionTypeTest inherits QUnit::Test {
     testUnionEmptyError() {
         # Test that empty union type causes parse error
         Program p(PO_NEW_STYLE);
-        assertThrows("PARSE-EXCEPTION", \p.parse(), ("
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("
             union<> sub test() {
                 return 1;
             }

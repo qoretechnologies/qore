@@ -108,8 +108,14 @@ public:
     }
 
     //! returns true if the value being managed can be edited/updated
+    /** A unique reference count alone is NOT sufficient — that uniqueness may belong
+        to the original owner (e.g. an AOT-deserialized ScopedObjectCallNode's args
+        list that this holder is borrowing via `value=true` evalList).  Editing in
+        that case destructively consumes the owner's args; subsequent re-evaluations
+        of the same expression see NOTHING entries.  Require `needs_deref` to confirm
+        the holder owns its own reference before allowing destructive edits. */
     DLLLOCAL bool canEdit() const {
-        return !val || needs_deref || val->is_unique();
+        return !val || needs_deref;
     }
 
     //! returns a pointer to the QoreListNode object being managed

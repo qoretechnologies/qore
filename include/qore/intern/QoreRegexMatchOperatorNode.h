@@ -55,6 +55,10 @@ public:
         return boolTypeInfo;
     }
 
+    DLLLOCAL QoreRegex* getRegex() const {
+        return const_cast<QoreRegex*>(*regex);
+    }
+
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
         ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)

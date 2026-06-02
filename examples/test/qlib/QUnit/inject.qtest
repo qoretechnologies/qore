@@ -5,7 +5,8 @@
 
 %disable-warning module-only
 
-%requires ../../../../qlib/FixedLengthUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FixedLengthUtil
 
 %requires reflection
 

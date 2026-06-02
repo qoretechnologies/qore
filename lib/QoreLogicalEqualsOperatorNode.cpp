@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,14 +29,42 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/intern/QorePluginRegistry.h>
 
 QoreString QoreLogicalEqualsOperatorNode::logical_equals_str("logical equals operator expression");
 QoreString QoreLogicalNotEqualsOperatorNode::logical_not_equals_str("logical not equals operator expression");
 
-QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    if (pfunc)
-        return (this->*pfunc)(xsink);
+static void set_binary_analysis_eq(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
 
+static int try_plugin_binary_parse_eq(QoreParseContext& parse_context, const QoreTypeInfo* lti,
+        const QoreTypeInfo* rti, const char* operation_name, const QoreParseAnalysis& left_analysis,
+        const QoreParseAnalysis& right_analysis, const QoreTypeInfo*& typeInfo) {
+    QorePluginResolvedOperationInfo plugin_op;
+    ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+    int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, rti, operation_name,
+        QorePluginHelperAbi::BinaryValue, plugin_op, parse_xsink);
+    if (plugin_rc) {
+        return plugin_rc;
+    }
+
+    typeInfo = plugin_op.signature.return_type;
+    parse_context.typeInfo = typeInfo;
+    set_binary_analysis_eq(parse_context, left_analysis, right_analysis);
+    return 0;
+}
+
+QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder l(left, xsink);
     if (*xsink)
         return QoreValue();
@@ -45,7 +73,31 @@ QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
     if (*xsink)
         return QoreValue();
 
-    return softEqual(*l, *r, xsink);
+    if (qore_buffer_binary_op_applies(*l, *r)) {
+        return qore_buffer_binary_op(*l, *r,
+            invertFallbackResult() ? QoreBufferBinaryOperation::NotEqual : QoreBufferBinaryOperation::Equal, xsink);
+    }
+
+    if (qore_plugin_value_may_have_operation(*l) || qore_plugin_value_may_have_operation(*r)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), getPluginOperationName(),
+            QorePluginHelperAbi::BinaryValue, *l, *r, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
+
+    bool result;
+    if (pfunc == &QoreLogicalEqualsOperatorNode::floatSoftEqual) {
+        result = l->getAsFloat() == r->getAsFloat();
+    } else if (pfunc == &QoreLogicalEqualsOperatorNode::bigIntSoftEqual) {
+        result = l->getAsBigInt() == r->getAsBigInt();
+    } else if (pfunc == &QoreLogicalEqualsOperatorNode::boolSoftEqual) {
+        result = l->getAsBool() == r->getAsBool();
+    } else {
+        result = softEqual(*l, *r, xsink);
+    }
+    return invertFallbackResult() ? !result : result;
 }
 
 int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -54,23 +106,54 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* lti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
 
     // FIXME issue warnings or errors at parse time based on operand types
 
     parse_context.typeInfo = boolTypeInfo;
+    typeInfo = boolTypeInfo;
+
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(lti, rti,
+        invertFallbackResult() ? QoreBufferBinaryOperation::NotEqual : QoreBufferBinaryOperation::Equal);
+    if (bufferResultTypeInfo) {
+        parse_context.typeInfo = bufferResultTypeInfo;
+        typeInfo = bufferResultTypeInfo;
+        set_binary_analysis_eq(parse_context, left_analysis, right_analysis);
+        return err;
+    }
+
+    int plugin_rc = try_plugin_binary_parse_eq(parse_context, lti, rti, getPluginOperationName(),
+        left_analysis, right_analysis, typeInfo);
+    if (plugin_rc < 0 && !err) {
+        err = -1;
+    } else if (!plugin_rc) {
+        return err;
+    }
 
     // see if both arguments are constants, then eval immediately and substitute this node with the result
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalEqualsOperatorNode> del(this);
         ParseExceptionSink xsink;
-        val = softEqual(left, right, *xsink);
+        bool result = softEqual(left, right, *xsink);
+        val = invertFallbackResult() ? !result : result;
+        set_binary_analysis_eq(parse_context, left_analysis, right_analysis);
         return **xsink ? -1 : 0;
     }
 
@@ -87,6 +170,7 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
             pfunc = &QoreLogicalEqualsOperatorNode::boolSoftEqual;
     }
 
+    set_binary_analysis_eq(parse_context, left_analysis, right_analysis);
     return err;
 }
 
@@ -102,25 +186,28 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
     //printf("QoreLogicalEqualsOperatorNode::softEqual() lt: %d rt: %d (%d %s)\n", lt, rt, right.type,
     //  right.getTypeName());
 
-    if (lt == NT_STRING) {
-        const QoreStringNode* ls = l.get<const QoreStringNode>();
-        if (rt == NT_STRING) {
-            return ls->equalSoft(*r.get<const QoreStringNode>(), xsink);
+    if (lt == NT_STRING || rt == NT_STRING) {
+        QoreStringValueHelper ls(l);
+        // Picking the LHS's encoding unconditionally throws ENCODING-CONVERSION-ERROR
+        // for cases like (us-ascii) == (utf-8-with-non-ascii), where the RHS bytes
+        // cannot survive a lossless transcode into US-ASCII.  Pick the more capable
+        // encoding (avoiding US-ASCII when the other side is something else) so the
+        // conversion direction matches QoreString::equalSoft's own internal logic.
+        const QoreEncoding* common = ls->getEncoding();
+        if (common == QCS_USASCII && rt == NT_STRING) {
+            const QoreEncoding* renc = r.get<const QoreStringNode>()->getEncoding();
+            if (renc) {
+                common = renc;
+            }
         }
-        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        QoreStringValueHelper rs(r, common, xsink);
         if (*xsink) {
             return false;
         }
-        return ls->equal(*rs);
-    }
-
-    if (rt == NT_STRING) {
-        const QoreStringNode* rs = r.get<const QoreStringNode>();
-        QoreStringValueHelper ls(l, rs->getEncoding(), xsink);
-        if (*xsink) {
-            return false;
-        }
-        return ls->equal(*rs);
+        // ls may now be in a different encoding than common; rs is already common.
+        // equalSoft handles cross-encoding length+memcmp + further USASCII coercion
+        // safely, so just delegate.
+        return ls->equalSoft(*rs, xsink);
     }
 
     if (lt == NT_NUMBER) {
@@ -170,6 +257,14 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
         DateTimeValueHelper ld(l);
         DateTimeValueHelper rd(r);
         return ld->isEqual(*rd);
+    }
+
+    if (lt == NT_NULL || rt == NT_NULL) {
+        return lt == NT_NULL && rt == NT_NULL;
+    }
+
+    if (lt == NT_NOTHING || rt == NT_NOTHING) {
+        return lt == NT_NOTHING && rt == NT_NOTHING;
     }
 
     const AbstractQoreNode* ln = l.getInternalNode();

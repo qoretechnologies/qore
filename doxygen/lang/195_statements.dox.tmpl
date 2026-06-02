@@ -340,6 +340,13 @@ Skips the rest of a loop and jumps right to the evaluation of the iteration expr
     Another optional modifier to the <tt><b>context</b></tt> statement that behaves the same as above except that the
     results are sorted in descending order.
 
+    @par Execution Modes
+    The \c context statement, contextual column references such as \c %name,
+    and the \c %% current-row reference are supported by AST, IR, JIT, and
+    AOT execution. Native execution modes use the shared IR pipeline while
+    preserving the same row-ordering, filtering, break/continue/return, and
+    exception semantics as AST execution.
+
     @par Example
     @code{.py}
 # note that "%service_type" and "%effective_start_date" represent values

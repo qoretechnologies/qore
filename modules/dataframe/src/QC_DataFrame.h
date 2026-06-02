@@ -13,6 +13,8 @@
 
 #include "df_column.h"
 
+#include <qore/QoreColumnarResult.h>
+
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -23,6 +25,12 @@ DLLLOCAL extern QoreClass* QC_DATAFRAME;
 
 DLLLOCAL void preinitDataFrameClass();
 DLLLOCAL QoreClass* initDataFrameClass(QoreNamespace& ns);
+
+DLLLOCAL extern const TypedHashDecl* hashdeclDataFrameShape;
+DLLLOCAL extern const TypedHashDecl* hashdeclColumnStats;
+DLLLOCAL extern const TypedHashDecl* hashdeclCsvOptions;
+DLLLOCAL extern const TypedHashDecl* hashdeclParquetReadOptions;
+DLLLOCAL extern const TypedHashDecl* hashdeclParquetWriteOptions;
 
 namespace QoreDataFrameNS {
 
@@ -44,6 +52,10 @@ public:
     DLLLOCAL static QoreDataFrame* fromColumns(const QoreHashNode* columns,
         ExceptionSink* xsink);
 
+    //! Construct from a native ColumnarResult without materializing an intermediate hash
+    DLLLOCAL static QoreDataFrame* fromColumnarResult(const QoreColumnarResult* result,
+        ExceptionSink* xsink);
+
     // --- Metadata ---
 
     DLLLOCAL int64_t numRows() const;
@@ -57,6 +69,9 @@ public:
     //! Get a column's values as a Qore list
     DLLLOCAL QoreListNode* getColumn(const std::string& name, ExceptionSink* xsink) const;
 
+    //! Get a column's values as a dense Qore buffer
+    DLLLOCAL QoreBufferNode* getColumnBuffer(const std::string& name, ExceptionSink* xsink) const;
+
     //! Get a row as a hash
     DLLLOCAL QoreHashNode* getRow(int64_t index, ExceptionSink* xsink) const;
 
@@ -69,6 +84,10 @@ public:
     //! Get a slice [start, end) as a new DataFrame
     DLLLOCAL QoreDataFrame* slice(int64_t start, int64_t end, ExceptionSink* xsink) const;
 
+    //! Get an inclusive row range as a new DataFrame
+    DLLLOCAL QoreDataFrame* sliceRange(const QoreValue& start_index, const QoreValue& stop_index,
+        ExceptionSink* xsink) const;
+
     // --- Conversion ---
 
     //! Convert to list<hash<auto>>
@@ -76,6 +95,9 @@ public:
 
     //! Convert to hash of lists (column-oriented)
     DLLLOCAL QoreHashNode* toColumnHash(ExceptionSink* xsink) const;
+
+    //! Convert to a columnar result, preserving dense buffers when available
+    DLLLOCAL QoreColumnarResult* toColumnarResult(ExceptionSink* xsink) const;
 
     // --- Statistics ---
 
@@ -106,6 +128,17 @@ public:
     DLLLOCAL QoreDataFrame* filter(const std::string& column, const std::string& op,
         QoreValue value, ExceptionSink* xsink) const;
 
+    //! Build a row bitmap mask by comparing one column with a value
+    DLLLOCAL std::vector<uint8_t> compareColumnMask(const std::string& column, const std::string& op,
+        QoreValue value, ExceptionSink* xsink) const;
+
+    //! Filter rows using a row bitmap mask
+    DLLLOCAL QoreDataFrame* filterMask(const std::vector<uint8_t>& mask, ExceptionSink* xsink) const;
+
+    //! Build a new DataFrame from an arbitrary row index list
+    DLLLOCAL QoreDataFrame* selectRows(const std::vector<int64_t>& indices,
+        ExceptionSink* xsink) const;
+
     //! Sort by one or more columns
     DLLLOCAL QoreDataFrame* sortBy(const QoreListNode* columns,
         const QoreListNode* ascending, ExceptionSink* xsink) const;
@@ -119,6 +152,14 @@ public:
 
     //! Drop rows containing any null values
     DLLLOCAL QoreDataFrame* dropna(ExceptionSink* xsink) const;
+
+    //! Count distinct values in one column
+    DLLLOCAL QoreDataFrame* valueCounts(const std::string& column, bool dropna,
+        bool sort_desc, const std::string& count_name, ExceptionSink* xsink) const;
+
+    //! Return the number of distinct values in one column
+    DLLLOCAL int64_t nunique(const std::string& column, bool dropna,
+        ExceptionSink* xsink) const;
 
     //! Return a new DataFrame with an additional or replaced column
     DLLLOCAL QoreDataFrame* withColumn(const std::string& name,
@@ -165,15 +206,22 @@ public:
         const QoreListNode* on_columns, const std::string& how,
         ExceptionSink* xsink) const;
 
-    // --- Parquet I/O (optional — requires Apache Arrow) ---
+    // --- Parquet I/O via Apache Arrow and Parquet ---
 
     //! Read a Parquet file into a DataFrame
     DLLLOCAL static QoreDataFrame* readParquet(const std::string& path,
-        ExceptionSink* xsink);
+        const QoreHashNode* options, ExceptionSink* xsink);
 
     //! Write this DataFrame to a Parquet file
-    DLLLOCAL void writeParquet(const std::string& path,
+    DLLLOCAL void writeParquet(const std::string& path, const QoreHashNode* options,
         ExceptionSink* xsink) const;
+
+    //! Read Arrow IPC stream or file data into a DataFrame
+    DLLLOCAL static QoreDataFrame* fromArrowIpc(const BinaryNode* data,
+        ExceptionSink* xsink);
+
+    //! Write this DataFrame to an Arrow IPC stream binary
+    DLLLOCAL BinaryNode* toArrowIpc(ExceptionSink* xsink) const;
 
     // --- ML Integration ---
 
@@ -218,10 +266,6 @@ private:
 
     //! Build a new DataFrame from a contiguous row range
     DLLLOCAL QoreDataFrame* sliceRows(int64_t start, int64_t count,
-        ExceptionSink* xsink) const;
-
-    //! Build a new DataFrame from an arbitrary row index list
-    DLLLOCAL QoreDataFrame* selectRows(const std::vector<int64_t>& indices,
         ExceptionSink* xsink) const;
 
     //! Rebuild col_index from columns vector

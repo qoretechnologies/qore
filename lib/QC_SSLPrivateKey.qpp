@@ -82,19 +82,20 @@ qclass SSLPrivateKey [arg=QoreSSLPrivateKey* pk; vparent=Serializable; serialize
 
 //! Creates the SSLPrivateKey object from the PEM-encoded text representation of the private key passed
 /** @param pem The PEM-encoded text representation of the private key
-    @param pass The optional password or passphrase for the private key
+    @param password The optional password or passphrase for the private key
 
     @par Example:
     @code{.py}
-SSLPrivateKey key(pem);
+SSLPrivateKey key(pem: pem, password: password);
     @endcode
 
     @throw SSLPRIVATEKEY-CONSTRUCTOR-ERROR error in private key data
 
     @since 0.8.4: the deprecated functionality where the if the string passed was less than 200 bytes long, it was assumed to be a file name has been removed; the string is assumed to be the PEM-encoded private key itself
  */
-SSLPrivateKey::constructor(string pem, *string pass) {
-    SimpleRefHolder<QoreSSLPrivateKey> qpk(new QoreSSLPrivateKey(pem, pass ? pass->c_str() : nullptr, xsink));
+SSLPrivateKey::constructor(string pem, *string password) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLPrivateKey> qpk(new QoreSSLPrivateKey(pem, password ? password->c_str() : nullptr,
+        xsink));
 
     if (!*xsink) {
         self->setPrivate(CID_SSLPRIVATEKEY, qpk.release());
@@ -106,12 +107,12 @@ SSLPrivateKey::constructor(string pem, *string pass) {
 
     @par Example:
     @code{.py}
-SSLPrivateKey key(der);
+SSLPrivateKey key(der: der);
     @endcode
 
     @throw SSLPRIVATEKEY-CONSTRUCTOR-ERROR error in private key data
  */
-SSLPrivateKey::constructor(binary der) {
+SSLPrivateKey::constructor(binary der) [flags=NAMED_ARGS] {
     SimpleRefHolder<QoreSSLPrivateKey> qc(new QoreSSLPrivateKey(der, xsink));
     if (!*xsink) {
         self->setPrivate(CID_SSLPRIVATEKEY, qc.release());

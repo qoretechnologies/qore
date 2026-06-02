@@ -97,7 +97,7 @@ public class SegmentTrackingPlansDataProvider inherits SegmentDataProviderBase {
     }
 
     #! Searches for tracking plans
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Build query with optional type filter
         string path = "tracking-plans";
@@ -105,7 +105,7 @@ public class SegmentTrackingPlansDataProvider inherits SegmentDataProviderBase {
             path += sprintf("?type=%s", encode_url(search_options.type, True));
         }
         list<auto> records = doPaginatedGet(path, search_options.count);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

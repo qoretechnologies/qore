@@ -43,7 +43,7 @@ QoreRerankerProcessor proc({
     @endcode
 
 */
-public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -89,7 +89,6 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
                     "- `http` — Call an HTTP reranker endpoint\n"
                     "- `onnx` — Run a local ONNX cross-encoder model",
                 "type": AbstractDataProviderTypeMap."string",
-                "required": True,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "http",
@@ -130,9 +129,49 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
                 "display_name": "Tokenizer Config Path",
                 "short_desc": "Path to tokenizer.json for ONNX mode",
                 "desc": "Filesystem path to a HuggingFace `tokenizer.json` file. "
-                    "Required for `onnx` mode.",
+                    "Required for `onnx` mode unless `registry_model_name` is provided.",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": False,
+            },
+            "onnx_session_config": <DataProviderOptionInfo>{
+                "display_name": "ONNX Session Config",
+                "short_desc": "Provider and threading config for ONNX Runtime",
+                "desc": "Optional `ML::OnnxSessionConfig` hash passed to the local ONNX "
+                    "cross-encoder model. Use this to select execution providers, disable "
+                    "GPU auto-detection with `{\"providers\": ()}`, or tune "
+                    "`intra_op_threads`, `inter_op_threads`, and graph optimization. "
+                    "Registry package execution config is used by default when present; "
+                    "this option overrides it.",
+                "type": AbstractDataProviderTypeMap."*hash",
+                "example_value": {"providers": ()},
+            },
+            "registry_model_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Name",
+                "short_desc": "Registry package containing reranker artifacts",
+                "desc": "QoreModelRegistry model/package name containing an ONNX cross-encoder "
+                    "model and a `tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_version": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Version",
+                "short_desc": "Registry model version or latest",
+                "desc": "Optional registry model version ID. Omit or use `latest` to load "
+                    "the most recent package version.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry ONNX Artifact",
+                "short_desc": "Named ONNX artifact in the package",
+                "desc": "Optional named ONNX artifact. Defaults to the package execution "
+                    "entry artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_tokenizer_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Tokenizer Artifact",
+                "short_desc": "Named tokenizer.json artifact in the package",
+                "desc": "Optional tokenizer artifact name. Defaults to the package manifest's "
+                    "`tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
             },
             "max_length": <DataProviderOptionInfo>{
                 "display_name": "Max Sequence Length",
@@ -143,7 +182,17 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
                 "required": False,
                 "default_value": 512,
             },
-        };
+            "output_names": <DataProviderOptionInfo>{
+                "display_name": "Output Tensor Names",
+                "short_desc": "Only materialize selected ONNX outputs",
+                "desc": "Optional output tensor names to request from ONNX Runtime before "
+                    "score extraction. Use this for multi-output reranker models when "
+                    "only the logits tensor is needed, for example `(\"logits\",)`. "
+                    "Omit this option to request all model outputs.",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                "example_value": ("logits",),
+            },
+        } + AbstractDataProviderMLProcessor::ModelRegistryConstructorOptions;
     }
 
     private {
@@ -158,6 +207,18 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
 
         #! The reranker instance
         QoreTokenizerUtils::CrossEncoderReranker reranker;
+
+        #! Optional ONNX Runtime session configuration
+        *hash<ML::OnnxSessionConfig> onnx_session_config;
+
+        #! Optional ONNX output tensor names
+        *list<string> output_names;
+
+        #! Registry backend options
+        hash<auto> registry_options;
+
+        #! True when ONNX mode was inferred from registry execution metadata
+        bool reranker_mode_inferred = False;
 
         #! Accumulated records
         list<auto> buffer = ();
@@ -184,15 +245,42 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
             throw "CONSTRUCTOR-ERROR", "passage_field option is required";
         }
 
-        string reranker_mode = copts.reranker_mode;
+        string reranker_mode;
+        *string requested_reranker_mode = copts.reranker_mode;
+        if (requested_reranker_mode.val()) {
+            reranker_mode = requested_reranker_mode;
+        }
+        if (!reranker_mode.val() && copts.registry_model_name.val()) {
+            reranker_mode = "onnx";
+            reranker_mode_inferred = True;
+        }
         if (!reranker_mode.val()) {
-            throw "CONSTRUCTOR-ERROR", "reranker_mode option is required";
+            throw "CONSTRUCTOR-ERROR",
+                "reranker_mode is required unless registry_model_name identifies a "
+                "registry package with an onnx/reranker execution plan";
         }
 
         hash<QoreTokenizerUtils::RerankerConfig> rconfig(<QoreTokenizerUtils::RerankerConfig>{
             "mode": reranker_mode,
             "max_length": copts.max_length ?? 512,
         });
+        if (exists copts.output_names) {
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            if (!output_names) {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names must contain at least one ONNX output tensor name; "
+                    "omit output_names to request all model outputs";
+            }
+            if (reranker_mode != "onnx") {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names is only supported when reranker_mode is \"onnx\"; "
+                    "omit output_names for HTTP reranker endpoints";
+            }
+            rconfig.output_names = output_names;
+        }
+        if (exists copts.onnx_session_config) {
+            onnx_session_config = cast<hash<ML::OnnxSessionConfig>>(copts.onnx_session_config);
+        }
 
         if (reranker_mode == "http") {
             if (!copts.reranker_url.val()) {
@@ -202,17 +290,66 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
             rconfig.url = copts.reranker_url;
             rconfig.api_key = copts.reranker_api_key;
         } else if (reranker_mode == "onnx") {
-            if (!copts.reranker_model_path.val()) {
+            registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
+            if (copts.registry_model_name.val()) {
+%ifndef NoJson
+                QoreModelRegistry::ModelRegistry registry(registry_options);
+                hash<QoreModelRegistry::ModelVersionInfo> manifest =
+                    registry.getVersionManifest(copts.registry_model_name,
+                        copts.registry_model_version);
+                AbstractDataProviderMLProcessor::validateRegistryExecutionTask(
+                    manifest, "reranker", "rerank-text", reranker_mode_inferred);
+                if (!output_names) {
+                    *list<string> plan_output_names =
+                        AbstractDataProviderMLProcessor::getRegistryExecutionPlanOutputNames(
+                            manifest, ("logits_output_name", "logits_output",
+                                "scores_output", "score_output"));
+                    if (plan_output_names) {
+                        rconfig.output_names = plan_output_names;
+                    }
+                }
+                string artifact_name = copts.registry_model_artifact_name
+                    ?? AbstractDataProviderMLProcessor::getRegistryExecutionPlanArtifactName(
+                        manifest)
+                    ?? (manifest.execution ? manifest.execution.entry_artifact : NOTHING)
+                    ?? "model";
+                if (manifest.execution && manifest.execution.config) {
+                    rconfig.session_config =
+                        cast<hash<ML::OnnxSessionConfig>>(manifest.execution.config);
+                }
+                rconfig.model_data = registry.loadNamedArtifact(copts.registry_model_name,
+                    manifest.version_id, artifact_name);
+                hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+                    copts.registry_model_name, manifest.version_id,
+                    copts.registry_tokenizer_artifact_name);
+                rconfig.tokenizer_config = tokenizer_package.tokenizer_json;
+                rconfig.tokenizer_runtime_config = tokenizer_package.tokenizer_config;
+%else
+                throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
+%endif
+            } else {
+                if (!copts.reranker_model_path.val()) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "reranker_model_path is required for ONNX mode unless "
+                        "registry_model_name is provided";
+                }
+                if (!copts.tokenizer_config_path.val()) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "tokenizer_config_path is required for ONNX mode unless "
+                        "registry_model_name is provided";
+                }
+                rconfig.model_path = copts.reranker_model_path;
+%ifndef NoJson
+                rconfig.tokenizer_config =
+                    parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+%else
                 throw "CONSTRUCTOR-ERROR",
-                    "reranker_model_path is required for ONNX mode";
+                    "json module is required for tokenizer config parsing";
+%endif
             }
-            if (!copts.tokenizer_config_path.val()) {
-                throw "CONSTRUCTOR-ERROR",
-                    "tokenizer_config_path is required for ONNX mode";
+            if (onnx_session_config) {
+                rconfig.session_config = onnx_session_config;
             }
-            rconfig.model_path = copts.reranker_model_path;
-            rconfig.tokenizer_config =
-                parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
         }
 
         reranker = new QoreTokenizerUtils::CrossEncoderReranker(rconfig);
@@ -287,9 +424,176 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
         return results;
     }
 
-    #! Does not support bulk API
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash<auto>>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreRerankerProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (buffer || query_field.find(".") >= 0 || passage_field.find(".") >= 0) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *list<string> queries = stringColumnFromShape(records, shape, count, query_field);
+        *list<string> passages = stringColumnFromShape(records, shape, count, passage_field);
+        if (!exists queries || !exists passages) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        list<float> scores = reranker.score(queries[0], passages);
+        if (scores.lsize() != count) {
+            throw "PROCESSOR-ERROR",
+                sprintf("reranker returned %d scores for %d input rows", scores.lsize(), count);
+        }
+
+        list<hash<auto>> scored;
+        for (int i = 0; i < scores.lsize(); ++i) {
+            push scored, {"index": i, "score": scores[i]};
+        }
+        scored = sort(scored, int sub(hash<auto> a, hash<auto> b) {
+            return b.score <=> a.score;
+        });
+
+        int limit = min(top_k, scored.lsize());
+        list<int> selected_indices;
+        list<float> selected_scores;
+        list<int> ranks;
+        for (int i = 0; i < limit; ++i) {
+            push selected_indices, scored[i]."index";
+            push selected_scores, scored[i].score;
+            push ranks, i + 1;
+        }
+
+        return selectRerankedRows(records, shape, selected_indices, selected_scores, ranks);
+    }
+
+    #! Uses the row-oriented implementation when a shaped column path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        foreach auto row in (rows) {
+            processRecordImpl(row);
+        }
+        return;
+    }
+
+    #! Reads a top-level string column from a shaped block
+    private *list<string> stringColumnFromShape(auto records, DataProvider::DataProviderShape shape,
+            int count, string field) {
+        *auto column;
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                if (records.columnNames().contains(field)) {
+                    column = records.getColumn(field);
+                }
+                break;
+            case DataProvider::DataProviderShape::BufferColumns:
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    if (records.columnNames().contains(field)) {
+                        column = records.getColumn(field);
+                    }
+                } else if (records.hasKey(field)) {
+                    column = records{field};
+                }
+                break;
+            case DataProvider::DataProviderShape::HashOfLists:
+                if (records.hasKey(field)) {
+                    column = records{field};
+                }
+                break;
+        }
+        if (!exists column) {
+            return;
+        }
+        return QoreRerankerProcessor::columnToStrings(column, count, field);
+    }
+
+    #! Converts a shaped text column to string values using row-mode value semantics
+    private static list<string> columnToStrings(auto column, int count, string field) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        if (values.lsize() != count) {
+            throw "PROCESSOR-SHAPE-ERROR",
+                sprintf("text field %y has %d values but the shaped block has %d rows",
+                    field, values.lsize(), count);
+        }
+
+        list<string> texts;
+        foreach auto value in (values) {
+            push texts, value.toString();
+        }
+        return texts;
+    }
+
+    #! Builds a shaped top-k output block with reranker score and rank columns
+    private auto selectRerankedRows(auto records, DataProvider::DataProviderShape shape,
+            list<int> selected_indices, list<float> scores, list<int> ranks) {
+        hash<auto> columns;
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                return records.takeRows(selected_indices)
+                    .withColumn("reranker_score", scores)
+                    .withColumn("reranker_rank", ranks);
+            case DataProvider::DataProviderShape::BufferColumns:
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    columns = records.take(selected_indices).toColumnHash();
+                    columns.reranker_score = scores;
+                    columns.reranker_rank = ranks;
+                    return ColumnarResult::fromColumnHash(columns);
+                }
+                columns = records + {};
+                foreach string name in (keys columns) {
+                    columns{name} = QoreRerankerProcessor::selectColumnValues(
+                        columns{name}, selected_indices);
+                }
+                columns.reranker_score = scores;
+                columns.reranker_rank = ranks;
+                return ColumnarResult::fromColumnHash(columns);
+            case DataProvider::DataProviderShape::HashOfLists:
+                foreach string name in (keys records) {
+                    columns{name} = QoreRerankerProcessor::selectColumnValues(
+                        records{name}, selected_indices);
+                }
+                columns.reranker_score = scores;
+                columns.reranker_rank = ranks;
+                return columns;
+        }
+        return records;
+    }
+
+    #! Selects a ranked subset from a list or dense buffer column
+    private static list<auto> selectColumnValues(auto column, list<int> selected_indices) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        list<auto> result;
+        if (values.typeCode() != NT_LIST) {
+            return DataProvider::AbstractDataProcessor::repeatValue(column, selected_indices.lsize());
+        }
+        foreach int index in (selected_indices) {
+            push result, values[index];
+        }
+        return result;
+    }
+
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

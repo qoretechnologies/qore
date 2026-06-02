@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreAbstractLoggerInterface.h>
 
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
@@ -41,6 +42,7 @@
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <algorithm>
 #include <atomic>

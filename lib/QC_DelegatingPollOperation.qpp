@@ -205,7 +205,8 @@ protected:
             ExceptionSink xsink;
             ValueHolder rv(inner_obj->evalMethod("getState", nullptr, &xsink), &xsink);
             if (!xsink && rv->getType() == NT_STRING) {
-                cached_state = rv->get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper state(*rv);
+                cached_state.assign(state->c_str(), state->size());
                 return cached_state.c_str();
             }
         }
@@ -247,17 +248,18 @@ qclass DelegatingPollOperation [
     private_members=object sock,string goal,auto data_save;
     ns=Qore;
     arg=DelegatingPollOperationPriv* poll;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<auto>
 ];
 
 //! Creates a delegating poll operation wrapping an inner operation
-/** @param inner the inner poll operation to delegate to
+/** @param operation the inner poll operation to delegate to
     @param on_complete optional code reference called when the operation completes;
         signature: \c code<nothing(hash<SocketPollResultInfo>)>
-    @param done optional Counter to decrement when the operation completes
+    @param done_counter optional Counter to decrement when the operation completes
 */
-DelegatingPollOperation::constructor(AbstractPollOperation inner, *code on_complete, *Counter done) {
-    QoreObject* inner_obj = const_cast<QoreObject*>(inner);
+DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code on_complete, *Counter done_counter)
+        [flags=NAMED_ARGS] {
+    QoreObject* inner_obj = const_cast<QoreObject*>(operation);
 
     // Get the inner operation's C++ private data if available
     SocketPollOperationBase* inner_base = nullptr;
@@ -277,8 +279,8 @@ DelegatingPollOperation::constructor(AbstractPollOperation inner, *code on_compl
     }
 
     QoreObject* counter_obj = nullptr;
-    if (done) {
-        counter_obj = const_cast<QoreObject*>(done);
+    if (done_counter) {
+        counter_obj = const_cast<QoreObject*>(done_counter);
         counter_obj->ref();
     }
 
@@ -376,7 +378,7 @@ auto DelegatingPollOperation::getOutput() [flags=RET_VALUE_ONLY] {
     was provided, it is called with the result hash. If both are provided, the
     Counter is decremented first.
 */
-nothing DelegatingPollOperation::onComplete(hash<SocketPollResultInfo> result) {
+nothing DelegatingPollOperation::onComplete(hash<SocketPollResultInfo> result) [flags=NAMED_ARGS] {
     if (poll->counter_obj) {
         // Decrement counter — use separate xsink so counter failures don't block callback
         ExceptionSink dec_xsink;

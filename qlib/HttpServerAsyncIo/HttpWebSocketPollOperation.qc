@@ -152,6 +152,8 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         @ref setConnection() behavior.
     */
     public onPollComplete() {
+        HttpWebSocketPollOperationBase::onPollComplete();
+
         *HttpAsyncSocketIoController c;
         *HttpAsyncTarget t;
         {

@@ -58,25 +58,41 @@ struct TypedefEntry {
     QoreParseTypeInfo* parseTypeInfo = nullptr;  //!< parse-time type info (before resolution)
     const QoreTypeInfo* typeInfo = nullptr;      //!< resolved type info (after resolution)
     bool pub = false;                            //!< is this typedef public?
+    std::string from_module;                     //!< module that defined this typedef
 
     //! Constructor for parse-time type info only
     DLLLOCAL TypedefEntry(const QoreProgramLocation* loc, QoreParseTypeInfo* pti, bool p = false)
             : loc(loc), parseTypeInfo(pti), pub(p) {
+        assignModule();
     }
 
     //! Constructor for both resolved type info and parse-time type info
     DLLLOCAL TypedefEntry(const QoreProgramLocation* loc, const QoreTypeInfo* ti, QoreParseTypeInfo* pti,
             bool p = false)
             : loc(loc), parseTypeInfo(pti), typeInfo(ti), pub(p) {
+        assignModule();
     }
 
     DLLLOCAL TypedefEntry(const TypedefEntry& old)
             : loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr),
-              typeInfo(old.typeInfo), pub(old.pub) {
+              typeInfo(old.typeInfo), pub(old.pub), from_module(old.from_module) {
     }
 
     DLLLOCAL ~TypedefEntry() {
         delete parseTypeInfo;
+    }
+
+    //! Returns the module name where this typedef was defined
+    DLLLOCAL const char* getModuleName() const {
+        return from_module.empty() ? nullptr : from_module.c_str();
+    }
+
+    //! Sets the module name from the current module context
+    DLLLOCAL void assignModule() {
+        const char* mod_name = get_module_context_name();
+        if (mod_name) {
+            from_module = mod_name;
+        }
     }
 };
 
@@ -120,7 +136,8 @@ public:
     bool root = false,   // is this the root namespace?
         pub,      // is this namespace public (inherited by child programs or programs importing user modules)
         builtin,  // is this namespace builtin?
-        imported = false; // was this namespace imported?
+        imported = false, // was this namespace imported?
+        parseCommitRuntimeInitDone = false; // has parseCommitRuntimeInit() been called?
 
     // pointer to parent namespace (nullptr if this is the root namespace or an unattached namespace)
     const qore_ns_private* parent = nullptr;
@@ -187,7 +204,7 @@ public:
             root(old.root),
             pub(old.builtin ? true : false),
             builtin(old.builtin),
-            imported(old.imported),
+            imported(old.imported || (!old.root && !old.builtin)),
             class_handler(old.class_handler) {
         if (!old.from_modules.empty()) {
             from_modules = old.from_modules;
@@ -239,6 +256,20 @@ public:
             }
         }
         return from_modules.front().c_str();
+    }
+
+    //! Override the module attribution of this namespace.
+    /** Used by the AOT deserializer to repair cases where a namespace was first
+        created under a different module's context (as a dependency-induced
+        extension) and is later re-encountered by the owning module itself.
+        Mirrors the parseAssimilate() repair at qore_ns_private::parseAssimilate().
+    */
+    DLLLOCAL void overrideFromModule(const char* mod_name) {
+        if (mod_name) {
+            addModuleName(mod_name);
+        } else {
+            from_modules.clear();
+        }
     }
 
     //! Sets a key value in the namespace's key-value store
@@ -2216,6 +2247,18 @@ public:
     }
 
     DLLLOCAL TypedHashDecl* parseFindHashDecl(const QoreProgramLocation* loc, const NamedScope& name);
+
+    //! Tries to find a hashdecl without raising a parse error
+    /** @param name the name/scope of the hashdecl
+        @return the hash declaration if found, nullptr otherwise
+    */
+    DLLLOCAL TypedHashDecl* parseTryFindHashDecl(const NamedScope& name) {
+        if (name.size() == 1) {
+            return parseFindHashDeclIntern(name.ostr);
+        }
+        unsigned m = 0;
+        return parseFindScopedHashDeclIntern(name, m);
+    }
 
     DLLLOCAL const QoreEnumDecl* parseFindScopedEnumIntern(const NamedScope& name, unsigned& matched);
     DLLLOCAL const QoreEnumDecl* parseFindEnum(const QoreProgramLocation* loc, const NamedScope& name);

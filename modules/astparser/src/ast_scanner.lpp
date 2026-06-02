@@ -799,7 +799,7 @@ extern "C" void ast_scanner_clear_tree() {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state regex_brace_state regex_extract_brace_state regex_subst1_brace regex_subst2_brace_wait regex_subst2_brace regex_trans1_brace regex_trans2_brace_wait regex_trans2_brace
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires_state regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state prepend_module_state module_cmd set_zone try_module try_reexport_module angle_state regex_brace_state regex_extract_brace_state regex_subst1_brace regex_subst2_brace_wait regex_subst2_brace regex_trans1_brace regex_trans2_brace_wait regex_trans2_brace
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -808,6 +808,16 @@ DIGIT           [0-9]
 WORD            [a-zA-Z_][a-zA-Z0-9_]*
 WS              [ \t\r]
 WSNL            [ \t\r\n]
+TYPE_ARG_START  [a-zA-Z_*:?]
+TYPE_ARG_TEXT   [a-zA-Z\*<:_0-9 \t,!().=?]*
+TYPE_ARG_NESTED [a-zA-Z\*<>:_0-9 \t,!().?]*
+CLASS_TPARAM_ATOM [a-zA-Z\*:_0-9 \t,!().=]
+CLASS_TPARAM_NESTED1 \<{CLASS_TPARAM_ATOM}*\>
+CLASS_TPARAM_NESTED2 \<({CLASS_TPARAM_ATOM}|{CLASS_TPARAM_NESTED1})*\>
+CLASS_TPARAM_NESTED3 \<({CLASS_TPARAM_ATOM}|{CLASS_TPARAM_NESTED2})*\>
+CLASS_TPARAMS   \<({CLASS_TPARAM_ATOM}|{CLASS_TPARAM_NESTED3})*\>
+TYPE_ARGS       \<{WS}*({TYPE_ARG_START}{TYPE_ARG_TEXT})?\>
+TYPE_ARGS_NESTED \<{WS}*({TYPE_ARG_START}{TYPE_ARG_NESTED})?\>
 YEAR            [0-9]{4}
 MONTH           (0[1-9])|(1[012])
 DAY             ((0[1-9])|([12][0-9])|(3[01]))
@@ -840,6 +850,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%lock-options{WS}*$                    { yylval->parseopt = new ASTParseOption(APOK_LOCK_OPTIONS); return PARSE_OPTION_FULL; }
 ^%lock-warnings{WS}*$                   { yylval->parseopt = new ASTParseOption(APOK_LOCK_WARNINGS); return PARSE_OPTION_FULL; }
 ^%no-locale-control{WS}*$               { yylval->parseopt = new ASTParseOption(APOK_NO_LOCALE_CONTROL); return PARSE_OPTION_FULL; }
+^%no-module-path-directives{WS}*$       { yylval->parseopt = new ASTParseOption(APOK_NO_MODULE_PATH_DIRECTIVES); return PARSE_OPTION_FULL; }
 ^%no-process-control{WS}*$              { yylval->parseopt = new ASTParseOption(APOK_NO_PROCESS_CONTROL); return PARSE_OPTION_FULL; }
 ^%no-constant-defs{WS}*$                { yylval->parseopt = new ASTParseOption(APOK_NO_CONSTANT_DEFS); return PARSE_OPTION_FULL; }
 ^%no-new{WS}*$                          { yylval->parseopt = new ASTParseOption(APOK_NO_NEW); return PARSE_OPTION_FULL; }
@@ -916,6 +927,14 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             return PARSE_OPTION_END;
                                         }
 <append_module_state><<EOF>>            { AST_FLEX_DO_EOF }
+^%prepend-module-path{WS}*$             { yylval->parseopt = new ASTStringParseOption(APOK_PREPEND_MODULE_PATH); return PARSE_OPTION_FULL; }
+^%prepend-module-path{WS}+              { BEGIN(prepend_module_state); return PARSE_OPTION_BEGIN; }
+<prepend_module_state>[^\n\r]+          {
+                                            yylval->parseopt = new ASTStringParseOption(APOK_PREPEND_MODULE_PATH, yytext);
+                                            BEGIN(INITIAL);
+                                            return PARSE_OPTION_END;
+                                        }
+<prepend_module_state><<EOF>>           { AST_FLEX_DO_EOF }
 ^%set-time-zone{WS}*$                   { yylval->parseopt = new ASTStringParseOption(APOK_SET_TIME_ZONE); return PARSE_OPTION_FULL; }
 ^%set-time-zone{WS}+                    { BEGIN(set_zone); return PARSE_OPTION_BEGIN; }
 <set_zone>[^\n\r]+                      {
@@ -948,6 +967,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             return PARSE_OPTION_END;
                                         }
 <enable_warning><<EOF>>                 { AST_FLEX_DO_EOF }
+^%fp-fast-math{WS}*$                    { yylval->parseopt = new ASTParseOption(APOK_FP_FAST_MATH); return PARSE_OPTION_FULL; }
 ^%exec-class{WS}*$                      { yylval->parseopt = new ASTStringParseOption(APOK_EXEC_CLASS); return PARSE_OPTION_FULL; }
 ^%exec-class{WS}+                       { BEGIN(exec_class_state); return PARSE_OPTION_BEGIN; }
 <exec_class_state>{
@@ -978,15 +998,15 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 <try_module><<EOF>>                     { AST_FLEX_DO_EOF }
 ^%endtry{WS}*$                          { yylval->parseopt = new ASTParseOption(APOK_ENDTRY); return PARSE_OPTION_FULL; }
 ^%requires{WS}*$                        { yylval->parseopt = new ASTStringParseOption(APOK_REQUIRES); return PARSE_OPTION_FULL; }
-^%requires                              { BEGIN(requires); return PARSE_OPTION_BEGIN; }
-<requires>[^\n\r]+                      {
+^%requires                              { BEGIN(requires_state); return PARSE_OPTION_BEGIN; }
+<requires_state>[^\n\r]+                {
                                             const char* trimmed = trim_inplace(yytext);
                                             if (trimmed)
                                                 yylval->parseopt = new ASTStringParseOption(APOK_REQUIRES, trimmed);
                                             BEGIN(INITIAL);
                                             return PARSE_OPTION_END;
                                         }
-<requires><<EOF>>                       { AST_FLEX_DO_EOF }
+<requires_state><<EOF>>                 { AST_FLEX_DO_EOF }
 ^%module-cmd{WS}*$                      { yylval->parseopt = new ASTStringParseOption(APOK_MODULE_CMD); return PARSE_OPTION_FULL; }
 ^%module-cmd                            { BEGIN(module_cmd); return PARSE_OPTION_BEGIN; }
 <module_cmd>{WS}*                       /* ignore white space */
@@ -1909,7 +1929,7 @@ P{D2}:{D2}(:{D2}(\.{US})?)?             { yylval->string = strdup(yytext); retur
 (::{WORD})+                             { yylval->string = strdup(yytext); return SCOPED_REF;}
 ({WORD}::)+\${WORD}                     { yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;}
 (::{WORD})?::\${WORD}                   { yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;}
-cast<\*?{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,]+>)?{WS}*>  { yylval->string = make_cast(yytext); return QORE_CAST; }
+cast<\*?{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!=?]*>)?{WS}*>  { yylval->string = make_cast(yytext); return QORE_CAST; }
 ({WORD}::)+\$\.{WORD}                   { yylval->string = strdup(yytext); return BASE_CLASS_CALL;}
 @[Nn][Aa][Nn]@                          {
 #ifdef NAN
@@ -1959,6 +1979,9 @@ cast<\*?{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,]+>)?{WS}*>  { yylval->st
 {BINARY}                                { yylval->string = strdup(yytext); return BINARY; }
 \$\.{WORD}                              { yylval->string = strdup(yytext + 2); return SELF_REF; }
 \${WORD}                                { yylval->string = strdup(yytext + 1); return VAR_REF; }
+class{WS}+({WORD}::)+{WORD}{WS}*{CLASS_TPARAMS} { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
+class{WS}+(::{WORD})+{WS}*{CLASS_TPARAMS}       { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
+class{WS}+{WORD}{WS}*{CLASS_TPARAMS}            { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_STRING; }
 class{WS}+({WORD}::)+{WORD}             { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
 class{WS}+(::{WORD})+                   { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_SCOPED_REF; }
 class{WS}+{WORD}                        { claimClassDocComment(); yylval->string = trim(yytext + 6); return CLASS_STRING; }
@@ -2019,11 +2042,71 @@ hash\<{WORD}\>\{                        {
 #endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
-{WORD}<[a-zA-Z\*<:_0-9 \t,!().]+>       {
-                                            if (angle_balanced(yytext)) {
-                                                yylval->string = strdup(yytext);
-                                                return ANGLE_IDENTIFIER;
-                                            }
+({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return ANGLE_IDENTIFIER;
+                                           }
+                                           parse_error(*get_loc(yylloc), "unterminated type specification in "
+                                               "explicit generic static method call '%s'", yytext);
+                                           yylval->string = strdup(yytext);
+                                           return ANGLE_IDENTIFIER;
+                                        }
+(::{WORD})+{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return ANGLE_IDENTIFIER;
+                                           }
+                                           parse_error(*get_loc(yylloc), "unterminated type specification in "
+                                               "explicit generic static method call '%s'", yytext);
+                                           yylval->string = strdup(yytext);
+                                           return ANGLE_IDENTIFIER;
+                                        }
+({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return SCOPED_REF;
+                                           }
+                                           parse_error(*get_loc(yylloc), "unterminated type specification in "
+                                               "static method call '%s'", yytext);
+                                           yylval->string = strdup(yytext);
+                                           return SCOPED_REF;
+                                        }
+(::{WORD})+{TYPE_ARGS_NESTED}::{WORD} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return SCOPED_REF;
+                                           }
+                                           parse_error(*get_loc(yylloc), "unterminated type specification in "
+                                               "static method call '%s'", yytext);
+                                           yylval->string = strdup(yytext);
+                                           return SCOPED_REF;
+                                        }
+({WORD}::)+{WORD}{TYPE_ARGS} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return ANGLE_IDENTIFIER;
+                                           }
+
+                                           yylval->String = new QoreStringNode(yytext);
+                                           yylloc->saveFirst();
+                                           BEGIN(angle_state);
+}
+(::{WORD})+{TYPE_ARGS}  {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return ANGLE_IDENTIFIER;
+                                           }
+
+                                           yylval->String = new QoreStringNode(yytext);
+                                           yylloc->saveFirst();
+                                           BEGIN(angle_state);
+}
+{WORD}{TYPE_ARGS}       {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return ANGLE_IDENTIFIER;
+                                           }
                                             yylval->String = new std::string(yytext);
                                             yylloc->saveFirst();
                                             BEGIN(angle_state);

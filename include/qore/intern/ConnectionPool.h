@@ -61,6 +61,10 @@ protected:
     int max_size;
     int64 peak_size = 0;
     int wait_count_val = 0;
+    //! Signaled when wait_count_val increases or decreases — distinct from the
+    //! resource-available signal on the inherited condvar so observers (tests,
+    //! admin tools) waiting on wait_count_val don't compete with acquire() waiters.
+    QoreCondition wait_count_cond;
     int64 total_acquires = 0;
     int64 total_timeouts = 0;
     int64 timeout_ms;
@@ -124,6 +128,20 @@ public:
 
     //! Clears the warning callback
     DLLLOCAL void clearWarningCallback(ExceptionSink* xsink);
+
+    //! Blocks until \a n threads are blocked in acquire(), or the timeout elapses.
+    /** Used by tests and admin tools as a deterministic synchronization point: the
+        background thread that is about to call acquire() races with whatever the
+        caller wants to do next, and polling getStats().wait_count is fragile.
+        Returns 0 when wait_count_val >= n.  Returns -1 on timeout.  Raises an
+        exception (and returns -1) on sandbox interrupt.
+
+        @param n the minimum wait_count_val to wait for
+        @param timeout_ms the maximum time to wait in milliseconds; <= 0 means wait
+            indefinitely
+        @param xsink the exception sink
+    */
+    DLLLOCAL int waitForWaiters(int n, int64 timeout_ms, ExceptionSink* xsink);
 };
 
 //! Qore-bridging ConnectionPool subclass that dispatches virtual calls to Qore methods

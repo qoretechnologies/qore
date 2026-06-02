@@ -113,6 +113,10 @@ void ParseOptionMap::static_init() {
     DO_MAP("no-constant-defs",         QoreParseOptions::NO_CONSTANT_DEFS);
     DO_MAP("no-namespace-defs",        QoreParseOptions::NO_NAMESPACE_DEFS);
     DO_MAP("no-new",                   QoreParseOptions::NO_NEW);
+    DO_MAP("broken-soft-types",        QoreParseOptions::BROKEN_SOFT_TYPES);
+    DO_MAP("no-summarize",             QoreParseOptions::NO_SUMMARIZE);
+    DO_MAP("no-module-path-directives", QoreParseOptions::NO_MODULE_PATH_DIRECTIVES);
+    DO_MAP("fp-fast-math",             QoreParseOptions::FP_FAST_MATH);
 
     // the following are not useful from the command-line
     //DO_MAP("no-user-constants",        PO_NO_INHERIT_USER_CONSTANTS);

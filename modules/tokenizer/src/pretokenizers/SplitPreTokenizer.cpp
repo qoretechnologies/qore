@@ -9,6 +9,7 @@
 */
 
 #include "SplitPreTokenizer.h"
+#include "utils/qore_helpers.h"
 
 #include <cctype>
 
@@ -64,18 +65,15 @@ static std::string extractPattern(const QoreHashNode* config, ExceptionSink* xsi
         // {"Regex": "pattern_string"} or {"String": "literal"}
         QoreValue rv = ph->getKeyValue("Regex");
         if (!rv.isNullOrNothing()) {
-            const QoreStringNode* s = rv.get<const QoreStringNode>();
-            return s ? s->c_str() : "";
+            return safeGetStdString(rv);
         }
         rv = ph->getKeyValue("String");
         if (!rv.isNullOrNothing()) {
-            const QoreStringNode* s = rv.get<const QoreStringNode>();
-            return escapeLiteral(s ? s->c_str() : "");
+            return escapeLiteral(safeGetStdString(rv));
         }
     }
     // Plain string
-    const QoreStringNode* ps = pv.get<const QoreStringNode>();
-    return ps ? ps->c_str() : "";
+    return safeGetStdString(pv);
 }
 
 SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* xsink) {
@@ -102,8 +100,8 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
     }
 
     QoreValue bv = config->getKeyValue("behavior");
-    const QoreStringNode* bs = bv.isNullOrNothing() ? nullptr : bv.get<const QoreStringNode>();
-    behavior = bs ? bs->c_str() : "Removed";
+    std::string bs = bv.isNullOrNothing() ? "" : safeGetStdString(bv);
+    behavior = bs.empty() ? "Removed" : std::move(bs);
 }
 
 SplitPreTokenizer::~SplitPreTokenizer() {

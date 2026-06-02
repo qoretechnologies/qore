@@ -128,6 +128,18 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         #! - \c agg (hash<auto!>): per-aggregate accumulator state keyed by output name
         hash<string, hash<auto!>> groups;
 
+        #! Preferred shape for the next pipeline flush output
+        DataProviderShape pending_output_shape = DataProviderShape::RowRecords;
+
+        #! True if the pending output shape has been set for the current accumulation window
+        bool pending_output_shape_set = False;
+
+        #! Runtime DataFrame class captured from DataFrameBlock input for shape-preserving flushes
+        *Class pending_dataframe_class;
+
+        #! Native DataFrame aggregate input for simple single-block DataFrameBlock inputs
+        *auto pending_dataframe_native_input;
+
         #! Flag indicating if the processor has been configured
         bool configured = False;
     }
@@ -167,8 +179,20 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         return ProviderInfo;
     }
 
-    #! Accumulates a record into the appropriate group
-    private *auto processRecordImpl(auto record) {
+    #! Records the shape of accumulated input for shape-preserving pipeline flushes
+    private updatePendingOutputShape(DataProviderShape shape) {
+        if (!pending_output_shape_set) {
+            pending_output_shape = cast<enum<DataProviderShape>>(shape);
+            pending_output_shape_set = True;
+            return;
+        }
+        if (pending_output_shape != shape) {
+            pending_output_shape = cast<enum<DataProviderShape>>(DataProviderShape::RowRecords);
+        }
+    }
+
+    #! Accumulates one logical record into the appropriate group
+    private accumulateRecord(auto record) {
         if (!configured) {
             throw "PROCESSOR-ERROR", "QoreGroupByProcessor: not configured; provide constructor options";
         }
@@ -242,13 +266,145 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
 
         grp.agg = agg;
         groups{key} = grp;
+    }
 
+    #! Accumulates a record into the appropriate group
+    private *auto processRecordImpl(auto record) {
+        updatePendingOutputShape(DataProviderShape::RowRecords);
+        materializePendingNativeInput();
+        accumulateRecord(record);
         # accumulation only — never emit during processRecord
         return;
     }
 
-    #! Emits one record per group with computed aggregates
-    private *list<auto> flushRecordsImpl() {
+    #! Accumulates hash-of-lists records without converting the whole block to a row list first
+    private accumulateHashOfLists(hash<auto> records) {
+        HashListIterator it(records);
+        while (it.next()) {
+            accumulateRecord(it.getValue());
+        }
+    }
+
+    #! Returns True if a field can be read from a column block without row materialization
+    private bool isColumnBlockField(string field) {
+        return field.find(".") < 0;
+    }
+
+    #! Returns True if all configured group and aggregate fields can use column-block accumulation
+    private bool canUseColumnBlockAccumulator() {
+        foreach string field in (group_by_fields) {
+            if (!isColumnBlockField(field)) {
+                return False;
+            }
+        }
+        foreach hash<GroupByAggSpec> spec in (agg_specs) {
+            if (spec.field && !isColumnBlockField(spec.field)) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Returns the value at a logical row from a list, buffer, or scalar column
+    static *auto getColumnBlockValue(auto column, int index) {
+        switch (column.typeCode()) {
+            case NT_LIST:
+            case NT_BUFFER:
+                return column[index];
+        }
+        return column;
+    }
+
+    #! Accumulates a hash of list/buffer/scalar columns directly by row index
+    private bool accumulateColumnBlock(hash<auto> columns) {
+        if (!canUseColumnBlockAccumulator()) {
+            return False;
+        }
+
+        int row_count = AbstractDataProcessor::shapeRecordCount(columns);
+        for (int i = 0; i < row_count; ++i) {
+            hash<auto> gv;
+            bool skip_row = False;
+            foreach string field in (group_by_fields) {
+                if (!columns.hasKey(field)) {
+                    skip_row = True;
+                    break;
+                }
+                gv{field} = getColumnBlockValue(columns{field}, i);
+            }
+            if (skip_row) {
+                continue;
+            }
+
+            string key = group_by_fields ? sprintf("%y", gv) : "";
+            if (!groups.hasKey(key)) {
+                groups{key} = {
+                    "group_values": gv,
+                    "record_count": 0,
+                    "agg": initAccumulators(),
+                };
+            }
+
+            hash<auto!> grp = groups{key};
+            grp.record_count++;
+            hash<auto!> agg = grp.agg;
+
+            foreach hash<GroupByAggSpec> spec in (agg_specs) {
+                if (spec.op == "count") {
+                    continue;
+                }
+                if (!columns.hasKey(spec.field)) {
+                    continue;
+                }
+
+                string agg_key = spec.output_name;
+                hash<auto!> acc = agg{agg_key};
+                auto value = getColumnBlockValue(columns{spec.field}, i);
+                if (spec.op == "first") {
+                    if (!acc.set) {
+                        acc.value = value;
+                        acc.set = True;
+                    }
+                } else if (spec.op == "last") {
+                    acc.value = value;
+                    acc.set = True;
+                } else {
+                    *float fval = coerceNumeric(value);
+                    if (!exists fval) {
+                        continue;
+                    }
+                    if (spec.op == "sum" || spec.op == "avg") {
+                        acc.sum = acc.sum.toFloat() + fval;
+                        acc.count = acc.count.toInt() + 1;
+                    } else if (spec.op == "min") {
+                        if (!acc.initialized || fval < acc.val.toFloat()) {
+                            acc.val = fval;
+                            acc.initialized = True;
+                        }
+                    } else if (spec.op == "max") {
+                        if (!acc.initialized || fval > acc.val.toFloat()) {
+                            acc.val = fval;
+                            acc.initialized = True;
+                        }
+                    }
+                }
+                agg{agg_key} = acc;
+            }
+
+            grp.agg = agg;
+            groups{key} = grp;
+        }
+
+        return True;
+    }
+
+    #! Accumulates a dense ColumnarResult directly by row index
+    private bool accumulateColumnarResult(auto records) {
+        return accumulateColumnBlock(records.toColumnHash());
+    }
+
+    #! Builds one result record per group with computed aggregates
+    private *list<auto> buildFlushRows() {
         if (!configured || !groups) {
             return;
         }
@@ -282,15 +438,276 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
             push results, result;
         }
 
-        # clear accumulated state
-        remove groups;
-
         return results;
     }
 
-    #! GroupBy does not support bulk API — records must be processed individually
+    #! Clears accumulated group and shape state after a flush
+    private clearAccumulatedState() {
+        remove groups;
+        pending_output_shape = cast<enum<DataProviderShape>>(DataProviderShape::RowRecords);
+        pending_output_shape_set = False;
+        remove pending_dataframe_class;
+        remove pending_dataframe_native_input;
+    }
+
+    #! Converts deferred native DataFrame input into the regular accumulator before mixed input is processed
+    private materializePendingNativeInput() {
+        if (!exists pending_dataframe_native_input) {
+            return;
+        }
+        auto input = pending_dataframe_native_input;
+        remove pending_dataframe_native_input;
+        accumulateHashOfLists(input.toColumnHash());
+    }
+
+    #! Builds a native DataFrame aggregate result from deferred single-block input
+    private *auto buildPendingNativeResult() {
+        if (!exists pending_dataframe_native_input) {
+            return;
+        }
+        *auto result = tryNativeDataFrameAggregate(pending_dataframe_native_input);
+        if (exists result) {
+            return result;
+        }
+        materializePendingNativeInput();
+        return;
+    }
+
+    #! Emits one record per group with computed aggregates for direct row-record callers
+    private *list<auto> flushRecordsImpl() {
+        *auto native_result = buildPendingNativeResult();
+        if (exists native_result) {
+            auto result = native_result;
+            clearAccumulatedState();
+            return result.toRecords();
+        }
+
+        *list<auto> results = buildFlushRows();
+        if (!results) {
+            return;
+        }
+        clearAccumulatedState();
+        return results;
+    }
+
+    #! Emits accumulated results in the negotiated pipeline shape when possible
+    private flushImpl(code enqueue) {
+        *auto native_result = buildPendingNativeResult();
+        if (exists native_result) {
+            auto result = native_result;
+            DataProviderShape output_shape = pending_output_shape;
+            clearAccumulatedState();
+
+            switch (output_shape) {
+                case DataProviderShape::DataFrameBlock:
+                    enqueue(result);
+                    return;
+                case DataProviderShape::BufferColumns:
+                    enqueue(result.toColumnarResult());
+                    return;
+                case DataProviderShape::HashOfLists:
+                    enqueue(result.toColumnHash());
+                    return;
+                case DataProviderShape::RowRecords:
+                    map enqueue($1), result.toRecords();
+                    return;
+            }
+            map enqueue($1), result.toRecords();
+            return;
+        }
+
+        *list<auto> results = buildFlushRows();
+        if (!results) {
+            return;
+        }
+        DataProviderShape output_shape = pending_output_shape;
+        *Class dataframe_class = pending_dataframe_class;
+        clearAccumulatedState();
+
+        switch (output_shape) {
+            case DataProviderShape::DataFrameBlock:
+                enqueue(dataframe_class.newObject(results));
+                return;
+            case DataProviderShape::BufferColumns:
+                enqueue(AbstractDataProcessor::getDataFrameClass().newObject(results).toColumnarResult());
+                return;
+            case DataProviderShape::HashOfLists:
+                enqueue(AbstractDataProcessor::recordsToHashList(results));
+                return;
+            case DataProviderShape::RowRecords:
+                map enqueue($1), results;
+                return;
+        }
+        map enqueue($1), results;
+    }
+
+    #! Processes records in hash-of-lists form by accumulating each logical row
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProviderShape::HashOfLists);
+        accumulateHashOfLists(records);
+        return;
+    }
+
+    #! Processes data in an explicitly negotiated shape
+    /** @param records the input records
+        @param shape the negotiated input shape
+
+        @return @ref nothing because grouped results are emitted on flush
+
+        @since DataProvider 3.5
+    */
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock:
+                updatePendingOutputShape(DataProviderShape::DataFrameBlock);
+                pending_dataframe_class = Class::getClass(records);
+                if (!groups.size() && !exists pending_dataframe_native_input && canUseNativeDataFrameAggregate()) {
+                    pending_dataframe_native_input = records;
+                    return;
+                }
+                materializePendingNativeInput();
+                accumulateHashOfLists(records.toColumnHash());
+                return;
+            case DataProviderShape::HashOfLists:
+                updatePendingOutputShape(DataProviderShape::HashOfLists);
+                materializePendingNativeInput();
+                if (!accumulateColumnBlock(records)) {
+                    accumulateHashOfLists(records);
+                }
+                return;
+            case DataProviderShape::BufferColumns:
+                updatePendingOutputShape(DataProviderShape::BufferColumns);
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    if (!groups.size() && !exists pending_dataframe_native_input && canUseNativeDataFrameAggregate()) {
+                        auto df = AbstractDataProcessor::getDataFrameClass().newObject(records.toColumnHash());
+                        pending_dataframe_native_input = df;
+                        return;
+                    }
+                    materializePendingNativeInput();
+                    if (!accumulateColumnarResult(records)) {
+                        accumulateHashOfLists(AbstractDataProcessor::recordsToHashList(records.toRows()));
+                    }
+                } else {
+                    materializePendingNativeInput();
+                    if (!accumulateColumnBlock(records)) {
+                        accumulateHashOfLists(AbstractDataProcessor::bufferColumnsToHashList(records));
+                    }
+                }
+                return;
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! GroupBy supports bulk API and accumulates each logical row from the block
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
+    }
+
+    #! Returns supported input shapes
+    /** @since DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    /** Grouped results are emitted on flush.  Pipeline flush preserves a DataFrame or hash-of-lists
+        carrier when the current accumulation window used one consistently; direct flushRecords()
+        still returns row records for compatibility.
+
+        @since DataProvider 3.5
+    */
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns True when a field name can be evaluated directly by DataFrame native methods
+    private bool isNativeDataFrameField(string field) {
+        return field.find(".") < 0;
+    }
+
+    #! Returns True if the aggregate set can use the native DataFrame aggregation path
+    private bool canUseNativeDataFrameAggregate() {
+        foreach string field in (group_by_fields) {
+            if (!isNativeDataFrameField(field)) {
+                return False;
+            }
+        }
+
+        hash<auto> output_names;
+        foreach string field in (group_by_fields) {
+            output_names{field} = True;
+        }
+        foreach hash<GroupByAggSpec> spec in (agg_specs) {
+            if (output_names{spec.output_name}) {
+                return False;
+            }
+            output_names{spec.output_name} = True;
+
+            switch (spec.op) {
+                case "count":
+                    break;
+                case "sum":
+                case "avg":
+                case "min":
+                case "max":
+                    if (!spec.field || !isNativeDataFrameField(spec.field)) {
+                        return False;
+                    }
+                    break;
+                default:
+                    return False;
+            }
+        }
+        return True;
+    }
+
+    #! Adds or renames one native DataFrame aggregate output column
+    private auto addNativeAggregateOutput(*auto result, auto grouped, hash<GroupByAggSpec> spec) {
+        if (spec.op == "count") {
+            auto counts = grouped.count();
+            if (!exists result) {
+                result = counts;
+                if (spec.output_name != "count") {
+                    result.renameColumn("count", spec.output_name);
+                }
+            } else {
+                result.addColumn(spec.output_name, counts.getColumn("count"));
+            }
+            return result;
+        }
+
+        string native_op = spec.op == "avg" ? "mean" : spec.op;
+        hash<auto> agg_spec = {spec.field: native_op};
+        auto one = grouped.agg(agg_spec);
+        if (spec.output_name != spec.field) {
+            one.renameColumn(spec.field, spec.output_name);
+        }
+
+        if (!exists result) {
+            return one;
+        }
+        result.addColumn(spec.output_name, one.getColumn(spec.output_name));
+        return result;
+    }
+
+    #! Attempts a native DataFrame group-by aggregate for simple aggregate specs
+    private *auto tryNativeDataFrameAggregate(auto records) {
+        if (!canUseNativeDataFrameAggregate()) {
+            return;
+        }
+
+        auto grouped = records.groupBy(group_by_fields);
+        *auto result;
+        foreach hash<GroupByAggSpec> spec in (agg_specs) {
+            result = addNativeAggregateOutput(result, grouped, spec);
+        }
+        return result;
     }
 
     #! Returns the processor capability bitfield

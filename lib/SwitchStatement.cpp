@@ -45,7 +45,7 @@ bool CaseNode::isCaseNodeImpl() const {
     return !def;
 }
 
-bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) {
+bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
     // Unwrap TAG_ENUM for switch/case comparison so enum constants match base type values
     QoreValue lhs = lhs_value.isEnum() ? lhs_value.getEnumMember()->getValue() : lhs_value;
     QoreValue rhs = val.isEnum() ? val.getEnumMember()->getValue() : val;
@@ -281,7 +281,7 @@ bool CaseNodeWithOperator::isCaseNodeImpl() const {
     return false;
 }
 
-bool CaseNodeWithOperator::matches(QoreValue lhs_value, ExceptionSink* xsink) {
+bool CaseNodeWithOperator::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
     return op_func(lhs_value, val, xsink);
 }
 
@@ -289,13 +289,13 @@ CaseNodeRegex::CaseNodeRegex(const QoreProgramLocation* loc, QoreRegex* m_re, St
         : CaseNode(loc, QoreValue(), blk), re(m_re) {
 }
 
-bool CaseNodeRegex::matches(QoreValue lhs_value, ExceptionSink* xsink) {
+bool CaseNodeRegex::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
     QoreStringValueHelper str(lhs_value);
 
     return re->exec(*str, xsink);
 }
 
-bool CaseNodeNegRegex::matches(QoreValue lhs_value, ExceptionSink* xsink) {
+bool CaseNodeNegRegex::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
     QoreStringValueHelper str(lhs_value);
 
     return !re->exec(*str, xsink);

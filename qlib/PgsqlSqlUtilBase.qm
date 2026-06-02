@@ -171,8 +171,12 @@ $function$
       with automatic deduplication of duplicate primary key values within batches
     - added \c PgsqlTable::copyInsert() method for maximum-throughput bulk inserts using the PostgreSQL
       COPY protocol
+    - added a \c PgsqlTable::bulkInsert() override using the PostgreSQL COPY protocol for pure
+      hash-of-lists input without insert options
     - added \c PgsqlTable::doReturningImpl() override that correctly returns all rows for bulk RETURNING
       results (base class only returns the first row)
+    - fixed \c PgsqlTable handling of session temporary tables so unqualified table names and the
+      \c pg_temp schema alias resolve to the backend's active temporary schema
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -597,8 +601,9 @@ public class PgsqlColumn inherits SqlUtil::AbstractColumn {
     }
 
     #! creates the column from the supplied arguments
-    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs, *int scale)
+    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs, *int scale)
             : AbstractColumn(n, nt, qt, sz, nul, dv, cm, scale) {
+        if (!exists bs) { bs = 0; }
         byte_size = bs;
     }
 
@@ -607,19 +612,23 @@ public class PgsqlColumn inherits SqlUtil::AbstractColumn {
         switch (native_type) {
             case =~ /^timestamptz/: {
                 string sql = native_type;
-                return splice sql, 11, 0, "(" + string(size) + ")";
+                splice sql, 11, 0, "(" + string(size) + ")";
+                return sql;
             }
             case =~ /^timestamp/: {
                 string sql = native_type;
-                return splice sql, 9, 0, "(" + string(size) + ")";
+                splice sql, 9, 0, "(" + string(size) + ")";
+                return sql;
             }
             case =~ /^timetz/: {
                 string sql = native_type;
-                return splice sql, 6, 0, "(" + string(size) + ")";
+                splice sql, 6, 0, "(" + string(size) + ")";
+                return sql;
             }
             case =~ /^time/: {
                 string sql = native_type;
-                return splice sql, 4, 0, "(" + string(size) + ")";
+                splice sql, 4, 0, "(" + string(size) + ")";
+                return sql;
             }
         }
         return AbstractColumn::getNativeTypeString();
@@ -731,8 +740,8 @@ string str = col.getRenameSql(t, "new_name");
 #! represents a PostgreSQL-specific numeric column
 public class PgsqlNumericColumn inherits PgsqlColumn {
     #! creates the column from the supplied arguments
-    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs,
-            softint scale) : PgsqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
+    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs, *softint scale)
+            : PgsqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
     }
 
     #! returns a string giving the native type of the column
@@ -1584,7 +1593,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     #! returns an iterator listing the string materialized view names in the database
-    ListIterator materializedViewIterator() {
+    ListIterator<string> materializedViewIterator() {
         return listMaterializedViews().iterator();
     }
 
@@ -1594,7 +1603,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     #! returns an iterator listing the string type names in the database
-    ListIterator typeIterator() {
+    ListIterator<string> typeIterator() {
         return listTypes().iterator();
     }
 
@@ -2477,8 +2486,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     #! Creates the object from the arguments
     constructor(AbstractDatasource nds, string nname, *hash opts) : AbstractTable(nds, nname, opts) {
+        bool explicit_schema = (nname =~ x/^(\w+)\.\w+/)[0] ? True : False;
+
         # see if there is a schema in the name
         parse_schema_name(nname, \schema, \name);
+
+        resolveTemporaryTableSchema(!explicit_schema);
 
         # get table info
         *hash<auto> row = ds.selectRow("select * from pg_tables where schemaname = %v and tablename = %v", schema, name);
@@ -3020,6 +3033,46 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return ds.exec(sql, data);
     }
 
+    #! Inserts a hash-of-lists row batch using the PostgreSQL COPY protocol when possible
+    /** @param data a hash of column name to list of values; each list must have the same number of elements
+        @param opt optional insert options; if any options are passed, this method falls back to the generic
+        AbstractTable::bulkInsert() implementation
+
+        @return the number of rows inserted
+
+        @since PgsqlSqlUtilBase 1.9
+    */
+    int bulkInsert(hash<auto> data, *hash<auto> opt) {
+        if (!opt || !opt.size()) {
+            int rows = getCopyInsertRowCount(data);
+            if (rows == 0) {
+                return 0;
+            }
+            if (rows > 0) {
+                return copyInsert(data);
+            }
+        }
+
+        return AbstractTable::bulkInsert(data, opt);
+    }
+
+    private int getCopyInsertRowCount(hash<auto> data) {
+        int rows = -1;
+        foreach hash<auto> row in (data.pairIterator()) {
+            if (row.value.typeCode() != NT_LIST) {
+                return -1;
+            }
+            int size = row.value.size();
+            if (rows == -1) {
+                rows = size;
+            } else if (rows != size) {
+                throw "BULK-INSERT-ERROR", sprintf("%s column %y has %d values, expected %d",
+                    getDesc(), row.key, size, rows);
+            }
+        }
+        return rows == -1 ? 0 : rows;
+    }
+
     #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
     string getColumnSqlName(string col) {
         return PgsqlDatabase::PgsqlReservedWords{col.lwr()} ? ("\"" + col + "\"") : col;
@@ -3225,9 +3278,35 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private bool checkExistenceImpl() {
         *hash<auto> qh = ds.selectRow("select * from pg_catalog.pg_statio_all_tables where schemaname = %v and "
             "relname = %v", schema, name);
-        if (qh)
+        if (qh) {
             return inDb = True;
+        }
+        if (resolveTemporaryTableSchema(True)) {
+            qh = ds.selectRow("select * from pg_catalog.pg_statio_all_tables where schemaname = %v and "
+                "relname = %v", schema, name);
+            if (qh) {
+                return inDb = True;
+            }
+        }
         return False;
+    }
+
+    private bool resolveTemporaryTableSchema(bool allow_unqualified) {
+        if (schema != "pg_temp" && !(allow_unqualified && schema == "public")) {
+            return False;
+        }
+
+        *hash<auto> row = ds.selectRow(
+            "select n.nspname schemaname from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "where c.relname = %v and c.relkind in ('r', 'p') "
+            "and c.relnamespace = pg_catalog.pg_my_temp_schema()", name);
+        if (!row) {
+            return False;
+        }
+
+        schema = row.schemaname;
+        return True;
     }
 
     private Columns describeImpl() {
@@ -3256,7 +3335,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     row.data_type = row.udt_name;
                 }
             }
-            softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
+            *softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
             if (!size) {
                 size = row.datetime_precision;
             }
@@ -3293,7 +3372,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             } else {
                 c = new PgsqlColumn(row.column_name, row.data_type, th.qore, exists size ? size : 0,
                     row.is_nullable == "YES", defval, row.description ? row.description : NOTHING,
-                    row.character_octet_length);
+                    row.character_octet_length, NOTHING);
             }
             rv{row.column_name} = c;
         }
@@ -3364,10 +3443,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
             foreach hash<auto> i in (ih.pairIterator()) {
                 # check primary key index and add tablespace to primary key definition
-                if (i.primary && !primaryKey.empty()) {
+                if (i.value.primary && !primaryKey.empty()) {
                     PgsqlPrimaryKey pk = cast<PgsqlPrimaryKey>(primaryKey);
-                    if (i.value.tablespace && !pk.tablespace)
-                        pk.tablespace = i.value.tablespace;
+                    if (i.value.tablespace && !pk.getTablespace())
+                        pk.setTablespace(i.value.tablespace);
                     continue;
                 }
                 # check unique indexes to make sure they are not matched with a unique constraint

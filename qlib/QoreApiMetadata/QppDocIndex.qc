@@ -75,7 +75,7 @@ public class QppDocIndex {
         if (!d.chdir(dir_path)) {
             return index;
         }
-        list<string> files = d.listFiles("\\.meta\\.json$");
+        list<string> files = d.listFileNames(regex: "\\.meta\\.json$");
         foreach string fname in (files) {
             string path = dir_path + "/" + fname;
             string content = ReadOnlyFile::readTextFile(path);
@@ -83,7 +83,7 @@ public class QppDocIndex {
             QppDocIndex::indexMetadata(meta, \index);
         }
         # recurse into subdirectories (per-module metadata layout)
-        list<string> subdirs = d.listDirs();
+        list<string> subdirs = d.listDirNames();
         foreach string subdir in (subdirs) {
             hash<string, hash<auto>> sub_index =
                 QppDocIndex::buildFromDirectory(dir_path + "/" + subdir);
@@ -102,6 +102,7 @@ public class QppDocIndex {
             foreach hash<auto> cls in (meta.classes) {
                 string qname =
                     QppDocIndex::qualifiedName(cls.namespace_path, cls.name);
+                QppDocIndex::enrichClass(\cls);
                 cls.source_file = source_file;
                 cls.symbol_type = "class";
                 index{qname} = cls;
@@ -110,6 +111,7 @@ public class QppDocIndex {
                 if (cls.instance_methods) {
                     foreach hash<auto> m in (cls.instance_methods) {
                         string mname = qname + "::" + m.name;
+                        QppDocIndex::enrichCallable(\m);
                         m.source_file = source_file;
                         m.symbol_type = "method";
                         m.class_name = cls.name;
@@ -124,6 +126,7 @@ public class QppDocIndex {
                 if (cls.static_methods) {
                     foreach hash<auto> m in (cls.static_methods) {
                         string mname = qname + "::" + m.name;
+                        QppDocIndex::enrichCallable(\m);
                         m.source_file = source_file;
                         m.symbol_type = "static_method";
                         m.class_name = cls.name;
@@ -143,6 +146,7 @@ public class QppDocIndex {
             foreach hash<auto> func in (meta.functions) {
                 string qname = QppDocIndex::qualifiedName(
                     func.namespace_path, func.name);
+                QppDocIndex::enrichCallable(\func);
                 func.source_file = source_file;
                 func.symbol_type = "function";
                 # for overloaded functions, append param count
@@ -158,6 +162,8 @@ public class QppDocIndex {
             foreach hash<auto> c in (meta.constants) {
                 string qname =
                     QppDocIndex::qualifiedName(c.namespace_path, c.name);
+                QppDocIndex::enrichTypeUse(\c, "type_name", "type_info",
+                    "wildcard_type_arguments");
                 c.source_file = source_file;
                 c.symbol_type = "constant";
                 index{qname} = c;
@@ -169,6 +175,7 @@ public class QppDocIndex {
             foreach hash<auto> hd in (meta.hashdecls) {
                 string qname =
                     QppDocIndex::qualifiedName(hd.namespace_path, hd.name);
+                QppDocIndex::enrichHashdecl(\hd);
                 hd.source_file = source_file;
                 hd.symbol_type = "hashdecl";
                 index{qname} = hd;
@@ -183,6 +190,92 @@ public class QppDocIndex {
                 en.source_file = source_file;
                 en.symbol_type = "enum";
                 index{qname} = en;
+            }
+        }
+    }
+
+    #! Add structured type metadata to a qpp hash field
+    private static enrichTypeUse(reference<hash<auto>> item, string type_field,
+            string info_field, string wildcard_field) {
+        if (!exists item{type_field}) {
+            return;
+        }
+        hash<TypeUseInfo> info =
+            TypeMetadata::parseTypeUse(string(item{type_field}));
+        item{info_field} = info;
+        if (info.wildcard_arguments.size()) {
+            item{wildcard_field} = info.wildcard_arguments;
+        }
+    }
+
+    #! Add structured type metadata to qpp function/method metadata
+    private static enrichCallable(reference<hash<auto>> item) {
+        QppDocIndex::enrichTypeUse(\item, "return_type",
+            "return_type_info", "return_wildcard_type_arguments");
+        if (exists item.params) {
+            for (int i = 0; i < item.params.size(); ++i) {
+                hash<auto> p = item.params[i];
+                QppDocIndex::enrichTypeUse(\p, "type_name", "type_info",
+                    "wildcard_type_arguments");
+                item.params[i] = p;
+            }
+        }
+    }
+
+    #! Add structured type metadata to qpp class metadata
+    private static enrichClass(reference<hash<auto>> cls) {
+        if (exists cls.parents) {
+            list<hash<TypeUseInfo>> parent_info = ();
+            list<hash<WildcardTypeArgumentInfo>> wildcards = ();
+            foreach auto parent in (cls.parents) {
+                hash<TypeUseInfo> info =
+                    TypeMetadata::parseTypeUse(string(parent));
+                parent_info += info;
+                wildcards += info.wildcard_arguments;
+            }
+            if (parent_info.size()) {
+                cls.parent_type_info = parent_info;
+            }
+            if (wildcards.size()) {
+                cls.parent_wildcard_type_arguments = wildcards;
+            }
+        }
+
+        if (exists cls.members) {
+            for (int i = 0; i < cls.members.size(); ++i) {
+                hash<auto> member = cls.members[i];
+                QppDocIndex::enrichTypeUse(\member, "type_name",
+                    "type_info", "wildcard_type_arguments");
+                cls.members[i] = member;
+            }
+        }
+
+        if (exists cls.instance_methods) {
+            for (int i = 0; i < cls.instance_methods.size(); ++i) {
+                hash<auto> method = cls.instance_methods[i];
+                QppDocIndex::enrichCallable(\method);
+                cls.instance_methods[i] = method;
+            }
+        }
+        if (exists cls.static_methods) {
+            for (int i = 0; i < cls.static_methods.size(); ++i) {
+                hash<auto> method = cls.static_methods[i];
+                QppDocIndex::enrichCallable(\method);
+                cls.static_methods[i] = method;
+            }
+        }
+    }
+
+    #! Add structured type metadata to qpp hashdecl metadata
+    private static enrichHashdecl(reference<hash<auto>> hd) {
+        QppDocIndex::enrichTypeUse(\hd, "parent_name", "parent_type_info",
+            "parent_wildcard_type_arguments");
+        if (exists hd.members) {
+            for (int i = 0; i < hd.members.size(); ++i) {
+                hash<auto> member = hd.members[i];
+                QppDocIndex::enrichTypeUse(\member, "type_name",
+                    "type_info", "wildcard_type_arguments");
+                hd.members[i] = member;
             }
         }
     }

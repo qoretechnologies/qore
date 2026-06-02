@@ -29,7 +29,9 @@
 %requires DataProvider
 %requires ConnectionProvider
 %requires WebSocketHandler >= 2.0
-%requires json
+%try-module json
+%define NoJson
+%endtry
 %requires HttpServerUtil
 
 module DpqlWebSocket {

@@ -236,13 +236,15 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         error_info = new QoreHashNode(autoTypeInfo);
         const QoreValue err_val = xsink->getExceptionErr();
         if (err_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper err(err_val);
             error_info->setKeyValue("err",
-                err_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                err.getReferencedValue(), xsink);
         }
         const QoreValue desc_val = xsink->getExceptionDesc();
         if (desc_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper desc(desc_val);
             error_info->setKeyValue("desc",
-                desc_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                desc.getReferencedValue(), xsink);
         }
         // Push NOTHING sentinels to all registered stream Queues on error
         ExceptionSink clear_xsink;
@@ -364,13 +366,15 @@ QoreHashNode* Http2PollOperationPriv::continueSendPoll(ExceptionSink* xsink) {
         error_info = new QoreHashNode(autoTypeInfo);
         const QoreValue err_val = xsink->getExceptionErr();
         if (err_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper err(err_val);
             error_info->setKeyValue("err",
-                err_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                err.getReferencedValue(), xsink);
         }
         const QoreValue desc_val = xsink->getExceptionDesc();
         if (desc_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper desc(desc_val);
             error_info->setKeyValue("desc",
-                desc_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                desc.getReferencedValue(), xsink);
         }
         h2_state = H2ServerState::CLOSED;
         return nullptr;
@@ -796,34 +800,34 @@ qclass Http2PollOperationBase [
     private_members=object sock,string goal;
     ns=Qore;
     arg=Http2PollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<*hash<auto>>
 ];
 
 //! Creates the HTTP/2 poll operation base
-/** @param sock the client Socket with an established HTTP/2 connection
-    @param initial_read_op the initial read poll operation from sock.startPollReadHttp2Request()
+/** @param socket the client Socket with an established HTTP/2 connection
+    @param initial_read_operation the initial read poll operation from socket.startPollReadHttp2Request()
     @param headers_only if True, dispatch requests on HEADERS (before END_STREAM)
 */
-Http2PollOperationBase::constructor(Socket[QoreSocketObject] sock, object initial_read_op,
-        bool headers_only) {
-    // Validate that initial_read_op is a SocketPollOperationBase subclass
-    const QoreClass* op_cls = initial_read_op->getClass();
+Http2PollOperationBase::constructor(Socket[QoreSocketObject] socket, object initial_read_operation,
+        bool headers_only) [flags=NAMED_ARGS] {
+    // Validate that initial_read_operation is a SocketPollOperationBase subclass
+    const QoreClass* op_cls = initial_read_operation->getClass();
     if (!op_cls || !op_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
         xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
-            "initial_read_op must be a SocketPollOperationBase subclass");
+            "initial_read_operation must be a SocketPollOperationBase subclass");
         return;
     }
 
-    // Extract the SocketPollOperationBase priv from the initial_read_op
+    // Extract the SocketPollOperationBase priv from the initial_read_operation
     ReferenceHolder<SocketPollOperationBase> read_priv(reinterpret_cast<SocketPollOperationBase*>(
-        const_cast<QoreObject*>(initial_read_op)->getReferencedPrivateData(
+        const_cast<QoreObject*>(initial_read_operation)->getReferencedPrivateData(
             CID_SOCKETPOLLOPERATIONBASE, xsink)), xsink);
     if (*xsink || !read_priv) {
         return;
     }
     if (read_priv->needsWorkerDispatch()) {
         xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
-            "initial_read_op requires worker dispatch and cannot be used by Http2PollOperationBase");
+            "initial_read_operation requires worker dispatch and cannot be used by Http2PollOperationBase");
         return;
     }
 
@@ -838,15 +842,15 @@ Http2PollOperationBase::constructor(Socket[QoreSocketObject] sock, object initia
         new QoreStringNode("http2_connection"), xsink);
 
     // Ref the socket for the C++ priv
-    QoreSocketObject* sock_ptr = *sock;
+    QoreSocketObject* sock_ptr = *socket;
     sock_ptr->ref();
 
-    // Ref the initial_read_op QoreObject for DGC (the priv takes ownership)
-    const_cast<QoreObject*>(initial_read_op)->ref();
+    // Ref the initial_read_operation QoreObject for DGC (the priv takes ownership)
+    const_cast<QoreObject*>(initial_read_operation)->ref();
 
     self->setPrivate(CID_HTTP2POLLOPERATIONBASE,
         new Http2PollOperationPriv(self, sock_ptr, read_priv.release(),
-            const_cast<QoreObject*>(initial_read_op), headers_only));
+            const_cast<QoreObject*>(initial_read_operation), headers_only));
 }
 
 //! Destroys the object
@@ -908,7 +912,7 @@ nothing Http2PollOperationBase::abort() {
     continueReading() calls correctly throw instead of clearing a request
     that is being dispatched.
 */
-auto Http2PollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+*hash<auto> Http2PollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 
@@ -966,21 +970,21 @@ bool Http2PollOperationBase::isHeadersOnly() [flags=RET_VALUE_ONLY] {
     Extracts the SocketPollOperationBase priv from the QoreObject and
     stores it as the current inner operation with SENDING state.
 
-    @param send_op the poll operation from sock.startPollSendHttp2Response() or similar
+    @param send_operation the poll operation from socket.startPollSendHttp2Response() or similar
 
     @throw HTTP2-STATE-ERROR if the current state does not allow sending
-    @throw HTTP2POLLOPERATIONBASE-ERROR if send_op is not a SocketPollOperationBase subclass
+    @throw HTTP2POLLOPERATIONBASE-ERROR if send_operation is not a SocketPollOperationBase subclass
 */
-nothing Http2PollOperationBase::injectSendOp(object send_op) {
-    const QoreClass* op_cls = send_op->getClass();
+nothing Http2PollOperationBase::injectSendOp(object send_operation) [flags=NAMED_ARGS] {
+    const QoreClass* op_cls = send_operation->getClass();
     if (!op_cls || !op_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
         xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
-            "send_op must be a SocketPollOperationBase subclass");
+            "send_operation must be a SocketPollOperationBase subclass");
         return QoreValue();
     }
 
     SocketPollOperationBase* send_priv = reinterpret_cast<SocketPollOperationBase*>(
-        const_cast<QoreObject*>(send_op)->getReferencedPrivateData(
+        const_cast<QoreObject*>(send_operation)->getReferencedPrivateData(
             CID_SOCKETPOLLOPERATIONBASE, xsink));
     if (*xsink || !send_priv) {
         return QoreValue();
@@ -988,18 +992,18 @@ nothing Http2PollOperationBase::injectSendOp(object send_op) {
     if (send_priv->needsWorkerDispatch()) {
         send_priv->deref(xsink);
         xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
-            "send_op requires worker dispatch and cannot be used by Http2PollOperationBase");
+            "send_operation requires worker dispatch and cannot be used by Http2PollOperationBase");
         return QoreValue();
     }
 
-    // Ref the send_op QoreObject for DGC before transferring ownership
-    const_cast<QoreObject*>(send_op)->ref();
+    // Ref the send_operation QoreObject for DGC before transferring ownership
+    const_cast<QoreObject*>(send_operation)->ref();
 
-    priv->injectSendOp(send_priv, const_cast<QoreObject*>(send_op), xsink);
+    priv->injectSendOp(send_priv, const_cast<QoreObject*>(send_operation), xsink);
     if (*xsink) {
         // injectSendOp did not take ownership on error; deref what we ref'd
         send_priv->deref(xsink);
-        const_cast<QoreObject*>(send_op)->deref(xsink);
+        const_cast<QoreObject*>(send_operation)->deref(xsink);
     }
 }
 
@@ -1008,21 +1012,21 @@ nothing Http2PollOperationBase::injectSendOp(object send_op) {
     Extracts the SocketPollOperationBase priv from the QoreObject and
     stores it as the current inner operation with READING state.
 
-    @param read_op the poll operation from sock.startPollReadHttp2Request()
+    @param read_operation the poll operation from socket.startPollReadHttp2Request()
 
     @throw HTTP2-STATE-ERROR if the current state does not allow reading
-    @throw HTTP2POLLOPERATIONBASE-ERROR if read_op is not a SocketPollOperationBase subclass
+    @throw HTTP2POLLOPERATIONBASE-ERROR if read_operation is not a SocketPollOperationBase subclass
 */
-nothing Http2PollOperationBase::injectReadOp(object read_op) {
-    const QoreClass* op_cls = read_op->getClass();
+nothing Http2PollOperationBase::injectReadOp(object read_operation) [flags=NAMED_ARGS] {
+    const QoreClass* op_cls = read_operation->getClass();
     if (!op_cls || !op_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
         xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
-            "read_op must be a SocketPollOperationBase subclass");
+            "read_operation must be a SocketPollOperationBase subclass");
         return QoreValue();
     }
 
     SocketPollOperationBase* read_priv = reinterpret_cast<SocketPollOperationBase*>(
-        const_cast<QoreObject*>(read_op)->getReferencedPrivateData(
+        const_cast<QoreObject*>(read_operation)->getReferencedPrivateData(
             CID_SOCKETPOLLOPERATIONBASE, xsink));
     if (*xsink || !read_priv) {
         return QoreValue();
@@ -1030,18 +1034,18 @@ nothing Http2PollOperationBase::injectReadOp(object read_op) {
     if (read_priv->needsWorkerDispatch()) {
         read_priv->deref(xsink);
         xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
-            "read_op requires worker dispatch and cannot be used by Http2PollOperationBase");
+            "read_operation requires worker dispatch and cannot be used by Http2PollOperationBase");
         return QoreValue();
     }
 
-    // Ref the read_op QoreObject for DGC before transferring ownership
-    const_cast<QoreObject*>(read_op)->ref();
+    // Ref the read_operation QoreObject for DGC before transferring ownership
+    const_cast<QoreObject*>(read_operation)->ref();
 
-    priv->injectReadOp(read_priv, const_cast<QoreObject*>(read_op), xsink);
+    priv->injectReadOp(read_priv, const_cast<QoreObject*>(read_operation), xsink);
     if (*xsink) {
         // injectReadOp did not take ownership on error; deref what we ref'd
         read_priv->deref(xsink);
-        const_cast<QoreObject*>(read_op)->deref(xsink);
+        const_cast<QoreObject*>(read_operation)->deref(xsink);
     }
 }
 
@@ -1073,7 +1077,7 @@ nothing Http2PollOperationBase::continueReading() {
     @since %Qore 2.3
 */
 nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
-        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) {
+        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
     // Transfer the Queue ref from the ReferenceHolder to the C++ priv
     Queue* queue_ptr = queue.release();
     // Ref the QoreObject for DGC preventing garbage collection
@@ -1140,7 +1144,7 @@ nothing Http2PollOperationBase::deregisterPersistentSessionQueue() {
     @since %Qore 2.4
 */
 nothing Http2PollOperationBase::registerStreamFrameState(int stream_id,
-        Queue[Queue] queue) {
+        Queue[Queue] queue) [flags=NAMED_ARGS] {
     // Transfer the Queue ref from the ReferenceHolder to the C++ priv.
     // The WebSocketStreamFrameState destructor derefs the Queue when the
     // stream is torn down; no separate deref in StreamQueueInfo cleanup.
@@ -1179,6 +1183,6 @@ nothing Http2PollOperationBase::clearStreamQueues() {
 
     @since %Qore 2.3
 */
-nothing Http2PollOperationBase::onStreamData(int stream_id) {
+nothing Http2PollOperationBase::onStreamData(int stream_id) [flags=NAMED_ARGS] {
     // Default no-op — Qore subclass overrides to wake handler
 }

@@ -39,6 +39,7 @@
 #include <openssl/evp.h>
 #include <openssl/des.h>
 #include <openssl/hmac.h>
+#include <string>
 
 #define MD2_ERR "MD2-DIGEST-ERROR"
 #define MD4_ERR "MD4-DIGEST-ERROR"
@@ -60,6 +61,7 @@ class BaseHelper {
 protected:
     unsigned char* input;
     size_t input_len;
+    std::string input_storage;
 
     unsigned char md_value[EVP_MAX_MD_SIZE > HMAC_MAX_MD_CBLOCK ? EVP_MAX_MD_SIZE : HMAC_MAX_MD_CBLOCK];
     unsigned int md_len;
@@ -76,7 +78,10 @@ protected:
 
     DLLLOCAL void setInput(const QoreValue pt) {
         if (pt.getType() == NT_STRING) {
-            setInput(*pt.get<const QoreStringNode>());
+            QoreStringValueHelper str(pt);
+            input_storage.assign(str->getBuffer(), str->strlen());
+            input = reinterpret_cast<unsigned char*>(input_storage.data());
+            input_len = input_storage.size();
         } else {
             assert(pt.getType() == NT_BINARY);
             setInput(*pt.get<const BinaryNode>());

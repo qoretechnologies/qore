@@ -1,10 +1,10 @@
 #!/usr/bin/env qore
 
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
 %exec-class WinSpecificTest

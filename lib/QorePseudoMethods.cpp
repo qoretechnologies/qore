@@ -40,6 +40,7 @@
 #include "Pseudo_QC_Number.cpp"
 #include "Pseudo_QC_String.cpp"
 #include "Pseudo_QC_List.cpp"
+#include "Pseudo_QC_Buffer.cpp"
 #include "Pseudo_QC_Hash.cpp"
 #include "Pseudo_QC_Object.cpp"
 #include "Pseudo_QC_Date.cpp"
@@ -52,6 +53,7 @@
 
 // list of pseudo-classes for basic types + 2 entries for closures and call references
 static QoreClass* po_list[NODE_ARRAY_LEN + 2];
+static QoreClass* pseudo_buffer;
 
 // int <x>.typeCode()
 static QoreValue PSEUDONULL_typeCode(QoreObject *ignored, AbstractQoreNode *node, const QoreListNode *args, ExceptionSink *xsink) {
@@ -86,6 +88,7 @@ void pseudo_classes_init() {
     po_list[NT_HASH] = initPseudoHashClass();
     po_list[NT_OBJECT] = initPseudoObjectClass();
     po_list[NT_NUMBER] = initPseudoNumberClass();
+    pseudo_buffer = initPseudoBufferClass();
 
     // + 2 pseudo classes with runtime type values outside the value type range
     po_list[NODE_ARRAY_LEN] = initPseudoCallrefClass();
@@ -96,6 +99,7 @@ void pseudo_classes_del() {
     // delete pseudo-classes
     for (unsigned i = 0; i < NODE_ARRAY_LEN + 2; ++i)
         qore_class_private::get(*po_list[i])->deref(true, true);
+    qore_class_private::get(*pseudo_buffer)->deref(true, true);
 
     qore_class_private::get(*QC_PSEUDOVALUE)->deref(true, true);
 }
@@ -111,6 +115,9 @@ static QoreClass* pseudo_get_class(qore_type_t t) {
         }
         if (t == NT_RUNTIME_CLOSURE) {
             return po_list[NODE_ARRAY_LEN + 1];
+        }
+        if (t == NT_BUFFER) {
+            return pseudo_buffer;
         }
         if (t == NT_WEAKREF) {
             return po_list[NT_OBJECT];
@@ -159,6 +166,15 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
 QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreListNode *args, ExceptionSink *xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     switch (n.getType()) {
+        case NT_STRING:
+            if (n.isShortString()) {
+                char buf[7];
+                n.getShortString(buf);
+                ValueHolder str(new QoreStringNode(buf, n.shortStringLen(), QCS_UTF8), xsink);
+                return qore_class_private::evalPseudoMethod(po_list[NT_STRING], *str, name, args, rc, xsink);
+            }
+            break;
+
         case NT_WEAKREF:
             return qore_class_private::evalPseudoMethod(po_list[NT_OBJECT],
                 QoreValue(n.get<WeakReferenceNode>()->get()), name, args, rc, xsink);
@@ -206,6 +222,20 @@ const QoreMethod* pseudo_classes_find_method(const QoreTypeInfo* typeInfo, const
         m = pseudo_classes_find_method(typeInfo->return_vec[0].spec.getType(), mname, qc);
         possible_match = m ? true : false;
         return m;
+    }
+
+    // For optional types (exactly X or NOTHING, e.g. *hash<string, T>),
+    // resolve the pseudo-method for the base type X.
+    // This allows methods like pairIterator() on optional hashes to be typed correctly.
+    if (typeInfo->return_vec.size() == 2) {
+        for (int i = 0; i < 2; ++i) {
+            if (typeInfo->return_vec[i].spec.getType() == NT_NOTHING) {
+                int base_idx = 1 - i;
+                m = pseudo_classes_find_method(typeInfo->return_vec[base_idx].spec.getType(), mname, qc);
+                possible_match = m ? true : false;
+                return m;
+            }
+        }
     }
 
     QoreClass* nqc;

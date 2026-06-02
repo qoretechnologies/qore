@@ -90,7 +90,8 @@ DecisionTree::constructor(hash<auto> options) {
         }
         v = options->getKeyValue("task");
         if (v.getType() == NT_STRING) {
-            task = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper task_str(v);
+            task = task_str->c_str();
             if (task != "classification" && task != "regression") {
                 xsink->raiseException("ML-DECISION-TREE-ERROR",
                     "task must be 'classification' or 'regression'; got '%s'",
@@ -100,7 +101,8 @@ DecisionTree::constructor(hash<auto> options) {
         }
         v = options->getKeyValue("criterion");
         if (v.getType() == NT_STRING) {
-            criterion = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper criterion_str(v);
+            criterion = criterion_str->c_str();
         }
         v = options->getKeyValue("seed");
         if (!v.isNullOrNothing()) {

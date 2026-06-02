@@ -103,7 +103,11 @@ public:
 	 return 0;
       }
 
+      int iter = 0;
       while (true) {
+         if (++iter % 10 == 0 && qore_check_cancel(xsink, "compressing bzip2 data")) {
+            return nullptr;
+         }
 	 int64 done = (int64)total_out_lo32 + (((int64)total_out_hi32) << 32);
 	 next_out = ((char*)b->getPtr()) + done;
 	 avail_out = (unsigned)(bs - done);
@@ -166,7 +170,11 @@ public:
             return nullptr;
         }
 
+        int iter = 0;
         while (true) {
+            if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing bzip2 data")) {
+                return nullptr;
+            }
             int64 done = (int64)total_out_lo32 + (((int64)total_out_hi32) << 32);
             next_out = ((char*)b->getPtr()) + done;
             avail_out = (unsigned)(bs - done);
@@ -338,7 +346,12 @@ static BinaryNode* qore_deflate_intern(const void* ptr, unsigned long len, int l
    c_stream.next_out = (Bytef*)buf;
    c_stream.avail_out = bsize;
 
+   int iter = 0;
    while (c_stream.avail_in) {
+      if (++iter % 10 == 0 && qore_check_cancel(xsink, "compressing zlib data")) {
+         free(buf);
+         return nullptr;
+      }
       rc = deflate(&c_stream, Z_NO_FLUSH);
       if (rc != Z_OK && rc != Z_BUF_ERROR) {
          free(buf);
@@ -359,6 +372,10 @@ static BinaryNode* qore_deflate_intern(const void* ptr, unsigned long len, int l
    }
 
    while (true) {
+      if (++iter % 10 == 0 && qore_check_cancel(xsink, "compressing zlib data")) {
+         free(buf);
+         return nullptr;
+      }
       rc = deflate(&c_stream, Z_FINISH);
       if (rc == Z_STREAM_END)
          break;
@@ -404,7 +421,12 @@ static char* qore_inflate_intern(const BinaryNode* b, int &len, bool gzipFormat,
     d_stream.next_out = (Bytef*)buf;
     d_stream.avail_out = bsize;
 
+    int iter = 0;
     while (true) {
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing zlib data")) {
+            free(buf);
+            return nullptr;
+        }
         rc = inflate(&d_stream, Z_NO_FLUSH);
         if (rc == Z_STREAM_END)
             break;
@@ -498,7 +520,12 @@ static BinaryNode* qore_deflate_raw_intern(const void* ptr, unsigned long len, i
     c_stream.next_out = (Bytef*)buf;
     c_stream.avail_out = bsize;
 
+    int iter = 0;
     while (c_stream.avail_in) {
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, "compressing raw deflate data")) {
+            free(buf);
+            return nullptr;
+        }
         rc = deflate(&c_stream, Z_NO_FLUSH);
         if (rc != Z_OK && rc != Z_BUF_ERROR) {
             free(buf);
@@ -516,6 +543,10 @@ static BinaryNode* qore_deflate_raw_intern(const void* ptr, unsigned long len, i
     }
 
     while (true) {
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, "compressing raw deflate data")) {
+            free(buf);
+            return nullptr;
+        }
         rc = deflate(&c_stream, Z_FINISH);
         if (rc == Z_STREAM_END)
             break;
@@ -561,7 +592,12 @@ static char* qore_inflate_raw_intern(const BinaryNode* b, int &len, ExceptionSin
     d_stream.next_out = (Bytef*)buf;
     d_stream.avail_out = bsize;
 
+    int iter = 0;
     while (true) {
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing raw deflate data")) {
+            free(buf);
+            return nullptr;
+        }
         rc = inflate(&d_stream, Z_NO_FLUSH);
         if (rc == Z_STREAM_END)
             break;
@@ -670,7 +706,13 @@ static char* qore_unbrotli_intern(const BinaryNode* b, size_t& decoded_size, Exc
     size_t total_out = 0;
 
     BrotliDecoderResult result;
+    int iter = 0;
     while (true) {
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing Brotli data")) {
+            free(buf);
+            BrotliDecoderDestroyInstance(state);
+            return nullptr;
+        }
         result = BrotliDecoderDecompressStream(state, &avail_in, &next_in, &avail_out, &next_out, &total_out);
 
         if (result == BROTLI_DECODER_RESULT_SUCCESS) {
@@ -803,7 +845,13 @@ static char* qore_unzstd_intern(const BinaryNode* b, size_t& decoded_size, Excep
         ZSTD_inBuffer input = { b->getPtr(), b->size(), 0 };
         size_t total_out = 0;
 
+        int iter = 0;
         while (input.pos < input.size) {
+            if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing Zstd data")) {
+                free(buf);
+                ZSTD_freeDStream(dstream);
+                return nullptr;
+            }
             ZSTD_outBuffer output = { static_cast<char*>(buf) + total_out, buf_size - total_out, 0 };
             size_t result = ZSTD_decompressStream(dstream, &output, &input);
 
@@ -1058,7 +1106,7 @@ const COMPRESSION_ALG_LZ4 = str(CompressionTransforms::ALG_LZ4);
 //! Performs zlib-based "deflate" data compression (<a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>) and returns a binary object of the compressed data
 /** Note that strings are compressed without the trailing null character.
 
-    @param str The string to compress
+    @param data The string to compress
     @param level Specifies the compression level; must be an integer between 1 and 9, 9 meaning the highest compression level. The default value Z_DEFAULT_COMPRESSION gives a tradeoff between speed and compression size
 
     @return a binary object of the compressed data
@@ -1071,20 +1119,20 @@ binary bin = compress(str_data);
     @throw ZLIB-LEVEL-ERROR level must be between 1 - 9 or -1
     @throw ZLIB-ERROR zlib returned an error while processing
 */
-binary compress(string str, int level = Z_DEFAULT_COMPRESSION) {
+binary compress(string data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
       return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
 
-   if (!str->strlen())
+   if (!data->strlen())
       return new BinaryNode;
 
-   return qore_deflate(str->getBuffer(), str->strlen(), level, xsink);
+   return qore_deflate(data->getBuffer(), data->strlen(), level, xsink);
 }
 
 //! Performs zlib-based "deflate" data compression (<a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>) and returns a binary object of the compressed data
 /** Note that strings are compressed without the trailing null character.
 
-    @param bin The binary object to compress
+    @param data The binary object to compress
     @param level Specifies the compression level; must be an integer between 1 and 9, 9 meaning the highest compression level. The default value Z_DEFAULT_COMPRESSION gives a tradeoff between speed and compression size
 
     @return a binary object of the compressed data
@@ -1097,14 +1145,14 @@ binary bin = compress(bin_data);
     @throw ZLIB-LEVEL-ERROR level must be between 1 - 9 or -1
     @throw ZLIB-ERROR zlib returned an error while processing
 */
-binary compress(binary bin, int level = Z_DEFAULT_COMPRESSION) {
+binary compress(binary data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
       return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
 
-   if (!bin->size())
+   if (!data->size())
       return new BinaryNode;
 
-   return qore_deflate(bin->getPtr(), bin->size(), level, xsink);
+   return qore_deflate(data->getPtr(), data->size(), level, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1115,7 +1163,7 @@ nothing compress() [flags=RUNTIME_NOOP] {
 
 //! Performs zlib-based decompression of data compressed by the "deflate" algorithm (<a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>) and returns a string of the decompressed data
 /**
-    @param bin the compressed data to decompress
+    @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return the uncompressed data as a string
@@ -1127,9 +1175,9 @@ string str = uncompress_to_string(bin, "iso-8859-1");
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
 */
-string uncompress_to_string(binary bin, *string encoding) {
+string uncompress_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_inflate_to_string(bin, qe, xsink);
+   return qore_inflate_to_string(compressed_data, qe, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1139,7 +1187,7 @@ nothing uncompress_to_string() [flags=RUNTIME_NOOP] {
 }
 
 //! Performs zlib-based decompression of data compressed by the "deflate" algorithm (<a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>) and returns a binary object of the decompressed data
-/** @param bin the data to decompress
+/** @param compressed_data the data to decompress
 
     @return a binary object of the decompressed data
 
@@ -1150,8 +1198,8 @@ binary bin = uncompress_to_binary(data);
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
 */
-binary uncompress_to_binary(binary bin) {
-   return qore_inflate_to_binary(bin, xsink);
+binary uncompress_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
+   return qore_inflate_to_binary(compressed_data, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1166,7 +1214,7 @@ nothing uncompress_to_binary() [flags=RUNTIME_NOOP] {
 
     This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
 
-    @param str The string to compress
+    @param data The string to compress
     @param level Specifies the compression level; must be an integer between 1 and 9, 9 meaning the highest
     compression level. The default value Z_DEFAULT_COMPRESSION gives a tradeoff between speed and compression size
 
@@ -1182,14 +1230,14 @@ binary bin = deflate_raw(str_data);
 
     @since %Qore 2.3
 */
-binary deflate_raw(string str, int level = Z_DEFAULT_COMPRESSION) {
+binary deflate_raw(string data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
       return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
 
-   if (!str->strlen())
+   if (!data->strlen())
       return new BinaryNode;
 
-   return qore_deflate_raw(str->getBuffer(), str->strlen(), level, xsink);
+   return qore_deflate_raw(data->getBuffer(), data->strlen(), level, xsink);
 }
 
 //! Performs raw DEFLATE compression without zlib/gzip headers or trailers
@@ -1198,7 +1246,7 @@ binary deflate_raw(string str, int level = Z_DEFAULT_COMPRESSION) {
 
     This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
 
-    @param bin The binary object to compress
+    @param data The binary object to compress
     @param level Specifies the compression level; must be an integer between 1 and 9, 9 meaning the highest
     compression level. The default value Z_DEFAULT_COMPRESSION gives a tradeoff between speed and compression size
 
@@ -1214,14 +1262,14 @@ binary bin = deflate_raw(bin_data);
 
     @since %Qore 2.3
 */
-binary deflate_raw(binary bin, int level = Z_DEFAULT_COMPRESSION) {
+binary deflate_raw(binary data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
       return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 1 - 9 or -1 (value passed: %d)", level);
 
-   if (!bin->size())
+   if (!data->size())
       return new BinaryNode;
 
-   return qore_deflate_raw(bin->getPtr(), bin->size(), level, xsink);
+   return qore_deflate_raw(data->getPtr(), data->size(), level, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1236,7 +1284,7 @@ nothing deflate_raw() [flags=RUNTIME_NOOP] {
 
     This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
 
-    @param bin the compressed data to decompress (in raw DEFLATE format)
+    @param compressed_data the compressed data to decompress (in raw DEFLATE format)
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return the uncompressed data as a string
@@ -1250,9 +1298,9 @@ string str = inflate_raw_to_string(bin, "utf-8");
 
     @since %Qore 2.3
 */
-string inflate_raw_to_string(binary bin, *string encoding) {
+string inflate_raw_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_inflate_raw_to_string(bin, qe, xsink);
+   return qore_inflate_raw_to_string(compressed_data, qe, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1267,7 +1315,7 @@ nothing inflate_raw_to_string() [flags=RUNTIME_NOOP] {
 
     This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
 
-    @param bin the compressed data to decompress (in raw DEFLATE format)
+    @param compressed_data the compressed data to decompress (in raw DEFLATE format)
 
     @return the uncompressed data as a binary object
 
@@ -1280,8 +1328,8 @@ binary bin = inflate_raw_to_binary(data);
 
     @since %Qore 2.3
 */
-binary inflate_raw_to_binary(binary bin) {
-   return qore_inflate_raw_to_binary(bin, xsink);
+binary inflate_raw_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
+   return qore_inflate_raw_to_binary(compressed_data, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1293,7 +1341,7 @@ nothing inflate_raw_to_binary() [flags=RUNTIME_NOOP] {
 //! Performs <a href="http://zlib.net/">zlib</a>-based "gzip" data compression (<a href="http://www.ietf.org/rfc/rfc1952.txt">RFC 1952</a>) and returns a binary object of the compressed data
 /** Strings are compressed without the trailing null character
 
-    @param str the data to compress
+    @param data the data to compress
     @param level the compression level, must be a value between 1 and 9 inclusive, 1 = the least compression (and taking the least memory), 9 = the most compression (using the most memory).  An invalid option passed to this argument will result in a \c ZLIB-LEVEL-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1306,19 +1354,19 @@ binary data = gzip(str);
     @throw ZLIB-LEVEL-ERROR level must be between 1 - 9 or -1
     @throw ZLIB-ERROR The zlib library returned an error during processing (should not normally happen during compression)
 */
-binary gzip(string str, int level = Z_DEFAULT_COMPRESSION) {
+binary gzip(string data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if (!level || level > 9)
       return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 0 - 9 (value passed: %d)", level);
 
-   if (!str->strlen())
+   if (!data->strlen())
       return new BinaryNode;
 
-   return qore_gzip(str->getBuffer(), str->strlen(), level, xsink);
+   return qore_gzip(data->getBuffer(), data->strlen(), level, xsink);
 }
 
 //! Performs <a href="http://zlib.net/">zlib</a>-based "gzip" data compression (<a href="http://www.ietf.org/rfc/rfc1952.txt">RFC 1952</a>) and returns a binary object of the compressed data
 /**
-    @param bin the data to compress
+    @param data the data to compress
     @param level the compression level, must be a value between 1 and 9 inclusive, 1 = the least compression (and taking the least memory), 9 = the most compression (using the most memory).  An invalid option passed to this argument will result in a \c ZLIB-LEVEL-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1331,14 +1379,14 @@ binary data = gzip(bin);
     @throw ZLIB-LEVEL-ERROR level must be between 1 - 9 or -1
     @throw ZLIB-ERROR The zlib library returned an error during processing (should not normally happen during compression)
 */
-binary gzip(binary bin, int level = Z_DEFAULT_COMPRESSION) {
+binary gzip(binary data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if (!level || level > 9)
       return xsink->raiseException("ZLIB-LEVEL-ERROR", "level must be between 0 - 9 (value passed: %d)", level);
 
-   if (!bin->size())
+   if (!data->size())
       return new BinaryNode;
 
-   return qore_gzip(bin->getPtr(), bin->size(), level, xsink);
+   return qore_gzip(data->getPtr(), data->size(), level, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1348,7 +1396,7 @@ nothing gzip() [flags=RUNTIME_NOOP] {
 }
 
 //! Performs <a href="http://zlib.net/">zlib</a>-based decompression of data compressed with the "gzip" algorithm (<a href="http://www.ietf.org/rfc/rfc1952.txt">RFC 1952</a>) and returns a string of the uncompressed datas
-/** @param bin the compressed data to decompress
+/** @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return the uncompressed data as a string
@@ -1360,9 +1408,9 @@ string str = gunzip_to_string(bin, "iso-8859-1");
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
 */
-string gunzip_to_string(binary bin, *string encoding) {
+string gunzip_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_gunzip_to_string(bin, qe, xsink);
+   return qore_gunzip_to_string(compressed_data, qe, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1372,7 +1420,7 @@ nothing gunzip_to_string() [flags=RUNTIME_NOOP] {
 }
 
 //! Performs <a href="http://zlib.net/">zlib</a>-based decompression of data compressed with the \c "gzip" algorithm (<a href="http://www.ietf.org/rfc/rfc1952.txt">RFC 1952</a>) and returns a binary object of the uncompressed data
-/** @param bin the compressed data to decompress
+/** @param compressed_data the compressed data to decompress
 
     @return the uncompressed data as a binary object
 
@@ -1383,8 +1431,8 @@ binary bin = gunzip_to_binary(data);
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
 */
-binary gunzip_to_binary(binary bin) {
-   return qore_gunzip_to_binary(bin, xsink);
+binary gunzip_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
+   return qore_gunzip_to_binary(compressed_data, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1394,7 +1442,7 @@ nothing gunzip_to_binary() [flags=RUNTIME_NOOP] {
 }
 
 //! Compresses the given data with the <a href="http://en.wikipedia.org/wiki/Bzip2">bzip2 algorithm</a> and returns the compressed data as a binary
-/** @param bin the data to compress
+/** @param data the data to compress
     @param level the compression level, must be a value between 1 and 9 inclusive, 1 = the least compression (and taking the least memory), 9 = the most compression (using the most memory).  An invalid option passed to this argument will result in a \c BZLIB2-LEVEL-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1407,17 +1455,17 @@ binary bin = bzip2(data);
     @throw BZLIB2-LEVEL-ERROR level must be between 1 - 9
     @throw BZIP2-COMPRESS-ERROR the bzip2 library returned an error during processing
 */
-binary bzip2(binary bin, softint level = BZ2_DEFAULT_COMPRESSION) {
+binary bzip2(binary data, softint level = BZ2_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if (!level || level > 9)
       return xsink->raiseException("BZLIB2-LEVEL-ERROR", "level must be between 1 - 9 (value passed: %d)", level);
 
-   return qore_bzip2(bin->getPtr(), bin->size(), level, xsink);
+   return qore_bzip2(data->getPtr(), data->size(), level, xsink);
 }
 
 //! Compresses the given data with the <a href="http://en.wikipedia.org/wiki/Bzip2">bzip2 algorithm</a> and returns the compressed data as a binary
 /** Strings are compressed without the trailing null character
 
-    @param str the data to compress
+    @param data the data to compress
     @param level the compression level, must be a value between 1 and 9 inclusive, 1 = the least compression (and taking the least memory), 9 = the most compression (using the most memory).  An invalid option passed to this argument will result in a \c BZLIB2-LEVEL-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1430,11 +1478,11 @@ binary bin = bzip2(str);
     @throw BZLIB2-LEVEL-ERROR level must be between 1 - 9
     @throw BZIP2-COMPRESS-ERROR the bzip2 library returned an error during processing
 */
-binary bzip2(string str, softint level = BZ2_DEFAULT_COMPRESSION) {
+binary bzip2(string data, softint level = BZ2_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if (!level || level > 9)
       return xsink->raiseException("BZLIB2-LEVEL-ERROR", "level must be between 1 - 9 (value passed: %d)", level);
 
-   return qore_bzip2(str->getBuffer(), str->strlen(), level, xsink);
+   return qore_bzip2(data->getBuffer(), data->strlen(), level, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1444,7 +1492,7 @@ nothing bzip2() [flags=RUNTIME_NOOP] {
 }
 
 //! Uncompresses the given data with the <a href="http://en.wikipedia.org/wiki/Bzip2">bzip2 algorithm</a> and returns the uncompressed data as a binary object
-/** @param bin the compressed data to decompress
+/** @param compressed_data the compressed data to decompress
 
     @return the uncompressed data as a binary object
 
@@ -1455,8 +1503,8 @@ binary bin = bunzip2_to_binary(bzip2_string);
 
     @throw BZIP2-DECOMPRESS-ERROR the bzip2 library returned an internal error during processing (possibly due to corrupt input data)
 */
-binary bunzip2_to_binary(binary bin) {
-   return qore_bunzip2_to_binary(bin, xsink);
+binary bunzip2_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
+   return qore_bunzip2_to_binary(compressed_data, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1466,7 +1514,7 @@ nothing bunzip2_to_binary() [flags=RUNTIME_NOOP] {
 }
 
 //! Uncompresses the given data with the <a href="http://en.wikipedia.org/wiki/Bzip2">bzip2 algorithm</a> and returns the uncompressed data as a string
-/** @param bin the compressed data to decompress
+/** @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return the uncompressed data as a string
@@ -1478,9 +1526,9 @@ string str = bunzip2_to_string(bzip2_string, "iso-8859-1");
 
     @throw BZIP2-DECOMPRESS-ERROR the bzip2 library returned an internal error during processing (possibly due to corrupt input data)
 */
-string bunzip2_to_string(binary bin, *string encoding) {
+string bunzip2_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_bunzip2_to_string(bin, qe, xsink);
+   return qore_bunzip2_to_string(compressed_data, qe, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1492,7 +1540,7 @@ nothing bunzip2_to_string() [flags=RUNTIME_NOOP] {
 //! Compresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the compressed data as a binary
 /** Strings are compressed without the trailing null character
 
-    @param str the data to compress
+    @param data the data to compress
     @param quality the compression quality level, must be a value between 0 and 11 inclusive, 0 = the least compression (and fastest), 11 = the most compression (using the most memory and time). An invalid option passed to this argument will result in a \c BROTLI-LEVEL-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1507,7 +1555,7 @@ binary bin = brotli(str);
 
     @since %Qore 2.1
 */
-binary brotli(string str, int quality = BROTLI_DEFAULT_QUALITY) {
+binary brotli(string data, int quality = BROTLI_DEFAULT_QUALITY) [flags=NAMED_ARGS] {
    if ((quality < BROTLI_MIN_QUALITY && quality != -1) || quality > BROTLI_MAX_QUALITY)
       return xsink->raiseException("BROTLI-LEVEL-ERROR", "quality must be between %d - %d or -1 (value passed: %d)",
          BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY, quality);
@@ -1515,14 +1563,14 @@ binary brotli(string str, int quality = BROTLI_DEFAULT_QUALITY) {
    if (quality == -1)
       quality = BROTLI_DEFAULT_QUALITY;
 
-   if (!str->strlen())
+   if (!data->strlen())
       return new BinaryNode;
 
-   return qore_brotli(str->getBuffer(), str->strlen(), quality, xsink);
+   return qore_brotli(data->getBuffer(), data->strlen(), quality, xsink);
 }
 
 //! Compresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the compressed data as a binary
-/** @param bin the data to compress
+/** @param data the data to compress
     @param quality the compression quality level, must be a value between 0 and 11 inclusive, 0 = the least compression (and fastest), 11 = the most compression (using the most memory and time). An invalid option passed to this argument will result in a \c BROTLI-LEVEL-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1537,7 +1585,7 @@ binary bin = brotli(data);
 
     @since %Qore 2.1
 */
-binary brotli(binary bin, int quality = BROTLI_DEFAULT_QUALITY) {
+binary brotli(binary data, int quality = BROTLI_DEFAULT_QUALITY) [flags=NAMED_ARGS] {
    if ((quality < BROTLI_MIN_QUALITY && quality != -1) || quality > BROTLI_MAX_QUALITY)
       return xsink->raiseException("BROTLI-LEVEL-ERROR", "quality must be between %d - %d or -1 (value passed: %d)",
          BROTLI_MIN_QUALITY, BROTLI_MAX_QUALITY, quality);
@@ -1545,10 +1593,10 @@ binary brotli(binary bin, int quality = BROTLI_DEFAULT_QUALITY) {
    if (quality == -1)
       quality = BROTLI_DEFAULT_QUALITY;
 
-   if (!bin->size())
+   if (!data->size())
       return new BinaryNode;
 
-   return qore_brotli(bin->getPtr(), bin->size(), quality, xsink);
+   return qore_brotli(data->getPtr(), data->size(), quality, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1559,7 +1607,7 @@ nothing brotli() [flags=RUNTIME_NOOP] {
 }
 
 //! Decompresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the decompressed data as a binary object
-/** @param bin the compressed data to decompress
+/** @param compressed_data the compressed data to decompress
 
     @return the uncompressed data as a binary object
 
@@ -1572,8 +1620,8 @@ binary bin = unbrotli_to_binary(brotli_data);
 
     @since %Qore 2.1
 */
-binary unbrotli_to_binary(binary bin) {
-   return qore_unbrotli_to_binary(bin, xsink);
+binary unbrotli_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
+   return qore_unbrotli_to_binary(compressed_data, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1584,7 +1632,7 @@ nothing unbrotli_to_binary() [flags=RUNTIME_NOOP] {
 }
 
 //! Decompresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the decompressed data as a string
-/** @param bin the compressed data to decompress
+/** @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return the uncompressed data as a string
@@ -1598,9 +1646,9 @@ string str = unbrotli_to_string(brotli_data, "utf-8");
 
     @since %Qore 2.1
 */
-string unbrotli_to_string(binary bin, *string encoding) {
+string unbrotli_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_unbrotli_to_string(bin, qe, xsink);
+   return qore_unbrotli_to_string(compressed_data, qe, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1613,7 +1661,7 @@ nothing unbrotli_to_string() [flags=RUNTIME_NOOP] {
 //! Compresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the compressed data as a binary
 /** Strings are compressed without the trailing null character
 
-    @param str the data to compress
+    @param data the data to compress
     @param level the compression level, must be a value between 1 and ZSTD_MAX_LEVEL (typically 22) inclusive, 1 = the least compression (and fastest), ZSTD_MAX_LEVEL = the most compression (using the most memory and time). An invalid option passed to this argument will result in a \c ZSTD-LEVEL-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1628,7 +1676,7 @@ binary bin = zstd(str);
 
     @since %Qore 2.1
 */
-binary zstd(string str, int level = 3) {
+binary zstd(string data, int level = 3) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > ZSTD_maxCLevel())
       return xsink->raiseException("ZSTD-LEVEL-ERROR", "level must be between %d - %d or -1 (value passed: %d)",
          1, ZSTD_maxCLevel(), level);
@@ -1636,14 +1684,14 @@ binary zstd(string str, int level = 3) {
    if (level == -1)
       level = ZSTD_CLEVEL_DEFAULT;
 
-   if (!str->strlen())
+   if (!data->strlen())
       return new BinaryNode;
 
-   return qore_zstd(str->getBuffer(), str->strlen(), level, xsink);
+   return qore_zstd(data->getBuffer(), data->strlen(), level, xsink);
 }
 
 //! Compresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the compressed data as a binary
-/** @param bin the data to compress
+/** @param data the data to compress
     @param level the compression level, must be a value between 1 and ZSTD_MAX_LEVEL (typically 22) inclusive, 1 = the least compression (and fastest), ZSTD_MAX_LEVEL = the most compression (using the most memory and time). An invalid option passed to this argument will result in a \c ZSTD-LEVEL-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1658,7 +1706,7 @@ binary bin = zstd(data);
 
     @since %Qore 2.1
 */
-binary zstd(binary bin, int level = 3) {
+binary zstd(binary data, int level = 3) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > ZSTD_maxCLevel())
       return xsink->raiseException("ZSTD-LEVEL-ERROR", "level must be between %d - %d or -1 (value passed: %d)",
          1, ZSTD_maxCLevel(), level);
@@ -1666,10 +1714,10 @@ binary zstd(binary bin, int level = 3) {
    if (level == -1)
       level = ZSTD_CLEVEL_DEFAULT;
 
-   if (!bin->size())
+   if (!data->size())
       return new BinaryNode;
 
-   return qore_zstd(bin->getPtr(), bin->size(), level, xsink);
+   return qore_zstd(data->getPtr(), data->size(), level, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1680,7 +1728,7 @@ nothing zstd() [flags=RUNTIME_NOOP] {
 }
 
 //! Decompresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the decompressed data as a binary object
-/** @param bin the compressed data to decompress
+/** @param compressed_data the compressed data to decompress
 
     @return the uncompressed data as a binary object
 
@@ -1693,8 +1741,8 @@ binary bin = unzstd_to_binary(zstd_data);
 
     @since %Qore 2.1
 */
-binary unzstd_to_binary(binary bin) {
-   return qore_unzstd_to_binary(bin, xsink);
+binary unzstd_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
+   return qore_unzstd_to_binary(compressed_data, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1705,7 +1753,7 @@ nothing unzstd_to_binary() [flags=RUNTIME_NOOP] {
 }
 
 //! Decompresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the decompressed data as a string
-/** @param bin the compressed data to decompress
+/** @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return the uncompressed data as a string
@@ -1719,9 +1767,9 @@ string str = unzstd_to_string(zstd_data, "utf-8");
 
     @since %Qore 2.1
 */
-string unzstd_to_string(binary bin, *string encoding) {
+string unzstd_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_unzstd_to_string(bin, qe, xsink);
+   return qore_unzstd_to_string(compressed_data, qe, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1737,7 +1785,7 @@ nothing unzstd_to_string() [flags=RUNTIME_NOOP] {
     @note LZ4 does not store the original size in the compressed data, so decompression requires either a
     max_output_size parameter or knowledge of the original size.
 
-    @param str the data to compress
+    @param data the data to compress
     @param acceleration the acceleration factor for faster compression at the cost of compression ratio, must be a value between 1 and 65537 inclusive, 1 = best compression ratio (default), higher values = faster compression but larger output. An invalid option passed to this argument will result in a \c LZ4-ACCELERATION-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1752,22 +1800,22 @@ binary bin = lz4(str);
 
     @since %Qore 2.1
 */
-binary lz4(string str, int acceleration = 1) {
+binary lz4(string data, int acceleration = 1) [flags=NAMED_ARGS] {
    if (acceleration < 1 || acceleration > 65537)
       return xsink->raiseException("LZ4-ACCELERATION-ERROR", "acceleration must be between %d - %d (value passed: %d)",
          1, 65537, acceleration);
 
-   if (!str->strlen())
+   if (!data->strlen())
       return new BinaryNode;
 
-   return qore_lz4(str->getBuffer(), str->strlen(), acceleration, xsink);
+   return qore_lz4(data->getBuffer(), data->strlen(), acceleration, xsink);
 }
 
 //! Compresses the given data with the <a href="https://github.com/lz4/lz4">LZ4</a> algorithm and returns the compressed data as a binary
 /** @note LZ4 does not store the original size in the compressed data, so decompression requires either a
     max_output_size parameter or knowledge of the original size.
 
-    @param bin the data to compress
+    @param data the data to compress
     @param acceleration the acceleration factor for faster compression at the cost of compression ratio, must be a value between 1 and 65537 inclusive, 1 = best compression ratio (default), higher values = faster compression but larger output. An invalid option passed to this argument will result in a \c LZ4-ACCELERATION-ERROR exception being raised.
 
     @return the compressed data as a binary object
@@ -1782,15 +1830,15 @@ binary bin = lz4(data);
 
     @since %Qore 2.1
 */
-binary lz4(binary bin, int acceleration = 1) {
+binary lz4(binary data, int acceleration = 1) [flags=NAMED_ARGS] {
    if (acceleration < 1 || acceleration > 65537)
       return xsink->raiseException("LZ4-ACCELERATION-ERROR", "acceleration must be between %d - %d (value passed: %d)",
          1, 65537, acceleration);
 
-   if (!bin->size())
+   if (!data->size())
       return new BinaryNode;
 
-   return qore_lz4(bin->getPtr(), bin->size(), acceleration, xsink);
+   return qore_lz4(data->getPtr(), data->size(), acceleration, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1804,7 +1852,7 @@ nothing lz4() [flags=RUNTIME_NOOP] {
 /** @note LZ4 does not store the original size in the compressed data, so either max_output_size must be provided,
     or it will be estimated (which may fail for highly compressed data).
 
-    @param bin the compressed data to decompress
+    @param compressed_data the compressed data to decompress
     @param max_output_size the maximum size of the decompressed output (default: 0 = estimate from input size)
 
     @return the uncompressed data as a binary object
@@ -1818,8 +1866,8 @@ binary bin = unlz4_to_binary(lz4_data, 1000000);
 
     @since %Qore 2.1
 */
-binary unlz4_to_binary(binary bin, int max_output_size = 0) {
-   return qore_unlz4_to_binary(bin, max_output_size, xsink);
+binary unlz4_to_binary(binary compressed_data, int max_output_size = 0) [flags=NAMED_ARGS] {
+   return qore_unlz4_to_binary(compressed_data, max_output_size, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1833,7 +1881,7 @@ nothing unlz4_to_binary() [flags=RUNTIME_NOOP] {
 /** @note LZ4 does not store the original size in the compressed data, so either max_output_size must be provided,
     or it will be estimated (which may fail for highly compressed data).
 
-    @param bin the compressed data to decompress
+    @param compressed_data the compressed data to decompress
     @param max_output_size the maximum size of the decompressed output (default: 0 = estimate from input size)
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
@@ -1848,9 +1896,9 @@ string str = unlz4_to_string(lz4_data, 1000000, "utf-8");
 
     @since %Qore 2.1
 */
-string unlz4_to_string(binary bin, int max_output_size = 0, *string encoding) {
+string unlz4_to_string(binary compressed_data, int max_output_size = 0, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_unlz4_to_string(bin, max_output_size, qe, xsink);
+   return qore_unlz4_to_string(compressed_data, max_output_size, qe, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1867,7 +1915,7 @@ Qore::FileOutputStream of("my-file.txt.bz2");
 Qore::TransformOutputStream ts(of, get_compressor(Qore::COMPRESSION_ALG_BZIP2));
     @endcode
 
-    @param alg the transformation algorithm; see @ref compression_transformations for possible values
+    @param algorithm the transformation algorithm; see @ref compression_transformations for possible values
     @param level compression level as defined by the algorithm or @ref COMPRESSION_LEVEL_DEFAULT to use the default compression level
 
     @return a @ref Transform object for compressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
@@ -1876,8 +1924,8 @@ Qore::TransformOutputStream ts(of, get_compressor(Qore::COMPRESSION_ALG_BZIP2));
 
     @since %Qore 0.8.13
  */
-Transform get_compressor(string alg, int level = COMPRESSION_LEVEL_DEFAULT) {
-   SimpleRefHolder<Transform> t(CompressionTransforms::getCompressor(alg, level, xsink));
+Transform get_compressor(string algorithm, int level = COMPRESSION_LEVEL_DEFAULT) [flags=NAMED_ARGS] {
+   SimpleRefHolder<Transform> t(CompressionTransforms::getCompressor(algorithm, level, xsink));
    if (*xsink) {
       return 0;
    }
@@ -1891,7 +1939,7 @@ Qore::FileOutputStream of("my-file.txt.bz2");
 Qore::TransformOutputStream ts(of, get_decompressor(Qore::COMPRESSION_ALG_BZIP2));
     @endcode
 
-    @param alg the transformation algorithm; see @ref compression_transformations for possible values
+    @param algorithm the transformation algorithm; see @ref compression_transformations for possible values
 
     @return a @ref Transform object for decompressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 
@@ -1899,8 +1947,8 @@ Qore::TransformOutputStream ts(of, get_decompressor(Qore::COMPRESSION_ALG_BZIP2)
 
     @since %Qore 0.8.13
  */
-Transform get_decompressor(string alg) {
-   SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(alg, xsink));
+Transform get_decompressor(string algorithm) [flags=NAMED_ARGS] {
+   SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(algorithm, xsink));
    if (*xsink) {
       return 0;
    }

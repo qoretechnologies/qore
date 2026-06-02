@@ -11,13 +11,14 @@
 %define NoYaml
 %endtry
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/AsyncApi.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires Logger
+%requires HttpServerUtil
+%requires RestSchemaValidator
+%requires AsyncApi
 
 %exec-class AsyncApiTest
 
@@ -45,6 +46,60 @@ public class AsyncApiTest inherits QUnit::Test {
 %ifdef NoYaml
         testSkip("no yaml module");
 %endif
+    }
+
+    #! Returns True if the supplied exception comes from an unavailable network.
+    /** Covers every connect-time failure mode the public-schemas test can hit
+        when the CI runner lacks reachable DNS / outbound HTTPS / a working TLS
+        handshake.  Listed individually rather than matched by regex so a new
+        error class shows up as a hard failure instead of a silent skip.
+
+        - SOCKET-CONNECT-ERROR     - kernel-level connect() refused/unreachable
+        - SOCKET-SSL-ERROR         - TLS handshake failure / bad cert chain
+        - SOCKET-TIMEOUT           - raw socket timed out before completion
+        - QOREADDRINFO-GETINFO-ERROR - getaddrinfo failed (DNS down / NXDOMAIN)
+        - HTTPCLIENT-HOSTNAME-ERROR - resolved-host validation failed
+        - HTTPCLIENT-CONNECT-ERROR - high-level HTTP connection failed
+        - HTTPCLIENT-NEGOTIATE-ERROR - ALPN/HTTP-version negotiation failed
+        - HTTPCLIENT-NEGOTIATE-TIMEOUT - ALPN/HTTP-version negotiation timed out
+        - HTTPCLIENT-CONNECT-TIMEOUT - high-level connect timeout
+        - HTTPCLIENT-TIMEOUT       - request timed out (no body received)
+    */
+    static bool isNetworkError(hash<ExceptionInfo> ex) {
+        switch (ex.err) {
+            case "SOCKET-CONNECT-ERROR":
+            case "SOCKET-SSL-ERROR":
+            case "SOCKET-TIMEOUT":
+            case "QOREADDRINFO-GETINFO-ERROR":
+            case "HTTPCLIENT-HOSTNAME-ERROR":
+            case "HTTPCLIENT-CONNECT-ERROR":
+            case "HTTPCLIENT-NEGOTIATE-ERROR":
+            case "HTTPCLIENT-NEGOTIATE-TIMEOUT":
+            case "HTTPCLIENT-CONNECT-TIMEOUT":
+            case "HTTPCLIENT-TIMEOUT":
+                return True;
+        }
+        return False;
+    }
+
+    #! Returns True for transient HTTP responses from the external public schema host.
+    static bool isExternalDependencyStatus(int statusCode) {
+        switch (statusCode) {
+            case 403:
+            case 408:
+            case 429:
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+                return True;
+        }
+        return False;
+    }
+
+    #! Returns the external public schema host used by publicSchemasTest().
+    static string getPublicSchemaBaseUrl() {
+        return ENV.ASYNCAPI_PUBLIC_SCHEMA_BASE_URL ?? "https://raw.githubusercontent.com";
     }
 
     schemaParsingTest() {
@@ -377,34 +432,36 @@ public class AsyncApiTest inherits QUnit::Test {
     publicSchemasTest() {
         checkModules();
 
+        string baseUrl = AsyncApiTest::getPublicSchemaBaseUrl();
+
         # Official AsyncAPI example schemas from the spec repository
         # Pinned to v3.0.0 tag to avoid breakage when upstream bumps the spec version
         list<hash<auto>> publicSchemas = (
             {
                 "name": "simple-asyncapi",
-                "url": "https://raw.githubusercontent.com/asyncapi/spec/v3.0.0/examples/simple-asyncapi.yml",
+                "path": "/asyncapi/spec/v3.0.0/examples/simple-asyncapi.yml",
                 "expectedTitle": "Account Service",
                 "expectedApiVersion": "1.0.0",
             },
             {
                 "name": "streetlights-mqtt-asyncapi",
-                "url": "https://raw.githubusercontent.com/asyncapi/spec/v3.0.0/examples/streetlights-mqtt-asyncapi.yml",
+                "path": "/asyncapi/spec/v3.0.0/examples/streetlights-mqtt-asyncapi.yml",
                 "expectedTitle": "Streetlights MQTT API",
                 "expectedApiVersion": "1.0.0",
             },
         );
 
         HTTPClient client({
-            "url": "https://raw.githubusercontent.com",
+            "url": baseUrl,
             "timeout": 10s,
             "connect_timeout": 10s,
         });
         try {
             client.connect();
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
-                testSkip(sprintf("Network unavailable: %s", ex.desc));
+            if (AsyncApiTest::isNetworkError(ex)) {
+                testSkip("External public AsyncAPI schema dependency unavailable: %s: %s",
+                    ex.err, ex.desc);
             }
             rethrow;
         }
@@ -415,22 +472,22 @@ public class AsyncApiTest inherits QUnit::Test {
         for (int i = 0; i < publicSchemas.size(); i++) {
             hash<auto> schemaInfo = publicSchemas[i];
             try {
-                # Extract path from full URL
-                string path = schemaInfo.url;
-                path =~ s/https:\/\/raw\.githubusercontent\.com//;
-
                 # Fetch the schema from GitHub
                 hash<auto> info;
-                *string yamlContent = client.get(path, NOTHING, \info);
+                *string yamlContent = client.get(schemaInfo.path, NOTHING, \info);
                 int statusCode = info."response-headers".status_code;
                 if (statusCode != 200) {
-                    printf("SKIP: Could not fetch %s (HTTP %d)\n", schemaInfo.name, statusCode);
-                    continue;
+                    if (AsyncApiTest::isExternalDependencyStatus(statusCode)) {
+                        testSkip("External public AsyncAPI schema dependency returned HTTP %d for %s",
+                            statusCode, schemaInfo.name);
+                    }
+                    assertEq(200, statusCode,
+                        sprintf("External public AsyncAPI schema %s should be available", schemaInfo.name));
                 }
 
                 if (!exists yamlContent) {
-                    printf("SKIP: Empty response for %s\n", schemaInfo.name);
-                    continue;
+                    testSkip("External public AsyncAPI schema dependency returned an empty response for %s",
+                        schemaInfo.name);
                 }
 
                 # Parse the schema
@@ -455,10 +512,9 @@ public class AsyncApiTest inherits QUnit::Test {
 
                 anyPassed = True;
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
-                    printf("SKIP: Network error fetching %s: %s\n", schemaInfo.name, ex.desc);
-                    continue;
+                if (AsyncApiTest::isNetworkError(ex)) {
+                    testSkip("External public AsyncAPI schema dependency unavailable while fetching %s: %s: %s",
+                        schemaInfo.name, ex.err, ex.desc);
                 }
                 # Some complex schemas may have features not yet fully supported
                 if (ex.err =~ /RUNTIME-TYPE-ERROR/) {

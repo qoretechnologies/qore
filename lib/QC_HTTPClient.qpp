@@ -302,8 +302,8 @@ qclass HTTPClient [
 HTTPClient httpclient(("url":"http://hostname:8080/path"));
     @endcode
 
-    @param opts sets options and changes default behaviour for the object, etc; key names are case-sensitive and
-    therefore must all be in lower-case:
+    The \a options argument sets options and changes default behaviour for the object, etc; key names are
+    case-sensitive and therefore must all be in lower-case:
     - \c additional_methods: An optional hash defining additional HTTP methods to handle.  This allows the HTTPClient
       class to handle various HTTP extensions like e.g. WebDAV. The hash is defined with new method names as keys; the
       values are @ref True "True" or @ref False "False" indicating if the method can accept a message body; for
@@ -406,9 +406,9 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - %Qore 2.3 added the following option:
       - \c http3_mode
 */
-HTTPClient::constructor(hash<auto> opts) {
+HTTPClient::constructor(hash<auto> options) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
-    if (client->setOptions(opts, xsink)) {
+    if (client->setOptions(options, xsink)) {
         return;
     }
 
@@ -452,12 +452,12 @@ HTTPClient::destructor() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation HTTPClient::startPollConnect() {
+AbstractPollOperation<auto> HTTPClient::startPollConnect() {
     return client->startPollConnect(xsink, self);
 }
 
 //! Sets the HTTP protocol version string for headers in outgoing messages, allowed values are \c "1.0" and \"1.1\".
-/** @param ver \c "1.0" or \"1.1\" for the HTTP protocol compliance version
+/** @param version \c "1.0" or \"1.1\" for the HTTP protocol compliance version
 
     @par Example:
     @code{.py}
@@ -466,8 +466,8 @@ httpclient.setHTTPVersion("1.1");
 
     @throw HTTP-VERSION-ERROR invalid HTTP version passed (allowed values: \c "1.0" and \"1.1\")
  */
-nothing HTTPClient::setHTTPVersion(string ver) {
-    client->setHTTPVersion(ver->c_str(), xsink);
+nothing HTTPClient::setHTTPVersion(string version) [flags=NAMED_ARGS] {
+    client->setHTTPVersion(version->c_str(), xsink);
 }
 
 //! Returns the HTTP protocol version string used in outgoing messages
@@ -505,7 +505,7 @@ bool HTTPClient::isHttp2Enabled() [flags=CONSTANT] {
 /** When enabled, the client will offer h2 via ALPN during TLS negotiation.
     If the server supports HTTP/2, subsequent requests will use HTTP/2.
 
-    @param enable @ref True to enable HTTP/2, @ref False to disable
+    @param enabled @ref True to enable HTTP/2, @ref False to disable
 
     @par Example:
     @code{.py}
@@ -516,8 +516,8 @@ httpclient.setHttp2Enabled(True);
 
     @since %Qore 2.2
 */
-nothing HTTPClient::setHttp2Enabled(softbool enable = True) {
-    client->setHttp2Enabled(enable);
+nothing HTTPClient::setHttp2Enabled(softbool enabled = True) [flags=NAMED_ARGS] {
+    client->setHttp2Enabled(enabled);
 }
 
 //! Sets the HTTP/2 protocol mode
@@ -552,7 +552,7 @@ httpclient.setHttp2Mode("h2c");
     @see getHttp2Mode()
     @see setHTTPVersion()
 */
-nothing HTTPClient::setHttp2Mode(string mode) {
+nothing HTTPClient::setHttp2Mode(string mode) [flags=NAMED_ARGS] {
     const char* str = mode->c_str();
     int mode_int;
     if (!strcasecmp(str, "disabled") || !strcmp(str, "0")) {
@@ -578,7 +578,7 @@ nothing HTTPClient::setHttp2Mode(string mode) {
 
     @since %Qore 2.3
 */
-nothing HTTPClient::setHttp2Mode(enum<HTTP2Mode> mode) {
+nothing HTTPClient::setHttp2Mode(enum<HTTP2Mode> mode) [flags=NAMED_ARGS] {
     int64 mode_int = mode.getAsBigInt();
     if (mode_int < HTTP2_MODE_DISABLED || mode_int > HTTP2_MODE_H2C_UPGRADE) {
         xsink->raiseException("HTTP2-MODE-ERROR", "invalid mode value %d; valid values are: 0-4", (int)mode_int);
@@ -674,7 +674,7 @@ httpclient.setHttp2Settings({
 
     @since %Qore 2.2
 */
-nothing HTTPClient::setHttp2Settings(*hash<auto> settings) {
+nothing HTTPClient::setHttp2Settings(*hash<auto> settings) [flags=NAMED_ARGS] {
     client->setHttp2Settings(settings, xsink);
 }
 
@@ -695,7 +695,7 @@ httpclient.setHttp2StreamPriority(5, 32, 3);
     @since %Qore 2.2
 */
 nothing HTTPClient::setHttp2StreamPriority(int stream_id, int weight = 16, int dependency = 0,
-        softbool exclusive = False) {
+        softbool exclusive = False) [flags=NAMED_ARGS] {
     client->setHttp2StreamPriority(stream_id, weight, dependency, exclusive, xsink);
 }
 
@@ -731,7 +731,7 @@ if (resp.status_code == 200) {
     @since %Qore 2.2
 */
 *hash<auto> HTTPClient::sendHttp2Connect(string path, *hash<auto> headers, string protocol,
-        *reference<hash<auto>> info) {
+        *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->sendHttp2Connect(path->c_str(), headers,
         protocol->c_str(), *ohrh, xsink), xsink);
@@ -774,7 +774,7 @@ if (resp.status_code == 200) {
     @since %Qore 2.2
 */
 *hash<auto> HTTPClient::sendHttp3Connect(string path, *hash<auto> headers, string protocol,
-        *reference<hash<auto>> info) {
+        *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->sendHttp3Connect(path->c_str(), headers,
         protocol->c_str(), *ohrh, xsink), xsink);
@@ -801,7 +801,7 @@ httpclient.sendHttp2StreamData(stream_id, frame);
     @since %Qore 2.2
 */
 nothing HTTPClient::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False,
-        *int timeout_ms) {
+        *int timeout_ms) [flags=NAMED_ARGS] {
     int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
     client->sendHttp2StreamData(stream_id, data, (bool)end_stream, timeout, xsink);
 }
@@ -828,7 +828,7 @@ if (data) {
 
     @since %Qore 2.2
 */
-*binary HTTPClient::readHttp2StreamData(int stream_id, *int timeout_ms) {
+*binary HTTPClient::readHttp2StreamData(int stream_id, *int timeout_ms) [flags=NAMED_ARGS] {
     int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
     return client->readHttp2StreamData(stream_id, timeout, xsink);
 }
@@ -853,7 +853,7 @@ httpclient.sendHttp3StreamData(stream_id, frame);
     @since %Qore 2.2
 */
 nothing HTTPClient::sendHttp3StreamData(int stream_id, *binary data, softbool end_stream = False,
-        *int timeout_ms) {
+        *int timeout_ms) [flags=NAMED_ARGS] {
     int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
     client->sendHttp3StreamData(stream_id, data, (bool)end_stream, timeout, xsink);
 }
@@ -880,7 +880,7 @@ if (data) {
 
     @since %Qore 2.2
 */
-*binary HTTPClient::readHttp3StreamData(int stream_id, *int timeout_ms) {
+*binary HTTPClient::readHttp3StreamData(int stream_id, *int timeout_ms) [flags=NAMED_ARGS] {
     int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
     return client->readHttp3StreamData(stream_id, timeout, xsink);
 }
@@ -917,7 +917,7 @@ if (httpclient.hasHttp2StreamData(stream_id)) {
 
     @since %Qore 2.3
 */
-bool HTTPClient::hasHttp2StreamData(int stream_id) [flags=CONSTANT] {
+bool HTTPClient::hasHttp2StreamData(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     return client->hasHttp2StreamData((int32_t)stream_id);
 }
 
@@ -939,7 +939,7 @@ while (!httpclient.isHttp2StreamClosed(stream_id)) {
 
     @since %Qore 2.3
 */
-bool HTTPClient::isHttp2StreamClosed(int stream_id) [flags=CONSTANT] {
+bool HTTPClient::isHttp2StreamClosed(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     return client->isHttp2StreamClosed((int32_t)stream_id);
 }
 
@@ -961,7 +961,7 @@ while (!httpclient.isHttp3StreamClosed(stream_id)) {
 
     @since %Qore 2.3
 */
-bool HTTPClient::isHttp3StreamClosed(int stream_id) [flags=CONSTANT] {
+bool HTTPClient::isHttp3StreamClosed(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     return client->isHttp3StreamClosed((int64_t)stream_id);
 }
 
@@ -987,7 +987,7 @@ if (httpclient.isHttp2DataAvailable(stream_id, 1000)) {
 
     @since %Qore 2.3
 */
-bool HTTPClient::isHttp2DataAvailable(int stream_id, timeout timeout_ms = 0) {
+bool HTTPClient::isHttp2DataAvailable(int stream_id, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return client->isHttp2DataAvailable((int32_t)stream_id, (int)timeout_ms, xsink);
 }
 
@@ -1029,7 +1029,7 @@ httpclient.setHttp3Mode(HTTP3Mode::Auto);
 
     @see getHttp3Mode()
 */
-nothing HTTPClient::setHttp3Mode(string mode) {
+nothing HTTPClient::setHttp3Mode(string mode) [flags=NAMED_ARGS] {
     const char* str = mode->c_str();
     int mode_int = parseHttp3ModeString(str);
     if (mode_int < 0) {
@@ -1049,7 +1049,7 @@ nothing HTTPClient::setHttp3Mode(string mode) {
 
     @see getHttp3Mode()
 */
-nothing HTTPClient::setHttp3Mode(enum<HTTP3Mode> mode) {
+nothing HTTPClient::setHttp3Mode(enum<HTTP3Mode> mode) [flags=NAMED_ARGS] {
     int64 mode_int = mode.getAsBigInt();
     if (mode_int < HTTP3_MODE_DISABLED || mode_int > HTTP3_MODE_REQUIRED) {
         xsink->raiseException("HTTP3-MODE-ERROR", "invalid mode value %d; valid values are: 0-2", (int)mode_int);
@@ -1112,7 +1112,7 @@ httpclient.setSecure(True);
 
     @param secure if @ref True, a SSL/TLS connection will be attempted on the next connection. If @ref False, an unencrypted cleartext connection will be established
  */
-nothing HTTPClient::setSecure(softbool secure = True) {
+nothing HTTPClient::setSecure(softbool secure = True) [flags=NAMED_ARGS] {
     client->setSecure(secure);
 }
 
@@ -1198,7 +1198,8 @@ nothing HTTPClient::disconnect() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path, string body, *hash<auto> headers) {
+AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string path, string body,
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     return client->startPollSendRecv(xsink, self, method, path, body, body->c_str(), body->size(), headers,
         body->getEncoding());
 }
@@ -1236,7 +1237,8 @@ AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path,
 
     @since %Qore 1.12
 */
-AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path, *binary body, *hash<auto> headers) {
+AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string path, *binary body,
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     return client->startPollSendRecv(xsink, self, method, path, body, body ? body->getPtr() : nullptr,
         body ? body->size() : 0, headers);
 }
@@ -1257,8 +1259,8 @@ AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path,
 
     @since %Qore 2.3
 */
-AbstractPollOperation HTTPClient::startPollSendAndStream(string method, *string path, string body,
-        *hash<auto> headers) {
+AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, string body,
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     return client->startPollSendAndStream(xsink, self, method, path, body, body->c_str(), body->size(), headers,
         body->getEncoding());
 }
@@ -1268,8 +1270,8 @@ AbstractPollOperation HTTPClient::startPollSendAndStream(string method, *string 
 
     @since %Qore 2.3
 */
-AbstractPollOperation HTTPClient::startPollSendAndStream(string method, *string path, *binary body,
-        *hash<auto> headers) {
+AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, *binary body,
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     return client->startPollSendAndStream(xsink, self, method, path, body, body ? body->getPtr() : nullptr,
         body ? body->size() : 0, headers);
 }
@@ -1292,9 +1294,9 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is
     converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last
     header in the hash with a matching name with a case-insensitive search
-    @param getbody If this argument is @ref True, then the object will try to receive a message body even if no
-    \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies
-    without a \c "Content-Length" header.
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if
+    no \c "Content-Length" header is present in the response. Use this only with broken servers that send message
+    bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request
     headers and other information about the HTTP request; this hash contains the following keys:
     - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
@@ -1346,10 +1348,11 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-hash<auto> HTTPClient::send(string body, string method, *string path, *hash<auto> headers, softbool getbody = False, *reference<hash<auto>> info) {
+hash<auto> HTTPClient::send(string body, string method, *string path, *hash<auto> headers,
+        softbool read_response_body = False, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->send(method->c_str(), path && !path->empty() ? path->c_str() : nullptr,
-        headers, *body, getbody, *ohrh, xsink), xsink);
+        headers, *body, read_response_body, *ohrh, xsink), xsink);
     return *xsink ? QoreValue() : rv.release();
 }
 
@@ -1365,7 +1368,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
     @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", \c "CONNECT", or \c "PATCH"). Additional methods can be added in the constructor with the a \c additional_methods option.
     @param path The path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
-    @param getbody If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
@@ -1411,10 +1414,11 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-hash<auto> HTTPClient::send(*binary body, string method, *string path, *hash<auto> headers, softbool getbody = False, *reference<hash<auto>> info) {
+hash<auto> HTTPClient::send(*binary body, string method, *string path, *hash<auto> headers,
+        softbool read_response_body = False, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->send(method->c_str(), path && !path->empty() ? path->c_str() : nullptr,
-        headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, getbody, *ohrh, xsink), xsink);
+        headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, read_response_body, *ohrh, xsink), xsink);
     return *xsink ? QoreValue() : rv.release();
 }
 
@@ -1466,7 +1470,8 @@ if (resp.status_code == 200) {
 
     @since %Qore 2.3
  */
-hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *hash<auto> headers, *reference<hash<auto>> info) {
+hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *hash<auto> headers,
+        *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(xsink);
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
@@ -1505,7 +1510,7 @@ bool HTTPClient::isOpen() [flags=CONSTANT] {
 
     @since %Qore 2.3
 */
-bool HTTPClient::isDataAvailable(timeout timeout_ms = 0) {
+bool HTTPClient::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return client->isDataAvailable((int)timeout_ms, xsink);
 }
 
@@ -1519,7 +1524,7 @@ bool HTTPClient::isDataAvailable(timeout timeout_ms = 0) {
 
     @since %Qore 2.3
 */
-hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) {
+hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -1537,7 +1542,8 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) {
     @return SseMessageInfo hash or NOTHING for EOF
     @since %Qore 2.3
 */
-*hash<SseMessageInfo> HTTPClient::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) {
+*hash<SseMessageInfo> HTTPClient::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1)
+        [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(
         client->readServerSentEventConnMgr(content_encoding, timeout_ms, xsink), xsink);
     if (*xsink) {
@@ -1573,7 +1579,7 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) {
     @return hash with "body" key containing the accumulated body
     @since %Qore 2.3
 */
-hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) {
+hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyConnMgr(timeout_ms, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -1589,7 +1595,7 @@ hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) {
     @return hash with "body" key containing the accumulated binary body
     @since %Qore 2.3
 */
-hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
+hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyBinaryConnMgr(timeout_ms, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -1610,7 +1616,7 @@ hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
 
     @since %Qore 2.3
 */
-binary HTTPClient::recvBinary(softint size = 0, timeout timeout_ms = -1) {
+binary HTTPClient::recvBinary(softint size = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyBinaryConnMgr(timeout_ms, xsink), xsink);
     if (*xsink) {
         return QoreValue();
@@ -1638,12 +1644,12 @@ binary HTTPClient::recvBinary(softint size = 0, timeout timeout_ms = -1) {
 hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Content-Type": "application/x-yaml"});
     @endcode
 
-    @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
+    @param send_callback The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
     @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", \c "CONNECT", or \c "PATCH"). Additional methods can be added in the constructor with the a \c additional_methods option.
     @param path The path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
-    @param getbody If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
@@ -1694,9 +1700,13 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     - %Qore 0.8.10
     - %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-hash<auto> HTTPClient::sendWithSendCallback(code scb, string method, *string path, *hash<auto> headers, timeout timeout_ms = 0, softbool getbody = False, *reference<hash> info) {
+hash<auto> HTTPClient::sendWithSendCallback(code send_callback, string method, *string path, *hash<auto> headers,
+        timeout timeout_ms = 0, softbool read_response_body = False,
+        *reference<hash> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
-    ReferenceHolder<QoreHashNode> rv(client->sendWithSendCallback(method->c_str(), path && !path->empty() ? path->c_str() : 0, headers, scb, getbody, *ohrh, timeout_ms, xsink), xsink);
+    ReferenceHolder<QoreHashNode> rv(client->sendWithSendCallback(method->c_str(),
+        path && !path->empty() ? path->c_str() : 0, headers, send_callback, read_response_body, *ohrh,
+        timeout_ms, xsink), xsink);
     return *xsink ? QoreValue() : rv.release();
 }
 
@@ -1709,7 +1719,7 @@ hash<auto> HTTPClient::sendWithSendCallback(code scb, string method, *string pat
 httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-Type": "application/x-yaml"});
     @endcode
 
-    @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+    @param receive_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
     - \c "data": the string or binary data
     - \c "chunked": True if the data was received with chunked transfer encoding, False if not
     .
@@ -1727,7 +1737,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @param path The path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
-    @param getbody If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
@@ -1769,13 +1779,16 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     - %Qore 0.8.10
     - %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-nothing HTTPClient::sendWithRecvCallback(code rcb, string body, string method, *string path, *hash<auto> headers, timeout timeout_ms = 0, softbool getbody = False, *reference<hash<auto>> info) {
+nothing HTTPClient::sendWithRecvCallback(code receive_callback, string body, string method, *string path,
+        *hash<auto> headers, timeout timeout_ms = 0, softbool read_response_body = False,
+        *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     // issue 1813: convert string to socket's character encoding as documented
     TempEncodingHelper btmp(body, client->getEncoding(), xsink);
     if (*xsink)
         return QoreValue();
-    client->sendWithRecvCallback(method->c_str(), path && !path->empty() ? path->c_str() : 0, headers, btmp->c_str(), btmp->size(), getbody, *ohrh, timeout_ms, rcb, self, xsink);
+    client->sendWithRecvCallback(method->c_str(), path && !path->empty() ? path->c_str() : 0, headers,
+        btmp->c_str(), btmp->size(), read_response_body, *ohrh, timeout_ms, receive_callback, self, xsink);
 }
 
 //! Sends an HTTP request with the specified method and optional message body; headers and any body received are returned through a receive callback
@@ -1787,7 +1800,7 @@ nothing HTTPClient::sendWithRecvCallback(code rcb, string body, string method, *
 httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-Type": "application/x-yaml"});
     @endcode
 
-    @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+    @param receive_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
     - \c "data": the string or binary data
     - \c "chunked": True if the data was received with chunked transfer encoding, False if not
     .
@@ -1805,7 +1818,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     @param path The path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
-    @param getbody If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
@@ -1845,9 +1858,13 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
     - %Qore 0.8.10
     - %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-nothing HTTPClient::sendWithRecvCallback(code rcb, *binary body, string method, *string path, *hash<auto> headers, timeout timeout_ms = 0, softbool getbody = False, *reference<hash<auto>> info) {
+nothing HTTPClient::sendWithRecvCallback(code receive_callback, *binary body, string method, *string path,
+        *hash<auto> headers, timeout timeout_ms = 0, softbool read_response_body = False,
+        *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
-    client->sendWithRecvCallback(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, getbody, *ohrh, timeout_ms, rcb, self, xsink);
+    client->sendWithRecvCallback(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers,
+        body ? body->getPtr() : nullptr, body ? body->size() : 0, read_response_body, *ohrh, timeout_ms,
+        receive_callback, self, xsink);
 }
 
 //! Sends an HTTP request with the specified method and optional message body; headers are returned through an optional receive callback and any body received is written to the @ref OutputStream
@@ -1860,22 +1877,23 @@ nothing HTTPClient::sendWithRecvCallback(code rcb, *binary body, string method, 
 string fn = tmp_location() + DirSep + get_random_string() + ".tmp"
 FileOutputString output_stream(fn);
 # log the "X-Logme" header
-code rcb = sub (hash<auto> h) {
+code receive_callback = sub (hash<auto> h) {
     if (h.hdr."x-logme")
         log("X-Logme: %y", h.hdr."x-logme");
 };
-httpclient.send(output_stream, data, "POST", "/path", {"Content-Type": "application/x-yaml"}, NOTHING, NOTHING, NOTHING, rcb);
+httpclient.send(output_stream: output_stream, body: data, method: "POST", path: "/path",
+    headers: {"Content-Type": "application/x-yaml"}, receive_callback: receive_callback);
     @endcode
 
-    @param os The @ref OutputStream to write the response body to
+    @param output_stream The @ref OutputStream to write the response body to
     @param body The message body to send; pass @ref nothing (no value) to send no body
     @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", \c "CONNECT", or \c "PATCH"). Additional methods can be added in the constructor with the a \c additional_methods option.
     @param path The path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
-    @param getbody If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request.
-    @param rcb An optional receive callback for message headers received only; header or trailer data is placed in a hash with the following keys:
+    @param receive_callback An optional receive callback for message headers received only; header or trailer data is placed in a hash with the following keys:
     - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no trailers were included in a chunked message
     - \c "info": this hash is passed when headers are received; in this case, the hash has at least the the following keys:
       - \c "accept-charset": the value of any \c "Accept-Charset" header
@@ -1908,16 +1926,18 @@ httpclient.send(output_stream, data, "POST", "/path", {"Content-Type": "applicat
 
     @since %Qore 0.8.13
  */
-nothing HTTPClient::send(Qore::OutputStream[OutputStream] os, *data body, string method, *string path, *hash<auto> headers, timeout timeout_ms = 0, softbool getbody = False, *reference<hash<auto>> info, *code rcb) {
+nothing HTTPClient::send(Qore::OutputStream[OutputStream] output_stream, *data body, string method, *string path,
+        *hash<auto> headers, timeout timeout_ms = 0, softbool read_response_body = False,
+        *reference<hash<auto>> info, *code receive_callback) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
     if (get_node_type(body) == NT_STRING) {
-        client->sendWithOutputStream(method->c_str(), pstr, headers, *static_cast<const QoreStringNode*>(body), getbody,
-            *ohrh, timeout_ms, rcb, self, *os, xsink);
+        client->sendWithOutputStream(method->c_str(), pstr, headers, *static_cast<const QoreStringNode*>(body),
+            read_response_body, *ohrh, timeout_ms, receive_callback, self, *output_stream, xsink);
     } else {
         const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
         client->sendWithOutputStream(method->c_str(), pstr, headers, b ? b->getPtr() : nullptr, b ? b->size() : 0,
-            getbody, *ohrh, timeout_ms, rcb, self, *os, xsink);
+            read_response_body, *ohrh, timeout_ms, receive_callback, self, *output_stream, xsink);
     }
 }
 
@@ -1931,37 +1951,38 @@ nothing HTTPClient::send(Qore::OutputStream[OutputStream] os, *data body, string
 string fn = tmp_location() + DirSep + get_random_string() + ".tmp"
 FileOutputString output_stream(fn);
 # log the "X-Logme" header
-code rcb = sub (hash<auto> h) {
+code receive_callback = sub (hash<auto> h) {
     if (h.hdr."x-logme")
         log("X-Logme: %y", h.hdr."x-logme");
 };
 # write the "X-Content-Done" header when done
-code tcb = *hash<auto> sub () {
+code trailers_callback = *hash<auto> sub () {
     return {"X-Content-Done": "true"};
 };
-httpclient.sendChunked(output_stream, input_stream, "POST", "/path", {"Content-Type": "application/x-yaml"}, NOTHING, NOTHING, NOTHING, rcb, tcb);
+httpclient.sendChunked(output_stream: output_stream, input_stream: input_stream, method: "POST", path: "/path",
+    headers: {"Content-Type": "application/x-yaml"}, receive_callback: receive_callback,
+    trailers_callback: trailers_callback);
     @endcode
 
-    @param os The @ref OutputStream to write the response body to
-    @param is The @ref InputStream to read the request body from; each read will be sent as a separate chunk
+    @param output_stream The @ref OutputStream to write the response body to
+    @param input_stream The @ref InputStream to read the request body from; each read will be sent as a separate chunk
     @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", \c "CONNECT", or \c "PATCH"). Additional methods can be added in the constructor with the a \c additional_methods option.
     @param max_chunk_size the maximum chunk size as the read block size for the @ref InputStream read block size; the actual size of the data read will determine the size of each HTTP chunk
     @param path The path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
-    @param getbody If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request.
-    @param tcb An optional trailer callback for message trailers to write in the outgoing chunked message; the callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers for the final chunk
-    @param rcb An optional receive callback for message headers received only; header or trailer data is placed in a hash with the following keys:
+    @param receive_callback An optional receive callback for message headers received only; header or trailer data is placed in a hash with the following keys:
     - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no trailers were included in a chunked message
     - \c "info": this hash is passed when headers are received; in this case, the hash has at least the the following keys:
       - \c "accept-charset": the value of any \c "Accept-Charset" header
       - \c "accept-encoding": the value of any \c "Accept-Encoding" header
       - \c "body-content-type": the value of the \c "Content-Type" header, if any, without any character set info
       - \c "charset": any character set value found in the \c "Content-Type" header
-      - \c "response-headers-raw: a hash of unprocessed headers with no case conversions or additional keys
+      - \c "response-headers-raw": a hash of unprocessed headers with no case conversions or additional keys
     - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
-    @param tcb An optional trailer callback for message trailers to write in the outgoing chunked message; the callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers for the final chunk
+    @param trailers_callback An optional trailer callback for message trailers to write in the outgoing chunked message; the callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers for the final chunk
 
     @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
@@ -1988,16 +2009,20 @@ httpclient.sendChunked(output_stream, input_stream, "POST", "/path", {"Content-T
 
     @since %Qore 0.8.13
  */
-nothing HTTPClient::sendChunked(Qore::OutputStream[OutputStream] os, Qore::InputStream[InputStream] is, string method,
+nothing HTTPClient::sendChunked(Qore::OutputStream[OutputStream] output_stream,
+        Qore::InputStream[InputStream] input_stream, string method,
         int max_chunk_size = 4096, *string path, *hash<auto> headers, timeout timeout_ms = 0,
-        softbool getbody = False, *reference<hash<auto>> info, *code rcb, *code tcb) {
+        softbool read_response_body = False, *reference<hash<auto>> info, *code receive_callback,
+        *code trailers_callback) [flags=NAMED_ARGS] {
     if (max_chunk_size < 1) {
         xsink->raiseException("HTTP-CHUNK-ERROR", "the max chunk size must be greater than 0; value given is: " QLLD,
             max_chunk_size);
         return QoreValue();
     }
     OptHashRefHelper ohrh(info, xsink);
-    client->sendChunked(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers, getbody, *ohrh, timeout_ms, rcb, self, *os, *is, (size_t)max_chunk_size, tcb, xsink);
+    client->sendChunked(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers,
+        read_response_body, *ohrh, timeout_ms, receive_callback, self, *output_stream, *input_stream,
+        (size_t)max_chunk_size, trailers_callback, xsink);
 }
 
 //! Sends an HTTP request with the specified method and chunked message body as given by a send callback; headers and any body received are returned through a receive callback
@@ -2009,8 +2034,8 @@ nothing HTTPClient::sendChunked(Qore::OutputStream[OutputStream] os, Qore::Input
 httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Content-Type": "application/x-yaml"});
     @endcode
 
-    @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
-    @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+    @param send_callback The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
+    @param receive_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
     - \c "data": the string or binary data
     - \c "chunked": True if the data was received with chunked transfer encoding, False if not
     .
@@ -2028,7 +2053,7 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
     @param path The path for the message (i.e. \c "/path/resource?method&param=value")
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
-    @param getbody If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message bodies without a \c "Content-Length" header.
     @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c [accept-charset]: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
@@ -2064,7 +2089,7 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
 
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
-    - if a response is received while the chunked send operation is still in progress, an error is assumed, the send operation is aborted, and the response header is read immediately and the \c send_aborted flag is set in the argument to \a rcb
+    - if a response is received while the chunked send operation is still in progress, an error is assumed, the send operation is aborted, and the response header is read immediately and the \c send_aborted flag is set in the argument to \a receive_callback
     - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
 
     @see @ref httpclient_get_with_body
@@ -2073,11 +2098,12 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
     - %Qore 0.8.10
     - %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-nothing HTTPClient::sendWithCallbacks(code scb, code rcb, string method, *string path, *hash<auto> headers,
-        timeout timeout_ms = 0, softbool getbody = False, *reference<hash<auto>> info) {
+nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback, string method, *string path,
+        *hash<auto> headers, timeout timeout_ms = 0, softbool read_response_body = False,
+        *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
-    client->sendWithCallbacks(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers, scb,
-        getbody, *ohrh, timeout_ms, rcb, self, xsink);
+    client->sendWithCallbacks(method->c_str(), path && !path->empty() ? path->c_str() : nullptr, headers,
+        send_callback, read_response_body, *ohrh, timeout_ms, receive_callback, self, xsink);
 }
 
 //! Sends an HTTP \c GET request and returns the message body received as a string or @ref nothing if no message body is received
@@ -2135,7 +2161,7 @@ nothing HTTPClient::sendWithCallbacks(code scb, code rcb, string method, *string
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-*string HTTPClient::get(string path, *hash<auto> headers, *reference<hash<auto>> info) {
+*string HTTPClient::get(string path, *hash<auto> headers, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->get(path->c_str(), headers, *ohrh, xsink), xsink);
     return *xsink ? nullptr : rv.release();
@@ -2190,7 +2216,7 @@ hash<auto> msg = httpclient.head("/path");
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-hash<auto> HTTPClient::head(string path, *hash<auto> headers, *reference<hash<auto>> info) {
+hash<auto> HTTPClient::head(string path, *hash<auto> headers, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->head(path->c_str(), headers, *ohrh, xsink), xsink);
     return *xsink ? nullptr : rv.release();
@@ -2249,7 +2275,8 @@ httpclient.post("/path", body);
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-*string HTTPClient::post(string path, string body, *hash<auto> headers, *reference<hash<auto>> info) {
+*string HTTPClient::post(string path, string body, *hash<auto> headers,
+        *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->post(path->c_str(), headers, *body, *ohrh, xsink), xsink);
 #ifdef DEBUG
@@ -2310,7 +2337,8 @@ httpclient.post("/path", body);
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-*string HTTPClient::post(string path, *binary body, *hash<auto> headers, *reference<hash<auto>> info) {
+*string HTTPClient::post(string path, *binary body, *hash<auto> headers,
+        *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->post(path->c_str(), headers, body ? body->getPtr() : 0, body ? body->size() : 0, *ohrh, xsink), xsink);
 #ifdef DEBUG
@@ -2327,7 +2355,7 @@ httpclient.post("/path", body);
 httpclient.setTimeout(2m);
     @endcode
  */
-nothing HTTPClient::setTimeout(timeout timeout_ms = 0) {
+nothing HTTPClient::setTimeout(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
    client->setTimeout((int)timeout_ms);
 }
 
@@ -2351,7 +2379,7 @@ int HTTPClient::getTimeout() [flags=CONSTANT] {
 httpclient.setEncoding("UTF-8");
     @endcode
  */
-nothing HTTPClient::setEncoding(string encoding) {
+nothing HTTPClient::setEncoding(string encoding) [flags=NAMED_ARGS] {
     client->setEncoding(QEM.findCreate(encoding));
 }
 
@@ -2384,7 +2412,7 @@ httpclient.setURL("https://user:password@hostname:8080/path");
 
     @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
  */
-HTTPClient::setURL(string url) {
+HTTPClient::setURL(string url) [flags=NAMED_ARGS] {
     TempEncodingHelper nurl(url, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -2405,7 +2433,7 @@ HTTPClient::setURL(string url) {
 
     @see getSafeURL()
  */
-*string HTTPClient::getURL(int code = URL_NORMAL) [flags=CONSTANT] {
+*string HTTPClient::getURL(int code = URL_NORMAL) [flags=CONSTANT,NAMED_ARGS] {
     return client->getUrl(code);
 }
 
@@ -2451,7 +2479,7 @@ httpclient.setProxyURL("http://user:password@proxy_host:8080/path");
 
     @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
  */
-nothing HTTPClient::setProxyURL(string url) {
+nothing HTTPClient::setProxyURL(string url) [flags=NAMED_ARGS] {
     TempEncodingHelper nurl(url, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -2510,8 +2538,8 @@ httpclient.setProxySecure(True);
 
     @see HTTPClient::isProxySecure() to check the flag
 */
-nothing HTTPClient::setProxySecure(softbool b = True) {
-    client->setProxySecure(b);
+nothing HTTPClient::setProxySecure(softbool secure = True) [flags=NAMED_ARGS] {
+    client->setProxySecure(secure);
 }
 
 //! Returns any username set for the connection
@@ -2563,7 +2591,7 @@ bool HTTPClient::isProxySecure() [flags=CONSTANT] {
 }
 
 //! Updates the setting for the \c max_redirects value for the object (maximum number of HTTP redirects that will be processed before an exception is raised)
-/** @param mr the setting for the maximum number of HTTP redirects that will be processed before an exception is raised
+/** @param max_redirects the setting for the maximum number of HTTP redirects that will be processed before an exception is raised
 
     @par Example:
     @code{.py}
@@ -2572,8 +2600,8 @@ httpclient.setMaxRedirects(5);
 
     @see HTTPClient::getMaxRedirects() to retrieve this value
 */
-nothing HTTPClient::setMaxRedirects(softint mr = 0) {
-    client->setMaxRedirects((int)mr);
+nothing HTTPClient::setMaxRedirects(softint max_redirects = 0) [flags=NAMED_ARGS] {
+    client->setMaxRedirects((int)max_redirects);
 }
 
 //! Returns the current \c max_redirects value for the object (the maximum number of HTTP redirects that will be processed before an exception is raised)
@@ -2607,22 +2635,23 @@ httpclient.setEventQueue(queue);
 
     @param queue a @ref Qore::Thread::Queue "Queue" object to receive HTTPClient and Socket events; note that the
     Queue passed cannot have any maximum size set or a QUEUE-ERROR will be thrown
-    @param arg an argument that will be included in each event hash in the \a arg key
+    @param argument an argument that will be included in each event hash in the \c "arg" key
     @param with_data if @ref True, then the actual raw data transferred / received is also included in the events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 
     @see event_handling for more information
 
-    @since %Qore 0.9.4 added the \a arg and \a with_data options
+    @since %Qore 0.9.4 added the \c argument and \c with_data options
 */
-nothing HTTPClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
+nothing HTTPClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument, *bool with_data)
+        [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the HttpClient object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    client->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
+    client->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Sets the connect timeout in milliseconds
@@ -2636,7 +2665,7 @@ nothing HTTPClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *b
 httpclient.setConnectTimeout(2m);
     @endcode
 */
-nothing HTTPClient::setConnectTimeout(timeout timeout_ms = -1) {
+nothing HTTPClient::setConnectTimeout(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
    client->setConnectTimeout((int)timeout_ms);
 }
 
@@ -2659,12 +2688,12 @@ int HTTPClient::getConnectTimeout() [flags=CONSTANT] {
     wherever possible.  This method is retained for source compatibility;
     passing @ref False no longer disables the connection manager.
 
-    @param enable ignored
+    @param enabled ignored
 
     @since %Qore 2.3
 */
-nothing HTTPClient::setUseConnectionManager(softbool enable = True) {
-    client->setUseConnectionManager(enable);
+nothing HTTPClient::setUseConnectionManager(softbool enabled = True) [flags=NAMED_ARGS] {
+    client->setUseConnectionManager(enabled);
 }
 
 //! Returns @ref True because async connection manager dispatch is always enabled
@@ -2696,12 +2725,12 @@ bool HTTPClient::getUseConnectionManager() [flags=CONSTANT] {
 httpclient.setNoDelay(True);
     @endcode
 
-    @param b the \c TCP_NODELAY setting for the object
+    @param enabled the \c TCP_NODELAY setting for the object
 
     @see HTTPClient::getNoDelay()
 */
-int HTTPClient::setNoDelay(softbool b = True) {
-    return client->setNoDelay(b);
+int HTTPClient::setNoDelay(softbool enabled = True) [flags=NAMED_ARGS] {
+    return client->setNoDelay(enabled);
 }
 
 //! Returns the \c TCP_NODELAY setting for the HTTPClient object
@@ -2733,20 +2762,20 @@ bool HTTPClient::isConnected() [flags=CONSTANT] {
 /** Call this method after calling HTTPClient::setURL() to set authentication information when not present in the URL
     used in HTTPClient::setURL()
 
-    @param user the username to use for authentication in the next HTTP connection
-    @param pass the password to use for authentication in the next HTTP connection
+    @param username the username to use for authentication in the next HTTP connection
+    @param password the password to use for authentication in the next HTTP connection
 
     @par Example:
     @code{.py}
 httpclient.setUserPassword(user, pass);
     @endcode
  */
-nothing HTTPClient::setUserPassword(string user, string pass) {
-    TempEncodingHelper nuser(user, QCS_DEFAULT, xsink);
+nothing HTTPClient::setUserPassword(string username, string password) [flags=NAMED_ARGS] {
+    TempEncodingHelper nuser(username, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    TempEncodingHelper npass(pass, QCS_DEFAULT, xsink);
+    TempEncodingHelper npass(password, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -2793,15 +2822,15 @@ nothing HTTPClient::clearUserPassword() {
 httpclient.setProxyUserPassword(user, pass);
     @endcode
 
-    @param user the username to use for proxy authentication in the next HTTP connection
-    @param pass the password to use for proxy authentication in the next HTTP connection
+    @param username the username to use for proxy authentication in the next HTTP connection
+    @param password the password to use for proxy authentication in the next HTTP connection
 */
-nothing HTTPClient::setProxyUserPassword(string user, string pass) {
-    TempEncodingHelper nuser(user, QCS_DEFAULT, xsink);
+nothing HTTPClient::setProxyUserPassword(string username, string password) [flags=NAMED_ARGS] {
+    TempEncodingHelper nuser(username, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    TempEncodingHelper npass(pass, QCS_DEFAULT, xsink);
+    TempEncodingHelper npass(password, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -2840,14 +2869,14 @@ nothing HTTPClient::clearProxyUserPassword() {
 }
 
 //! Sets headers to send by default with every outgoing request
-/** @param hdr headers to send by default with every outgoing request
+/** @param headers headers to send by default with every outgoing request
 
     @see getDefaultHeaders()
 
     @since %Qore 0.9.5
 */
-nothing HTTPClient::addDefaultHeaders(hash<auto> hdr) {
-    client->addDefaultHeaders(hdr);
+nothing HTTPClient::addDefaultHeaders(hash<auto> headers) [flags=NAMED_ARGS] {
+    client->addDefaultHeaders(headers);
 }
 
 //! Returns a hash of default headers to be sent with every outgoing request
@@ -2869,7 +2898,7 @@ hash<string, string> HTTPClient::getDefaultHeaders() [flags=CONSTANT] {
 httpclient.setDefaultPath();
     @endcode
  */
-nothing HTTPClient::setDefaultPath(*string path) {
+nothing HTTPClient::setDefaultPath(*string path) [flags=NAMED_ARGS] {
     TempEncodingHelper npath;
     if (path && !npath.set(path, QCS_DEFAULT, xsink)) {
         return QoreValue();
@@ -2915,7 +2944,7 @@ httpclient.setConnectionPath(new_path);
 
     @since %Qore 0.9.3.2
 */
-HTTPClient::setConnectionPath(*string uri_path) {
+HTTPClient::setConnectionPath(*string uri_path) [flags=NAMED_ARGS] {
     TempEncodingHelper path;
     if (uri_path && !path.set(uri_path, QCS_DEFAULT, xsink)) {
         return QoreValue();
@@ -2952,7 +2981,7 @@ httpclient.setWarningQueue(5000, 5000, queue, "socket-1");
     - \c "arg": if any \c "arg" argument is passed to the
       @ref Qore::HTTPClient::setWarningQueue() "HTTPClient::setWarningQueue()" method, it will be included in the
       warning hash here
-    @param warning_bs value in bytes per second; if any call has performance below this threshold, a socket warning is
+    @param warning_bytes value in bytes per second; if any call has performance below this threshold, a socket warning is
     placed on the warning queue with the following keys:
     - \c "type": a string with the constant value \c "SOCKET-THROUGHPUT-WARNING"
     - \c "dir": either \c "send" or \c "recv" depending on the direction of the data flow
@@ -2964,13 +2993,13 @@ httpclient.setWarningQueue(5000, 5000, queue, "socket-1");
       @ref Qore::HTTPClient::setWarningQueue() "HTTPClient::setWarningQueue()" method, it will be included in the
       warning hash here
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive warning events
-    @param arg an optional argument to be placed in the \c "arg" key in each warning hash (could be used to identify
+    @param argument an optional argument to be placed in the \c "arg" key in each warning hash (could be used to identify
     the socket for example)
     @param min_ms the minimum transfer time with a resolution of milliseconds for a transfer to be eligible for
     triggering a warning; transfers that take less than this period of time are not eligible for raising a warning
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
-    @throw SOCKET-SETWARNINGQUEUE-ERROR at least one of \a warning_ms and \a warning_bs must be > 0
+    @throw SOCKET-SETWARNINGQUEUE-ERROR at least one of \a warning_ms and \a warning_bytes must be > 0
 
     @see HTTPClient::clearWarningQueue()
 
@@ -2979,13 +3008,14 @@ httpclient.setWarningQueue(5000, 5000, queue, "socket-1");
     - %Qore 0.8.12 the minimum threshold for a warning is a transfer of at least 1024 bytes, smaller transfers will
       not result in a warning
 */
-nothing HTTPClient::setWarningQueue(int warning_ms, int warning_bs, Queue[Queue] queue, auto arg, timeout min_ms = 1s) {
+nothing HTTPClient::setWarningQueue(int warning_ms, int warning_bytes, Queue[Queue] queue, auto argument,
+        timeout min_ms = 1s) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    client->setWarningQueue(xsink, warning_ms, warning_bs, queue.release(), arg.refSelf(), min_ms);
+    client->setWarningQueue(xsink, warning_ms, warning_bytes, queue.release(), argument.refSelf(), min_ms);
 }
 
 //! Returns performance statistics for the socket
@@ -3094,7 +3124,7 @@ int HTTPClient::getPersistentCount() [flags=CONSTANT] {
 httpclient.setErrorPassthru();
     @endcode
 
-    @param set if @ref True "True" then HTTP status codes indicating errors will not cause an
+    @param enabled if @ref True "True" then HTTP status codes indicating errors will not cause an
       \c HTTP-CLIENT-RECEIVE-ERROR exception to be raised, rather such responses will be passed through to the caller
       like any other response
 
@@ -3106,8 +3136,8 @@ httpclient.setErrorPassthru();
 
     @since %Qore 0.9.3
 */
-bool HTTPClient::setErrorPassthru(bool set = True) {
-    return client->setErrorPassthru(set);
+bool HTTPClient::setErrorPassthru(bool enabled = True) [flags=NAMED_ARGS] {
+    return client->setErrorPassthru(enabled);
 }
 
 //! get the error passthru status
@@ -3134,7 +3164,7 @@ bool HTTPClient::getErrorPassthru() [flags=CONSTANT] {
 httpclient.setRedirectPassthru();
     @endcode
 
-    @param set if @ref True "True" then redirect messages will be passed to the caller instead of proceessed
+    @param enabled if @ref True "True" then redirect messages will be passed to the caller instead of proceessed
 
     @return the old \c reddirect_passthru value
 
@@ -3142,8 +3172,8 @@ httpclient.setRedirectPassthru();
 
     @since %Qore 0.9.3
 */
-bool HTTPClient::setRedirectPassthru(bool set = True) {
-    return client->setRedirectPassthru(set);
+bool HTTPClient::setRedirectPassthru(bool enabled = True) [flags=NAMED_ARGS] {
+    return client->setRedirectPassthru(enabled);
 }
 
 //! get the redirect passthru status
@@ -3169,7 +3199,7 @@ bool HTTPClient::getRedirectPassthru() [flags=CONSTANT] {
 httpclient.setEncodingPassthru();
     @endcode
 
-    @param set if @ref True "True" then message bodies received with known content encodings are not decoded but
+    @param enabled if @ref True "True" then message bodies received with known content encodings are not decoded but
     rather passed through as-is
 
     @return the old \c encoding_passthru value
@@ -3179,8 +3209,8 @@ httpclient.setEncodingPassthru();
 
     @since %Qore 0.9.3
 */
-bool HTTPClient::setEncodingPassthru(bool set = True) {
-    return client->setEncodingPassthru(set);
+bool HTTPClient::setEncodingPassthru(bool enabled = True) [flags=NAMED_ARGS] {
+    return client->setEncodingPassthru(enabled);
 }
 
 //! get the encoding passthru status
@@ -3224,7 +3254,7 @@ httpclient.setAssumedEncoding("utf-8");
 
     @since %Qore 0.9.4.2
 */
-HTTPClient::setAssumedEncoding(*string encoding) {
+HTTPClient::setAssumedEncoding(*string encoding) [flags=NAMED_ARGS] {
     client->setAssumedEncoding(encoding && !encoding->empty() ? encoding->c_str() : "ISO-8859-1");
 }
 
@@ -3249,7 +3279,7 @@ string HTTPClient::getAssumedEncoding() [flags=RET_VALUE_ONLY] {
 httpclient.setPreEncodedUrls();
     @endcode
 
-    @param set if @ref True "True" then all URI paths in URLs are assumed to be already
+    @param enabled if @ref True "True" then all URI paths in URLs are assumed to be already
     <a href="https://en.wikipedia.org/wiki/Percent-encoding">percent encoded</a>; if this flag is set and any
     unencoded characters are sent in a URL with a new request, an exception is raised.
 
@@ -3261,8 +3291,8 @@ httpclient.setPreEncodedUrls();
 
     @since %Qore 1.13.0
 */
-bool HTTPClient::setPreEncodedUrls(bool set = True) {
-    return client->setPreEncodedUrls(set);
+bool HTTPClient::setPreEncodedUrls(bool enabled = True) [flags=NAMED_ARGS] {
+    return client->setPreEncodedUrls(enabled);
 }
 
 //! get the pre-encoded URL flag

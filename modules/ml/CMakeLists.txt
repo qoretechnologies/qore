@@ -28,14 +28,15 @@ if (NOT Eigen3_FOUND)
 endif()
 
 # ONNX Runtime is optional
+option(QORE_WITH_ONNXRUNTIME "Build the ml module with ONNX Runtime support when available" ON)
 set(HAVE_ONNXRUNTIME FALSE)
 find_package(PkgConfig QUIET)
-if (PkgConfig_FOUND)
+if (QORE_WITH_ONNXRUNTIME AND PkgConfig_FOUND)
     # Also check /opt/onnxruntime for pkg-config files
     set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:/opt/onnxruntime/lib/pkgconfig")
     pkg_check_modules(ONNXRUNTIME QUIET libonnxruntime)
 endif()
-if (NOT ONNXRUNTIME_FOUND)
+if (QORE_WITH_ONNXRUNTIME AND NOT ONNXRUNTIME_FOUND)
     find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime
                  HINTS /opt/onnxruntime/lib)
     find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h
@@ -92,6 +93,7 @@ set(ML_QPP_SRC
     src/QC_LOF.qpp
     src/QC_KNN.qpp
     src/QC_GMM.qpp
+    src/QC_Tensor.qpp
     src/QC_OnnxModel.qpp
     src/QC_StandardScaler.qpp
     src/QC_MinMaxScaler.qpp
@@ -137,6 +139,7 @@ set(ML_CPP_SRC
     src/LOF.cpp
     src/KNN.cpp
     src/GMM.cpp
+    src/Tensor.cpp
     src/StandardScaler.cpp
     src/MinMaxScaler.cpp
     src/Imputer.cpp
@@ -176,6 +179,39 @@ else()
     message(STATUS "ONNX Runtime not found - OnnxModel class will throw MISSING-FEATURE-ERROR")
 endif()
 
+# Optional CUDA runtime, used only to copy ONNX CUDA device-output buffers back to
+# host memory.  Never required: CPU-only (and ROCm) builds simply cannot
+# materialize CUDA device outputs and report that clearly at runtime.
+set(HAVE_CUDART FALSE)
+if (HAVE_ONNXRUNTIME)
+    find_package(CUDAToolkit QUIET)
+    if (CUDAToolkit_FOUND AND TARGET CUDA::cudart)
+        message(STATUS "CUDA runtime found (${CUDAToolkit_VERSION}) - ONNX device-output copy-to-host enabled")
+        set(HAVE_CUDART TRUE)
+    else()
+        message(STATUS "CUDA runtime not found - ONNX CUDA device outputs will be unavailable")
+    endif()
+endif()
+
+# Optional Metal framework on Apple Silicon / macOS, used to allocate UMA
+# (Unified Memory Architecture) device buffers via MTLBuffer with
+# MTLStorageModeShared.  On UMA, "device" and "host" memory are the same
+# physical bytes -- the copy-to-host callback is a no-op, transfer counters
+# stay 0, and pinnedHost() is moot.  Never required: non-Apple builds and
+# CoreML-only macOS builds simply lack the upload path and report it clearly.
+set(HAVE_METAL FALSE)
+if (APPLE AND HAVE_ONNXRUNTIME)
+    find_library(METAL_FRAMEWORK Metal)
+    find_library(FOUNDATION_FRAMEWORK Foundation)
+    if (METAL_FRAMEWORK AND FOUNDATION_FRAMEWORK)
+        message(STATUS "Metal framework found - macOS Metal/UMA device buffers enabled")
+        set(HAVE_METAL TRUE)
+        list(APPEND ML_CPP_SRC src/Tensor_Metal.mm)
+    else()
+        message(STATUS "Metal framework not found - macOS Metal/UMA device buffers disabled")
+    endif()
+endif()
+
 set(QORE_DOX_ML_TMPL_SRC
     docs/mainpage.dox.tmpl
 )
@@ -195,6 +231,15 @@ if (HAVE_ONNXRUNTIME)
         target_link_directories(${ml_module_name} PRIVATE ${ONNXRUNTIME_LIBRARY_DIRS})
     endif()
     target_link_libraries(${ml_module_name} ${ONNXRUNTIME_LIBRARIES})
+    if (HAVE_CUDART)
+        target_compile_definitions(${ml_module_name} PRIVATE HAVE_CUDART)
+        target_link_libraries(${ml_module_name} CUDA::cudart)
+    endif()
+    if (HAVE_METAL)
+        target_compile_definitions(${ml_module_name} PRIVATE HAVE_METAL)
+        target_link_libraries(${ml_module_name} ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK})
+        set_source_files_properties(src/Tensor_Metal.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    endif()
 endif()
 add_dependencies(${ml_module_name} libqore ML_QPP_GENERATED_FILES)
 

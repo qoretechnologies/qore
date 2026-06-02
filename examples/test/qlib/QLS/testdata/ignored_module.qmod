@@ -1,0 +1,2 @@
+#!/usr/bin/env qore
+this file intentionally looks like a script but uses an AOT binary extension

@@ -32,7 +32,42 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/typed_hash_decl_private.h"
+
+static bool qore_parse_hash_literal_value_may_be_nothing(const QoreValue& v) {
+    if (v.getType() == NT_VARREF) {
+        const VarRefNode* vr = v.get<const VarRefNode>();
+        qore_var_t vt = vr->getType();
+        if ((vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS) && vr->ref.id) {
+            return true;
+        }
+        if ((vt == VT_GLOBAL || vt == VT_THREAD_LOCAL) && vr->ref.var) {
+            return true;
+        }
+    }
+
+    if (v.hasNode()) {
+        const AbstractQoreNode* node = v.getInternalNode();
+        if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            // Hash and hashdecl member lookup can return NOTHING even when the
+            // declared member type is non-optional, because hashdecl slots are not
+            // implicitly materialized.
+            return true;
+        }
+
+        if (dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            // Class members and static class vars can also be unassigned at
+            // runtime despite a non-optional declared type.
+            return true;
+        }
+    }
+
+    return false;
+}
 
 void QoreParseHashNode::finalizeBlock(int sline, int eline) {
     QoreProgramLocation tl(sline, eline);
@@ -59,11 +94,23 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     // try to find a common value type, if any
     bool vcommon = false;
 
+    const QoreTypeInfo* expected_hash_type = parse_context.expected_type_info;
+    const QoreTypeInfo* expected_hash_value_type = expected_hash_type
+        ? QoreTypeInfo::getUniqueReturnComplexHash(expected_hash_type)
+        : nullptr;
+    if (!expected_hash_value_type && expected_hash_type) {
+        expected_hash_value_type = QoreTypeInfo::getReturnComplexHashOrNothing(expected_hash_type);
+    }
+    const TypedHashDecl* expected_hash_decl = expected_hash_type
+        ? QoreTypeInfo::getTypedHash(expected_hash_type)
+        : nullptr;
+
     int err = 0;
 
     for (size_t i = 0; i < keys.size(); ++i) {
         QoreValue p = keys[i];
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = nullptr;
         if (parse_init_value(keys[i], parse_context) && !err) {
             err = -1;
         }
@@ -81,15 +128,41 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
             argTypeInfo->doNonStringWarning(lvec[i], str.c_str());
         }
 
+        const QoreTypeInfo* expected_value_type = expected_hash_value_type;
+        if (expected_hash_decl && keys[i].getType() == NT_STRING) {
+            QoreStringValueHelper key(keys[i]);
+            const HashDeclMemberInfo* m = typed_hash_decl_private::get(*expected_hash_decl)->findMember(key->c_str());
+            if (m) {
+                expected_value_type = m->getTypeInfo();
+            }
+        }
+
+        bool typed_varref_may_be_nothing = false;
+        typed_varref_may_be_nothing = qore_parse_hash_literal_value_may_be_nothing(values[i]);
+
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = expected_value_type;
         if (parse_init_value(values[i], parse_context) && !err) {
             err = -1;
         }
         vtypes[i] = parse_context.typeInfo;
+        typed_varref_may_be_nothing = typed_varref_may_be_nothing
+            || qore_parse_hash_literal_value_may_be_nothing(values[i]);
 
-        //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d '%s': '%s'\n", this, i,
-        //    keys[i].getType() == NT_STRING ? keys[i].get<const QoreStringNode>()->c_str() : keys[i].getFullTypeName(),
-        //    values[i].getFullTypeName());
+        // For lvalue-like refs, clear type info to prevent baking declared or
+        // narrowed types into the hash literal; the actual runtime value may
+        // be NOTHING, so the type must be determined at runtime.
+        if (vtypes[i] && typed_varref_may_be_nothing) {
+            vtypes[i] = nullptr;
+        }
+        if (vtypes[i] && expected_value_type
+                && QoreTypeInfo::parseAcceptsReturns(expected_value_type, NT_NOTHING)
+                && values[i].needsEval()) {
+            vtypes[i] = nullptr;
+        }
+
+        //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d key type '%s': value type '%s'\n",
+        //    this, i, keys[i].getFullTypeName(), values[i].getFullTypeName());
 
         if (!i) {
             if (vtypes[0] && vtypes[0] != anyTypeInfo) {
@@ -106,10 +179,24 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     }
 
     kmap.clear();
+    parse_context.expected_type_info = expected_hash_type;
 
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
     if (vtype && vtype != anyTypeInfo) {
         typeInfo = parse_context.typeInfo = qore_get_complex_hash_type(vtype);
+    } else if (expected_hash_value_type) {
+        // Inference would otherwise lock to autoHashTypeInfo; use the
+        // lvalue's expected hash value-type as the narrowing target
+        // when the caller supplied a hint.  Runtime coercion (softint,
+        // softstring, per-value acceptInputKey softening) happens
+        // during the hash store path, so adopting the expected type
+        // is safe: if values don't fit at runtime, the existing accept
+        // logic raises.  Keep the full hash value type, including
+        // or-nothing element types such as `hash<string, *hash<auto>>`;
+        // otherwise valid optional hash slots reject NOTHING.
+        // See design/parser-lvalue-type-propagation.md.
+        vtype = expected_hash_value_type;
+        typeInfo = parse_context.typeInfo = qore_get_complex_hash_type(expected_hash_value_type);
     } else {
         typeInfo = autoHashTypeInfo;
         // issue #3740: must set to auto type info to avoid type stripping
@@ -151,8 +238,25 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 
 QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(keys.size() == values.size());
-    // complex type will be added before returning if applicable
-    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+
+    // Use the parse-time narrowed value type when available so
+    // setKeyValue triggers per-value softening (softint, softstring,
+    // ...) on insert — matches what the IR lowering path already
+    // does via `createMakeHashConstKeys(..., parse_ti)` at
+    // lib/QoreIRLowering.cpp:7869.  Without this, AST-mode execution
+    // would build a hash<auto> at runtime even when the parser
+    // narrowed the node's typeInfo via the lvalue-hint channel — see
+    // design/parser-lvalue-type-propagation.md.  Falls back to
+    // autoTypeInfo when the parser left vtype as auto/null/any, and
+    // the tail block below derives complexTypeInfo from runtime-
+    // inferred values as before (issue #2106).
+    const bool parse_time_narrowed = (this->vtype
+        && this->vtype != autoTypeInfo
+        && this->vtype != anyTypeInfo);
+
+    ReferenceHolder<QoreHashNode> h(
+        new QoreHashNode(parse_time_narrowed ? this->vtype : autoTypeInfo),
+        xsink);
 
     // issue #2106 we must calculate the runtime type again because lvalues can return NOTHING despite their declared
     // type
@@ -173,7 +277,7 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
             return QoreValue();
         }
 
-        const QoreTypeInfo* vt = v->getTypeInfo();
+        const QoreTypeInfo* vt = v->getFullTypeInfo();
 
         if (!i) {
             vtype = vt;
@@ -189,7 +293,8 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
         //printd(5, "QoreParseHashNode::evalImpl() '%s' this->vtype: '%s' (c: %d) vt: '%s' (c: %d)\n",
         //  key->c_str(), QoreTypeInfo::getName(this->vtype), QoreTypeInfo::hasComplexType(this->vtype),
         //  QoreTypeInfo::getName(vt), QoreTypeInfo::hasComplexType(vt));
-        if (this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype) && QoreTypeInfo::hasComplexType(vt)) {
+        if (this->vtype && this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype)
+                && QoreTypeInfo::hasComplexType(vt)) {
             // this can never throw an exception; it's only used for type folding/stripping
             QoreTypeInfo::acceptInputKey(this->vtype, key->c_str(), val, xsink);
         }
@@ -203,12 +308,19 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 
     ValueHolder rv(h.release(), xsink);
 
-    // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
-    if (!vtype || vtype == anyTypeInfo) {
-        vtype = autoTypeInfo;
+    // When the parser narrowed the value type, the hash was
+    // constructed with the narrowed `complexTypeInfo` and
+    // setKeyValue already softened values on insert — preserving it
+    // here keeps AST-mode behaviour aligned with IR/AOT.  Otherwise
+    // fall back to deriving from the runtime-inferred vtype (issue
+    // #2791: use "auto" rather than "any").
+    if (!parse_time_narrowed) {
+        if (!vtype || vtype == anyTypeInfo) {
+            vtype = autoTypeInfo;
+        }
+        const QoreTypeInfo* ti = qore_get_complex_hash_type(vtype);
+        qore_hash_private::get(*rv->get<QoreHashNode>())->complexTypeInfo = ti;
     }
-    const QoreTypeInfo* ti = qore_get_complex_hash_type(vtype);
-    qore_hash_private::get(*rv->get<QoreHashNode>())->complexTypeInfo = ti;
 
     return rv.release();
 }

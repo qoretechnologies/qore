@@ -885,6 +885,11 @@ public:
         normalize();
     }
 
+    DLLLOCAL void setUnnormalized(int n_year, int n_month, int n_day, int n_hour, int n_minute, int n_second,
+            int n_us) {
+        qore_simple_tm::set(n_year, n_month, n_day, n_hour, n_minute, n_second, n_us);
+    }
+
     DLLLOCAL void set(const QoreValue v);
 
     DLLLOCAL void set(const char* str);
@@ -1454,6 +1459,11 @@ public:
     DLLLOCAL void setRelativeDateSeconds(int64 s, int us = 0) {
         relative = true;
         d.rel.setSeconds(s, us);
+    }
+
+    DLLLOCAL void setRelativeDateUnnormalized(int year, int month, int day, int hour, int minute, int second, int us) {
+        relative = true;
+        d.rel.setUnnormalized(year, month, day, hour, minute, second, us);
     }
 
     DLLLOCAL int64 getRelativeSeconds() const {

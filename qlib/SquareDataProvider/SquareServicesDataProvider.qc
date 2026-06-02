@@ -80,7 +80,7 @@ public class SquareServicesDataProvider inherits SquareDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Search catalog for ITEM objects (services are items with appointment-related product_type)
         hash<auto> body = {
@@ -106,7 +106,7 @@ public class SquareServicesDataProvider inherits SquareDataProviderBase {
             filtered += record;
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(filtered), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(filtered), where_cond,
             search_options);
     }
 

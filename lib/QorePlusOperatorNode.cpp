@@ -36,6 +36,23 @@
 
 QoreString QorePlusOperatorNode::plus_str("+ operator expression");
 
+static void set_binary_analysis_plus(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink)
@@ -46,6 +63,10 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 
     qore_type_t lt = lh->getType();
     qore_type_t rt = rh->getType();
+
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::Add, xsink);
+    }
 
     if (lt == NT_LIST) {
         const QoreListNode* l = lh->get<const QoreListNode>();
@@ -63,11 +84,13 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     }
 
     if (lt == NT_STRING) {
-        QoreStringNodeHolder str(new QoreStringNode(*lh->get<const QoreStringNode>()));
+        QoreStringNodeValueHelper lstr(*lh);
+        QoreStringNodeHolder str(new QoreStringNode(**lstr));
 
-        if (rt == NT_STRING)
-            str->concat(rh->get<const QoreStringNode>(), xsink);
-        else {
+        if (rt == NT_STRING) {
+            QoreStringNodeValueHelper rstr(*rh);
+            str->concat(*rstr, xsink);
+        } else {
             QoreStringValueHelper r(*rh, str->getEncoding(), xsink);
             if (*xsink)
                 return QoreValue();
@@ -77,7 +100,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     }
 
     if (rt == NT_STRING) {
-        const QoreStringNode* r = rh->get<const QoreStringNode>();
+        QoreStringNodeValueHelper r(*rh);
         QoreStringNodeValueHelper strval(*lh, r->getEncoding(), xsink);
         if (*xsink)
             return QoreValue();
@@ -86,7 +109,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 
         QoreStringNode* rv = const_cast<QoreStringNode*>(*str);
 
-        rv->concat(r, xsink);
+        rv->concat(*r, xsink);
         if (*xsink)
             return QoreValue();
         return str.release();
@@ -190,11 +213,22 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* leftTypeInfo = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
@@ -209,6 +243,7 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         if (!result.isNothing() || **xsink) {
             val = result;
             parse_context.typeInfo = val.getFullTypeInfo();
+            set_binary_analysis_plus(parse_context, left_analysis, right_analysis);
             return **xsink ? -1 : 0;
         }
         // constants not resolved - skip parse-time folding, let runtime handle it
@@ -218,10 +253,15 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     printd(5, "QorePlusOperatorNode::parseInitImpl() this: %p l: '%s' r: '%s'\n", this,
         QoreTypeInfo::getName(leftTypeInfo), QoreTypeInfo::getName(rightTypeInfo));
 
-    // if either side is a list, then the return type is list (highest priority)
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(leftTypeInfo, rightTypeInfo,
+        QoreBufferBinaryOperation::Add);
     bool is_list_left = QoreTypeInfo::isType(leftTypeInfo, NT_LIST);
     bool is_list_right = QoreTypeInfo::isType(rightTypeInfo, NT_LIST);
-    if (is_list_left || is_list_right) {
+    if (bufferResultTypeInfo) {
+        returnTypeInfo = bufferResultTypeInfo;
+    }
+    // if either side is a list, then the return type is list (highest priority)
+    else if (is_list_left || is_list_right) {
         if (is_list_left && is_list_right) {
             parse_context.typeInfo = QoreTypeInfo::isOutputIdentical(leftTypeInfo, rightTypeInfo)
                 ? leftTypeInfo
@@ -231,14 +271,14 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             if (QoreTypeInfo::equal(elementTypeInfo, rightTypeInfo)) {
                 returnTypeInfo = leftTypeInfo;
             } else {
-                returnTypeInfo = listTypeInfo;
+                returnTypeInfo = autoListTypeInfo;
             }
         } else {
             const QoreTypeInfo* elementTypeInfo = QoreTypeInfo::getElementType(rightTypeInfo);
             if (QoreTypeInfo::equal(elementTypeInfo, leftTypeInfo)) {
                 returnTypeInfo = rightTypeInfo;
             } else {
-                returnTypeInfo = listTypeInfo;
+                returnTypeInfo = autoListTypeInfo;
             }
         }
     }
@@ -276,10 +316,10 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 && QoreTypeInfo::isOutputIdentical(leftTypeInfo, rightTypeInfo)) {
                 returnTypeInfo = leftTypeInfo;
             } else {
-                returnTypeInfo = hashTypeInfo;
+                returnTypeInfo = autoHashTypeInfo;
             }
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_OBJECT)) {
-            returnTypeInfo = hashTypeInfo;
+            returnTypeInfo = autoHashTypeInfo;
         } else if (QoreTypeInfo::isType(rightTypeInfo, NT_OBJECT)) {
             returnTypeInfo = objectTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_BINARY) || QoreTypeInfo::isType(rightTypeInfo, NT_BINARY)) {
@@ -291,5 +331,6 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     }
 
     parse_context.typeInfo = returnTypeInfo;
+    set_binary_analysis_plus(parse_context, left_analysis, right_analysis);
     return err;
 }

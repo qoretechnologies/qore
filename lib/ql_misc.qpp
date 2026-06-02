@@ -68,8 +68,10 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
         case NT_NOTHING:
         case NT_NULL:
             return 0;
-        case NT_STRING:
-            return v.get<const QoreStringNode>()->size();
+        case NT_STRING: {
+            QoreStringValueHelper str(v);
+            return str->size();
+        }
         case NT_BINARY:
             return v.get<const BinaryNode>()->size();
         case NT_INT:
@@ -85,7 +87,11 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             int64 total = 0;
             const QoreListNode* l = v.get<const QoreListNode>();
             ConstListIterator li(l);
+            int iter = 0;
             while (li.next()) {
+                if (++iter % 100 == 0 && qore_check_cancel(xsink, "calculating value byte size")) {
+                    return 0;
+                }
                 total += q_get_value_byte_size(li.getValue(), xsink);
                 if (*xsink) {
                     return 0;
@@ -97,7 +103,11 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             int64 total = 0;
             const QoreHashNode* h = v.get<const QoreHashNode>();
             ConstHashIterator hi(h);
+            int iter = 0;
             while (hi.next()) {
+                if (++iter % 100 == 0 && qore_check_cancel(xsink, "calculating value byte size")) {
+                    return 0;
+                }
                 total += strlen(hi.getKey());
                 total += q_get_value_byte_size(hi.get(), xsink);
                 if (*xsink) {
@@ -597,7 +607,7 @@ const SignalToName = (
     When a signal is raised and the signal handler code is called, the signal number is passed as an integer argument to the signal handling code.
 
     @param signal The signal number to process, see @ref signal_constants for possible values
-    @param f The code to execute when the signal is caught; this should accept an integer argument giving the signal number
+    @param handler The code to execute when the signal is caught; this should accept an integer argument giving the signal number
 
     @par Example:
     @code{.py}
@@ -606,12 +616,12 @@ set_signal_handler(SIGINT, \signal_handler());
 
     @see @ref signal_handling for more information
 */
-nothing set_signal_handler(softint signal, code f) [dom=PROCESS] {
+nothing set_signal_handler(softint signal, code handler) [dom=PROCESS;flags=NAMED_ARGS] {
 #ifdef HAVE_SIGNAL_HANDLING
     if (signal <= 0 || signal > QORE_SIGNAL_MAX)
         return xsink->raiseException("SET-SIGNAL-HANDLER-ERROR", "%d is not a valid signal", signal);
 
-    QSM.setHandler(signal, f, xsink);
+    QSM.setHandler(signal, handler, xsink);
 #else
     return xsink->raiseException("MISSING-FEATURE-ERROR", "this platform does not support signal handling, therefore "
         "the set_signal_handler() and remove_signal_handler() functions are not available in Qore; for maximum "
@@ -636,7 +646,7 @@ remove_signal_handler(SIGINT);
 
     @see @ref signal_handling for more information
 */
-nothing remove_signal_handler(softint signal) [dom=PROCESS] {
+nothing remove_signal_handler(softint signal) [dom=PROCESS;flags=NAMED_ARGS] {
 #ifdef HAVE_SIGNAL_HANDLING
     if (signal <= 0 || signal > QORE_SIGNAL_MAX) {
         return xsink->raiseException("REMOVE-SIGNAL-HANDLER-ERROR", "%d is not a valid signal", signal);
@@ -666,7 +676,7 @@ set_async_io_logger(logger);
 
     @since %Qore 2.3
 */
-nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS] {
+nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS;flags=NAMED_ARGS] {
     qore_set_async_io_logger(const_cast<QoreObject*>(logger), xsink);
 }
 
@@ -725,7 +735,7 @@ auto call_function(string name, ...) {
 
 //! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result, passing the remaining arguments to the @ref call_reference "call reference" or @ref closure "closure"
 /**
-    @param f The @ref call_reference "call reference" or @ref closure "closure"
+    @param callable The @ref call_reference "call reference" or @ref closure "closure"
     @param ... Any optional arguments to the @ref call_reference "call reference" or @ref closure "closure"
 
     @par Example:
@@ -742,20 +752,20 @@ auto result = call_function(call_ref, arg1, arg2);
     - call_object_method()
     - call_object_method_args()
 */
-auto call_function(code f, ...) {
+auto call_function(code callable, ...) {
     ReferenceHolder<QoreListNode> vargs(xsink);
     // if there are arguments to pass, create argument list by copying current list
     if (num_args(args) > 1) {
         vargs = args->copyListFrom(1);
     }
 
-    return f->execValue(*vargs, xsink);
+    return callable->execValue(*vargs, xsink);
 }
 
 //! Calls a function and returns the return value, using the optional second argument as a list of arguments for the function
 /**
     @param name The name of the function to call
-    @param vargs Optionally a single argument to the function or a list of arguments to the function
+    @param arguments Optionally a single argument to the function or a list of arguments to the function
 
     @return The value returned by the called function
 
@@ -776,14 +786,14 @@ auto result = call_function_args("func_name", (arg1, arg2));
     - call_object_method()
     - call_object_method_args()
 */
-auto call_function_args(string name, *softlist<auto> vargs) {
-    return getProgram()->callFunction(name->c_str(), vargs, xsink);
+auto call_function_args(string name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return getProgram()->callFunction(name->c_str(), arguments, xsink);
 }
 
 //! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result, using the optional second argument as a list of arguments to the @ref call_reference "call reference" or @ref closure "closure"
 /**
-    @param f The @ref call_reference "call reference" or @ref closure "closure"
-    @param vargs Optionally a single argument to the @ref call_reference "call reference" or @ref closure "closure" or a list of arguments to the @ref call_reference "call reference" or @ref closure "closure"
+    @param callable The @ref call_reference "call reference" or @ref closure "closure"
+    @param arguments Optionally a single argument to the @ref call_reference "call reference" or @ref closure "closure" or a list of arguments to the @ref call_reference "call reference" or @ref closure "closure"
 
     @par Example:
     @code{.py}
@@ -799,8 +809,8 @@ auto result = call_function_args(call_ref, (arg1, arg2));
     - call_object_method()
     - call_object_method_args()
 */
-auto call_function_args(code f, *softlist<auto> vargs) {
-    return f->execValue(vargs, xsink);
+auto call_function_args(code callable, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return callable->execValue(arguments, xsink);
 }
 
 //! Calls a function and returns the return value, passing the remaining arguments after the function name to the builtin function
@@ -839,7 +849,7 @@ auto call_builtin_function(string name, ...) {
 //! Calls a function and returns the return value, using the optional second argument as a list of arguments for the function
 /**
     @param name The name of the builtin function to call
-    @param vargs Optionally a single argument to the function or a list of arguments to the function
+    @param arguments Optionally a single argument to the function or a list of arguments to the function
 
     @return The value returned by the called function
 
@@ -855,12 +865,12 @@ auto result = call_builtin_function_args("func_name", (arg1, arg2));
 
     @since 0.8.4 this function no longer restricts its search to builtin functions as as of Qore 0.8.4 builtin and user functions are stored identically internally; there is only one function implementation which can contain both builtin and user variants
 */
-auto call_builtin_function_args(string name, *softlist<auto> vargs) {
+auto call_builtin_function_args(string name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     const QoreFunction* f = get_builtin_func(name, xsink);
     if (!f)
         return QoreValue();
 
-    return f->evalDynamic(vargs, runtime_cfg, xsink);
+    return f->evalDynamic(arguments, runtime_cfg, xsink);
 }
 
 //! A function performing the same role as the @ref exists "exists operator"
@@ -921,7 +931,7 @@ bool b = exists_function("func_name");
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case existsFunction()
 */
-bool exists_function(string name) [flags=CONSTANT] {
+bool exists_function(string name) [flags=CONSTANT,NAMED_ARGS] {
     return getProgram()->existsFunction(name->c_str());
 }
 
@@ -972,7 +982,7 @@ nothing functionType() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case functionType()
 */
-*string function_type(string name) {
+*string function_type(string name) [flags=NAMED_ARGS] {
     const qore_ns_private* ns;
     const QoreFunction* f = qore_root_ns_private::runtimeFindFunction(*(getRootNS()), name->c_str(), ns);
     if (!f)
@@ -995,7 +1005,7 @@ string str = html_encode("<hello>"); # returns "&lt;hello&gt;"
 
     @see <string>::getEncoded()
 */
-string html_encode(string str) [flags=CONSTANT] {
+string html_encode(string str) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNodeHolder rv(new QoreStringNode(str->getEncoding()));
     return rv->concatEncode(xsink, *str, CE_HTML) ? QoreValue() : rv.release();
 }
@@ -1020,7 +1030,7 @@ string str = html_decode("&lt;hello&gt;"); # returns "<hello>"
 
     @see <string>::getDecoded()
 */
-string html_decode(string str) [flags=CONSTANT] {
+string html_decode(string str) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNodeHolder rv(new QoreStringNode(str->getEncoding()));
     return rv->concatDecode(xsink, *str, CD_HTML) ? QoreValue() : rv.release();
 }
@@ -1067,7 +1077,7 @@ parse(code, filename);
     these changes were made to align the functionality of this function with the @ref Qore::Program::parse() "Program::parse()"
     and @ref Qore::Program::parsePending() "Program::parsePending()" methods
 */
-*hash<auto> parse(string code, string label, *softint warning_mask, *string source, *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC,IN_MODULE] {
+*hash<auto> parse(string code, string label, *softint warning_mask, *string source, *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC,IN_MODULE;flags=NAMED_ARGS] {
     if (warning_mask) {
         ExceptionSink wsink;
         getProgram()->parse(code, label, xsink, &wsink, warning_mask, source, offset);
@@ -1106,7 +1116,7 @@ nothing getClassName() [flags=RUNTIME_NOOP,DEPRECATED] {
 
 //! Returns the class name of the object passed
 /**
-    @param obj the object to get the class name of
+    @param object_value the object to get the class name of
     @return the class name of the object passed
 
     @par Example:
@@ -1118,8 +1128,8 @@ string name = get_class_name(obj);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getClassName()
 */
-string get_class_name(object obj) [flags=CONSTANT] {
-    return new QoreStringNode(obj->getClass()->getName());
+string get_class_name(object object_value) [flags=CONSTANT,NAMED_ARGS] {
+    return new QoreStringNode(object_value->getClass()->getName());
 }
 
 //! Parses a URL string and returns a hash of the components
@@ -1163,7 +1173,7 @@ hash<UrlInfo> h = parse_url(url_string, True);
 
     @see parseURL() for a version of this function that does not throw exceptions if the URL cannot be parsed
 */
-hash<UrlInfo> parse_url(string url, bool keep_brackets) {
+hash<UrlInfo> parse_url(string url, bool keep_brackets) [flags=NAMED_ARGS] {
     QoreURL qurl(url, keep_brackets, xsink);
     if (*xsink)
         return QoreValue();
@@ -1211,7 +1221,7 @@ hash<UrlInfo> h = parse_url(url_string, QURL_DECODE);
     @see
     - parseURL() for a version of this function that does not throw exceptions if the URL cannot be parsed
 */
-hash<UrlInfo> parse_url(string url, *int options) {
+hash<UrlInfo> parse_url(string url, *int options) [flags=NAMED_ARGS] {
     QoreURL qurl(xsink, url, options);
     return qurl.isValid() ? qurl.getHash() : QoreValue();
 }
@@ -1254,7 +1264,7 @@ hash<UrlInfo> parse_url(string url, *int options) {
 
     @see parse_url() for a version of this function that throws exceptions if the URL cannot be parsed
 */
-*hash<UrlInfo> parseURL(string url, bool keep_brackets = False) [flags=CONSTANT] {
+*hash<UrlInfo> parseURL(string url, bool keep_brackets = False) [flags=CONSTANT,NAMED_ARGS] {
     QoreURL qurl(url, keep_brackets);
     return qurl.isValid() ? qurl.getHash() : QoreValue();
 }
@@ -1266,7 +1276,7 @@ hash<UrlInfo> parse_url(string url, *int options) {
 
     @since %Qore 1.13
 */
-string get_safe_url(string url) {
+string get_safe_url(string url) [flags=NAMED_ARGS] {
     QoreURL qurl(xsink, url, QURL_KEEP_BRACKETS);
     if (!qurl.isValid()) {
         assert(*xsink);
@@ -1328,8 +1338,8 @@ nothing parseURL() [flags=RUNTIME_NOOP] {
 
 //! Executes a process and returns a string of the output (stdout only)
 /**
-    @param cmd The shell command to executed as a subprocess
-    @param rc an optional reference to an integer to return the return code of the process
+    @param command The shell command to execute as a subprocess
+    @param return_code an optional reference to an integer to return the return code of the process
 
     @return The stdout of the shell command that was executed
 
@@ -1353,11 +1363,11 @@ string files = backquote("ls", \rc);
 
     @since %Qore 0.8.8 the \a rc argument was added
 */
-string backquote(string cmd, *reference<int> rc) [dom=EXTERNAL_PROCESS] {
+string backquote(string command, *reference<int> return_code) [dom=EXTERNAL_PROCESS;flags=NAMED_ARGS] {
     int prc;
-    SimpleRefHolder<QoreStringNode> str(backquoteEval(cmd->c_str(), prc, xsink));
-    if (!*xsink && rc) {
-        QoreTypeSafeReferenceHelper rh(rc, xsink);
+    SimpleRefHolder<QoreStringNode> str(backquoteEval(command->c_str(), prc, xsink));
+    if (!*xsink && return_code) {
+        QoreTypeSafeReferenceHelper rh(return_code, xsink);
         if (!rh)
             return QoreValue();
 
@@ -1375,8 +1385,8 @@ nothing backquote() [flags=RUNTIME_NOOP;dom=EXTERNAL_PROCESS] {
 //! Returns a base64-encoded representation of a string
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param str the string to encode
-    @param maxlinelen the maximum length of a line in the resulting output string in bytes; if this value is > 0 then output lines will be separated by CRLF characters
+    @param data the string to encode
+    @param max_line_length the maximum length of a line in the resulting output string in bytes; if this value is > 0 then output lines will be separated by CRLF characters
 
     @return the base64-encoded string of the data passed
 
@@ -1423,8 +1433,8 @@ nothing makeBase64String() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns a base64-encoded representation of a string
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param str the string to encode
-    @param maxlinelen the maximum length of a line in the resulting output string in bytes; if this value is > 0 then output lines will be separated by CRLF characters
+    @param data the string to encode
+    @param max_line_length the maximum length of a line in the resulting output string in bytes; if this value is > 0 then output lines will be separated by CRLF characters
 
     @return the base64-encoded string of the data passed
 
@@ -1439,17 +1449,17 @@ string base64 = make_base64_string(data, 64);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case makeBase64String()
 */
-string make_base64_string(string str, softint maxlinelen = -1) [flags=CONSTANT] {
+string make_base64_string(string data, softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
    QoreStringNode* rv = new QoreStringNode;
-   rv->concatBase64(str, maxlinelen);
+   rv->concatBase64(data, max_line_length);
    return rv;
 }
 
 //! Returns a base64-encoded representation of a binary object
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param bin the data to encode
-    @param maxlinelen the maximum length of a line in the resulting output string in bytes; if this value is > 0 then output lines will be separated by CRLF characters
+    @param data the binary data to encode
+    @param max_line_length the maximum length of a line in the resulting output string in bytes; if this value is > 0 then output lines will be separated by CRLF characters
 
     @return the base64-encoded string of the data passed
 
@@ -1464,14 +1474,14 @@ string base64 = make_base64_string(data, 64);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case makeBase64String()
 */
-string make_base64_string(binary bin, softint maxlinelen = -1) [flags=CONSTANT] {
-   return new QoreStringNode(bin, maxlinelen);
+string make_base64_string(binary data, softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
+   return new QoreStringNode(data, max_line_length);
 }
 
 //! Returns a base64-url-encoded representation of a string
 /** Just like @ref make_base64_string() but with \c "+" and \c "/" subject to URL percent encoding
 
-    @param str the string to encode
+    @param data the string to encode
 
     @return the base64-url-encoded string of the data passed
 
@@ -1485,16 +1495,16 @@ string base64 = make_base64_url_string(data);
 
     @since %Qore 1.19.0
 */
-string make_base64_url_string(string str) [flags=CONSTANT] {
+string make_base64_url_string(string data) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* rv = new QoreStringNode;
-    rv->concatBase64Url(*str);
+    rv->concatBase64Url(*data);
     return rv;
 }
 
 //! Returns a base64-url-encoded representation of a binary object
 /** Just like @ref make_base64_string() but with \c "+" and \c "/" subject to URL percent encoding
 
-    @param bin the data to encode
+    @param data the binary data to encode
 
     @return the base64-encoded string of the data passed
 
@@ -1508,16 +1518,16 @@ string base64 = make_base64_url_string(data);
 
     @since %Qore 1.19.0
 */
-string make_base64_url_string(binary bin) [flags=CONSTANT] {
+string make_base64_url_string(binary data) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* rv = new QoreStringNode;
-    rv->concatBase64Url(*bin);
+    rv->concatBase64Url(*data);
     return rv;
 }
 
 //! Parses a base64 encoded string and returns a binary object of the decoded data
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param str the base64-encoded input data to decode
+    @param base64_string the base64-encoded input data to decode
 
     @return a binary object of the decoded data
 
@@ -1559,14 +1569,14 @@ binary bin = parse_base64_string(base64_string);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case parseBase64String()
 */
-binary parse_base64_string(string str) [flags=RET_VALUE_ONLY] {
-   return str->parseBase64(xsink);
+binary parse_base64_string(string base64_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return base64_string->parseBase64(xsink);
 }
 
 //! Parses a base64 encoded string and returns a string of the decoded data
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param str the base64-encoded input data to decode
+    @param base64_string the base64-encoded input data to decode
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return a string of the decoded data tagged with the given encoding
@@ -1615,15 +1625,15 @@ string str = parse_base64_string_to_string(base64_string);
     - the encoding parameter was added in %Qore 0.8.4
     - %Qore 0.8.12 as a replacement for deprecated camel-case parseBase64StringToString()
 */
-string parse_base64_string_to_string(string str, *string encoding) [flags=RET_VALUE_ONLY] {
+string parse_base64_string_to_string(string base64_string, *string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return str->parseBase64ToString(qe, xsink);
+   return base64_string->parseBase64ToString(qe, xsink);
 }
 
 //! Parses a base64-url-encoded string and returns a binary object of the decoded data
 /** Base64-URL encoding is defined by <a href="https://datatracker.ietf.org/doc/html/rfc4648">RFC-4648</a>
 
-    @param str the base64-url-encoded input data to decode
+    @param base64_url_string the base64-url-encoded input data to decode
 
     @return a binary object of the decoded data
 
@@ -1639,14 +1649,14 @@ binary bin = parse_base64_url_string(base64_string);
 
     @since %Qore 2.0
 */
-binary parse_base64_url_string(string str) [flags=RET_VALUE_ONLY] {
-   return str->parseBase64Url(xsink);
+binary parse_base64_url_string(string base64_url_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return base64_url_string->parseBase64Url(xsink);
 }
 
 //! Parses a base64-url-encoded string and returns a string of the decoded data
 /** Base64-URL encoding is defined by <a href="https://datatracker.ietf.org/doc/html/rfc4648">RFC-4648</a>
 
-    @param str the base64-url-encoded input data to decode
+    @param base64_url_string the base64-url-encoded input data to decode
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return a string of the decoded data tagged with the given encoding
@@ -1663,9 +1673,9 @@ string str = parse_base64_url_string_to_string(base64_string);
 
     @since %Qore 2.0
 */
-string parse_base64_url_string_to_string(string str, *string encoding) [flags=RET_VALUE_ONLY] {
+string parse_base64_url_string_to_string(string base64_url_string, *string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return str->parseBase64UrlToString(qe, xsink);
+   return base64_url_string->parseBase64UrlToString(qe, xsink);
 }
 
 //! Returns a list of hashes describing the currently-loaded %Qore modules
@@ -1796,7 +1806,7 @@ list<string> get_feature_list() {
 }
 
 //! Returns a list of all the values in the hash argument passed
-/** @param h a hash to get all the values of
+/** @param hash_value a hash to get all the values of
 
     @return a list of all the values in the hash argument passed
 
@@ -1809,8 +1819,8 @@ list<auto> vl = hash_values(vl);
 
     @see <hash>::keys()
 */
-list<auto> hash_values(hash<auto> h) [flags=CONSTANT] {
-    return qore_hash_private::get(*h)->getValues();
+list<auto> hash_values(hash<auto> hash_value) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_hash_private::get(*hash_value)->getValues();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1821,7 +1831,7 @@ nothing hash_values() [flags=RUNTIME_NOOP] {
 
 //! Returns @ref True if the given key exists in the hash (does not necessarily have to have a value assigned); exceptions are only raised if string encoding errors are encountered
 /**
-    @param h the hash to check
+    @param container the hash to check
     @param key the key name to check; this value will be converted to the @ref default_encoding "default character encoding" to check the hash
 
     @return @ref True if the given key exists in the hash (does not necessarily have to have a value assigned), @ref False if the key is not present at all
@@ -1835,17 +1845,20 @@ bool b = has_key(hash, "key");
 
     @throw ENCODING-CONVERSION-ERROR this error is thrown if the given key cannot be converted to the @ref default_encoding "default character encoding"
 */
-bool has_key(hash<auto> h, string key) {
+bool has_key(hash<auto> container, string key) [flags=NAMED_ARGS] {
     TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
     if (*xsink)
         return QoreValue();
     bool exists;
-    h->getKeyValueExistence(tmp->c_str(), exists);
+    container->getKeyValueExistence(tmp->c_str(), exists);
     return exists;
 }
 
 //! Returns @ref True if the given key exists in the object (does not necessarily have to have a value assigned); exceptions are only raised if string encoding errors are encountered or in case of object access errors.
 /**
+    @param container the object to check
+    @param key the member name to check; this value will be converted to the @ref default_encoding "default character encoding" to check the object
+
     @par Example:
     @code{.py}
 bool b = has_key(obj, "key");
@@ -1855,16 +1868,16 @@ bool b = has_key(obj, "key");
 
     @note object access exceptions could also be raised
 */
-bool has_key(object obj, string key) {
+bool has_key(object container, string key) [flags=NAMED_ARGS] {
     TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
     if (*xsink)
         return QoreValue();
-    return obj->hasMember(tmp->c_str(), xsink);
+    return container->hasMember(tmp->c_str(), xsink);
 }
 
 //! Returns the byte value at the given byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /**
-    @param str the string data to process
+    @param data the string data to process
     @param offset the byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the byte value at the given byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -1877,9 +1890,9 @@ bool has_key(object obj, string key) {
     @note that for strings this function is not equivalent to the @ref list_element_operator "[] operator" for multi-byte character encodings, as this function works purely on bytes and the @ref list_element_operator "[] operator" operates on characters\n\n
     Furthermore this function is identical to getByte(), except this function has no @ref RUNTIME_NOOP variant
 */
-*int get_byte(string str, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )str->c_str();
-   int size = str->strlen();
+*int get_byte(string data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->c_str();
+   int size = data->strlen();
 
    if (offset >= size || offset < 0)
       return QoreValue();
@@ -1889,7 +1902,7 @@ bool has_key(object obj, string key) {
 
 //! Returns the byte value at the given byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /**
-    @param b the data to process
+    @param data the binary data to process
     @param offset the byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the byte value at the given byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -1902,9 +1915,9 @@ bool has_key(object obj, string key) {
     @note this function is equivalent to the more efficient @ref list_element_operator "[] operator" when used with a binary argument\n\n
     Furthermore this function is identical to getByte(), except this function has no @ref RUNTIME_NOOP variant
 */
-*int get_byte(binary b, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )b->getPtr();
-   int size = b->size();
+*int get_byte(binary data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->getPtr();
+   int size = data->size();
 
    if (offset >= size || offset < 0)
       return QoreValue();
@@ -1914,7 +1927,7 @@ bool has_key(object obj, string key) {
 
 //! Returns the byte value at the given byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /**
-    @param str the string data to process
+    @param data the string data to process
     @param offset the byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the byte value at the given byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -1977,9 +1990,9 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_16_lsb()
 */
-*int get_word_16(string str, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )str->c_str();
-   int size = str->strlen();
+*int get_word_16(string data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->c_str();
+   int size = data->strlen();
 
    if (offset >= (size - 1) || offset < 0)
       return QoreValue();
@@ -1990,7 +2003,7 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 16-bit integer value at the given 2-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Most_significant_bit">MSB byte order</a> when retrieving the value from the data
 
-    @param b the data to process
+    @param data the binary data to process
     @param offset the 2-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 16-bit integer value at the given 2-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2002,9 +2015,9 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_16_lsb()
 */
-*int get_word_16(binary b, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )b->getPtr();
-   int size = b->size();
+*int get_word_16(binary data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->getPtr();
+   int size = data->size();
 
    if (offset >= (size - 1) || offset < 0)
       return QoreValue();
@@ -2015,7 +2028,7 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Most_significant_bit">MSB byte order</a> when retrieving the value from the data
 
-    @param str the string data to process
+    @param data the string data to process
     @param offset the 4-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2029,9 +2042,9 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_32_lsb()
 */
-*int get_word_32(string str, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )str->c_str();
-   int size = str->strlen();
+*int get_word_32(string data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->c_str();
+   int size = data->strlen();
 
    if (offset >= (size - 3) || offset < 0)
       return QoreValue();
@@ -2042,7 +2055,7 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Most_significant_bit">MSB byte order</a> when retrieving the value from the data
 
-    @param b the data to process
+    @param data the binary data to process
     @param offset the 4-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2056,9 +2069,9 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_32_lsb()
 */
-*int get_word_32(binary b, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )b->getPtr();
-   int size = b->size();
+*int get_word_32(binary data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->getPtr();
+   int size = data->size();
 
    if (offset >= (size - 3) || offset < 0)
       return QoreValue();
@@ -2069,7 +2082,7 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Most_significant_bit">MSB byte order</a> when retrieving the value from the data
 
-    @param str the string data to process
+    @param data the string data to process
     @param offset the 4-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2131,9 +2144,9 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_64_lsb()
 */
-*int get_word_64(string str, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )str->c_str();
-   int size = str->strlen();
+*int get_word_64(string data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->c_str();
+   int size = data->strlen();
 
    if (offset >= (size - 7) || offset < 0)
       return QoreValue();
@@ -2144,7 +2157,7 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 64-bit integer value at the given 8-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Most_significant_bit">MSB byte order</a> when retrieving the value from the data
 
-    @param b the data to process
+    @param data the binary data to process
     @param offset the 8-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 64-bit integer value at the given 8-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2156,9 +2169,9 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_64_lsb()
 */
-*int get_word_64(binary b, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )b->getPtr();
-   int size = b->size();
+*int get_word_64(binary data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->getPtr();
+   int size = data->size();
 
    if (offset >= (size - 7) || offset < 0)
       return QoreValue();
@@ -2169,7 +2182,7 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 16-bit integer value at the given 2-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Least_significant_bit">LSB byte order</a> when retrieving the value from the data
 
-    @param str the string data to process
+    @param data the string data to process
     @param offset the 2-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 16-bit integer value at the given 2-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2181,9 +2194,9 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_16()
 */
-*int get_word_16_lsb(string str, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )str->c_str();
-   int size = str->strlen();
+*int get_word_16_lsb(string data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->c_str();
+   int size = data->strlen();
 
    if (offset >= (size - 1) || offset < 0)
       return QoreValue();
@@ -2194,7 +2207,7 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 16-bit integer value at the given 2-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Least_significant_bit">LSB byte order</a> when retrieving the value from the data
 
-    @param b the data to process
+    @param data the binary data to process
     @param offset the 2-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 16-bit integer value at the given 2-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2206,9 +2219,9 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_16()
 */
-*int get_word_16_lsb(binary b, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )b->getPtr();
-   int size = b->size();
+*int get_word_16_lsb(binary data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->getPtr();
+   int size = data->size();
 
    if (offset >= (size - 1) || offset < 0)
       return QoreValue();
@@ -2219,7 +2232,7 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Least_significant_bit">LSB byte order</a> when retrieving the value from the data
 
-    @param str the string data to process
+    @param data the string data to process
     @param offset the 4-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2233,9 +2246,9 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_32()
 */
-*int get_word_32_lsb(string str, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )str->c_str();
-   int size = str->strlen();
+*int get_word_32_lsb(string data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->c_str();
+   int size = data->strlen();
 
    if (offset >= (size - 3) || offset < 0)
       return QoreValue();
@@ -2246,7 +2259,7 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Least_significant_bit">LSB byte order</a> when retrieving the value from the data
 
-    @param b the data to process
+    @param data the binary data to process
     @param offset the 4-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2258,9 +2271,9 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_32()
 */
-*int get_word_32_lsb(binary b, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )b->getPtr();
-   int size = b->size();
+*int get_word_32_lsb(binary data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->getPtr();
+   int size = data->size();
 
    if (offset >= (size - 3) || offset < 0)
       return QoreValue();
@@ -2271,7 +2284,7 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 64-bit integer value at the given 8-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Least_significant_bit">LSB byte order</a> when retrieving the value from the data
 
-    @param str the string data to process
+    @param data the string data to process
     @param offset the 8-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 64-bit integer value at the given 8-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2283,9 +2296,9 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_64()
 */
-*int get_word_64_lsb(string str, softint offset = 0) [flags=CONSTANT] {
-   unsigned char* ptr = (unsigned char* )str->c_str();
-   int size = str->strlen();
+*int get_word_64_lsb(string data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+   unsigned char* ptr = (unsigned char* )data->c_str();
+   int size = data->strlen();
 
    if (offset >= (size - 7) || offset < 0)
       return QoreValue();
@@ -2296,7 +2309,7 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 64-bit integer value at the given 8-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Least_significant_bit">LSB byte order</a> when retrieving the value from the data
 
-    @param b the data to process
+    @param data the binary data to process
     @param offset the 8-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 64-bit integer value at the given 8-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2308,9 +2321,9 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 
     @see get_word_64()
 */
-*int get_word_64_lsb(binary b, softint offset = 0) [flags=CONSTANT] {
-    unsigned char* ptr = (unsigned char* )b->getPtr();
-    int size = b->size();
+*int get_word_64_lsb(binary data, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
+    unsigned char* ptr = (unsigned char* )data->getPtr();
+    int size = data->size();
 
     if (offset >= (size - 7) || offset < 0)
         return QoreValue();
@@ -2332,7 +2345,7 @@ string splice(string[doc] str) [flags=NOOP] {
 //! Returns a string based on the argument string but with characters removed from a certain character index
 /** An exception can only be thrown here if an invalid multi-byte encoding is found
 
-    @param str the string to process
+    @param value the string to process
     @param start the character index (where the first character is 0) to start removing characters; if this value is negative, it gives the offset from the end of the string
 
     @return the processed string
@@ -2344,8 +2357,8 @@ string str = splice(str2, 5);
 
     @see the @ref splice "splice operator"
 */
-string splice(string str, softint start) {
-    QoreStringNodeHolder pstr(str->copy());
+string splice(string value, softint start) [flags=NAMED_ARGS] {
+    QoreStringNodeHolder pstr(value->copy());
     pstr->splice(start, xsink);
     return *xsink ? QoreValue() : pstr.release();
 }
@@ -2353,10 +2366,10 @@ string splice(string str, softint start) {
 //! Returns a string based on the argument string but optionally with characters removed and/or added from a certain character index
 /** An exception can only be thrown here if an invalid multi-byte encoding is found
 
-    @param str the string to process
+    @param value the string to process
     @param start the character index (where the first character is 0) to start removing (and/or adding) characters; if this value is negative, it gives the offset from the end of the string
-    @param len the number of characters to remove; if this argument is 0 then no characters are removed; if this value is negative, then it gives an offset from the end of the string (ie -2 means remove all characters up to but not including the two last characters)
-    @param nstr the optional string for inserting new characters
+    @param length the number of characters to remove; if this argument is 0 then no characters are removed; if this value is negative, then it gives an offset from the end of the string (ie -2 means remove all characters up to but not including the two last characters)
+    @param replacement the optional string for inserting new characters
 
     @return the processed string with characters removed and/or added according to the arguments
 
@@ -2367,16 +2380,16 @@ string str = splice(str2, 5, 7, "hello");
 
     @see the @ref splice "splice operator"
 */
-string splice(string str, softint start, softint len, *string nstr) {
-    QoreStringNodeHolder pstr(str->copy());
-    pstr->splice(start, len, QoreValue(nstr), xsink);
+string splice(string value, softint start, softint length, *string replacement) [flags=NAMED_ARGS] {
+    QoreStringNodeHolder pstr(value->copy());
+    pstr->splice(start, length, QoreValue(replacement), xsink);
     return *xsink ? QoreValue() : pstr.release();
 }
 
 //! Returns a list based on the argument list but with elements removed from the given index to the end of the list
 /** Exceptions can only be thrown here if objects are removed from the list and this causes them to go out of scope and an exception is thrown in one of the destructors
 
-    @param l the list to process
+    @param value the list to process
     @param start the starting element (where the first element is 0) to start removing elements; if this value is negative, it gives the offset from the end of the list
 
     @par Example:
@@ -2386,8 +2399,8 @@ list<auto> l = splice(l2, 5);
 
     @see the @ref splice "splice operator"
 */
-list<auto> splice(list<auto> l, softint start) {
-    ReferenceHolder<QoreListNode> lst(l->copy(), xsink);
+list<auto> splice(list<auto> value, softint start) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
     ReferenceHolder<> holder(lst->splice(start), xsink);
     return *xsink ? QoreValue() : lst.release();
 }
@@ -2395,9 +2408,9 @@ list<auto> splice(list<auto> l, softint start) {
 //! Returns a list based on the argument list but optionally with elements removed and/or added from a certain index
 /** Exceptions can only be thrown here if objects are removed from the list and this causes them to go out of scope and an exception is thrown in one of the destructors
 
-    @param l the list to process
+    @param value the list to process
     @param start the starting element (where the first element is 0) to start removing (and/or adding) elements; if this value is negative, it gives the offset from the end of the list
-    @param len the number of list elements to remove; if this argument is 0 then no elements are removed; if this value is negative, then it gives an offset from the end of the list (ie -2 means remove all elements up to but not including the two last elements)
+    @param length the number of list elements to remove; if this argument is 0 then no elements are removed; if this value is negative, then it gives an offset from the end of the list (ie -2 means remove all elements up to but not including the two last elements)
 
     @return the processed list with elements removed and/or added according to the arguments
 
@@ -2408,19 +2421,19 @@ list<auto> l = splice(l2, 5, 7);
 
     @see the @ref splice "splice operator"
 */
-list<auto> splice(list<auto> l, softint start, softint len) {
-    ReferenceHolder<QoreListNode> lst(l->copy(), xsink);
-    ReferenceHolder<> holder(lst->splice(start, len), xsink);
+list<auto> splice(list<auto> value, softint start, softint length) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
+    ReferenceHolder<> holder(lst->splice(start, length), xsink);
     return *xsink ? QoreValue() : lst.release();
 }
 
 //! Returns a list based on the argument list but optionally with elements removed and/or added from a certain index
 /** Exceptions can only be thrown here if objects are removed from the list and this causes them to go out of scope and an exception is thrown in one of the destructors
 
-    @param l the list to process
+    @param value the list to process
     @param start the starting element (where the first element is 0) to start removing (and/or adding) elements; if this value is negative, it gives the offset from the end of the list
-    @param len the number of list elements to remove; if this argument is 0 then no elements are removed; if this value is negative, then it gives an offset from the end of the list (ie -2 means remove all elements up to but not including the two last elements)
-    @param nlist the new  list for inserting new elements
+    @param length the number of list elements to remove; if this argument is 0 then no elements are removed; if this value is negative, then it gives an offset from the end of the list (ie -2 means remove all elements up to but not including the two last elements)
+    @param replacement the new list for inserting new elements
 
     @return the processed list with elements removed and/or added according to the arguments
 
@@ -2431,9 +2444,9 @@ list<auto> l = splice(l2, 5, 7, "hello");
 
     @see the @ref splice "splice operator"
 */
-list<auto> splice(list<auto> l, softint start, softint len, softlist<auto> nlist) {
-    ReferenceHolder<QoreListNode> lst(l->copy(), xsink);
-    ReferenceHolder<> holder(lst->splice(start, len, nlist, xsink), xsink);
+list<auto> splice(list<auto> value, softint start, softint length, softlist<auto> replacement) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
+    ReferenceHolder<> holder(lst->splice(start, length, replacement, xsink), xsink);
     return *xsink ? QoreValue() : lst.release();
 }
 
@@ -2444,7 +2457,7 @@ nothing splice() [flags=RUNTIME_NOOP] {
 }
 
 //! Returns a hex-encoded representation of a string
-/** @param str the string to encode
+/** @param data the string to encode
 
     @return a string of hex digits repsenting the bytes of the argument passed
 
@@ -2502,14 +2515,14 @@ string str = make_hex_string(str2);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case makeHexString()
 */
-string make_hex_string(string str) [flags=CONSTANT] {
+string make_hex_string(string data) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* rv = new QoreStringNode;
-    rv->concatHex(str);
+    rv->concatHex(data);
     return rv;
 }
 
 //! Returns a hex-encoded representation of a binary object
-/** @param bin the binary object to encode
+/** @param data the binary object to encode
 
     @return a string of hex digits repsenting the bytes of the argument passed
 
@@ -2525,9 +2538,9 @@ string str = make_hex_string(bin);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case makeHexString()
 */
-string make_hex_string(binary bin) [flags=CONSTANT] {
+string make_hex_string(binary data) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* str = new QoreStringNode;
-    str->concatHex(bin);
+    str->concatHex(data);
     return str;
 }
 
@@ -2555,7 +2568,7 @@ nothing parseHexString() [flags=RUNTIME_NOOP,DEPRECATED] {
 }
 
 //! Parses a hex-encoded string and returns the binary object
-/** @param hexstr a string of an even-number of only hexadecimal digits
+/** @param hex_string a string of an even-number of only hexadecimal digits
 
     @return a binary object of the decoded data
 
@@ -2572,12 +2585,12 @@ binary bin = parseHexString(hex_string);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case parseHexString()
 */
-binary parse_hex_string(string hexstr) [flags=RET_VALUE_ONLY] {
-   return hexstr->parseHex(xsink);
+binary parse_hex_string(string hex_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return hex_string->parseHex(xsink);
 }
 
 //! Returns an integer for a hexadecimal string value; throws an exception if non-hex digits are found
-/** @param str a string of hexadecimal digits (like \c "6d4f84e0"; with or without leading \c "x" or \c "0x")
+/** @param hex_string a string of hexadecimal digits (like \c "6d4f84e0"; with or without leading \c "x" or \c "0x")
 
     @return the base-10 integer corresponding to the argument
 
@@ -2588,14 +2601,14 @@ int i = hextoint("ab3d4e0f12");
 
     @throw PARSE-HEX-ERROR invalid hex digit found
 */
-int hextoint(string str) {
-   if (!str->strlen())
+int hextoint(string hex_string) [flags=NAMED_ARGS] {
+   if (!hex_string->strlen())
       return 0;
 
    int64 rc = 0;
    int64 pow = 0;
-   const char* buf = str->c_str();
-   size_t len = str->size();
+   const char* buf = hex_string->c_str();
+   size_t len = hex_string->size();
    if (*buf == '0' && *(buf + 1) == 'x') {
       buf += 2;
       len -= 2;
@@ -2604,7 +2617,11 @@ int hextoint(string str) {
       buf++;
       --len;
    }
+   size_t iter = 0;
    for (const char* p = buf + len - 1; p >= buf; p--) {
+      if (++iter % 100 == 0 && qore_check_cancel(xsink, "parsing hexadecimal integer")) {
+         return 0;
+      }
       int n = get_nibble(*p, xsink);
       if (xsink->isException())
 	 return 0;
@@ -2627,7 +2644,7 @@ nothing hextoint() [flags=RUNTIME_NOOP] {
 }
 
 //! parses a string representing a number in a configurable base and returns the integer
-/** @param num a string representing a number
+/** @param value a string representing a number
     @param base the base of the number
 
     @return the integer represented by the string and the base
@@ -2639,11 +2656,11 @@ int i = strtoint("41", 8);
 
     @throw STRTOINT-ERROR cannot parse string; unsupported base, etc
 */
-int strtoint(string num, softint base = 10) {
+int strtoint(string value, softint base = 10) [flags=NAMED_ARGS] {
    errno = 0;
-   int64 rv = strtoll(num->c_str(), 0, base);
+   int64 rv = strtoll(value->c_str(), 0, base);
    if (errno == EINVAL || errno == ERANGE)
-      xsink->raiseException("STRTOINT-ERROR", "could not parse '%s' to an integer", num->c_str());
+      xsink->raiseException("STRTOINT-ERROR", "could not parse '%s' to an integer", value->c_str());
    return rv;
 }
 
@@ -2676,7 +2693,7 @@ load_module("mysql");
     - %Qore 0.8.7 this function can also be used in user module code
     - %Qore 0.9 added the \c warning_mask parameter
 */
-nothing load_module(string name, int warning_mask = WARN_MODULES) [dom=MODULES] {
+nothing load_module(string name, int warning_mask = WARN_MODULES) [dom=MODULES;flags=NAMED_ARGS] {
     QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), getProgram(), nullptr, QMLO_NONE, warning_mask);
 }
 
@@ -2703,7 +2720,7 @@ load_module("mysql");
     - %Qore 0.8.7 this function can also be used in user module code
     - %Qore 0.9 added the \c warning_mask parameter
 */
-*hash<ExceptionInfo> load_module_warn(string name, int warning_mask = WARN_MODULES) [dom=MODULES] {
+*hash<ExceptionInfo> load_module_warn(string name, int warning_mask = WARN_MODULES) [dom=MODULES;flags=NAMED_ARGS] {
     ExceptionSink wsink;
     QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), getProgram(), nullptr, QMLO_NONE, warning_mask);
     if (!*xsink && wsink) {
@@ -2727,14 +2744,14 @@ load_user_module_with_program("MyModule", p);
     @endcode
 
     @param name the name or path of the user module to load
-    @param pgm the @ref Qore::Program "Program" object to use as a container for the new user module, presumably this has a custom API that the user module can use; note that after this call the @ref Qore::Program "Program" object will be owned by the user module, therefore the object itself will no longer be valid and any accesses to the object after this call will result in an exception
+    @param program the @ref Qore::Program "Program" object to use as a container for the new user module, presumably this has a custom API that the user module can use; note that after this call the @ref Qore::Program "Program" object will be owned by the user module, therefore the object itself will no longer be valid and any accesses to the object after this call will result in an exception
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
 
     @since %Qore 0.8.12
  */
-nothing load_user_module_with_program(string name, !Qore::Program[QoreProgram] pgm) [dom=MODULES] {
-    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), getProgram(), pgm);
+nothing load_user_module_with_program(string name, !Qore::Program[QoreProgram] program) [dom=MODULES;flags=NAMED_ARGS] {
+    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), getProgram(), program);
 }
 
 //! Reloads an already-loaded %Qore module subject to code injection at run-time into %Qore; the module's code is not imported into the current Program object
@@ -2757,7 +2774,7 @@ reload_module("FixedLengthUtil");
 
     @since %Qore 0.8.12
 */
-nothing reload_module(string name) [dom=MODULES,INJECTION] {
+nothing reload_module(string name) [dom=MODULES,INJECTION;flags=NAMED_ARGS] {
     QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), 0, 0, QMLO_RELOAD);
 }
 
@@ -2778,7 +2795,7 @@ string decoded_url = decode_url(encoded_url);
     - encode_uri_request()
     - decode_uri_request() for a similar function that provides AJAX-compatible URI decoding for the URI query component
 */
-string decode_url(string url) [flags=CONSTANT] {
+string decode_url(string url) [flags=CONSTANT,NAMED_ARGS] {
    QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
    str->concatDecodeUrl(*url, xsink);
    return *xsink ? QoreValue() : str.release();
@@ -2813,7 +2830,7 @@ string encoded_url = encode_url(url);
 
     @since %Qore 0.8.9
 */
-string encode_url(string url, softbool encode_all = False) [flags=CONSTANT] {
+string encode_url(string url, softbool encode_all = False) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNodeHolder str(new QoreStringNode(url->getEncoding()));
     str->concatEncodeUrl(xsink, url, encode_all);
     return *xsink ? QoreValue() : str.release();
@@ -2856,7 +2873,7 @@ string decoded_uri = decode_uri_request("path/to/something%20else?query=1%2b1+%2
 
     @since %Qore 0.8.12
 */
-string decode_uri_request(string uri) [flags=CONSTANT] {
+string decode_uri_request(string uri) [flags=CONSTANT,NAMED_ARGS] {
    QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
    str->concatDecodeUriRequest(*uri, xsink);
    return *xsink ? QoreValue() : str.release();
@@ -2900,7 +2917,7 @@ string encoded_uri = encode_uri_request("path/to/something else?query=1+1 +2")'
 
     @since %Qore 0.8.12
 */
-string encode_uri_request(string url) [flags=CONSTANT] {
+string encode_uri_request(string url) [flags=CONSTANT,NAMED_ARGS] {
    QoreStringNodeHolder str(new QoreStringNode(url->getEncoding()));
    str->concatEncodeUriRequest(xsink, url);
    return *xsink ? QoreValue() : str.release();
@@ -3067,14 +3084,14 @@ int get_parse_options() [flags=CONSTANT] {
 set_return_value(1);
     @endcode
 
-    @param val the return value for the Program
+    @param value the return value for the Program
 
     @throw SETRETURNVALUE-ERROR this exception is thrown if the Program is not currently running in @ref exec-class "%exec-class" mode
 
     @since %Qore 0.8.12
  */
-set_return_value(auto val) [dom=PROCESS] {
-    qore_program_private::setReturnValue(*getProgram(), val.refSelf(), xsink);
+set_return_value(auto value) [dom=PROCESS;flags=NAMED_ARGS] {
+    qore_program_private::setReturnValue(*getProgram(), value.refSelf(), xsink);
 }
 
 //! returns a descriptive string for an exception location; the \c source and \c offset information will also be included in the string returned if present in the @ref Qore::ExceptionInfo "ExceptionInfo" hash argument
@@ -3087,30 +3104,30 @@ try {
 }
     @endcode
 
-    @param ex a hash which should be an @ref Qore::ExceptionInfo "ExceptionInfo" hash
+    @param exception_info a hash which should be an @ref Qore::ExceptionInfo "ExceptionInfo" hash
 
     @return a string describing the exception location (ex: \c "sftp-poller.q:140")
 
     @since %Qore 0.8.7
  */
-string get_ex_pos(hash<auto> ex) [flags=CONSTANT] {
-    QoreValue n = ex->getKeyValue("file");
-    QoreStringNode* str = new QoreStringNode(n.getType() == NT_STRING
-        ? n.get<const QoreStringNode>()->c_str()
-        : "<unknown>");
-    int ln = (int)ex->getKeyValue("line").getAsBigInt();
+string get_ex_pos(hash<auto> exception_info) [flags=CONSTANT,NAMED_ARGS] {
+    QoreValue n = exception_info->getKeyValue("file");
+    QoreStringValueHelper file(n);
+    QoreStringNode* str = new QoreStringNode(n.getType() == NT_STRING ? file->c_str() : "<unknown>");
+    int ln = (int)exception_info->getKeyValue("line").getAsBigInt();
     str->sprintf(":%d", ln);
     bool openparen = false;
-    n = ex->getKeyValue("lang");
+    n = exception_info->getKeyValue("lang");
     if (n.getType() == NT_STRING) {
-        str->sprintf(" (%s", n.get<const QoreStringNode>()->c_str());
+        QoreStringValueHelper lang(n);
+        str->sprintf(" (%s", lang->c_str());
         openparen = true;
     }
-    n = ex->getKeyValue("source");
+    n = exception_info->getKeyValue("source");
     if (n.getType() == NT_STRING) {
-        const QoreStringNode* sstr = n.get<const QoreStringNode>();
+        QoreStringValueHelper sstr(n);
         if (!sstr->empty()) {
-            int offset = (int)ex->getKeyValue("offset").getAsBigInt();
+            int offset = (int)exception_info->getKeyValue("offset").getAsBigInt();
             str->concat(" ");
             if (!openparen) {
                 str->concat('(');
@@ -3141,7 +3158,7 @@ hash<auto> h = get_local_vars(0);
 
     @since %Qore 0.8.13
  */
-hash<auto> get_local_vars(int frame) [dom=DEBUGGER;flags=RET_VALUE_ONLY] {
+hash<auto> get_local_vars(int frame) [dom=DEBUGGER;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return thread_get_local_vars(frame, xsink);
 }
 
@@ -3152,7 +3169,7 @@ set_local_var_value(0, "var", 1);
     @endcode
 
     @param frame the stack frame where 0 is the current or highest stack frame
-    @param var the name of the local variable
+    @param name the name of the local variable
     @param value the value to assign
 
     @throw UNKNOWN-VARIABLE the given local variable is not present in the current stack frame
@@ -3163,9 +3180,9 @@ set_local_var_value(0, "var", 1);
 
     @since %Qore 0.8.13
 */
-nothing set_local_var_value(int frame, string var, auto value) [dom=DEBUGGER] {
-   if (thread_set_local_var_value(frame, var->c_str(), value, xsink) == 1 && thread_set_closure_var_value(frame, var->c_str(), value, xsink) == 1 && !xsink->isEvent())
-      xsink->raiseException("UNKNOWN-VARIABLE", "cannot find local variable '%s' in stack frame %d", var->c_str(), (int)frame);
+nothing set_local_var_value(int frame, string name, auto value) [dom=DEBUGGER;flags=NAMED_ARGS] {
+   if (thread_set_local_var_value(frame, name->c_str(), value, xsink) == 1 && thread_set_closure_var_value(frame, name->c_str(), value, xsink) == 1 && !xsink->isEvent())
+      xsink->raiseException("UNKNOWN-VARIABLE", "cannot find local variable '%s' in stack frame %d", name->c_str(), (int)frame);
 }
 
 //! returns a hash of global variables
@@ -3201,7 +3218,7 @@ set_global_var_value("a", 1);
 
     @since %Qore 0.8.13
  */
-nothing set_global_var_value(string name, auto value) {
+nothing set_global_var_value(string name, auto value) [flags=NAMED_ARGS] {
    getProgram()->setGlobalVarValue(name->c_str(), value.refSelf(), xsink);
 }
 
@@ -3220,7 +3237,7 @@ auto val = get_module_option(mod, opt);
 
     @since %Qore 0.9
 */
-auto get_module_option(string module, string option) [flags=CONSTANT;dom=PROCESS] {
+auto get_module_option(string module, string option) [flags=CONSTANT,NAMED_ARGS;dom=PROCESS] {
     TempEncodingHelper mod_str(module, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3247,7 +3264,7 @@ set_module_option(mod, opt, val);
 
     @since %Qore 0.9
  */
-nothing set_module_option(string module, string option, auto value) [dom=PROCESS] {
+nothing set_module_option(string module, string option, auto value) [dom=PROCESS;flags=NAMED_ARGS] {
     TempEncodingHelper mod_str(module, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3277,7 +3294,7 @@ set_app_registry("custom-expressions", expression_map);
 
     @since %Qore 2.2
  */
-nothing set_app_registry(string key, auto value) [dom=PROCESS] {
+nothing set_app_registry(string key, auto value) [dom=PROCESS;flags=NAMED_ARGS] {
     TempEncodingHelper key_str(key, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3300,7 +3317,7 @@ nothing set_app_registry(string key, auto value) [dom=PROCESS] {
 
     @since %Qore 2.2
  */
-auto get_app_registry(string key) [flags=RET_VALUE_ONLY] {
+auto get_app_registry(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     TempEncodingHelper key_str(key, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3333,7 +3350,7 @@ auto get_app_registry(string key) [flags=RET_VALUE_ONLY] {
 
     @since %Qore 0.9.4
  */
-code get_call_reference(string identifier) [flags=RET_VALUE_ONLY] {
+code get_call_reference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return get_call_reference_intern(runtime_get_stack_object(), identifier, xsink);
 }
 
@@ -3408,7 +3425,7 @@ string get_module_context_path_ex() [flags=CONSTANT] {
 }
 
 //! Returns the approximate memory size in bytes of any Qore value
-/** @param val the value to calculate the byte size for
+/** @param value the value to calculate the byte size for
 
     @return the approximate byte size of the value's data
 
@@ -3427,13 +3444,14 @@ int hash_size = get_value_byte_size({"a": 1, "b": "test"});  # returns ~13
 
     @since %Qore 2.3
 */
-int get_value_byte_size(auto val) [flags=CONSTANT] {
-    return q_get_value_byte_size(val, xsink);
+int get_value_byte_size(auto value) [flags=CONSTANT,NAMED_ARGS] {
+    return q_get_value_byte_size(value, xsink);
 }
 
 //! Returns io_uring debug statistics for verifying that the io_uring code path is exercised in tests
-/** This function is only available in debug builds on Linux with io_uring support.
-    In release builds or on non-Linux platforms, it returns @ref nothing.
+/** This function is only available in debug builds on Linux with io_uring support and at least one
+    active event loop with runtime io_uring enabled.  In release builds, on non-Linux platforms, or
+    when runtime io_uring initialization is unavailable, it returns @ref nothing.
 
     @return a hash with the following keys, or @ref nothing if not available:
     - \c submits: (int) cumulative count of successfully submitted io_uring reads
@@ -3453,6 +3471,9 @@ if (stats_before && stats_after) {
 */
 *hash<auto> get_io_uring_debug_stats() {
 #if defined(DEBUG) && defined(__linux__) && defined(HAVE_IO_URING)
+    if (!QoreIoUring::getDebugActiveCount()) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("submits", (int64)QoreIoUring::getDebugSubmitCount(), xsink);
     rv->setKeyValue("completions", (int64)QoreIoUring::getDebugCompletionCount(), xsink);

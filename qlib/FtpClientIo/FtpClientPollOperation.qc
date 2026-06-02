@@ -120,7 +120,8 @@ public class FtpClientPollOperation {
         self.port = port;
         self.secure = secure;
         self.secure_data = secure_data;
-        ctrl = new FtpControlPollOperation(host, port, secure, secure_data, user, pass);
+        ctrl = new FtpControlPollOperation(host: host, port: port, secure: secure, secure_data: secure_data,
+            username: user, password: pass);
         current_poll_op = ctrl;
     }
 
@@ -160,7 +161,7 @@ public class FtpClientPollOperation {
         op_remote_path = remote_path;
         remove transfer_result;
         # Phase 0: TYPE I
-        ctrl.submitCommand("TYPE", "I");
+        ctrl.submitCommand(command: "TYPE", argument: "I");
         current_poll_op = ctrl;
     }
 
@@ -178,7 +179,7 @@ public class FtpClientPollOperation {
         op_send_data = data;
         remove transfer_result;
         # Phase 0: TYPE I
-        ctrl.submitCommand("TYPE", "I");
+        ctrl.submitCommand(command: "TYPE", argument: "I");
         current_poll_op = ctrl;
     }
 
@@ -196,7 +197,7 @@ public class FtpClientPollOperation {
         op_long_list = long_list;
         remove transfer_result;
         # Phase 0: TYPE A (ASCII for directory listings)
-        ctrl.submitCommand("TYPE", "A");
+        ctrl.submitCommand(command: "TYPE", argument: "A");
         current_poll_op = ctrl;
     }
 
@@ -210,7 +211,7 @@ public class FtpClientPollOperation {
         }
         op_type = FTP_OP_COMMAND;
         op_phase = 0;
-        ctrl.submitCommand(cmd, arg);
+        ctrl.submitCommand(command: cmd, argument: arg);
         current_poll_op = ctrl;
     }
 
@@ -271,7 +272,7 @@ public class FtpClientPollOperation {
                 if (!parseDataModeResponse()) {
                     return False;  # Fell back to PASV, need another phase
                 }
-                ctrl.submitCommand("RETR", op_remote_path);
+                ctrl.submitCommand(command: "RETR", argument: op_remote_path);
                 current_poll_op = ctrl;
                 return False;
             }
@@ -327,7 +328,7 @@ public class FtpClientPollOperation {
                 if (!parseDataModeResponse()) {
                     return False;
                 }
-                ctrl.submitCommand("STOR", op_remote_path);
+                ctrl.submitCommand(command: "STOR", argument: op_remote_path);
                 current_poll_op = ctrl;
                 return False;
             }
@@ -431,9 +432,9 @@ public class FtpClientPollOperation {
     # ========================================
     private sendDataModeCommand() {
         if (data_mode == FTP_MODE_EPSV) {
-            ctrl.submitCommand("EPSV");
+            ctrl.submitCommand(command: "EPSV");
         } else {
-            ctrl.submitCommand("PASV");
+            ctrl.submitCommand(command: "PASV");
         }
         current_poll_op = ctrl;
     }
@@ -447,7 +448,7 @@ public class FtpClientPollOperation {
             if ((resp.code / 100) != 2) {
                 # EPSV failed — fall back to PASV
                 data_mode = FTP_MODE_PASV;
-                ctrl.submitCommand("PASV");
+                ctrl.submitCommand(command: "PASV");
                 current_poll_op = ctrl;
                 --op_phase;  # Stay at the same phase for the fallback
                 return False;
@@ -475,7 +476,7 @@ public class FtpClientPollOperation {
     }
 
     private startDataReceive() {
-        data_op = new FtpDataPollOperation(data_host, data_port, secure_data);
+        data_op = new FtpDataPollOperation(host: data_host, port: data_port, secure_data: secure_data);
         current_poll_op = data_op;
     }
 

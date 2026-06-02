@@ -55,7 +55,7 @@ public class InsightlyOpportunitiesDataProvider inherits InsightlyDataProviderBa
         return new InsightlyOpportunityDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return runListSearch("Opportunities", where_cond, search_options);
     }

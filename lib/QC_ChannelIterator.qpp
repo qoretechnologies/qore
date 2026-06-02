@@ -30,7 +30,27 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QC_ChannelIterator.h"
+
+static const QoreTypeInfo* get_channel_iterator_element_type(const QoreTypeInfo* iterator_type_info) {
+    const QoreParameterizedClassTypeInfo* iterator_type
+        = QoreTypeInfo::getParameterizedClassType(iterator_type_info);
+    return iterator_type && iterator_type->getArgCount() ? iterator_type->getTypeArgs()[0] : autoTypeInfo;
+}
+
+QoreObject* qore_new_channel_iterator_object(QoreProgram* pgm, QoreChannel* ch) {
+    type_vec_t type_args;
+    type_args.push_back(autoTypeInfo);
+    return qore_new_channel_iterator_object(pgm, ch, type_args);
+}
+
+QoreObject* qore_new_channel_iterator_object(QoreProgram* pgm, QoreChannel* ch, const type_vec_t& type_args) {
+    const QoreTypeInfo* element_type = type_args.empty() ? autoTypeInfo : type_args[0];
+    QoreObject* rv = new QoreObject(QC_CHANNELITERATOR, pgm, new QoreChannelIterator(ch, false, element_type));
+    rv->setInstantiatedTypeInfo(QC_CHANNELITERATOR->getTypeInfo(type_args));
+    return rv;
+}
 
 //! An iterator for @ref Qore::Thread::Channel "Channel" objects that enables @ref foreach iteration
 /** This iterator calls @ref Qore::Thread::Channel::recv() "Channel::recv()" in each call to @ref next().
@@ -38,7 +58,7 @@
 
     @par Example: Using foreach
     @code{.py}
-Channel ch(10);
+Channel<int> ch(10);
 background sub() {
     for (int i = 0; i < 5; ++i) {
         ch.send(i);
@@ -52,7 +72,7 @@ foreach auto val in (ch.iterator()) {
 
     @par Example: Using while loop
     @code{.py}
-ChannelIterator it(ch);
+ChannelIterator<int> it(ch);
 while (it.next()) {
     printf("value: %y\n", it.getValue());
 }
@@ -64,18 +84,20 @@ while (it.next()) {
 
     @since %Qore 2.3
  */
-qclass ChannelIterator [dom=THREAD_CLASS; arg=QoreChannelIterator* i; ns=Qore::Thread; vparent=AbstractIterator];
+qclass ChannelIterator<T> [dom=THREAD_CLASS; arg=QoreChannelIterator* i; ns=Qore::Thread;
+    vparent=AbstractIterator<T>; legacy_raw];
 
 //! Creates the ChannelIterator for the given Channel
 /** @param channel the @ref Qore::Thread::Channel "Channel" to iterate
 
     @par Example:
     @code{.py}
-ChannelIterator it(channel);
+ChannelIterator<int> it(channel);
     @endcode
  */
-ChannelIterator::constructor(Channel[QoreChannel] channel) {
-    self->setPrivate(CID_CHANNELITERATOR, new QoreChannelIterator(channel.release(), true));
+ChannelIterator::constructor(Channel<T>[QoreChannel] channel) [flags=NAMED_ARGS] {
+    const QoreTypeInfo* element_type = get_channel_iterator_element_type(self->getInstantiatedTypeInfo());
+    self->setPrivate(CID_CHANNELITERATOR, new QoreChannelIterator(channel.release(), true, element_type));
 }
 
 //! Throws an exception; ChannelIterator objects cannot be copied
@@ -104,12 +126,12 @@ bool ChannelIterator::next() {
 
     @par Example:
     @code{.py}
-auto val = it.getValue();
+int val = it.getValue();
     @endcode
 
     @throw INVALID-ITERATOR iterator is not pointing at a valid element
  */
-auto ChannelIterator::getValue() [flags=RET_VALUE_ONLY] {
+T ChannelIterator::getValue() [flags=RET_VALUE_ONLY] {
     if (i->checkValid(xsink)) {
         return QoreValue();
     }

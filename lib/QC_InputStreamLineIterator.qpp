@@ -53,59 +53,61 @@ while (it.next()) {
 qclass InputStreamLineIterator [arg=InputStreamLineIterator* isli; ns=Qore; vparent=AbstractLineIterator; internal_members=InputStream is,StreamReader sr];
 
 //! Creates a buffered InputStreamLineIterator object for iterating over the given \c InputStream
-/** @param is the \c InputStream to iterate over
+/** @param input_stream the \c InputStream to iterate over
     @param encoding character encoding of the data from input stream; if not ASCII-compatible, all data will be
     converted to UTF-8; if not present, the @ref default_encoding "default character encoding" is assumed
-    @param eol the optional end of line character(s) to use to detect lines in the data; if this string is not passed,
+    @param line_separator the optional end of line character(s) to use to detect lines in the data; if this string is not passed,
     then if the character-encoding is ASCII-compatible, the end of line character(s) are detected automatically from
     \c "\n", \c "\r", or \c "\r\n"; if the stream uses a non-ASCII-compatible character encoding, then \c "\n" is
     assumed
-    @param trim if @ref True the string return values for the lines iterated will be trimmed of the eol bytes
-    @param bufsize the size of the buffer for the internal @ref Qore::BufferedStreamReader "BufferedStreamReader" in
+    @param trim_line if @ref True the string return values for the lines iterated will be trimmed of the line separator bytes
+    @param buffer_size the size of the buffer for the internal @ref Qore::BufferedStreamReader "BufferedStreamReader" in
     bytes; must be a positive integer
 
     @throw STREAM-BUFFER-ERROR an invalid stream buffer size was specified; the buffer size must be a positive integer
-    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the eol argument has a different
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the line_separator argument has a different
     @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
 
     @note this variant of the InputStreamLineIterator::constructor creates a
     @ref Qore::BufferedStreamReader "BufferedStreamReader" to read the input data
  */
-InputStreamLineIterator::constructor(Qore::InputStream[InputStream] is, *string encoding, *string eol,
-        bool trim = True, int bufsize = DefaultStreamBufferSize) {
-    if (eol && eol->empty())
-        eol = nullptr;
-    SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, is.release(),
-        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, eol, trim, bufsize));
+InputStreamLineIterator::constructor(Qore::InputStream[InputStream] input_stream, *string encoding,
+        *string line_separator, bool trim_line = True, int buffer_size = DefaultStreamBufferSize) [flags=NAMED_ARGS] {
+    if (line_separator && line_separator->empty())
+        line_separator = nullptr;
+    SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, input_stream.release(),
+        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, line_separator, trim_line, buffer_size));
     if (*xsink)
         return;
     self->setPrivate(CID_INPUTSTREAMLINEITERATOR, li.release());
     qore_object_private* o = qore_object_private::get(*self);
     const qore_class_private* cls = qore_class_private::get(*QC_INPUTSTREAMLINEITERATOR);
-    o->setValueIntern(cls, "is", static_cast<QoreObject *>(obj_is->refSelf()), xsink);
+    o->setValueIntern(cls, "is", static_cast<QoreObject *>(obj_input_stream->refSelf()), xsink);
 }
 
 //! Creates the InputStreamLineIterator for iterating data from the given \c StreamReader.
-/** @param sr the \c StreamReader used as a source of data to iterate over
-    @param eol the optional end of line character(s) to use to detect lines in the data; if this string is not passed,
+/** @param stream_reader the \c StreamReader used as a source of data to iterate over
+    @param line_separator the optional end of line character(s) to use to detect lines in the data; if this string is not passed,
     then if the character-encoding is ASCII-compatible, the end of line character(s) are detected automatically from
     \c "\n", \c "\r", or \c "\r\n"; if the stream uses a non-ASCII-compatible character encoding, then \c "\n" is
     assumed
-    @param trim if @ref True the string return values for the lines iterated will be trimmed of the eol bytes
+    @param trim_line if @ref True the string return values for the lines iterated will be trimmed of the line separator bytes
 
-    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the eol argument has a different
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the line_separator argument has a different
     @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
  */
-InputStreamLineIterator::constructor(Qore::StreamReader[StreamReader] sr, *string eol, bool trim = True) {
-    if (eol && eol->empty())
-        eol = nullptr;
-    SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, sr.release(), eol, trim));
+InputStreamLineIterator::constructor(Qore::StreamReader[StreamReader] stream_reader, *string line_separator,
+        bool trim_line = True) [flags=NAMED_ARGS] {
+    if (line_separator && line_separator->empty())
+        line_separator = nullptr;
+    SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, stream_reader.release(),
+        line_separator, trim_line));
     if (*xsink)
         return;
     self->setPrivate(CID_INPUTSTREAMLINEITERATOR, li.release());
     qore_object_private* o = qore_object_private::get(*self);
     const qore_class_private* cls = qore_class_private::get(*QC_INPUTSTREAMLINEITERATOR);
-    o->setValueIntern(cls, "sr", static_cast<QoreObject *>(obj_sr->refSelf()), xsink);
+    o->setValueIntern(cls, "sr", static_cast<QoreObject *>(obj_stream_reader->refSelf()), xsink);
 }
 
 //! Moves the current position to the next line in the data; returns @ref False if there are no more lines to read; if the iterator is not pointing at a valid element before this call, the iterator will be positioned to the beginning of the data.

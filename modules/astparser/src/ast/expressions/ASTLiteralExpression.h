@@ -37,7 +37,7 @@
 
 #include "ast/ASTExpression.h"
 
-#include "../../../include/qore/common.h"
+#include <qore/common.h>
 
 enum ALEKind {
     ALEK_Binary,

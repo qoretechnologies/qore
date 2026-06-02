@@ -1114,7 +1114,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         try {
-            controller.cancelByOwner(owner_id);
+            controller.cancelByOwner(owner: owner_id);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "closeAll: cancelByOwner error: %s: %s", ex.err, ex.desc);
         }
@@ -1129,7 +1129,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # "LOCK-ERROR: TID N deleted RWLock while TID M was holding the lock".
         # Per-owner (not global) so a manager destructor doesn't block on
         # unrelated long-running callbacks on the shared controller.
-        controller.flushCallbacksByOwner(owner_id);
+        controller.flushCallbacksByOwner(owner: owner_id);
 
         # Copy the pool and release the lock before closing connections
         hash<string, list<HttpClientConnection>> pool_copy;
@@ -1159,7 +1159,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # time (not pop time), so this call waits for every callback
         # queued by the cancellations above, not just those already
         # picked up by a worker.
-        controller.flushCallbacksByOwner(owner_id);
+        controller.flushCallbacksByOwner(owner: owner_id);
     }
 
     #! Removes idle connections older than the idle timeout
@@ -1337,7 +1337,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     if (pool.hasKey(key)) {
                         foreach HttpClientConnection conn in (pool{key}) {
-                            if (conn.isClosed() || conn.isDraining()) {
+                            if (isConnectionEvictableAtCheckout(conn)) {
+                                push dead_conns, conn;
+                                continue;
+                            }
+                            if (conn.isDraining()) {
                                 continue;
                             }
                             if (!isConnectionAlive(conn)) {
@@ -1392,6 +1396,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # Resolve protocol and check capacity under the write lock, then release
             # it before creating the connection.
             string protocol;
+            list<HttpClientConnection> checkout_evictions;
             {
                 AutoWriteLock al(pool_lock);
                 if (shutdown) {
@@ -1407,8 +1412,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     list<HttpClientConnection> live = ();
                     *HttpClientConnection reusable;
                     foreach HttpClientConnection conn in (pool{key}) {
-                        if (conn.isClosed()) {
-                            log(LoggerLevel::DEBUG, "evicting closed connection %d to %s",
+                        if (isConnectionEvictableAtCheckout(conn)) {
+                            push checkout_evictions, conn;
+                            log(LoggerLevel::DEBUG, "evicting unavailable connection %d to %s at checkout",
                                 conn.getConnectionId(), key);
                         } else {
                             push live, conn;
@@ -1464,6 +1470,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                             "stream limit", current_count, key);
                 }
             }
+            foreach HttpClientConnection conn in (checkout_evictions) {
+                try {
+                    conn.close();
+                } catch () {
+                }
+            }
 
             # Create connection outside the write lock so constructor-side setup cannot
             # stall unrelated pool operations.
@@ -1494,7 +1506,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
                 bool h2c_ok = False;
                 try {
-                    h2c_ok = conn.waitForReady(H2C_PROBE_TIMEOUT);
+                    h2c_ok = conn.waitForReady(timeout_ms: H2C_PROBE_TIMEOUT);
                 } catch () {
                     # Connection closed during probe (server rejected h2c)
                 }
@@ -1786,7 +1798,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         # Wait for H3 with stagger timeout using poll on the connection's notifier
         EventNotifier h3_notifier();
-        bool h3_queued = h3conn.registerReadyNotifier(h3_notifier);
+        bool h3_queued = h3conn.registerReadyNotifier(notifier: h3_notifier);
         if (!h3_queued) {
             # Already decided (ready or failed)
             *HttpClientConnection w = hePickReady(h3conn, NOTHING);
@@ -1830,8 +1842,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         # Race: register notifier and check if either already connected
         EventNotifier race_notifier();
-        bool h3_pending = h3conn.registerReadyNotifier(race_notifier);
-        bool h2_pending = h2conn.registerReadyNotifier(race_notifier);
+        bool h3_pending = h3conn.registerReadyNotifier(notifier: race_notifier);
+        bool h2_pending = h2conn.registerReadyNotifier(notifier: race_notifier);
 
         # If either already decided (ready or failed), check immediately
         if (!h3_pending || !h2_pending) {
@@ -2043,10 +2055,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     abandonAsyncHEByKey(string key) {
         AutoLock al(async_race_lock);
-        *AsyncRace race = async_races{key};
-        if (!race) {
+        if (!async_races.hasKey(key)) {
             return;
         }
+        AsyncRace race = async_races{key};
         log(LoggerLevel::DEBUG, "happy eyeballs (async): abandoning race for %s", key);
         heAbandonTimer(race);
         try { race.h3conn.close(); } catch () {}
@@ -2151,10 +2163,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             now_us() + milliseconds(HappyEyeballsStaggerMs),
             sub () {
                 AutoLock al(async_race_lock);
-                *AsyncRace r = async_races{key};
-                if (!r) {
+                if (!async_races.hasKey(key)) {
                     return;
                 }
+                AsyncRace r = async_races{key};
                 r.stagger_fired = True;
                 if (r.current_notifier) {
                     try {
@@ -2179,12 +2191,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     private *EventNotifier advanceAsyncHE(string key,
             reference<*HttpClientConnection> conn_out) {
-        *AsyncRace race = async_races{key};
-        if (!race) {
+        if (!async_races.hasKey(key)) {
             # abandoned/resolved concurrently (op being canceled) — nothing to do
             conn_out = NOTHING;
             return NOTHING;
         }
+        AsyncRace race = async_races{key};
 
         if (race.phase == "stagger") {
             *HttpClientConnection sw = hePickReady(race.h3conn, NOTHING);
@@ -2312,10 +2324,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @note Caller holds async_race_lock.  Does not close connections.
     */
     private removeAsyncRaceLocked(string key) {
-        *AsyncRace race = remove async_races{key};
-        if (!race) {
+        if (!async_races.hasKey(key)) {
             return;
         }
+        AsyncRace race = remove async_races{key};
         heAbandonTimer(race);
         if (race.we_set_creating) {
             AutoLock cl(create_mutex);
@@ -2374,7 +2386,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # wrong parent.  Force dispatch explicitly so HttpClientPollOperation::
         # onComplete() fires and handleConnectionResult() removes idle-closed,
         # errored, and proactively-timed-out connections from the pool.
-        controller.submit(<SocketPollOperationInfo>{
+        controller.submit(info: <SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "key": controller_key,
@@ -2434,7 +2446,18 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         if (conn.isDraining()) {
-            log(LoggerLevel::DEBUG, "connection %d is draining (GOAWAY received)", conn.getConnectionId());
+            int outstanding = conn.getOutstandingStreamCount();
+            if (!outstanding) {
+                log(LoggerLevel::DEBUG,
+                    "connection %d drained after GOAWAY; removing from pool",
+                    conn.getConnectionId());
+                try { conn.close(); } catch () {}
+                removeConnectionFromPool(key, conn);
+                return;
+            }
+            log(LoggerLevel::DEBUG,
+                "connection %d is draining (GOAWAY received, outstanding=%d)",
+                conn.getConnectionId(), outstanding);
         }
 
         try {
@@ -2862,6 +2885,21 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         return True;
     }
 
+    #! Internal: checks if a connection can be evicted synchronously at checkout
+    /** Draining connections must not accept new streams.  Once they have no
+        active streams or pending stream reservations, keeping them in the pool
+        only creates a race with the async I/O completion callback: a
+        replacement connection can be added before the callback removes the
+        idle draining entry.  Evict such connections here; leave draining
+        connections with outstanding work for the async completion path.
+
+        @note Called under pool_lock read/write lock — must not block or acquire pool_lock
+    */
+    private bool isConnectionEvictableAtCheckout(HttpClientConnection conn) {
+        return conn.isClosed()
+            || (conn.isDraining() && conn.getOutstandingStreamCount() == 0);
+    }
+
     #! Internal: evicts specific connections from the pool and closes them
     /** @param key the host:port pool key
         @param conns list of connections to evict
@@ -2915,9 +2953,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
             list<HttpClientConnection> live = ();
             foreach HttpClientConnection conn in (pool{key}) {
-                # Evict only definitively dead connections — not those that
-                # are merely at capacity (which would drop in-flight streams)
-                bool dead = conn.isClosed();
+                # Evict only definitively unavailable connections — not those
+                # that are merely at capacity (which would drop in-flight streams).
+                bool dead = isConnectionEvictableAtCheckout(conn);
                 if (!dead) {
                     HttpClientPollOperation op = conn.getPollOperation();
                     dead = op.isClosed() || op.hasError();
@@ -3017,7 +3055,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     returning.  No extra threads — cookie extraction happens synchronously
     on the caller's thread when they call \c get().
 */
-class CookieExtractingFuture inherits Future {
+class CookieExtractingFuture inherits Future<auto> {
     private {
         Future real_future;
         CookieJar jar;

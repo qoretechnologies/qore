@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ql_thread.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_program_private.h"
@@ -41,6 +42,10 @@
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_Channel.h"
+
+#ifndef QORE_IO_POLL_INTERVAL_MS
+#define QORE_IO_POLL_INTERVAL_MS 500
+#endif
 
 #include <pthread.h>
 #include <thread>
@@ -120,6 +125,9 @@ static void delete_thread_data_intern(const QoreListNode* args, ExceptionSink* x
 
     // iterate through arguments and delete each key
     for (unsigned i = 0; i < args->size(); i++) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "deleting thread data")) {
+            break;
+        }
         QoreValue p = args->retrieveEntry(i);
         if (!p.isNothing()) {
             QoreStringValueHelper t(p, QCS_DEFAULT, xsink);
@@ -144,6 +152,9 @@ static QoreHashNode* remove_thread_data_intern(const QoreListNode* args, Excepti
 
     // iterate through arguments and remove each key
     for (unsigned i = 0; i < args->size(); i++) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "removing thread data")) {
+            return nullptr;
+        }
         QoreValue p = args->retrieveEntry(i);
         if (!p.isNothing()) {
             QoreStringValueHelper t(p, QCS_DEFAULT, xsink);
@@ -248,7 +259,7 @@ list<int> thread_list() [flags=RET_VALUE_ONLY;dom=THREAD_INFO] {
 }
 
 //! Saves the data passed in the thread-local hash; all keys are merged into the thread-local hash, overwriting any information that may have been there before
-/** @param h a hash of data to save in the thread-local data hash
+/** @param data a hash of data to save in the thread-local data hash
 
     @par Example:
     @code{.py}
@@ -259,9 +270,9 @@ save_thread_data(h);
     by being overwritten with a new value, and the value is an object that goes out of scope, then such an object
     could throw an exception in its destructor
 */
-nothing save_thread_data(hash<auto> h) [dom=THREAD_CONTROL] {
-    QoreHashNode* data = getProgram()->getThreadData();
-    data->merge(h, xsink);
+nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    QoreHashNode* thread_data = getProgram()->getThreadData();
+    thread_data->merge(data, xsink);
 }
 
 //! Saves the data passed against the key passed as an argument in thread-local storage
@@ -277,7 +288,7 @@ save_thread_data("key1", value);
     by being overwritten with a new value, and the value is an object that goes out of scope, then such an object
     could throw an exception in its destructor
 */
-nothing save_thread_data(string key, auto value) [dom=THREAD_CONTROL] {
+nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
     QoreHashNode* data = getProgram()->getThreadData();
     data->setKeyValue(key, value.refSelf(), xsink);
 }
@@ -311,8 +322,8 @@ nothing delete_thread_data(...) [dom=THREAD_CONTROL] {
 
 //! Deletes the data associated to one or more keys in the thread-local data hash; if the data is an object, then it is destroyed
 /**
-    @param l a list of key names for deleting keys in the thread-local data hash; values are converted to strings if
-    necessary
+    @param key_list a list of key names for deleting keys in the thread-local data hash; values are converted to strings
+    if necessary
 
     @par Example:
     @code{.py}
@@ -325,8 +336,8 @@ delete_thread_data(list_of_keys);
     @see remove_thread_data() for a similar function that does not explicitly destroy objects in the thread-local data
     hash
 */
-nothing delete_thread_data(list<softstring> l) [dom=THREAD_CONTROL] {
-    delete_thread_data_intern(l, xsink);
+nothing delete_thread_data(list<softstring> key_list) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    delete_thread_data_intern(key_list, xsink);
 }
 
 //! Removes the data associated to one or more keys in the thread-local data hash and returns the data removed
@@ -349,8 +360,8 @@ hash<auto> h = remove_thread_data("filename");
 
 //! Removes the data associated to one or more keys in the thread-local data hash from a literal list passed as the first argument and returns the data removed
 /**
-    @param l a list of key names to remove from the thread-local data hash.  If the given hash keys do not exist in
-    the thread-local data hash, then the given key in the return value will have no value assigned
+    @param key_list a list of key names to remove from the thread-local data hash.  If the given hash keys do not exist
+    in the thread-local data hash, then the given key in the return value will have no value assigned
 
     @return a hash of the data removed
 
@@ -361,8 +372,8 @@ hash<auto> h = remove_thread_data(key_list);
 
     @since %Qore 0.8.4 this function returns the values it removes
 */
-hash<auto> remove_thread_data(list<softstring> l) [dom=THREAD_CONTROL] {
-    return remove_thread_data_intern(l, xsink);
+hash<auto> remove_thread_data(list<softstring> key_list) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    return remove_thread_data_intern(key_list, xsink);
 }
 
 //! Deletes all keys in the thread-local data hash
@@ -387,7 +398,7 @@ nothing delete_all_thread_data() [dom=THREAD_CONTROL] {
 auto data = get_thread_data("key1");
     @endcode
 */
-auto get_thread_data(string key) [flags=RET_VALUE_ONLY;dom=THREAD_CONTROL,THREAD_INFO] {
+auto get_thread_data(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
     TempEncodingHelper tmp(key, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
@@ -484,7 +495,7 @@ list<hash<CallStackInfo>> get_thread_call_stack() [dom=THREAD_CONTROL,THREAD_INF
     @return information about the code in the callstack according to the offset argument; if the call stack does not
     have an entry at the given offset, @ref NOTHING is returned
 */
-*hash<CallStackInfo> get_parent_caller_location(int offset = 1) [dom=THREAD_CONTROL,THREAD_INFO] {
+*hash<CallStackInfo> get_parent_caller_location(int offset = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
     return qore_get_parent_caller_location(offset);
 }
 
@@ -624,7 +635,7 @@ nothing mark_thread_resources() [dom=THREAD_CONTROL] {
 //! Sets a @ref call_reference "call reference" or @ref closure "closure" to run every time a new thread is started
 /** This code can be used to initialize @ref threading_and_variables "global thread-local variables", for example.
 
-    @param init a @ref call_reference "call reference" or @ref closure "closure" to run every time a new thread is
+    @param callback a @ref call_reference "call reference" or @ref closure "closure" to run every time a new thread is
     started or @ref nothing to clear any thread initialization code
 
     @return @ref True if there was already user initialization code set, @ref False if not
@@ -641,12 +652,12 @@ set_thread_init(sub () { var = 123; });
     @since %Qore 0.8.13 added the ability to remove the thread initialization code by passing @ref nothing to this
     function
 */
-bool set_thread_init(*code init) [dom=THREAD_CONTROL] {
-    return qore_program_private::setThreadInit(*getProgram(), init, xsink);
+bool set_thread_init(*code callback) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    return qore_program_private::setThreadInit(*getProgram(), callback, xsink);
 }
 
 //! Sets the default time zone for the current thread
-/** @param zone the TimeZone object for the current thread
+/** @param timezone the TimeZone object for the current thread
 
     This will cause the TimeZone::get() method to return the given TimeZone when called from the same thread
 
@@ -665,8 +676,8 @@ on_exit set_thread_tz(tz);
 
     @since %Qore 0.8.5
  */
-nothing set_thread_tz(TimeZone[TimeZoneData] zone) [dom=LOCALE_CONTROL] {
-    set_thread_tz(zone->get());
+nothing set_thread_tz(TimeZone[TimeZoneData] timezone) [flags=NAMED_ARGS;dom=LOCALE_CONTROL] {
+    set_thread_tz(timezone->get());
 }
 
 //! Clears the thread-local time zone for the current thread; after this call TimeZone::get() will return the value set for the current Program
@@ -731,7 +742,7 @@ set_thread_resource(obj);
 
     @since %Qore 0.8.12
  */
-nothing set_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [dom=THREAD_CONTROL] {
+nothing set_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
     set_thread_resource(*resource);
 }
 
@@ -755,7 +766,7 @@ remove_thread_resource(obj);
 
     @since %Qore 0.8.12
  */
-bool remove_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [dom=THREAD_CONTROL] {
+bool remove_thread_resource(AbstractThreadResource[AbstractQoreThreadResource] resource) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
     return remove_thread_resource(*resource) ? false : true;
 }
 
@@ -766,7 +777,7 @@ set_thread_resource(\func(), code);
     @endcode
 
     @param resource the thread resource handler to set
-    @param arg an argument to use when calling the thread resource handler
+    @param argument an argument to use when calling the thread resource handler
 
     @see
     - @ref thread_resources
@@ -778,8 +789,8 @@ set_thread_resource(\func(), code);
 
     @since %Qore 0.8.12
  */
-nothing set_thread_resource(code resource, auto arg) [dom=THREAD_CONTROL] {
-    set_thread_resource(resource, arg);
+nothing set_thread_resource(code resource, auto argument) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    set_thread_resource(resource, argument);
 }
 
 //! removes a callable thread resource from the current thread
@@ -802,7 +813,7 @@ remove_thread_resource(\func());
 
     @since %Qore 0.8.12
  */
-bool remove_thread_resource(code resource) [dom=THREAD_CONTROL] {
+bool remove_thread_resource(code resource) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
     return remove_thread_resource(resource, xsink) ? false : true;
 }
 
@@ -853,10 +864,10 @@ int get_default_thread_stack_size() [dom=THREAD_INFO;flags=CONSTANT] {
 
     @par Example:
     @code{.py}
-int size = set_default_thread_stack_size(size);
+int stack_size = set_default_thread_stack_size(2 * 1024 * 1024);
     @endcode
 
-    @param size the size in bytes for new threads
+    @param stack_size the size in bytes for new threads
 
     @return the value actually set
 
@@ -864,9 +875,9 @@ int size = set_default_thread_stack_size(size);
 
     @since %Qore 0.9.0
 */
-int set_default_thread_stack_size(int size) [dom=THREAD_CONTROL] {
+int set_default_thread_stack_size(int stack_size) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
 #ifdef QORE_MANAGE_STACK
-    return q_thread_set_stack_size((size_t)size, xsink);
+    return q_thread_set_stack_size((size_t)stack_size, xsink);
 #else
     return xsink->raiseException("MISSING-FEATURE-ERROR", "this version of the Qore library was built without "
         "support for stack management; check Qore::Option::HAVE_MANAGE_STACK before calling");
@@ -913,7 +924,7 @@ set_thread_name(name);
 
     @since %Qore 0.9.0
 */
-nothing set_thread_name(string name) [dom=THREAD_CONTROL] {
+nothing set_thread_name(string name) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
 #ifdef QORE_HAVE_THREAD_NAME
     q_set_thread_name(name->c_str());
 #else
@@ -962,7 +973,7 @@ bool active_exception() [dom=PROCESS] {
 }
 
 //! Requests cooperative cancellation of a thread
-/** @param tid the thread ID to cancel; must be a positive integer (TID 0 and negative values
+/** @param thread_id the thread ID to cancel; must be a positive integer (TID 0 and negative values
     are invalid and will throw an exception)
     @param reason optional reason string included in the \c THREAD-CANCELLED exception message
 
@@ -1005,7 +1016,7 @@ bool active_exception() [dom=PROCESS] {
     was not found or not active
 
     @throw THREAD-CANCEL-ERROR cannot cancel the current thread (use \c throw instead);
-    thrown also when \a tid <= 0
+    thrown also when \a thread_id <= 0
 
     @par Example:
     @code{.py}
@@ -1028,16 +1039,16 @@ bool active_exception() [dom=PROCESS] {
     @see thread_cancelled()
     @see clear_thread_cancel()
 */
-bool cancel_thread(int tid, *string reason) [dom=THREAD_CONTROL] {
-    if (tid == q_gettid()) {
+bool cancel_thread(int thread_id, *string reason) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
+    if (thread_id == q_gettid()) {
         return xsink->raiseException("THREAD-CANCEL-ERROR",
             "cannot cancel the current thread; use 'throw' instead"), false;
     }
-    if (tid <= 0) {
+    if (thread_id <= 0) {
         return xsink->raiseException("THREAD-CANCEL-ERROR",
-            "cannot cancel TID %d", tid), false;
+            "cannot cancel TID %d", thread_id), false;
     }
-    int rc = qore_cancel_thread(tid, reason ? reason->c_str() : nullptr);
+    int rc = qore_cancel_thread(thread_id, reason ? reason->c_str() : nullptr);
     return rc == 0;
 }
 
@@ -1197,6 +1208,10 @@ Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL] {
     if (args && args->size() > 1) {
         call_args = new QoreListNode(autoTypeInfo);
         for (size_t i = 1; i < args->size(); ++i) {
+            if (i > 1 && !((i - 1) % 100) && qore_check_cancel(xsink, "preparing async call arguments")) {
+                code->deref(xsink);
+                return QoreValue();
+            }
             call_args->push(args->getReferencedEntry(i), xsink);
         }
     }
@@ -1227,7 +1242,7 @@ Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL] {
     // We no longer need the promise reference from here - the thread owns it via priv
     promise->deref(xsink);
 
-    return new QoreObject(QC_FUTUREIMPL, getProgram(), future);
+    return qore_new_future_impl_object(getProgram(), future);
 }
 
 // ===== parallel_map / parallel_foreach internal implementation =====
@@ -1292,11 +1307,17 @@ static void parallel_exec_worker(ExceptionSink* xsink, void* arg) {
         return;
     }
 
+    int iter = 0;
     while (true) {
         // Lock-free work distribution
         if (state->has_error.load(std::memory_order_acquire)) {
             break;
         }
+        if (iter && !(iter % 100) && qore_check_cancel(xsink, "parallel execution")) {
+            parallel_capture_exception(state, xsink);
+            break;
+        }
+        ++iter;
         int index = state->next_index.fetch_add(1, std::memory_order_relaxed);
         if (index >= state->total) {
             break;
@@ -1353,7 +1374,7 @@ static void parallel_wait_for_workers(ParallelExecState& state, ExceptionSink* x
 
     @param callable the function to apply to each element; takes one argument and returns a value
     @param items the list of items to process
-    @param threads the number of worker threads; 0 (default) = auto (hardware concurrency)
+    @param thread_count the number of worker threads; 0 (default) = auto (hardware concurrency)
 
     @return a list of results in the same order as the input
 
@@ -1402,14 +1423,14 @@ list<auto> hashes = parallel_map(auto sub(auto pw) {
 
     @since %Qore 2.3
 */
-list<auto> parallel_map(code callable, list<auto> items, int threads = 0) [dom=THREAD_CLASS,THREAD_CONTROL] {
+list<auto> parallel_map(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
     const QoreListNode* l = items;
     if (!l || l->empty()) {
         return new QoreListNode(autoTypeInfo);
     }
 
     int total = (int)l->size();
-    int num_threads = threads > 0 ? threads : (int)std::thread::hardware_concurrency();
+    int num_threads = thread_count > 0 ? thread_count : (int)std::thread::hardware_concurrency();
     if (num_threads <= 0) {
         num_threads = 4;
     }
@@ -1421,6 +1442,9 @@ list<auto> parallel_map(code callable, list<auto> items, int threads = 0) [dom=T
     if (num_threads == 1) {
         ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
         for (int i = 0; i < total; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "parallel_map sequential execution")) {
+                return QoreValue();
+            }
             QoreValue item = l->getReferencedEntry(i);
             ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
             call_args->push(item, xsink);
@@ -1471,11 +1495,13 @@ list<auto> parallel_map(code callable, list<auto> items, int threads = 0) [dom=T
             QoreValue err = state.error_info->getKeyValue("err");
             QoreValue desc = state.error_info->getKeyValue("desc");
             QoreValue arg = state.error_info->getKeyValue("arg");
+            QoreStringValueHelper err_str(err);
+            QoreStringValueHelper desc_str(desc);
             xsink->raiseExceptionArg(
-                err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "PARALLEL-ERROR",
+                err.getType() == NT_STRING ? err_str->c_str() : "PARALLEL-ERROR",
                 arg.refSelf(),
                 "%s",
-                desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str()
+                desc.getType() == NT_STRING ? desc_str->c_str()
                     : "unknown error in parallel execution");
         } else {
             xsink->raiseException("PARALLEL-ERROR", "unknown error in parallel execution");
@@ -1486,6 +1512,13 @@ list<auto> parallel_map(code callable, list<auto> items, int threads = 0) [dom=T
     // Build result list preserving order
     ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
     for (int i = 0; i < total; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building parallel_map results")) {
+            for (auto& v : state.results) {
+                v.discard(xsink);
+                v = QoreValue();
+            }
+            return QoreValue();
+        }
         result->push(state.results[i], xsink);
         state.results[i] = QoreValue();
     }
@@ -1498,7 +1531,7 @@ list<auto> parallel_map(code callable, list<auto> items, int threads = 0) [dom=T
 
     @param callable the function to apply to each element; takes one argument
     @param items the list of items to process
-    @param threads the number of worker threads; 0 (default) = auto (hardware concurrency)
+    @param thread_count the number of worker threads; 0 (default) = auto (hardware concurrency)
 
     @par Example: Basic parallel execution
     @code{.py}
@@ -1533,14 +1566,14 @@ try {
 
     @since %Qore 2.3
 */
-nothing parallel_foreach(code callable, list<auto> items, int threads = 0) [dom=THREAD_CLASS,THREAD_CONTROL] {
+nothing parallel_foreach(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
     const QoreListNode* l = items;
     if (!l || l->empty()) {
         return QoreValue();
     }
 
     int total = (int)l->size();
-    int num_threads = threads > 0 ? threads : (int)std::thread::hardware_concurrency();
+    int num_threads = thread_count > 0 ? thread_count : (int)std::thread::hardware_concurrency();
     if (num_threads <= 0) {
         num_threads = 4;
     }
@@ -1551,6 +1584,9 @@ nothing parallel_foreach(code callable, list<auto> items, int threads = 0) [dom=
     // Sequential execution for single thread
     if (num_threads == 1) {
         for (int i = 0; i < total; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "parallel_foreach sequential execution")) {
+                return QoreValue();
+            }
             QoreValue item = l->getReferencedEntry(i);
             ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
             call_args->push(item, xsink);
@@ -1595,11 +1631,13 @@ nothing parallel_foreach(code callable, list<auto> items, int threads = 0) [dom=
             QoreValue err = state.error_info->getKeyValue("err");
             QoreValue desc = state.error_info->getKeyValue("desc");
             QoreValue arg = state.error_info->getKeyValue("arg");
+            QoreStringValueHelper err_str(err);
+            QoreStringValueHelper desc_str(desc);
             xsink->raiseExceptionArg(
-                err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "PARALLEL-ERROR",
+                err.getType() == NT_STRING ? err_str->c_str() : "PARALLEL-ERROR",
                 arg.refSelf(),
                 "%s",
-                desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str()
+                desc.getType() == NT_STRING ? desc_str->c_str()
                     : "unknown error in parallel execution");
         } else {
             xsink->raiseException("PARALLEL-ERROR", "unknown error in parallel execution");
@@ -1630,7 +1668,7 @@ struct ChannelSelectCase {
     - \c "value": (required for \c "send" operations) the value to send
 
     @param cases a list of case hashes
-    @param timeout_ms a @ref timeout_type "timeout" value; 0 (default) means wait indefinitely
+    @param timeout a @ref timeout_type "timeout" value; 0 (default) means wait indefinitely
 
     @return a hash with \c "index" (int, the 0-based case index) and \c "value" (the received value
     for recv operations, @ref NOTHING for send operations), or @ref NOTHING on timeout or if all
@@ -1710,7 +1748,7 @@ auto result = channel_select((
 
     @since %Qore 2.3
 */
-auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,THREAD_CONTROL] {
+auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
     const QoreListNode* case_list = cases;
     if (!case_list || case_list->empty()) {
         xsink->raiseException("CHANNEL-SELECT-ERROR", "channel_select() called with empty cases list");
@@ -1724,6 +1762,15 @@ auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,
     case_info.reserve(num_cases);
 
     for (int i = 0; i < num_cases; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "parsing channel_select cases")) {
+            for (auto& ci : case_info) {
+                ci.channel->deref(xsink);
+                if (ci.is_send) {
+                    ci.send_value.discard(xsink);
+                }
+            }
+            return QoreValue();
+        }
         QoreValue entry = case_list->retrieveEntry(i);
         if (entry.getType() != NT_HASH) {
             // Clean up already-parsed cases
@@ -1779,7 +1826,7 @@ auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,
                 "channel_select() case %d: 'op' is not a string", i);
             return QoreValue();
         }
-        const QoreStringNode* op_str = op_val.get<const QoreStringNode>();
+        QoreStringValueHelper op_str(op_val);
         bool is_send = !strcmp(op_str->c_str(), "send");
         if (!is_send && strcmp(op_str->c_str(), "recv")) {
             channel->deref(xsink);
@@ -1814,7 +1861,12 @@ auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,
     auto try_cases = [&](ExceptionSink* xs) -> QoreHashNode* {
         std::shuffle(indices.begin(), indices.end(), rng);
         bool any_alive = false;
+        int iter = 0;
         for (int idx : indices) {
+            if (iter && !(iter % 100) && qore_check_cancel(xs, "checking channel_select cases")) {
+                return nullptr;
+            }
+            ++iter;
             auto& ci = case_info[idx];
             if (ci.is_send) {
                 if (ci.channel->isClosed()) {
@@ -1881,8 +1933,8 @@ auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,
     };
 
     // Track user timeout via deadline
-    bool has_deadline = (timeout_ms > 0);
-    int64 deadline_ms = has_deadline ? (now_ms() + (int64)timeout_ms) : 0;
+    bool has_deadline = (timeout > 0);
+    int64 deadline_ms = has_deadline ? (now_ms() + (int64)timeout) : 0;
     QoreValue result_val;
 
     // Deterministic wait loop.

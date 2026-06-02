@@ -35,11 +35,19 @@
 
 extern QoreClass* QC_LISTITERATOR;
 
+DLLLOCAL QoreObject* qore_new_list_iterator_object(QoreProgram* pgm, const QoreListNode* l);
+
 // the c++ object
 class QoreListIterator : public QoreIteratorBase, public ConstListIterator {
+private:
+    DLLLOCAL static const QoreListNode* getListRef(const QoreListNode* l) {
+        return l ? l->listRefSelf() : new QoreListNode(autoTypeInfo);
+    }
+
 public:
-    DLLLOCAL QoreListIterator(const QoreListNode* l) : ConstListIterator(l->listRefSelf()) {
-        myElementTypeInfo = l->getValueTypeInfo();
+    DLLLOCAL QoreListIterator(const QoreListNode* l, const QoreTypeInfo* element_type = nullptr)
+            : ConstListIterator(getListRef(l)) {
+        myElementTypeInfo = element_type ? element_type : (l ? l->getValueTypeInfo() : autoTypeInfo);
         if (!QoreTypeInfo::hasType(myElementTypeInfo)) {
             myElementTypeInfo = autoTypeInfo;
         }

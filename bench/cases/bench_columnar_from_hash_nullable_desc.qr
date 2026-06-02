@@ -1,0 +1,45 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchColumnarFromHashNullableDesc
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchColumnarFromHashNullableDesc {
+    constructor() {
+        Bench::BenchRunner r("columnar_from_hash_nullable_desc");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        hash<auto> columns = DataFrameBench::makeNullableColumns(rows);
+        hash<auto> desc = {
+            "id": {"type": NT_INT, "nullable": True, "native_type": "integer"},
+            "region": {"type": NT_STRING, "nullable": True, "native_type": "text"},
+            "amount_a": {"type": NT_FLOAT, "nullable": True, "native_type": "double precision"},
+            "amount_b": {"type": NT_FLOAT, "nullable": True, "native_type": "double precision"},
+            "amount_c": {"type": NT_FLOAT, "nullable": True, "native_type": "double precision"},
+            "category": {"type": NT_STRING, "nullable": True, "native_type": "text"},
+        };
+
+        r.bytes_processed = DataFrameBench::approxWideBytes(rows);
+
+        r.measure = sub () {
+            ColumnarResult result = ColumnarResult::fromColumnHash(columns, desc);
+            if (result.numRows() != rows) {
+                throw "BENCHMARK-ERROR", sprintf("expected %d rows, got %d", rows, result.numRows());
+            }
+            if (result.getColumn("amount_a").fullType() != "buffer<*float64>") {
+                throw "BENCHMARK-ERROR", "nullable numeric column was not stored as buffer<*float64>";
+            }
+        };
+
+        exit(r.run());
+    }
+}

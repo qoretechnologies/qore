@@ -57,7 +57,7 @@ public class TallyWorkspacesDataProvider inherits TallyDataProviderBase {
     constructor(*hash<auto> options) : TallyDataProviderBase(options) {}
     string getName() { return ProviderInfo.name; }
 
-    private *AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params = {};
         if (search_options.page) params.page = search_options.page;
@@ -71,7 +71,7 @@ public class TallyWorkspacesDataProvider inherits TallyDataProviderBase {
         }
         hash<auto> response = doRestCommand("GET", path);
         list<hash<auto>> recs = response.body.items ?? ();
-        return new DefaultRecordIterator(new ListIterator(recs));
+        return new DefaultRecordIterator<hash<auto>>(new ListIterator<hash<auto>>(recs));
     }
 
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {

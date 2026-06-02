@@ -374,6 +374,9 @@ public:
     */
     DLLEXPORT const QoreString* operator*();
 
+    //! returns true if the object being managed is not null
+    DLLEXPORT explicit operator bool() const;
+
     //! returns a copy of the QoreString that the caller owns
     /** the object may be left empty after this call
          @return a QoreString pointer owned by the caller
@@ -441,6 +444,9 @@ public:
          @return the object being managed
     */
     DLLEXPORT const QoreStringNode* operator*();
+
+    //! returns true if the object being managed is not null
+    DLLEXPORT explicit operator bool() const;
 
     //! returns a referenced value - the caller will own the reference
     /**

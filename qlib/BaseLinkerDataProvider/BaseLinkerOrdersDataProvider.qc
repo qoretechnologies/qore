@@ -206,7 +206,7 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
     }
 
     #! Executes the search
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         list<auto> records = ();
         int remaining = search_options.limit ? search_options.limit.toInt() : 10000;
@@ -261,7 +261,7 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
         if (exists search_options.order_id) {
             hash<auto> response = callMethod("getOrders", base_params);
             records = map convertEpochFields($1), (response.orders ?? ());
-            return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
                 search_options, (new BaseLinkerOrderDataType()).getFields());
         }
 
@@ -289,7 +289,7 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
             id_from = int(page[page.size() - 1].order_id) + 1;
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerOrderDataType()).getFields());
     }
 

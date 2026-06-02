@@ -44,10 +44,10 @@ QoreValue QoreRegexSubstOperatorNode::evalImpl(bool& needs_deref, ExceptionSink 
     if (!v.checkType(NT_STRING))
         return QoreValue();
 
-    const QoreStringNode* str = v.getValue().get<const QoreStringNode>();
+    QoreStringNodeValueHelper str(v.getValue());
 
     // get new value
-    QoreStringNode* nv = regex->exec(str, xsink);
+    QoreStringNode* nv = regex->exec(*str, xsink);
 
     // if there is an exception above, nv = 0
     if (*xsink) {
@@ -69,7 +69,13 @@ int QoreRegexSubstOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
 
     if (!QoreTypeInfo::parseAcceptsReturns(parse_context.typeInfo, NT_STRING)) {
         QoreStringNode* desc = new QoreStringNode("the lvalue expression with the ");
@@ -89,5 +95,17 @@ int QoreRegexSubstOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     }
 
     parse_context.typeInfo = typeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (operand_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            && QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

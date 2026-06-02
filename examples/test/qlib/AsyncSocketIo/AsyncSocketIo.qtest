@@ -4,22 +4,23 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/Swagger.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/AsyncSocketIo
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestSchemaValidator
+%requires Swagger
+%requires RestClient
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires AsyncSocketIo
 
 %exec-class AsyncSocketIoTest
 
-class BlockingAbortPollOperation inherits Qore::AbstractPollOperation {
+class BlockingAbortPollOperation inherits Qore::AbstractPollOperation<auto> {
     private {
         EventNotifier notifier;
         Counter abort_started;
@@ -692,7 +693,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         RestClient rest1({"url": "http://127.0.0.1:" + port});
         RestClient rest2({"url": "http://127.0.0.1:" + port});
-        Queue shared = new Queue();
+        Queue<hash<SocketPollResultInfo>> shared();
 
         AbstractPollOperation spop1 = rest1.startPollSendRecv("GET", "/api_text");
         AbstractPollOperation spop2 = rest2.startPollSendRecv("GET", "/api_text");
@@ -724,7 +725,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         on_exit delete io_controller;
 
         RestClient rest({"url": "http://127.0.0.1:" + port});
-        Queue shared = new Queue();
+        Queue<hash<SocketPollResultInfo>> shared();
         Counter callback_done(1);
         hash<SocketPollResultInfo> callback_result;
 
@@ -734,7 +735,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             callback_done.dec();
         });
 
-        Queue returned = io_controller.submit(<SocketPollOperationInfo>{
+        Queue<hash<SocketPollResultInfo>> returned = io_controller.submit(<SocketPollOperationInfo>{
             "sock": rest,
             "spop": wrapped,
             "owner": "queue-with-on-complete-owner",

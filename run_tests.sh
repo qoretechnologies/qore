@@ -17,6 +17,10 @@ print_usage () {
   echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
   echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P)."
+  echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
+  echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
+  echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
+  echo "                           Set to '1' to preserve external provider discovery env vars."
 }
 
 err_multiple_format_opts() {
@@ -99,6 +103,26 @@ QR=""
 LIBQORE=""
 QORE_LIB_PATH="./lib/.libs:./qlib:$LD_LIBRARY_PATH"
 
+set_qore_build_dir () {
+    d="$1"
+    if [ ! -f "$d/CMakeCache.txt" ] || [ ! -f "$d/qore" ]; then
+        return 1
+    fi
+    if [ -f "$d/libqore.so" ]; then
+        LIBQORE="$d/libqore.so"
+    elif [ -f "$d/libqore.dylib" ]; then
+        LIBQORE="$d/libqore.dylib"
+    else
+        return 1
+    fi
+    QORE="$d/qore"
+    QR=""
+    if [ -f "$d/qr" ]; then
+        QR="$d/qr"
+    fi
+    return 0
+}
+
 # Allow callers to override binaries (ex: debug build output).
 if [ -n "$QORE_BINARY" ]; then
     QORE="$QORE_BINARY"
@@ -118,31 +142,22 @@ if [ -n "$LIBQORE_BINARY" ]; then
     LIBQORE="$LIBQORE_BINARY"
 fi
 
-# Test that qore is built.
-if [ -z "$QORE" ] && [ -s "./.libs/qore" ] && [ -f "./qore" ] && [ -f "./lib/.libs/libqore.so" -o "./lib/.libs/libqore.dylib" ]; then
-    if [ -f "./lib/.libs/libqore.so" ]; then
-        LIBQORE="./lib/.libs/libqore.so"
-    elif [ -f "./lib/.libs/libqore.dylib" ]; then
-        LIBQORE="./lib/.libs/libqore.dylib"
+# Test that qore is built (CMake only, autotools no longer supported).
+if [ -z "$QORE" ]; then
+    if [ -d "build" ]; then
+        set_qore_build_dir "build"
     fi
-    QORE="./.libs/qore"
-    QR="./.libs/qr"
-else
-    if [ -z "$QORE" ]; then
-        for D in `ls -d */`; do
-            d=`echo ${D%%/}`
-            if [ -f "$d/CMakeCache.txt" ] && [ -f "$d/qore" ] && [ -f "$d/libqore.so" -o "$d/libqore.dylib" ]; then
-                if [ -f "$d/libqore.so" ]; then
-                    LIBQORE="$d/libqore.so"
-                elif [ -f "$d/libqore.dylib" ]; then
-                    LIBQORE="$d/libqore.dylib"
-                fi
-                QORE="$d/qore"
-                QR="$d/qr"
-                break
-            fi
-        done
-    fi
+fi
+if [ -z "$QORE" ]; then
+    for D in `ls -d */`; do
+        d=`echo ${D%%/}`
+        if [ "$d" = "build" ]; then
+            continue
+        fi
+        if set_qore_build_dir "$d"; then
+            break
+        fi
+    done
 fi
 
 if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
@@ -150,10 +165,25 @@ if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
     exit 1
 fi
 
+export QORE_BINARY="$QORE"
+export LIBQORE_BINARY="$LIBQORE"
+
 QORE_DIR=`dirname "$QORE"`
+QORE_BUILD_DIR="$QORE_DIR"
+if [ -n "$QORE_LIBDIR" ] && [ -d "$QORE_LIBDIR" ]; then
+    QORE_BUILD_DIR="$QORE_LIBDIR"
+elif [ -n "$LIBQORE" ]; then
+    _libqore_dir=`dirname "$LIBQORE"`
+    if [ -d "$_libqore_dir/qlib-qmod" ] || [ -d "$_libqore_dir/modules" ]; then
+        QORE_BUILD_DIR="$_libqore_dir"
+    elif [ -d "$_libqore_dir/../qlib-qmod" ] || [ -d "$_libqore_dir/../modules" ]; then
+        QORE_BUILD_DIR="$_libqore_dir/.."
+    fi
+fi
 BUILD_MODULE_DIRS=""
-if [ -d "$QORE_DIR/modules" ]; then
-    for moddir in "$QORE_DIR/modules"/*; do
+BUILD_QMOD_DIR=""
+if [ -d "$QORE_BUILD_DIR/modules" ]; then
+    for moddir in "$QORE_BUILD_DIR/modules"/*; do
         if [ -d "$moddir" ]; then
             if [ -z "$BUILD_MODULE_DIRS" ]; then
                 BUILD_MODULE_DIRS="$moddir"
@@ -163,12 +193,45 @@ if [ -d "$QORE_DIR/modules" ]; then
         fi
     done
 fi
+if [ -n "$QORE_TEST_QMOD_DIR" ]; then
+    if [ ! -d "$QORE_TEST_QMOD_DIR" ]; then
+        echo "QORE_TEST_QMOD_DIR does not exist or is not a directory: $QORE_TEST_QMOD_DIR"
+        exit 1
+    fi
+    BUILD_QMOD_DIR="$QORE_TEST_QMOD_DIR"
+elif [ "$QORE_TEST_SOURCE_MODULES" != "1" ] && [ -d "$QORE_DIR/qlib-qmod" ]; then
+    BUILD_QMOD_DIR="$QORE_DIR/qlib-qmod"
+elif [ "$QORE_TEST_SOURCE_MODULES" != "1" ] && [ -d "$QORE_BUILD_DIR/qlib-qmod" ]; then
+    BUILD_QMOD_DIR="$QORE_BUILD_DIR/qlib-qmod"
+fi
 
 export LD_LIBRARY_PATH=$QORE_LIB_PATH
+TEST_MODULE_DIRS=""
+if [ -n "$BUILD_QMOD_DIR" ]; then
+    TEST_MODULE_DIRS="$BUILD_QMOD_DIR"
+fi
 if [ -n "$BUILD_MODULE_DIRS" ]; then
-    export QORE_MODULE_DIR=$BUILD_MODULE_DIRS:./qlib:$QORE_MODULE_DIR
+    if [ -n "$TEST_MODULE_DIRS" ]; then
+        TEST_MODULE_DIRS="$TEST_MODULE_DIRS:$BUILD_MODULE_DIRS"
+    else
+        TEST_MODULE_DIRS="$BUILD_MODULE_DIRS"
+    fi
+fi
+if [ -n "$TEST_MODULE_DIRS" ]; then
+    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:./qlib:$QORE_MODULE_DIR
 else
     export QORE_MODULE_DIR=./qlib:$QORE_MODULE_DIR
+fi
+# Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
+# use the same build binary rather than the system-installed qore.
+export QORE_EXECUTABLE="$QORE"
+
+# Keep qore tests hermetic by default. Developer shells often have Qorus or
+# application provider discovery configured, which can make negative provider
+# lookup tests print unrelated module-load diagnostics.
+if [ "${QORE_TEST_PRESERVE_PROVIDER_ENV}" != "1" ]; then
+    unset QORE_DATA_PROVIDERS
+    unset QORE_PROVIDER_INDEX_DIR
 fi
 
 if [ $MEASURE_TIME -eq 1 ]; then
@@ -311,6 +374,17 @@ fi
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
 
+# Run single test with timeout (default 300s = 5 minutes).
+# Use gtimeout on macOS (GNU coreutils), timeout on Linux.
+TEST_TIMEOUT=${TEST_TIMEOUT:-300}
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_CMD=timeout
+elif command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_CMD=gtimeout
+else
+    TIMEOUT_CMD=""
+fi
+
 # Run tests.
 i=1
 for test in $TESTS; do
@@ -322,24 +396,35 @@ for test in $TESTS; do
         echo "-------------------------------------"
     fi
 
-    # Run single test.
     if [ $MEASURE_TIME -eq 1 ]; then
-        eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        if [ -n "$TIMEOUT_CMD" ]; then
+            eval $TIMEOUT_CMD $TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        else
+            eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        fi
     else
-        $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        if [ -n "$TIMEOUT_CMD" ]; then
+            $TIMEOUT_CMD $TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        else
+            $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        fi
+    fi
+    test_exit=$?
+
+    # GNU timeout returns 124; busybox timeout (Alpine) returns 143 (128+SIGTERM)
+    if [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then
+        echo "TIMEOUT: test exceeded ${TEST_TIMEOUT}s limit"
     fi
 
-    TEST_EXIT=$?
-
-    if [ $TEST_EXIT -eq 0 ]; then
+    if [ $test_exit -eq 0 ]; then
         PASSED_TEST_COUNT=`expr $PASSED_TEST_COUNT + 1`
     else
         FAILED_TEST_COUNT=`expr $FAILED_TEST_COUNT + 1`
         FAILED_TESTS="$FAILED_TESTS $test"
         # If the test was killed by a signal (exit code > 128), try to capture diagnostics
-        if [ $TEST_EXIT -gt 128 ]; then
-            SIG_NUM=`expr $TEST_EXIT - 128`
-            echo "*** CRASH: test killed by signal $SIG_NUM (exit code $TEST_EXIT) ***"
+        if [ $test_exit -gt 128 ]; then
+            SIG_NUM=`expr $test_exit - 128`
+            echo "*** CRASH: test killed by signal $SIG_NUM (exit code $test_exit) ***"
             # Check for core dump in known locations
             CORE_FILE=""
             for cf in "$CORE_DIR"/core.* "$CORE_DIR_ABS"/core.* core core.* /tmp/core.* \

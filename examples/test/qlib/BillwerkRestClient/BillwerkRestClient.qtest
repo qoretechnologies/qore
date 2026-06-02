@@ -1,15 +1,16 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/BillwerkRestClient.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires ConnectionProvider
+%requires Logger
+%requires HttpServerUtil
+%requires RestClient
+%requires BillwerkRestClient
+%requires HttpServerAsyncIo
+%requires HttpServer
 
 %try-module json
 %define NoJson

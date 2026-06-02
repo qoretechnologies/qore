@@ -97,6 +97,10 @@ public:
         return keys.size();
     }
 
+    DLLLOCAL const QoreTypeInfo* getParseTypeInfo() const {
+        return typeInfo;
+    }
+
     // used when converting to the hash map operator
     DLLLOCAL QoreValue takeFirstKey() {
         assert(keys.size() == 1);

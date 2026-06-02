@@ -4,7 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class ChannelTest
 
@@ -149,7 +150,7 @@ class ChannelTest inherits QUnit::Test {
     }
 
     testSendTimeout() {
-        Channel ch(1);
+        Channel<int> ch(1);
         ch.send(1);
         # Channel full, should timeout
         assertThrows("CHANNEL-TIMEOUT", sub() { ch.send(2, 100ms); });
@@ -157,7 +158,7 @@ class ChannelTest inherits QUnit::Test {
     }
 
     testTrySendTryRecv() {
-        Channel ch(1);
+        Channel<int> ch(1);
         # tryRecv on empty returns NOTHING
         assertNothing(ch.tryRecv());
         # trySend succeeds
@@ -165,14 +166,16 @@ class ChannelTest inherits QUnit::Test {
         # trySend fails when full
         assertFalse(ch.trySend(43));
         # tryRecv returns hash with value and has_value keys
-        auto result = ch.tryRecv();
+        *hash<ChannelTryResult<int>> result = ch.tryRecv();
         assertEq(True, result.has_value);
         assertEq(42, result.value);
+        assertEq("hash<ChannelTryResult<int>>", result.fullType());
         # tryRecv on empty again
         assertNothing(ch.tryRecv());
         # Test tryRecv with NOTHING value — can distinguish from empty channel
-        assertTrue(ch.trySend(NOTHING));
-        auto result2 = ch.tryRecv();
+        Channel nothing_ch(1);
+        assertTrue(nothing_ch.trySend(NOTHING));
+        auto result2 = nothing_ch.tryRecv();
         assertEq(True, result2.has_value);
         assertNothing(result2.value);
     }

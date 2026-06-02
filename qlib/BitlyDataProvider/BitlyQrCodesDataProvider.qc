@@ -104,12 +104,12 @@ public class BitlyQrCodesDataProvider inherits BitlyDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If qrcode_id provided, get single record
         if (search_options.qrcode_id) {
             hash<auto> result = doGet("qr-codes/" + search_options.qrcode_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
@@ -129,7 +129,7 @@ public class BitlyQrCodesDataProvider inherits BitlyDataProviderBase {
 
         list<hash<auto>> all_records = fetchAllPages(
             "groups/" + group_guid + "/qr-codes", "qr_codes");
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

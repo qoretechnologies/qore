@@ -4,14 +4,15 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/QdrantDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires ConnectionProvider
+%requires QdrantDataProvider
 
 %try-module json >= 1.5
 %define NoJson

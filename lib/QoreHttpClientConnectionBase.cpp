@@ -180,14 +180,20 @@ bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, Exception
         const char* desc_str = wasReady()
             ? "connection closed after handshake, before request could be sent"
             : "connection closed before READY";
+        std::string err_storage;
+        std::string desc_storage;
         if (err) {
             QoreValue err_v = err->getKeyValue("err");
             if (err_v.getType() == NT_STRING) {
-                err_str = err_v.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper err_val(err_v);
+                err_storage = err_val->c_str();
+                err_str = err_storage.c_str();
             }
             QoreValue desc_v = err->getKeyValue("desc");
             if (desc_v.getType() == NT_STRING) {
-                desc_str = desc_v.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper desc_val(desc_v);
+                desc_storage = desc_val->c_str();
+                desc_str = desc_storage.c_str();
             }
         }
         xsink->raiseException(err_str, "%s", desc_str);
@@ -215,14 +221,20 @@ void HttpClientConnectionBase::raiseClosedSubmitError(const char* fallback_desc,
     if (err) {
         const char* err_str = "HTTPCLIENT-CONNECT-ERROR";
         const char* desc_str = fallback_desc;
+        std::string err_storage;
+        std::string desc_storage;
 
         QoreValue err_v = err->getKeyValue("err");
         if (err_v.getType() == NT_STRING) {
-            err_str = err_v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper err_val(err_v);
+            err_storage = err_val->c_str();
+            err_str = err_storage.c_str();
         }
         QoreValue desc_v = err->getKeyValue("desc");
         if (desc_v.getType() == NT_STRING) {
-            desc_str = desc_v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper desc_val(desc_v);
+            desc_storage = desc_val->c_str();
+            desc_str = desc_storage.c_str();
         }
         xsink->raiseException(err_str, "%s", desc_str);
         return;

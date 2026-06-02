@@ -58,10 +58,11 @@
 
     @see ListHashReverseIterator
  */
-qclass ListHashIterator [arg=QoreListHashIterator* i; ns=Qore; vparent=AbstractQuantifiedBidirectionalIterator];
+qclass ListHashIterator [arg=QoreListHashIterator* i; ns=Qore;
+    vparent=AbstractQuantifiedBidirectionalIterator<hash<auto>>];
 
 //! Creates the hash list iterator object
-/** @param l the list of hashes to iterate
+/** @param list_value the list of hashes to iterate
 
     @par Example:
     @code{.py}
@@ -70,8 +71,8 @@ ListHashIterator i(l);
 
     @note the constructor's argument is @ref softlist_type "softlist" so that it can also accept @ref nothing
 */
-ListHashIterator::constructor(softlist<auto> l) {
-    self->setPrivate(CID_LISTHASHITERATOR, new QoreListHashIterator(l));
+ListHashIterator::constructor(softlist<auto> list_value) [flags=NAMED_ARGS] {
+    self->setPrivate(CID_LISTHASHITERATOR, new QoreListHashIterator(list_value));
 }
 
 //! Creates a copy of the ListHashIterator object, iterating the same object as the original and in the same position
@@ -241,22 +242,22 @@ int ListHashIterator::max() [flags=CONSTANT] {
 }
 
 //! sets the new position in the result list; if the position is invalid then the method returns @ref False, meaning the iterator is not valid, otherwise it returns @ref True
-/** @param pos the new position for the iterator with 0 as the first element
+/** @param position the new position for the iterator with 0 as the first element
 
     @return @ref False, meaning the iterator is not valid, otherwise it returns @ref True
 
     @par Example:
     @code{.py}
-if (!i.set(pos))
-    throw "INVALID-POSITION", sprintf("%d is an invalid position", pos);
+if (!i.set(position))
+    throw "INVALID-POSITION", sprintf("%d is an invalid position", position);
     @endcode
 
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
 */
-bool ListHashIterator::set(int pos) {
+bool ListHashIterator::set(int position) [flags=NAMED_ARGS] {
     if (i->check(xsink))
         return false;
-    return !i->set(pos);
+    return !i->set(position);
 }
 
 //! This method allows the iterator to be dereferenced directly as a hash for the current row being iterated, as memberGate methods are called implicitly when an unknown member is accessed from outside the class.
@@ -276,7 +277,7 @@ while (i.next()) {
 
     @note equivalent to ListHashIterator::getKeyValue() when called explicitly
 */
-auto ListHashIterator::memberGate(string key) [flags=RET_VALUE_ONLY] {
+auto ListHashIterator::memberGate(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (i->check(xsink))
         return QoreValue();
 
@@ -300,7 +301,7 @@ while (i.next()) {
 
     @note ListHashIterator::memberGate() allows for the iterator to act as if it is a hash with members equal to the current row being iterated
 */
-auto ListHashIterator::getKeyValue(string key) [flags=RET_VALUE_ONLY] {
+auto ListHashIterator::getKeyValue(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (i->check(xsink))
         return QoreValue();
 

@@ -1,0 +1,1537 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class GenericClassTypesTest
+
+class SourceGenericBox<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+
+    T echo(T value) {
+        return value;
+    }
+
+    T localCopy(auto value) {
+        T local = value;
+        return local;
+    }
+
+    T localLoop(T value) {
+        T local = value;
+        for (int i = 0; i < 10; ++i) {
+            local = value;
+        }
+        return local;
+    }
+
+    list<T> listLocalLoop(T value) {
+        list<T> local = ();
+        for (int i = 0; i < 10; ++i) {
+            local = (value,);
+        }
+        return local;
+    }
+
+    nothing set(T value) {
+        self.value = value;
+    }
+
+    nothing setAny(auto value) {
+        self.value = value;
+    }
+
+    list<T> asList(T value) {
+        return (value,);
+    }
+}
+
+class SourceGenericPair<K, V> {
+    private {
+        K key;
+        V value;
+    }
+
+    constructor(K key, V value) {
+        self.key = key;
+        self.value = value;
+    }
+
+    K getKey() {
+        return self.key;
+    }
+
+    V getValue() {
+        return self.value;
+    }
+}
+
+class SourceDefaultBox<T = int> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+class SourceDefaultPair<K, V = string> {
+    private {
+        K key;
+        V value;
+    }
+
+    constructor(K key, V value) {
+        self.key = key;
+        self.value = value;
+    }
+
+    K getKey() {
+        return self.key;
+    }
+
+    V getValue() {
+        return self.value;
+    }
+}
+
+class SourceDefaultStatic<T = int> {
+    static T echo(T value) {
+        return value;
+    }
+}
+
+class SourceNestedDefaultStatic<T = list<hash<auto>>> {
+    static T echo(T value) {
+        return value;
+    }
+}
+
+class SourceBoundBox<T: int = int> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+class SourceGenericOverloads<T> {
+    string take(T value) {
+        return "scalar";
+    }
+
+    string take(list<T> value) {
+        return "list";
+    }
+}
+
+class SourceGenericBase<T> {
+    T echo(T value) {
+        return value;
+    }
+
+    list<T> asList(T value) {
+        return (value,);
+    }
+}
+
+class SourceGenericChild<T> inherits SourceGenericBase<T> {
+}
+
+class SourceFixedBaseChild<T> inherits SourceGenericBase<string> {
+}
+
+class SourceFixedBodyChild inherits SourceGenericBase<int> {
+}
+
+class SourceGenericBodyBase<T> {
+    list<T> collectBase(T value) {
+        list<T> rv();
+        rv += value;
+        return rv;
+    }
+
+    hash<string, T> collectHash(string key, T value) {
+        hash<string, T> rv();
+        rv{key} = value;
+        return rv;
+    }
+}
+
+class SourceFixedBodyChild2 inherits SourceGenericBodyBase<int> {
+}
+
+class SourceGenericStaticFactory<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    static SourceGenericStaticFactory<T> make(T value) {
+        return new SourceGenericStaticFactory<T>(value);
+    }
+
+    static list<T> collect(T value) {
+        list<T> rv();
+        rv += value;
+        return rv;
+    }
+
+    static T echoThroughLocal(auto value) {
+        T local = value;
+        return local;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+hashdecl SourceGenericResult<T> {
+    T value;
+    list<T> values;
+}
+
+hashdecl SourceGenericEnvelope<T> {
+    string status;
+    hash<SourceGenericResult<T>> result;
+}
+
+hashdecl SourceDefaultResult<T = string> {
+    T value;
+}
+
+hashdecl SourceDefaultPairResult<K, V = string> {
+    K key;
+    V value;
+}
+
+hashdecl SourceBoundResult<T: int = int> {
+    T value;
+}
+
+hashdecl SourceGenericHashParent<T> {
+    T value;
+}
+
+hashdecl SourceGenericHashChild<T> inherits SourceGenericHashParent<T> {
+    string name;
+}
+
+hashdecl SourceFixedHashParentChild<T> inherits SourceGenericHashParent<string> {
+    T extra;
+}
+
+hashdecl SourceDefaultHashParent<T = int> {
+    T id;
+}
+
+hashdecl SourceDefaultHashParentChild<T = string> inherits SourceDefaultHashParent<> {
+    T label;
+}
+
+class SourceTypedIterator<T> inherits AbstractIterator<T> {
+    private {
+        T value;
+        bool available;
+        bool valid_flag;
+    }
+
+    constructor(T value) {
+        self.value = value;
+        self.available = True;
+    }
+
+    bool next() {
+        if (!self.available) {
+            self.valid_flag = False;
+            return False;
+        }
+
+        self.available = False;
+        self.valid_flag = True;
+        return True;
+    }
+
+    T getValue() {
+        if (!self.valid_flag) {
+            throw "INVALID-ITERATOR", "iterator is not valid";
+        }
+        return self.value;
+    }
+
+    bool valid() {
+        return self.valid_flag;
+    }
+}
+
+class SourcePollOperation<T> inherits AbstractPollOperation<T> {
+    private {
+        T output;
+    }
+
+    constructor(T output) {
+        self.output = output;
+    }
+
+    string getGoal() {
+        return "complete";
+    }
+
+    string getState() {
+        return "complete";
+    }
+
+    bool goalReached() {
+        return True;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+    }
+
+    T getOutput() {
+        return output;
+    }
+}
+
+class SourceObjectPairMembers {
+    public {
+        int count;
+        string label;
+    }
+
+    constructor() {
+        count = 3;
+        label = "three";
+    }
+}
+
+class SourceRawCompatBox<T> [legacy_raw] {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+class SourceRawAcceptsBox<T> [legacy_raw_accepts] {
+    constructor(T value) {
+    }
+}
+
+class SourceRawConstructBox<T> [legacy_raw_construct] {
+    constructor(T value) {
+    }
+}
+
+T sub SourceGenericIdentity<T>(T value) {
+    T local = value;
+    return local;
+}
+
+T sub SourceGenericFirst<T>(T first, T second) {
+    return first;
+}
+
+T sub SourceGenericDefault<T = int>(T value = 11) {
+    return value;
+}
+
+T sub SourceGenericMakeString<T = int>() {
+    auto value = "made";
+    T local = value;
+    return local;
+}
+
+T sub SourceGenericBound<T: int>(T value) {
+    return value;
+}
+
+class SourceGenericCallMethods {
+    T echo<T>(T value) {
+        T local = value;
+        return local;
+    }
+
+    T echoLoop<T>(T value) {
+        T local = value;
+        for (int i = 0; i < 10; ++i) {
+            local = value;
+        }
+        return local;
+    }
+
+    T first<T>(T first, T second) {
+        return first;
+    }
+
+    T make<T = int>() {
+        auto value = "made-method";
+        T local = value;
+        return local;
+    }
+
+    static T staticEcho<T>(T value) {
+        return value;
+    }
+
+    static T staticDefault<T = int>(T value = 12) {
+        return value;
+    }
+
+    static T staticMake<T = int>() {
+        auto value = "made-static";
+        T local = value;
+        return local;
+    }
+
+    static T staticBound<T: int>(T value) {
+        return value;
+    }
+}
+
+class SourceGenericStaticChooser<T> {
+    static U choose<U>(T left, U right) {
+        return right;
+    }
+}
+
+class SourceSpecializedOps<T> {
+    T identity(T value) {
+        T local = value;
+        return local;
+    }
+
+    list<T> wrap(T value) {
+        list<T> rv();
+        rv += value;
+        return rv;
+    }
+
+    hash<SourceGenericResult<T>> result(T value) {
+        hash<SourceGenericResult<T>> rv(("value": value, "values": (value,)));
+        return rv;
+    }
+
+    static hash<SourceGenericResult<T>> staticResult(T value) {
+        hash<SourceGenericResult<T>> rv(("value": value, "values": (value,)));
+        return rv;
+    }
+
+    static U choose<U>(T left, U right) {
+        T saved = left;
+        U rv = right;
+        return rv;
+    }
+}
+
+namespace SourceGenericNs {
+    class Box<T> {
+        T echo(T value) {
+            return value;
+        }
+    }
+
+    class StaticFactory<T> {
+        private {
+            T value;
+        }
+
+        constructor(T value) {
+            self.value = value;
+        }
+
+        static StaticFactory<T> make(T value) {
+            return new StaticFactory<T>(value);
+        }
+
+        static T echoThroughLocal(auto value) {
+            T local = value;
+            return local;
+        }
+
+        T get() {
+            return self.value;
+        }
+    }
+
+    hashdecl Result<T> {
+        T value;
+    }
+
+    hashdecl Envelope<T> {
+        hash<Result<T>> result;
+    }
+}
+
+public class GenericClassTypesTest inherits QUnit::Test {
+    constructor() : Test("Generic class types", "1.0") {
+        addTestCase("basic source generics", \basicSourceGenerics());
+        addTestCase("multiple type parameters", \multipleTypeParameters());
+        addTestCase("default type arguments", \defaultTypeArguments());
+        addTestCase("namespaced generic class types", \namespacedGenericClassTypes());
+        addTestCase("generic overloads", \genericOverloads());
+        addTestCase("runtime substitution errors", \runtimeSubstitutionErrors());
+        addTestCase("generic inheritance", \genericInheritance());
+        addTestCase("static generic methods", \staticGenericMethods());
+        addTestCase("method-level generics", \methodLevelGenerics());
+        addTestCase("generic lvalue substitution cache", \genericLvalueSubstitutionCache());
+        addTestCase("generic hashdecls", \genericHashDecls());
+        addTestCase("generic wildcards", \genericWildcards());
+        addTestCase("expression-site inference", \expressionSiteInference());
+        addTestCase("specialized generic execution", \specializedGenericExecution());
+        addTestCase("specialized generic performance smoke", \specializedGenericPerformanceSmoke());
+        addTestCase("source generic iterators", \sourceGenericIterators());
+        addTestCase("source generic poll operations", \sourceGenericPollOperations());
+        addTestCase("builtin iterator element types", \builtinIteratorElementTypes());
+        addTestCase("source raw generic compatibility", \sourceRawGenericCompatibility());
+        addTestCase("parse checks", \parseChecks());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    basicSourceGenerics() {
+        SourceGenericBox<int> ibox(1);
+        assertEq(1, ibox.get());
+        assertEq(2, ibox.echo(2));
+        ibox.set(3);
+        assertEq(3, ibox.get());
+
+        list<int> values = ibox.asList(4);
+        assertEq(4, values[0]);
+
+        SourceGenericBox<string> sbox("a");
+        assertEq("a", sbox.get());
+        assertEq("b", sbox.echo("b"));
+    }
+
+    multipleTypeParameters() {
+        SourceGenericPair<string, int> pair("id", 7);
+        assertEq("id", pair.getKey());
+        assertEq(7, pair.getValue());
+    }
+
+    defaultTypeArguments() {
+        SourceDefaultBox<> default_box(1);
+        int value = default_box.get();
+        assertEq(1, value);
+
+        SourceDefaultPair<int> default_pair(2, "two");
+        assertEq(2, default_pair.getKey());
+        string default_pair_value = default_pair.getValue();
+        assertEq("two", default_pair_value);
+
+        SourceDefaultPair<string, int> explicit_pair("three", 3);
+        assertEq("three", explicit_pair.getKey());
+        assertEq(3, explicit_pair.getValue());
+
+        assertEq(4, SourceDefaultStatic<>::echo(4));
+
+        list<hash<auto>> nested_default = SourceNestedDefaultStatic<>::echo((("value": 6),));
+        assertEq(6, nested_default[0].value);
+
+        hash<SourceDefaultResult<>> default_result(("value": "ok"));
+        string result_value = default_result.value;
+        assertEq("ok", result_value);
+        assertEq("hash<SourceDefaultResult<string>>", default_result.fullType());
+
+        hash<SourceDefaultPairResult<int>> pair_result(("key": 5, "value": "five"));
+        assertEq(5, pair_result.key);
+        assertEq("five", pair_result.value);
+        assertEq("hash<SourceDefaultPairResult<int, string>>", pair_result.fullType());
+
+        SourceBoundBox<> bounded_box(6);
+        int bounded_value = bounded_box.get();
+        assertEq(6, bounded_value);
+
+        hash<SourceBoundResult<>> bounded_result(("value": 7));
+        int bounded_hash_value = bounded_result.value;
+        assertEq(7, bounded_hash_value);
+    }
+
+    namespacedGenericClassTypes() {
+        SourceGenericNs::Box<string> box();
+        assertEq("x", box.echo("x"));
+    }
+
+    genericOverloads() {
+        SourceGenericOverloads<int> overloads();
+        assertEq("scalar", overloads.take(1));
+        assertEq("list", overloads.take((1, 2)));
+    }
+
+    runtimeSubstitutionErrors() {
+        SourceGenericBox<int> box(1);
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { box.localCopy("x"); });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { box.setAny("x"); });
+    }
+
+    genericInheritance() {
+        SourceGenericChild<int> ichild();
+        assertEq(2, ichild.echo(2));
+        int i = ichild.echo(3);
+        assertEq(3, i);
+
+        list<int> values = ichild.asList(4);
+        assertEq(1, values.size());
+        assertEq(4, values[0]);
+
+        assertTrue(ichild instanceof SourceGenericBase<int>);
+        assertFalse(ichild instanceof SourceGenericBase<string>);
+
+        SourceGenericChild<string> schild();
+        string s = schild.echo("x");
+        assertEq("x", s);
+
+        SourceFixedBaseChild<int> fixed();
+        assertEq("z", fixed.echo("z"));
+        assertTrue(fixed instanceof SourceGenericBase<string>);
+        assertFalse(fixed instanceof SourceGenericBase<int>);
+
+        SourceFixedBodyChild fixed_body();
+        list<int> fixed_values = fixed_body.asList(6);
+        assertEq((6,), fixed_values);
+
+        SourceFixedBodyChild2 fixed_body2();
+        list<int> collected = fixed_body2.collectBase(7);
+        assertEq((7,), collected);
+        hash<string, int> collected_hash = fixed_body2.collectHash("seven", 7);
+        assertEq(7, collected_hash.seven);
+    }
+
+    staticGenericMethods() {
+        SourceGenericStaticFactory<int> f = SourceGenericStaticFactory<int>::make(8);
+        assertEq(8, f.get());
+
+        auto inferred = SourceGenericStaticFactory::make(15);
+        assertTrue(inferred instanceof SourceGenericStaticFactory<int>);
+        assertEq(15, inferred.get());
+
+        auto inferred_named = SourceGenericStaticFactory::make(value: "fifteen");
+        assertTrue(inferred_named instanceof SourceGenericStaticFactory<string>);
+        assertEq("fifteen", inferred_named.get());
+
+        list<int> values = SourceGenericStaticFactory<int>::collect(9);
+        assertEq((9,), values);
+
+        list<int> inferred_values = SourceGenericStaticFactory::collect(16);
+        assertEq((16,), inferred_values);
+
+        assertEq(10, SourceGenericStaticFactory<int>::echoThroughLocal(10));
+        assertThrows("RUNTIME-TYPE-ERROR",
+            sub () { SourceGenericStaticFactory<int>::echoThroughLocal("x"); });
+
+        SourceGenericStaticFactory<string> sf = SourceGenericStaticFactory<string>::make("v");
+        assertEq("v", sf.get());
+
+        SourceGenericNs::StaticFactory<int> nsf = SourceGenericNs::StaticFactory<int>::make(13);
+        assertEq(13, nsf.get());
+        assertEq(14, SourceGenericNs::StaticFactory<int>::echoThroughLocal(14));
+        assertThrows("RUNTIME-TYPE-ERROR",
+            sub () { SourceGenericNs::StaticFactory<int>::echoThroughLocal("x"); });
+    }
+
+    methodLevelGenerics() {
+        int function_int = SourceGenericIdentity(20);
+        assertEq(20, function_int);
+
+        int explicit_function_int = SourceGenericIdentity<int>(25);
+        assertEq(25, explicit_function_int);
+
+        string function_string = SourceGenericIdentity(value: "twenty");
+        assertEq("twenty", function_string);
+
+        string explicit_function_string = SourceGenericIdentity<string>(value: "twenty-five");
+        assertEq("twenty-five", explicit_function_string);
+
+        int default_function = SourceGenericDefault();
+        assertEq(11, default_function);
+
+        int explicit_default_function = SourceGenericDefault<int>();
+        assertEq(11, explicit_default_function);
+
+        string explicit_no_arg_function = SourceGenericMakeString<string>();
+        assertEq("made", explicit_no_arg_function);
+
+        int bound_function = SourceGenericBound(21);
+        assertEq(21, bound_function);
+
+        int explicit_bound_function = SourceGenericBound<int>(26);
+        assertEq(26, explicit_bound_function);
+
+        SourceGenericCallMethods calls();
+        int method_int = calls.echo(22);
+        assertEq(22, method_int);
+
+        int explicit_method_int = calls.echo<int>(27);
+        assertEq(27, explicit_method_int);
+
+        string method_string = calls.echo(value: "twenty-two");
+        assertEq("twenty-two", method_string);
+
+        string explicit_method_string = calls.echo<string>(value: "twenty-seven");
+        assertEq("twenty-seven", explicit_method_string);
+
+        string explicit_no_arg_method = calls.make<string>();
+        assertEq("made-method", explicit_no_arg_method);
+
+        int static_int = SourceGenericCallMethods::staticEcho(23);
+        assertEq(23, static_int);
+
+        int explicit_static_int = SourceGenericCallMethods::staticEcho<int>(28);
+        assertEq(28, explicit_static_int);
+
+        string static_string = SourceGenericCallMethods::staticEcho(value: "twenty-three");
+        assertEq("twenty-three", static_string);
+
+        string explicit_static_string = SourceGenericCallMethods::staticEcho<string>(value: "twenty-eight");
+        assertEq("twenty-eight", explicit_static_string);
+
+        int static_default = SourceGenericCallMethods::staticDefault();
+        assertEq(12, static_default);
+
+        int explicit_static_default = SourceGenericCallMethods::staticDefault<int>();
+        assertEq(12, explicit_static_default);
+
+        string explicit_no_arg_static = SourceGenericCallMethods::staticMake<string>();
+        assertEq("made-static", explicit_no_arg_static);
+
+        int static_bound = SourceGenericCallMethods::staticBound(24);
+        assertEq(24, static_bound);
+
+        int explicit_static_bound = SourceGenericCallMethods::staticBound<int>(29);
+        assertEq(29, explicit_static_bound);
+
+        string explicit_receiver_static = SourceGenericStaticChooser<int>::choose<string>(30, "thirty");
+        assertEq("thirty", explicit_receiver_static);
+
+        string inferred_receiver_static = SourceGenericStaticChooser::choose(31, "thirty-one");
+        assertEq("thirty-one", inferred_receiver_static);
+
+        string explicit_method_inferred_receiver_static = SourceGenericStaticChooser::choose<string>(32, "thirty-two");
+        assertEq("thirty-two", explicit_method_inferred_receiver_static);
+
+        string named_inferred_receiver_static = SourceGenericStaticChooser::choose(right: "thirty-three", left: 33);
+        assertEq("thirty-three", named_inferred_receiver_static);
+
+        int mixed_inferred_receiver_static = SourceGenericStaticChooser::choose("thirty-four", 34);
+        assertEq(34, mixed_inferred_receiver_static);
+    }
+
+    genericLvalueSubstitutionCache() {
+        SourceGenericBox<int> ibox(1);
+        assertEq(7, ibox.localLoop(7));
+        assertEq((8,), ibox.listLocalLoop(8));
+        any bad_string = "bad";
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { ibox.localLoop(bad_string); });
+
+        SourceGenericBox<string> sbox("a");
+        assertEq("cached", sbox.localLoop("cached"));
+        assertEq(("value",), sbox.listLocalLoop("value"));
+        any bad_int = 9;
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { sbox.listLocalLoop(bad_int); });
+
+        SourceGenericCallMethods calls();
+        assertEq(31, calls.echoLoop<int>(31));
+        assertEq("thirty-two", calls.echoLoop<string>("thirty-two"));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { calls.echoLoop<int>(bad_string); });
+    }
+
+    genericHashDecls() {
+        hash<SourceGenericResult<int>> result(("value": 11, "values": (12,)));
+        assertEq(11, result.value);
+        assertEq((12,), result.values);
+
+        hash<SourceGenericEnvelope<int>> envelope(("status": "ok", "result": result));
+        assertEq("ok", envelope.status);
+        assertEq(11, envelope.result.value);
+
+        hash<SourceGenericNs::Result<int>> ns_result(("value": 13));
+        assertEq(13, ns_result.value);
+        hash<SourceGenericNs::Envelope<int>> ns_envelope(("result": ns_result));
+        assertEq(13, ns_envelope.result.value);
+
+        any bad_value = {"value": "x", "values": (1,)};
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { hash<SourceGenericResult<int>> bad = bad_value; });
+
+        hash<SourceGenericHashChild<int>> child(("value": 21, "name": "twenty-one"));
+        int child_value = child.value;
+        assertEq(21, child_value);
+        assertEq("twenty-one", child.name);
+        assertEq("hash<SourceGenericHashChild<int>>", child.fullType());
+
+        hash<SourceGenericHashChild<string>> string_child(("value": "v", "name": "value"));
+        string inherited_value = string_child.value;
+        assertEq("v", inherited_value);
+
+        hash<SourceFixedHashParentChild<int>> fixed_child(("value": "fixed", "extra": 22));
+        string fixed_inherited_value = fixed_child.value;
+        int fixed_extra = fixed_child.extra;
+        assertEq("fixed", fixed_inherited_value);
+        assertEq(22, fixed_extra);
+
+        hash<SourceDefaultHashParentChild<>> default_child(("id": 23, "label": "default"));
+        int default_parent_value = default_child.id;
+        string default_child_label = default_child.label;
+        assertEq(23, default_parent_value);
+        assertEq("default", default_child_label);
+    }
+
+    genericWildcards() {
+        SourceGenericBox<int> ibox(1);
+
+        SourceGenericBox<?> any_box = ibox;
+        assertTrue(any_box instanceof SourceGenericBox<?>);
+        assertTrue(any_box instanceof SourceGenericBox<int>);
+        assertEq(1, any_box.get());
+
+        SourceGenericBox<? extends int> int_source = ibox;
+        int source_value = int_source.get();
+        assertEq(1, source_value);
+
+        SourceGenericBox<? extends number> number_source = ibox;
+        number number_value = number_source.get();
+        assertEq(1n, number_value);
+
+        SourceGenericBox<? super int> int_sink = ibox;
+        int_sink.set(2);
+        assertEq(2, ibox.get());
+        auto sink_value = int_sink.get();
+        assertEq(2, sink_value);
+
+        hash<SourceGenericResult<int>> result(("value": 3, "values": (4,)));
+        hash<SourceGenericResult<?>> any_result = result;
+        assertEq(3, any_result.value);
+        assertEq("hash<SourceGenericResult<int>>", any_result.fullType());
+
+        hash<SourceGenericResult<? extends int>> int_result = result;
+        int result_value = int_result.value;
+        assertEq(3, result_value);
+
+        hash<SourceGenericHashChild<int>> child(("value": 5, "name": "five"));
+        hash<SourceGenericHashParent<?>> parent_any = child;
+        assertEq(5, parent_any.value);
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { constructor() {} } sub t() { Box<?> b(); }",
+                "generic-classes");
+            assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { constructor(T value) {} } "
+                "sub t(Box<int> b) { Box<? extends string> s = b; }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { constructor(T value) {} nothing set(T value) {} } "
+                "sub t(Box<? extends int> b) { b.set(1); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T> { T value; } "
+                "sub t(hash<Result<int>> r) { hash<Result<? extends string>> s = r; }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Parent<T> { T value; } "
+                "hashdecl Child<T> inherits Parent<T> { string name; } "
+                "sub t(hash<Child<int>> c) { hash<Parent<? extends string>> p = c; }",
+                "generic-classes"));
+        }
+    }
+
+    expressionSiteInference() {
+        auto inferred_box = new SourceGenericBox(31);
+        assertTrue(inferred_box instanceof SourceGenericBox<int>);
+        assertFalse(inferred_box instanceof SourceGenericBox<string>);
+        int inferred_value = inferred_box.get();
+        assertEq(31, inferred_value);
+
+        SourceGenericBox<int> target_box = new SourceGenericBox(32);
+        assertTrue(target_box instanceof SourceGenericBox<int>);
+        assertEq(32, target_box.get());
+
+        SourceGenericBox<?> wildcard_target = new SourceGenericBox(33);
+        assertTrue(wildcard_target instanceof SourceGenericBox<int>);
+        assertEq(33, wildcard_target.get());
+
+        auto named_box = new SourceGenericBox(value: 34);
+        assertTrue(named_box instanceof SourceGenericBox<int>);
+        assertEq(34, named_box.get());
+
+        SourceBoundBox<int> bounded_box = new SourceBoundBox(35);
+        assertTrue(bounded_box instanceof SourceBoundBox<int>);
+        assertEq(35, bounded_box.get());
+
+        SourceGenericStaticFactory<int> static_target = SourceGenericStaticFactory::make(36);
+        assertTrue(static_target instanceof SourceGenericStaticFactory<int>);
+        assertEq(36, static_target.get());
+
+        SourceGenericBox<int> returned_box = self.makeInferredSourceGenericBox();
+        assertTrue(returned_box instanceof SourceGenericBox<int>);
+        assertEq(37, returned_box.get());
+
+        SourceGenericBase<int> returned_base = self.makeExplicitGenericChildAsBase();
+        assertTrue(returned_base instanceof SourceGenericChild<int>);
+        assertEq(38, returned_base.echo(38));
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Pair<K, V = string> { constructor(K key) {} } "
+                "bool sub t() { auto p = new Pair(1); return p instanceof Pair<int, string>; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T = int> { constructor() {} static Box<T> make() { return new Box<T>(); } } "
+                "bool sub t() { auto b = Box::make(); return b instanceof Box<int>; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class C<T> { constructor(T value) {} constructor(list<T> values) {} } "
+                "sub t() { auto c = new C((1, 2)); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { constructor(T value) {} "
+                "static Box<T> make(T value) { return new Box<T>(value); } "
+                "static Box<T> make(list<T> values) { return new Box<T>(values[0]); } } "
+                "sub t() { auto b = Box::make((1, 2)); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T: int> { constructor(T value) {} } "
+                "sub t() { auto b = new Box(\"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T: int> { constructor(T value) {} static Box<T> make(T value) { "
+                "return new Box<T>(value); } } sub t() { auto b = Box::make(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "bool sub t() { string s = Box::choose(1, \"x\"); return s == \"x\"; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "bool sub t() { string s = Box::choose<string>(1, \"x\"); return s == \"x\"; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "bool sub t() { string s = Box::choose(right: \"x\", left: 1); return s == \"x\"; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { static U choose<U>(T left, U right) { return right; } "
+                "static U choose<U>(list<T> left, U right) { return right; } } "
+                "sub t() { string s = Box::choose((1, 2), \"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T: int> { static U choose<U>(T left, U right) { return right; } } "
+                "sub t() { string s = Box::choose(\"bad\", \"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { static U choose<U: int>(T left, U right) { return right; } } "
+                "sub t() { int i = Box::choose(1, \"x\"); }", "generic-classes"));
+        }
+    }
+
+    SourceGenericBox<int> makeInferredSourceGenericBox() {
+        return new SourceGenericBox(37);
+    }
+
+    SourceGenericBase<int> makeExplicitGenericChildAsBase() {
+        return new SourceGenericChild<int>();
+    }
+
+    specializedGenericExecution() {
+        SourceSpecializedOps<int> int_ops();
+        SourceSpecializedOps<string> string_ops();
+
+        assertEq(1, int_ops.identity(1));
+        assertEq(2, int_ops.identity(2));
+        assertEq("a", string_ops.identity("a"));
+        assertEq("b", string_ops.identity("b"));
+
+        list<int> int_list = int_ops.wrap(3);
+        assertEq((3,), int_list);
+        list<string> string_list = string_ops.wrap("c");
+        assertEq(("c",), string_list);
+
+        hash<SourceGenericResult<int>> int_result = int_ops.result(4);
+        assertEq(4, int_result.value);
+        assertEq((4,), int_result.values);
+        assertEq("hash<SourceGenericResult<int>>", int_result.fullType());
+
+        hash<SourceGenericResult<string>> string_result = string_ops.result("d");
+        assertEq("d", string_result.value);
+        assertEq(("d",), string_result.values);
+        assertEq("hash<SourceGenericResult<string>>", string_result.fullType());
+
+        hash<SourceGenericResult<int>> static_int_result = SourceSpecializedOps<int>::staticResult(5);
+        assertEq(5, static_int_result.value);
+        assertEq("hash<SourceGenericResult<int>>", static_int_result.fullType());
+
+        hash<SourceGenericResult<string>> static_string_result = SourceSpecializedOps<string>::staticResult("e");
+        assertEq("e", static_string_result.value);
+        assertEq("hash<SourceGenericResult<string>>", static_string_result.fullType());
+
+        assertEq("right", SourceSpecializedOps<int>::choose<string>(6, "right"));
+        assertEq(7, SourceSpecializedOps<string>::choose<int>("left", 7));
+    }
+
+    specializedGenericPerformanceSmoke() {
+        SourceSpecializedOps<int> int_ops();
+        SourceSpecializedOps<string> string_ops();
+
+        int iterations = 10000;
+        int start_us = clock_getmicros();
+        int sum = 0;
+        for (int i = 0; i < iterations; ++i) {
+            int value = int_ops.identity(i);
+            sum += value;
+
+            list<int> values = int_ops.wrap(value);
+            sum += values[0];
+
+            hash<SourceGenericResult<int>> result = int_ops.result(value);
+            sum += result.value;
+
+            hash<SourceGenericResult<int>> static_result =
+                SourceSpecializedOps<int>::staticResult(value);
+            sum += static_result.value;
+
+            string text = string_ops.identity("value");
+            if (text != "value") {
+                throw "SPECIALIZED-GENERIC-SMOKE-ERROR",
+                    sprintf("unexpected specialized string result: %y", text);
+            }
+        }
+        int elapsed_us = clock_getmicros() - start_us;
+        assertEq(((iterations - 1) * iterations / 2) * 4, sum);
+        assertLt(30000000, elapsed_us,
+            sprintf("specialized generic loop took %d us", elapsed_us));
+    }
+
+    sourceGenericIterators() {
+        SourceTypedIterator<int> it(5);
+        assertTrue(it instanceof AbstractIterator<int>);
+        assertFalse(it instanceof AbstractIterator<string>);
+
+        AbstractIterator<int> typed = it;
+        assertTrue(typed.next());
+        int value = typed.getValue();
+        assertEq(5, value);
+        assertFalse(typed.next());
+
+        SourceTypedIterator<int> selected_it(7);
+        list<int> selected = select selected_it, $1 > 3;
+        assertEq(1, selected.size());
+        assertEq(7, selected[0]);
+    }
+
+    sourceGenericPollOperations() {
+        SourcePollOperation<int> op(17);
+        assertTrue(op instanceof AbstractPollOperation<int>);
+        assertFalse(op instanceof AbstractPollOperation<string>);
+
+        AbstractPollOperation<int> base = op;
+        int output = base.getOutput();
+        assertEq(17, output);
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub t(HttpIdlePollOperationBase op) { hash<auto> h = op.getOutput(); }",
+                "generic-classes");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "sub t(HttpIdlePollOperationBase op) { string s = op.getOutput(); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub t(Http2PollOperationBase op) { *hash<auto> h = op.getOutput(); }",
+                "generic-classes");
+        }
+    }
+
+    builtinIteratorElementTypes() {
+        hash<auto> recs = {
+            "name": ("alice", "bob"),
+            "age": (30, 31),
+        };
+
+        list<hash<auto>> rows = map $1, recs.contextIterator();
+        assertEq(2, rows.size());
+        assertEq("alice", rows[0].name);
+        assertEq(31, rows[1].age);
+
+        HashListIterator hli(recs);
+        list<hash<auto>> hli_rows = map $1, hli;
+        assertEq(2, hli_rows.size());
+        assertEq("bob", hli_rows[1].name);
+
+        list<hash<auto>> row_list = (("id": 1), ("id": 2));
+        ListHashIterator lhi(row_list);
+        list<hash<auto>> lhi_rows = map $1, lhi;
+        assertEq(2, lhi_rows.size());
+        assertEq(2, lhi_rows[1].id);
+
+        hash<string, int> values = {"a": 1, "b": 2};
+        hash<string, int> one_value = {"a": 1};
+        HashIterator<int> value_it(one_value);
+        assertTrue(value_it.next());
+        hash<KeyValueInfo<int>> value_pair = value_it.getValuePair();
+        assertEq("a", value_pair.key);
+        assertEq(1, value_pair.value);
+        assertEq("hash<KeyValueInfo<int>>", value_pair.fullType());
+
+        HashPairIterator<int> pair_it(one_value);
+        assertTrue(pair_it.next());
+        hash<KeyValueInfo<int>> iterator_pair = pair_it.getValue();
+        assertEq("a", iterator_pair.key);
+        assertEq(1, iterator_pair.value);
+        assertEq("hash<KeyValueInfo<int>>", iterator_pair.fullType());
+
+        map assertIntHashPair($1), pair_it;
+
+        hash<string, int> copied = map {$1.key: $1.value}, values.pairIterator();
+        assertEq(1, copied.a);
+        assertEq(2, copied.b);
+
+        map assertIntHashPair($1), values.pairIterator();
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(hash<auto> m) {} sub t(hash h) { map f($1), h.pairIterator(); }",
+                "generic-classes");
+        }
+
+        hash<SourceGenericResult<int>> typed_record(("value": 3, "values": (4,)));
+        auto record_value_it = typed_record.iterator();
+        assertTrue(record_value_it instanceof HashIterator<auto>);
+        assertFalse(record_value_it instanceof HashIterator<hash<SourceGenericResult<int>>>);
+
+        auto record_pair_it = typed_record.pairIterator();
+        assertTrue(record_pair_it instanceof HashPairIterator<auto>);
+        assertFalse(record_pair_it instanceof HashPairIterator<hash<SourceGenericResult<int>>>);
+        assertTrue(record_pair_it.next());
+        hash<KeyValueInfo<auto>> record_pair = record_pair_it.getValue();
+        assertTrue(record_pair.key == "value" || record_pair.key == "values");
+        assertEq("hash<KeyValueInfo<auto>>", record_pair.fullType());
+
+        SourceObjectPairMembers obj();
+        ObjectPairIterator object_pair_it(obj);
+        assertTrue(object_pair_it.next());
+        hash<KeyValueInfo<auto>> object_pair = object_pair_it.getValue();
+        assertTrue(object_pair.key == "count" || object_pair.key == "label");
+        if (object_pair.key == "count") {
+            assertEq(3, object_pair.value);
+        } else {
+            assertEq("three", object_pair.value);
+        }
+        assertEq("hash<KeyValueInfo<auto>>", object_pair.fullType());
+
+        hash<auto> object_members = map {$1.key: $1.value}, obj.pairIterator();
+        assertEq(3, object_members.count);
+        assertEq("three", object_members.label);
+    }
+
+    assertIntHashPair(hash<KeyValueInfo<int>> pair) {
+        assertEq("hash<KeyValueInfo<int>>", pair.fullType());
+    }
+
+    sourceRawGenericCompatibility() {
+        SourceRawCompatBox raw(1);
+        assertTrue(raw instanceof SourceRawCompatBox<auto>);
+        assertFalse(raw instanceof SourceRawCompatBox<int>);
+
+        SourceRawCompatBox<int> typed(2);
+        SourceRawCompatBox raw_annotation = typed;
+        assertTrue(raw_annotation instanceof SourceRawCompatBox<int>);
+
+        SourceRawAcceptsBox raw_accepts = new SourceRawAcceptsBox<int>(3);
+        assertTrue(raw_accepts instanceof SourceRawAcceptsBox<int>);
+
+        auto raw_construct = new SourceRawConstructBox(4);
+        assertTrue(raw_construct instanceof SourceRawConstructBox<auto>);
+    }
+
+    parseChecks() {
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T,T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T = int, U> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T, U = T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T:> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T: T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T: int> { constructor(T value) {} } sub t() { Box<string> b(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T: int> { T value; } hash<Result<string>> r;", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T: int = int> { constructor(T value) {} } "
+                "hashdecl Result<T: int = int> { T value; } "
+                "sub t() { Box<> b(1); hash<Result<>> r((\"value\": 2)); }", "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Pair<K, V = string> {} sub t() { Pair<> p(); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T = int> { constructor(T value) {} } sub t() { Box b(1); }", "generic-classes");
+            assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("DUPLICATE-SIGNATURE", \p.parse(), (
+                "class C<T> { nothing set(T v) {} nothing set(int v) {} }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("DUPLICATE-SIGNATURE", \p.parse(), (
+                "class C<T> { nothing set(list<T> v) {} nothing set(list<int> v) {} }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class C<T> { nothing set(T v) {} nothing set(list<T> v) {} } "
+                "sub t() { C<int> c(); c.set(1); c.set((1, 2)); }", "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("T sub identity<T>(T value) { return value; } "
+                "class C { T echo<T>(T value) { return value; } static T stat<T>(T value) { return value; } } "
+                "sub t() { int i = identity(1); string s = identity(value: \"x\"); C c(); "
+                "int mi = c.echo(2); string ms = c.echo(value: \"y\"); int si = C::stat(3); }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("T sub identity<T>(T value) { return value; } "
+                "class C { T echo<T>(T value) { return value; } static T stat<T>(T value) { return value; } } "
+                "sub t() { int i = identity<int>(1); string s = identity<string>(value: \"x\"); C c(); "
+                "int mi = c.echo<int>(2); string ms = c.echo<string>(value: \"y\"); int si = C::stat<int>(3); }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE, True);
+            p.parse("namespace N; T sub N::identity<T>(T value) { return value; } "
+                "class C {} T C::echo<T>(T value) { return value; } static T C::stat<T>(T value) { return value; } "
+                "sub t() { int i = N::identity(1); C c(); int mi = c.echo(2); int si = C::stat(3); }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE, True);
+            p.parse("namespace N; T sub N::identity<T>(T value) { return value; } "
+                "class C {} T C::echo<T>(T value) { return value; } static T C::stat<T>(T value) { return value; } "
+                "sub t() { int i = N::identity<int>(1); C c(); int mi = c.echo<int>(2); "
+                "int si = C::stat<int>(3); }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "sub t() { string s = Box<int>::choose<string>(1, \"x\"); }", "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "sub t() { string s = Box::choose<string>(1, \"x\"); }", "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub identity<T>(T value) { return value; } sub t() { int i = identity(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub identity<T>(T value) { return value; } sub t() { int i = identity<string>(1); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub identity<T>(T value) { return value; } sub t() { int i = identity<int, string>(1); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub first<T>(T a, T b) { return a; } sub t() { int i = first(1, \"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub bounded<T: int>(T value) { return value; } sub t() { string s = bounded(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub bounded<T: int>(T value) { return value; } sub t() { string s = bounded<string>(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "int sub plain(int value) { return value; } sub t() { int i = plain<int>(1); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class C { T echo<T>(T value) { return value; } } sub t() { C c(); int i = c.echo<string>(1); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { constructor(T value) {} } sub t() { Box<int> b(\"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { static Box<T> make(T value) { return new Box<T>(value); } } "
+                "sub t() { Box<int> b = Box<int>::make(\"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("INVALID-METHOD", \p.parse(), (
+                "class Box<T> { T get(T value) { return value; } } sub t() { Box<int>::get(1); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (
+                "hashdecl Result<T> { T value; } sub t() { hash<Result<int>> r((\"value\": \"x\")); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T> { T value; } hash<Result> r;", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T = string> { T value; } hash<Result> r;", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T> { T value; } hash<Result<int, string>> r;", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("hashdecl Parent<T> { T value; } hashdecl Child<T> inherits Parent<T> { string name; } "
+                "sub t() { hash<Child<int>> c((\"value\": 1, \"name\": \"ok\")); int i = c.value; }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (
+                "hashdecl Parent<T> { T value; } hashdecl Child<T> inherits Parent<T> { string name; } "
+                "sub t() { hash<Child<int>> c((\"value\": \"x\", \"name\": \"bad\")); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (
+                "hashdecl Parent<T> { T value; } hashdecl Child<T> inherits Parent<T> { string value; }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class RawBox<T> {} sub t() { RawBox b(); }", "generic-classes");
+            assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Base<T> { T get(T value) { return value; } } "
+                "class Child<T> inherits Base<T> {} "
+                "sub t() { Child<int> c(); string s = c.get(1); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Base<T> {} class Child<T> inherits Base<T, string> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Base {} class Child<T> inherits Base<T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Plain [legacy_raw] {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(
+                "class Box<T> [legacy_raw_accepts] { constructor(T value) {} } "
+                "bool sub t() { auto b = new Box(1); return b instanceof Box<int>; }", "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+    }
+}

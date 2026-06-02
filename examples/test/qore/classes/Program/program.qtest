@@ -6,8 +6,9 @@
 # to test ProgramControl::getProgram
 %allow-debugger
 
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
 %exec-class ProgramTest
 
 int sub t(any a) {
@@ -309,6 +310,8 @@ class ProgramTest inherits QUnit::Test {
         Expression exp0 = p.getExpression("1", "exp1");
         assertEq(1, exp0.eval());
         assertEq(1, exp0.eval());
+        Expression named_exp = new Expression(program: p, source: "t()", label: "exp_named");
+        assertEq(1, named_exp.eval());
         Expression exp1 = p.getExpression("round(nlog(1000) + 500).toString()", "exp1");
         assertEq("507", exp1.eval());
         Expression exp2 = p.getExpression("(int x = (rand() % 200)) + x * 2", "exp2");

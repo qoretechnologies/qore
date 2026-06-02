@@ -59,18 +59,20 @@ int i = sr.readi4();
 qclass BufferedStreamReader [arg=BufferedStreamReader* sr; ns=Qore; vparent=StreamReader; internal_members=InputStream is];
 
 //! Creates the BufferedStreamReader for reading data from the given @ref InputStream.
-/** @param is the @ref InputStream for reading data
+/** @param input_stream the @ref InputStream for reading data
     @param encoding the character encoding of the data from the @ref InputStream; if not present, the @ref default_encoding "default character encoding" is assumed
-    @param bufsize the size of the internal buffer in bytes; must be a positive integer
+    @param buffer_size the size of the internal buffer in bytes; must be a positive integer
 
     @throw STREAM-BUFFER-ERROR an invalid stream buffer size was specified; the buffer size must be a positive integer
  */
-BufferedStreamReader::constructor(Qore::InputStream[InputStream] is, *string encoding, int bufsize = DefaultStreamBufferSize) {
-   SimpleRefHolder<BufferedStreamReader> reader(new BufferedStreamReader(xsink, is.release(), encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, bufsize));
+BufferedStreamReader::constructor(Qore::InputStream[InputStream] input_stream, *string encoding,
+        int buffer_size = DefaultStreamBufferSize) [flags=NAMED_ARGS] {
+   SimpleRefHolder<BufferedStreamReader> reader(new BufferedStreamReader(xsink, input_stream.release(),
+       encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, buffer_size));
    if (*xsink)
       return;
    self->setPrivate(CID_BUFFEREDSTREAMREADER, reader.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_BUFFEREDSTREAMREADER);
-   o->setValueIntern(cls, "is", static_cast<QoreObject*>(obj_is->refSelf()), xsink);
+   o->setValueIntern(cls, "is", static_cast<QoreObject*>(obj_input_stream->refSelf()), xsink);
 }

@@ -72,7 +72,7 @@ public namespace EdifactUtil {
         private *string findFileByPrefix(string dir, string prefix) {
             Dir d();
             d.chdir(dir);
-            foreach string entry in (d.listFiles()) {
+            foreach string entry in (d.listFileNames()) {
                 string name = basename(entry);
                 if (name.size() > prefix.size() + 1
                         && name.substr(0, prefix.size()) == prefix
@@ -110,7 +110,7 @@ public namespace EdifactUtil {
             hash<string, hash<EdifactMessageDef>> msgs = new hash<string, hash<EdifactMessageDef>>();
             Dir d();
             d.chdir(dir);
-            foreach string entry in (d.listFiles()) {
+            foreach string entry in (d.listFileNames()) {
                 string name = basename(entry);
                 if (name.rfind("_D.") == -1 && name.rfind("_M.") == -1) {
                     continue;
@@ -540,7 +540,7 @@ public namespace EdifactUtil {
             }
             Dir d();
             d.chdir(dir);
-            foreach string entry in (d.listFiles()) {
+            foreach string entry in (d.listFileNames()) {
                 string name = basename(entry);
                 if (name.rfind("_D.") != -1 || name.rfind("_M.") != -1) {
                     return dir;

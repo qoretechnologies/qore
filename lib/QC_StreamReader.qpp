@@ -34,7 +34,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 
-DLLEXPORT extern QoreClass* QC_INPUTSTREAM;
+extern QoreClass* QC_INPUTSTREAM;
 
 //! This class defines a stream reader for input streams.
 /** @since %Qore 0.8.13
@@ -54,17 +54,18 @@ int i = sr.readi4();
 qclass StreamReader [arg=StreamReader* sr; ns=Qore; internal_members=InputStream is];
 
 //! Creates the StreamReader for reading data from the given @ref InputStream.
-/** @param is the @ref InputStream for reading data
+/** @param input_stream the @ref InputStream for reading data
     @param encoding character encoding of the data from the @ref InputStream; if not present, the @ref default_encoding "default character encoding" is assumed
  */
-StreamReader::constructor(Qore::InputStream[InputStream] is, *string encoding) {
-    SimpleRefHolder<StreamReader> reader(new StreamReader(xsink, is.release(), encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
+StreamReader::constructor(Qore::InputStream[InputStream] input_stream, *string encoding) [flags=NAMED_ARGS] {
+    SimpleRefHolder<StreamReader> reader(new StreamReader(xsink, input_stream.release(),
+        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
     if (*xsink)
         return;
     self->setPrivate(CID_STREAMREADER, reader.release());
     qore_object_private* o = qore_object_private::get(*self);
     const qore_class_private* cls = qore_class_private::get(*QC_STREAMREADER);
-    o->setValueIntern(cls, "is", static_cast<QoreObject*>(obj_is->refSelf()), xsink);
+    o->setValueIntern(cls, "is", static_cast<QoreObject*>(obj_input_stream->refSelf()), xsink);
 }
 
 //! Returns the @ref character_encoding "character encoding" for the StreamReader.
@@ -101,7 +102,7 @@ string str = sr.read(len);
     - a short read (a string returned with fewer characters than requested) indicates that there is no more data left in the stream
     - other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
  */
-*string StreamReader::readString(int limit = -1) {
+*string StreamReader::readString(int limit = -1) [flags=NAMED_ARGS] {
     return sr->readString(limit, xsink);
 }
 
@@ -111,17 +112,17 @@ string str = sr.read(len);
 string line = sr.readLine("\n");
     @endcode
 
-    @param eol the optional end of line character(s) to use to detect lines in the data - can be maximally 2 bytes long; if it is longer, the rest is ignored; if this string is not passed, then, if the character-encoding is ASCII-compatible, the end of line character(s) are detected automatically from \c "\n", \c "\r", or \c "\r\n"; if the stream uses a non-ASCII-compatible character encoding, then \c "\n" is assumed
-    @param trim if @ref True the returned lines will be trimmed of the eol bytes
+    @param line_separator the optional end of line character(s) to use to detect lines in the data - can be maximally 2 bytes long; if it is longer, the rest is ignored; if this string is not passed, then, if the character-encoding is ASCII-compatible, the end of line character(s) are detected automatically from \c "\n", \c "\r", or \c "\r\n"; if the stream uses a non-ASCII-compatible character encoding, then \c "\n" is assumed
+    @param trim_line if @ref True the returned lines will be trimmed of the end of line bytes
 
     @return a text line read from the stream or @ref nothing if there is no more data available in the stream
 
-    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the eol argument has a different @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the \a line_separator argument has a different @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
 
     @note other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
  */
-*string StreamReader::readLine(*string eol, bool trim = True) {
-    return sr->readLine(eol, trim, xsink);
+*string StreamReader::readLine(*string line_separator, bool trim_line = True) [flags=NAMED_ARGS] {
+    return sr->readLine(line_separator, trim_line, xsink);
 }
 
 //! Reads binary data from the input stream up to a given limit.
@@ -138,7 +139,7 @@ string line = sr.readLine("\n");
     - a short read (a binary object returned with fewer bytes than requested) indicates that there is no more data left in the stream
     - other stream read errors could be thrown here depending on the underlying @ref InputStream implementation
  */
-*binary StreamReader::readBinary(int limit = -1) {
+*binary StreamReader::readBinary(int limit = -1) [flags=NAMED_ARGS] {
     return sr->readBinary(limit, xsink);
 }
 

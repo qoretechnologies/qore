@@ -283,6 +283,15 @@ public hashdecl PipelineOptionInfo {
         @since DataProvider 3.4
     */
     *code<nothing(auto)> output_callback;
+
+    #! Process eligible single-queue pipelines on the caller's thread
+    /** When @ref True, a pipeline with one queue and only processor elements processes submitted
+        data synchronously in DataProviderPipeline::submit() and flushes in DataProviderPipeline::waitDone().
+        Pipelines with metrics collectors, thread callbacks, or fan-out queues continue using worker threads.
+
+        @since DataProvider 3.4
+    */
+    *bool synchronous;
 }
 
 #! Pipeline element
@@ -396,7 +405,7 @@ class PipelineQueue {
     }
 
     #! Creates the object
-    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size) {
+    constructor(DataProviderPipeline parent, Mutex lck, WaitGroup cnt, int id, int size, bool start_thread = True) {
         self.size = size;
         self.parent := parent;
         self.lck = lck;
@@ -404,6 +413,16 @@ class PipelineQueue {
 
         self.id = id;
         self.id_str = id.toString();
+        if (start_thread) {
+            startThreadIfNeeded();
+        }
+    }
+
+    #! Starts the worker thread if it has not already been started
+    startThreadIfNeeded() {
+        if (tid) {
+            return;
+        }
         WaitGroup run_cnt();
         run_cnt.add();
         # cnt is added/decremented inside run() so its scope coincides exactly with the
@@ -418,6 +437,75 @@ class PipelineQueue {
     #! Returns the pipeline ID
     int getId() {
         return id;
+    }
+
+    #! Returns True when this queue can be processed synchronously
+    bool canProcessSynchronously() {
+        if (!elems || elems.last().typeCode() == NT_LIST) {
+            return False;
+        }
+        foreach auto elem in (elems) {
+            if (!(elem instanceof AbstractDataProcessor)) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Processes data on the caller's thread for synchronous single-queue pipelines
+    processSynchronously(auto qdata) {
+        if (queue_abort) {
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
+        }
+        if (queue_stop) {
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y: cannot submit data; the pipeline is shutting "
+                "down", parent.getName());
+        }
+
+        processing = True;
+        on_exit {
+            processing = False;
+            if (queue_waiting) {
+                cond.broadcast();
+            }
+        }
+
+        softlist<auto> data_recs;
+        push data_recs, qdata;
+
+        try {
+            int elem_count = elems.size();
+            int elem_index = 0;
+            foreach auto elem in (elems) {
+                AbstractDataProcessor processor = cast<AbstractDataProcessor>(elem);
+                softlist<auto> new_recs;
+                foreach auto data_elem in (data_recs) {
+                    softlist<auto> new_elem_recs = processShapedData(processor, data_elem);
+                    new_recs += new_elem_recs;
+                    parent.logDebug("queue %d data processor %y output: %y", id, elem.className(), new_elem_recs);
+                }
+
+                if (output_callback && elem_index == elem_count - 1) {
+                    emitOutputRecords(new_recs);
+                }
+                data_recs = new_recs;
+                ++elem_index;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            parent.reportError(self, ex);
+        }
+    }
+
+    #! Flushes synchronous single-queue pipelines on the caller's thread
+    flushSynchronously() {
+        processing = True;
+        on_exit {
+            processing = False;
+            if (queue_waiting) {
+                cond.broadcast();
+            }
+        }
+        flushIntern();
     }
 
     #! Submits data for processing
@@ -440,11 +528,15 @@ class PipelineQueue {
         }
 
         bool waited = False;
-        while (!queue_stop && queue.lsize() == size) {
+        while (!queue_stop && !queue_abort && queue.lsize() == size) {
             waited = True;
             ++queue_waiting;
             cond.wait(lck);
             --queue_waiting;
+        }
+
+        if (queue_abort) {
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
         }
 
         if (queue_stop) {
@@ -580,6 +672,102 @@ class PipelineQueue {
         }
     }
 
+    #! Chooses the input shape to use for a processor and input value
+    private DataProviderShape chooseProcessorShape(AbstractDataProcessor processor, DataProviderShape current_shape) {
+        list<DataProviderShape> supported = processor.getSupportedInputShapes();
+        if (supported.contains(current_shape)) {
+            return cast<enum<DataProviderShape>>(current_shape);
+        }
+
+        foreach DataProviderShape preferred in ((DataProviderShape::DataFrameBlock,
+                DataProviderShape::BufferColumns, DataProviderShape::HashOfLists, DataProviderShape::RowRecords)) {
+            if (supported.contains(preferred)) {
+                return cast<enum<DataProviderShape>>(preferred);
+            }
+        }
+
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s does not advertise any supported input shape",
+            processor.className());
+    }
+
+    #! Appends a shaped processor result to the queue's internal work list
+    private appendShapedResult(reference<softlist<auto>> results, auto result) {
+        if (AbstractDataProcessor::detectShape(result) == DataProviderShape::RowRecords
+                && result.typeCode() == NT_LIST) {
+            results += result;
+        } else {
+            push results, result;
+        }
+    }
+
+    #! Processes one shaped input value through a processor
+    private softlist<auto> processShapedData(AbstractDataProcessor processor, auto data) {
+        softlist<auto> results;
+        DataProviderShape current_shape = AbstractDataProcessor::detectShape(data);
+        DataProviderShape processor_shape = chooseProcessorShape(processor, current_shape);
+        list<auto> inputs = AbstractDataProcessor::convertShape(data, current_shape, processor_shape);
+
+        foreach auto input in (inputs) {
+            if (processor_shape == DataProviderShape::RowRecords) {
+                *list<auto> row_results = processor.submitAndCollect(input);
+                if (row_results) {
+                    results += row_results;
+                }
+            } else {
+                *auto result = processor.processRecordsShape(input, processor_shape);
+                if (exists result) {
+                    appendShapedResult(\results, result);
+                }
+            }
+        }
+        return results;
+    }
+
+    #! Counts logical records in a list of shaped values
+    private int countShapedRecords(softlist<auto> values) {
+        int count = 0;
+        foreach auto value in (values) {
+            count += AbstractDataProcessor::shapeRecordCount(value);
+        }
+        return count;
+    }
+
+    #! Emits terminal output callback records from any supported pipeline shape
+    private emitOutputValue(auto value) {
+        DataProviderShape shape = AbstractDataProcessor::detectShape(value);
+        switch (shape) {
+            case DataProviderShape::BufferColumns: {
+                if (AbstractDataProcessor::isColumnarResult(value)) {
+                    map output_callback($1), value.toRows();
+                    return;
+                }
+                HashListIterator hli(AbstractDataProcessor::isHashOfBuffers(value)
+                    ? AbstractDataProcessor::bufferColumnsToHashList(value) : value);
+                map output_callback($1), hli;
+                return;
+            }
+            case DataProviderShape::HashOfLists: {
+                HashListIterator hli(value);
+                map output_callback($1), hli;
+                return;
+            }
+            case DataProviderShape::DataFrameBlock:
+                map output_callback($1), value.toRecords();
+                return;
+            case DataProviderShape::RowRecords:
+                output_callback(value);
+                return;
+        }
+        output_callback(value);
+    }
+
+    #! Emits terminal output callback records from a list of shaped values
+    private emitOutputRecords(softlist<auto> values) {
+        foreach auto value in (values) {
+            emitOutputValue(value);
+        }
+    }
+
     /** @note Called in the pipeline lock
     */
     private runIntern() {
@@ -667,6 +855,7 @@ class PipelineQueue {
                 foreach auto elem in (elems) {
                     softlist<auto> new_recs;
                     if (elem instanceof AbstractDataProcessor) {
+                        AbstractDataProcessor processor = cast<AbstractDataProcessor>(elem);
                         # Measure per-element processing time
                         *date elem_start;
                         if (has_metrics) {
@@ -674,10 +863,8 @@ class PipelineQueue {
                         }
 
                         foreach auto data_elem in (data_recs) {
-                            *list<auto> new_elem_recs = elem.submitAndCollect(data_elem);
-                            if (new_elem_recs) {
-                                new_recs += new_elem_recs;
-                            }
+                            softlist<auto> new_elem_recs = processShapedData(processor, data_elem);
+                            new_recs += new_elem_recs;
                             parent.logDebug("queue %d data processor %y output: %y", id,
                                 elem.className(), new_elem_recs);
                         }
@@ -688,53 +875,24 @@ class PipelineQueue {
                             acc_processing_us[elem_index] +=
                                 (now_us() - elem_start).durationMicroseconds();
 
-                            if (do_bulk) {
-                                # Bulk: data is always hash with list values
-                                int elem_in_count = 0;
-                                map elem_in_count += $1.firstValue().lsize(), data_recs;
-                                int elem_out_count = 0;
-                                map elem_out_count += $1.firstValue().lsize(), new_recs;
-                                acc_in[elem_index] += elem_in_count;
-                                acc_out[elem_index] += elem_out_count;
-                                if (elem_index == elem_count - 1) {
-                                    acc_completed[elem_index] += elem_out_count;
-                                }
-                            } else {
-                                # Non-bulk: list sizes are record counts
-                                int in_size = data_recs.lsize();
-                                int out_size = new_recs.lsize();
-                                acc_in[elem_index] += in_size;
-                                acc_out[elem_index] += out_size;
-                                if (elem_index == elem_count - 1) {
-                                    acc_completed[elem_index] += out_size;
-                                }
+                            int elem_in_count = countShapedRecords(data_recs);
+                            int elem_out_count = countShapedRecords(new_recs);
+                            acc_in[elem_index] += elem_in_count;
+                            acc_out[elem_index] += elem_out_count;
+                            if (elem_index == elem_count - 1) {
+                                acc_completed[elem_index] += elem_out_count;
                             }
                         }
 
                         # Invoke output callback for terminal processor output records
                         if (output_callback && elem_index == elem_count - 1) {
-                            if (do_bulk) {
-                                # Bulk mode: unpack hash-of-lists into individual records
-                                foreach auto out_rec in (new_recs) {
-                                    HashListIterator hli(out_rec);
-                                    map output_callback($1), hli;
-                                }
-                            } else {
-                                map output_callback($1), new_recs;
-                            }
+                            emitOutputRecords(new_recs);
                         }
                     } else {
                         # Fan-out to child queues
                         # Queue 0 tracks acc_in so flushMetricsBatch can compute submitted
                         if (has_metrics && !id) {
-                            int fanout_count;
-                            if (do_bulk) {
-                                fanout_count = 0;
-                                map fanout_count += $1.firstValue().lsize(), data_recs;
-                            } else {
-                                fanout_count = data_recs.lsize();
-                            }
-                            acc_in[elem_index] += fanout_count;
+                            acc_in[elem_index] += countShapedRecords(data_recs);
                         }
                         foreach auto data_elem in (data_recs) {
                             map $1.submit(data_elem), elem;
@@ -857,12 +1015,7 @@ class PipelineQueue {
                     # Record flush metrics for the element that produced records
                     if (mc) {
                         string element_id = elem_ids[elem_index];
-                        int records_out = 0;
-                        if (do_bulk) {
-                            map records_out += $1.firstValue().lsize(), flush_results;
-                        } else {
-                            records_out = flush_results.lsize();
-                        }
+                        int records_out = countShapedRecords(flush_results);
                         # Flush produces records without input, so records_in = 0.
                         int completed = 0;
                         if (elem_index == elem_count - 1) {
@@ -888,37 +1041,22 @@ class PipelineQueue {
                                 if (mc) {
                                     start_time = now_us();
                                 }
-                                *list<auto> new_elem_recs = elem2.submitAndCollect(data_elem);
+                                softlist<auto> new_elem_recs = processShapedData(elem2, data_elem);
                                 processing_us = 0;
                                 if (mc) {
                                     end_time = now_us();
                                     processing_us = (end_time - start_time).durationMicroseconds();
                                 }
 
-                                if (new_elem_recs) {
-                                    # here we need to use += to concatenate lists
-                                    new_recs += new_elem_recs;
-                                }
+                                new_recs += new_elem_recs;
                                 parent.logDebug("queue %d data processor %y processing flushed output: %y", id,
                                     elem2.className(), new_elem_recs);
 
                                 # Record metrics for processing flushed data
                                 if (mc) {
                                     string element_id = elem_ids[i];
-                                    int records_in = 1;
-                                    if (data_elem.typeCode() == NT_HASH
-                                            && data_elem.firstValue().typeCode() == NT_LIST) {
-                                        records_in = data_elem.firstValue().lsize();
-                                    }
-                                    int records_out = 0;
-                                    foreach auto out_rec in (new_elem_recs) {
-                                        if (out_rec.typeCode() == NT_HASH
-                                                && out_rec.firstValue().typeCode() == NT_LIST) {
-                                            records_out += out_rec.firstValue().lsize();
-                                        } else {
-                                            ++records_out;
-                                        }
-                                    }
+                                    int records_in = AbstractDataProcessor::shapeRecordCount(data_elem);
+                                    int records_out = countShapedRecords(new_elem_recs);
                                     int completed = 0;
                                     if (i == elem_size - 1) {
                                         completed = records_out;
@@ -936,14 +1074,7 @@ class PipelineQueue {
 
                     # Invoke output callback for terminal flushed output records
                     if (output_callback && data_recs) {
-                        if (do_bulk) {
-                            foreach auto out_rec in (data_recs) {
-                                HashListIterator hli(out_rec);
-                                map output_callback($1), hli;
-                            }
-                        } else {
-                            map output_callback($1), data_recs;
-                        }
+                        emitOutputRecords(data_recs);
                     }
                 } else {
                     # must be the last entry in the list - propagate flush to child queues
@@ -989,8 +1120,16 @@ public class PipelineMetricsCollector {
         #! Total records completed
         int total_completed = 0;
 
-        #! Timestamps for throughput calculation
+        #! Wall-clock collection start (CLOCK_REALTIME, exposed as snapshot.start_time)
         date collection_start;
+
+        #! Monotonic collection start in microseconds — used for all elapsed-time arithmetic
+        /** Required because the realtime clock can step backward (NTP slewing, VM time
+            synchronization), producing negative @c duration_secs / @c interval_ms when
+            two @ref now_us() captures straddle the step.  The monotonic clock is
+            guaranteed non-decreasing so elapsed values are always >= 0.
+        */
+        int collection_start_mono_us;
 
         #! Last callback invocation time
         *date last_callback_time;
@@ -1000,6 +1139,9 @@ public class PipelineMetricsCollector {
 
         #! Previous snapshot time (NOTHING until first getSnapshotIntern() call)
         *date prev_snapshot_time;
+
+        #! Previous snapshot's monotonic timestamp in microseconds (0 until first getSnapshotIntern())
+        int prev_snapshot_mono_us = 0;
 
         #! Previous total submitted count
         int prev_submitted = 0;
@@ -1037,6 +1179,7 @@ public class PipelineMetricsCollector {
         self.parent := parent;
         self.collector = collector;
         collection_start = now_us();
+        collection_start_mono_us = clock_get_monotonic_us();
         # Cache collector thresholds to avoid virtual method calls per record
         try {
             cached_record_interval = collector.getRecordInterval();
@@ -1531,14 +1674,16 @@ public class PipelineMetricsCollector {
             prev_submitted = 0;
             prev_completed = 0;
             remove prev_snapshot_time;
+            prev_snapshot_mono_us = 0;
             prev_element_snap = {};
 
             # Reset callback tracking
             records_since_callback = 0;
             remove last_callback_time;
 
-            # Reset collection start time
+            # Reset collection start time (both wall-clock and monotonic baselines)
             collection_start = now_us();
+            collection_start_mono_us = clock_get_monotonic_us();
 
             # Reset per-element counters (preserve structure: element_id, element_type, class_name)
             foreach string elem_id in (keys element_metrics) {
@@ -1603,7 +1748,10 @@ public class PipelineMetricsCollector {
     */
     private hash<PipelineMetricsSnapshot> getSnapshotIntern() {
         date now = now_us();
-        float duration_secs = (now - collection_start).durationSecondsFloat();
+        # Use the monotonic clock for elapsed-time arithmetic so a realtime clock step
+        # (NTP slewing, VM time sync) can never produce a negative duration.
+        int now_mono_us = clock_get_monotonic_us();
+        float duration_secs = (now_mono_us - collection_start_mono_us) / 1000000.0;
         # Use total_submitted (input rate) for throughput, not total_completed.
         # In fan-out pipelines, total_completed sums completions from ALL branches
         # (e.g. 2 branches × 100 records = 200 completed), which inflates the throughput
@@ -1652,9 +1800,13 @@ public class PipelineMetricsCollector {
             total_errors += em.error_count;
         }
 
-        # Compute delta metrics for the interval since the previous snapshot
-        date effective_prev_time = prev_snapshot_time ?? collection_start;
-        int interval_ms = (now - effective_prev_time).durationMilliseconds();
+        # Compute delta metrics for the interval since the previous snapshot.  Use the
+        # monotonic clock baseline so a realtime clock step between the previous and
+        # current snapshot can never produce a negative interval.
+        int effective_prev_mono_us = prev_snapshot_mono_us
+            ? prev_snapshot_mono_us
+            : collection_start_mono_us;
+        int interval_ms = (now_mono_us - effective_prev_mono_us) / 1000;
         int delta_submitted = total_submitted - prev_submitted;
         int delta_completed = total_completed - prev_completed;
         float delta_secs = interval_ms / 1000.0;
@@ -1702,6 +1854,7 @@ public class PipelineMetricsCollector {
 
         # Update prev_* state (still inside the lock — safe)
         prev_snapshot_time = now;
+        prev_snapshot_mono_us = now_mono_us;
         prev_submitted = total_submitted;
         prev_completed = total_completed;
         # Only snapshot elements that appear in delta output (non-queue, non-mapper)
@@ -1814,6 +1967,12 @@ public class DataProviderPipeline {
         /** @since DataProvider 3.4
         */
         *code<nothing(auto)> output_callback;
+
+        #! True if eligible pipelines should run on the caller's thread
+        bool synchronous = False;
+
+        #! True when the current run has used synchronous processing and needs synchronous flush
+        bool synchronous_processing = False;
     }
 
     #! Creates the object with the given options
@@ -1827,6 +1986,7 @@ public class DataProviderPipeline {
         debug_log = opts.debug_log;
         thread_callback = opts.thread_callback;
         output_callback = opts.output_callback;
+        synchronous = opts.synchronous ?? False;
         name = opts.name ?? sprintf("unnamed pipeline %y", self.uniqueHash());
 
         # Initialize metrics collector if provided
@@ -1837,7 +1997,7 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
-        pmap."0" = new PipelineQueue(self, lck, cnt, 0, 1);
+        pmap."0" = new PipelineQueue(self, lck, cnt, 0, 1, !synchronous);
     }
 
     #! Copy constructor; creates an empty pipeline with the same configuration as the original
@@ -2091,7 +2251,12 @@ public class DataProviderPipeline {
         }
 
         # wait for primary queue to complete processing
-        pmap."0".waitDone();
+        if (synchronous_processing) {
+            pmap."0".flushSynchronously();
+            synchronous_processing = False;
+        } else {
+            pmap."0".waitDone();
+        }
 
         # set the stop time
         stop_time = now_us();
@@ -2128,6 +2293,12 @@ public class DataProviderPipeline {
 
         lck.lock();
         on_exit lck.unlock();
+
+        foreach PipelineQueue q in (pmap.iterator()) {
+            if (q.queue_waiting || q.data_waiting) {
+                q.cond.broadcast();
+            }
+        }
 
         logInfo("pipeline %y: abort(<%s exceptions>) called with %sactive pipeline", name,
             ignore_exceptions ? "throw" : "ignore", locked ? "" : "in");
@@ -2245,6 +2416,9 @@ public class DataProviderPipeline {
         abort_flag = True;
         foreach PipelineQueue q in (pmap.iterator()) {
             q.queue_abort = True;
+            if (q.queue_waiting || q.data_waiting) {
+                q.cond.broadcast();
+            }
         }
     }
 
@@ -2285,7 +2459,7 @@ public class DataProviderPipeline {
     private:internal PipelineQueue copyPipeline(PipelineQueue old_queue) {
         *PipelineQueue queue = pmap{old_queue.id};
         if (!queue) {
-            queue = new PipelineQueue(self, lck, cnt, old_queue.id, old_queue.size);
+            queue = new PipelineQueue(self, lck, cnt, old_queue.id, old_queue.size, !synchronous);
             pmap{old_queue.id} = queue;
         }
 
@@ -2301,8 +2475,28 @@ public class DataProviderPipeline {
     /** Must be called with the lock held
     */
     private:internal submitIntern(auto _data) {
-        if (do_bulk && _data.typeCode() == NT_HASH && ((int rec_cnt = _data.firstValue().lsize()) > 1)) {
-            logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
+        DataProviderShape shape = AbstractDataProcessor::detectShape(_data);
+        if (canProcessSynchronouslyIntern()) {
+            int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
+            if (shape == DataProviderShape::DataFrameBlock) {
+                logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
+            } else if (shape == DataProviderShape::HashOfLists && rec_cnt > 1) {
+                logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
+            }
+            record_count += rec_cnt;
+            synchronous_processing = True;
+            pmap."0".processSynchronously(_data);
+            return;
+        }
+
+        if (shape == DataProviderShape::DataFrameBlock) {
+            int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape);
+            logInfo("pipeline %y: DataFrame input records: %d", name, rec_cnt);
+            record_count += rec_cnt;
+            pmap."0".submit(_data);
+        } else if (do_bulk && (shape == DataProviderShape::HashOfLists || shape == DataProviderShape::BufferColumns)
+                && ((int rec_cnt = AbstractDataProcessor::shapeRecordCount(_data, shape)) > 1)) {
+            logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
             record_count += rec_cnt;
             pmap."0".submit(_data);
         } else {
@@ -2314,7 +2508,7 @@ public class DataProviderPipeline {
     /** Must be called with the lock held
     */
     private:internal submitDataIntern(auto _data) {
-        ++record_count;
+        record_count += AbstractDataProcessor::shapeRecordCount(_data);
         pmap."0".submit(_data);
     }
 
@@ -2324,9 +2518,10 @@ public class DataProviderPipeline {
         @see @ref dataprovider_pipeline_bulk_processing
     */
     private:internal submitBulkIntern(AbstractDataProviderBulkRecordInterface i) {
-        while (*hash<auto> recs = i.getValue()) {
-            int rec_cnt = recs.firstValue().lsize();
-            logInfo("pipeline %y: bulk input records: %d", name, rec_cnt);
+        while (*auto recs = i.getShapedValue()) {
+            DataProviderShape shape = AbstractDataProcessor::detectShape(recs);
+            int rec_cnt = AbstractDataProcessor::shapeRecordCount(recs, shape);
+            logInfo("pipeline %y: %s input records: %d", name, AbstractDataProcessor::shapeName(shape), rec_cnt);
             record_count += rec_cnt;
             pmap."0".submit(recs);
         }
@@ -2362,10 +2557,20 @@ public class DataProviderPipeline {
             }
         }
 
+        if (synchronous_processing) {
+            synchronous_processing = False;
+        }
+
         # Reset metrics collector for reuse (clears counters and shut_down flag)
         if (metrics_collector) {
             metrics_collector.reset();
         }
+    }
+
+    #! Returns True when the current pipeline run can avoid worker-thread dispatch
+    private:internal bool canProcessSynchronouslyIntern() {
+        return synchronous && !metrics_collector && !thread_callback && pmap.size() == 1
+            && pmap."0".canProcessSynchronously();
     }
 
     #! Throws an exception if the pipeline cannot be used; locks the pipeline for changes otherwise
@@ -2401,6 +2606,12 @@ public class DataProviderPipeline {
                     if (q.elems && q.elems.last() instanceof AbstractDataProcessor) {
                         q.output_callback = output_callback;
                     }
+                }
+            }
+
+            if (!canProcessSynchronouslyIntern()) {
+                foreach PipelineQueue q in (pmap.iterator()) {
+                    q.startThreadIfNeeded();
                 }
             }
 
@@ -2472,5 +2683,3 @@ public class DataProviderPipeline {
     splice stack, 0, 2;
     return map $1.type != "new-thread" ? sprintf("%s %s()", get_ex_pos($1), $1.function) : "new-thread", stack;
 }
-
-

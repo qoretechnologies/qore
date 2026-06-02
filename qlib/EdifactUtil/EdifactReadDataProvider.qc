@@ -123,13 +123,13 @@ public namespace EdifactUtil {
         }
 
         #! Returns an iterator for the data
-        AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
             return new EdifactReadDataProviderRecordIterator(m_iterator);
         }
     }
 
     #! Record iterator for EDIFACT read data provider
-    class EdifactReadDataProviderRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+    class EdifactReadDataProviderRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
         private {
             EdifactAbstractIterator m_iterator;
         }

@@ -1,0 +1,45 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchOnnxRunBinding
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchOnnxRunBinding {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("onnx_run_binding: skipped (ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("onnx_run_binding");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        ML::OnnxModel model(model_path, <ML::OnnxSessionConfig>{"providers": ()});
+        ML::OnnxIoBinding binding = model.createBinding();
+
+        r.setup = sub () {
+            ML::Tensor input = new ML::Tensor(OnnxBench::makeFloat32Input(rows), (rows, 1));
+            binding.bindInput(name: "X", value: input);
+            binding.bindOutput(name: "Y");
+            r.bytes_processed = OnnxBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            hash<auto> result = binding.run(tensors: True);
+            ML::Tensor output = result.Y;
+            OnnxBench::verifyTensorOutput("onnx_run_binding", output, rows);
+        };
+
+        exit(r.run());
+    }
+}

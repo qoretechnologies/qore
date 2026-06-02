@@ -438,12 +438,16 @@ Datasource* DatasourcePool::getDSIntern(bool& new_ds, int64& wait_total, Excepti
         //printd(5, "DatasourcePool::getDSIntern() this: %p tl_timeout_ms: %d max: %d\n", this, tl_timeout_ms, max);
         // otherwise we sleep until a connection becomes available
         ++wait_count;
-        int64 warn_start = q_clock_getmicros_monotonic();
+        // Monotonic clock for the elapsed-time measurement: a realtime clock jump
+        // (NTP slewing, VM time sync) between warn_start and the post-wait read
+        // would otherwise skew wait_total and cause the warning callback to mis-fire
+        // (or fail to fire).  Same fix and rationale as ConnectionPool::acquire().
+        int64 warn_start = q_get_monotonic_us();
         int rc = tl_timeout_ms ? wait((QoreThreadLock*)this, tl_timeout_ms) : wait((QoreThreadLock*)this);
         wait_count--;
 
-        // add waiting time to total time (monotonic clock: immune to wall-clock steps)
-        wait_total += (q_clock_getmicros_monotonic() - warn_start);
+        // add waiting time to total time
+        wait_total += (q_get_monotonic_us() - warn_start);
 
         if (!valid) {
             xsink->raiseException("DATASOURCEPOOL-ERROR", "%s:%s@%s: DatasourcePool deleted while TID %d waiting " \
@@ -488,6 +492,23 @@ QoreValue DatasourcePool::select(const QoreString* sql, const QoreListNode* args
     return dpah->select(sql, args, xsink);
 }
 
+QoreValue DatasourcePool::selectTyped(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink);
+    if (!dpah)
+        return QoreValue();
+
+    return dpah->selectTyped(sql, args, xsink);
+}
+
+QoreColumnarResult* DatasourcePool::selectColumnar(const QoreString* sql, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    DatasourcePoolActionHelper dpah(*this, xsink);
+    if (!dpah)
+        return nullptr;
+
+    return dpah->selectColumnar(sql, args, xsink);
+}
+
 QoreHashNode* DatasourcePool::selectRow(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {
    DatasourcePoolActionHelper dpah(*this, xsink);
    if (!dpah)
@@ -502,6 +523,14 @@ QoreValue DatasourcePool::selectRows(const QoreString* sql, const QoreListNode* 
       return QoreValue();
 
    return dpah->selectRows(sql, args, xsink);
+}
+
+QoreValue DatasourcePool::selectRowsTyped(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {
+   DatasourcePoolActionHelper dpah(*this, xsink);
+   if (!dpah)
+      return QoreValue();
+
+   return dpah->selectRowsTyped(sql, args, xsink);
 }
 
 QoreHashNode* DatasourcePool::describe(const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {

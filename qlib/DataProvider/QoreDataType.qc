@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreDataType class definition
 
-/** QoreDataType.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** QoreDataType.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,6 +24,7 @@
 
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
+
 #! Display name and description info (without name field)
 /** @since %DataProvider 3.1
 */
@@ -329,10 +330,12 @@ public class QoreDataType inherits AbstractDataProviderType {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept values of type %y", getName(),
                 value.type());
         }
-        if ((!exists value || value == NULL) && exists default_value) {
+        # Only use default value when value is truly missing, not when NULL is explicitly passed
+        if (!exists value && exists default_value) {
             return default_value;
         }
         value = type.acceptsValue(value);
+        string name = type.getName();
         if (allowed_values && !allowed_values_creatable) {
             if (!allowed_values_map{value}) {
                 throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed values: %y",

@@ -37,7 +37,13 @@
 #include <unistd.h>
 #include <poll.h>
 
-//! Returns the current time in microseconds since the epoch
+//! Returns the current wall-clock time in microseconds since the Unix epoch (CLOCK_REALTIME).
+/** Used only for comparing against user-supplied absolute deadlines (\c addTimer() deadlines
+    come from \c DateTime::getEpochMicrosecondsUTC() and must therefore be compared in
+    realtime).  For internal "wait at most N ms" deadline arithmetic (EINTR retry remaining
+    time), use \c q_get_monotonic_us() instead so the bound is not skewed by realtime clock
+    adjustments.
+*/
 static int64_t q_epoch_us_fast() {
     int us;
     int64_t secs = q_epoch_us(us);
@@ -397,7 +403,9 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         ts.tv_sec = effective_timeout_ms / 1000;
         ts.tv_nsec = (effective_timeout_ms % 1000) * 1000000;
         pts = &ts;
-        deadline_us = q_epoch_us_fast() + (int64_t)effective_timeout_ms * 1000;
+        // Monotonic clock for the EINTR-retry deadline: this is a relative "wait at most N ms"
+        // bound, so it must not be skewed by realtime clock adjustments.
+        deadline_us = q_get_monotonic_us() + (int64_t)effective_timeout_ms * 1000;
     }
 
     int rc;
@@ -410,7 +418,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         // restarts the full timeout and repeated signals can prevent the
         // timeout from ever firing (root cause of stale-detect stalls)
         if (pts) {
-            int64_t remaining_us = deadline_us - q_epoch_us_fast();
+            int64_t remaining_us = deadline_us - q_get_monotonic_us();
             if (remaining_us <= 0) {
                 rc = 0;
                 break;
@@ -502,7 +510,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     int epoll_timeout_ms = effective_timeout_ms;
     int64_t epoll_deadline_us = 0;
     if (epoll_timeout_ms >= 0) {
-        epoll_deadline_us = q_epoch_us_fast() + (int64_t)epoll_timeout_ms * 1000;
+        // Monotonic clock for the EINTR-retry deadline (see kevent path above).
+        epoll_deadline_us = q_get_monotonic_us() + (int64_t)epoll_timeout_ms * 1000;
     }
     while (true) {
         rc = epoll_wait(event_fd, epevents.data(), epevents.size(), epoll_timeout_ms);
@@ -511,7 +520,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
         // Recompute remaining time after EINTR
         if (epoll_timeout_ms >= 0) {
-            int64_t remaining_us = epoll_deadline_us - q_epoch_us_fast();
+            int64_t remaining_us = epoll_deadline_us - q_get_monotonic_us();
             if (remaining_us <= 0) {
                 rc = 0;
                 break;
@@ -595,7 +604,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     int poll_timeout_ms = effective_timeout_ms;
     int64_t poll_deadline_us = 0;
     if (poll_timeout_ms >= 0) {
-        poll_deadline_us = q_epoch_us_fast() + (int64_t)poll_timeout_ms * 1000;
+        // Monotonic clock for the EINTR-retry deadline (see kevent/epoll paths above).
+        poll_deadline_us = q_get_monotonic_us() + (int64_t)poll_timeout_ms * 1000;
     }
     while (true) {
         rc = ::poll(pollfds.data(), pollfds.size(), poll_timeout_ms);
@@ -604,7 +614,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
         // Recompute remaining time after EINTR
         if (poll_timeout_ms >= 0) {
-            int64_t remaining_us = poll_deadline_us - q_epoch_us_fast();
+            int64_t remaining_us = poll_deadline_us - q_get_monotonic_us();
             if (remaining_us <= 0) {
                 rc = 0;
                 break;

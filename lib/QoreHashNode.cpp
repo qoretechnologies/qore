@@ -59,7 +59,10 @@ qore_hash_private::~qore_hash_private() {
 }
 
 void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
-    if (complexTypeInfo) {
+    // Only clear complexTypeInfo when SETTING a hashdecl, not when clearing one
+    // This allows hashes to transition between hashdecl and complex types without losing type info
+    if (hd && complexTypeInfo) {
+        // Setting a new hashdecl: clear the complex type
         complexTypeInfo = nullptr;
     }
     if (hashdecl) {
@@ -69,6 +72,7 @@ void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
         typed_hash_decl_private::get(*hd)->ref();
     }
     hashdecl = hd;
+
 }
 
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
@@ -321,8 +325,8 @@ int qore_hash_private::parseCheckTypedAssignment(const QoreProgramLocation* loc,
                 if (res && (res == QTI_IDENT || (!strict_check || !may_not_match)))
                     continue;
                 QoreValue kn = keys[i];
-                const QoreStringNode* key = kn.getType() == NT_STRING ? kn.get<const QoreStringNode>() : nullptr;
-                if (key) {
+                if (kn.getType() == NT_STRING) {
+                    QoreStringValueHelper key(kn);
                     parse_error(*loc, "cannot %s 'hash<string, %s>' from key '%s' of a hash with incompatible " \
                         "value type '%s'", context_action, QoreTypeInfo::getName(vti), key->c_str(),
                         QoreTypeInfo::getName(vti2));
@@ -363,35 +367,49 @@ QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, co
         init = a.takeReferencedNode<QoreHashNode>();
     }
 
-    return newComplexHashFromHash(typeInfo, init, xsink);
+    return newComplexHashFromHash(typeInfo, init, xsink, true);
 }
 
 QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init_hash,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool coerce_values) {
     ReferenceHolder<QoreHashNode> init(init_hash, xsink);
 
-    // check member types
-    if (init) {
-        if (!init->is_unique())
-            init = init->copy();
-        HashIterator i(*init);
-        const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
-        assert(vti);
-        while (i.next()) {
-            // check types
-            HashAssignmentHelper hah(i);
-            QoreValue qv(hash_assignment_priv::get(hah)->swap(QoreValue()));
-            QoreTypeInfo::acceptInputKey(vti, i.getKey(), qv, xsink);
-            hash_assignment_priv::get(hah)->swap(qv);
-            if (*xsink)
-                return nullptr;
-        }
-    } else {
+    if (!init) {
         init = new QoreHashNode;
+    } else if (!init->is_unique()) {
+        init = init->copy();
     }
     // mark new hash with new type
     assert(init->is_unique());
+
     init->priv->complexTypeInfo = typeInfo;
+    // Clear any hashdecl binding - complex hash types use complexTypeInfo, not hashdecl
+    if (init->priv->hashdecl) {
+        init->priv->setHashDecl(nullptr);
+    }
+
+    // Apply value type coercion if the hash has a typed value type
+    // (e.g. hash<string, softint> converts "23" -> 23).  Use the same
+    // assignment path as normal hash stores so hashdecl and complex-hash
+    // metadata is preserved instead of being collapsed to the base NT_HASH.
+    const QoreTypeInfo* vti = coerce_values ? QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo) : nullptr;
+    if (QoreTypeInfo::hasType(vti)) {
+        HashIterator i(*init);
+        while (i.next()) {
+            HashAssignmentHelper hah(i);
+            QoreValue qv(hash_assignment_priv::get(hah)->swap(QoreValue()));
+            if (!QoreTypeInfo::retypeValue(qv, vti, xsink)) {
+                hash_assignment_priv::get(hah)->swap(qv);
+                return nullptr;
+            }
+            QoreTypeInfo::acceptInputKey(vti, i.getKey(), qv, xsink);
+            hash_assignment_priv::get(hah)->swap(qv);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
+
     return init.release();
 }
 
@@ -1006,7 +1024,7 @@ ConstHashIterator::ConstHashIterator(const QoreHashNode* qh) : h(qh), priv(new q
 ConstHashIterator::ConstHashIterator(const QoreHashNode& qh) : h(&qh), priv(new qhi_priv()) {
 }
 
-ConstHashIterator::ConstHashIterator(const ConstHashIterator& old) : h(old.h->hashRefSelf()),
+ConstHashIterator::ConstHashIterator(const ConstHashIterator& old) : h(old.h ? old.h->hashRefSelf() : nullptr),
         priv(new qhi_priv(*old.priv)) {
 }
 

@@ -33,9 +33,11 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreThreadList.h"
 
+
 #include <qore/safe_dslist>
 
 #include <cassert>
+#include <cstdio>
 
 //! add an element to the end of the stack trace
 void QoreCallStack::add(qore_call_t type, const char* label, int start, int end, const char* code,
@@ -127,9 +129,22 @@ QoreException* QoreException::rethrow() {
     const char *fn = nullptr;
     QoreHashNode* n = l->retrieveEntry(0).get<QoreHashNode>();
     // get function name
-    fn = !n ? "<unknown>" : n->getKeyValue("function").get<QoreStringNode>()->c_str();
+    std::string fn_storage;
+    if (n) {
+        QoreStringValueHelper fn_str(n->getKeyValue("function"));
+        fn_storage = fn_str->c_str();
+        fn = fn_storage.c_str();
+    } else {
+        fn = "<unknown>";
+    }
 
-    l->insert(QoreThreadList::getCallStackHash(CT_RETHROW, fn, *get_runtime_location()), nullptr);
+    const QoreProgramLocation* loc = get_runtime_location();
+    if (loc) {
+        l->insert(QoreThreadList::getCallStackHash(CT_RETHROW, fn, *loc), nullptr);
+    } else {
+        static QoreProgramLocation default_loc;
+        l->insert(QoreThreadList::getCallStackHash(CT_RETHROW, fn, default_loc), nullptr);
+    }
     return e.release();
 }
 

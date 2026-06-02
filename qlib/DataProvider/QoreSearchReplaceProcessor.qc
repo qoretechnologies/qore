@@ -152,7 +152,11 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         if (!exists field_val || field_val.typeCode() != NT_STRING) {
             return record;
         }
-        string val = field_val;
+        return record + {field: replaceStringValue(field_val)};
+    }
+
+    #! Applies the configured replacement to one string value
+    private string replaceStringOnlyValue(string val) {
         if (is_regex) {
             val = regex_subst(val, search, replace_str, regex_opts);
         } else {
@@ -166,7 +170,109 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
                 }
             }
         }
-        return record + {field: val};
+        return val;
+    }
+
+    #! Applies the configured replacement to one nullable string value
+    private *string replaceNullableStringValue(*string field_val) {
+        if (!exists field_val) {
+            return NOTHING;
+        }
+        return replaceStringOnlyValue(field_val);
+    }
+
+    #! Applies the configured replacement to one scalar value
+    private auto replaceStringValue(auto field_val) {
+        if (!exists field_val || field_val.typeCode() != NT_STRING) {
+            return field_val;
+        }
+        return replaceStringOnlyValue(field_val);
+    }
+
+    #! Applies configured replacement to a top-level column block field
+    private hash<auto> replaceColumnBlock(hash<auto> records) {
+        hash<auto> result = records + {};
+        if (!records.hasKey(field)) {
+            return result;
+        }
+        if (result{field}.typeCode() == NT_LIST) {
+            result{field} = map replaceStringValue($1), result{field};
+            return result;
+        }
+        if (result{field}.typeCode() == NT_BUFFER
+                && (result{field}.fullType() == "buffer<string>"
+                    || result{field}.fullType() == "buffer<*string>")) {
+            if (result{field}.fullType() == "buffer<string>") {
+                list<string> values = ();
+                foreach string value in (result{field}) {
+                    values += replaceStringOnlyValue(value);
+                }
+                result{field} = new buffer<string>(values);
+            } else {
+                list<*string> values = ();
+                foreach *string value in (result{field}) {
+                    values += replaceNullableStringValue(value);
+                }
+                result{field} = new buffer<*string>(values);
+            }
+        }
+        return result;
+    }
+
+    #! Applies configured replacement to a top-level DataFrame column without copying other columns
+    private auto replaceDataFrameColumn(auto records) {
+        if (!records.columnNames().contains(field)) {
+            return records;
+        }
+        return records.withColumn(field, map replaceStringValue($1), records.getColumn(field));
+    }
+
+    #! Processes an explicitly-shaped block without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR", "QoreSearchReplaceProcessor: not configured; provide 'field', "
+                "'search', and 'replace' options";
+        }
+        if (field.find(".") >= 0) {
+            list<auto> rows = shape == DataProviderShape::RowRecords
+                ? (records,) : AbstractDataProcessor::convertShape(records, shape, DataProviderShape::RowRecords);
+            *list<auto> processed = processRecordsImpl(rows);
+            if (!processed) {
+                return;
+            }
+            if (shape == DataProviderShape::RowRecords) {
+                return processed.size() == 1 ? processed[0] : processed;
+            }
+            switch (shape) {
+                case DataProviderShape::HashOfLists:
+                    return AbstractDataProcessor::recordsToHashList(processed);
+                case DataProviderShape::DataFrameBlock:
+                    return AbstractDataProcessor::getDataFrameClass().newObject(processed);
+                case DataProviderShape::BufferColumns:
+                    return ColumnarResult::fromRows(processed);
+            }
+        }
+
+        switch (shape) {
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+            case DataProviderShape::HashOfLists:
+                return replaceColumnBlock(records);
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    return ColumnarResult::fromColumnHash(replaceColumnBlock(records.toColumnHash()));
+                }
+                return replaceColumnBlock(records);
+            case DataProviderShape::DataFrameBlock:
+                return replaceDataFrameColumn(records);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! Processes hash-of-lists blocks without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        return processRecordsShapeImpl(records, DataProviderShape::HashOfLists);
     }
 
     #! Returns the input type as the output type (search-replace does not change field structure)
@@ -181,14 +287,25 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         return input_type;
     }
 
-    #! Indicates that this processor does not support the bulk API
+    #! Indicates that this processor supports the bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_TRANSFORM;
+    }
+
+    #! Returns supported input shapes
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
     }
 }
 }

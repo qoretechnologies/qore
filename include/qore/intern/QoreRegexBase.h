@@ -39,6 +39,7 @@
 
 // base class for regex and regex substitution classes
 #include <pcre2.h>
+#include <string>
 
 //! Size of error buffer for PCRE2 error messages
 constexpr size_t qore_pcre2_errorbuf_size = 512;
@@ -84,10 +85,29 @@ public:
     DLLLOCAL void setUnicode();
     DLLLOCAL void setUngreedy();
 
+    //! Returns the regex options flags
+    DLLLOCAL int getOptions() const { return options; }
+
+    //! OR additional option bits into the options bitmask (for AOT deserialization)
+    DLLLOCAL void addOptions(int opts) { options |= opts; }
+
+    //! Returns the original pattern string (preserved for AOT serialization)
+    DLLLOCAL const char* getPatternCStr() const {
+        return pattern_cache.empty() ? nullptr : pattern_cache.c_str();
+    }
+
+    //! Saves the pattern string before it's deleted during compilation
+    DLLLOCAL void savePattern() {
+        if (str && pattern_cache.empty()) {
+            pattern_cache = str->c_str();
+        }
+    }
+
 protected:
     pcre2_code* p = nullptr;
     QoreString* str = nullptr;
     int options = PCRE2_UTF;
+    std::string pattern_cache;  //!< preserved for AOT serialization
 };
 
 #endif

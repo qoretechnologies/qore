@@ -32,8 +32,32 @@
     - @ref mongodb::MongoClient "MongoClient" - MongoDB client connection management
     - @ref mongodb::MongoDatabase "MongoDatabase" - MongoDB database operations
     - @ref mongodb::MongoCollection "MongoCollection" - MongoDB collection CRUD operations
-    - @ref mongodb::MongoCursor "MongoCursor" - Cursor for iterating query results
+    - <tt>MongoCursor&lt;DocT&gt;</tt> - Cursor for iterating query results
     - @ref mongodb::ObjectId "ObjectId" - MongoDB ObjectId type
+
+    @section mongodb_generic_cursor Typed Cursor Example
+
+    <tt>MongoCursor&lt;DocT&gt;</tt> is generic. The builtin collection
+    APIs return <tt>MongoCursor&lt;hash&lt;auto&gt;&gt;</tt>, which makes the document
+    type visible to the parser, reflection, API metadata, and generated docs:
+
+    @code{.py}
+%requires mongodb
+
+MongoClient client("mongodb://localhost:27017");
+MongoDatabase db = client.getDatabase("example");
+MongoCollection users = db.getCollection("users");
+
+MongoCursor<hash<auto>> cursor = users.find({"status": "active"});
+while (*hash<auto> doc = cursor.next()) {
+    printf("User: %y\n", doc);
+}
+
+list<hash<auto>> docs = users.aggregate((
+    {"$match": {"status": "active"}},
+    {"$project": {"name": 1, "email": 1}},
+)).toList();
+    @endcode
 
     @section mongodbconnection Connection Strings
 
@@ -59,7 +83,8 @@
     @subsection mongodb_1_0 mongodb Module Version 1.0
     - Initial release with full CRUD support
     - Aggregation pipeline support
-    - Cursor-based iteration
+    - Cursor-based iteration with
+      <tt>MongoCursor&lt;DocT: hash&lt;auto&gt; = hash&lt;auto&gt;&gt;</tt>
     - ObjectId type support
     - BSON to Qore type conversion
 */

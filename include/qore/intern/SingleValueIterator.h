@@ -35,16 +35,25 @@
 
 extern QoreClass* QC_SINGLEVALUEITERATOR;
 
+DLLLOCAL QoreObject* qore_new_single_value_iterator_object(QoreProgram* pgm, QoreValue value,
+        const QoreTypeInfo* element_type = nullptr);
+
 // the c++ object
 class SingleValueIterator : public QoreIteratorBase {
 public:
-    DLLLOCAL SingleValueIterator() : validp(false) {
+    DLLLOCAL SingleValueIterator(const QoreTypeInfo* element_type = autoTypeInfo)
+            : element_type(element_type ? element_type : autoTypeInfo), validp(false) {
     }
 
-    DLLLOCAL SingleValueIterator(const QoreValue v) : val(v.refSelf()), validp(false) {
+    DLLLOCAL SingleValueIterator(const QoreValue v, const QoreTypeInfo* element_type = nullptr)
+            : val(v.refSelf()), element_type(element_type ? element_type : v.getTypeInfo()), validp(false) {
+        if (!QoreTypeInfo::hasType(this->element_type)) {
+            this->element_type = autoTypeInfo;
+        }
     }
 
-    DLLLOCAL SingleValueIterator(const SingleValueIterator& old) : val(old.val.refSelf()), validp(old.validp) {
+    DLLLOCAL SingleValueIterator(const SingleValueIterator& old)
+            : val(old.val.refSelf()), element_type(old.element_type), validp(old.validp) {
     }
 
     DLLLOCAL bool next() {
@@ -85,7 +94,7 @@ public:
     DLLLOCAL virtual const char* getName() const { return "SingleValueIterator"; }
 
     DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
-        return val.getTypeInfo();
+        return element_type;
     }
 
     // Native fast-path: getValue() takes no xsink, so use a custom override
@@ -111,6 +120,7 @@ public:
 
 protected:
     QoreValue val{};
+    const QoreTypeInfo* element_type;
     bool validp;
 };
 

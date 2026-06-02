@@ -368,6 +368,9 @@ private:
     //! Current inner poll operation (ref'd) — changes during state transitions
     SocketPollOperationBase* current_op;
 
+    //! Protects current_op replacement against concurrent close()/abort()
+    mutable QoreThreadLock op_lock;
+
     //! The socket object (ref'd by us — separate from inner op's ref)
     QoreSocketObject* sock_obj;
 
@@ -516,6 +519,12 @@ private:
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
+
+    //! Returns a referenced snapshot of the current inner operation
+    DLLLOCAL SocketPollOperationBase* refCurrentOp() const;
+
+    //! Installs a new inner operation unless the outer operation has been closed
+    DLLLOCAL bool replaceCurrentOp(SocketPollOperationBase* op, H2State state, ExceptionSink* xsink);
 
     //! Release the current inner operation
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);

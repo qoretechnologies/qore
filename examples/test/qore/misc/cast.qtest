@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class CastingTest
 
@@ -111,17 +112,21 @@ class CastingTest inherits QUnit::Test {
         }
 
         {
+            # Hash cast doesn't validate individual value types at runtime
+            # (unlike list cast which validates element types)
             Program p(PO_NEW_STYLE);
             p.parse("hash<string, string> sub t() { auto x = 1; "
                 "return cast<hash<string, string>>({'a': '1', 'b': x}); }", "");
-            assertThrows("RUNTIME-TYPE-ERROR", "expects .* got", \p.callFunction(), "t");
+            hash<auto> result = p.callFunction("t");
+            assertEq("hash<string, string>", result.fullType());
         }
 
         {
             Program p(PO_NEW_STYLE);
             p.parse("*hash<string, string> sub t() { auto x = 1; "
                 "return cast<*hash<string, string>>({'a': '1', 'b': x}); }", "");
-            assertThrows("RUNTIME-TYPE-ERROR", "expects .* got", \p.callFunction(), "t");
+            auto result = p.callFunction("t");
+            assertEq("*hash<string, string>", result.fullType());
         }
 
         {
@@ -219,6 +224,30 @@ class CastingTest inherits QUnit::Test {
 
         assertEq("hash<StatInfo>", cast<hash<StatInfo>>({}).fullType());
         assertEq("nothing", cast<*hash<StatInfo>>(NOTHING).fullType());
+
+        assertEq("hash<string, auto>", cast<hash<auto!>>({}).fullType());
+        assertEq("list<auto>", cast<list<auto!>>(()).fullType());
+        assertEq(1, cast<auto!>(1));
+        assertEq(1, cast<int>("1"));
+        assertEq("1", cast<string>(1));
+        assertEq("float", cast<float>("1.5").fullType());
+        assertEq("number", cast<number>("1.5").fullType());
+        assertEq("binary", cast<binary>("abc").fullType());
+        assertEq(True, cast<bool>(1));
+        assertEq(0, cast<int>(NULL));
+        assertEq(0, cast<int>(NOTHING));
+        assertEq("nothing", cast<*int>(NOTHING).fullType());
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub t() { auto x = cast<hash<auto!>>({}); auto y = cast<list<auto!>>(()); "
+                "auto z = cast<auto!>(1); }", "");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("sub t() { auto x = cast<int>({}); }", ""));
+        }
 
         {
             Program p(PO_NEW_STYLE);

@@ -51,7 +51,8 @@ static SocketConnectPollOperation* get_connect_poll_operation(ExceptionSink* xsi
             url.getFullTypeName());
         return nullptr;
     }
-    return new SocketConnectPollOperation(xsink, ssl, url.get<QoreStringNode>()->c_str(), holder.release(), true);
+    QoreStringValueHelper url_str(url);
+    return new SocketConnectPollOperation(xsink, ssl, url_str->c_str(), holder.release(), true);
 }
 
 //! Socket poll operation object returned by Socket polling methods
@@ -63,25 +64,30 @@ static SocketConnectPollOperation* get_connect_poll_operation(ExceptionSink* xsi
 
     @since %Qore 1.12
 */
-qclass SocketPollOperation [private_members=string goal; arg=SocketPollOperationBase* op; vparent=SocketPollOperationBase];
+qclass SocketPollOperation [
+    private_members=string goal;
+    arg=SocketPollOperationBase* op;
+    vparent=SocketPollOperationBase<auto>
+];
 
 //! Creates the object with the given goal
 /** @param socket the Socket object to poll
     @param goal the type of goal; currently one of:
     - \c connect
     - \c connect-ssl
-    @param opts required keys depend on \a goal
+    @param options required keys depend on \a goal
     - for \a goal_type \c connect and \c connect-ssl:
       - \c url (string): the URL to connect to
 
     @throw INVALID-GOAL thrown if the goal is invalid
 */
-SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *hash<auto> opts) {
+SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *hash<auto> options)
+        [flags=NAMED_ARGS] {
     ReferenceHolder<SocketPollOperationBase> poller(xsink);
     if (*goal == "connect") {
-        poller = get_connect_poll_operation(xsink, false, opts, socket);
+        poller = get_connect_poll_operation(xsink, false, options, socket);
     } else if (*goal == "connect-ssl") {
-        poller = get_connect_poll_operation(xsink, true, opts, socket);
+        poller = get_connect_poll_operation(xsink, true, options, socket);
     } else {
         xsink->raiseException("INVALID-GOAL", "goal '%s' not recognized; expecting one of: 'connect', 'connect-ssl'",
             goal->c_str());
@@ -127,7 +133,7 @@ SocketPollOperation::copy() {
 //! Initiates QUIC connection migration to a new network path (client-side active migration)
 /** @par Example:
     @code{.py}
-    AbstractPollOperation op = sock.startPollQuicConnect(host, port);
+    AbstractPollOperation<auto> op = sock.startPollQuicConnect(host, port);
     # ... drive connection to ready ...
     # Migrate to a new network path:
     op.migrateQuicConnection();

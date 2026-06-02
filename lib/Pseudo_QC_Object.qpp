@@ -252,6 +252,8 @@ ObjectPairIterator <object>::pairIterator() [flags=CONSTANT] {
 bool b = obj.hasCallableMethod("getStatus");
     @endcode
 
+    @param method the method name to check
+
     @return @ref True "True" if the given method exists (can be non-static or static) and is callable from the current context
 
     @see
@@ -265,8 +267,8 @@ bool b = obj.hasCallableMethod("getStatus");
 
     @since %Qore 0.8.8
  */
-bool <object>::hasCallableMethod(string name) [flags=CONSTANT] {
-    return qore_class_private::runtimeHasCallableMethod(*(obj->getClass()), name->getBuffer());
+bool <object>::hasCallableMethod(string method) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_class_private::runtimeHasCallableMethod(*(obj->getClass()), method->getBuffer());
 }
 
 //! Returns @ref True "True" if the given non-static method exists and is callable from the current context
@@ -274,6 +276,8 @@ bool <object>::hasCallableMethod(string name) [flags=CONSTANT] {
     @code{.py}
 bool b = obj.hasCallableNormalMethod("getStatus");
     @endcode
+
+    @param method the non-static method name to check
 
     @return @ref True "True" if the given non-static method exists and is callable from the current context
 
@@ -288,8 +292,8 @@ bool b = obj.hasCallableNormalMethod("getStatus");
 
     @since %Qore 0.8.8
  */
-bool <object>::hasCallableNormalMethod(string name) [flags=CONSTANT] {
-    return qore_class_private::runtimeHasCallableNormalMethod(*(obj->getClass()), name->getBuffer());
+bool <object>::hasCallableNormalMethod(string method) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_class_private::runtimeHasCallableNormalMethod(*(obj->getClass()), method->getBuffer());
 }
 
 //! Returns @ref True "True" if the given static method exists and is callable from the current context
@@ -297,6 +301,8 @@ bool <object>::hasCallableNormalMethod(string name) [flags=CONSTANT] {
     @code{.py}
 bool b = obj.hasCallableStaticMethod("getStatus");
     @endcode
+
+    @param method the static method name to check
 
     @return @ref True "True" if the given static method exists and is callable from the current context
 
@@ -310,8 +316,8 @@ bool b = obj.hasCallableStaticMethod("getStatus");
 
     @since %Qore 0.8.8
  */
-bool <object>::hasCallableStaticMethod(string name) [flags=CONSTANT] {
-    return qore_class_private::runtimeHasCallableStaticMethod(*(obj->getClass()), name->getBuffer());
+bool <object>::hasCallableStaticMethod(string method) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_class_private::runtimeHasCallableStaticMethod(*(obj->getClass()), method->getBuffer());
 }
 
 //! Returns @ref True since objects can return a non-zero size
@@ -360,6 +366,6 @@ string <object>::uniqueHash() [flags=CONSTANT] {
 
     @since %Qore 0.9.4
  */
-code <object>::getCallReference(string identifier) [flags=RET_VALUE_ONLY] {
+code <object>::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return get_call_reference_intern(obj, identifier, xsink);
 }

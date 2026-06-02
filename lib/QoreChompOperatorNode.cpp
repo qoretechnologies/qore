@@ -88,13 +88,10 @@ QoreValue QoreChompOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     while (hi.next()) {
         if (hi.get().getType() == NT_STRING) {
             QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+            // note that no exception can happen here
+            ensure_unique(v, xsink);
+            assert(!*xsink);
             QoreStringNode* vs = v.get<QoreStringNode>();
-            if (!vs->is_unique()) {
-                QoreStringNode* old = vs;
-                vs = vs->copy();
-                old->deref();
-                v = vs;
-            }
             count += vs->chomp();
         }
     }
@@ -105,7 +102,13 @@ int QoreChompOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     assert(!parse_context.typeInfo);
     QoreParseContextFlagHelper fh(parse_context);
     fh.setFlags(PF_FOR_ASSIGNMENT);
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
     if (!err && exp && checkLValue(exp, parse_context.pflag)) {
         err = -1;
     }
@@ -123,5 +126,15 @@ int QoreChompOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.known_type = parse_context.typeInfo;
+    if (operand_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+        && QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

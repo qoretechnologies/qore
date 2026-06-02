@@ -104,6 +104,15 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         #! Window counter
         int window_count = 0;
 
+        #! Preferred shape for pending flush output
+        DataProviderShape pending_output_shape = DataProviderShape::RowRecords;
+
+        #! True if the pending output shape has been set for buffered records
+        bool pending_output_shape_set = False;
+
+        #! True while a shaped bulk block is dispatching through processRecordImpl()
+        bool processing_shaped_bulk = False;
+
         #! Whether configured
         bool configured = False;
     }
@@ -137,6 +146,24 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         configured = True;
     }
 
+    #! Records the shape of accumulated input for shape-preserving flushes
+    private updatePendingOutputShape(DataProviderShape shape) {
+        if (!pending_output_shape_set) {
+            pending_output_shape = cast<enum<DataProviderShape>>(shape);
+            pending_output_shape_set = True;
+            return;
+        }
+        if (pending_output_shape != shape) {
+            pending_output_shape = cast<enum<DataProviderShape>>(DataProviderShape::RowRecords);
+        }
+    }
+
+    #! Clears pending flush shape state
+    private clearPendingOutputShape() {
+        pending_output_shape = cast<enum<DataProviderShape>>(DataProviderShape::RowRecords);
+        pending_output_shape_set = False;
+    }
+
     #! Returns the name of this data provider
     string getName() {
         return "cross-correlation";
@@ -160,6 +187,9 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
             throw "PROCESSOR-ERROR",
                 "QoreCrossCorrelationProcessor: not configured; provide constructor options";
         }
+        if (!processing_shaped_bulk) {
+            updatePendingOutputShape(DataProviderShape::RowRecords);
+        }
         push buffer, record;
         if (buffer.lsize() >= window_size) {
             hash<auto> result = computeCrossCorrelation(buffer);
@@ -169,8 +199,8 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         return;
     }
 
-    #! Flushes remaining buffered data
-    private *list<auto> flushRecordsImpl() {
+    #! Builds remaining buffered results
+    private *list<auto> buildFlushRows() {
         if (!configured || !buffer) {
             return;
         }
@@ -181,6 +211,21 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         }
         buffer = ();
         return;
+    }
+
+    #! Flushes remaining buffered data as row records for direct callers
+    private *list<auto> flushRecordsImpl() {
+        *list<auto> results = buildFlushRows();
+        clearPendingOutputShape();
+        return results;
+    }
+
+    #! Flushes remaining buffered data in the negotiated pipeline shape
+    private flushImpl(code enqueue) {
+        *list<auto> results = buildFlushRows();
+        DataProviderShape output_shape = pending_output_shape;
+        clearPendingOutputShape();
+        AbstractDataProcessor::emitRecordListShape(results, output_shape, enqueue);
     }
 
     #! Computes cross-correlation from buffered records
@@ -282,9 +327,103 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         };
     }
 
-    #! Does not support bulk API
+    #! Processes records in a given bulk shape
+    private *hash<auto> processRecordsBulkShape(hash<auto> records, DataProviderShape shape) {
+        updatePendingOutputShape(shape);
+        list<auto> results;
+        processing_shaped_bulk = True;
+        on_exit {
+            processing_shaped_bulk = False;
+        }
+        HashListIterator it(records);
+        while (it.next()) {
+            *auto result = processRecordImpl(it.getValue());
+            if (exists result) {
+                if (result.typeCode() == NT_LIST) {
+                    results += result;
+                } else {
+                    push results, result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        return AbstractDataProcessor::recordsToHashList(results);
+    }
+
+    #! Processes records in bulk (hash-of-lists) format
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        return processRecordsBulkShape(records, DataProviderShape::HashOfLists);
+    }
+
+    #! Processes DataFrame or BufferColumns input from selected top-level columns only
+    private *hash<auto> processColumnarRecordsShape(auto records, DataProviderShape shape, hash<auto> columns) {
+        updatePendingOutputShape(shape);
+        int record_count = AbstractDataProcessor::shapeRecordCount(records, shape);
+        list<auto> results;
+        processing_shaped_bulk = True;
+        on_exit {
+            processing_shaped_bulk = False;
+        }
+        for (int i = 0; i < record_count; ++i) {
+            hash<auto> record;
+            record{field_x} = columns{field_x}[i];
+            record{field_y} = columns{field_y}[i];
+            *auto result = processRecordImpl(record);
+            if (exists result) {
+                if (result.typeCode() == NT_LIST) {
+                    results += result;
+                } else {
+                    push results, result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        return AbstractDataProcessor::recordsToHashList(results);
+    }
+
+    #! Processes data in an explicitly negotiated shape
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::HashOfLists:
+                return processRecordsBulkShape(records, shape);
+            case DataProviderShape::BufferColumns:
+            case DataProviderShape::DataFrameBlock: {
+                list<string> fields = (field_x, field_y);
+                *hash<auto> columns = AbstractDataProcessor::getTopLevelShapeColumns(records, shape, fields);
+                if (columns && columns.size() == fields.size()) {
+                    return AbstractDataProcessor::convertHashListResultShape(
+                        processColumnarRecordsShape(records, shape, columns), shape);
+                }
+                return AbstractDataProcessor::convertHashListResultShape(
+                    processRecordsBulkShape(AbstractDataProcessor::convertShape(
+                        records, shape, DataProviderShape::HashOfLists)[0], shape), shape);
+            }
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! Supports bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
+    }
+
+    #! Returns supported input shapes
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
     }
 
     #! Returns the processor capability bitfield

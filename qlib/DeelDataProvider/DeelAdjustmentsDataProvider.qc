@@ -126,13 +126,13 @@ public class DeelAdjustmentsDataProvider inherits DeelDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If adjustment_id provided, get single record
         if (search_options.adjustment_id) {
             hash<auto> result = doGet("invoice-adjustments/" + encode_url(search_options.adjustment_id, True));
             list<hash<auto>> data = result.data ? (result.data,) : ();
-            return new DefaultRecordIterator(new ListHashIterator(data),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data),
                 where_cond, search_options);
         }
 
@@ -147,7 +147,7 @@ public class DeelAdjustmentsDataProvider inherits DeelDataProviderBase {
 
         list<hash<auto>> all_records = fetchAllPages("invoice-adjustments", "adjustments", params,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

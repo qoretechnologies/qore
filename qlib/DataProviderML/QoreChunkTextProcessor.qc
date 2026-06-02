@@ -44,7 +44,7 @@ QoreChunkTextProcessor proc({
     @endcode
 
 */
-public class QoreChunkTextProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreChunkTextProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -136,11 +136,33 @@ public class QoreChunkTextProcessor inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Path to HuggingFace tokenizer.json file",
                 "desc": "The filesystem path to a HuggingFace `tokenizer.json` configuration "
                     "file. This file defines the vocabulary and tokenization rules used to "
-                    "measure chunk boundaries accurately for a specific model.",
+                    "measure chunk boundaries accurately for a specific model. Provide either "
+                    "this option or `tokenizer_model_name` to load the tokenizer from "
+                    "QoreModelRegistry.",
                 "type": AbstractDataProviderTypeMap."string",
-                "required": True,
             },
-        };
+            "tokenizer_model_name": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Model Name",
+                "short_desc": "Registry model containing tokenizer.json",
+                "desc": "The QoreModelRegistry model/package name that contains a "
+                    "`tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "tokenizer_model_version": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Model Version",
+                "short_desc": "Registry model version or latest",
+                "desc": "Optional model version ID. Omit or use `latest` to load the most "
+                    "recent registered tokenizer package.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "tokenizer_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Artifact Name",
+                "short_desc": "Named tokenizer artifact in the registry package",
+                "desc": "Optional named artifact to load. Defaults to the package manifest's "
+                    "`tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+        } + AbstractDataProviderMLProcessor::ModelRegistryConstructorOptions;
     }
 
     private {
@@ -154,7 +176,19 @@ public class QoreChunkTextProcessor inherits DataProvider::AbstractDataProvider 
         int chunk_overlap;
 
         #! Path to the tokenizer config
-        string tokenizer_config_path;
+        *string tokenizer_config_path;
+
+        #! Registry model/package containing tokenizer.json
+        *string tokenizer_model_name;
+
+        #! Registry model version
+        *string tokenizer_model_version;
+
+        #! Registry tokenizer artifact name
+        *string tokenizer_artifact_name;
+
+        #! Registry backend options
+        hash<auto> registry_options;
 
         #! Lazy-initialized DocumentChunker
         *QoreTokenizerUtils::DocumentChunker chunker;
@@ -175,9 +209,14 @@ public class QoreChunkTextProcessor inherits DataProvider::AbstractDataProvider 
             throw "CONSTRUCTOR-ERROR", "text_field option is required";
         }
         tokenizer_config_path = copts.tokenizer_config_path;
-        if (!tokenizer_config_path.val()) {
-            throw "CONSTRUCTOR-ERROR", "tokenizer_config_path option is required";
+        tokenizer_model_name = copts.tokenizer_model_name;
+        tokenizer_model_version = copts.tokenizer_model_version;
+        tokenizer_artifact_name = copts.tokenizer_artifact_name;
+        if (!tokenizer_config_path.val() && !tokenizer_model_name.val()) {
+            throw "CONSTRUCTOR-ERROR",
+                "tokenizer_config_path or tokenizer_model_name option is required";
         }
+        registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
         chunk_size = copts.chunk_size ?? 512;
         if (chunk_size <= 0) {
             throw "CONSTRUCTOR-ERROR",
@@ -247,18 +286,32 @@ public class QoreChunkTextProcessor inherits DataProvider::AbstractDataProvider 
     #! Ensures the DocumentChunker is initialized (lazy creation to avoid file I/O in constructor)
     private ensureChunker() {
         if (!chunker) {
-            hash<auto> tokenizer_config =
-                parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
+%ifndef NoJson
+            hash<auto> tokenizer_config;
+            *hash<auto> tokenizer_runtime_config;
+            if (tokenizer_model_name.val()) {
+                QoreModelRegistry::ModelRegistry registry(registry_options);
+                hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+                    tokenizer_model_name, tokenizer_model_version, tokenizer_artifact_name);
+                tokenizer_config = tokenizer_package.tokenizer_json;
+                tokenizer_runtime_config = tokenizer_package.tokenizer_config;
+            } else {
+                tokenizer_config = parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
+            }
             chunker = new QoreTokenizerUtils::DocumentChunker(tokenizer_config, {
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
+                "tokenizer_runtime_config": tokenizer_runtime_config,
             });
+%else
+            throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
+%endif
         }
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

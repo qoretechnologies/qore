@@ -49,8 +49,9 @@ void StreamPipe::rethrow(ExceptionSink *xsink) {
     QoreValue errNode = exception->getKeyValue("err");
     QoreValue descNode = exception->getKeyValue("desc");
     if (errNode.getType() == NT_STRING && descNode.getType() == NT_STRING) {
-        xsink->raiseException(errNode.get<QoreStringNode>()->c_str(),
-            descNode.get<QoreStringNode>()->stringRefSelf());
+        QoreStringValueHelper err(errNode);
+        QoreStringNodeValueHelper desc(descNode);
+        xsink->raiseException(err->c_str(), desc.getReferencedValue());
     } else {
         xsink->raiseException("PIPE-ERROR", "an unexpected error occurred during the background operation");
     }

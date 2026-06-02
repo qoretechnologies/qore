@@ -889,7 +889,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr)
-            : CdsRestConnection(config + {"opts": config.opts + {"api_profile": DynamicsProfile.name}}, attr) {
+            : CdsRestConnection(DynamicsRestConnection::getConfig(config), attr) {
     }
 
     #! returns \c "dynamics"
@@ -900,6 +900,15 @@ public class DynamicsRestConnection inherits CdsRestConnection {
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+
+    #! returns options for @ref DynamicsRestConnection::constructor()
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {
+            "opts": config.opts + {
+                "api_profile": CdsRestClient::DynamicsProfile.name,
+            },
+        };
     }
 }
 
@@ -1039,7 +1048,9 @@ public class DynamicsRestClientIo inherits RestClientIo::RestClientIo, CdsRestCl
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CdsRestClientBase::getOptions(opts + {"api_profile": DynamicsProfile.name}), shared_mgr) {
+            : RestClientIo(CdsRestClientBase::getOptions(opts + {
+                "api_profile": CdsRestClient::DynamicsProfile.name,
+            }), shared_mgr) {
     }
 }
 
@@ -1050,8 +1061,9 @@ public class BusinessCentralRestClientIo inherits RestClientIo::RestClientIo, Cd
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CdsRestClientBase::getOptions(opts + {"api_profile": BusinessCentralProfile.name}),
-                shared_mgr) {
+            : RestClientIo(CdsRestClientBase::getOptions(opts + {
+                "api_profile": CdsRestClient::BusinessCentralProfile.name,
+            }), shared_mgr) {
     }
 }
 }

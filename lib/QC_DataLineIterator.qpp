@@ -59,17 +59,17 @@ line 3 = "aaa_base-11.3-7.2.x86_64"
 qclass DataLineIterator [arg=DataLineIterator* i; ns=Qore; vparent=AbstractLineIterator];
 
 //! creates the DataLineIterator based on the string given
-/** @param str the string to iterate over; note that if this string is in a non-ascii-compatible character encoding, it will be converted to UTF-8 for processing in the constructor and the UTF-8 version of the string will be used for iterating in this object
-    @param eol the optional end of line character(s) to use to detect lines in the data; if this string is not passed, then the end of line character(s) are detected automatically, and can be either \c "\n", \c "\r", or \c "\r\n"; if this string is passed and has a different @ref character_encoding "character encoding" from this object's (as determined by the \c encoding parameter), then it will be converted to the DataLineIterator's @ref character_encoding "character encoding"
-    @param trim if @ref True "True" the string return values for the lines iterated will be trimmed of the eol bytes
+/** @param source the string to iterate over; note that if this string is in a non-ascii-compatible character encoding, it will be converted to UTF-8 for processing in the constructor and the UTF-8 version of the string will be used for iterating in this object
+    @param line_separator the optional end of line character(s) to use to detect lines in the data; if this string is not passed, then the end of line character(s) are detected automatically, and can be either \c "\n", \c "\r", or \c "\r\n"; if this string is passed and has a different @ref character_encoding "character encoding" from this object's (as determined by the \c encoding parameter), then it will be converted to the DataLineIterator's @ref character_encoding "character encoding"
+    @param trim_line if @ref True "True" the string return values for the lines iterated will be trimmed of the end of line bytes
 
-    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the eol argument has a different @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the \a line_separator argument has a different @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
  */
-DataLineIterator::constructor(string str, *string eol, bool trim = True) {
-    if (eol && eol->empty())
-        eol = nullptr;
+DataLineIterator::constructor(string source, *string line_separator, bool trim_line = True) [flags=NAMED_ARGS] {
+    if (line_separator && line_separator->empty())
+        line_separator = nullptr;
 
-    SimpleRefHolder<DataLineIterator> dli(new DataLineIterator(xsink, str, eol, trim));
+    SimpleRefHolder<DataLineIterator> dli(new DataLineIterator(xsink, source, line_separator, trim_line));
     if (*xsink)
         return;
 

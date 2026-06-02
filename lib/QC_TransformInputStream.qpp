@@ -54,16 +54,17 @@ qclass TransformInputStream [arg=TransformInputStream* is; ns=Qore; vparent=Inpu
 
 //! Creates the TransformInputStream
 /**
-    @param is the underlying @ref InputStream where the data to transform will be read from
-    @param t the transformation to apply
+    @param input_stream the underlying @ref InputStream where the data to transform will be read from
+    @param transform the transformation to apply
  */
-TransformInputStream::constructor(Qore::InputStream[InputStream] is, Qore::Transform[Transform] t) {
-   SimpleRefHolder<TransformInputStream> tis(new TransformInputStream(is.release(), t.release()));
+TransformInputStream::constructor(Qore::InputStream[InputStream] input_stream, Qore::Transform[Transform] transform)
+        [flags=NAMED_ARGS] {
+   SimpleRefHolder<TransformInputStream> tis(new TransformInputStream(input_stream.release(), transform.release()));
    self->setPrivate(CID_TRANSFORMINPUTSTREAM, tis.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_TRANSFORMINPUTSTREAM);
-   o->setValueIntern(cls, "is", static_cast<QoreObject *>(obj_is->refSelf()), xsink);
-   o->setValueIntern(cls, "t", static_cast<QoreObject *>(obj_t->refSelf()), xsink);
+   o->setValueIntern(cls, "is", static_cast<QoreObject *>(obj_input_stream->refSelf()), xsink);
+   o->setValueIntern(cls, "t", static_cast<QoreObject *>(obj_transform->refSelf()), xsink);
 }
 
 //! Reads bytes (up to a specified limit) from the input stream; returns \ref NOTHING if there are no more bytes in the stream
@@ -75,7 +76,7 @@ TransformInputStream::constructor(Qore::InputStream[InputStream] is, Qore::Trans
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-*binary TransformInputStream::read(int limit) {
+*binary TransformInputStream::read(int limit) [flags=NAMED_ARGS] {
    return is->readHelper(limit, xsink);
 }
 

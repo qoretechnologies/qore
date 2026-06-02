@@ -30,8 +30,15 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreHashIterator.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 extern QoreClass* QC_HASHITERATOR;
+
+static const QoreTypeInfo* get_hash_reverse_iterator_value_type(const QoreTypeInfo* iterator_type_info) {
+    const QoreParameterizedClassTypeInfo* iterator_type
+        = QoreTypeInfo::getParameterizedClassType(iterator_type_info);
+    return iterator_type && iterator_type->getArgCount() ? iterator_type->getTypeArgs()[0] : autoTypeInfo;
+}
 
 //! This class an iterator class for hashes
 /** Call HashReverseIterator::next() to iterate through the hash in reverse order; do not use the iterator if HashReverseIterator::next() returns @ref False.
@@ -39,9 +46,9 @@ extern QoreClass* QC_HASHITERATOR;
 
     @par Example: HashReverseIterator basic usage
     @code{.py}
-    hash<auto> h = ( "key1" : 1, "key2" : 2, );
+    hash<string, int> h = ( "key1" : 1, "key2" : 2, );
 
-    HashReverseIterator it(h);
+    HashReverseIterator<int> it(h);
     while (it.next()) {
         printf("getKey: %n; getKeyValue: %n; getValue: %n; getValuePair: %n\n",
                it.getKey(), it.getKeyValue(), it.getValue(), it.getValuePair());
@@ -63,35 +70,38 @@ extern QoreClass* QC_HASHITERATOR;
 
     @see HashIterator
  */
-qclass HashReverseIterator [arg=QoreHashReverseIterator* i; ns=Qore; vparent=HashIterator];
+qclass HashReverseIterator<V> [arg=QoreHashReverseIterator* i; ns=Qore; vparent=HashIterator<V>; legacy_raw];
 
 //! Creates the hash iterator object
-/** @param h the hash to iterate
+/** @param hash_value the hash to iterate
 
     @par Example:
     @code{.py}
-HashReverseIterator hi(h);
+hash<string, int> h = {"key": 1};
+HashReverseIterator<int> hi(h);
     @endcode
  */
-HashReverseIterator::constructor(hash<auto> h) {
-    self->setPrivate(CID_HASHREVERSEITERATOR, new QoreHashReverseIterator(h));
+HashReverseIterator::constructor(hash<string, V> hash_value) [flags=NAMED_ARGS] {
+    self->setPrivate(CID_HASHREVERSEITERATOR,
+        new QoreHashReverseIterator(hash_value, get_hash_reverse_iterator_value_type(self->getInstantiatedTypeInfo())));
 }
 
 //! Creates an empty iterator object
 /** @par Example:
     @code{.py}
-*hash<auto> h = get_hash_or_nothing();
-HashReverseIterator hi(h);
+*hash<string, int> h = get_hash_or_nothing();
+HashReverseIterator<int> hi(h);
     @endcode
  */
 HashReverseIterator::constructor() {
-    self->setPrivate(CID_HASHREVERSEITERATOR, new QoreHashReverseIterator);
+    self->setPrivate(CID_HASHREVERSEITERATOR,
+        new QoreHashReverseIterator(get_hash_reverse_iterator_value_type(self->getInstantiatedTypeInfo())));
 }
 
 //! Creates a copy of the HashReverseIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-HashReverseIterator ni = i.copy();
+HashReverseIterator<int> ni = i.copy();
     @endcode
  */
 HashReverseIterator::copy() {

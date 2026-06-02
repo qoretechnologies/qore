@@ -122,17 +122,21 @@ static int q_get_hash_int_value(const QoreHashNode& h, const char* key, int def 
     return v.isNullOrNothing() ? def : static_cast<int>(v.getAsBigInt());
 }
 
-static QoreStringNode* q_gethostbyname_to_string_asyncio(const char* host) {
-    ExceptionSink xsink;
-    ReferenceHolder<QoreListNode> addrs(qore_socket_resolve_addrinfo_asyncio(&xsink, host, nullptr, Q_AF_UNSPEC, 0),
-        &xsink);
-    if (xsink || !addrs || addrs->empty()) {
-        xsink.clear();
+static QoreStringNode* q_gethostbyname_to_string_asyncio(ExceptionSink* xsink, const char* host) {
+    ExceptionSink lookup_xsink;
+    ReferenceHolder<QoreListNode> addrs(
+        qore_socket_resolve_addrinfo_asyncio(&lookup_xsink, host, nullptr, Q_AF_UNSPEC, 0), &lookup_xsink);
+    if (lookup_xsink || !addrs || addrs->empty()) {
+        lookup_xsink.clear();
         return nullptr;
     }
 
+    int iter = 0;
     ConstListIterator li(*addrs);
     while (li.next()) {
+        if (++iter % 100 == 0 && qore_check_cancel(xsink, "processing hostname lookup results")) {
+            return nullptr;
+        }
         const QoreHashNode* h = q_get_addrinfo_hash(li.getValue());
         if (!h) {
             continue;
@@ -146,21 +150,29 @@ static QoreStringNode* q_gethostbyname_to_string_asyncio(const char* host) {
     return nullptr;
 }
 
-static QoreHashNode* q_gethostbyname_to_hash_asyncio(const char* host) {
-    ExceptionSink xsink;
+static QoreHashNode* q_gethostbyname_to_hash_asyncio(ExceptionSink* xsink, const char* host) {
+    ExceptionSink lookup_xsink;
     ReferenceHolder<QoreListNode> addrs(
-        qore_socket_resolve_addrinfo_asyncio(&xsink, host, nullptr, Q_AF_UNSPEC, AI_CANONNAME), &xsink);
-    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), &xsink);
-    ReferenceHolder<QoreListNode> addresses(new QoreListNode(stringTypeInfo), &xsink);
-    if (xsink || !addrs || addrs->empty() || !result || !addresses) {
-        xsink.clear();
+        qore_socket_resolve_addrinfo_asyncio(&lookup_xsink, host, nullptr, Q_AF_UNSPEC, AI_CANONNAME), &lookup_xsink);
+    if (lookup_xsink || !addrs || addrs->empty()) {
+        lookup_xsink.clear();
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> addresses(new QoreListNode(stringTypeInfo), xsink);
+    if (*xsink || !result || !addresses) {
         return nullptr;
     }
 
     const QoreHashNode* first = nullptr;
     int first_family = AF_UNSPEC;
+    int iter = 0;
     ConstListIterator li(*addrs);
     while (li.next()) {
+        if (++iter % 100 == 0 && qore_check_cancel(xsink, "processing hostname lookup results")) {
+            return nullptr;
+        }
         const QoreHashNode* h = q_get_addrinfo_hash(li.getValue());
         if (!h) {
             continue;
@@ -172,9 +184,8 @@ static QoreHashNode* q_gethostbyname_to_hash_asyncio(const char* host) {
         if (q_get_hash_int_value(*h, "family", AF_UNSPEC) == first_family) {
             const QoreStringNode* address = q_get_hash_string_value(*h, "address");
             if (address) {
-                addresses->push(address->stringRefSelf(), &xsink);
-                if (xsink) {
-                    xsink.clear();
+                addresses->push(address->stringRefSelf(), xsink);
+                if (*xsink) {
                     return nullptr;
                 }
             }
@@ -447,7 +458,7 @@ hashdecl ExceptionInfo {
  */
 ///@{
 //! Exits the program with the return code passed (this function does not return)
-/** @param rc the return code for the process (0 = no error; success)
+/** @param status the return code for the process (0 = no error; success)
 
     @par Example:
     @code{.py}
@@ -456,8 +467,8 @@ exit(0);
 
     @see abort()
  */
-nothing exit(softint rc = 0) [dom=PROCESS] {
-   qore_exit_process(rc);
+nothing exit(softint status = 0) [flags=NAMED_ARGS;dom=PROCESS] {
+   qore_exit_process(status);
 }
 
 //! Aborts the current program (this function does not return)
@@ -483,8 +494,12 @@ nothing abort() [dom=PROCESS] {
 exec("/usr/bin/xterm -bg black -fg white -sb -sl 2000");
     @endcode
  */
-nothing exec(string command) [dom=EXTERNAL_PROCESS,PROCESS] {
+nothing exec(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS,PROCESS] {
    ExecArgList exec_args(command->c_str());
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(exec_args.getFile(), QSEC_EXECUTE, xsink)) {
+      return QoreValue();
+   }
    execvp(exec_args.getFile(), exec_args.getArgs());
 
    xsink->raiseErrnoException("EXEC-ERROR", errno, "execvp() failed in child process for target '%s'", exec_args.getFile());
@@ -513,9 +528,14 @@ int rc = system("ls -l");
     - backquote()
     - @ref backquote_operator "the backquote operator"
  */
-int system(string command) [dom=EXTERNAL_PROCESS] {
+int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
     QoreSandboxManagerHelper smh;
     const bool use_pgroup = (bool)smh;
+#ifndef _Q_WINDOWS
+    if (smh && !smh->checkFilesystemAccess("/bin/sh", QSEC_EXECUTE, xsink)) {
+        return -1;
+    }
+#endif
 #ifdef __linux__
     auto pidfd_open = [](pid_t target_pid) -> int {
 #ifdef SYS_pidfd_open
@@ -809,29 +829,32 @@ list<int> getgroups() [dom=EXTERNAL_INFO] {
 setgroups(l);
     @endcode
 
-    @param gids a list of supplementary group IDs for the current process
+    @param group_ids a list of supplementary group IDs for the current process
 
     @since %Qore 0.8.11.1
 */
-nothing setgroups(softlist<softint> gids) [dom=PROCESS] {
+nothing setgroups(softlist<softint> group_ids) [flags=NAMED_ARGS;dom=PROCESS] {
 #ifdef HAVE_SETGROUPS
-    if (gids->empty())
+    if (group_ids->empty())
         return QoreValue();
 
 #ifdef HAVE_LOCAL_VARIADIC_ARRAYS_X
-    gid_t l[gids->size()];
+    gid_t l[group_ids->size()];
 #else
-    gid_t* l = (gid_t*)malloc(sizeof(gid_t) * gids->size());
+    gid_t* l = (gid_t*)malloc(sizeof(gid_t) * group_ids->size());
     if (!l) {
         xsink->outOfMemory();
         return QoreValue();
     }
     ON_BLOCK_EXIT(free, l);
 #endif
-    for (size_t i = 0, e = gids->size(); i < e; ++i) {
-        l[i] = (int)gids->retrieveEntry(i).getAsBigInt();
+    for (size_t i = 0, e = group_ids->size(); i < e; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "preparing supplementary groups")) {
+            return QoreValue();
+        }
+        l[i] = (int)group_ids->retrieveEntry(i).getAsBigInt();
     }
-    if (setgroups(gids->size(), l))
+    if (setgroups(group_ids->size(), l))
         xsink->raiseErrnoException("SETGROUPS-ERROR", errno, "error calling setgroups()");
 #else
     missing_function_error("setgroups", "UNIX_USERMGT", xsink);
@@ -854,7 +877,7 @@ sleep(10s);
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-int sleep(softint seconds) [dom=PROCESS] {
+int sleep(softint seconds) [flags=NAMED_ARGS;dom=PROCESS] {
    if (!seconds) {
       return 0;
    }
@@ -885,7 +908,7 @@ nothing sleep() [flags=RUNTIME_NOOP;dom=PROCESS] {
 }
 
 //! Causes the current thread to sleep for a certain number of microseconds
-/** @param usecs The amount of time in microseconds to sleep; integer arguments are interpreted literally as a number of microseconds to sleep
+/** @param microseconds The amount of time in microseconds to sleep; integer arguments are interpreted literally as a number of microseconds to sleep
 
     @return should always return 0 for success, -1 if interrupted
 
@@ -902,13 +925,13 @@ usleep(5000);
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-int usleep(softint usecs) [dom=PROCESS] {
-   if (!usecs) {
+int usleep(softint microseconds) [flags=NAMED_ARGS;dom=PROCESS] {
+   if (!microseconds) {
       return 0;
    }
 
    // Always poll in chunks for cancel/interrupt checking
-   int64 remaining_usecs = usecs;
+   int64 remaining_usecs = microseconds;
    const int64 chunk_usecs = 100000ll; // 100ms chunks
 
    while (remaining_usecs > 0) {
@@ -927,7 +950,7 @@ int usleep(softint usecs) [dom=PROCESS] {
 }
 
 //! Causes the current thread to sleep for a certain number of microseconds
-/** @param d A time value giving the amount of time in microseconds to sleep; this should be a @ref relative_dates "relative date/time value" to make the source more readable (ex: \c 250ms)
+/** @param duration A time value giving the amount of time in microseconds to sleep; this should be a @ref relative_dates "relative date/time value" to make the source more readable (ex: \c 250ms)
 
     @return should always return 0 for success, -1 if interrupted
 
@@ -944,8 +967,8 @@ usleep(250ms);
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-int usleep(date d) [dom=PROCESS] {
-   int64 usecs = d->getRelativeMicroseconds();
+int usleep(date duration) [flags=NAMED_ARGS;dom=PROCESS] {
+   int64 usecs = duration->getRelativeMicroseconds();
    if (!usecs) {
       return 0;
    }
@@ -1063,7 +1086,7 @@ int fork() [dom=PROCESS] {
     - <tt>\> 0</tt>: the signal is sent to the process ID given
     - \c 0: the signal is sent to all processes whose group ID is equal to the process group ID of the sender, and for which the process has permission
     - \c -1: if the user has super-user privileges, the signal is sent to all processes excluding system processes and the process sending the signal.  If the user is not the super user, the signal is sent to all processes with the same uid as the user, excluding the process sending the signal.  No error is returned if any process could be signaled.
-    @param sig the @ref signal_constants "signal number" to send to the process or processes
+    @param signal the @ref signal_constants "signal number" to send to the process or processes
 
     @return 0 means success (no error), or -1 meaning an error occurred; in this case check errno() for the error
 
@@ -1073,9 +1096,9 @@ if (kill(pid, SIGTERM))
     printf("error sending signal to pid %d: %s\n", pid, strerror());
     @endcode
  */
-int kill(softint pid, softint sig = SIGHUP) [dom=EXTERNAL_PROCESS] {
+int kill(softint pid, softint signal = SIGHUP) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
 #ifdef HAVE_KILL
-   return kill(pid, sig);
+   return kill(pid, signal);
 #else
    return missing_function_error("kill", xsink);
 #endif
@@ -1125,7 +1148,7 @@ srand(now());
 
     @since %Qore 0.8.13 the random number generator is seeded randomly when the %Qore library is initialized
  */
-nothing srand(softint seed) [dom=PROCESS] {
+nothing srand(softint seed) [flags=NAMED_ARGS;dom=PROCESS] {
 #ifdef HAVE_RANDOM
    srandom((int)seed);
 #else
@@ -1172,7 +1195,7 @@ int errno() {
 }
 
 //! Returns the string corresponding to the error code passed (generally retrieved with errno())
-/** @param err the error code to retrieve the description for (generally provided by errno())
+/** @param error_number the error code to retrieve the description for (generally provided by errno())
 
     @return the string corresponding to the error code passed; if the error code is unknown, then a string like \c "Unknown error: -1" is returned
 
@@ -1182,8 +1205,8 @@ if (unlink(path))
     printf("%s: %s\n", path, strerror(errno()));
     @endcode
  */
-string strerror(softint err) [flags=CONSTANT] {
-   return q_strerror(err);
+string strerror(softint error_number) [flags=CONSTANT,NAMED_ARGS] {
+   return q_strerror(error_number);
 }
 
 //! Returns the string corresponding to the last error that occurred in the current thread
@@ -1213,7 +1236,7 @@ string fn = basename("/usr/local/bin/file_name");
 
     @see dirname()
  */
-string basename(string path) [flags=CONSTANT] {
+string basename(string path) [flags=CONSTANT,NAMED_ARGS] {
    char* p = q_basename(path->c_str());
    int len = strlen(p);
    return new QoreStringNode(p, len, len + 1, path->getEncoding());
@@ -1237,7 +1260,7 @@ string dir = dirname("/usr/local/bin/file_name");
 
     @see basename()
  */
-string dirname(string path) [flags=CONSTANT] {
+string dirname(string path) [flags=CONSTANT,NAMED_ARGS] {
    char* p = q_dirname(path->c_str());
    int len = strlen(p);
    return new QoreStringNode(p, len, len + 1, path->getEncoding());
@@ -1263,7 +1286,7 @@ if (setuid(uid))
     printf("setuid %d: %s\n", uid, strerror());
     @endcode
  */
-int setuid(softint uid) [dom=PROCESS] {
+int setuid(softint uid) [flags=NAMED_ARGS;dom=PROCESS] {
 #ifdef HAVE_SETUID
    return setuid((int)uid);
 #else
@@ -1285,7 +1308,7 @@ if (seteuid(uid))
     printf("seteuid %d: %s\n", uid, strerror());
     @endcode
  */
-int seteuid(softint uid) [dom=PROCESS] {
+int seteuid(softint uid) [flags=NAMED_ARGS;dom=PROCESS] {
 #ifdef HAVE_SETEUID
    return seteuid((int)uid);
 #else
@@ -1307,7 +1330,7 @@ if (setgid(gid))
     printf("setgid %d: %s\n", gid, strerror());
     @endcode
  */
-int setgid(softint gid) [dom=PROCESS] {
+int setgid(softint gid) [flags=NAMED_ARGS;dom=PROCESS] {
 #ifdef HAVE_SETGID
    return setgid((int)gid);
 #else
@@ -1329,7 +1352,7 @@ if (setegid(gid))
     printf("setegid %d: %s\n", gid, strerror());
     @endcode
  */
-int setegid(softint gid) [dom=PROCESS] {
+int setegid(softint gid) [flags=NAMED_ARGS;dom=PROCESS] {
 #ifdef HAVE_SETEGID
    return setegid((int)gid);
 #else
@@ -1357,7 +1380,7 @@ int setsid() [dom=PROCESS] {
 }
 
 //! Returns the first address corresponding to the hostname passed as an argument or @ref nothing if the lookup fails
-/** @param name the name to look up
+/** @param hostname the name to look up
 
     @return the first address corresponding to the hostname passed as an argument or @ref nothing if the lookup fails
 
@@ -1372,8 +1395,8 @@ if (!exists host)
 
     @see gethostbyname_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
  */
-*string gethostbyname(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyname_to_string_asyncio(name->c_str());
+*string gethostbyname(string hostname) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   return q_gethostbyname_to_string_asyncio(xsink, hostname->c_str());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1385,8 +1408,8 @@ nothing gethostbyname() [flags=RUNTIME_NOOP] {
 //! Returns the official hostname corresponding to the network address passed as an argument
 /** If the address family is invalid or the address string is not a valid address for the given family a \c GETHOSTBYADDR-ERROR exception will be thrown.
 
-    @param addr the address to look up
-    @param type the network address family; see @ref network_address_family_constants for valid values
+    @param address the address to look up
+    @param family the network address family; see @ref network_address_family_constants for valid values
 
     @return the official hostname corresponding to the network addressed passed as an argument
 
@@ -1403,8 +1426,8 @@ if (!exists hostname)
 
     @see gethostbyaddr_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
  */
-*string gethostbyaddr(string addr, softint type = AF_INET) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyaddr_to_string_asyncio(xsink, addr->c_str(), type);
+*string gethostbyaddr(string address, softint family = AF_INET) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   return q_gethostbyaddr_to_string_asyncio(xsink, address->c_str(), family);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1415,7 +1438,7 @@ nothing gethostbyaddr() [flags=RUNTIME_NOOP] {
 
 //! Returns @ref host_information_hash "a hash" representing all host and address information corresponding to the hostname passed as an argument
 /**
-    @param name the name to look up
+    @param hostname the name to look up
 
     @return @ref host_information_hash "a hash" representing all host and address information corresponding to the hostname passed as an argument
 
@@ -1430,8 +1453,8 @@ if (!ah)
 
     @see gethostbyname() for a version of this function that returns just the first network address corresponding to the hostname
  */
-*hash<auto> gethostbyname_long(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyname_to_hash_asyncio(name->c_str());
+*hash<auto> gethostbyname_long(string hostname) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   return q_gethostbyname_to_hash_asyncio(xsink, hostname->c_str());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1443,8 +1466,8 @@ nothing gethostbyname_long() [flags=RUNTIME_NOOP] {
 //! Returns @ref host_information_hash "a hash" representing all host and address information corresponding to the address and address type passed as arguments
 /** If the address family is invalid or the address string is not a valid address for the given family a \c GETHOSTBYADDR-ERROR exception will be thrown.
 
-    @param addr the address to look up
-    @param type the network address family; see @ref network_address_family_constants for valid values
+    @param address the address to look up
+    @param family the network address family; see @ref network_address_family_constants for valid values
 
     @return @ref host_information_hash "a hash" representing all host and address information corresponding to the address and address type passed as arguments
 
@@ -1461,8 +1484,8 @@ if (!ah)
 
     @see gethostbyaddr() for a simpler version of this function that returns just a single hostname for the address
  */
-*hash<auto> gethostbyaddr_long(string addr, softint type = AF_INET) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyaddr_to_hash_asyncio(xsink, addr->c_str(), type);
+*hash<auto> gethostbyaddr_long(string address, softint family = AF_INET) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   return q_gethostbyaddr_to_hash_asyncio(xsink, address->c_str(), family);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1491,7 +1514,7 @@ list<hash<auto>> l = getaddrinfo("localhost");
 
     @throw QOREADDRINFO-GETINFO-ERROR nodename nor servname provided, or not known
  */
-list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
    return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : 0, service ? service->c_str() : 0,
       (int)family, (int)flags);
 }
@@ -1510,7 +1533,7 @@ list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family =
     @param flags see @ref network_address_information_constants for possible values to be combined with @ref bitwise_or_operator "binary or"
     @param socktype a hint for the type of socket; 0 = any socket type
     @param protocol a hint for the protocol number; 0 = the default protocol
-    @param timeout_ms the timeout for the controller-backed resolution operation; -1 = never timeout
+    @param timeout the timeout for the controller-backed resolution operation; -1 = never timeout
 
     @return a Future that resolves to a list of @ref address_information_hash for the given node name or string address
 
@@ -1524,10 +1547,10 @@ list<hash<auto>> l = f.get();
 
     @since %Qore 2.3
  */
-Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout_ms = -1) [dom=EXTERNAL_INFO] {
+Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
    QoreFuture* future = qore_socket_resolve_addrinfo_asyncio_future(xsink, node ? node->c_str() : 0,
-      service ? service->c_str() : 0, (int)family, (int)flags, (int)socktype, (int)protocol, timeout_ms);
-   return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
+      service ? service->c_str() : 0, (int)family, (int)flags, (int)socktype, (int)protocol, timeout);
+   return future ? qore_new_future_impl_object(getProgram(), future) : nullptr;
 }
 
 //! Starts an asynchronous reverse address lookup and returns a Future for peer-style address information
@@ -1536,10 +1559,10 @@ Future getaddrinfo_async(*string node, *softstring service, softint family = AF_
     @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()", with numeric address fields always present and
     hostname fields present when reverse DNS succeeds.
 
-    @param addr the numeric IPv4 or IPv6 address to resolve
+    @param address the numeric IPv4 or IPv6 address to resolve
     @param family the address family, must be one of Qore::AF_INET or Qore::AF_INET6
     @param port the peer port to include in the returned hash
-    @param timeout_ms the timeout for the controller-backed reverse resolution operation; -1 = never timeout
+    @param timeout the timeout for the controller-backed reverse resolution operation; -1 = never timeout
 
     @return a Future that resolves to a hash with peer-style address information
 
@@ -1554,22 +1577,22 @@ hash<auto> peer_info = f.get(100ms);
 
     @since %Qore 2.3
  */
-Future getnameinfo_async(string addr, softint family = AF_INET, softint port = 0, timeout timeout_ms = -1) [dom=EXTERNAL_INFO] {
+Future getnameinfo_async(string address, softint family = AF_INET, softint port = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
    struct sockaddr_storage sa;
    socklen_t len = 0;
-   if (q_getnameinfo_sockaddr(xsink, addr->c_str(), family, port, sa, len) < 0) {
+   if (q_getnameinfo_sockaddr(xsink, address->c_str(), family, port, sa, len) < 0) {
       return QoreValue();
    }
 
-   QoreFuture* future = qore_socket_resolve_nameinfo_asyncio_future(xsink, sa, len, timeout_ms);
-   return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
+   QoreFuture* future = qore_socket_resolve_nameinfo_asyncio_future(xsink, sa, len, timeout);
+   return future ? qore_new_future_impl_object(getProgram(), future) : nullptr;
 }
 
 //! closes all possible file descriptors; useful in "daemon" processes that may have inherited open file descriptors
 /** @par Platform Availability:
     @ref Qore::Option::HAVE_CLOSE_ALL_FD
 
-    @param strd if @ref True "True" then also stdin, stdout, and stderr are closed, otherwise fds > 2 are closed
+    @param standard_fds if @ref True "True" then also stdin, stdout, and stderr are closed, otherwise fds > 2 are closed
 
     @par Example:
     @code{.py}
@@ -1580,15 +1603,20 @@ close_all_fd();
     file descriptors; normally this function should only be used when starting a new process after a fork() and exec()
     to close any inherited descriptors, for example
  */
-nothing close_all_fd(*softbool strd) [dom=PROCESS] {
+nothing close_all_fd(*softbool standard_fds) [flags=NAMED_ARGS;dom=PROCESS] {
 #if defined(HAVE_UNISTD_H) && defined(_SC_OPEN_MAX)
-    int start = strd ? 0 : 3;
+    int start = standard_fds ? 0 : 3;
     // get max file descriptor
     int max = (int)sysconf(_SC_OPEN_MAX);
     printd(5, "close_all_fd() start: %d max: %d\n", start, max);
 
-    for (;start < max; ++start)
+    int iter = 0;
+    for (;start < max; ++start) {
+        if (++iter % 100 == 0 && qore_check_cancel(xsink, "closing file descriptors")) {
+            return QoreValue();
+        }
         close(start);
+    }
 #else
     missing_function_error("close_all_fd", xsink);
 #endif // HAVE_UNISTD
@@ -1655,7 +1683,11 @@ list<hash<NetIfInfo>> get_netif_list() [dom=EXTERNAL_INFO] {
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclNetIfInfo->getTypeInfo()), xsink);
 
+    int iter = 0;
     for (struct ifaddrs* ifa = ifap; ifa; ifa = ifa->ifa_next) {
+        if (++iter % 100 == 0 && qore_check_cancel(xsink, "building network interface list")) {
+            return QoreValue();
+        }
         // skip interfaces with no address
         if (!ifa->ifa_addr)
             continue;
@@ -1712,7 +1744,7 @@ list<hash<NetIfInfo>> get_netif_list() [dom=EXTERNAL_INFO] {
 }
 
 //! sets %Qore runtime library options
-/** @param opts the runtime options to set, binary-anded with @ref Qore::QLO_RUNTIME_OPTS; see
+/** @param options the runtime options to set, binary-anded with @ref Qore::QLO_RUNTIME_OPTS; see
     @ref library_option_constants and @ref Qore::QLO_RUNTIME_OPTS "QLO_RUNTIME_OPTS" for more information
 
     @return the options used
@@ -1721,8 +1753,8 @@ list<hash<NetIfInfo>> get_netif_list() [dom=EXTERNAL_INFO] {
 
     @since %Qore 0.9.3.1
 */
-int qore_set_library_options(int opts) [dom=PROCESS] {
-    return qore_set_library_options(opts);
+int qore_set_library_options(int options) [flags=NAMED_ARGS;dom=PROCESS] {
+    return qore_set_library_options(options);
 }
 
 //! returns all %Qore library options
@@ -1759,7 +1791,7 @@ int qore_get_library_options() [dom=PROCESS] {
 
     @since %Qore 2.3
 */
-nothing set_global_http2_mode(string mode) [dom=PROCESS] {
+nothing set_global_http2_mode(string mode) [flags=NAMED_ARGS;dom=PROCESS] {
     const char* mode_str = mode->c_str();
     int mode_val;
     if (!strcasecmp(mode_str, "auto")) {
@@ -1790,7 +1822,7 @@ nothing set_global_http2_mode(string mode) [dom=PROCESS] {
 
     @since %Qore 2.3
 */
-nothing set_global_http2_mode(enum<HTTP2Mode> mode) [dom=PROCESS] {
+nothing set_global_http2_mode(enum<HTTP2Mode> mode) [flags=NAMED_ARGS;dom=PROCESS] {
     int64 mode_val = mode.getAsBigInt();
     if (mode_val < HTTP2_MODE_DISABLED || mode_val > HTTP2_MODE_REQUIRED) {
         xsink->raiseException("SET-GLOBAL-HTTP2-MODE-ERROR",
@@ -1822,18 +1854,18 @@ string get_global_http2_mode() [dom=PROCESS] {
 
 //! Adds the given module to the blacklist
 /** @param name the name of the module
-    @param msg the message that will be included in any exception when the module is attempted to be loaded
+    @param message the message that will be included in any exception when the module is attempted to be loaded
 
     @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
 
     @since %Qore 2.0.1
 */
-int qore_add_module_to_blacklist(string name, string msg = "by an API call") [dom=PROCESS] {
+int qore_add_module_to_blacklist(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
     TempEncodingHelper n(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    TempEncodingHelper m(msg, QCS_DEFAULT, xsink);
+    TempEncodingHelper m(message, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1842,7 +1874,7 @@ int qore_add_module_to_blacklist(string name, string msg = "by an API call") [do
 
 //! Adds the given module to the blacklist and throws an exception if here's an error
 /** @param name the name of the module
-    @param msg the message that will be included in any exception when the module is attempted to be loaded
+    @param message the message that will be included in any exception when the module is attempted to be loaded
 
     @throw BLACKLIST-ERROR could not add module to blacklist
 
@@ -1850,12 +1882,12 @@ int qore_add_module_to_blacklist(string name, string msg = "by an API call") [do
 
     @since %Qore 2.0.1
 */
-int qore_add_module_to_blacklist_ex(string name, string msg = "by an API call") [dom=PROCESS] {
+int qore_add_module_to_blacklist_ex(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
     TempEncodingHelper n(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    TempEncodingHelper m(msg, QCS_DEFAULT, xsink);
+    TempEncodingHelper m(message, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
     }

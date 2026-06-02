@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include <qore/HttpClientConnectionManager.h>
+#include <qore/QoreAbstractLoggerInterface.h>
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreFuture.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"

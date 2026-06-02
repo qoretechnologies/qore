@@ -53,13 +53,28 @@ endif ()
 #
 #  _cpp_files : output list of filenames created in CMAKE_CURRENT_BINARY_DIR.
 #
+# Optional one-value keyword args:
+#  DOXLIST   : output list variable — receives the generated .dox.h paths.
+#  METALIST  : output list variable — receives the generated .meta.json
+#              metadata paths (used for `qore_install_qpp_metadata`).
+#  STUBLIST  : output list variable — receives the generated .stub.qc
+#              compile-time Qore-syntax stub paths.  When set, qpp is
+#              invoked with `--stub-output=<path>` so the stub file is
+#              built alongside the .cpp.  Stubs are consumed by qcc's
+#              `--stub=<path>` flag in AOT pipelines that need Qore-
+#              syntax declarations of the C++-backed classes qpp emits.
+#              Omit the keyword (or pass an empty target variable) to
+#              skip stub generation entirely — most core/library callers
+#              that don't feed an AOT pipeline should leave this unset.
+#
 # usage:
 # set(MY_QPP foo.qpp bar.qpp)
 # qore_wrap_qpp_value(MY_CPP ${MY_QPP})
+# qore_wrap_qpp_value(MY_CPP DOXLIST MY_DOX METALIST MY_META STUBLIST MY_STUB ${MY_QPP})
 #
 MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
     set(options)
-    set(oneValueArgs DOXLIST METALIST)
+    set(oneValueArgs DOXLIST METALIST STUBLIST)
     set(multiValueArgs OPTIONS)
 
     cmake_parse_arguments(_WRAP_QPP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -71,10 +86,24 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
         SET(_doxfile ${CMAKE_CURRENT_BINARY_DIR}/${_outfile}.dox.h)
         SET(_metafile ${CMAKE_CURRENT_BINARY_DIR}/${_outfile}.meta.json)
 
-        ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile}
+        # Stub output is opt-in: the caller must pass STUBLIST <var> to
+        # activate it, otherwise qpp is not told to produce a stub and
+        # no .stub.qc file is listed as an OUTPUT.  Callers outside AOT
+        # pipelines don't need stubs and shouldn't pay the generation
+        # cost (or the extra dependency edge).
+        SET(_stub_arg)
+        SET(_stub_outputs)
+        IF(_WRAP_QPP_STUBLIST)
+            SET(_stubfile ${CMAKE_CURRENT_BINARY_DIR}/${_outfile}.stub.qc)
+            SET(_stub_arg --stub-output=${_stubfile})
+            SET(_stub_outputs ${_stubfile})
+        ENDIF(_WRAP_QPP_STUBLIST)
+
+        ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile} ${_stub_outputs}
                            COMMAND ${QORE_QPP_EXECUTABLE}
-                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_infile}
+                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_stub_arg} ${_infile}
                            MAIN_DEPENDENCY ${_infile}
+                           DEPENDS ${QORE_QPP_EXECUTABLE}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                            VERBATIM
                         )
@@ -85,6 +114,9 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
         IF(_WRAP_QPP_METALIST)
            SET(${_WRAP_QPP_METALIST} ${${_WRAP_QPP_METALIST}} ${_metafile})
         ENDIF(_WRAP_QPP_METALIST)
+        IF(_WRAP_QPP_STUBLIST)
+           SET(${_WRAP_QPP_STUBLIST} ${${_WRAP_QPP_STUBLIST}} ${_stubfile})
+        ENDIF(_WRAP_QPP_STUBLIST)
         #MESSAGE(STATUS "DEBUG D: " _WRAP_QPP_DOXLIST " ${D}:" ${_WRAP_QPP_DOXLIST} " ${${D}}:" ${${_WRAP_QPP_DOXLIST}})
     ENDFOREACH (it)
 
@@ -119,6 +151,12 @@ ENDMACRO (QORE_INSTALL_QPP_METADATA)
 #
 MACRO (QORE_EXTRACT_QM_METADATA _module_name)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR)
+        if(DEFINED QORE_EXECUTABLE)
+            set(_qore_qm_metadata_command
+                ${QORE_EXECUTABLE} ${QORE_QM_METADATA_EXECUTABLE})
+        else()
+            set(_qore_qm_metadata_command ${QORE_QM_METADATA_EXECUTABLE})
+        endif()
         set(_qm_meta_files "")
         foreach(_qm_file ${ARGN})
             get_filename_component(_qm_basename ${_qm_file} NAME)
@@ -126,7 +164,7 @@ MACRO (QORE_EXTRACT_QM_METADATA _module_name)
             if(DEFINED QORE_QM_METADATA_ENV)
                 add_custom_command(OUTPUT ${_qm_meta_out}
                     COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                        ${QORE_QM_METADATA_EXECUTABLE}
+                        ${_qore_qm_metadata_command}
                         ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
                         ${_qm_meta_out}
                     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
@@ -135,7 +173,7 @@ MACRO (QORE_EXTRACT_QM_METADATA _module_name)
                 )
             else()
                 add_custom_command(OUTPUT ${_qm_meta_out}
-                    COMMAND ${QORE_QM_METADATA_EXECUTABLE}
+                    COMMAND ${_qore_qm_metadata_command}
                         ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
                         ${_qm_meta_out}
                     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
@@ -219,6 +257,30 @@ ENDMACRO (QORE_BINARY_MODULE_QORE)
 MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
     QORE_BINARY_MODULE_INTERN2(${_module_name} ${_version} "" 2 ${ARGN})
     set(_external_module_name ${_module_name})
+    if (TARGET ${_module_name})
+        list(FIND QORE_AOT_BINARY_MODULE_TARGETS ${_module_name} _qore_aot_binary_module_found)
+        if (_qore_aot_binary_module_found EQUAL -1)
+            list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_module_name})
+        endif()
+        unset(_qore_aot_binary_module_found)
+        list(FIND QORE_QM_METADATA_DEPENDS ${_module_name} _qore_qm_metadata_dep_found)
+        if (_qore_qm_metadata_dep_found EQUAL -1)
+            list(APPEND QORE_QM_METADATA_DEPENDS ${_module_name})
+        endif()
+        unset(_qore_qm_metadata_dep_found)
+    endif()
+    if (NOT DEFINED QORE_QM_METADATA_ENV)
+        set(_qore_external_module_path "${CMAKE_SOURCE_DIR}/qlib:${CMAKE_BINARY_DIR}")
+        if (DEFINED QORE_BUILDTREE_USER_MODULE_PATH
+                AND NOT "${QORE_BUILDTREE_USER_MODULE_PATH}" STREQUAL "")
+            set(_qore_external_module_path
+                "${_qore_external_module_path}:${QORE_BUILDTREE_USER_MODULE_PATH}")
+        endif()
+        set(QORE_QM_METADATA_ENV
+            "QORE_MODULE_DIR=${_qore_external_module_path}"
+            "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}")
+        unset(_qore_external_module_path)
+    endif()
 ENDMACRO (QORE_EXTERNAL_BINARY_MODULE)
 
 MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suffix)
@@ -332,7 +394,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
         message(STATUS "")
         message(STATUS "Module ${_module_name} uninstall target: make uninstall")
         message(STATUS "")
-    else()
+    elseif (NOT "${_mod_suffix}" STREQUAL "1")
         message(WARNING "Module ${_module_name} uninstall script: no file: ${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in")
     endif()
 
@@ -394,6 +456,299 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     endif (DOXYGEN_FOUND)
 ENDMACRO (QORE_BINARY_MODULE_INTERN2)
 
+MACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH _out_var _base_dir _relative_path)
+    if (IS_ABSOLUTE "${_base_dir}")
+        set(_qore_aot_remove_path "\$ENV{DESTDIR}${_base_dir}/${_relative_path}")
+    else()
+        set(_qore_aot_remove_path
+            "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_base_dir}/${_relative_path}")
+    endif()
+    string(APPEND ${_out_var} "  \"${_qore_aot_remove_path}\"\n")
+ENDMACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH)
+
+MACRO (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES _name _is_dir _base_dir)
+    set(_qore_aot_stale_source_qmods "")
+    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+        _qore_aot_stale_source_qmods "${_base_dir}" "${_name}.qmod")
+    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+        _qore_aot_stale_source_qmods "${_base_dir}" "${_name}.qmod.d")
+    if (${_is_dir})
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qore_aot_stale_source_qmods "${_base_dir}" "${_name}/${_name}.qmod")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qore_aot_stale_source_qmods "${_base_dir}" "${_name}/${_name}.qmod.d")
+    endif()
+    install(CODE "file(REMOVE\n${_qore_aot_stale_source_qmods})")
+ENDMACRO (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES)
+
+# Emit AOT-build rules for a user module producing a .qmod via qcc.
+#
+# Gated on QORE_BUILD_AOT_MODULES; uses the in-tree qcc target when building
+# Qore itself, and QORE_QCC_EXECUTABLE from QoreConfig.cmake for external
+# binary module builds.
+#
+# Args (positional):
+#   _name        module base name (e.g. Util, DataProvider)
+#   _is_dir      "1" for split-dir modules (qlib/<name>/), "0" for single-file
+#   _source_root for _is_dir=1: absolute path to the module directory
+#                for _is_dir=0: absolute path to the primary .qm file
+# Variadic:     absolute paths of all .qm + .qc source files in the module
+#
+# The .qmod lands in ${QORE_AOT_MODULES_DIR} at install time.  Core qlib uses
+# the versioned arch-specific module directory, while external module builds
+# default to their arch-specific module directory from QoreConfig.cmake.
+MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
+    if (TARGET qcc)
+        set(_qore_qcc_command $<TARGET_FILE:qcc>)
+    elseif (DEFINED QORE_QCC_EXECUTABLE)
+        set(_qore_qcc_command ${QORE_QCC_EXECUTABLE})
+    else()
+        message(FATAL_ERROR "QORE_BUILD_AOT_MODULES=ON requires qcc or QORE_QCC_EXECUTABLE")
+    endif()
+
+    if (NOT DEFINED QCC_FORMAT_STAMP)
+        set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
+        add_custom_command(
+            OUTPUT ${QCC_FORMAT_STAMP}
+            COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_STAMP}
+            DEPENDS ${_qore_qcc_command}
+            COMMENT "Updating qcc format-version stamp"
+            VERBATIM
+        )
+        if (NOT TARGET qcc-format-version)
+            add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
+        endif()
+    endif()
+    if (NOT DEFINED QORE_AOT_LINK_SOURCE_MODULES)
+        set(QORE_AOT_LINK_SOURCE_MODULES ON)
+    endif()
+    if (DEFINED QORE_AOT_MODULES_DIR)
+        set(_qmod_install_dir ${QORE_AOT_MODULES_DIR})
+    elseif (DEFINED QORE_MODULES_DIR)
+        set(_qmod_install_dir ${QORE_MODULES_DIR})
+    else()
+        set(_qmod_install_dir ${QORE_USER_MODULES_DIR})
+    endif()
+
+    # Split-dir modules emit `build/qlib-qmod/<name>/<name>.qmod` and copy
+    # sibling resources (logo SVGs, asyncapi YAMLs, etc.) into the same
+    # directory so that `get_script_dir()` during AOT init resolves to a
+    # directory containing those resources.  Constants like
+    # `const FooLogo = File::readTextFile(get_script_dir() + "/foo-logo.svg")`
+    # fire during `qore_aot_module_ns_init` under a
+    # ProgramThreadCountContextHelper that points at the module's own
+    # Program — whose script_dir is the .qmod's directory.  A flat qmod
+    # without sibling resources would hit FILE-OPEN2-ERROR and raise
+    # AOT-PENDING-CONSTANT on every downstream `registerApp(...)` call.
+    # Single-file modules (no subdir) have no resources, so they keep the
+    # flat layout.
+    set(_qmod_flat_dir ${CMAKE_BINARY_DIR}/qlib-qmod)
+    if (${_is_dir})
+        set(_qmod_out_dir ${_qmod_flat_dir}/${_name})
+        set(_qmod_source_link ${CMAKE_SOURCE_DIR}/qlib/${_name}/${_name}.qmod)
+    else()
+        set(_qmod_out_dir ${_qmod_flat_dir})
+        set(_qmod_source_link ${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod)
+    endif()
+    set(_qmod_out ${_qmod_out_dir}/${_name}.qmod)
+    file(MAKE_DIRECTORY ${_qmod_out_dir})
+
+    # One-shot cleanup of stale flat artifacts from the pre-subdir layout
+    # (cmake commit that moved split-dir qmods into subdirs).  Without this,
+    # ModuleManager::loadModuleIntern finds `<dir>/<name>.qmod` first
+    # (flat takes precedence in the search order) and loads the stale
+    # pre-fix qmod instead of the current subdir one.  Runs at configure
+    # time; `file(REMOVE)` is a no-op on nonexistent paths, so it's
+    # idempotent across clean configures.
+    if (${_is_dir})
+        file(REMOVE
+            "${_qmod_flat_dir}/${_name}.qmod"
+            "${_qmod_flat_dir}/${_name}.qmod.d"
+            "${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod")
+    endif()
+
+    # Both split-dir and single-file use the direct `qcc -m` path.
+    # Split-dir takes the module directory; single-file takes the .qm.
+    #
+    # Historical note: the macro originally used per-file `qcc -c` +
+    # `qcc -m --from-objects` for split-dir modules, intending to exploit
+    # make parallelism across the N component .qc files.  Measurement on
+    # DataProvider (134 files) showed whole-dir compile is actually
+    # FASTER wall-clock (69s vs 93s @ -j8) — per-file re-parses the full
+    # context directory N times and the redundant N-parse overhead eats
+    # the parallelism benefit.  Per-file's real win is incremental
+    # rebuild granularity, not clean-build throughput.  Additionally the
+    # per-file path hits a latent slice-4 bug in extractAOTSlotIdentities
+    # (SIGSEGV on some modules, e.g. FileLocationHandlerHttp.qc) that
+    # whole-dir avoids.  Revisit per-file mode after the slice-4 fix and
+    # add an opt-in option for dev-loop incremental builds.
+    set(_qmod_dep ${_qmod_out}.d)
+
+    # For split-dir modules, collect sibling resource files at cmake-time
+    # so they can be declared as BYPRODUCTS of the copy step and tracked
+    # by make for rebuild triggers when the source changes.
+    set(_qmod_resource_copies "")
+    set(_qmod_resource_srcs "")
+    set(_qmod_jar_srcs "")
+    set(_qmod_jar_stage_commands "")
+    if (${_is_dir})
+        file(GLOB _qmod_resource_srcs
+            "${_source_root}/*.svg"
+            "${_source_root}/*.yaml"
+            "${_source_root}/*.json")
+        if (IS_DIRECTORY "${_source_root}/jar")
+            file(GLOB _qmod_jar_srcs "${_source_root}/jar/*.jar")
+            set(_qmod_jar_stage_commands
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}/jar
+                COMMAND ${CMAKE_COMMAND} -E copy_directory ${_source_root}/jar ${_qmod_out_dir}/jar)
+        endif()
+    endif()
+
+    # Dependency strategy: qmod output depends on the module's own
+    # source files (ARGN), ${QCC_FORMAT_STAMP}, and
+    # ${QORE_AOT_PROBE_STAMP} (see root CMakeLists.txt).  ${QCC_FORMAT_STAMP}
+    # tracks files that change qmod wire format or qcc compile semantics --
+    # not every libqore source edit.  ${QORE_AOT_PROBE_STAMP} tracks which
+    # external binary modules (json, yaml, xml, ...) were loadable at
+    # cmake configure time; the .qm sources use %try-module / %ifdef
+    # No<Name> to branch on availability, and that decision is baked
+    # into the AOT-compiled .qmod, so re-AOT must fire when the probe
+    # outcome changes.  Target-level `add_dependencies` below ensures
+    # qcc and libqore are BUILT before qmod rules run (needed for cold
+    # builds) without making qmod rules mtime-dependent on their
+    # binaries.  Previously `DEPENDS $<TARGET_FILE:qcc>` triggered all
+    # 238 qmod rebuilds on any libqore relink, even for runtime-only
+    # fixes (QoreAOTRuntime.cpp, Function.cpp evalIntern, slot-reg
+    # filtering, etc.) that don't affect qmod output.
+    set(_qmod_probe_dep "")
+    if (DEFINED QORE_AOT_PROBE_STAMP)
+        set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
+    endif()
+    if (${_is_dir})
+        # Optional symlink at qlib/<name>/<name>.qmod (inside the source
+        # subdir, alongside the resources).  Tests using
+        # %prepend-module-path "${SCRIPT_DIR}/../../../../qlib" drive
+        # module lookup into the <name>/ folder where the loader prefers
+        # the `.qmod` form per the within-folder preference rule added
+        # to ModuleManager::loadModuleIntern.
+        add_custom_command(
+            OUTPUT ${_qmod_out}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+            ${_qmod_jar_stage_commands}
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                ${_qore_qcc_command} -m ${_source_root}
+                --depfile=${_qmod_dep} -o ${_qmod_out}
+            DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
+            DEPFILE ${_qmod_dep}
+            WORKING_DIRECTORY ${_qmod_out_dir}
+            COMMENT "AOT compile ${_name}.qmod"
+            VERBATIM
+        )
+        # Per-resource copy commands so rebuilds fire when a resource
+        # changes in the source tree.  Outputs go into the same dir as
+        # the qmod so `get_script_dir()` finds them at init time.
+        foreach(_res ${_qmod_resource_srcs})
+            get_filename_component(_res_name ${_res} NAME)
+            set(_res_out ${_qmod_out_dir}/${_res_name})
+            add_custom_command(
+                OUTPUT ${_res_out}
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_res} ${_res_out}
+                DEPENDS ${_res}
+                COMMENT "Copy ${_name} resource ${_res_name}"
+                VERBATIM
+            )
+            list(APPEND _qmod_resource_copies ${_res_out})
+        endforeach()
+    else()
+        # Optionally drop a symlink at qlib/<name>.qmod pointing at the
+        # freshly built qmod.  The in-tree test suite uses
+        # %prepend-module-path "${SCRIPT_DIR}/../../../../qlib" to anchor
+        # module lookup at the source qlib/ directory; placing the qmod
+        # there alongside the .qm lets loadModuleIntern's within-dir
+        # preference order pick the AOT artifact.
+        add_custom_command(
+            OUTPUT ${_qmod_out}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                ${_qore_qcc_command} -m ${_source_root}
+                --depfile=${_qmod_dep} -o ${_qmod_out}
+            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
+            DEPFILE ${_qmod_dep}
+            WORKING_DIRECTORY ${_qmod_out_dir}
+            COMMENT "AOT compile ${_name}.qmod"
+            VERBATIM
+        )
+    endif()
+
+    set(_qmod_source_link_dep "")
+    if (QORE_AOT_LINK_SOURCE_MODULES)
+        add_custom_command(
+            OUTPUT ${_qmod_source_link}
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                ${_qmod_out} ${_qmod_source_link}
+            DEPENDS ${_qmod_out}
+            COMMENT "Link ${_name}.qmod into source qlib"
+            VERBATIM
+        )
+        set(_qmod_source_link_dep ${_qmod_source_link})
+    endif()
+
+    add_custom_target(${_name}-qmod ALL DEPENDS
+        ${_qmod_out}
+        ${_qmod_source_link_dep}
+        ${_qmod_resource_copies})
+    # Ensure qcc executable + libqore.so are built before this qmod
+    # rule runs — target-level deps, not mtime deps, so a newer qcc
+    # binary doesn't force a qmod rebuild on its own.
+    if (TARGET qcc)
+        add_dependencies(${_name}-qmod qcc)
+    endif()
+    if (TARGET qcc-format-version)
+        add_dependencies(${_name}-qmod qcc-format-version)
+    endif()
+    if (DEFINED QORE_AOT_BINARY_MODULE_TARGETS)
+        foreach(_qore_aot_binary_module ${QORE_AOT_BINARY_MODULE_TARGETS})
+            if (TARGET ${_qore_aot_binary_module})
+                add_dependencies(${_name}-qmod ${_qore_aot_binary_module})
+            endif()
+        endforeach()
+    endif()
+
+    # Install qmods into an arch-specific module directory.  Split-dir module
+    # qmods keep their resources beside the qmod so get_script_dir() resolves
+    # the same way it does in the build tree.
+    set(_qmod_stale_install_paths "")
+    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+        _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod")
+    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+        _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod.d")
+    if (${_is_dir})
+        # Remove stale artifacts from older layouts.  Flat qmods shadow split
+        # qmods within one module path entry, and old share-installed qmods can
+        # be loaded when AOT is later disabled or an installed qmod is missing.
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod.d")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod.d")
+        install(CODE "file(REMOVE\n${_qmod_stale_install_paths})")
+        install(FILES ${_qmod_out} DESTINATION ${_qmod_install_dir}/${_name})
+        if (_qmod_resource_srcs)
+            install(FILES ${_qmod_resource_srcs} DESTINATION ${_qmod_install_dir}/${_name})
+        endif()
+        if (_qmod_jar_srcs)
+            install(FILES ${_qmod_jar_srcs} DESTINATION ${_qmod_install_dir}/${_name}/jar)
+        endif()
+    else()
+        install(CODE "file(REMOVE\n${_qmod_stale_install_paths})")
+        install(FILES ${_qmod_out} DESTINATION ${_qmod_install_dir})
+    endif()
+ENDMACRO (QORE_USER_MODULE_AOT_RULES)
+
 # Install qore native/user module (.qm file) into the proper location.
 #
 # NOTE: this macro is for the library only
@@ -419,6 +774,20 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
 
     set (_extra_files ${ARGN})
 
+    # User-module dependencies are maintained explicitly by the caller.
+    # AOT qmod rules add all in-tree binary module targets separately, so
+    # split-module compilation cannot race binary modules required by a
+    # transitive %requires chain.
+    set(_effective_mod_deps ${_mod_deps})
+
+    # Record user-module dependencies for a final pass after all module
+    # targets have been declared.  The immediate dependency wiring below can
+    # only see targets already defined at this point; without the final pass,
+    # forward qlib dependencies are order-dependent and parallel qmod builds
+    # can race each other.
+    set_property(GLOBAL APPEND PROPERTY QORE_USER_MODULE_TARGETS ${f})
+    set_property(GLOBAL PROPERTY QORE_USER_MODULE_DEPS_${f} "${_effective_mod_deps}")
+
     # Add module name to the global list for documentation cross-referencing
     set(QORE_USER_MODULE_NAMES ${QORE_USER_MODULE_NAMES} ${f} CACHE INTERNAL "List of user module names for doc cross-referencing")
 
@@ -432,7 +801,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         # prepare needed vars
         set(MOD_DOXYFILE "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f}")
         unset(MOD_DEPS)
-        foreach(i ${_mod_deps})
+        foreach(i ${_effective_mod_deps})
             # we must use relative directories for tags; using absolute paths for tags will break the documentation
             # when used on any system except the one where it's generated
             get_filename_component(f0 ${i} NAME)
@@ -524,7 +893,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         add_dependencies(docs-${f} docs-lib)
 
         # make this dependent on the other module targets
-        foreach(i ${_mod_deps})
+        foreach(i ${_effective_mod_deps})
             get_filename_component(f0 ${i} NAME)
             if (TARGET docs-${f0})
                 add_dependencies(docs-${f} docs-${f0})
@@ -534,10 +903,21 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
 
     # install qm file
     install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
+    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 1 "${QORE_USER_MODULES_DIR}")
+    else()
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 0 "${QORE_USER_MODULES_DIR}")
+    endif()
 
     # extract and install QM metadata (automatic for user modules)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
             AND DEFINED QORE_QM_METADATA_SUBDIR)
+        if(DEFINED QORE_EXECUTABLE)
+            set(_qore_qm_metadata_command
+                ${QORE_EXECUTABLE} ${QORE_QM_METADATA_EXECUTABLE})
+        else()
+            set(_qore_qm_metadata_command ${QORE_QM_METADATA_EXECUTABLE})
+        endif()
         set(_um_qm_meta_files "")
         # use module-specific subdirectory to avoid collisions when
         # different modules contain .qc files with the same basename
@@ -556,7 +936,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
                     add_custom_command(OUTPUT ${_meta_out}
                         COMMAND ${CMAKE_COMMAND} -E env
                             ${QORE_QM_METADATA_ENV}
-                            ${QORE_QM_METADATA_EXECUTABLE}
+                            ${_qore_qm_metadata_command}
                             ${_src_file} ${_meta_out}
                         DEPENDS ${_src_file}
                         COMMENT "Extracting metadata from ${_src_name}"
@@ -564,7 +944,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
                     )
                 else()
                     add_custom_command(OUTPUT ${_meta_out}
-                        COMMAND ${QORE_QM_METADATA_EXECUTABLE}
+                        COMMAND ${_qore_qm_metadata_command}
                             ${_src_file} ${_meta_out}
                         DEPENDS ${_src_file}
                         COMMENT "Extracting metadata from ${_src_name}"
@@ -586,7 +966,54 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
                         ${QORE_METADATA_DIR}/${QORE_QM_METADATA_SUBDIR})
         endif()
     endif()
+
+    # AOT: build a .qmod alongside the .qm source when enabled
+    if (QORE_BUILD_AOT_MODULES AND (TARGET qcc OR DEFINED QORE_QCC_EXECUTABLE))
+        if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+            QORE_USER_MODULE_AOT_RULES(${f} 1
+                ${CMAKE_SOURCE_DIR}/qlib/${f} ${_mod_targets})
+        else()
+            QORE_USER_MODULE_AOT_RULES(${f} 0
+                ${CMAKE_SOURCE_DIR}/${_module_file} ${_mod_targets})
+        endif()
+        foreach(_dep ${_effective_mod_deps})
+            get_filename_component(_dep_name ${_dep} NAME_WE)
+            if (TARGET ${_dep_name})
+                add_dependencies(${f}-qmod ${_dep_name})
+            endif()
+            if (TARGET ${_dep_name}-qmod)
+                add_dependencies(${f}-qmod ${_dep_name}-qmod)
+            endif()
+        endforeach()
+    endif()
 ENDMACRO (QORE_USER_MODULE)
+
+function(QORE_FINALIZE_USER_MODULE_DEPENDENCIES)
+    get_property(_qore_user_modules GLOBAL PROPERTY QORE_USER_MODULE_TARGETS)
+    foreach(_mod ${_qore_user_modules})
+        get_property(_mod_deps GLOBAL PROPERTY QORE_USER_MODULE_DEPS_${_mod})
+        if (NOT _mod_deps)
+            continue()
+        endif()
+
+        foreach(_dep ${_mod_deps})
+            get_filename_component(_dep_name ${_dep} NAME_WE)
+
+            if (TARGET docs-${_mod} AND TARGET docs-${_dep_name})
+                add_dependencies(docs-${_mod} docs-${_dep_name})
+            endif()
+
+            if (TARGET ${_mod}-qmod)
+                if (TARGET ${_dep_name})
+                    add_dependencies(${_mod}-qmod ${_dep_name})
+                endif()
+                if (TARGET ${_dep_name}-qmod)
+                    add_dependencies(${_mod}-qmod ${_dep_name}-qmod)
+                endif()
+            endif()
+        endforeach()
+    endforeach()
+endfunction()
 
 # Install qore native/user module (.qm file) into proper location.
 #
@@ -601,13 +1028,14 @@ ENDMACRO (QORE_USER_MODULE)
 # The module will be installed automatically in 'make install' target.
 MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     get_filename_component(f ${_module_file} NAME_WE)
+    unset(_mod_targets)
+    unset(_mod_jar_targets)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qm" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qc"
             "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg")
         file(GLOB _mod_jar_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/jar/*.jar")
         set(qm_install_subdir "${f}") # install files into a subdir
         #message(STATUS "_mod_targets ${_mod_targets}")
-        message(STATUS "_mod_jar_targets ${_mod_jar_targets}")
     else()
         set(_mod_targets ${_module_file})
         set(qm_install_subdir "") # common qm file
@@ -689,7 +1117,12 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
 
     # install user module files
     install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
-    if (DEFINED _mod_jar_targets)
+    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 1 "${QORE_USER_MODULES_DIR}")
+    else()
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 0 "${QORE_USER_MODULES_DIR}")
+    endif()
+    if (_mod_jar_targets)
         install(FILES ${_mod_jar_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar)
         message(STATUS "called install for ${_mod_jar_targets} -> ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar")
     endif()
@@ -697,6 +1130,12 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     # extract and install QM metadata (automatic for external user modules)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
             AND DEFINED _external_module_name)
+        if(DEFINED QORE_EXECUTABLE)
+            set(_qore_qm_metadata_command
+                ${QORE_EXECUTABLE} ${QORE_QM_METADATA_EXECUTABLE})
+        else()
+            set(_qore_qm_metadata_command ${QORE_QM_METADATA_EXECUTABLE})
+        endif()
         set(_ext_qm_meta_files "")
         # use module-specific subdirectory to avoid collisions when
         # different modules contain .qc files with the same basename
@@ -711,13 +1150,25 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
                 endif()
                 get_filename_component(_src_name ${_src_file} NAME)
                 set(_meta_out ${_ext_meta_dir}/${_src_name}.meta.json)
-                add_custom_command(OUTPUT ${_meta_out}
-                    COMMAND ${QORE_QM_METADATA_EXECUTABLE}
-                        ${_src_file} ${_meta_out}
-                    DEPENDS ${_src_file}
-                    COMMENT "Extracting metadata from ${_src_name}"
-                    VERBATIM
-                )
+                if(DEFINED QORE_QM_METADATA_ENV)
+                    add_custom_command(OUTPUT ${_meta_out}
+                        COMMAND ${CMAKE_COMMAND} -E env
+                            ${QORE_QM_METADATA_ENV}
+                            ${_qore_qm_metadata_command}
+                            ${_src_file} ${_meta_out}
+                        DEPENDS ${_src_file}
+                        COMMENT "Extracting metadata from ${_src_name}"
+                        VERBATIM
+                    )
+                else()
+                    add_custom_command(OUTPUT ${_meta_out}
+                        COMMAND ${_qore_qm_metadata_command}
+                            ${_src_file} ${_meta_out}
+                        DEPENDS ${_src_file}
+                        COMMENT "Extracting metadata from ${_src_name}"
+                        VERBATIM
+                    )
+                endif()
                 list(APPEND _ext_qm_meta_files ${_meta_out})
             endif()
         endforeach()
@@ -729,10 +1180,46 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
                 DEPENDS ${_ext_qm_meta_files})
             add_dependencies(${_external_module_name}-qm-metadata
                 qm-metadata-${f})
+            if(QORE_QM_METADATA_DEPENDS)
+                add_dependencies(qm-metadata-${f}
+                    ${QORE_QM_METADATA_DEPENDS})
+            endif()
             install(FILES ${_ext_qm_meta_files}
                     DESTINATION
                         ${QORE_METADATA_DIR}/${_external_module_name})
         endif()
+    endif()
+
+    # AOT: build a .qmod alongside the .qm source when enabled
+    if (QORE_BUILD_AOT_MODULES AND (TARGET qcc OR DEFINED QORE_QCC_EXECUTABLE))
+        if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+            QORE_USER_MODULE_AOT_RULES(${f} 1
+                ${CMAKE_SOURCE_DIR}/qlib/${f} ${_mod_targets})
+        else()
+            QORE_USER_MODULE_AOT_RULES(${f} 0
+                ${CMAKE_SOURCE_DIR}/${_module_file} ${_mod_targets})
+        endif()
+        foreach(_dep ${_mod_deps})
+            get_filename_component(_dep_name ${_dep} NAME_WE)
+            if (TARGET ${_dep_name})
+                add_dependencies(${f}-qmod ${_dep_name})
+            endif()
+            if (TARGET ${_dep_name}-qmod)
+                add_dependencies(${f}-qmod ${_dep_name}-qmod)
+            endif()
+        endforeach()
+        get_property(_qore_external_user_modules GLOBAL PROPERTY QORE_EXTERNAL_USER_MODULE_TARGETS)
+        foreach(_existing_mod ${_qore_external_user_modules})
+            get_property(_existing_deps GLOBAL PROPERTY QORE_EXTERNAL_USER_MODULE_DEPS_${_existing_mod})
+            foreach(_dep ${_existing_deps})
+                get_filename_component(_dep_name ${_dep} NAME_WE)
+                if ("${_dep_name}" STREQUAL "${f}" AND TARGET ${_existing_mod}-qmod)
+                    add_dependencies(${_existing_mod}-qmod ${f}-qmod)
+                endif()
+            endforeach()
+        endforeach()
+        set_property(GLOBAL APPEND PROPERTY QORE_EXTERNAL_USER_MODULE_TARGETS ${f})
+        set_property(GLOBAL PROPERTY QORE_EXTERNAL_USER_MODULE_DEPS_${f} "${_mod_deps}")
     endif()
 ENDMACRO (QORE_EXTERNAL_USER_MODULE)
 

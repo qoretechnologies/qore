@@ -90,7 +90,7 @@ qclass Http1Connection [
 
     @since %Qore 2.3
 */
-Http1Connection::constructor(string target_host, int target_port, bool ssl_required = False) {
+Http1Connection::constructor(string target_host, int target_port, bool ssl_required = False) [flags=NAMED_ARGS] {
     ReferenceHolder<Http1ClientConnection> conn(
         new Http1ClientConnection(target_host->c_str(), (int)target_port, ssl_required, xsink),
         xsink);
@@ -156,7 +156,7 @@ int Http1Connection::getTargetPort() [flags=RET_VALUE_ONLY] {
     @return True if the connection is ready; False on timeout
     @throw HTTPCLIENT-CONNECT-ERROR if the connection is closed with an error
 */
-bool Http1Connection::waitForReady(int timeout_ms = 30000) {
+bool Http1Connection::waitForReady(int timeout_ms = 30000) [flags=NAMED_ARGS] {
     return priv->waitForReadyOrError((int64_t)timeout_ms, xsink);
 }
 

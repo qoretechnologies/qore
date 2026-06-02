@@ -47,7 +47,7 @@ public class EasyPostCarrierAccountsDataProvider inherits EasyPostDataProviderBa
         return recordType.getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         list<hash<auto>> records = ();
         if (search_options.id) {
@@ -59,7 +59,7 @@ public class EasyPostCarrierAccountsDataProvider inherits EasyPostDataProviderBa
             auto response = doGet("carrier_accounts");
             records = response.typeCode() == NT_LIST ? response : (response.carrier_accounts ?? ());
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

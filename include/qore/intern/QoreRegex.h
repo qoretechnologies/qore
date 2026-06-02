@@ -82,6 +82,10 @@ public:
         global = true;
     }
 
+    DLLLOCAL bool isGlobal() const {
+        return global;
+    }
+
     DLLLOCAL void ref() const {
         ROreference();
     }

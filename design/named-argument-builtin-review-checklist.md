@@ -1,0 +1,614 @@
+# Named-Argument Builtin Review Checklist
+
+## Status
+
+The named-arguments feature is **implemented and shipped in Qore 2.3.0**; see
+[`design/named-arguments.md`](named-arguments.md) for the feature design
+(syntax, binder, overload resolution, evaluation order, reflection, `QCF_NAMED_ARGS`
+gating). This document is the **operational companion**: the review process and
+migration record for opting individual builtin variants into the named-callable
+surface.
+
+The core QPP migration is complete (the `feat: enable named ...` series through
+`d05c0eb97 docs: record named-call positional inventory`); the
+[Current Core Migration Notes](#current-core-migration-notes) and
+[Current core positional-only inventory](#current-core-positional-only-inventory)
+are the durable record of that work and the precedent for binary-module
+migrations under `~/src/qore/git/module-*`.
+
+## Purpose
+
+This checklist captures the review process for enabling named arguments on
+builtin functions and methods. It applies to core Qore QPP files and should also
+be used when the same migration is applied to binary modules under
+`~/src/qore/git/module-*`.
+
+Named arguments make formal parameter names part of the public API. Do not add
+`NAMED_ARGS` until the names have been reviewed as stable, clear, and safe for
+users to rely on.
+
+## Inventory
+
+Build the target first so qpp metadata is current:
+
+```bash
+cmake --build build --target qore
+```
+
+Each function/method entry in the generated `*.meta.json` carries `params`
+(`{name, type_name, default_value?}`), a `flags` array (which includes
+`"NAMED_ARGS"` once a variant has opted in), and the dedicated
+`"named_callable"` (bool) and `"named_parameters"` (array) fields emitted by
+`serializeMetadataNamedArgsJson`. The inventory queries below filter on the
+`flags` array, which is sufficient; `named_callable` can be used directly as a
+cross-check (note it is `false` for a `NAMED_ARGS` variant that has no named
+parameters).
+
+For core builtin functions, list fixed-arity variants that are not yet
+named-callable:
+
+```bash
+jq -r '
+  def row($x): select(($x.params|length)>0)
+    | select((($x.flags//[])|index("NAMED_ARGS"))|not)
+    | select((($x.flags//[])|index("NOOP"))|not)
+    | select((($x.flags//[])|index("RUNTIME_NOOP"))|not)
+    | select((($x.flags//[])|index("DEPRECATED"))|not)
+    | [input_filename, $x.name, $x.signature, (($x.flags//[])|join("+")),
+       (($x.params//[])|map(.name+":"+.type_name)|join(", "))] | @tsv;
+  .functions[]? as $f | row($f)
+' build/ql_*.meta.json | sed 's#build/##' | sort
+```
+
+For core builtin methods and constructors, list fixed-arity variants that are
+not yet named-callable:
+
+```bash
+jq -r '
+  def row($c; $kind; $x): select(($x.params|length)>0)
+    | select((($x.flags//[])|index("NAMED_ARGS"))|not)
+    | select((($x.flags//[])|index("NOOP"))|not)
+    | select((($x.flags//[])|index("RUNTIME_NOOP"))|not)
+    | select((($x.flags//[])|index("DEPRECATED"))|not)
+    | [input_filename, $c.name, $kind, ($x.name // "constructor"), $x.signature,
+       (($x.flags//[])|join("+")),
+       (($x.params//[])|map(.name+":"+.type_name)|join(", "))] | @tsv;
+  .classes[]? as $c
+  | ( ($c.constructors[]? | row($c; "constructor"; .)),
+      ($c.instance_methods[]? | row($c; "instance"; .)),
+      ($c.static_methods[]? | row($c; "static"; .)) )
+' build/QC_*.meta.json build/Pseudo_QC_*.meta.json | sed 's#build/##' | sort
+```
+
+For a binary module, use the same query against that module's generated
+`*.meta.json` files after building the module.
+
+## Opt-In Rules
+
+Enable `NAMED_ARGS` only when all of these are true:
+
+- Every non-varargs parameter has a reviewed public name.
+- The selected variant can be resolved at parse time from the supplied names and
+  types.
+- The function or method has a fixed parameter surface; free-form positional
+  forwarding remains positional.
+- Error messages, documentation, and reflection will expose the reviewed names.
+- Any newly touched C++ code passes the sandboxing and cooperative cancellation
+  audits.
+
+Do not enable `NAMED_ARGS` for:
+
+- Varargs-only variants such as `print(...)`, `exists(...)`, `min(...)`, and
+  `max(...)`.
+- Dynamic forwarding helpers such as `call_function(name, ...)`,
+  `call_object_method(object_value, method, ...)`, and `create_object(class_name,
+  ...)`.
+- Deprecated, `NOOP`, or `RUNTIME_NOOP` compatibility variants.
+- APIs where the meaningful names are option-hash keys rather than formal
+  parameters.
+- Ambiguous overload sets where a named call cannot reliably choose a single
+  variant at parse time.
+
+Fixed parameters before varargs can be enabled only when qpp and parser
+semantics make the fixed names unambiguous and the remaining varargs remain
+positional. Treat each such API as a case-by-case decision.
+
+## Parameter Names
+
+Prefer names that describe the user's intent at the call site:
+
+| Avoid | Prefer | Notes |
+|-------|--------|-------|
+| `arg`, `value1`, `value2` | domain-specific names | Generic names are only acceptable for true converters like `type(value)`. |
+| `l`, `h`, `strd`, `opts` | `values`, `hash_value`, `standard_fds`, `options` | Expand abbreviations unless they are established public terms. |
+| `fmt` | `format` | Preserve only if the short form is already a widely documented API name and changing it is not worth the break. |
+| `alg` | `algorithm` | Use the full noun for public calls. |
+| `key_len` | `key_length` | Avoid internal abbreviations and underscore fragments that read like implementation variables. |
+| `old_path`, `new_path` | `source_path`, `target_path` | Use semantic direction, especially for mutating filesystem/process APIs. |
+| `uid`, `gid` | `owner`, `group` | Prefer the documented role when it is clearer than the system type name. |
+| `sig` | `signal` | Avoid abbreviations in public names. |
+| `usecs` | `microseconds` | Prefer full units. |
+| `timeout_ms` | `timeout` | If the type is `timeout`, the unit belongs in the value type, not the name. |
+
+Keep consistent names across related APIs:
+
+- Data payloads: `data`, `compressed_data`, `base64_string`, `hex_string`.
+- Containers: `values`, `hash_value`, `container`, `key`.
+- Paths: `path`, `source_path`, `target_path`, `link_path`.
+- Crypto: `algorithm`, `digest`, `key`, `iv`, `mac`, `mac_size`, `aad`.
+- Time: `date_value`, `seconds`, `milliseconds`, `microseconds`.
+- Object helpers: `object_value`, `class_name`, `method`, `arguments`.
+- Command-line parser helpers: `options` for the option specification hash and
+  `arguments` for the command-line argument list. Avoid internal abbreviations
+  such as `opts` and `pgm_args`.
+- Regex helpers: `pattern`, `replacement`, `options`, `callback`, and
+  `subject` for the text being matched, extracted, searched, or substituted.
+  Avoid exposing internal names such as `str`.
+- Iterator helpers: `source` for source text or streams, `list_value`,
+  `hash_value`, and `object_value` for container/object iterators, `position`
+  for repositioning, `value` for a single yielded or override value, and
+  `start`, `stop`, `step` for numeric ranges.
+  Keep overlapping range value-override overloads positional-only when marking
+  both the numeric and override variants would make named calls ambiguous.
+- Stream helpers: `input_stream` and `output_stream` for stream dependencies,
+  `source_encoding` and `target_encoding` for conversion direction,
+  `transform` for `Transform` objects, `sync_close` for pipe close behavior,
+  `buffer_size` for stream buffers, and `line_separator`/`trim_line` for line
+  parsing controls. Avoid exposing internal names such as `is`, `os`, `t`,
+  `eol`, or `bufsize`.
+- Parse-option helpers: `parse_options` for integer `PO_*` masks, `name` and
+  `names` for string option names, and `other` for another `ParseOptions`
+  object. Do not expose the internal abbreviation `po`.
+- Scanner helpers: `source` for scanned text, `literal` for raw token text,
+  `count` for advancing multiple codepoints, `char_offset`/`byte_offset` for
+  relative lookups, and `byte_length` for extracted byte ranges.
+
+If a rename is needed, update all of the following in the same commit:
+
+- QPP signature parameter name.
+- Doxygen `@param` name.
+- Error messages that identify the argument.
+- Tests and reflection assertions.
+
+## Flags
+
+Add `NAMED_ARGS` to the existing flag list:
+
+```cpp
+[flags=RET_VALUE_ONLY,NAMED_ARGS]
+[flags=CONSTANT,NAMED_ARGS]
+[flags=NAMED_ARGS;dom=FILESYSTEM]
+abstract nothing ClassName::method(string value) [flags=NAMED_ARGS];
+```
+
+If the implementation gains cancellation checks or any other possible exception
+path, it is no longer `CONSTANT`; use `RET_VALUE_ONLY` when it has no side
+effects visible beyond returning or throwing.
+
+Do not use `NAMED_ARGS` on `DEPRECATED`, `NOOP`, or `RUNTIME_NOOP` variants.
+
+## User-Facing Errors
+
+Named-call failures should use the most informative error available:
+
+- Unknown names should report `NAMED-ARG-UNKNOWN` and list accessible named
+  parameters when the target is named-callable.
+- Calls to variants that are not opted in should report
+  `NAMED-CALL-NOT-SUPPORTED`.
+- Varargs-only and dynamic call-reference cases should remain
+  `NAMED-CALL-NOT-SUPPORTED`.
+
+When an existing named-call error is more informative, preserve it rather than
+replacing it with a generic failure.
+
+## Tests
+
+For each converted batch, add or update:
+
+- Runtime named-call tests in `examples/test/qore/vars/named-arguments.qtest`.
+- Reflection tests in `examples/test/qore/misc/reflection.qtest` using
+  `isNamedCallable()` and `getNamedParameterNames()`. Both are declared on
+  `Reflection::AbstractVariant` and inherited by `FunctionVariant`,
+  method-variant, and constructor-variant reflection classes;
+  `getNamedParameterNames()` returns an empty list when `isNamedCallable()`
+  is `False`, so assert both together rather than treating an empty list as
+  "no names available".
+- Focused functional tests for the touched subsystem.
+- Negative tests when the batch changes error behavior or intentionally leaves
+  related variants unmarked.
+
+Run named-argument tests in all execution modes:
+
+```bash
+LD_LIBRARY_PATH=build build/qore --exec-mode=ast examples/test/qore/vars/named-arguments.qtest
+LD_LIBRARY_PATH=build build/qore --exec-mode=ir  examples/test/qore/vars/named-arguments.qtest
+LD_LIBRARY_PATH=build build/qore --exec-mode=jit examples/test/qore/vars/named-arguments.qtest
+```
+
+Run reflection with in-tree modules:
+
+```bash
+LD_LIBRARY_PATH=build QORE_MODULE_DIR=build/modules/reflection:build/modules/astparser:qlib \
+  build/qore examples/test/qore/misc/reflection.qtest
+```
+
+## Using Named Calls in Qore Module Code
+
+Use named calls in qlib or module source only when they remain parse-time
+resolvable and improve readability without adding casts or temporary variables
+solely for the call syntax.
+
+Good qlib precedents:
+
+```qore
+DataLineIterator it(source: str);
+StreamPipe pipe(sync_close: False);
+hash<auto> urlh = parse_datasource(datasource: ds_str);
+```
+
+Avoid converting calls whose argument types are intentionally dynamic:
+
+```qore
+# Keep positional: opts.eol is an option-hash member with runtime type.
+new DataLineIterator(data, opts.eol);
+
+# Keep positional: body is auto/data even if guarded by a runtime type check.
+new BinaryInputStream(body);
+```
+
+When applying this work to binary modules, treat dynamic hash members, `auto`,
+`data`, and broad option payloads as positional unless an explicit static type
+already exists for the expression. If the named-call error message says the
+call depends on runtime argument types, preserve the more informative error and
+leave the call positional rather than obscuring the code with casts.
+
+## Audit Requirements
+
+Run the repository audit checklist before each commit that changes QPP/C++ or
+tests.
+
+For C++/QPP changes:
+
+- Search for filesystem and network operations and verify sandbox checks.
+- Add `qore_check_cancel()` to loops that can iterate more than 100 times.
+- Use checks every 100 iterations for tight loops and every 10 iterations for
+  expensive loops.
+- Do not introduce `qore_check_io_interrupt()`.
+- Preserve exception safety with `ReferenceHolder`, `SimpleRefHolder`, or
+  `std::unique_ptr` as appropriate.
+- Re-run `git diff --check HEAD`.
+
+For tests:
+
+- Keep `%modern`.
+- Keep executable permission.
+- Use hard `%requires` for Qore-shipped modules and `%try-module` only for
+  external optional modules.
+
+## Binary Module Migration
+
+For each binary module repository:
+
+1. Build the module so generated qpp metadata is fresh.
+2. Run the metadata inventory query against the module's `*.meta.json`.
+3. Group candidates by API family and risk.
+4. Review names using this checklist before adding `NAMED_ARGS`.
+5. Rename unsafe formal parameters before exposing them.
+6. Update module docs and examples that mention renamed parameter names.
+7. Add runtime named-call tests and reflection/metadata checks if the module has
+   a reflection test harness.
+8. Run the module's focused tests and any cross-module integration tests.
+9. Run sandbox/cancellation audits for touched C++/QPP files.
+10. Commit in small, reviewable batches.
+
+Carry over exclusions explicitly. If a module leaves a variant unmarked because
+it is varargs, dynamic, deprecated, or option-hash based, record that rationale
+in the commit notes or migration tracking issue.
+
+## Current Core Migration Notes
+
+These examples are from the core migration and should be reused as precedent:
+
+- `sort(arg: 1)` should report an unknown named argument with accessible
+  parameters when the function is named-callable.
+- `sprintf(fmt: ...)` remains not supported while the varargs formatter is not
+  opted in.
+- Crypto `alg` was renamed to `algorithm`; `key_len` was renamed to
+  `key_length`.
+- Fixed vector formatter variants use `format` and `values`; varargs
+  formatters such as `sprintf(fmt, ...)`, `printf(fmt, ...)`, and
+  `f_sprintf(fmt, ...)` remain positional until a safe varargs convention is
+  designed.
+- Filesystem `glob_str` was renamed to `pattern`; `rename(old_path, new_path)`
+  was renamed to `rename(source_path, target_path)`; `symlink(old_path,
+  new_path)` was renamed to `symlink(target_path, link_path)`.
+- Library/process helpers expanded internal abbreviations before exposure:
+  `rc` -> `status`, `gids` -> `group_ids`, `sig` -> `signal`, `usecs` ->
+  `microseconds`, `d` -> `duration`, `addr` -> `address`, `type` -> `family`,
+  `strd` -> `standard_fds`, `opts` -> `options`, and `msg` -> `message`.
+- Timeout parameters with the Qore `timeout` type should use the public name
+  `timeout` unless an established API already exposes `timeout_ms`.
+- Thread helpers use intent names for public calls: `tid` -> `thread_id`,
+  thread-local data hashes use `data`, thread-local key lists use `key_list`,
+  worker counts use `thread_count`, thread init uses `callback`, resource
+  callback arguments use `argument`, and `TimeZone` parameters use `timezone`.
+- Pseudo-methods should not expose internal abbreviations: use `separator`
+  instead of `sep` or `str` when the value separates output, `precision` instead
+  of `prec`, `decimal_separator` and `thousands_separator` instead of
+  `decimal_sep` and `thousands_sep`, `pattern` and `byte_offset` for binary
+  searches, `length` instead of `len` for binary slices, `other_hash` instead of
+  `oh`, and `method` instead of generic `name` for callable-method checks.
+- String pseudo-methods use method-specific names where they communicate the
+  call-site role: `prefix` for `startsWith()`, `suffix` for `endsWith()`,
+  `substring` for containment/searches, `offset` for character search offsets,
+  `separator` for literal split delimiters, `separator_pattern` for regex split
+  delimiters, `pattern` for regex matching/extraction, `length` for slices, and
+  `encoding_flags` / `decoding_flags` for string encode/decode bitfields. Avoid
+  parser-conflicting names such as `trim`; use `trim_line` for line parsing.
+- Do not mark ambiguous string compatibility overloads such as
+  `splitRegex(separator_pattern, with_separator, limit)` when a fuller overload
+  has a defaulted middle parameter and can already serve named calls via
+  `options: 0`.
+- Stream and iterator builtins use domain terms instead of terse implementation
+  names: `source`, `input_stream`, `output_stream`, `buffer_size`,
+  `line_separator`, `trim_line`, `text`, `value`, `format`, and `format_args`.
+  Leave varargs formatting methods such as `printf(format, ...)` and
+  `f_printf(format, ...)` positional-only; fixed-arity `vprintf()` variants can
+  opt in with `format` and `format_args`.
+- Serializable APIs should use data-shape names that disambiguate overloads:
+  `input_stream` and `output_stream` for stream transport, `binary_data`,
+  `string_data`, and `serialization_info` for deserialization inputs, `value`
+  for the value being serialized, `flags` for serialization/deserialization
+  bitfields, and `members` for the internal member hook payload. Avoid exposing
+  terse implementation names such as `stream`, `bin`, or `val`.
+- Thread synchronization classes prefer call-site nouns: `max_size` for queue
+  capacity, `initial_value` for counters, `value` for queue/channel payloads,
+  `description` for exception text, `permits` for semaphore counts,
+  `semaphore` for `AutoSemaphore`, and `lock` for read/write lock guard
+  constructors.
+- ThreadPool uses explicit capacity and lifecycle names:
+  `max_threads`, `min_idle_threads`, `max_idle_threads`,
+  `idle_release_timeout`, `task`, and `cancel_callback`. Do not expose terse
+  implementation names such as `max`, `minidle`, `maxidle`, or `release_ms`.
+- Event-loop APIs use the polled object role as the name (`socket`, `file`, or
+  `notifier`) plus `events`; timer APIs use `deadline`, `user_data`, and
+  `timer_id`. Do not expose `udata` as a public formal parameter name.
+- FTP poll-operation APIs should use endpoint and credential names at the call
+  site: `host`, `port`, `secure`, `secure_data`, `username`, and `password`;
+  command submission should use `command` and `argument`, not implementation
+  abbreviations such as `cmd` and `arg`. Qlib orchestrator calls with dynamic
+  ternary command names or stored broad payload values may still need to remain
+  positional when qmod reports `NAMED-CALL-NOT-SUPPORTED`.
+- FtpClient APIs use public path and stream roles: `url`, `path`,
+  `local_path`, `remote_path`, `input_stream`, `output_stream`,
+  `source_path`, `target_path`, `username`, `password`, `host`, `family`,
+  `host_lookup`, `queue`, `argument`, `with_data`, `warning_ms`,
+  `warning_bytes`, `min_ms`, `timeout_ms`, `command`, and `argument`. Avoid
+  exposing implementation abbreviations such as `is`, `os`, `from`, `to`,
+  `user`, `pass`, `cmd`, `arg`, and `warning_bs`.
+- FtpClient qlib calls that depend on dynamic hash values, ternary-created
+  stream values, or class members may need to remain positional in qmod
+  modules. Confirm with `FileLocationHandler-qmod`,
+  `FtpClientDataProvider-qmod`, and `FtpPoller-qmod`; current examples include
+  `getAsString(file, opts.encoding)`, `put(dynamic_stream, file)`,
+  `FtpClient(options.url)`, `setTimeout(options."timeout")`, and
+  `FtpPoller` calls through its `ftp` member.
+- HTTPClient constructor and configuration APIs should expose stable public
+  names rather than implementation abbreviations: `options`, `headers`,
+  `version`, `enabled`, `secure`, `username`, `password`, `argument`,
+  `warning_bytes`, `max_redirects`, and `uri_path`. HTTP/2 and HTTP/3 stream
+  helpers use `stream_id`, `data`, `end_stream`, `timeout_ms`, `protocol`,
+  `info`, and `content_encoding`. Passive read/status methods can opt in with
+  these names. Keep the timeout-only `readServerSentEvent(timeout_ms)`
+  compatibility overload itself positional; `readServerSentEvent(timeout_ms:)`
+  is still parse-safe through the named `readServerSentEvent(content_encoding,
+  timeout_ms)` variant with `content_encoding` omitted.
+  Main request-sending and callback APIs should use behavior-oriented names:
+  `method`, `path`, `body`, `headers`, `read_response_body`, `info`,
+  `send_callback`, `receive_callback`, `trailers_callback`, `output_stream`,
+  `input_stream`, and `max_chunk_size`. Avoid exposing terse internal names
+  such as `getbody`, `scb`, `rcb`, `tcb`, `os`, or `is`. The `send`,
+  `post`, `sendWithRecvCallback`, `startPollSendRecv`, and
+  `startPollSendAndStream` overload pairs share the same named parameter list
+  across string/binary body variants and are safe when parser tests cover both
+  statically typed body forms.
+- SQL/Datasource APIs should expose database connection roles and list-taking
+  bind helpers clearly: use `username`, `password`, `database`, `description`,
+  `options`, `queue`, `argument`, `option`, `value`, `auto_commit`,
+  `min_connections`, `max_connections`, `warning_ms`, `timeout_ms`, and
+  `arguments`. The fixed list-taking methods (`vexec`, `vselect`,
+  `bindArgs`, `execArgs`, etc.) can opt in with `arguments`; true varargs SQL
+  helpers such as `exec(sql, ...)`, `select(sql, ...)`, `prepare(sql, ...)`,
+  `bind(...)`, and `exec(...)` remain positional until a specific builtin
+  varargs named-call convention is designed and tested. Datasource and
+  DatasourcePool constructors currently remain positional because their
+  overload sets still produce the more informative `NAMED-CALL-NOT-SUPPORTED`
+  error for named calls at runtime. For SQLStatement constructors, use
+  `datasource` and `datasource_pool` to keep overload selection readable.
+- HTTP readiness APIs use `timeout_ms` for blocking readiness waits and
+  `notifier` for `registerReadyNotifier()`. HTTP connection constructors should
+  keep the endpoint and TLS decision explicit (`target_host`, `target_port`,
+  `ssl_required`) when they are exposed to named calls.
+- HTTP poll-operation constructors should avoid internal shorthand: use
+  `socket`, `timeout_ms`, `operation`, `min_status`,
+  `max_status`, `error_code`, `header_name`, `header_prefix`,
+  `websocket_key`, `accept_operation`, `certificate`, `private_key`,
+  `accept_all_certificates`, `http_version`, `perform_ssl_handshake`,
+  `initial_read_operation`, `send_operation`, and `read_operation`.
+  Stream registration helpers should use `stream_id`, `queue`, and
+  `notifier`.
+- HTTP client poll-operation APIs should keep connection routing and request
+  roles explicit: use `connect_target`, `target_host`, `target_port`,
+  `ssl_required`, `proxy_tunnel`, `plain_proxy`, `connection`, `method`,
+  `path`, `headers`, `body`, `promise`, `max_streams`, `channel`,
+  `streaming`, `body_streaming`, `trailers`, `ping_interval_ms`,
+  `end_stream`, `message_queue`, `host`, `port`, `family`,
+  `connect_timeout`, `stream_limit`, `status_code`, `chunk_size`,
+  `connection_unique_hash`, `stream_key`, `error_code`, `description`, and
+  `initial_body`. HTTP/3 server operation constructors should use
+  `drain_timeout`, `headers_only`, and `max_request_body_size`.
+- WebSocket poll-operation APIs should use transport-neutral message names:
+  `payload` for ping/pong data, `frame_data` for pre-encoded frames,
+  `heartbeat_interval_ms`, `idle_timeout_ms`, `timeout_ms`, `max_frame_size`,
+  and `callback` instead of shorthand such as `msg`, `ms`, `size`, or `cb`.
+- PollPipeline APIs should expose pipeline roles rather than implementation
+  shorthand: use `socket`, `payload`, `operation`, `byte_count`,
+  `error_code`, `min_status`, `max_status`, `context_key`,
+  `expected_prefix`, `username`, and `step_index` instead of `sock`, `d`,
+  `op`, `size`, `err`, `lo`, `hi`, `key`, `prefix`, `user`, or `step_idx`.
+- Async I/O controller APIs should not expose implementation shorthand:
+  use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
+  `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of
+  `autostop`, `info`, `replace`, `sock`, `to`, `udata`, `cancel`, and
+  `num_threads`.
+- Qmod call sites that pass closure or otherwise broad values into
+  `AsyncIoController::addTimer(..., user_data)` may need to remain positional
+  until named calls are supported for every auto-payload case in AOT/qmod
+  compilation.
+- Qlib wrapper/object call sites must also stay positional when the receiver is
+  not parse-time-resolved tightly enough for qmod named-call compilation, even
+  if the underlying native method now supports named arguments. For example,
+  `HttpServerAsyncIo` calls to `Http3ServerPollOperation` constructor and
+  stream-registration methods currently stay positional because named calls
+  raise `NAMED-CALL-NOT-SUPPORTED` while loading the qlib module.
+- Time and terminal APIs should expand terse units and value roles before
+  opt-in: use `seconds`, `microseconds`, `milliseconds`, `date_value`,
+  `date_string`, and `offset` instead of `secs`, `us`, `ms`, `d`, `dtstr`,
+  and `cc`.
+- Constructor parameters named after wire formats such as `pem` and `der` are
+  acceptable when the overloads map directly to those formats; expand related
+  credentials such as `pass` to `password` before opt-in.
+- File APIs should use `path` for filesystem names and reuse stream naming
+  such as `line_separator` and `trim_line`; avoid exposing legacy camel-case or
+  abbreviated names such as `fileName`, `eol`, and `trim`.
+- Error propagation APIs should use `error`, `description`, and `argument`
+  instead of abbreviations such as `err`, `desc`, and `arg`.
+- Poll-operation wrappers should expose role names, not implementation names:
+  use `operation`, `done_counter`, `as_string`, and `options` instead of
+  `inner`, `done`, `to_string`, and `opts`.
+- Pool APIs should use `options` for configuration hashes and `argument` for
+  user callback payloads; keep established units such as `warning_ms` when they
+  are already documented user-facing names.
+- Debugger APIs should expose complete public names: use `program`,
+  `statement_id`, `thread_id`, `thread_ids`, and `breakpoint_id` instead of
+  implementation abbreviations such as `pgm`, `tid`, and `bkpt`.
+- Program-control debugger APIs should use `program_id`, `parse_define`,
+  `function_name`, `variable_name`, `found`, `breakpoint`, `statement_id`,
+  `list_breakpoints`, `file`, `line`, and `params`.
+- Program APIs should expose stable owner and action names: `parse_options`,
+  `independent`, `code`, `label`, `warning_mask`, `source`, `offset`,
+  `format_label`, `function_name`, `class_name`, `method_name`, `arguments`,
+  `variable_name`, `found`, `import_as`, `readonly`, `inject`,
+  `module_visibility`, `reexport`, `hashdecl_name`, `path`, `region`,
+  `seconds_east`, `zone`, `sandbox_manager`, `mode`, `parse_define`,
+  `module_name`, `program`, `reinject`, `callback`, `value`, `command`,
+  `identifier`, `frame_offset`, and `name` for parse-option string names.
+  Leave true varargs forwarding helpers such as `Program::callFunction(name,
+  ...)` and `Program::callStaticMethod(class_name, method, ...)` positional
+  until fixed-parameter-plus-varargs named-call semantics are designed and
+  tested.
+- Debugger callback hooks (`onAttach()`, `onStep()`, etc.) are override
+  surfaces; review them separately from direct control methods. When enabled,
+  the base `DebugProgram` names should be complete and stable: `program`,
+  `run_state`, `run_to_statement_id`, `block_statement_id`, `statement_id`,
+  `breakpoint_id`, `flow`, `return_value`, `exception`, and `dismiss`.
+- Debugger qlib command handlers may still need positional Breakpoint calls
+  when arguments are dynamic hash values or command payloads; qmod currently
+  rejects those named calls with `NAMED-CALL-NOT-SUPPORTED` even though the
+  native Breakpoint methods themselves support named arguments.
+- Expression-like constructors should use the complete public owner name
+  `program` rather than implementation abbreviations such as `pgm`.
+- Filesystem class methods should expose path role names. For `Dir`, use
+  `owner` / `group` for ownership changes and `filename` for file-name-only
+  operations such as `removeFile()`.
+- `ReadOnlyFile` should use `path`, `encoding`, `size`, `timeout_ms`,
+  `include_eol`, `eol`, `position`, `queue`, `argument`, `with_data`,
+  `as_string`, `max_bytes`, and `max_file_len`. Use `argument` for the
+  `setEventQueue()` input even though the resulting event hash key remains
+  `arg`.
+- Socket low-level APIs should expose network and stream roles instead of
+  implementation shorthand: use `target`, `host`, `port`, `service`,
+  `bind_address`, `reuse_address`, `path`, `family`, `socket_type`,
+  `protocol`, `timeout_ms`, `backlog`, `data`, `input_stream`,
+  `output_stream`, `size`, `value`, `encoding`, `protocols`, `certificate`,
+  `private_key`, `pem`, `der`, `password`, `queue`, `argument`, `with_data`,
+  `enabled`, `warning_bytes`, `min_ms`, `accept_all`, `max_body_size`,
+  `max_request_body_size`, `node`, `items`, and `event_text`; avoid exposing
+  internal names such as `str`, `bin`, `socktype`, `iface`, `reuseaddr`, `os`,
+  `i`, `cert`, `key`, `pass`, `arg`, `nd`, `ms`, `set`, and `warning_bs`.
+  HTTP helpers should use `status_description`, `send_callback`,
+  `receive_callback`, `trailers_callback`, `output_stream`, `info`, and
+  `idle_timeout` instead of `status_desc`, `scb`, `rcb`, `tcb`, or `os`.
+  Keep HTTP response compatibility overloads without an `info` output reference
+  positional when the fuller `info` overload can provide the same named-call
+  behavior without ambiguity. Keep the timeout-only
+  `readServerSentEvent(timeout_ms)` compatibility overload positional when the
+  fuller overload can provide named calls.
+  HTTP/2 methods should keep protocol terms explicit: `options`, `stream_id`,
+  `status_code`, `headers`, `body`, `chunk_size`, `path`, `enabled`,
+  `timeout_ms`, `end_stream`, `trailers`, and `streaming`.
+  QUIC / HTTP/3 methods should mirror those terms and use `session_id`,
+  `stream_id`, `status_code`, `headers`, `body`, `data`, `queue`, `options`,
+  `timeout_ms`, `method`, `path`, `host`, `port`, `family`, `chunk_size`, and
+  `end_stream`; avoid exposing shorthand such as `opts` or generic `timeout`.
+- `SandboxManager` should expose explicit limit and policy names:
+  `max_bytes`, `max_cpu_time_ms`, `max_wall_time_ms`, `max_threads`,
+  `max_depth`, `path`, `access_modes`, `allow`, `host_pattern`, `cidr`,
+  `port`, `protocol`, `start_port`, and `end_port`.
+- For `File`, use `value` for width-specific integer writes,
+  `lock_type` / `length` for file locking, `target_file` for `redirect()`,
+  and `format` / `values` for explicit formatting-list methods. Keep true
+  varargs `printf()` / `f_printf()` variants positional until varargs named
+  calls are reviewed separately.
+- GetOpt APIs use `options` for the option-specification hash and `arguments`
+  for the command-line argument list. This applies to the constructor, the
+  mutating `reference<list<string>>` instance parsing methods, and static
+  helpers such as `GetOpt::parseEx()`. Keep the same-name by-value instance
+  overloads positional-only: marking both the reference and by-value overloads
+  makes named calls ambiguous, while marking only the reference overload gives a
+  useful typed error for by-value named calls and preserves the clearer
+  `arguments: \ARGV` use case.
+- Do not mark an overload when it makes an already-enabled named call ambiguous
+  with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
+  step, value)` must remain positional because it conflicts with the named
+  `RangeIterator(start, stop, step)` constructor.
+- Qlib split-module or helper-method calls may still need to remain positional
+  when qmod cannot resolve a `Promise` parameter's method signature; this
+  preserves the more informative `NAMED-CALL-NOT-SUPPORTED` behavior rather
+  than introducing a qmod build failure.
+- Fixed-arity functions in reviewed batches should leave no unmarked entries in
+  that batch's generated metadata except intentional excluded variants.
+
+### Current core positional-only inventory
+
+After the core Socket HTTP/2 and QUIC sweep, generated core metadata still has
+intentional positional-only entries in these categories:
+
+- True varargs and fixed-prefix varargs remain positional until the named-call
+  convention for mixed fixed/varargs builtins is designed and tested. This
+  includes formatting APIs (`printf`, `sprintf`, `f_printf`, `f_sprintf`),
+  forwarding helpers (`call_function`, `call_builtin_function`,
+  `call_object_method`, `call_static_method`, `Program::callFunction`,
+  `Program::callStaticMethod`, `<callref>::exec`, `call_async`), generic
+  varargs constructors/functions such as `list(...)`, `print(...)`, and
+  `exists(...)`, and SQL varargs such as `exec(sql, ...)`,
+  `select(sql, ...)`, `prepare(sql, ...)`, `bind(...)`, and `exec(...)`.
+- Compatibility overloads stay positional when another overload provides the
+  useful named-call surface without ambiguity. Current examples include
+  `Socket::sendHTTPResponse(..., timeout_ms)` no-`info` overloads,
+  `Socket::sendHTTPResponseWithCallback(..., timeout_ms)` no-`info`,
+  timeout-only `Socket::readServerSentEvent(timeout_ms)`,
+  timeout-only `HTTPClient::readServerSentEvent(timeout_ms)`,
+  `<string>::splitRegex(separator_pattern, with_separator, limit)`, and the
+  four-argument `RangeIterator` / `xrange` value-override overloads.
+- Legacy aliases with generic historical parameter names remain positional when
+  the canonical reviewed API exposes named calls. Examples include old DBI,
+  time, list-sort, string/encoding, and object helper aliases with names such as
+  `ds`, `dt`, `arg`, `l`, `f`, `str`, `bin`, `obj`, and `varg`.
+- `Datasource` / `DatasourcePool` constructor overloads remain positional for
+  now because their overload sets currently produce a clearer
+  `NAMED-CALL-NOT-SUPPORTED` diagnostic than a misleading partial named-call
+  match. Revisit them only with dedicated overload-selection tests.
+- `GetOpt::parse*` by-value `arguments` overloads remain positional; only the
+  reference-taking overloads should expose named calls so `arguments: \ARGV`
+  remains useful without making overload resolution ambiguous.

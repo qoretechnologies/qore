@@ -270,6 +270,7 @@ public:
     DLLLOCAL QoreException* catchException();
     DLLLOCAL QoreException* getException();
     DLLLOCAL void overrideLocation(const QoreProgramLocation& loc);
+    DLLLOCAL void setLastLocation(const QoreProgramLocation& loc);
     DLLLOCAL void rethrow(QoreException* old);
 
     DLLLOCAL static void defaultExceptionHandler(QoreException* e);

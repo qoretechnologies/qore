@@ -5,9 +5,10 @@
 
 %include ../FtpServer.qc
 
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/FsUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
 
 %exec-class FtpTest
 
@@ -73,7 +74,7 @@ class FtpTest inherits QUnit::Test {
             file = basename(h.path);
 
             FtpClient fc();
-            fc.setURL(url);
+            fc.setURL(url: url);
             try {
                 fc.connect();
                 fc.disconnect();
@@ -135,14 +136,14 @@ class FtpTest inherits QUnit::Test {
         on_exit serv.shutdown();
 
         port = serv.getPort();
-        FtpClient fc("ftp://user:pass@127.0.0.1:" + port);
+        FtpClient fc(url: "ftp://user:pass@127.0.0.1:" + port);
         Queue q();
-        fc.setWarningQueue(20000, 20000, q, "test");
+        fc.setWarningQueue(warning_ms: 20000, warning_bytes: 20000, queue: q, argument: "test");
         assertNothing(fc.connect());
 
         fc.setModePORT();
 
-        assertNothing(fc.put(local_path));
+        assertNothing(fc.put(local_path: local_path));
 
         # Server delays the PORT response by 2 seconds; client timeout is 1ms.
         # Ratio 2000x means the 1ms timeout should fire reliably, but on fast
@@ -150,11 +151,11 @@ class FtpTest inherits QUnit::Test {
         # elapses (kernel TCP buffering + small 3-byte body).  Only class-
         # check when an exception was actually raised.
         serv.setBroken("PORT", 2s);
-        fc.setTimeout(1ms);
+        fc.setTimeout(timeout_ms: 1ms);
         assertEq(1, fc.getTimeout());
 
         try {
-            fc.put(local_path);
+            fc.put(local_path: local_path);
         } catch (hash<ExceptionInfo> ex) {
             assertEq("SOCKET-TIMEOUT", ex.err);
         }
@@ -167,13 +168,13 @@ class FtpTest inherits QUnit::Test {
         on_exit serv.shutdown();
 
         port = serv.getPort();
-        FtpClient fc("ftp://user:pass@localhost:" + port);
+        FtpClient fc(url: "ftp://user:pass@localhost:" + port);
         Queue q();
-        fc.setWarningQueue(20000, 20000, q, "test");
+        fc.setWarningQueue(warning_ms: 20000, warning_bytes: 20000, queue: q, argument: "test");
         assertNothing(fc.connect());
 
         FileInputStream fis(local_path);
-        assertNothing(fc.put(fis, "test_file.txt"));
+        assertNothing(fc.put(input_stream: fis, remote_path: "test_file.txt"));
     }
 
     testIssue3033() {
@@ -191,12 +192,12 @@ class FtpTest inherits QUnit::Test {
         on_exit serv.shutdown();
 
         port = serv.getPort();
-        FtpClient fc("ftp://user:pass@localhost:" + port);
+        FtpClient fc(url: "ftp://user:pass@localhost:" + port);
         Queue q();
-        fc.setWarningQueue(20000, 20000, q, "test");
+        fc.setWarningQueue(warning_ms: 20000, warning_bytes: 20000, queue: q, argument: "test");
         assertNothing(fc.connect());
 
-        assertNothing(fc.put(empty_path));
+        assertNothing(fc.put(local_path: empty_path));
     }
 
     testPasv() {
@@ -206,21 +207,21 @@ class FtpTest inherits QUnit::Test {
         on_exit serv.shutdown();
 
         port = serv.getPort();
-        FtpClient fc("ftp://user:pass@localhost:" + port);
+        FtpClient fc(url: "ftp://user:pass@localhost:" + port);
         Queue q();
-        fc.setWarningQueue(20000, 20000, q, "test");
+        fc.setWarningQueue(warning_ms: 20000, warning_bytes: 20000, queue: q, argument: "test");
         assertNothing(fc.connect());
 
         fc.setModePASV();
 
-        assertNothing(fc.put(local_path));
+        assertNothing(fc.put(local_path: local_path));
 
         serv.setBroken("stor", 2s);
-        fc.setTimeout(1ms);
+        fc.setTimeout(timeout_ms: 1ms);
         {
             *hash<ExceptionInfo> ex;
             try {
-                fc.put(local_path);
+                fc.put(local_path: local_path);
             } catch (hash<ExceptionInfo> ex1) {
                 ex = ex1;
             }
@@ -235,13 +236,13 @@ class FtpTest inherits QUnit::Test {
 
         # reconnect after timeout to ensure clean FTP protocol state
         fc.disconnect();
-        fc.setTimeout(60s);
+        fc.setTimeout(timeout_ms: 60s);
         serv.setBroken("stor", 0);
         assertNothing(fc.connect());
         fc.setModePASV();
-        assertNothing(fc.put(local_path));
+        assertNothing(fc.put(local_path: local_path));
 
-        assertNothing(fc.get(local_path, local_path));
+        assertNothing(fc.get(remote_path: local_path, local_path: local_path));
         assertRegex("abc", ReadOnlyFile::readTextFile(local_path));
 
         # Induce a timeout by making the server stall on RETR longer than the
@@ -256,7 +257,7 @@ class FtpTest inherits QUnit::Test {
         # accept that — the test's purpose is to pin the error category on
         # the timeout path, not to prove timeouts always fire.
         serv.setBroken("retr", 2s);
-        fc.setTimeout(20ms);
+        fc.setTimeout(timeout_ms: 20ms);
         {
             string before_get_timeout = ReadOnlyFile::readTextFile(local_path);
             on_exit ensureLocalFile();
@@ -278,7 +279,7 @@ class FtpTest inherits QUnit::Test {
 
             *string err;
             try {
-                fc.get(local_path, get_timeout_dest);
+                fc.get(remote_path: local_path, local_path: get_timeout_dest);
             }
             catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -296,14 +297,14 @@ class FtpTest inherits QUnit::Test {
 
         # reconnect after timeout to ensure clean FTP protocol state
         fc.disconnect();
-        fc.setTimeout(60s);
+        fc.setTimeout(timeout_ms: 60s);
         serv.setBroken("retr", 0);
         serv.setGetEmpty();
         assertNothing(fc.connect());
         fc.setModePASV();
-        assertNothing(fc.get(local_path, local_path));
+        assertNothing(fc.get(remote_path: local_path, local_path: local_path));
         assertEq("", ReadOnlyFile::readTextFile(local_path));
-        assertEq("", fc.getAsString(local_path));
+        assertEq("", fc.getAsString(remote_path: local_path));
 
         assertEq(Type::String, fc.nlst().type());
     }
@@ -329,9 +330,9 @@ class FtpTest inherits QUnit::Test {
             path =~ s/\\/\//g;
 %endif
 
-            fc.cwd(path);
+            fc.cwd(path: path);
 
-            assertNothing(fc.get(file, local_read_path));
+            assertNothing(fc.get(remote_path: file, local_path: local_read_path));
 
             *list l = stat(local_read_path);
             testAssertion("FtpClient::get() return value", int sub () {return l.typeCode();}, NOTHING, new TestResultValue(NT_LIST));
@@ -373,28 +374,28 @@ class FtpTest inherits QUnit::Test {
         on_exit serv.shutdown();
 
         port = serv.getPort();
-        FtpClient fc("ftp://user:pass@127.0.0.1:" + port);
+        FtpClient fc(url: "ftp://user:pass@127.0.0.1:" + port);
         Queue q();
-        fc.setWarningQueue(20000, 20000, q, "test");
+        fc.setWarningQueue(warning_ms: 20000, warning_bytes: 20000, queue: q, argument: "test");
         assertEq(AF_UNSPEC, fc.getNetworkFamily());
         assertThrows("FTPCLIENT-SETNETWORKFAMILY-ERROR", \fc.setNetworkFamily(), -1);
 
-        fc.setNetworkFamily(AF_INET);
+        fc.setNetworkFamily(family: AF_INET);
         assertEq(NOTHING, fc.connect());
 
-        hash info = fc.getControlSocketInfo();
+        hash info = fc.getControlSocketInfo(host_lookup: False);
         assertEq(AF_INET, info.family);
-        info = fc.getControlPeerInfo();
+        info = fc.getControlPeerInfo(host_lookup: False);
         assertEq(AF_INET, info.family);
 
-        assertNothing(fc.put(local_path));
+        assertNothing(fc.put(local_path: local_path));
 
         serv.setBroken("stor", 2s);
-        fc.setTimeout(1ms);
+        fc.setTimeout(timeout_ms: 1ms);
         {
             *hash<ExceptionInfo> ex;
             try {
-                fc.put(local_path);
+                fc.put(local_path: local_path);
             }
             catch (hash<ExceptionInfo> ex1) {
                 ex = ex1;
@@ -411,13 +412,13 @@ class FtpTest inherits QUnit::Test {
 
         # reconnect after timeout to ensure clean FTP protocol state
         fc.disconnect();
-        fc.setTimeout(60s);
+        fc.setTimeout(timeout_ms: 60s);
         serv.setBroken("stor", 0);
-        fc.setNetworkFamily(AF_INET);
+        fc.setNetworkFamily(family: AF_INET);
         assertNothing(fc.connect());
-        assertNothing(fc.put(local_path));
+        assertNothing(fc.put(local_path: local_path));
 
-        assertNothing(fc.get(local_path, local_path));
+        assertNothing(fc.get(remote_path: local_path, local_path: local_path));
         assertEq(True, ReadOnlyFile::readTextFile(local_path) =~ /abc/);
 
         # Induce a timeout by making the server stall on RETR longer than the
@@ -432,14 +433,14 @@ class FtpTest inherits QUnit::Test {
         # accept that — the test's purpose is to pin the error category on
         # the timeout path, not to prove timeouts always fire.
         serv.setBroken("retr", 2s);
-        fc.setTimeout(20ms);
+        fc.setTimeout(timeout_ms: 20ms);
         {
             string before_get_timeout = ReadOnlyFile::readTextFile(local_path);
             on_exit ensureLocalFile();
 
             *string err;
             try {
-                fc.get(local_path, local_path);
+                fc.get(remote_path: local_path, local_path: local_path);
             }
             catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -453,14 +454,14 @@ class FtpTest inherits QUnit::Test {
 
         # reconnect after timeout to ensure clean FTP protocol state
         fc.disconnect();
-        fc.setTimeout(60s);
+        fc.setTimeout(timeout_ms: 60s);
         serv.setBroken("retr", 0);
         serv.setGetEmpty();
-        fc.setNetworkFamily(AF_INET);
+        fc.setNetworkFamily(family: AF_INET);
         assertNothing(fc.connect());
-        assertNothing(fc.get(local_path, local_path));
+        assertNothing(fc.get(remote_path: local_path, local_path: local_path));
         assertEq("", ReadOnlyFile::readTextFile(local_path));
-        assertEq("", fc.getAsString(local_path));
+        assertEq("", fc.getAsString(remote_path: local_path));
 
         assertEq(Type::String, fc.nlst().type());
     }

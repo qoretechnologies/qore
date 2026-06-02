@@ -84,6 +84,13 @@ public:
         return typeInfo;
     }
 
+    DLLLOCAL void setTypeInfo(const QoreTypeInfo* ti) {
+        typeInfo = ti;
+        if (parse_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+            parse_analysis.known_type = ti;
+        }
+    }
+
     // returns an intermediate reference for use with the background operator
     DLLLOCAL IntermediateParseReferenceNode* evalToIntermediate(ExceptionSink* xsink) const;
     DLLLOCAL IntermediateParseReferenceNode* evalToIntermediate(RuntimeConfig& rc, ExceptionSink* xsink) const;
@@ -91,6 +98,16 @@ public:
     // returns a runtime reference
     DLLLOCAL virtual ReferenceNode* evalToRef(ExceptionSink* xsink) const;
     DLLLOCAL virtual ReferenceNode* evalToRef(RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL ReferenceNode* evalToRefWithResolvedSelector(QoreValue selector, ExceptionSink* xsink) const;
+    DLLLOCAL ReferenceNode* evalToRefWithResolvedSelector(RuntimeConfig& rc, QoreValue selector,
+        ExceptionSink* xsink) const;
+    DLLLOCAL ReferenceNode* evalToRefWithResolvedHashKey(QoreValue key, ExceptionSink* xsink) const;
+    DLLLOCAL ReferenceNode* evalToRefWithResolvedHashKey(RuntimeConfig& rc, QoreValue key, ExceptionSink* xsink) const;
+
+    //! Returns the lvalue expression (for IR local variable analysis)
+    DLLLOCAL const QoreValue& getLVExp() const {
+        return lvexp;
+    }
 
 protected:
     //! lvalue expression for reference

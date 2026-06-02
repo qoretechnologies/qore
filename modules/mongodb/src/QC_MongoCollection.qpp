@@ -42,7 +42,7 @@ MongoCollection users = db.getCollection("users");
 hash<auto> result = users.insertOne({"name": "John", "age": 30});
 
 # Find documents
-MongoCursor cursor = users.find({"age": {"$gt": 25}});
+MongoCursor<hash<auto>> cursor = users.find({"age": {"$gt": 25}});
 while (*hash<auto> doc = cursor.next()) {
     printf("Found: %y\n", doc);
 }
@@ -109,18 +109,18 @@ hash<auto> MongoCollection::insertMany(list<hash<auto>> documents) {
 //! Finds documents in the collection
 /** @param filter the query filter (optional, empty hash matches all)
     @param opts find options (optional): @c projection, @c sort, @c limit, @c skip
-    @return a MongoCursor for iterating the results
+    @return a MongoCursor<hash<auto>> for iterating the results
 
     @par Example:
     @code{.py}
 # Find all documents
-MongoCursor cursor = coll.find();
+MongoCursor<hash<auto>> cursor = coll.find();
 
 # Find with filter
-MongoCursor cursor = coll.find({"status": "active"});
+MongoCursor<hash<auto>> cursor = coll.find({"status": "active"});
 
 # Find with options
-MongoCursor cursor = coll.find({"status": "active"}, {
+MongoCursor<hash<auto>> cursor = coll.find({"status": "active"}, {
     "projection": {"name": 1, "age": 1},
     "sort": {"age": -1},
     "limit": 10
@@ -129,12 +129,12 @@ MongoCursor cursor = coll.find({"status": "active"}, {
 
     @throw MONGODB-COLLECTION-ERROR find failed
 */
-MongoCursor MongoCollection::find(*hash<auto> filter, *hash<auto> opts) {
+MongoCursor<hash<auto>> MongoCollection::find(*hash<auto> filter, *hash<auto> opts) {
     mongoc_cursor_t* cursor = collection->find(filter, opts, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    return new QoreObject(QC_MONGOCURSOR, getProgram(), new QoreMongoCursor(cursor));
+    return qore_new_mongo_cursor_object(getProgram(), cursor);
 }
 
 //! Finds a single document in the collection
@@ -310,7 +310,7 @@ bool MongoCollection::drop() {
 
 //! Runs an aggregation pipeline on the collection
 /** @param pipeline a list of pipeline stages
-    @return a MongoCursor for iterating the results
+    @return a MongoCursor<hash<auto>> for iterating the results
 
     @par Example:
     @code{.py}
@@ -319,7 +319,7 @@ list<hash<auto>> pipeline = (
     {"$group": {"_id": "$category", "count": {"$sum": 1}}},
     {"$sort": {"count": -1}}
 );
-MongoCursor cursor = coll.aggregate(pipeline);
+MongoCursor<hash<auto>> cursor = coll.aggregate(pipeline);
 while (*hash<auto> doc = cursor.next()) {
     printf("%s: %d\n", doc._id, doc.count);
 }
@@ -327,10 +327,10 @@ while (*hash<auto> doc = cursor.next()) {
 
     @throw MONGODB-COLLECTION-ERROR aggregation failed
 */
-MongoCursor MongoCollection::aggregate(list<hash<auto>> pipeline) {
+MongoCursor<hash<auto>> MongoCollection::aggregate(list<hash<auto>> pipeline) {
     mongoc_cursor_t* cursor = collection->aggregate(pipeline, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    return new QoreObject(QC_MONGOCURSOR, getProgram(), new QoreMongoCursor(cursor));
+    return qore_new_mongo_cursor_object(getProgram(), cursor);
 }

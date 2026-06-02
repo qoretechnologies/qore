@@ -61,6 +61,10 @@ QoreListNode* get_code_flag_list(int64 c) {
         rv->push(new QoreStringNode("RUNTIME_NOOP"), nullptr);
     }
 
+    if (c & QCF_NAMED_ARGS) {
+        rv->push(new QoreStringNode("NAMED_ARGS"), nullptr);
+    }
+
     return rv.release();
 }
 
@@ -134,6 +138,7 @@ list<string> l = v.getCodeFlagList();
     - \c "DEPRECATED": the variant has the @ref Qore::Reflection::CF_DEPRECATED "CF_DEPRECATED" flag set
     - \c "RET_VALUE_ONLY": the variant has the @ref Qore::Reflection::CF_RET_VALUE_ONLY "CF_RET_VALUE_ONLY" flag set
     - \c "RUNTIME_NOOP": the variant has the @ref Qore::Reflection::CF_RUNTIME_NOOP "CF_RUNTIME_NOOP" flag set
+    - \c "NAMED_ARGS": the variant has the @ref Qore::Reflection::CF_NAMED_ARGS "CF_NAMED_ARGS" flag set
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
@@ -367,6 +372,33 @@ bool AbstractVariant::isUser() [flags=RET_VALUE_ONLY] {
 
     // the variant ptr must be valid
     return !v->variant->isBuiltin();
+}
+
+//! returns @ref True if the variant accepts named-argument calls
+/** @par Example:
+    @code{.py}
+bool b = v.isNamedCallable();
+    @endcode
+
+    @return @ref True if the variant accepts named-argument calls; @ref False if it rejects named calls
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
+
+    @note builtin variants accept named arguments only when they have the @ref Qore::Reflection::CF_NAMED_ARGS
+    "CF_NAMED_ARGS" flag; varargs-only signatures reject named-argument calls because there are no fixed parameters to
+    bind
+
+    @see getNamedParameterNames()
+*/
+bool AbstractVariant::isNamedCallable() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, v->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the variant ptr must be valid
+    return v->variant->isNamedCallable();
 }
 
 //! returns @ref True if the function or method that the variant belongs to (and therefore the variant itself) has been injected as a dependency injection
@@ -744,6 +776,49 @@ list<string> AbstractVariant::getParamNames() [flags=RET_VALUE_ONLY] {
 
     for (auto& i : v->variant->getParamNames()) {
         rv->push(i.empty() ? QoreValue() : QoreValue(new QoreStringNode(i)), xsink);
+    }
+
+    return rv.release();
+}
+
+//! returns parameter names that are part of the named-argument call surface
+/** @par Example:
+    @code{.py}
+list<string> l = v.getNamedParameterNames();
+    @endcode
+
+    @return a list of parameter names that can be used in named-argument calls; returns an empty list if
+    @ref isNamedCallable() returns @ref False
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
+
+    @note this list excludes unnamed parameters and the varargs tail; in this version, builtin variants only return
+    names here if they have the @ref Qore::Reflection::CF_NAMED_ARGS "CF_NAMED_ARGS" flag
+
+    @see getParamNames()
+    @see isNamedCallable()
+*/
+list<string> AbstractVariant::getNamedParameterNames() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, v->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    if (!v->variant->isNamedCallable()) {
+        return rv.release();
+    }
+
+    size_t count = 0;
+    for (auto& i : v->variant->getParamNames()) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "named parameter reflection")) {
+            return QoreValue();
+        }
+        ++count;
+        if (!i.empty()) {
+            rv->push(new QoreStringNode(i), xsink);
+        }
     }
 
     return rv.release();

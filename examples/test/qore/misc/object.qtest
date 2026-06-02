@@ -1,13 +1,13 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
+%modern
 %enable-all-warnings
-%new-style
 %no-child-restrictions
 %allow-weak-references
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 our int calls_constructor = 0;
 our int calls_destructor  = 0;
@@ -85,6 +85,20 @@ class MyClass {
     }
 }
 
+# Class for testing object += hash
+class ObjectPlusEqualsTest {
+    public {
+        int a;
+        string b;
+        *int c;
+    }
+
+    constructor(int a, string b) {
+        self.a = a;
+        self.b = b;
+    }
+}
+
 sub et(Test t) {
     t.a = "123";
 }
@@ -123,11 +137,15 @@ class NullDatasource inherits AbstractDatasource {
     auto vexec(string sql, *softlist<auto> vargs) {}
     auto execRaw(string sql) {}
     auto select(string sql, ...) {}
+    auto selectTyped(string sql, ...) {}
     auto selectRow(string sql, ...) {}
     auto selectRows(string sql, ...) {}
+    auto selectRowsTyped(string sql, ...) {}
     auto vselect(string sql, *softlist<auto> vargs) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
     auto vselectRow(string sql, *softlist<auto> vargs) {}
     auto vselectRows(string sql, *softlist<auto> vargs) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
     nothing beginTransaction() {}
     *string getUserName() {}
     *string getPassword() {}
@@ -173,6 +191,7 @@ object sub test3() { return create_object_args(\"PrivTest\", 1);}
         addTestCase("create_object", \testCreateObject());
         addTestCase("inheritance", \inheritance());
         addTestCase("weak refs", \weakRefTest());
+        addTestCase("object plus-equals", \objectPlusEqualsTest());
         addTestCase("no private data", \noPrivateDataTest());
         set_return_value(main());
     }
@@ -324,6 +343,27 @@ object sub test3() { return create_object_args(\"PrivTest\", 1);}
         }
 
         assertThrows("OBJECT-ALREADY-DELETED", \m.get());
+    }
+
+    objectPlusEqualsTest() {
+        # Test object += hash (in-place member merge)
+        # This exercises IR lowering for typed object variables with +=
+        ObjectPlusEqualsTest obj(1, "hello");
+        assertEq(1, obj.a);
+        assertEq("hello", obj.b);
+        assertNothing(obj.c);
+
+        # Merge hash into object - should update members in-place
+        obj += {"a": 42, "b": "world", "c": 99};
+        assertEq(42, obj.a);
+        assertEq("world", obj.b);
+        assertEq(99, obj.c);
+
+        # Partial merge - only some members
+        obj += {"a": 100};
+        assertEq(100, obj.a);
+        assertEq("world", obj.b);
+        assertEq(99, obj.c);
     }
 
     #! Tests that calling a C++ method on an object with no C++ private data throws

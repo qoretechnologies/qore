@@ -11,22 +11,23 @@
 %define NoYaml
 %endtry
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/Swagger.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/RestSchemaDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Mime
+%requires QUnit
+%requires FsUtil
+%requires Logger
+%requires DataProvider
+%requires HttpServerUtil
+%requires RestSchemaValidator
+%requires Swagger
+%requires OpenApi3
+%requires ConnectionProvider
+%requires RestClient
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires RestClientIo
+%requires RestSchemaDataProvider
 
 %exec-class RestSchemaDataProviderTest
 
@@ -37,6 +38,7 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         addTestCase("OpenAPI 3.0 schema composition test", \testOpenApi3SchemaComposition());
         addTestCase("OpenAPI 3.0 data provider type validation", \testOpenApi3TypeValidation());
         addTestCase("OpenAPI 3.1 data provider features", \testOpenApi31Features());
+        addTestCase("Overlapping Swagger paths test", \testOverlappingSwaggerPaths());
         addTestCase("Factory test", \testFactory());
         set_return_value(main());
     }
@@ -865,6 +867,37 @@ paths:
             assertTrue(provider.isOpenApi3());
             assertEq("Test API 3.0", provider.getName());
         }
+    }
+
+    testOverlappingSwaggerPaths() {
+        checkModules();
+
+        string schema = '{
+            "swagger": "2.0",
+            "info": {"title": "AOT Reference Test", "version": "1"},
+            "paths": {
+                "/events": {
+                    "get": {"responses": {"200": {"description": "ok"}}}
+                },
+                "/events/{id}": {
+                    "get": {"responses": {"200": {"description": "ok"}}}
+                },
+                "/events/{id}/foo": {
+                    "post": {"responses": {"200": {"description": "ok"}}}
+                }
+            }
+        }';
+
+        RestSchemaDataProvider provider({"schema": schema});
+        assertTrue(provider.isSwagger());
+        assertEq("AOT Reference Test", provider.getName());
+        assertEq(("events",), provider.getChildProviderNames());
+
+        AbstractDataProvider events = provider.getChildProvider("events");
+        assertEq(("*", "GET"), events.getChildProviderNames());
+
+        AbstractDataProvider get = provider.getChildProviderPath("events/GET");
+        assertEq("GET", get.getName());
     }
 
     testFactory() {

@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+# Test functions for overload resolution
+string sub auto_variant(auto x) { return "auto"; }
+string sub auto_variant(Mutex x) { return "mutex"; }
+
+# Main test code
+int passed = 0;
+int failed = 0;
+
+# Test 1: assigned non-nullable Mutex should select Mutex variant
+{
+    Mutex m();
+    string result = auto_variant(m);
+    if (result == "mutex") {
+        printf("PASS: assigned Mutex selects Mutex variant\n");
+        ++passed;
+    } else {
+        printf("FAIL: assigned Mutex selected %s variant instead of Mutex\n", result);
+        ++failed;
+    }
+}
+
+# Test 2: unassigned non-nullable Mutex should select auto variant
+{
+    Mutex m;
+    string result = auto_variant(m);
+    if (result == "auto") {
+        printf("PASS: unassigned Mutex selects auto variant\n");
+        ++passed;
+    } else {
+        printf("FAIL: unassigned Mutex selected %s variant instead of auto\n", result);
+        ++failed;
+    }
+}
+
+# Test 3: auto narrowed from assigned Mutex should select Mutex variant
+{
+    Mutex m();
+    auto x = m;
+    string result = auto_variant(x);
+    if (result == "mutex") {
+        printf("PASS: auto narrowed from assigned Mutex selects Mutex variant\n");
+        ++passed;
+    } else {
+        printf("FAIL: auto narrowed from assigned Mutex selected %s variant\n", result);
+        ++failed;
+    }
+}
+
+# Test 4: auto assigned from unassigned Mutex should select auto variant
+{
+    Mutex m;
+    auto x = m;
+    string result = auto_variant(x);
+    if (result == "auto") {
+        printf("PASS: auto assigned from unassigned Mutex selects auto variant\n");
+        ++passed;
+    } else {
+        printf("FAIL: auto assigned from unassigned Mutex selected %s variant\n", result);
+        ++failed;
+    }
+}
+
+# Test 5: remove operator should reset to NOTHING (auto variant)
+{
+    Mutex m();
+    remove m;
+    string result = auto_variant(m);
+    if (result == "auto") {
+        printf("PASS: after remove, Mutex selects auto variant\n");
+        ++passed;
+    } else {
+        printf("FAIL: after remove, Mutex selected %s variant instead of auto\n", result);
+        ++failed;
+    }
+}
+
+printf("\n=== Parse Type Analysis Test Results ===\n");
+printf("Passed: %d\n", passed);
+printf("Failed: %d\n", failed);
+printf("Total: %d\n", passed + failed);
+
+if (failed > 0) {
+    exit(1);
+}

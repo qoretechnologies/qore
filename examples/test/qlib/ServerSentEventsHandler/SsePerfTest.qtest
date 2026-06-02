@@ -6,14 +6,15 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/ServerSentEventHandler
-%requires ../../../../qlib/ServerSentEventClient
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires ServerSentEventClient
 
 %try-module json >= 1.5
 %define NoJson
@@ -156,6 +157,16 @@ class SsePerfTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    globalTearDown() {
+        @debug {
+            try {
+                remove_signal_handler(SIGUSR1);
+            } catch () {
+                # ignore cleanup errors
+            }
+        }
+    }
+
     checkModule() {
 %ifdef NoJson
         testSkip("no json module");
@@ -190,6 +201,52 @@ class SsePerfTest inherits QUnit::Test {
             }
             usleep(50ms);
         }
+    }
+
+    #! Wait for the server-side connection count to reach an exact value
+    private waitForConnectionCount(ServerSentEventHandler sse, int count, *timeout dur) {
+        date deadline = now_us() + (dur ?? 10s);
+        while (sse.getConnectionIds().size() != count) {
+            if (now_us() >= deadline) {
+                throw "TIMEOUT", sprintf("waitForConnectionCount: expected %d connections, got %d",
+                    count, sse.getConnectionIds().size());
+            }
+            usleep(50ms);
+        }
+    }
+
+    #! Disconnect a client and wait until the server has deregistered it
+    private disconnectClient(ServerSentEventClient client, ServerSentEventHandler sse,
+            int expected_count = 0) {
+        try {
+            client.disconnect();
+        } catch () {
+            # ignore cleanup errors
+        }
+        waitForConnectionCount(sse, expected_count);
+    }
+
+    #! Disconnect all clients and wait until the server has deregistered them
+    private disconnectClients(list<ServerSentEventClient> clients, ServerSentEventHandler sse,
+            int expected_count = 0) {
+        foreach ServerSentEventClient client in (clients) {
+            try {
+                client.disconnect();
+            } catch () {
+                # ignore cleanup errors
+            }
+        }
+        waitForConnectionCount(sse, expected_count);
+    }
+
+    #! Stop a test server; HttpServer::stop() is idempotent
+    private stopServer(hash<auto> srv) {
+        srv.http.stop();
+    }
+
+    #! Wait for a background helper to finish and fail the test if it survives
+    private waitForHelper(Counter counter, timeout dur, string label) {
+        assertEq(0, counter.waitForZero(dur), label);
     }
 
     #! Compute elapsed milliseconds from a start timestamp
@@ -237,11 +294,11 @@ class SsePerfTest inherits QUnit::Test {
 
         int event_count = 500;
         hash<auto> srv = createServer();
-        on_exit srv.http.stop();
+        on_exit stopServer(srv);
 
         PerfObserver observer();
         ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
-        on_exit client.disconnect();
+        on_exit disconnectClient(client, srv.sse);
         client.registerObserver(observer);
         client.observersReady();
 
@@ -291,7 +348,7 @@ class SsePerfTest inherits QUnit::Test {
         int num_clients = 10;
         int event_count = 100;
         hash<auto> srv = createServer();
-        on_exit srv.http.stop();
+        on_exit stopServer(srv);
 
         list<PerfObserver> observers();
         list<ServerSentEventClient> clients();
@@ -305,15 +362,7 @@ class SsePerfTest inherits QUnit::Test {
             clients += client;
             observers += obs;
         }
-        on_exit {
-            for (int i = 0; i < num_clients; ++i) {
-                try {
-                    clients[i].disconnect();
-                } catch () {
-                    # ignore cleanup errors
-                }
-            }
-        }
+        on_exit disconnectClients(clients, srv.sse);
 
         waitForConnection(srv.sse, num_clients);
         foreach PerfObserver obs in (observers) {
@@ -382,12 +431,12 @@ class SsePerfTest inherits QUnit::Test {
 
         list<int> sizes = (100, 1024, 8192, 32768);
         hash<auto> srv = createServer();
-        on_exit srv.http.stop();
+        on_exit stopServer(srv);
 
         foreach int size in (sizes) {
             PerfObserver observer();
             ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
-            on_exit client.disconnect();
+            on_exit disconnectClient(client, srv.sse);
             client.registerObserver(observer);
             client.observersReady();
 
@@ -422,13 +471,7 @@ class SsePerfTest inherits QUnit::Test {
 
             # Disconnect current client before the loop reconnects for the next size
             # The server tracks connections, so we need a clean state
-            client.disconnect();
-            # Wait for server to deregister
-            int retries = 0;
-            while (srv.sse.getConnectionIds().size() > 0 && retries < 100) {
-                usleep(50ms);
-                ++retries;
-            }
+            disconnectClient(client, srv.sse);
         }
     }
 
@@ -440,11 +483,11 @@ class SsePerfTest inherits QUnit::Test {
 
         int duration_secs = 3;
         hash<auto> srv = createServer();
-        on_exit srv.http.stop();
+        on_exit stopServer(srv);
 
         PerfObserver observer();
         ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
-        on_exit client.disconnect();
+        on_exit disconnectClient(client, srv.sse);
         client.registerObserver(observer);
         client.observersReady();
 
@@ -477,10 +520,10 @@ class SsePerfTest inherits QUnit::Test {
 
         on_exit {
             stop_sender = True;
-            sender_done.waitForZero(10s);
+            waitForHelper(sender_done, 10s, "sender thread should stop during cleanup");
         }
 
-        sender_done.waitForZero(seconds(duration_secs + 10));
+        waitForHelper(sender_done, seconds(duration_secs + 10), "sender thread should finish");
 
         # Wait a bit for remaining events to arrive
         usleep(2s);
@@ -516,7 +559,7 @@ class SsePerfTest inherits QUnit::Test {
 
         int event_count = 200;
         hash<auto> srv = createServer();
-        on_exit srv.http.stop();
+        on_exit stopServer(srv);
 
         # Establish 2 stable clients
         list<PerfObserver> stable_observers();
@@ -529,15 +572,7 @@ class SsePerfTest inherits QUnit::Test {
             stable_clients += client;
             stable_observers += obs;
         }
-        on_exit {
-            for (int i = 0; i < 2; ++i) {
-                try {
-                    stable_clients[i].disconnect();
-                } catch () {
-                    # ignore cleanup errors
-                }
-            }
-        }
+        on_exit disconnectClients(stable_clients, srv.sse);
 
         waitForConnection(srv.sse, 2);
         foreach PerfObserver obs in (stable_observers) {
@@ -556,6 +591,13 @@ class SsePerfTest inherits QUnit::Test {
                 try {
                     PerfObserver obs();
                     ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
+                    on_exit {
+                        try {
+                            client.disconnect();
+                        } catch () {
+                            # ignore cleanup errors
+                        }
+                    }
                     client.registerObserver(obs);
                     client.observersReady();
                     obs.waitForConnected(5s);
@@ -573,7 +615,7 @@ class SsePerfTest inherits QUnit::Test {
 
         on_exit {
             stop_churn = True;
-            churn_done.waitForZero(10s);
+            waitForHelper(churn_done, 15s, "churner thread should stop during cleanup");
         }
 
         # Send events while churning
@@ -598,7 +640,7 @@ class SsePerfTest inherits QUnit::Test {
         float total_ms = elapsedMs(start);
 
         stop_churn = True;
-        churn_done.waitForZero(10s);
+        waitForHelper(churn_done, 15s, "churner thread should finish");
 
         int min_received = event_count;
         int max_received = 0;
@@ -641,7 +683,7 @@ class SsePerfTest inherits QUnit::Test {
         int num_clients = 3;
         int event_count = 200;
         hash<auto> srv = createServer();
-        on_exit srv.http.stop();
+        on_exit stopServer(srv);
 
         list<PerfObserver> observers();
         list<ServerSentEventClient> clients();
@@ -654,15 +696,7 @@ class SsePerfTest inherits QUnit::Test {
             clients += client;
             observers += obs;
         }
-        on_exit {
-            for (int i = 0; i < num_clients; ++i) {
-                try {
-                    clients[i].disconnect();
-                } catch () {
-                    # ignore cleanup errors
-                }
-            }
-        }
+        on_exit disconnectClients(clients, srv.sse);
 
         waitForConnection(srv.sse, num_clients);
         foreach PerfObserver obs in (observers) {

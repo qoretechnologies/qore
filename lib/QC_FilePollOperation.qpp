@@ -43,22 +43,23 @@
 
     @since %Qore 1.19
 */
-qclass FilePollOperation [arg=SocketPollOperationBase* op; vparent=SocketPollOperationBase];
+qclass FilePollOperation [arg=SocketPollOperationBase* op; vparent=SocketPollOperationBase<auto>];
 
 //! Creates the object with the given goal
 /** @param file the File object to poll
     @param path the path to read
-    @param to_string if the output should be a string or not; if so, the string's encoding will be the same as the
+    @param as_string if the output should be a string or not; if so, the string's encoding will be the same as the
     %File's encoding
     @param num_bytes the number of bytes to read; < 0 means read the entire file
 */
-FilePollOperation::constructor(ReadOnlyFile[File] file, string path, bool to_string, int num_bytes = -1) {
+FilePollOperation::constructor(ReadOnlyFile[File] file, string path, bool as_string, int num_bytes = -1)
+        [flags=NAMED_ARGS] {
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;
     }
     ReferenceHolder<SocketPollOperationBase> poller(new FileReadPollOperation(xsink, file.release(), npath->c_str(),
-        num_bytes, to_string), xsink);
+        num_bytes, as_string), xsink);
     if (*xsink) {
         return;
     }

@@ -68,6 +68,7 @@ union qore_gvar_ref_u {
     double f;
     AbstractQoreNode* n;
     const QoreEnumMember* em;  //!< for enum member pointers (QV_Enum)
+    uint64_t qv;               //!< for inline QoreValue bits (QV_Value)
     // note that the "readonly" flag is stored in bit 0 of this pointer - do not read directly
     size_t _refptr;
 
@@ -100,6 +101,8 @@ DLLLOCAL void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& l
 class LValueHelper;
 class LValueRemoveHelper;
 class RSetHelper;
+struct LVPathStep;
+enum class LVPathStepKind : uint8_t;
 
 // structure for global variables
 class Var : protected QoreReferenceCounter {
@@ -107,6 +110,7 @@ private:
     const QoreProgramLocation* loc;      // location of the initial definition
     QoreLValue<qore_gvar_ref_u> val;
     std::string name;
+    std::string from_module;              // module that defined this variable
     mutable QoreVarRWLock rwl;
     QoreParseTypeInfo* parseTypeInfo = nullptr;
     const QoreTypeInfo* typeInfo = nullptr;
@@ -343,6 +347,14 @@ public:
         narrowedTypeInfo = nullptr;
         narrowedLoc = nullptr;
     }
+
+    //! Returns the module name that defined this variable, or nullptr if not set
+    DLLLOCAL const char* getModuleName() const {
+        return from_module.empty() ? nullptr : from_module.c_str();
+    }
+
+    //! Assigns the current module context to this variable
+    DLLLOCAL void assignModule();
 };
 
 DLLLOCAL void delete_global_variables();
@@ -392,6 +404,7 @@ protected:
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    DLLLOCAL int setBufferElementLValue(QoreBufferNode* b, size_t index);
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
@@ -426,6 +439,9 @@ private:
     int rdt = 0;
 
     RObject* robj = nullptr;
+    QoreBufferNode* buffer_lvalue = nullptr;
+    size_t buffer_lvalue_index = 0;
+    QoreValue buffer_lvalue_value;
 
 public:
     QoreLValueGeneric* val = nullptr;
@@ -457,6 +473,13 @@ public:
     DLLLOCAL void saveTempRef(QoreValue& n);
 
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
+
+    //! Navigate an lvalue using a structured path (IR-based alternative to AST-based doLValue)
+    //! @param steps array of LVPathStep describing the navigation
+    //! @param num_steps number of steps in the array
+    //! @param for_remove true if navigating for a remove operation
+    //! @return 0 on success, -1 on error (exception raised in vl.xsink)
+    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);
@@ -596,11 +619,18 @@ public:
     // only call if there is a reference-counted AbstractQoreNode value in place
     // FIXME: port operators to LValueHelper instead and remove this function
     DLLLOCAL void ensureUnique() {
+        QoreValue current = getValue();
+        if (current.isShortString()) {
+            char buf[7];
+            current.getShortString(buf);
+            assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
+            return;
+        }
+
         AbstractQoreNode* current_value = getNodeValue();
         assert(current_value && current_value->getType() != NT_OBJECT);
 
         if (!current_value->is_unique()) {
-            //printd(5, "LValueHelper::ensureUnique() this: %p saving old value: %p '%s'\n", this, current_value, get_type_name(current_value));
             AbstractQoreNode* old = current_value;
             assignNodeIntern(current_value->realCopy());
             saveTemp(old);

@@ -87,6 +87,8 @@ public:
 };
 
 class QoreAbstractModule {
+    friend class QoreModuleManager;
+
 public:
     version_list_t version_list;
     // list of dependent modules to reexport
@@ -97,7 +99,7 @@ public:
             const char* v, const char* a, const char* u, const QoreString& l, unsigned load_opt) :
             filename(fn), name(n), desc(d), author(a), url(u), license(l), path(fn) ,
             priv(load_opt & QMLO_PRIVATE), injected(load_opt & QMLO_INJECT), reinjected(load_opt & QMLO_REINJECT),
-            version_list(v) {
+            init_failed(false), version_list(v) {
         q_normalize_path(filename, cwd);
     }
 
@@ -106,7 +108,7 @@ public:
             const char* path = nullptr) :
             filename(fn), name(n), path(path ? path : fn), priv(load_opt & QMLO_PRIVATE),
             injected(load_opt & QMLO_INJECT),
-            reinjected(load_opt & QMLO_REINJECT) {
+            reinjected(load_opt & QMLO_REINJECT), init_failed(false) {
         q_normalize_path(filename, cwd);
     }
 
@@ -152,6 +154,14 @@ public:
 
     DLLLOCAL bool isReInjected() const {
         return reinjected;
+    }
+
+    DLLLOCAL bool isInitFailed() const {
+        return init_failed;
+    }
+
+    DLLLOCAL void setInitFailed() {
+        init_failed = true;
     }
 
     DLLLOCAL void addModuleReExport(const char* m) {
@@ -228,7 +238,8 @@ protected:
 
     bool priv : 1,
         injected : 1,
-        reinjected : 1;
+        reinjected : 1,
+        init_failed : 1;
 
     DLLLOCAL QoreHashNode* getHashIntern(bool with_filename = true) const;
 
@@ -441,10 +452,34 @@ public:
         return findModuleUnlocked(name);
     }
 
+    //! Load a reexported module into a program using the current module-load locking context.
+    DLLLOCAL void loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm);
+
     //! find a module by name without locking; the caller must hold the mutex
     DLLLOCAL QoreAbstractModule* findModuleUnlocked(const char* name) {
         module_map_t::iterator i = map.find(name);
         return i == map.end() ? nullptr : i->second;
+    }
+
+    //! Import a module's namespace into a program without acquiring the lock
+    /** This is for use by AOT runtime code that is called from within a locked context
+        (e.g., qore_aot_module_init called from loadBinaryModuleFromDesc).
+        @param name the module name to import
+        @param pgm the target QoreProgram
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int importModuleNSUnlocked(const char* name, QoreProgram* pgm, ExceptionSink& xsink);
+
+    //! Import a module's namespace into a program (locked version)
+    /** @param name the module feature name
+        @param pgm the target QoreProgram
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int importModuleNS(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
+        AutoLocker al(mutex);
+        return importModuleNSUnlocked(name, pgm, xsink);
     }
 
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
@@ -452,6 +487,10 @@ public:
     DLLLOCAL int runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             QoreProgram* mpgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES,
             bool reexport = false, qore_binary_module_desc_t mod_desc_func = nullptr);
+
+    //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
+    DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
+            qore_binary_module_desc_t desc_fn, const char* path);
 
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();
@@ -476,8 +515,15 @@ public:
             return;
 
         const char* old_name = get_module_context_name();
-        if (old_name)
-            setUserModuleDependency(mi->getName(), old_name);
+        if (old_name) {
+            // Only track dependency if the dependent module is also a user module.
+            // Binary modules (including AOT modules) are not cleaned up via delUser(),
+            // so tracking their dependencies would cause assertion failures.
+            QoreAbstractModule* dep_mi = findModuleUnlocked(old_name);
+            if (dep_mi && dep_mi->isUser()) {
+                setUserModuleDependency(mi->getName(), old_name);
+            }
+        }
         trySetUserModule(mi->getName());
     }
 
@@ -575,8 +621,11 @@ protected:
     // user module dependent map: dependent -> module
     ModMap rmd_map;
 
-    // module blacklist
-    typedef std::map<const char*, const char*, ltstr> bl_map_t;
+    // module blacklist — name and reason are stored as std::string so the map owns
+    // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
+    // c_str()) that are freed once the helper destructs, so holding raw const char*
+    // here would dangle once the add function returns.
+    typedef std::map<std::string, std::string, std::less<>> bl_map_t;
     bl_map_t mod_blacklist;
 
     // module hash
@@ -652,7 +701,10 @@ public:
     DLLLOCAL virtual ~QoreBuiltinModule() {
         printd(5, "QoreBuiltinModule::~QoreBuiltinModule() '%s': %s calling module_delete: %p\n", name.c_str(),
             filename.c_str(), module_delete);
+        // Set the module context name so module_delete() can identify which module is being unloaded
+        const char* old_ctx_name = set_module_context_name(name.c_str());
         module_delete();
+        set_module_context_name(old_ctx_name);
         // we do not close binary modules because we may have thread local data that needs to be
         // destroyed when exit() is called
     }
@@ -714,6 +766,15 @@ public:
         del = dl;
     }
 
+    DLLLOCAL void setInitClosure(QoreValue v) {
+        init_c.discard(nullptr);
+        init_c = v;
+    }
+
+    DLLLOCAL QoreValue refInitClosure() const {
+        return init_c.refSelf();
+    }
+
     DLLLOCAL virtual bool isBuiltin() const override {
         return false;
     }
@@ -734,10 +795,18 @@ public:
         }
     }
 
+    //! Run the module deletion callback if it has not yet been called
+    /** Safe to call multiple times; only runs the callback once.
+        Called by QoreModuleManager::delUser() Phase 0 to ensure del callbacks
+        execute while all module programs (and their TypeInfos) are still alive.
+    */
+    DLLLOCAL void runDelCallback(ExceptionSink& xsink);
+
 protected:
     //! Module logic / namespace container
     QoreProgram* pgm;
 
+    QoreValue init_c{}; // retained for AOT compilation of embedded local modules
     AbstractQoreNode* del = nullptr; // deletion closure / call reference
 
     DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
@@ -791,11 +860,14 @@ protected:
 
 class ModuleLoadMapHelper {
 public:
-    DLLLOCAL ModuleLoadMapHelper(const char* feature);
+    DLLLOCAL ModuleLoadMapHelper(const char* feature, bool unlock_now = true);
     DLLLOCAL ~ModuleLoadMapHelper();
+
+    DLLLOCAL void unlock();
 
 private:
     QoreModuleManager::module_load_map_t::iterator i;
+    bool unlocked;
 };
 
 #endif

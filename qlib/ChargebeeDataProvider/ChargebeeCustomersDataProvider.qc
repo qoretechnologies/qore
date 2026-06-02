@@ -171,12 +171,12 @@ public class ChargebeeCustomersDataProvider inherits ChargebeeDataProviderBase {
     }
 
     #! Searches for customers
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If id provided, get single record
         if (search_options.id) {
             hash<auto> response = doGet("/customers/" + search_options.id);
-            return new DefaultRecordIterator(new ListHashIterator((response.customer,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((response.customer,)),
                 where_cond, search_options, recordType.getFields());
         }
 
@@ -228,7 +228,7 @@ public class ChargebeeCustomersDataProvider inherits ChargebeeDataProviderBase {
             records = ();
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

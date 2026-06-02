@@ -155,7 +155,7 @@ public class KeapContactsDataProvider inherits KeapDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Build optional_properties query string fragment
         string opt_props_qs = (map sprintf("optional_properties=%s", $1),
@@ -166,7 +166,7 @@ public class KeapContactsDataProvider inherits KeapDataProviderBase {
             hash<auto> result = doRestRequest("GET",
                 "contacts/" + search_options.contact_id + "?" + opt_props_qs);
             result = transformContactResponse(result);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
@@ -192,7 +192,7 @@ public class KeapContactsDataProvider inherits KeapDataProviderBase {
             search_options.limit, opt_props_qs);
         # Transform each record to extract email and phone
         list<hash<auto>> transformed = map transformContactResponse($1), all_records;
-        return new DefaultRecordIterator(new ListHashIterator(transformed), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(transformed), where_cond,
             search_options);
     }
 

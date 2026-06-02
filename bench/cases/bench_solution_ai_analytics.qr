@@ -1,0 +1,80 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchSolutionAiAnalytics
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchSolutionAiAnalytics {
+    constructor() {
+        Bench::BenchRunner r("solution_ai_analytics");
+        r.iterations = 3;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::aiRows();
+        if (rows < 8) {
+            rows = 8;
+        }
+
+        DataFrame::DataFrame features;
+
+        r.setup = sub () {
+            features = DataFrameBench::makeAnalyticFrame(rows);
+            r.bytes_processed = DataFrameBench::approxAnalyticBytes(rows) * 4;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreStandardScalerProcessor scaler({
+                "fields": "feature1,feature2,feature3",
+                "window_size": rows,
+                "output_mode": "dataframe",
+                "include_input_fields": False,
+            });
+            DataFrame::DataFrame scaled = scaler.processRecordsShape(features, DataProviderShape::DataFrameBlock);
+            DataFrameBench::verifyRows("solution_ai_analytics/scaler", scaled, rows);
+
+            DataProviderML::QoreMinMaxScalerProcessor minmax({
+                "fields": "feature1,feature2,feature3",
+                "window_size": rows,
+                "output_mode": "dataframe",
+                "include_input_fields": False,
+            });
+            DataFrame::DataFrame normalized = minmax.processRecordsShape(features, DataProviderShape::DataFrameBlock);
+            DataFrameBench::verifyRows("solution_ai_analytics/minmax", normalized, rows);
+
+            DataProviderML::QoreKMeansProcessor kmeans({
+                "fields": "feature1,feature2,feature3",
+                "window_size": rows,
+                "k": 4,
+                "output_mode": "dataframe",
+                "include_input_fields": False,
+                "include_centroid_distances": False,
+            });
+            DataFrame::DataFrame clusters = kmeans.processRecordsShape(features, DataProviderShape::DataFrameBlock);
+            DataFrame::DataFrame cluster_summary = clusters.groupBy(("cluster",)).agg({
+                "distance": ("mean", "max"),
+                "cluster": "count",
+            });
+            DataFrameBench::verifyRows("solution_ai_analytics/kmeans", cluster_summary, 1);
+
+            DataProviderML::QorePCAProcessor pca({
+                "fields": "feature1,feature2,feature3",
+                "window_size": rows,
+                "n_components": 2,
+                "output_mode": "dataframe",
+                "include_input_fields": False,
+            });
+            DataFrame::DataFrame pca_frame = pca.processRecordsShape(features, DataProviderShape::DataFrameBlock);
+            DataFrameBench::verifyRows("solution_ai_analytics/pca", pca_frame, rows);
+        };
+
+        exit(r.run());
+    }
+}

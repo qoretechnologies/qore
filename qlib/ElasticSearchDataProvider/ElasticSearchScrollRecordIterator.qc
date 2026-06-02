@@ -34,7 +34,7 @@ public namespace ElasticSearchDataProvider {
 
     @see https://www.elastic.co/guide/en/elasticsearch/reference/current/scroll-api.html
 */
-public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private:internal {
         #! The REST client object for API calls — any @ref RestClient::AbstractRestClient subclass
         RestClient::AbstractRestClient rest;

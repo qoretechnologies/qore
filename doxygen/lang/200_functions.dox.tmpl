@@ -43,6 +43,179 @@
 
     This is most important with @ref abstract "abstract" class methods.
 
+    @subsection function_type_parameters Function Type Parameters
+    Functions can declare formal type parameters after the function name. The
+    type parameters can then be used in the return type, parameter types, local
+    declarations, and nested type declarations in the function body:
+
+    @code{.py}
+T sub identity<T>(T value) {
+    T local = value;
+    return local;
+}
+
+int i = identity(1);                         # T inferred as int
+string s = identity(value: "ready");         # named calls also infer T
+string explicit = identity<string>("done");  # explicit call type argument
+    @endcode
+
+    Explicit generic call type arguments are written after the function name
+    and before the normal argument list. Explicit type arguments take precedence
+    over inference and are required when the call has no arguments from which a
+    type parameter can be inferred:
+
+    @code{.py}
+T sub make<T = int>() {
+    auto value = 1;
+    T rv = value;
+    return rv;
+}
+
+int default_value = make();          # default type argument T = int
+int explicit_value = make<int>();    # explicit T
+    @endcode
+
+    Type parameters can declare an upper bound and a default. Bounds are
+    checked after inference or after explicit type arguments are applied:
+
+    @code{.py}
+T sub bounded<T: int = int>(T value = 1) {
+    return value;
+}
+
+int ok = bounded(2);
+int explicit_ok = bounded<int>(3);
+# string bad = bounded<string>("x");  # PARSE-TYPE-ERROR
+    @endcode
+
+    Methods and static methods use the same call-type-argument syntax:
+
+    @code{.py}
+class Chooser {
+    T echo<T>(T value) {
+        return value;
+    }
+
+    static U choose<T, U>(T left, U right) {
+        return right;
+    }
+}
+
+Chooser c();
+int method_value = c.echo(4);
+string explicit_method_value = c.echo<string>(value: "four");
+string static_value = Chooser::choose<int, string>(1, "one");
+    @endcode
+
+    If inference cannot choose one unique type argument, or if an explicit type
+    argument violates a bound, parsing raises \c PARSE-TYPE-ERROR. Functions
+    or methods without type parameters cannot be called with generic call type
+    arguments.
+
+    @subsection function_named_arguments Named Arguments
+    Function, method, constructor, and base-constructor calls can pass arguments by parameter name using
+    <tt>name: expression</tt> syntax. Named arguments make call sites clearer when a call has optional arguments,
+    boolean switches, timeouts, encodings, or several arguments with related types:
+
+    @code{.py}
+sub connect(string host, int port = 443, *int timeout = NOTHING, bool tls = True) {
+    # ...
+}
+
+connect(host: "example.com");
+connect("example.com", timeout: 30, tls: False);
+connect(host: "example.com", tls: False, timeout: 10);
+    @endcode
+
+    Positional arguments may appear before named arguments, but a positional argument cannot follow a named
+    argument in the same call. Named arguments are matched case-sensitively against the selected variant's declared
+    parameter names. Duplicate names, unknown names, or names that would overwrite a parameter already filled by a
+    positional argument are parse-time errors.
+
+    Parameters may be supplied in any order by name. Parameters omitted from a named call use the same
+    default-argument handling as positional calls:
+
+    @code{.py}
+sub resize(string source, string target, int width = 1024, int height = 768, bool keep_aspect = True) {
+    # ...
+}
+
+resize(source: "in.png", target: "out.png", height: 480);
+resize("in.png", "thumb.png", keep_aspect: False, width: 128, height: 128);
+    @endcode
+
+    Named arguments bind to fixed parameters only; they do not bind to varargs or the \c argv variable.
+
+    @code{.py}
+sub log(string level, string message, ...) {
+    # level and message can be named; varargs cannot
+}
+
+log(level: "INFO", message: "started");
+log("INFO", "started", "request_id", 123);  # extra values remain positional
+    @endcode
+
+    Argument expressions are evaluated in source order, even when the resulting values are assigned to parameters in
+    a different order:
+
+    @code{.py}
+sub pair(int a, int b) {
+    printf("%d:%d\n", a, b);
+}
+
+pair(b: side_effect_1(), a: side_effect_2());
+    @endcode
+
+    In the example above, \c side_effect_1() is evaluated before \c side_effect_2(), but the resulting call still
+    passes the second value as \c a and the first value as \c b.
+
+    Named arguments also work with methods, constructors, and base constructors when the target signature is known at
+    parse time:
+
+    @code{.py}
+class Reader {
+    constructor(string path, string encoding = "UTF-8", bool strict = True) {
+        # ...
+    }
+
+    string readLine(int max_chars = 4096, bool trim = True) {
+        # ...
+    }
+}
+
+class CsvReader inherits Reader {
+    constructor(string path, string encoding = "UTF-8")
+        : Reader(path: path, encoding: encoding, strict: False) {
+    }
+}
+
+Reader r(path: "data.csv", encoding: "UTF-8");
+string line = r.readLine(trim: False);
+    @endcode
+
+    Builtin functions and methods can support named arguments as well. For example:
+
+    @code{.py}
+string decoded = binary_to_string(value: body, encoding: "UTF-8");
+date ts = localtime(seconds: epoch_seconds, microseconds: 250000);
+binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: False, fin: True);
+    @endcode
+
+    Some builtin variants intentionally remain positional-only, for example runtime-dispatched, varargs-only, or
+    compatibility-sensitive variants. Such calls produce a named-call diagnostic explaining why the call is not
+    supported and, when possible, which named parameters are available on named-callable variants.
+
+    A call with named arguments must resolve to a known signature at parse time. Calls through untyped call
+    references or closures are rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional arguments or give the target
+    an explicit type that allows parse-time resolution. Builtin functions and methods accept named arguments only
+    when their variant has opted in with the @ref NAMED_ARGS "NAMED_ARGS" code flag.
+
+    @note Parameter names are part of the public calling interface for named callers. Renaming a public parameter can
+    break callers that use named arguments even when positional callers are unaffected.
+
+    @note At a call site, <tt>f(a: 1)</tt> is a named-argument call. To pass a paren-form hash as one positional
+    argument, keep the extra parentheses: <tt>f((a: 1))</tt>.
+
     @subsection function_return_types Function Return Type Declarations
     The return type of the function can be given by placing a type declaration before the <tt><b>sub</b></tt> keyword (the older syntax with the <tt><b>returns</b></tt> keyword after the parameter list is still accepted as well).
 

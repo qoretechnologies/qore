@@ -78,7 +78,7 @@ public class FtpClientGetFileDataProvider inherits AbstractDataProvider {
         OutputStream out = req.text
             ? new StringOutputStream(req.encoding)
             : new BinaryOutputStream();
-        ftp.get(path, out);
+        ftp.get(remote_path: path, output_stream: out);
         return {
             "path": path,
             "data": req.text

@@ -118,13 +118,13 @@ public class ApolloContactsDataProvider inherits ApolloDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If contact_id provided, get single record
         if (search_options.contact_id) {
             hash<auto> result = doGet("contacts/" + search_options.contact_id);
             hash<auto> contact = result.contact ?? result;
-            return new DefaultRecordIterator(new ListHashIterator((contact,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((contact,)),
                 where_cond, search_options);
         }
 
@@ -142,7 +142,7 @@ public class ApolloContactsDataProvider inherits ApolloDataProviderBase {
 
         list<hash<auto>> records = fetchAllPagesPost("contacts/search", "contacts", body,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
 
     #! Returns static provider info

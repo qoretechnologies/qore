@@ -38,6 +38,8 @@
 #include <cstdlib>
 #include <cstring>
 
+static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed);
+
 #ifdef DEBUG
 const char* ClassNs::getName() const {
    return isNs() ? getNs()->name.c_str() : getClass()->name.c_str();
@@ -47,7 +49,9 @@ const char* ClassNs::getName() const {
 ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue val, const QoreTypeInfo* ti,
         bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access)
         : loc(loc), name(n), typeInfo(ti), val(val), in_init(false), pub(n_pub),
-        init(n_init), builtin(n_builtin), delayed_eval(false), access(n_access) {
+        init(n_init), builtin(n_builtin), delayed_eval(false), has_init_expr(false),
+        saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
+        access(n_access) {
     QoreProgram* pgm = getProgram();
     if (pgm)
         pwo = qore_program_private::getParseWarnOptions(pgm);
@@ -64,7 +68,12 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
 ConstantEntry::ConstantEntry(const ConstantEntry& old)
         : loc(old.loc), pwo(old.pwo), name(old.name),
         typeInfo(old.typeInfo), val(old.val.refSelf()),
-        in_init(false), pub(old.builtin), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
+        in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
+        has_init_expr(old.has_init_expr),
+        saved_val_set(old.saved_val_set),
+        aot_shell_pending(old.aot_shell_pending),
+        external_stub(old.external_stub),
+        external_stub_dependent(old.external_stub_dependent),
         saved_val(old.saved_val.refSelf()),
         access(old.access), from_module(old.from_module) {
     assert(!old.in_init);
@@ -76,9 +85,17 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
 void ConstantEntry::del(QoreListNode& l) {
     //printd(5, "ConstantEntry::del(l) this: %p '%s' node: %p (%d) %s %d (saved_val: %s)\n", this, name.c_str(),
     //  node, get_node_type(node), get_type_name(node), node->reference_count(), saved_val.getTypeName());
-    if (saved_val) {
+    aot_init_expr.discard(nullptr);
+#ifdef DEBUG
+    aot_init_expr.clear();
+#endif
+    if (saved_val_set) {
         val.discard(nullptr);
-        l.push(saved_val, nullptr);
+        if (saved_val.hasNode()) {
+            l.push(saved_val, nullptr);
+        } else {
+            saved_val.clear();
+        }
 #ifdef DEBUG
         val.clear();
         saved_val.clear();
@@ -94,7 +111,11 @@ void ConstantEntry::del(QoreListNode& l) {
 }
 
 void ConstantEntry::del(ExceptionSink* xsink) {
-    if (saved_val) {
+    aot_init_expr.discard(xsink);
+#ifdef DEBUG
+    aot_init_expr.clear();
+#endif
+    if (saved_val_set) {
         val.discard(xsink);
         saved_val.discard(xsink);
 #ifdef DEBUG
@@ -109,6 +130,80 @@ void ConstantEntry::del(ExceptionSink* xsink) {
         val.clear();
 #endif
     }
+}
+
+void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
+    if (getenv("QORE_AOT_INIT_TRACE")) {
+        fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue ce=%p name=%s result=%s pending=%d has=%d\n",
+            (void*)this, name.c_str(), result.getTypeName(), (int)aot_shell_pending, (int)hasValue());
+    }
+    // AOT init functions can lose container metadata while computing values.
+    // Re-apply the declared constant type before storing so runtime overload
+    // dispatch sees the same value type as source mode.
+    if (typeInfo && !result.isNothing()) {
+        ExceptionSink type_xsink;
+        QoreTypeInfo::retypeValue(result, typeInfo, &type_xsink);
+        if (type_xsink) {
+            type_xsink.clear();
+        }
+        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", result, &type_xsink);
+        if (type_xsink) {
+            type_xsink.clear();
+        }
+    }
+    saved_val.discard(xsink);
+    if (val.getType() == NT_RTCONSTREF) {
+        saved_val = result;
+    } else {
+        val.discard(xsink);
+        val = result;
+        saved_val = result.refSelf();
+    }
+    saved_val_set = true;
+    init = true;
+    aot_shell_pending = false;
+    if (getenv("QORE_AOT_INIT_TRACE")) {
+        fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue done ce=%p name=%s pending=%d has=%d saved=%d\n",
+            (void*)this, name.c_str(), (int)aot_shell_pending, (int)hasValue(), (int)saved_val.hasNode());
+    }
+}
+
+void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
+    bool changed = false;
+    QoreValue resolved = resolveRtConstRefDeep(val, xsink, changed);
+    if (xsink && *xsink) {
+        resolved.discard(nullptr);
+        return;
+    }
+    if (!changed) {
+        resolved.discard(nullptr);
+        return;
+    }
+
+    val.discard(xsink);
+    val = resolved;
+    saved_val.discard(xsink);
+    saved_val = resolved.refSelf();
+    saved_val_set = true;
+}
+
+void ConstantEntry::makeExternalStubDeclaration() {
+    assert(!builtin);
+    delayed_eval = false;
+    has_init_expr = false;
+    aot_shell_pending = false;
+    external_stub = true;
+    external_stub_dependent = false;
+    init = true;
+
+    saved_val.discard(nullptr);
+    saved_val_set = false;
+    aot_init_expr.discard(nullptr);
+
+    QoreValue placeholder = val;
+    val.clear();
+    val = new RuntimeConstantRefNode(loc, this, true);
+    placeholder.discard(nullptr);
 }
 
 int ConstantEntry::parseInit(ClassNs ptr) {
@@ -132,6 +227,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     }
 
     int err = 0;
+    bool external_stub_constant_ref = false;
 
     QoreProgram* pgm;
     if (!builtin) {
@@ -150,8 +246,18 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         //printd(5, "ConstantEntry::parseInit() this: %p '%s' about to init val: '%s' class: %p '%s'\n", this,
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
+
         err = parse_init_value(val, parse_context);
         typeInfo = parse_context.typeInfo;
+        external_stub_constant_ref = parse_context.external_stub_constant_ref;
+
+        // Enrich exception with constant name for better debugging
+        if (err) {
+            ExceptionSink* xsink = getProgram()->getParseExceptionSink();
+            if (xsink) {
+                xsink->appendLastDescription(" (while initializing constant '%s')", name.c_str());
+            }
+        }
         assert(!parse_context.lvids);
         pgm = parse_context.pgm;
         assert(pgm == getProgram());
@@ -161,6 +267,10 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
     //printd(5, "ConstantEntry::parseInit() this: %p %s initialized to node: %p (%s) value: %d type: '%s'\n", this,
     //  name.c_str(), node, get_type_name(node), node->is_value(), QoreTypeInfo::getName(typeInfo));
+
+    if (external_stub_constant_ref) {
+        external_stub_dependent = true;
+    }
 
     // do not evaluate expression if any parse exceptions have been thrown
     if (!val.hasNode() || !val.getInternalNode()->needs_eval() || pgm->parseExceptionRaised()) {
@@ -172,6 +282,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
     delayed_eval = true;
     saved_val = val.takeIfNode();
+    saved_val_set = true;
     val = new RuntimeConstantRefNode(loc, this);
     return err;
 }
@@ -181,10 +292,22 @@ int ConstantEntry::parseCommitRuntimeInit() {
         return 0;
     }
     delayed_eval = false;
-    assert(saved_val);
+    has_init_expr = true;
+    assert(saved_val_set);
     assert(saved_val.needsEval());
 
+    // Preserve the init expression for AOT lowering before evaluation consumes it.
+    // The expression AST is ref-counted; this keeps it alive after saved_val is replaced.
+    aot_init_expr = saved_val.refSelf();
+
+    if (external_stub_dependent) {
+        saved_val.discard(nullptr);
+        saved_val_set = false;
+        return 0;
+    }
+
     int err = 0;
+    bool defer_external_stub = false;
 
     // evaluate expression
     ExceptionSink xsink;
@@ -198,14 +321,32 @@ int ConstantEntry::parseCommitRuntimeInit() {
             QoreValue nv = v.takeReferencedValue();
             saved_val.discard(&xsink);
             saved_val = nv;
+            saved_val_set = true;
             typeInfo = saved_val.getTypeInfo();
             assert(!saved_val.getInternalNode() || !saved_val.needsEval());
         } else {
-            typeInfo = nothingTypeInfo;
+            QoreValue ex_err = xsink.getExceptionErr();
+            if (ex_err.getType() == NT_STRING) {
+                QoreStringValueHelper ex_err_str(ex_err);
+                defer_external_stub = !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT");
+            }
+            if (!defer_external_stub) {
+                typeInfo = nothingTypeInfo;
+            }
         }
     }
 
+    if (defer_external_stub) {
+        xsink.clear();
+        external_stub_dependent = true;
+        saved_val.discard(nullptr);
+        saved_val_set = false;
+        return 0;
+    }
+
     if (xsink.isEvent()) {
+        // Enrich exception with constant name for better debugging
+        xsink.appendLastDescription(" (while initializing constant '%s')", name.c_str());
         qore_program_private::addParseException(getProgram(), xsink, loc);
         if (!err) {
             err = -1;
@@ -215,26 +356,140 @@ int ConstantEntry::parseCommitRuntimeInit() {
     return err;
 }
 
-// Collapse a chain of RuntimeConstantRefNode indirections to the concrete
-// stored value.  A constant whose initializer is itself another constant
-// (possibly transitively: const A = B; const B = C; ...) leaves each
-// entry's saved_val pointing at the next RuntimeConstantRefNode.  Unwrapping
-// only one level (the original behavior) leaked the internal NT_RTCONSTREF
-// parse-node type out through the public QoreExternalConstant API, where
-// C++/module consumers (e.g. the jni module building Java proxy classes)
-// have no way to handle it.  Follow the chain to the terminal value so the
-// node type is never exposed.  Parse-time recursive-constant detection
-// (see ConstantEntry::get) prevents cycles; the bound is a defensive
-// backstop only.
+// Collapse a chain of plain RuntimeConstantRefNode indirections to the concrete
+// stored value.  This helper returns a borrowed value and is therefore only
+// suitable for paths that cannot materialize a computed reference, such as
+// ConstantEntry::getValue().
 const QoreValue& ConstantEntry::resolveRtConstRef(const QoreValue& start) {
     const QoreValue* v = &start;
     for (unsigned i = 0; v->getType() == NT_RTCONSTREF && i < 65536; ++i) {
-        v = &v->get<const RuntimeConstantRefNode>()->getConstantEntry()->saved_val;
+        ConstantEntry* rce = v->get<const RuntimeConstantRefNode>()->getConstantEntry();
+        if (!rce->saved_val_set) {
+            return rce->aot_shell_pending || rce->external_stub ? *v : rce->saved_val;
+        }
+        v = &rce->saved_val;
     }
     return *v;
 }
 
+// Collapse and evaluate RuntimeConstantRefNode values to an owned value.  AOT
+// uses RuntimeConstantRefNode subclasses for references to nested constant
+// paths; those must be evaluated polymorphically instead of manually unwrapping
+// only the base ConstantEntry.
+static QoreValue materializeRtConstRefValue(const QoreValue& start, ExceptionSink* xsink, bool& changed) {
+    changed = false;
+    QoreValue cur = start.refSelf();
+    for (unsigned i = 0; cur.getType() == NT_RTCONSTREF && i < 65536; ++i) {
+        QoreValue next = cur.eval(xsink);
+        cur.discard(nullptr);
+        if (*xsink) {
+            next.discard(nullptr);
+            return QoreValue();
+        }
+        cur = next;
+        changed = true;
+    }
+    return cur;
+}
+
+static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed) {
+    QoreValue resolved = materializeRtConstRefValue(start, xsink, changed);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // AOT constant containers can hold nested RuntimeConstantRefNode values.
+    // Materialize only the containers that actually contain such references.
+    if (resolved.getType() == NT_HASH) {
+        const QoreHashNode* h = resolved.get<const QoreHashNode>();
+        if (!h) {
+            return resolved;
+        }
+
+        ReferenceHolder<QoreHashNode> rv(xsink);
+        ConstHashIterator hi(*h);
+        while (hi.next()) {
+            bool child_changed;
+            QoreValue v = resolveRtConstRefDeep(hi.get(), xsink, child_changed);
+            if (*xsink) {
+                resolved.discard(nullptr);
+                return QoreValue();
+            }
+            if (child_changed) {
+                if (!rv) {
+                    rv = h->realCopy();
+                }
+                // This is not a source-level assignment; it is materializing a
+                // serialized constant-reference graph.  Preserve the resolved
+                // value exactly, including complex container metadata, instead
+                // of applying hash assignment's plain-hash type stripping.
+                qore_hash_private::get(**rv)->setKeyValueIntern(hi.getKey(), v);
+            } else {
+                v.discard(nullptr);
+            }
+        }
+
+        if (rv) {
+            changed = true;
+            resolved.discard(nullptr);
+            return rv.release();
+        }
+
+        return resolved;
+    }
+
+    if (resolved.getType() == NT_LIST) {
+        const QoreListNode* l = resolved.get<const QoreListNode>();
+        if (!l) {
+            return resolved;
+        }
+
+        ReferenceHolder<QoreListNode> rv(xsink);
+        for (size_t i = 0, e = l->size(); i < e; ++i) {
+            bool child_changed;
+            QoreValue v = resolveRtConstRefDeep(l->retrieveEntry(i), xsink, child_changed);
+            if (*xsink) {
+                resolved.discard(nullptr);
+                return QoreValue();
+            }
+            if (child_changed) {
+                if (!rv) {
+                    rv = static_cast<QoreListNode*>(l->realCopy());
+                }
+                rv->setEntry(i, v, xsink);
+                if (*xsink) {
+                    resolved.discard(nullptr);
+                    return QoreValue();
+                }
+            } else {
+                v.discard(nullptr);
+            }
+        }
+
+        if (rv) {
+            changed = true;
+            resolved.discard(nullptr);
+            return rv.release();
+        }
+
+        return resolved;
+    }
+
+    return resolved;
+}
+
 QoreValue ConstantEntry::getReferencedValue() const {
+    ExceptionSink xsink;
+    bool changed;
+    QoreValue rv = resolveRtConstRefDeep(val, &xsink, changed);
+    if (!xsink) {
+        return rv;
+    }
+    rv.discard(nullptr);
+
+    // This accessor cannot report exceptions. Preserve the historical raw
+    // return path for genuinely unresolved AOT/external constants.
+    xsink.clear();
     return resolveRtConstRef(val).refSelf();
 }
 
@@ -242,7 +497,7 @@ const QoreValue ConstantEntry::getValue() const {
     return resolveRtConstRef(val);
 }
 
-ConstantList::ConstantList(const ConstantList& old, const QoreParseOptions& po, ClassNs p) : ptr(p) {
+ConstantList::ConstantList(const ConstantList& old, const QoreParseOptions& po, ClassNs p) : ptr(p), runtime_init_hwm(old.runtime_init_hwm) {
     //printd(5, "ConstantList::ConstantList(old: %p, p: %s %s) this: %p cls: %p ns: %p\n", &old, p.getType(),
     //  p.getName(), this, ptr.getClass(), ptr.getNs());
     cnemap_t::iterator last = cnemap.begin();
@@ -320,6 +575,11 @@ void ConstantList::parseDeleteAll() {
         qore_program_private::addParseException(getProgram(), xsink);
 }
 
+static bool parsingExternalStubDeclarations() {
+    QoreProgram* pgm = getProgram();
+    return pgm && qore_program_private::get(*pgm)->isParsingStubDeclarations();
+}
+
 cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const char* name, QoreValue value,
         const QoreTypeInfo* typeInfo, bool pub, ClassAccess access) {
     // first check if the constant has already been defined
@@ -332,6 +592,9 @@ cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const 
     ConstantEntry* ce = new ConstantEntry(loc, name, value,
         typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo : value.getTypeInfo(),
         pub, false, false, access);
+    if (parsingExternalStubDeclarations()) {
+        ce->makeExternalStubDeclaration();
+    }
     return cnemap.insert(cnemap_t::value_type(ce->getName(), ce)).first;
 }
 
@@ -395,7 +658,12 @@ void ConstantList::mergeUserPublic(const ConstantList& src) {
             continue;
         }
 
-        assert(!inList(i->first));
+        // skip constants that already exist (same module re-imported via different dependency paths,
+        // e.g. QUnit -> Util and FsUtil -> Util); scanMergeCommittedNamespace already validated
+        // that any existing constant has the same identity
+        if (inList(i->first)) {
+            continue;
+        }
 
         ConstantEntry* n = new ConstantEntry(*i->second);
         cnemap[n->getName()] = n;
@@ -434,9 +702,18 @@ void ConstantList::assimilate(ConstantList& n) {
 // duplicate checking is done here
 void ConstantList::assimilate(ConstantList& n, const char* type, const char* name,
         std::vector<std::string>* pending_names) {
+    qore_ns_private* ns = ptr.getNs();
+    const bool imported_ns = ns && ns->imported;
+
     // assimilate target list
     for (cnemap_t::iterator i = n.cnemap.begin(), e = n.cnemap.end(); i != e; ++i) {
-        if (inList(i->first)) {
+        ConstantEntry* existing = findEntry(i->first);
+        if (existing) {
+            if (imported_ns && existing->isPublic() && i->second->isPublic()) {
+                // A child Program can parse a user module that redeclares public API constants inherited from the
+                // parent Program. Keep the inherited value and drop the redundant parsed declaration.
+                continue;
+            }
             parse_error(*i->second->loc, "constant \"%s\" has already been defined in %s \"%s\"", i->first, type,
                 name);
             continue;
@@ -462,6 +739,9 @@ void ConstantList::parseAdd(const QoreProgramLocation* loc, const std::string& n
     }
 
     ConstantEntry* ce = new ConstantEntry(loc, name.c_str(), val, val.getTypeInfo(), false, false, false, access);
+    if (parsingExternalStubDeclarations()) {
+        ce->makeExternalStubDeclaration();
+    }
     cnemap[ce->getName()] = ce;
 }
 
@@ -480,14 +760,21 @@ int ConstantList::parseInit() {
 
 int ConstantList::parseCommitRuntimeInit() {
     int err = 0;
+    // Initialize only constants beyond the high water mark to avoid double evaluation
+    // while allowing new constants added in REPL sessions (AOT mode) to be initialized
+    size_t idx = 0;
     for (auto& i : cnemap) {
-        //printd(5, "ConstantList::parseInit() this: %p '%s' %p (class: %p '%s' ns: %p '%s')\n", this, i->first,
-        //  i->second->node, ptr.getClass(), ptr.getClass() ? ptr.getClass()->name.c_str() : "n/a", ptr.getNs(),
-        //  ptr.getNs() ? ptr.getNs()->name.c_str() : "n/a");
-        if (i.second->parseCommitRuntimeInit() && !err) {
-            err = -1;
+        if (idx >= runtime_init_hwm) {
+            //printd(5, "ConstantList::parseInit() this: %p '%s' (class: %p '%s' ns: %p '%s')\n", this, i.first,
+            //  ptr.getClass(), ptr.getClass() ? ptr.getClass()->name.c_str() : "n/a", ptr.getNs(),
+            //  ptr.getNs() ? ptr.getNs()->name.c_str() : "n/a");
+            if (i.second->parseCommitRuntimeInit() && !err) {
+                err = -1;
+            }
         }
+        ++idx;
     }
+    runtime_init_hwm = cnemap.size();
     return err;
 }
 

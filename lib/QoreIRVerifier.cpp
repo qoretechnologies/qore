@@ -1,0 +1,1857 @@
+/* -*- indent-tabs-mode: nil -*- */
+/*
+    QoreIRVerifier.cpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/intern/QoreJITIncludes.h"
+#include <qore/intern/QoreIRVerifier.h>
+
+#include <unordered_set>
+#include <vector>
+
+#include <qore/intern/QoreIR.h>
+#include <qore/intern/LocalVar.h>
+#include <qore/intern/QoreTypeInfo.h>
+#include <qore/intern/VarRefNode.h>
+#include <qore/intern/QoreOperatorNode.h>
+#include <qore/intern/CallReferenceCallNode.h>
+#include <qore/intern/QoreDotEvalOperatorNode.h>
+#include <qore/intern/SelfVarrefNode.h>
+#include <qore/intern/ObjectMethodReferenceNode.h>
+#include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/QoreClosureParseNode.h>
+#include <qore/intern/StatementBlock.h>
+#include <qore/intern/IfStatement.h>
+#include <qore/intern/WhileStatement.h>
+#include <qore/intern/ForStatement.h>
+#include <qore/intern/ForEachStatement.h>
+#include <qore/intern/SwitchStatement.h>
+#include <qore/intern/TryStatement.h>
+#include <qore/intern/ReturnStatement.h>
+#include <qore/intern/ThrowStatement.h>
+#include <qore/intern/OnBlockExitStatement.h>
+#include <qore/intern/DebugStatement.h>
+#include <qore/intern/AssertStatement.h>
+#include <qore/intern/ExpressionStatement.h>
+#include <qore/intern/QoreOpcodeRegistry.h>
+
+// isTerminator() is now defined in QoreIR.h
+
+// Check if opcode produces a result value — delegates to registry
+static bool requiresResult(QoreIROpcode op) {
+    return getOpcodeProducesResult(static_cast<int>(op));
+}
+
+// Get expected operand count for opcode — delegates to registry
+static int expectedOperands(QoreIROpcode op) {
+    return getOpcodeExpectedOperands(static_cast<int>(op));
+}
+
+static const std::string& getOpcodeRegistryValidationError() {
+    static const std::string registry_error = []() {
+        std::string error;
+        if (!qore_ir_validate_opcode_registry(error)) {
+            return "IR opcode registry validation failed: " + error;
+        }
+        return std::string();
+    }();
+    return registry_error;
+}
+
+// Collect all branch targets (blocks that can be reached)
+static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const QoreIRFunction& func) {
+    std::unordered_set<const QoreIRBasicBlock*> targets;
+    // Entry block is always reachable
+    if (!func.blocks.empty()) {
+        targets.insert(func.blocks[0].get());
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            // Collect branch targets
+            if (auto* br = dynamic_cast<const QoreIRBranchInstruction*>(inst.get())) {
+                if (br->target) {
+                    targets.insert(br->target);
+                }
+            } else if (auto* brif = dynamic_cast<const QoreIRBranchIfInstruction*>(inst.get())) {
+                if (brif->true_target) {
+                    targets.insert(brif->true_target);
+                }
+                if (brif->false_target) {
+                    targets.insert(brif->false_target);
+                }
+            } else if (auto* invoke = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get())) {
+                if (invoke->normal_target) {
+                    targets.insert(invoke->normal_target);
+                }
+                if (invoke->exception_target) {
+                    targets.insert(invoke->exception_target);
+                }
+            } else if (auto* sw_int = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get())) {
+                for (const auto& case_info : sw_int->cases) {
+                    if (case_info.target) {
+                        targets.insert(case_info.target);
+                    }
+                }
+                if (sw_int->default_target) {
+                    targets.insert(sw_int->default_target);
+                }
+            } else if (auto* sw_str = dynamic_cast<const QoreIRSwitchStringInstruction*>(inst.get())) {
+                for (const auto& case_info : sw_str->cases) {
+                    if (case_info.target) {
+                        targets.insert(case_info.target);
+                    }
+                }
+                if (sw_str->default_target) {
+                    targets.insert(sw_str->default_target);
+                }
+            } else if (auto* thr = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                if (thr->exception_target) {
+                    targets.insert(thr->exception_target);
+                }
+            } else if (auto* inv_md = dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst.get())) {
+                if (inv_md->normal_target) {
+                    targets.insert(inv_md->normal_target);
+                }
+                if (inv_md->exception_target) {
+                    targets.insert(inv_md->exception_target);
+                }
+            } else if (auto* inv_de = dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get())) {
+                if (inv_de->normal_target) {
+                    targets.insert(inv_de->normal_target);
+                }
+                if (inv_de->exception_target) {
+                    targets.insert(inv_de->exception_target);
+                }
+            }
+            // Also check base class exception_target for other opcodes
+            if (inst->exception_target) {
+                targets.insert(inst->exception_target);
+            }
+        }
+    }
+    return targets;
+}
+
+bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
+    const std::string& registry_error = getOpcodeRegistryValidationError();
+    if (!registry_error.empty()) {
+        error = registry_error;
+        return false;
+    }
+
+    if (func.blocks.empty()) {
+        error = "function has no basic blocks";
+        return false;
+    }
+
+    // Collect branch targets to identify reachable blocks
+    std::unordered_set<const QoreIRBasicBlock*> reachable = collectBranchTargets(func);
+
+    std::unordered_set<const QoreIRBasicBlock*> block_set;
+    for (const auto& block : func.blocks) {
+        if (!block_set.insert(block.get()).second) {
+            error = "duplicate basic block pointer";
+            return false;
+        }
+        // Skip unreachable blocks - they may be empty/unterminated dead code
+        if (reachable.find(block.get()) == reachable.end()) {
+            continue;
+        }
+        if (block->instructions.empty()) {
+            error = "basic block '" + block->name + "' has no instructions";
+            return false;
+        }
+        const QoreIRInstruction* last = block->instructions.back().get();
+        if (!isTerminator(last->opcode)) {
+            error = "basic block '" + block->name + "' missing terminator";
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "VERIFIER: block '%s' has %zu instructions, last opcode=%d\n",
+                    block->name.c_str(), block->instructions.size(), static_cast<int>(last->opcode));
+                for (size_t i = 0; i < block->instructions.size(); ++i) {
+                    fprintf(stderr, "  inst[%zu]: opcode=%d\n", i,
+                        static_cast<int>(block->instructions[i]->opcode));
+                }
+                // Also dump all blocks
+                for (const auto& b : func.blocks) {
+                    fprintf(stderr, "BLOCK '%s' (%zu instructions):", b->name.c_str(), b->instructions.size());
+                    for (const auto& inst : b->instructions) {
+                        fprintf(stderr, " %d", static_cast<int>(inst->opcode));
+                    }
+                    fprintf(stderr, "\n");
+                }
+            }
+            return false;
+        }
+    }
+    std::unordered_set<uint32_t> value_ids;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (requiresResult(inst->opcode)) {
+                if (!inst->result.isValid()) {
+                    // Allow missing result when the opcode has optional_result set
+                    // (e.g., LValuePathUnary for void remove/delete statements)
+                    if (!getOpcodeOptionalResult(static_cast<int>(inst->opcode))) {
+                        error = "instruction missing result value: opcode=" + std::to_string(static_cast<int>(inst->opcode))
+                            + " in block '" + block->name + "'";
+                        return false;
+                    }
+                } else {
+                    if (!value_ids.insert(inst->result.id).second) {
+                        error = "duplicate result value id";
+                        return false;
+                    }
+                }
+            } else if (inst->result.isValid()) {
+                error = "unexpected result value: opcode="
+                    + std::to_string(static_cast<int>(inst->opcode))
+                    + " in block '" + block->name + "'";
+                return false;
+            }
+        }
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (!invoke_inst || !invoke_inst->normal_target
+                    || block_set.find(invoke_inst->normal_target) == block_set.end()
+                    || !invoke_inst->exception_target
+                    || block_set.find(invoke_inst->exception_target) == block_set.end()) {
+                    error = "invoke missing valid targets";
+                    return false;
+                }
+            }
+            if (inst->opcode == QoreIROpcode::InvokeMethodDirect) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst.get());
+                if (!invoke_inst || !invoke_inst->normal_target
+                    || block_set.find(invoke_inst->normal_target) == block_set.end()
+                    || !invoke_inst->exception_target
+                    || block_set.find(invoke_inst->exception_target) == block_set.end()) {
+                    error = "invoke.method.direct missing valid targets";
+                    return false;
+                }
+            }
+            if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
+                if (!invoke_inst || !invoke_inst->normal_target
+                    || block_set.find(invoke_inst->normal_target) == block_set.end()
+                    || !invoke_inst->exception_target
+                    || block_set.find(invoke_inst->exception_target) == block_set.end()) {
+                    error = "invoke.dot_eval_method.direct missing valid targets";
+                    return false;
+                }
+            }
+            int expected = expectedOperands(inst->opcode);
+            if (expected >= 0) {
+                // Exact operand count check
+                if (expected != static_cast<int>(inst->operands.size())) {
+                    error = "unexpected operand count for opcode " + std::to_string(static_cast<int>(inst->opcode))
+                        + " (expected " + std::to_string(expected) + ", got "
+                        + std::to_string(inst->operands.size()) + ")";
+                    return false;
+                }
+            } else if (expected <= -2) {
+                // Minimum operand count check: encoded as -(min + 2)
+                int min_operands = -(expected + 2);
+                if (static_cast<int>(inst->operands.size()) < min_operands) {
+                    error = "too few operands for opcode " + std::to_string(static_cast<int>(inst->opcode))
+                        + " (minimum " + std::to_string(min_operands) + ", got "
+                        + std::to_string(inst->operands.size()) + ")";
+                    return false;
+                }
+            }
+            // expected == -1: skip validation entirely (fully variable)
+            if ((inst->opcode == QoreIROpcode::LoadArg || inst->opcode == QoreIROpcode::LoadClosure)
+                    && inst->operands.size() > 1) {
+                error = "load.arg/load.closure only support zero or one operand";
+                return false;
+            }
+            for (const auto& op : inst->operands) {
+                if (!op.isValid()) {
+                    error = "invalid operand value id";
+                    return false;
+                }
+                if (value_ids.find(op.id) == value_ids.end()) {
+                    error = "operand references undefined value";
+                    return false;
+                }
+            }
+            if (inst->opcode == QoreIROpcode::Br) {
+                auto* br = dynamic_cast<const QoreIRBranchInstruction*>(inst.get());
+                if (!br || !br->target) {
+                    error = "branch missing target";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::BrIf) {
+                auto* br = dynamic_cast<const QoreIRBranchIfInstruction*>(inst.get());
+                if (!br || !br->condition.isValid()) {
+                    error = "branch-if missing condition";
+                    return false;
+                }
+                if (!br->true_target || !br->false_target) {
+                    error = "branch-if missing target";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::SwitchInt) {
+                auto* sw = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get());
+                if (!sw || !sw->switch_val.isValid()) {
+                    error = "switch.int missing switch value";
+                    return false;
+                }
+                if (!sw->default_target) {
+                    error = "switch.int missing default target";
+                    return false;
+                }
+                for (const auto& c : sw->cases) {
+                    if (!c.target) {
+                        error = "switch.int case missing target";
+                        return false;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::IteratorCreate) {
+                auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
+                if (!iter || !iter->iterable.isValid()) {
+                    error = "iterator.create missing iterable";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::IteratorNext) {
+                auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
+                if (!iter || !iter->iterator.isValid()) {
+                    error = "iterator.next missing iterator";
+                    return false;
+                }
+                if (!iter->done_target || !iter->continue_target) {
+                    error = "iterator.next missing targets";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::RefForeachInit) {
+                auto* rfi = dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst.get());
+                if (!rfi) {
+                    error = "ref.foreach.init instruction malformed";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::Return
+                    || inst->opcode == QoreIROpcode::ReturnNothing) {
+                auto* ret = dynamic_cast<const QoreIRReturnInstruction*>(inst.get());
+                if (!ret) {
+                    error = "return instruction malformed";
+                    return false;
+                }
+                if (inst->opcode == QoreIROpcode::Return && !ret->has_value) {
+                    error = "return missing value";
+                    return false;
+                }
+                if (inst->opcode == QoreIROpcode::ReturnNothing && ret->has_value) {
+                    error = "return.nothing has value";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::Phi) {
+                auto* phi = dynamic_cast<const QoreIRPhiInstruction*>(inst.get());
+                if (!phi) {
+                    error = "phi instruction malformed";
+                    return false;
+                }
+                if (phi->incoming.empty()) {
+                    error = "phi missing incoming values";
+                    return false;
+                }
+                if (phi->incoming.size() != inst->operands.size()) {
+                    error = "phi operands do not match incoming values";
+                    return false;
+                }
+                for (const auto& incoming : phi->incoming) {
+                    if (!incoming.block || block_set.find(incoming.block) == block_set.end()) {
+                        error = "phi references unknown block";
+                        return false;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::LoadClosure
+                    || inst->opcode == QoreIROpcode::StoreClosure) {
+                auto* local_inst = dynamic_cast<const QoreIRLocalInstruction*>(inst.get());
+                if (!local_inst || !local_inst->local) {
+                    error = "local instruction missing local";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::LoadGlobal
+                    || inst->opcode == QoreIROpcode::StoreGlobal
+                    || inst->opcode == QoreIROpcode::LoadThreadLocal
+                    || inst->opcode == QoreIROpcode::StoreThreadLocal) {
+                auto* var_inst = dynamic_cast<const QoreIRVarInstruction*>(inst.get());
+                if (!var_inst || !var_inst->var) {
+                    error = "variable instruction missing var";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::LoadLValue
+                    || inst->opcode == QoreIROpcode::StoreLValue
+                    || inst->opcode == QoreIROpcode::PreIncLValue
+                    || inst->opcode == QoreIROpcode::PreDecLValue
+                    || inst->opcode == QoreIROpcode::PostIncLValue
+                    || inst->opcode == QoreIROpcode::PostDecLValue
+                    || inst->opcode == QoreIROpcode::AddAssignLValue
+                    || inst->opcode == QoreIROpcode::SubAssignLValue
+                    || inst->opcode == QoreIROpcode::MulAssignLValue
+                    || inst->opcode == QoreIROpcode::DivAssignLValue
+                    || inst->opcode == QoreIROpcode::ModAssignLValue
+                    || inst->opcode == QoreIROpcode::AndAssignLValue
+                    || inst->opcode == QoreIROpcode::OrAssignLValue
+                    || inst->opcode == QoreIROpcode::XorAssignLValue
+                    || inst->opcode == QoreIROpcode::ShlAssignLValue
+                    || inst->opcode == QoreIROpcode::ShrAssignLValue) {
+                auto* lv_inst = dynamic_cast<const QoreIRLValueInstruction*>(inst.get());
+                if (!lv_inst || !lv_inst->lvalue.hasNode()) {
+                    error = "lvalue instruction missing lvalue";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::Call
+                    || inst->opcode == QoreIROpcode::CallIndirect
+                    || inst->opcode == QoreIROpcode::CallMethod
+                    || inst->opcode == QoreIROpcode::CallStatic
+                    || inst->opcode == QoreIROpcode::CastAny
+                    || inst->opcode == QoreIROpcode::CastList
+                    || inst->opcode == QoreIROpcode::CastHash
+                    || inst->opcode == QoreIROpcode::CastObject
+                    || inst->opcode == QoreIROpcode::CastEnum
+                    || inst->opcode == QoreIROpcode::ExtractAny
+                    || inst->opcode == QoreIROpcode::ExtractList
+                    || inst->opcode == QoreIROpcode::ExtractString
+                    || inst->opcode == QoreIROpcode::ExtractBinary
+                    || inst->opcode == QoreIROpcode::RemoveAny
+                    || inst->opcode == QoreIROpcode::RemoveList
+                    || inst->opcode == QoreIROpcode::RemoveHash
+                    || inst->opcode == QoreIROpcode::RemoveObject
+                    || inst->opcode == QoreIROpcode::RemoveString
+                    || inst->opcode == QoreIROpcode::RemoveBinary
+                    || inst->opcode == QoreIROpcode::KeysAny
+                    || inst->opcode == QoreIROpcode::KeysList
+                    || inst->opcode == QoreIROpcode::KeysHash
+                    || inst->opcode == QoreIROpcode::RegexMatchAny
+                    || inst->opcode == QoreIROpcode::RegexMatchBool
+                    || inst->opcode == QoreIROpcode::RegexNMatchBool
+                    || inst->opcode == QoreIROpcode::RegexExtractAny
+                    || inst->opcode == QoreIROpcode::RegexExtractList
+                    || inst->opcode == QoreIROpcode::RegexSubstAny
+                    || inst->opcode == QoreIROpcode::RegexSubstString
+                    || inst->opcode == QoreIROpcode::InstanceOfBool
+                    || inst->opcode == QoreIROpcode::TrimAny
+                    || inst->opcode == QoreIROpcode::TrimString
+                    || inst->opcode == QoreIROpcode::ChompAny
+                    || inst->opcode == QoreIROpcode::ChompString
+                    || inst->opcode == QoreIROpcode::TransliterateAny
+                    || inst->opcode == QoreIROpcode::TransliterateString
+                    || inst->opcode == QoreIROpcode::BackgroundInt
+                    || inst->opcode == QoreIROpcode::ListAssignAny
+                    || inst->opcode == QoreIROpcode::PopAny
+                    || inst->opcode == QoreIROpcode::PushAny
+                    || inst->opcode == QoreIROpcode::ExistsAny
+                    || inst->opcode == QoreIROpcode::ExistsBool
+                    || inst->opcode == QoreIROpcode::ElementsAny
+                    || inst->opcode == QoreIROpcode::ElementsInt
+                    || inst->opcode == QoreIROpcode::DotEvalAny
+                    || inst->opcode == QoreIROpcode::DotEvalInt
+                    || inst->opcode == QoreIROpcode::DotEvalFloat
+                    || inst->opcode == QoreIROpcode::DotEvalString
+                    || inst->opcode == QoreIROpcode::DotEvalDate
+                    || inst->opcode == QoreIROpcode::DotEvalList
+                    || inst->opcode == QoreIROpcode::DotEvalHash
+                    || inst->opcode == QoreIROpcode::DotEvalObject) {
+                auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
+                auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bg_inst) {
+                    if (bg_inst->kind != QoreIRBackgroundKind::DotEval || bg_inst->name.empty()
+                            || bg_inst->operands.empty()) {
+                        error = "background instruction missing native metadata";
+                        return false;
+                    }
+                } else if (!expr_inst || !expr_inst->expr.hasNode()) {
+                    error = "expr instruction missing expr";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::SwitchRegexMatch) {
+                auto* regex_inst = dynamic_cast<const QoreIRSwitchRegexMatchInstruction*>(inst.get());
+                if (!regex_inst || !regex_inst->regex_case) {
+                    error = "SwitchRegexMatch instruction missing regex_case";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::SwitchCaseMatch) {
+                auto* case_inst = dynamic_cast<const QoreIRSwitchCaseMatchInstruction*>(inst.get());
+                if (!case_inst || !case_inst->case_node) {
+                    error = "SwitchCaseMatch instruction missing case_node";
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (!invoke_inst || !invoke_inst->expr.hasNode()) {
+                    error = "invoke instruction missing expr";
+                    return false;
+                }
+            } else if (isPluginDispatchOpcode(inst->opcode)) {
+                auto* plugin_inst = dynamic_cast<const QoreIRPluginInstruction*>(inst.get());
+                if (!plugin_inst || !plugin_inst->operation.isValid()) {
+                    error = "plugin dispatch instruction missing operation reference";
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+// --- IR-only local classification ---
+
+//! Returns true if the opcode is a delegate-to-AST statement that executes through
+//! StatementBlock::exec() and could access any local on the thread-local variable stack.
+static bool isDelegateToASTStatement(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Summarize:     // Summarize statement delegates to AST
+        case QoreIROpcode::MapSelectAny:  // Delegate-to-AST functional operator
+        case QoreIROpcode::HashMapAny:    // Delegate-to-AST functional operator
+        case QoreIROpcode::HashMapSelectAny: // Delegate-to-AST functional operator
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Returns true if the opcode is a lvalue operation that modifies variables through
+//! the runtime stack (not through StoreLocal).
+static bool isLValueOp(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::LoadLValue:
+        case QoreIROpcode::StoreLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue:
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::UnshiftLValue:
+        case QoreIROpcode::SpliceLValue:
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Recursively walk an AST expression tree and collect all local variable keys
+//! (LocalVar* as void*) referenced by VarRefNode leaves.
+//!
+//! IMPORTANT: This walker is conservative — for any unrecognized node type,
+//! it sets `unknown_node_found` to true, which causes the caller to treat
+//! ALL locals as AST-visible.  This ensures correctness even if new AST node
+//! types are added to Qore.
+static void collectLocalsFromExpr(const QoreValue& expr,
+        std::unordered_set<const void*>& ast_locals, bool& unknown_node_found) {
+    if (!expr.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return;
+    }
+
+    qore_type_t ntype = expr.getType();
+
+    // VarRefNode — leaf node, check if it's a local variable
+    if (ntype == NT_VARREF) {
+        auto* var_ref = reinterpret_cast<const VarRefNode*>(node);
+        qore_var_t type = var_ref->getType();
+        if ((type == VT_LOCAL || type == VT_LOCAL_TS || type == VT_CLOSURE) && var_ref->ref.id) {
+            ast_locals.insert(reinterpret_cast<const void*>(var_ref->ref.id));
+        }
+        // VarRefNewObjectNode inherits from both VarRefNode and FunctionCallBase;
+        // its constructor args may reference locals that are evaluated through AST
+        if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            if (const QoreParseListNode* pargs = vrn->getParseArgs()) {
+                for (size_t i = 0; i < pargs->size(); ++i) {
+                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found);
+                }
+            }
+            if (const QoreListNode* eargs = vrn->getArgs()) {
+                ConstListIterator li(eargs);
+                while (li.next()) {
+                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+                }
+            }
+        }
+        return;
+    }
+
+    // Self variable reference — leaf node (not a local, no children)
+    if (ntype == NT_SELF_VARREF) {
+        return;
+    }
+
+    // Constants and literals — leaf nodes
+    if (ntype == NT_STRING || ntype == NT_INT || ntype == NT_FLOAT || ntype == NT_BOOLEAN
+            || ntype == NT_NOTHING || ntype == NT_NULL || ntype == NT_NUMBER
+            || ntype == NT_DATE || ntype == NT_BINARY || ntype == NT_HASH
+            || ntype == NT_LIST || ntype == NT_BACKQUOTE) {
+        return;
+    }
+
+    // Binary operators: recurse left and right
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Binary int-specific operators (inherit separately from QoreBinaryOperatorNode<>)
+    if (auto* binop = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Unary/single expression operators: recurse expression
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // LValue single expression operators
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Single-value expression operators (e.g., exists, which inherits from
+    // QoreSingleValueExpressionOperatorNode<QoreOperatorNode>)
+    if (auto* unop = dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>(node)) {
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Dot eval operator (method call on object): left.method()
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found);
+        // Method call node has args that might reference locals
+        if (const MethodCallNode* m = dot->getMethodCall()) {
+            if (const QoreParseListNode* pargs = m->getParseArgs()) {
+                for (size_t i = 0; i < pargs->size(); ++i) {
+                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found);
+                }
+            }
+            // Also check resolved args — after parse resolution, locals may only
+            // be in the resolved args list
+            if (const QoreListNode* rargs = m->getArgs()) {
+                ConstListIterator li(rargs);
+                while (li.next()) {
+                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+                }
+            }
+        }
+        return;
+    }
+
+    // Function calls (FunctionCallNode, SelfFunctionCallNode, StaticMethodCallNode,
+    // MethodCallNode — all inherit from FunctionCallBase)
+    if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
+        if (const QoreParseListNode* args = call->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found);
+            }
+        }
+        if (const QoreListNode* args = call->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+            }
+        }
+        return;
+    }
+
+    // Call reference calls: adder(32)
+    if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        collectLocalsFromExpr(crc->getExp(), ast_locals, unknown_node_found);
+        if (const QoreParseListNode* args = crc->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found);
+            }
+        }
+        if (const QoreListNode* args = crc->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+            }
+        }
+        return;
+    }
+
+    // Object method reference: \obj.method() — recurse into the object expression
+    if (ntype == NT_OBJMETHREF) {
+        if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+            collectLocalsFromExpr(omr->getExp(), ast_locals, unknown_node_found);
+        }
+        // ParseSelfMethodReferenceNode, ParseScopedSelfMethodReferenceNode,
+        // StaticMethodReferenceNode have no local variable references (self-based)
+        return;
+    }
+
+    // Parse reference: \var — recurse into the lvalue expression
+    if (ntype == NT_PARSEREFERENCE) {
+        auto* pref = reinterpret_cast<const ParseReferenceNode*>(node);
+        collectLocalsFromExpr(pref->getLVExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
+    // Parse list: recurse all elements
+    if (ntype == NT_PARSE_LIST) {
+        auto* plist = expr.get<const QoreParseListNode>();
+        for (size_t i = 0; i < plist->size(); ++i) {
+            collectLocalsFromExpr(plist->get(i), ast_locals, unknown_node_found);
+        }
+        return;
+    }
+
+    // Unknown node type — conservatively mark for fallback
+    unknown_node_found = true;
+}
+
+//! Recursively walk an expression in source order and collect LocalVar* slots
+//! needed to serialize embedded AST expression trees.
+static void collectLocalSlotsFromExpr(const QoreValue& expr,
+        std::vector<const LocalVar*>& locals, std::unordered_set<const void*>& seen) {
+    if (!expr.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return;
+    }
+
+    auto addVarRef = [&locals, &seen](const VarRefNode* var_ref) {
+        qore_var_t type = var_ref->getType();
+        if ((type == VT_LOCAL || type == VT_LOCAL_TS || type == VT_CLOSURE) && var_ref->ref.id) {
+            const void* key = reinterpret_cast<const void*>(var_ref->ref.id);
+            if (seen.insert(key).second) {
+                locals.push_back(reinterpret_cast<const LocalVar*>(var_ref->ref.id));
+            }
+        }
+    };
+    auto addLocalVar = [&locals, &seen](const LocalVar* lv) {
+        if (!lv) {
+            return;
+        }
+        const void* key = reinterpret_cast<const void*>(lv);
+        if (seen.insert(key).second) {
+            locals.push_back(lv);
+        }
+    };
+
+    qore_type_t ntype = expr.getType();
+    if (ntype == NT_VARREF) {
+        auto* var_ref = reinterpret_cast<const VarRefNode*>(node);
+        addVarRef(var_ref);
+        if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            if (const QoreParseListNode* pargs = vrn->getParseArgs()) {
+                for (size_t i = 0; i < pargs->size(); ++i) {
+                    collectLocalSlotsFromExpr(pargs->get(i), locals, seen);
+                }
+            }
+            if (const QoreListNode* eargs = vrn->getArgs()) {
+                ConstListIterator li(eargs);
+                while (li.next()) {
+                    collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+                }
+            }
+        }
+        return;
+    }
+
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+        collectLocalSlotsFromExpr(binop->getLeft(), locals, seen);
+        collectLocalSlotsFromExpr(binop->getRight(), locals, seen);
+        return;
+    }
+    if (auto* binop = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+        collectLocalSlotsFromExpr(binop->getLeft(), locals, seen);
+        collectLocalSlotsFromExpr(binop->getRight(), locals, seen);
+        return;
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+        collectLocalSlotsFromExpr(unop->getExp(), locals, seen);
+        return;
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+        collectLocalSlotsFromExpr(unop->getExp(), locals, seen);
+        return;
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>(node)) {
+        collectLocalSlotsFromExpr(unop->getExp(), locals, seen);
+        return;
+    }
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        collectLocalSlotsFromExpr(dot->getExpression(), locals, seen);
+        if (const MethodCallNode* m = dot->getMethodCall()) {
+            if (const QoreParseListNode* pargs = m->getParseArgs()) {
+                for (size_t i = 0; i < pargs->size(); ++i) {
+                    collectLocalSlotsFromExpr(pargs->get(i), locals, seen);
+                }
+            }
+            if (const QoreListNode* rargs = m->getArgs()) {
+                ConstListIterator li(rargs);
+                while (li.next()) {
+                    collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+                }
+            }
+        }
+        return;
+    }
+    if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
+        if (const QoreParseListNode* args = call->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalSlotsFromExpr(args->get(i), locals, seen);
+            }
+        }
+        if (const QoreListNode* args = call->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+            }
+        }
+        return;
+    }
+    if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        collectLocalSlotsFromExpr(crc->getExp(), locals, seen);
+        if (const QoreParseListNode* args = crc->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalSlotsFromExpr(args->get(i), locals, seen);
+            }
+        }
+        if (const QoreListNode* args = crc->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+            }
+        }
+        return;
+    }
+    if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
+        if (const LVarSet* vlist = closure->getVList()) {
+            for (LocalVar* lv : *vlist) {
+                addLocalVar(lv);
+            }
+        }
+        return;
+    }
+    if (ntype == NT_OBJMETHREF) {
+        if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+            collectLocalSlotsFromExpr(omr->getExp(), locals, seen);
+        }
+        return;
+    }
+    if (ntype == NT_PARSEREFERENCE) {
+        auto* pref = reinterpret_cast<const ParseReferenceNode*>(node);
+        collectLocalSlotsFromExpr(pref->getLVExp(), locals, seen);
+        return;
+    }
+    if (ntype == NT_PARSE_LIST) {
+        auto* plist = expr.get<const QoreParseListNode>();
+        for (size_t i = 0; i < plist->size(); ++i) {
+            collectLocalSlotsFromExpr(plist->get(i), locals, seen);
+        }
+    }
+}
+
+//! Recursively walks a StatementBlock AST tree to find all local variable references.
+//! This is used to determine which locals are referenced by on_block_exit handler bodies
+//! so they can be excluded from IR-only classification.
+static void collectLocalsFromStatementBlock(const StatementBlock* block,
+        std::unordered_set<const void*>& ast_locals, bool& unknown_node_found) {
+    if (!block) {
+        return;
+    }
+    for (const auto* stmt : block->getStatements()) {
+        if (!stmt) {
+            continue;
+        }
+        // ExpressionStatement: walk expression
+        if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
+            collectLocalsFromExpr(expr_stmt->getExpression(), ast_locals, unknown_node_found);
+            continue;
+        }
+        // IfStatement: walk condition, then-block, else-block
+        if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+            collectLocalsFromExpr(if_stmt->getCond(), ast_locals, unknown_node_found);
+            collectLocalsFromStatementBlock(if_stmt->getIfCode(), ast_locals,
+                    unknown_node_found);
+            collectLocalsFromStatementBlock(if_stmt->getElseCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // WhileStatement / DoWhileStatement: walk condition, body
+        if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
+            collectLocalsFromExpr(while_stmt->getCond(), ast_locals, unknown_node_found);
+            collectLocalsFromStatementBlock(while_stmt->getCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // ForStatement: walk init, condition, increment, body
+        if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+            collectLocalsFromExpr(for_stmt->getAssignment(), ast_locals, unknown_node_found);
+            collectLocalsFromExpr(for_stmt->getCond(), ast_locals, unknown_node_found);
+            collectLocalsFromExpr(for_stmt->getIterator(), ast_locals, unknown_node_found);
+            collectLocalsFromStatementBlock(for_stmt->getCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // ForEachStatement: walk variable, list, body
+        if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
+            collectLocalsFromExpr(foreach_stmt->getVar(), ast_locals, unknown_node_found);
+            collectLocalsFromExpr(foreach_stmt->getList(), ast_locals, unknown_node_found);
+            collectLocalsFromStatementBlock(foreach_stmt->getCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // SwitchStatement: walk switch expression, case expressions and blocks
+        if (auto* switch_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
+            collectLocalsFromExpr(switch_stmt->getSwitchExp(), ast_locals,
+                    unknown_node_found);
+            for (const CaseNode* cn = switch_stmt->getCases(); cn; cn = cn->next) {
+                collectLocalsFromExpr(cn->val, ast_locals, unknown_node_found);
+                collectLocalsFromStatementBlock(cn->code, ast_locals, unknown_node_found);
+            }
+            continue;
+        }
+        // TryStatement: walk try block, catch block
+        if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
+            collectLocalsFromStatementBlock(try_stmt->getTryBlock(), ast_locals,
+                    unknown_node_found);
+            collectLocalsFromStatementBlock(try_stmt->getCatchBlock(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // ReturnStatement: walk return expression
+        if (auto* ret_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
+            collectLocalsFromExpr(ret_stmt->getExpression(), ast_locals, unknown_node_found);
+            continue;
+        }
+        // ThrowStatement: walk throw args
+        if (auto* throw_stmt = dynamic_cast<const ThrowStatement*>(stmt)) {
+            collectLocalsFromExpr(throw_stmt->getArgs(), ast_locals, unknown_node_found);
+            continue;
+        }
+        // OnBlockExitStatement: walk handler body
+        if (auto* obe_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
+            collectLocalsFromStatementBlock(obe_stmt->getCode(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // DebugStatement: walk expression or block
+        if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
+            if (debug_stmt->getBlock()) {
+                collectLocalsFromStatementBlock(debug_stmt->getBlock(), ast_locals,
+                        unknown_node_found);
+            }
+            if (debug_stmt->getExpression()) {
+                collectLocalsFromExpr(debug_stmt->getExpression(), ast_locals,
+                        unknown_node_found);
+            }
+            continue;
+        }
+        // AssertStatement: walk condition expression
+        if (auto* assert_stmt = dynamic_cast<const AssertStatement*>(stmt)) {
+            collectLocalsFromExpr(assert_stmt->getCondition(), ast_locals,
+                    unknown_node_found);
+            continue;
+        }
+        // Nested StatementBlock: recurse
+        if (auto* sub_block = dynamic_cast<const StatementBlock*>(stmt)) {
+            collectLocalsFromStatementBlock(sub_block, ast_locals, unknown_node_found);
+            continue;
+        }
+        // Unknown statement type — conservatively mark for fallback
+        unknown_node_found = true;
+    }
+}
+
+//! Extracts the AST expression from an instruction that stores one.
+//! Returns nullptr if the instruction type doesn't have an expr field.
+static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        // QoreIRExprInstruction (Call, CallIndirect, CallMethod, CallStatic, CallClosureDirect, and other expr-based ops)
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallClosureDirect:
+            return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
+
+        // CallDirect, CallStaticDirect, DotEvalMethodDirect, and InvokeDotEvalMethodDirect have expr fields,
+        // but they pre-evaluate all arguments into IR operands. The expr args are only used by AOT serialization,
+        // not re-evaluated at JIT runtime. Returning nullptr prevents incorrect classification of call args as
+        // AST-visible locals, allowing parameters to be properly classified as IR-only.
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+            return nullptr;
+
+        // Invoke has its own instruction class.  When operands are present for
+        // natively lowered invoke opcodes, the expression is metadata only
+        // (target identity, regex/type information, etc.) and its argument/base
+        // subtrees are not re-evaluated at runtime.  Walking those trees here
+        // marks operand locals AST-visible and forces unnecessary runtime-stack
+        // reloads after every call in hot AOT loops.
+        case QoreIROpcode::Invoke: {
+            const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
+            switch (inv->invoke_opcode) {
+                case QoreIROpcode::Call:
+                case QoreIROpcode::CallDirect:
+                case QoreIROpcode::CallIndirect:
+                case QoreIROpcode::CallMethod:
+                case QoreIROpcode::CallMethodDirect:
+                case QoreIROpcode::CallStatic:
+                case QoreIROpcode::CallStaticDirect:
+                    return nullptr;
+
+                case QoreIROpcode::RegexMatchBool:
+                case QoreIROpcode::RegexNMatchBool:
+                case QoreIROpcode::RegexExtractAny:
+                case QoreIROpcode::RegexExtractList:
+                case QoreIROpcode::ExistsAny:
+                case QoreIROpcode::ExistsBool:
+                case QoreIROpcode::InstanceOfBool:
+                case QoreIROpcode::KeysAny:
+                case QoreIROpcode::KeysList:
+                case QoreIROpcode::KeysHash:
+                case QoreIROpcode::ElementsAny:
+                case QoreIROpcode::ElementsInt:
+                case QoreIROpcode::CastAny:
+                case QoreIROpcode::CastList:
+                case QoreIROpcode::CastHash:
+                case QoreIROpcode::CastComplexHash:
+                case QoreIROpcode::CastObject:
+                case QoreIROpcode::CastEnum:
+                    return inv->operands.empty() ? &inv->expr : nullptr;
+
+                case QoreIROpcode::ListAssignAny:
+                    return inv->operands.size() >= 2 ? nullptr : &inv->expr;
+
+                case QoreIROpcode::RangeSliceAny:
+                case QoreIROpcode::RangeSliceInt:
+                case QoreIROpcode::RangeSliceFloat:
+                    return inv->operands.size() >= 3 ? nullptr : &inv->expr;
+
+                default:
+                    return &inv->expr;
+            }
+        }
+
+        // Native access opcodes with expr fields
+        case QoreIROpcode::LoadStaticVar:
+            return &static_cast<const QoreIRStaticVarInstruction*>(inst)->expr;
+        case QoreIROpcode::NewObject:
+            // NewObject has no expr field — class/variant are stored directly
+            // and args are IR operands, not AST nodes.
+            return nullptr;
+        case QoreIROpcode::LoadConstant:
+            return &static_cast<const QoreIRLoadConstantInstruction*>(inst)->expr;
+
+        // Closure/reference creation opcodes with expr fields
+        case QoreIROpcode::CreateClosure:
+            return &static_cast<const QoreIRCreateClosureInstruction*>(inst)->expr;
+        case QoreIROpcode::CreateCallRef:
+            return &static_cast<const QoreIRCreateCallRefInstruction*>(inst)->expr;
+        case QoreIROpcode::CreateMethodRef:
+            return &static_cast<const QoreIRCreateMethodRefInstruction*>(inst)->expr;
+        case QoreIROpcode::CreateParseRef:
+            return &static_cast<const QoreIRCreateParseRefInstruction*>(inst)->expr;
+
+        // Container construction opcodes with expr fields
+        case QoreIROpcode::NewHashDecl:
+            return &static_cast<const QoreIRNewHashDeclInstruction*>(inst)->expr;
+        case QoreIROpcode::NewComplexHash:
+            return &static_cast<const QoreIRNewComplexHashInstruction*>(inst)->expr;
+        case QoreIROpcode::NewComplexList:
+            return &static_cast<const QoreIRNewComplexListInstruction*>(inst)->expr;
+        case QoreIROpcode::NewComplexBuffer:
+            return &static_cast<const QoreIRNewComplexBufferInstruction*>(inst)->expr;
+
+        // VarRefNewObjectNode construction
+        case QoreIROpcode::VrnConstruct:
+            return &static_cast<const QoreIRVrnConstructInstruction*>(inst)->expr;
+
+        // Native-lowered expression opcodes keep expr metadata for constants,
+        // regex/type details, or fallback identity.  When operands are present,
+        // the operand subtrees have already been lowered and are not evaluated
+        // through the AST at runtime.
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum: {
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            return expr_inst->operands.empty() ? &expr_inst->expr : nullptr;
+        }
+
+        case QoreIROpcode::ListAssignAny: {
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            return expr_inst->operands.size() >= 2 ? nullptr : &expr_inst->expr;
+        }
+
+        // DotEval opcodes delegate method calls to AST — the expr contains the
+        // full QoreDotEvalOperatorNode including argument expressions that may
+        // reference locals.
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        // NOTE: AddAssignLValue/SubAssignLValue are QoreIRLValueInstruction, not
+        // QoreIRExprInstruction — they are handled by isLValueOp() + line 1008
+        // Elements/size ops delegate to AST
+        // Map/select/cast ops delegate to AST
+        case QoreIROpcode::MapSelectList:
+        case QoreIROpcode::MapSelectAny:
+        case QoreIROpcode::HashMap:
+        case QoreIROpcode::HashMapSelect:
+        case QoreIROpcode::HashMapAny:
+        case QoreIROpcode::HashMapSelectAny:
+        case QoreIROpcode::InvokeSimError:
+        // Lvalue-modifying expression ops (modify variables via AST LValueHelper)
+        // These delegate to AST and read local variables from the thread-local stack.
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::ExtractAny:
+        case QoreIROpcode::ExtractList:
+        case QoreIROpcode::ExtractString:
+        case QoreIROpcode::ExtractBinary:
+        case QoreIROpcode::RemoveAny:
+        case QoreIROpcode::RemoveList:
+        case QoreIROpcode::RemoveHash:
+        case QoreIROpcode::RemoveObject:
+        case QoreIROpcode::RemoveString:
+        case QoreIROpcode::RemoveBinary:
+        case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::RegexSubstString:
+        case QoreIROpcode::TrimAny:
+        case QoreIROpcode::TrimString:
+        case QoreIROpcode::ChompAny:
+        case QoreIROpcode::ChompString:
+        case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::TransliterateString:
+        // Keys/exists/background ops delegate to AST
+        case QoreIROpcode::BackgroundInt:
+            if (dynamic_cast<const QoreIRBackgroundInstruction*>(inst)) {
+                return nullptr;
+            }
+            return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
+
+        default:
+            return nullptr;
+    }
+}
+
+//! Extracts an expression that is kept only so AOT serialization can rebuild
+//! call identity metadata. These expressions are not runtime AST fallbacks, but
+//! their local references still need slots in serialized nested IR functions.
+static const QoreValue* getSerializationOnlyInstructionExpr(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::CallDirect:
+            return &static_cast<const QoreIRCallDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::CallMethodDirect: {
+            const QoreValue& expr = static_cast<const QoreIRCallMethodDirectInstruction*>(inst)->expr;
+            return expr ? &expr : nullptr;
+        }
+        case QoreIROpcode::InvokeMethodDirect: {
+            const QoreValue& expr = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)->expr;
+            return expr ? &expr : nullptr;
+        }
+        case QoreIROpcode::CallStaticDirect:
+            return &static_cast<const QoreIRCallStaticDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::DotEvalMethodDirect:
+            return &static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+            return &static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)->expr;
+        default:
+            return nullptr;
+    }
+}
+
+//! Returns true if the opcode is a call/invoke that could trigger AST evaluation
+//! and potentially access locals through the thread-local variable stack.
+static bool isCallOrInvoke(QoreIROpcode op) {
+    switch (op) {
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::Invoke:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void collectLocalsFromIRFunction(const QoreIRFunction& func,
+        std::unordered_set<const void*>& ast_locals,
+        bool& unknown_node_found) {
+    auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
+        collectLocalsFromExpr(ctx_inst->exp, ast_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->where_exp, ast_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->sort_exp, ast_locals, unknown_node_found);
+    };
+
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::LoadLocal ||
+                    inst->opcode == QoreIROpcode::StoreLocal ||
+                    inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                if (linst->local) {
+                    ast_locals.insert(reinterpret_cast<const void*>(linst->local));
+                }
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                if (fused->target) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->target));
+                }
+                if (fused->source) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->source));
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst.get());
+                if (fused->local) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->local));
+                }
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
+                if (fused->lhs) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->lhs));
+                }
+                if (fused->rhs) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->rhs));
+                }
+            }
+
+            if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                auto* pi = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                for (const auto& step : pi->path) {
+                    if ((step.kind == LVPathStepKind::LocalVar
+                            || step.kind == LVPathStepKind::ClosureVar)
+                            && step.ref_ptr) {
+                        ast_locals.insert(step.ref_ptr);
+                    }
+                }
+            }
+
+            if (isLValueOp(inst->opcode)) {
+                auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
+                collectLocalsFromExpr(lvinst->lvalue, ast_locals, unknown_node_found);
+            }
+            if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                collectLocalsFromExpr(*expr, ast_locals, unknown_node_found);
+            }
+
+            if (inst->opcode == QoreIROpcode::Context) {
+                collect_context_exprs(static_cast<const QoreIRContextInstruction*>(inst.get()));
+            }
+
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                if (obe_inst->stmt) {
+                    collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
+                            ast_locals, unknown_node_found);
+                }
+                if (obe_inst->handler_ir) {
+                    collectLocalsFromIRFunction(*obe_inst->handler_ir,
+                            ast_locals, unknown_node_found);
+                }
+            }
+        }
+    }
+}
+
+bool QoreIRFunction::isDirectParamsRuntimeSafe() const {
+    if (!direct_params_eligible) {
+        return false;
+    }
+
+    for (const auto& i : param_local_vars) {
+        const LocalVar* lv = i.second;
+        if (lv && lv->closureUse()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void QoreIRFunction::computeIROnlyLocals() {
+    ir_only_locals.clear();
+
+    // Collect all locals referenced by LoadLocal/StoreLocal/UninstantiateLocal
+    std::unordered_set<const void*> all_locals;
+
+    // Collect all locals referenced by AST expression trees in Call/Invoke/Lvalue
+    // instructions.  These locals are accessed through the runtime stack (not through
+    // LoadLocal/StoreLocal) and MUST remain AST-visible.
+    std::unordered_set<const void*> ast_referenced_locals;
+
+    // Track whether the function has any delegate-to-AST statements
+    bool has_delegate_to_ast = false;
+
+    // If the AST walker encounters an unknown node type, we conservatively
+    // mark ALL locals as AST-visible.
+    bool unknown_node_found = false;
+    auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
+        collectLocalsFromExpr(ctx_inst->exp, ast_referenced_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->where_exp, ast_referenced_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->sort_exp, ast_referenced_locals, unknown_node_found);
+    };
+
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            // Collect locals from LoadLocal/StoreLocal/UninstantiateLocal
+            if (inst->opcode == QoreIROpcode::LoadLocal ||
+                    inst->opcode == QoreIROpcode::StoreLocal ||
+                    inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                if (linst->local) {
+                    all_locals.insert(reinterpret_cast<const void*>(linst->local));
+                }
+            }
+            // Collect locals from fused local int instructions
+            if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                if (fused->target) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->target));
+                }
+                if (fused->source) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->source));
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst.get());
+                if (fused->local) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->local));
+                }
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
+                if (fused->lhs) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->lhs));
+                }
+                if (fused->rhs) {
+                    all_locals.insert(reinterpret_cast<const void*>(fused->rhs));
+                }
+            }
+
+            // LValuePath operations: locals in path steps are accessed through the
+            // runtime variable stack (via navigatePath), not through LoadLocal/StoreLocal.
+            // They must NOT be classified as IR-only.
+            if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                auto* pi = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                for (const auto& step : pi->path) {
+                    if ((step.kind == LVPathStepKind::LocalVar
+                            || step.kind == LVPathStepKind::ClosureVar)
+                            && step.ref_ptr) {
+                        ast_referenced_locals.insert(step.ref_ptr);
+                    }
+                }
+            }
+
+            // HashKeyStore/HashKeyStoreDynamic/ListIndexStore can trigger a
+            // copy-on-write in their helper, which calls qore_rt_assign_local
+            // to install the COW'd container back into the runtime slot. The
+            // LLVM codegen explicitly calls reloadLocalFromRuntime() after the
+            // helper so subsequent LoadLocal(container) reads the updated
+            // hash/list — but reloadLocalFromRuntime() early-exits for IR-only
+            // locals (the alloca cache is assumed authoritative). Mark these
+            // container locals AST-visible so COW updates propagate back to
+            // the alloca.
+            if (inst->opcode == QoreIROpcode::HashKeyStore) {
+                auto* hks = static_cast<const QoreIRHashKeyStoreInstruction*>(inst.get());
+                if (hks->container_lv) {
+                    ast_referenced_locals.insert(
+                        reinterpret_cast<const void*>(hks->container_lv));
+                } else if (hks->container && hks->container->ref.id) {
+                    ast_referenced_locals.insert(hks->container->ref.id);
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                auto* hksd = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
+                if (hksd->container_lv) {
+                    ast_referenced_locals.insert(
+                        reinterpret_cast<const void*>(hksd->container_lv));
+                } else if (hksd->container && hksd->container->ref.id) {
+                    ast_referenced_locals.insert(hksd->container->ref.id);
+                }
+            } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
+                auto* lis = static_cast<const QoreIRListIndexStoreInstruction*>(inst.get());
+                if (lis->container && lis->container->ref.id) {
+                    ast_referenced_locals.insert(lis->container->ref.id);
+                }
+            }
+
+            // Lvalue operations: walk the lvalue AST expression for local references
+            if (isLValueOp(inst->opcode)) {
+                auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
+                collectLocalsFromExpr(lvinst->lvalue, ast_referenced_locals,
+                        unknown_node_found);
+            }
+
+            // Walk the expr AST tree for any instruction type that stores one
+            if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                collectLocalsFromExpr(*expr, ast_referenced_locals,
+                        unknown_node_found);
+            }
+
+            // ContextInit evaluates its context data, where, and sort
+            // expressions through the AST runtime helper; locals referenced by
+            // those expressions must therefore remain visible on the runtime
+            // local stack and cannot be classified as IR-only.
+            if (inst->opcode == QoreIROpcode::Context) {
+                collect_context_exprs(static_cast<const QoreIRContextInstruction*>(inst.get()));
+            }
+
+            if (isDelegateToASTStatement(inst->opcode)) {
+                has_delegate_to_ast = true;
+            }
+
+            // OnBlockExit: walk handler body AST to find referenced locals.
+            // Only those locals must remain AST-visible — others can be IR-only.
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                if (obe_inst->stmt) {
+                    collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
+                            ast_referenced_locals, unknown_node_found);
+                }
+                if (obe_inst->handler_ir) {
+                    collectLocalsFromIRFunction(*obe_inst->handler_ir,
+                            ast_referenced_locals, unknown_node_found);
+                }
+            }
+        }
+    }
+
+    // Store total local count for Phase 4 optimization (selective reload skip)
+    total_local_count = all_locals.size();
+
+    // If the function has delegate-to-AST statements, ALL locals are AST-visible
+    // because the AST execution could access any local through the thread-local stack.
+    if (has_delegate_to_ast) {
+        ast_visible_body_locals = all_body_locals;
+        printd(5, "computeIROnlyLocals '%s': has_delegate_to_ast, all AST-visible\n", name.c_str());
+        return;  // ir_only_locals stays empty — all locals are AST-visible
+    }
+
+    // If the AST walker hit an unknown node type, conservatively treat all locals
+    // as AST-visible.  This ensures correctness even for unhandled AST structures.
+    if (unknown_node_found) {
+        ast_visible_body_locals = all_body_locals;
+        printd(5, "computeIROnlyLocals '%s': unknown_node_found, all AST-visible\n", name.c_str());
+        return;
+    }
+
+    printd(5, "computeIROnlyLocals '%s': all_locals=%d ast_referenced=%d\n",
+        name.c_str(), (int)all_locals.size(), (int)ast_referenced_locals.size());
+
+    // A local is IR-only if:
+    // 1. It appears in LoadLocal/StoreLocal/UninstantiateLocal (the IR access path)
+    // 2. It is NOT referenced by any AST expression tree (Call/Invoke/Lvalue exprs)
+    // 3. It is NOT a reference type (which can alias other variables)
+    for (const void* key : all_locals) {
+        const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
+        // Local appears in AST expression trees — must stay AST-visible
+        if (ast_referenced_locals.count(key)) {
+            printd(5, "  local '%s' (%p): AST-referenced (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        // Closure-captured locals use the closure variable stack (not the regular
+        // local variable stack).  qore_rt_assign_local routes through the closure
+        // stack when closure_use is true, so we must NOT skip it.
+        if (lv->closureUse()) {
+            printd(5, "  local '%s' (%p): closure-captured (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        // Top-level locals are program-wide lexical variables.  A function can
+        // read or write them without an AST subtree in the current function,
+        // so intra-function IR-only analysis cannot prove runtime-stack sync
+        // is unnecessary.
+        if (lv->isTopLevel()) {
+            printd(5, "  local '%s' (%p): top-level (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        // Reference-type locals can alias other variables — must stay AST-visible
+        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
+            printd(5, "  local '%s' (%p): reference type (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        // Block-scoped object-typed locals need runtime stack sync for timely
+        // destructor execution at scope exit. UninstantiateLocal calls
+        // qore_rt_clear_local to trigger destructors (e.g., AutoLock::destructor
+        // calls Mutex::unlock), but the ir-only path skips qore_rt_clear_local
+        // because the runtime stack is never written. Keep these AST-visible so
+        // StoreLocal syncs to the runtime stack and UninstantiateLocal properly
+        // clears it.
+        if (QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo())) {
+            printd(5, "  local '%s' (%p): block-scoped object type (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        printd(5, "  local '%s' (%p): IR-ONLY\n", lv->getName(), key);
+        ir_only_locals.insert(key);
+    }
+
+    // Build filtered instantiation list: body locals NOT classified as IR-only.
+    ast_visible_body_locals.clear();
+    for (LocalVar* lv : all_body_locals) {
+        if (!ir_only_locals.count(reinterpret_cast<const void*>(lv))) {
+            ast_visible_body_locals.push_back(lv);
+        }
+    }
+
+}
+
+// Defined in QoreIRInterpreter.cpp
+extern const VarRefNode* extractLValueBaseVarRef(const QoreValue&);
+
+void QoreIRFunction::computeSlotIdsAndEmbed() {
+    // Pass 1: Compute max value ID for right-sizing interpreter value vector
+    // AND compute local variable slot IDs for flat array access in interpreter
+    uint32_t max_vid = 0;
+    std::unordered_map<const LocalVar*, uint32_t> slot_map;
+
+    uint32_t next_local_slot = 0;
+    // Preserve any slots assigned before this pass.  Function signatures seed
+    // parameter/argv/self slots here so direct-parameter calls cannot collide
+    // with scoped body locals; handler IR uses the same path for parent slots.
+    std::unordered_set<uint32_t> used_local_slots;
+    for (const auto& [lvar, slot_id] : local_var_slots) {
+        if (lvar) {
+            uint32_t sid = slot_id;
+            if (!used_local_slots.insert(sid).second) {
+                while (used_local_slots.find(next_local_slot) != used_local_slots.end()) {
+                    ++next_local_slot;
+                }
+                sid = next_local_slot++;
+                used_local_slots.insert(sid);
+            }
+            slot_map[lvar] = sid;
+            if (sid >= next_local_slot) {
+                next_local_slot = sid + 1;
+            }
+        }
+    }
+
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid() && inst->result.id > max_vid) {
+                max_vid = inst->result.id;
+            }
+            for (const auto& operand : inst->operands) {
+                if (operand.isValid() && operand.id > max_vid) {
+                    max_vid = operand.id;
+                }
+            }
+
+            // Track LocalVar* pointers — assign slot IDs to all locals referenced
+            // by any instruction type (LoadLocal, StoreLocal, fused ops, etc.)
+            auto assign_slot = [&](const LocalVar* lv) {
+                if (lv && slot_map.find(lv) == slot_map.end()) {
+                    slot_map[lv] = next_local_slot++;
+                    used_local_slots.insert(slot_map[lv]);
+                }
+            };
+            auto assign_expr_slots = [&](const QoreValue& expr) {
+                std::vector<const LocalVar*> expr_locals;
+                std::unordered_set<const void*> seen;
+                collectLocalSlotsFromExpr(expr, expr_locals, seen);
+                for (const LocalVar* lv : expr_locals) {
+                    assign_slot(lv);
+                }
+            };
+            if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
+                assign_slot(local_inst->local);
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* f = static_cast<QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                assign_slot(f->target);
+                assign_slot(f->source);
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                assign_slot(static_cast<QoreIRIncrementLocalIntInstruction*>(inst.get())->local);
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* f = static_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
+                assign_slot(f->lhs);
+                assign_slot(f->rhs);
+            } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LoadLValue)
+                    && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::SpliceLValue)) {
+                // Lvalue instructions: ensure locals referenced through lvalue
+                // expressions get slot assignments (needed for compound assignment
+                // on types forced to the lvalue path: list, hash, etc.)
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst.get());
+                const VarRefNode* base_var = extractLValueBaseVarRef(lval_inst->lvalue);
+                if (base_var) {
+                    qore_var_t vtype = base_var->getType();
+                    if ((vtype == VT_LOCAL || vtype == VT_LOCAL_TS) && base_var->ref.id) {
+                        assign_slot(reinterpret_cast<const LocalVar*>(base_var->ref.id));
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStore) {
+                // HashKeyStore[Dynamic] reference their container LocalVar via
+                // the `container` VarRefNode for the COW branch + auto-vivify
+                // assign-back path. The container is NOT serialized — only
+                // container_slot_id is — so the slot must be assigned here so
+                // pass 2 can fill in container_slot_id and AOT deser can
+                // resolve it back to the LocalVar* via slot_to_local.
+                auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());
+                if (hks->container && hks->container->ref.id) {
+                    assign_slot(reinterpret_cast<const LocalVar*>(hks->container->ref.id));
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                auto* hksd = static_cast<QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
+                if (hksd->container && hksd->container->ref.id) {
+                    assign_slot(reinterpret_cast<const LocalVar*>(hksd->container->ref.id));
+                }
+            } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
+                auto* lis = static_cast<QoreIRListIndexStoreInstruction*>(inst.get());
+                if (lis->container && lis->container->ref.id) {
+                    assign_slot(reinterpret_cast<const LocalVar*>(lis->container->ref.id));
+                }
+            } else if (inst->opcode == QoreIROpcode::CreateParseRef) {
+                auto* pr = static_cast<QoreIRCreateParseRefInstruction*>(inst.get());
+                const ParseReferenceNode* prn = pr->node
+                    ? pr->node
+                    : dynamic_cast<const ParseReferenceNode*>(pr->expr.getInternalNode());
+                if (prn) {
+                    const VarRefNode* base_var = extractLValueBaseVarRef(prn->getLVExp());
+                    if (base_var && base_var->ref.id) {
+                        qore_var_t vtype = base_var->getType();
+                        if (vtype == VT_LOCAL || vtype == VT_LOCAL_TS || vtype == VT_CLOSURE) {
+                            assign_slot(reinterpret_cast<const LocalVar*>(base_var->ref.id));
+                        }
+                    }
+                }
+            } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LValuePathAssign)
+                    && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::LValuePathTernary)) {
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst.get());
+                if (!path_inst->path.empty()) {
+                    const LVPathStep& root = path_inst->path[0];
+                    if ((root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar)
+                            && root.ref_ptr) {
+                        assign_slot(reinterpret_cast<const LocalVar*>(root.ref_ptr));
+                    }
+                }
+            }
+            if (isLValueOp(inst->opcode)) {
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst.get());
+                assign_expr_slots(lval_inst->lvalue);
+            }
+            if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                assign_expr_slots(*expr);
+            }
+            if (const QoreValue* expr = getSerializationOnlyInstructionExpr(inst.get())) {
+                assign_expr_slots(*expr);
+            }
+        }
+    }
+    max_value_id = max_vid;
+    local_var_slots = slot_map;
+    max_local_slot_id = next_local_slot > 0 ? next_local_slot - 1 : 0;
+
+    // Pass 1.5: Set metadata flags on blocks and cache line numbers in instructions
+    // This allows the interpreter to skip the phi loop when there are no phis,
+    // and avoid repeated pointer dereferences when checking for line changes
+    for (const auto& block : blocks) {
+        block->has_phi_nodes = false;
+        for (const auto& inst : block->instructions) {
+            // Cache line number: -1 if no location, otherwise store start_line
+            // This avoids two pointer dereferences per instruction in the line-change gate
+            inst->cached_start_line = inst->loc ? static_cast<int16_t>(inst->loc->start_line) : -1;
+
+            if (inst->opcode == QoreIROpcode::Phi) {
+                block->has_phi_nodes = true;
+                // Don't break here; continue to set cached_start_line for all instructions
+            }
+            // Note: Phi instructions are always at the beginning of blocks, so we can
+            // check has_phi_nodes efficiently later by just looking at the first instruction
+        }
+    }
+
+    // Pass 2: embed pre-computed slot_id and is_closure in instructions
+    // to eliminate hash map lookups on the hot path in the interpreter
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
+                if (local_inst->local) {
+                    auto it = slot_map.find(local_inst->local);
+                    if (it != slot_map.end()) {
+                        local_inst->slot_id = it->second;
+                    }
+                    local_inst->is_closure = local_inst->local->closureUse();
+                    local_inst->is_ref = QoreTypeInfo::isReference(local_inst->local->getTypeInfo());
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStore) {
+                auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());
+                if (hks->container && hks->container->ref.id) {
+                    auto it = slot_map.find(
+                        reinterpret_cast<const LocalVar*>(hks->container->ref.id));
+                    if (it != slot_map.end()) {
+                        hks->container_slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                auto* hksd = static_cast<QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
+                if (hksd->container && hksd->container->ref.id) {
+                    auto it = slot_map.find(
+                        reinterpret_cast<const LocalVar*>(hksd->container->ref.id));
+                    if (it != slot_map.end()) {
+                        hksd->container_slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
+                auto* lis = static_cast<QoreIRListIndexStoreInstruction*>(inst.get());
+                if (lis->container && lis->container->ref.id) {
+                    auto it = slot_map.find(
+                        reinterpret_cast<const LocalVar*>(lis->container->ref.id));
+                    if (it != slot_map.end()) {
+                        lis->container_slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* fused = static_cast<QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                if (fused->target) {
+                    auto it = slot_map.find(fused->target);
+                    if (it != slot_map.end()) {
+                        fused->target_slot_id = it->second;
+                    }
+                }
+                if (fused->source) {
+                    auto it = slot_map.find(fused->source);
+                    if (it != slot_map.end()) {
+                        fused->source_slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                auto* fused = static_cast<QoreIRIncrementLocalIntInstruction*>(inst.get());
+                if (fused->local) {
+                    auto it = slot_map.find(fused->local);
+                    if (it != slot_map.end()) {
+                        fused->slot_id = it->second;
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* fused = static_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
+                if (fused->lhs) {
+                    auto it = slot_map.find(fused->lhs);
+                    if (it != slot_map.end()) {
+                        fused->lhs_slot_id = it->second;
+                    }
+                }
+                if (fused->rhs) {
+                    auto it = slot_map.find(fused->rhs);
+                    if (it != slot_map.end()) {
+                        fused->rhs_slot_id = it->second;
+                    }
+                }
+            } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LoadLValue)
+                    && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::SpliceLValue)) {
+                // Lvalue instruction: pre-compute the target variable's slot_id
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst.get());
+                const VarRefNode* base_var = extractLValueBaseVarRef(lval_inst->lvalue);
+                if (base_var) {
+                    qore_var_t vtype = base_var->getType();
+                    if ((vtype == VT_LOCAL || vtype == VT_LOCAL_TS) && base_var->ref.id) {
+                        auto it = slot_map.find(
+                            reinterpret_cast<const LocalVar*>(base_var->ref.id));
+                        if (it != slot_map.end()) {
+                            lval_inst->lvalue_slot_id = it->second;
+                        }
+                    } else {
+                        lval_inst->lvalue_slot_id = QoreIRLValueInstruction::LVALUE_NON_LOCAL;
+                    }
+                } else {
+                    lval_inst->lvalue_slot_id = QoreIRLValueInstruction::LVALUE_NON_LOCAL;
+                }
+            } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LValuePathAssign)
+                    && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::LValuePathTernary)) {
+                // LValuePath instruction: set root variable's slot_id for targeted cache invalidation
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst.get());
+                if (!path_inst->path.empty()) {
+                    LVPathStep& root = path_inst->path[0];
+                    if ((root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar)
+                            && root.ref_ptr) {
+                        auto it = slot_map.find(reinterpret_cast<const LocalVar*>(root.ref_ptr));
+                        if (it != slot_map.end()) {
+                            path_inst->lvalue_slot_id = it->second;
+                            // Also embed slot_id on the path step itself, so AOT
+                            // serialization carries a stable reference that can
+                            // rebuild ref_ptr when the instruction is deserialized
+                            // for a closure/handler body (where AOTRuntime does
+                            // not walk the path to re-resolve ref_ptr from
+                            // ctx->locals).
+                            root.slot_id = it->second;
+                        }
+                    } else {
+                        path_inst->lvalue_slot_id = QoreIRLValuePathInstruction::LVALUE_NON_LOCAL;
+                    }
+                }
+            }
+        }
+    }
+}

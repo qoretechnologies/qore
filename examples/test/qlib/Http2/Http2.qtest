@@ -7,15 +7,16 @@
 %define NoJson
 %endtry
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
 %requires ../../../../qlib/HttpServerAsyncIo/HttpServerAsyncIo.qm
-%requires ../../../../qlib/WebSocketClient.qm
-%requires ../../../../qlib/WebSocketHandler.qm
+%requires WebSocketClient
+%requires WebSocketHandler
 
 %exec-class Http2Test
 

@@ -1,0 +1,2044 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class NamedArgumentsTest
+
+string sub na_defaults(int a = 1, int b = 2, int c = 3) {
+    return sprintf("%d:%d:%d", a, b, c);
+}
+
+string sub na_required(int a, int b, int c = 3) {
+    return sprintf("%d:%d:%d", a, b, c);
+}
+
+our list<int> na_order;
+
+int sub na_mark(int v) {
+    na_order += v;
+    return v;
+}
+
+string sub na_misc_concat(string left, string right) {
+    return sprintf("%s%s", left, right);
+}
+
+string sub na_pair(int a, int b) {
+    return sprintf("%d:%d", a, b);
+}
+
+nothing sub na_set_ref(reference<int> target, int value) {
+    target = value;
+}
+
+string sub na_fixed_varargs(int a, int b = 2, ...) {
+    return sprintf("%d:%d", a, b);
+}
+
+string sub na_pick(int count, string mode = "default") {
+    return sprintf("count:%d:%s", count, mode);
+}
+
+string sub na_pick(float size, string unit = "m") {
+    return sprintf("size:%s:%s", size, unit);
+}
+
+number sub na_math_floor(number value, int precision) {
+    return floor(precision: precision, value: value);
+}
+
+int sub na_math_compare(float left, float right, float epsilon) {
+    return compare(left: left, right: right, epsilon: epsilon);
+}
+
+int sub na_math_compare_number(number left, number right, number epsilon) {
+    return compare(left: left, right: right, epsilon: epsilon);
+}
+
+float sub na_math_hypot(float x, float y) {
+    return hypot(x: x, y: y);
+}
+
+float sub na_math_atan2(float x, float y) {
+    return atan2(x: x, y: y);
+}
+
+class NA_Base {
+    public {
+        string base_value;
+    }
+
+    constructor(int a = 1, int b = 2) {
+        base_value = sprintf("%d:%d", a, b);
+    }
+}
+
+class NA_Child inherits NA_Base {
+    public {
+        string child_value;
+    }
+
+    constructor(int x = 3, int y = 4) : NA_Base(b: na_mark(20), a: na_mark(10)) {
+        child_value = sprintf("%d:%d", x, y);
+    }
+
+    string method(int a, int b = 2) {
+        return sprintf("%d:%d", a, b);
+    }
+
+    static string staticMethod(int a, int b = 2) {
+        return sprintf("%d:%d", a, b);
+    }
+}
+
+class NA_Logger inherits LoggerInterfaceBase {
+    public {
+        list<hash<auto>> messages();
+    }
+
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        push messages, {
+            "level": level,
+            "message": format_args ? vsprintf(message, format_args) : message,
+        };
+    }
+
+    bool isEnabledFor(int level) {
+        return level >= 1000;
+    }
+}
+
+class NA_Serializable inherits Serializable {
+    public {
+        int value;
+    }
+
+    constructor(int value = 0) {
+        self.value = value;
+    }
+}
+
+public class NamedArgumentsTest inherits QUnit::Test {
+    constructor() : Test("Named arguments test", "1.0") {
+        addTestCase("defaults and mixed arguments", \defaultsAndMixedArguments(), NOTHING);
+        addTestCase("methods and constructors", \methodsAndConstructors(), NOTHING);
+        addTestCase("references and varargs", \referencesAndVarargs(), NOTHING);
+        addTestCase("source evaluation order", \sourceEvaluationOrder(), NOTHING);
+        addTestCase("overload selection by name", \overloadSelectionByName(), NOTHING);
+        addTestCase("builtin opt-in", \builtinOptIn(), NOTHING);
+        addTestCase("reviewed math builtin opt-in", \reviewedMathBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed type builtin opt-in", \reviewedTypeBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed string builtin opt-in", \reviewedStringBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed utility builtin opt-in", \reviewedUtilityBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed list builtin opt-in", \reviewedListBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed pwd builtin opt-in", \reviewedPwdBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed compression builtin opt-in", \reviewedCompressionBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed time builtin opt-in", \reviewedTimeBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed object builtin opt-in", \reviewedObjectBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed misc builtin opt-in", \reviewedMiscBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed crypto builtin opt-in", \reviewedCryptoBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed ReadOnlyFile class builtin opt-in", \reviewedReadOnlyFileBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed library builtin opt-in", \reviewedLibraryBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed parse-options class builtin opt-in", \reviewedParseOptionsClassBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed SandboxManager class builtin opt-in", \reviewedSandboxManagerBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed Program class builtin opt-in", \reviewedProgramClassBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed ProgramControl class builtin opt-in", \reviewedProgramControlBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed DebugProgram callback builtin opt-in", \reviewedDebugProgramBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed event-loop class builtin opt-in", \reviewedEventLoopClassBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed Socket low-level builtin opt-in", \reviewedSocketLowLevelBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed Socket HTTP builtin opt-in", \reviewedSocketHttpBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed Socket HTTP/2 builtin opt-in", \reviewedSocketHttp2BuiltinOptIn(), NOTHING);
+        addTestCase("reviewed Socket QUIC builtin opt-in", \reviewedSocketQuicBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed HTTPClient class builtin opt-in", \reviewedHttpClientClassBuiltinOptIn(),
+            NOTHING);
+        addTestCase("reviewed SQL class builtin opt-in", \reviewedSqlClassBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed async I/O controller builtin opt-in",
+            \reviewedAsyncIoControllerBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed Serializable builtin opt-in", \reviewedSerializableBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed iterator builtin opt-in", \reviewedIteratorBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
+        addTestCase("parse failures", \parseFailures(), NOTHING);
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(value: main());
+    }
+
+    defaultsAndMixedArguments() {
+        assertEq("1:2:100", na_defaults(c: 100), "named default holes");
+        assertEq("9:2:100", na_defaults(a: 9, c: 100), "named middle default");
+        assertEq("9:2:100", na_required(9, c: 100, b: 2), "positional before named");
+    }
+
+    methodsAndConstructors() {
+        na_order = ();
+        NA_Child child = new NA_Child(y: 8, x: 7);
+        assertEq("10:20", child.base_value, "base constructor arguments are mapped by name");
+        assertEq("7:8", child.child_value, "constructor arguments are mapped by name");
+        assertEq((20, 10), na_order, "base constructor argument evaluation keeps source order");
+        assertEq("3:4", child.method(b: 4, a: 3), "method arguments are mapped by name");
+        assertEq("5:6", NA_Child::staticMethod(b: 6, a: 5), "static method arguments are mapped by name");
+    }
+
+    referencesAndVarargs() {
+        int target = 1;
+        na_set_ref(value: 9, target: \target);
+        assertEq(9, target, "reference arguments are mapped by name");
+        assertEq("5:2", na_fixed_varargs(a: 5), "fixed parameters before varargs accept named arguments");
+        assertEq("5:6", na_fixed_varargs(b: 6, a: 5), "fixed parameters before varargs are reordered");
+    }
+
+    sourceEvaluationOrder() {
+        na_order = ();
+        assertEq("2:1", na_pair(b: na_mark(1), a: na_mark(2)), "mapped call result");
+        assertEq((1, 2), na_order, "source order is preserved");
+    }
+
+    overloadSelectionByName() {
+        assertEq("count:3:default", na_pick(count: 3), "first variant selected by name");
+        assertEq("size:1.5:cm", na_pick(size: 1.5, unit: "cm"), "second variant selected by name");
+    }
+
+    builtinOptIn() {
+        assertEq("cde", substr(str: "abcdef", start: 2, len: 3), "opted-in builtin accepts named arguments");
+        assertEq("de", substr(len: 2, str: "abcdef", start: 3), "opted-in builtin accepts reordered names");
+        assertEq("cde", "abcdef".substr(start: 2, length: 3), "opted-in string pseudo-method accepts named arguments");
+    }
+
+    reviewedMathBuiltinOptIn() {
+        assertEq(8, pow(base: cast<int>(2), exponent: cast<int>(3)), "math builtin uses reviewed public names");
+        assertEq(0, na_math_compare_number(357.27n, na_math_floor(357.271n, 2), 0.000000000001n),
+            "renamed optional precision can be reordered");
+        assertEq(0, na_math_compare(10.0, 10.05, 0.1), "reviewed compare names are accepted");
+        assertEq(5.0, na_math_hypot(3.0, 4.0), "canonical hypot names are accepted");
+        assertEq(1.0, na_math_atan2(1.0, 1.0) / (M_PI / 4), "canonical atan2 names are accepted");
+    }
+
+    reviewedTypeBuiltinOptIn() {
+        assertEq(True, boolean(value: 1), "boolean conversion uses value");
+        assertEq(254, int(base: 16, value: "fe"), "integer conversion exposes base and value");
+        assertEq(3.5, float(value: "3.5"), "float conversion uses value");
+        assertEq("string", type(value: "x"), "type inspection uses value");
+        assertEq("integer", typename(value: 1), "typename inspection uses value");
+        assertEq("A", binary_to_string(encoding: "USASCII", value: binary(value: "A")),
+            "binary conversion exposes value and encoding");
+    }
+
+    reviewedStringBuiltinOptIn() {
+        assertEq(3, length(str: "abc"), "string length accepts named arguments");
+        assertEq(3, length(bin: binary(value: "abc")), "binary length accepts named arguments");
+        assertEq("cde", binary_to_string(value: substr(bin: binary(value: "abcdef"), start: 2, len: 3),
+            encoding: "USASCII"), "binary substr exposes bin/start/len");
+        assertEq(2, index(substr: "cd", str: "abcdef", pos: 1), "index exposes search names");
+        assertEq(("a", "b"), split(separator: ",", str: "a,b"), "split exposes separator and string");
+        assertEq(True, regex(str: "abc123", pattern: "\\d+", options: 0), "regex exposes pattern");
+        assertEq("abcX", regex_subst(str: "abc123", pattern: "\\d+", replacement: "X"),
+            "regex_subst exposes replacement");
+        assertEq("a:b", join(separator: ":", values: ("a", "b")), "join list variant exposes separator and values");
+        assertEq("x:2", vsprintf(format: "%s:%d", values: ("x", 2)), "vsprintf exposes format and values");
+
+        string ref = "  line\n";
+        assertEq("  line", chomp(str: \ref), "reference chomp exposes str");
+        assertEq("  line", ref, "reference chomp updates the lvalue");
+        assertEq("line", trim(str: \ref, chars: " "), "reference trim exposes str and chars");
+        ref = "  line";
+        assertEq("line", ltrim(str: \ref, chars: " "), "reference ltrim exposes str and chars");
+        ref = "line  ";
+        assertEq("line", rtrim(str: \ref, chars: " "), "reference rtrim exposes str and chars");
+
+        Scanner scanner = new Scanner(source: "hello");
+        assertEq("ell", scanner.extractRange(byte_offset: 1, byte_length: 3),
+            "Scanner constructor and extractRange expose source and byte ranges");
+        assertTrue(scanner.startsWith(literal: "he"), "Scanner startsWith exposes literal");
+        assertTrue(scanner.match(literal: "he"), "Scanner match exposes literal");
+        assertEq(ord("l"), scanner.peekByteAt(byte_offset: 0), "Scanner peekByteAt exposes byte_offset");
+        assertEq(ord("o"), scanner.peekAt(char_offset: 2), "Scanner peekAt exposes char_offset");
+        assertEq(2, scanner.advanceN(count: 2), "Scanner advanceN exposes count");
+        assertEq(ord("o"), scanner.peek(), "Scanner named calls leave expected cursor position");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("vprintf(format: \"%s\", values: (\"x\")); f_vprintf(format: \"%s\", values: (\"x\"));",
+            "vprintf-named");
+    }
+
+    reviewedUtilityBuiltinOptIn() {
+        string key = "QORE_NAMED_ARGS_TEST_ENV";
+        unsetenv(name: key);
+        setenv(name: key, value: "named-ok");
+        assertEq("named-ok", getenv(name: key), "environment helpers expose name and value");
+        unsetenv(name: key);
+        assertNothing(getenv(name: key), "environment helpers clean up with named arguments");
+
+        assertEq({
+            "type": "sqlite3",
+            "db": ":memory:",
+        }, parse_datasource(datasource: "sqlite3:@:memory:"), "parse_datasource exposes datasource");
+
+        hash<auto> row = {
+            "name": ("david",),
+        };
+        context (row) {
+            assertEq("david", cx_value(key: "name"), "cx_value exposes key");
+        }
+
+        assertEq(<81026869>, ws_encode_frame(message: "hi", opcode: 1, masked: False),
+            "ws_encode_frame exposes message and opcode");
+        assertEq(<01020304>, ws_unmask_data(data: <00000000>, mask: <01020304>),
+            "ws_unmask_data exposes data and mask");
+    }
+
+    reviewedListBuiltinOptIn() {
+        code<int(auto, auto)> descending = int sub(auto left, auto right) {
+            return right <=> left;
+        };
+
+        assertEq((1, 2, 3), sort(values: (3, 1, 2)), "sort exposes values");
+        assertEq((3, 2, 1), sort(comparator: descending, values: (1, 3, 2)), "sort exposes comparator");
+        assertEq((3, 2, 1), sort_descending(values: (1, 3, 2)), "sort_descending exposes values");
+        assertEq((1, 2, 3), sort_stable(values: (3, 1, 2)), "sort_stable exposes values");
+        assertEq((3, 2, 1), sort_descending_stable(values: (1, 3, 2)),
+            "sort_descending_stable exposes values");
+        assertEq(1, min(values: (3, 1, 2)), "min exposes values");
+        assertEq(3, max(values: (1, 3, 2)), "max exposes values");
+        assertEq((1, 3), range(start: 1, stop: 5, step: 2), "range exposes start, stop, and step");
+        assertEq((0, 1, 2), range(stop: 3), "range exposes stop");
+        assertEq((3, 2, 1), reverse(values: (1, 2, 3)), "reverse exposes values");
+        assertTrue(inlist(value: "1", values: (1, 2)), "inlist exposes value and values");
+        assertFalse(inlist_hard(value: "1", values: (1, 2)), "inlist_hard exposes value and values");
+    }
+
+    reviewedPwdBuiltinOptIn() {
+        Program p(PO_NEW_STYLE);
+        p.parse("getpwuid(uid: 0); getpwuid2(uid: 0); getpwnam(name: \"root\"); getpwnam2(name: \"root\"); "
+            "getgrgid(gid: 0); getgrgid2(gid: 0); getgrnam(name: \"root\"); getgrnam2(name: \"root\");",
+            "pwd-named");
+    }
+
+    reviewedCompressionBuiltinOptIn() {
+        string payload = "named compression payload";
+
+        binary zlib = compress(data: payload, level: Z_DEFAULT_COMPRESSION);
+        assertEq(payload, uncompress_to_string(compressed_data: zlib, encoding: "utf-8"),
+            "zlib helpers expose data and compressed_data");
+        assertEq(binary(value: payload), uncompress_to_binary(compressed_data: zlib),
+            "zlib binary decompression exposes compressed_data");
+
+        binary gzip_data = gzip(data: payload, level: Z_DEFAULT_COMPRESSION);
+        assertEq(payload, gunzip_to_string(compressed_data: gzip_data, encoding: "utf-8"),
+            "gzip helpers expose data and compressed_data");
+        assertEq(binary(value: payload), gunzip_to_binary(compressed_data: gzip_data),
+            "gzip binary decompression exposes compressed_data");
+
+        binary raw = deflate_raw(data: payload, level: Z_DEFAULT_COMPRESSION);
+        assertEq(payload, inflate_raw_to_string(compressed_data: raw, encoding: "utf-8"),
+            "raw deflate helpers expose data and compressed_data");
+        assertEq(binary(value: payload), inflate_raw_to_binary(compressed_data: raw),
+            "raw deflate binary decompression exposes compressed_data");
+
+        binary bzip = bzip2(data: payload, level: BZ2_DEFAULT_COMPRESSION);
+        assertEq(payload, bunzip2_to_string(compressed_data: bzip, encoding: "utf-8"),
+            "bzip2 helpers expose data and compressed_data");
+        assertEq(binary(value: payload), bunzip2_to_binary(compressed_data: bzip),
+            "bzip2 binary decompression exposes compressed_data");
+
+        binary brotli_data = brotli(data: payload, quality: BROTLI_DEFAULT_QUALITY);
+        assertEq(payload, unbrotli_to_string(compressed_data: brotli_data, encoding: "utf-8"),
+            "Brotli helpers expose data and compressed_data");
+        assertEq(binary(value: payload), unbrotli_to_binary(compressed_data: brotli_data),
+            "Brotli binary decompression exposes compressed_data");
+
+        binary zstd_data = zstd(data: payload, level: ZSTD_DEFAULT_LEVEL);
+        assertEq(payload, unzstd_to_string(compressed_data: zstd_data, encoding: "utf-8"),
+            "Zstd helpers expose data and compressed_data");
+        assertEq(binary(value: payload), unzstd_to_binary(compressed_data: zstd_data),
+            "Zstd binary decompression exposes compressed_data");
+
+        binary lz4_data = lz4(data: payload, acceleration: LZ4_DEFAULT_ACCELERATION);
+        assertEq(payload, unlz4_to_string(compressed_data: lz4_data, max_output_size: 1024, encoding: "utf-8"),
+            "LZ4 helpers expose data and compressed_data");
+        assertEq(binary(value: payload), unlz4_to_binary(compressed_data: lz4_data, max_output_size: 1024),
+            "LZ4 binary decompression exposes compressed_data");
+
+        assertTrue(get_compressor(algorithm: COMPRESSION_ALG_ZLIB, level: COMPRESSION_LEVEL_DEFAULT) != NOTHING,
+            "get_compressor exposes algorithm");
+        assertTrue(get_decompressor(algorithm: COMPRESSION_ALG_ZLIB) != NOTHING,
+            "get_decompressor exposes algorithm");
+    }
+
+    reviewedTimeBuiltinOptIn() {
+        date absolute = date(date_string: "2020-01-02T03:04:05Z");
+        assertEq(absolute, date(value: absolute), "date conversion exposes value");
+        assertEq(10s, date(seconds: 10), "numeric date conversion exposes seconds");
+        assertEq("2020-01-02", format_date(format: "YYYY-MM-DD", date_value: absolute),
+            "format_date exposes date_value");
+
+        date masked = date(date_string: "20200102 030405", mask: "YYYYMMDD HHmmSS");
+        assertEq("2020-01-02", format_date(format: "YYYY-MM-DD", date_value: masked),
+            "masked date parsing exposes date_string and mask");
+
+        date epoch = gmtime(seconds: 10, microseconds: 500000);
+        assertEq(10, get_epoch_seconds(date_value: epoch), "gmtime exposes seconds and microseconds");
+        assertEq(10, timegm(date_value: epoch), "timegm exposes date_value");
+        assertEq(10, mktime(date_value: epoch), "mktime exposes date_value");
+        assertEq(epoch, gmtime(date_value: epoch), "gmtime date variant exposes date_value");
+        assertEq(10, get_epoch_seconds(date_value: localtime(seconds: 10, microseconds: 0)),
+            "localtime exposes seconds and microseconds");
+
+        date relative = days(days: 1) + hours(hours: 2) + minutes(minutes: 3) + seconds(seconds: 4)
+            + milliseconds(milliseconds: 5) + microseconds(microseconds: 6);
+        assertTrue(is_date_relative(date_value: relative), "relative date inspection exposes date_value");
+        assertFalse(is_date_absolute(date_value: relative), "absolute date inspection exposes date_value");
+        assertEq(1, get_days(date_value: days(days: 1)), "get_days exposes date_value");
+        assertEq(2, get_hours(date_value: hours(hours: 2)), "get_hours exposes date_value");
+        assertEq(3, get_minutes(date_value: minutes(minutes: 3)), "get_minutes exposes date_value");
+        assertEq(4, get_seconds(date_value: seconds(seconds: 4)), "get_seconds exposes date_value");
+        assertEq(5, get_milliseconds(date_value: milliseconds(milliseconds: 5)),
+            "get_milliseconds exposes date_value");
+        assertEq(6, get_microseconds(date_value: microseconds(microseconds: 6)),
+            "get_microseconds exposes date_value");
+        assertEq(86400, get_duration_seconds(date_value: days(days: 1)),
+            "duration helpers expose date_value");
+
+        assertEq("2020-01-02", format_date(format: "YYYY-MM-DD",
+            date_value: get_midnight(date_value: absolute)), "get_midnight exposes date_value");
+        assertEq(2020, date_info(date_value: absolute).year, "date_info exposes date_value");
+        assertEq("2019-12-30", format_date(format: "YYYY-MM-DD",
+            date_value: get_date_from_iso_week(year: 2020, week: 1, day: 1)),
+            "ISO week helper exposes year, week, and day");
+
+        TimeZone original_tz = TimeZone::get();
+        on_exit TimeZone::set(zone: original_tz);
+        TimeZone utc = new TimeZone(region: "UTC");
+        TimeZone utc_offset = new TimeZone(seconds_east: 0);
+        assertEq(0, get_epoch_seconds(date_value: utc.date(seconds: 0, microseconds: 0)),
+            "TimeZone date exposes seconds and microseconds");
+        assertEq(0, get_epoch_seconds(date_value: utc_offset.date(date_string: "1970-01-01T00:00:00Z")),
+            "TimeZone date exposes date_string");
+        assertEq(0, get_epoch_seconds(date_value: utc.date(date_string: "1970-01-01 00:00:00",
+            mask: "YYYY-MM-DD HH:mm:SS")), "TimeZone date exposes mask");
+        assertEq(get_epoch_microseconds(date_value: absolute),
+            get_epoch_microseconds(date_value: utc.date(date_value: absolute)),
+            "TimeZone date exposes date_value");
+        assertEq(1234, get_epoch_milliseconds(date_value: utc.dateMs(milliseconds: 1234)),
+            "TimeZone dateMs exposes milliseconds");
+        assertEq(1234567, get_epoch_microseconds(date_value: utc.dateUs(microseconds: 1234567)),
+            "TimeZone dateUs exposes microseconds");
+        TimeZone::setRegion(region: "UTC");
+        TimeZone::setUTCOffset(seconds_east: 0);
+        TimeZone::set(zone: original_tz);
+    }
+
+    reviewedObjectBuiltinOptIn() {
+        NA_Child child = new NA_Child(1, 2);
+        assertEq("13:14", call_object_method_args(object_value: child, method: "method", arguments: (13, 14)),
+            "object method helper exposes object_value and arguments");
+        assertEq("15:16", call_static_method_args(class_name: "NA_Child", method: "staticMethod",
+            arguments: (15, 16)), "static method helper exposes class_name and arguments");
+        assertEq("17:18", cast<NA_Child>(create_object_args(class_name: "NA_Child", arguments: (17, 18))).child_value,
+            "object creation helper exposes class_name and arguments");
+        assertEq("cde", call_pseudo_args(value: "abcdef", method: "substr", arguments: (2, 3)),
+            "pseudo-method helper exposes value and arguments");
+        assertTrue(inlist("method", get_method_list(object_value: child)), "method list exposes object_value");
+    }
+
+    reviewedMiscBuiltinOptIn() {
+        assertEq("&lt;x&gt;", html_encode(str: "<x>"), "HTML helpers expose str");
+        assertEq("<x>", html_decode(str: "&lt;x&gt;"), "HTML decode exposes str");
+        assertEq("a b", decode_url(url: "a%20b"), "URL decode exposes url");
+        assertEq("a%20b", encode_url(url: "a b"), "URL encode exposes url");
+        assertEq("a b", decode_uri_request(uri: "a%20b"), "URI request decode exposes uri");
+        assertEq("a%20b", encode_uri_request(url: "a b"), "URI request encode exposes url");
+
+        assertTrue(exists_function(name: "type"), "function inspection exposes name");
+        assertEq("builtin", function_type(name: "type"), "function_type exposes name");
+        assertEq("named", call_function_args(name: "na_misc_concat", arguments: ("nam", "ed")),
+            "call_function_args exposes name and arguments");
+        assertEq("named", call_function_args(callable: \na_misc_concat(), arguments: ("nam", "ed")),
+            "call_function_args exposes callable and arguments");
+        assertEq("cde", call_builtin_function_args(name: "substr", arguments: ("abcdef", 2, 3)),
+            "call_builtin_function_args exposes arguments");
+
+        NA_Child child = new NA_Child();
+        assertEq("NA_Child", get_class_name(object_value: child), "class name helper exposes object_value");
+        assertTrue(has_key(container: {"k": 1}, key: "k"), "has_key exposes container");
+        assertEq(("v",), hash_values(hash_value: {"k": "v"}), "hash_values exposes hash_value");
+        assertEq(98, get_byte(data: "abc", offset: 1), "byte helper exposes data and offset");
+
+        assertEq("YWI=", make_base64_string(data: "ab"), "base64 helper exposes data");
+        assertEq("ab", parse_base64_string_to_string(base64_string: "YWI=", encoding: "utf-8"),
+            "base64 parser exposes base64_string");
+        assertEq("ab", binary_to_string(value: parse_base64_url_string(base64_url_string: "YWI="),
+            encoding: "utf-8"), "base64-url parser exposes base64_url_string");
+        assertEq("ab", make_hex_string(data: <ab>), "hex helper exposes data");
+        assertEq(<ab>, parse_hex_string(hex_string: "ab"), "hex parser exposes hex_string");
+        assertEq(171, hextoint(hex_string: "ab"), "hextoint exposes hex_string");
+        assertEq(65, strtoint(value: "101", base: 8), "strtoint exposes value and base");
+
+        assertEq("aZZdef", splice(value: "abcdef", start: 1, length: 2, replacement: "ZZ"),
+            "string splice exposes value and replacement");
+        assertEq((1, 9, 4), splice(value: (1, 2, 3, 4), start: 1, length: 2, replacement: (9)),
+            "list splice exposes value and replacement");
+        assertEq("https://user:<masked>@example.com/x", get_safe_url(url: "https://user:pass@example.com/x"),
+            "safe URL helper exposes url");
+        assertEq("example.com", parse_url(url: "https://example.com/path", keep_brackets: False).host,
+            "parse_url exposes keep_brackets");
+        assertEq("example.com", parseURL(url: "https://example.com/path").host, "parseURL exposes url");
+        assertEq(3, get_value_byte_size(value: "abc"), "byte size helper exposes value");
+
+        LoggerInterfaceBase logger = new NA_Logger();
+        assertFalse(logger.isEnabledFor(level: 999), "LoggerInterfaceBase exposes level");
+        assertTrue(logger.isEnabledFor(level: 1000), "LoggerInterfaceBase exposes level");
+        logger.logArgs(level: 1000, message: "hello %s", format_args: ("world",));
+        assertEq("hello world", cast<NA_Logger>(logger).messages[0].message,
+            "LoggerInterfaceBase exposes format_args");
+    }
+
+    reviewedCryptoBuiltinOptIn() {
+        string data = "named crypto payload";
+        string key = "1234567812345abcabcdefghijklmnopqrstuvwxyz";
+
+        assertEq(MD5(data), MD5(data: data), "digest helper exposes data");
+        assertEq(MD5_bin(data), MD5_bin(data: data), "binary digest helper exposes data");
+        assertEq(MD5_hmac(data, key), MD5_hmac(data: data, key: key), "HMAC helper exposes data and key");
+        assertEq(digest("md5", data), digest(digest: "md5", data: data), "generic digest exposes digest and data");
+        assertEq(hmac("sha256", data, key), hmac(digest: "sha256", data: data, key: key),
+            "generic HMAC exposes digest, data, and key");
+        assertTrue(has_digest(digest: "sha256"), "digest inspection exposes digest");
+
+        binary encrypted = encrypt(algorithm: "blowfish", data: data, key: key);
+        assertEq(data, decrypt_to_string(algorithm: "blowfish", data: encrypted, key: key, encoding: "utf-8"),
+            "generic crypto helpers expose algorithm and data");
+        assertTrue(get_encryptor(algorithm: "blowfish", key: key) != NOTHING, "get_encryptor exposes algorithm");
+        assertTrue(get_decryptor(algorithm: "blowfish", key: key) != NOTHING, "get_decryptor exposes algorithm");
+        assertTrue(get_cipher_info(cipher: "blowfish") != NOTHING, "get_cipher_info exposes cipher");
+        assertEq(16, pbkdf2(digest: "sha256", password: "password", salt: "salt", iterations: 1,
+            key_length: 16).size(), "pbkdf2 exposes key_length");
+        assertEq(4, get_random_bytes(size: 4).size(), "random helper exposes size");
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", sub () { new SSLCertificate(pem: "not a certificate"); });
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", sub () { new SSLCertificate(der: <00>); });
+        assertThrows("SSLPRIVATEKEY-CONSTRUCTOR-ERROR",
+            sub () { new SSLPrivateKey(pem: "not a key", password: "secret"); });
+        assertThrows("SSLPRIVATEKEY-CONSTRUCTOR-ERROR", sub () { new SSLPrivateKey(der: <00>); });
+    }
+
+    reviewedFileBuiltinOptIn() {
+        string file = sprintf("%s%sqore-na-file-%d-%s.txt", tmp_location(), DirSep, getpid(),
+            get_random_bytes(size: 4).toHex());
+        string target = file + ".renamed";
+        on_exit unlink(path: file);
+        on_exit unlink(path: target);
+
+        {
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC, 0600, "utf-8");
+            f.write("named file");
+        }
+
+        assertTrue(is_file(path: file), "is_file exposes path");
+        assertFalse(is_dir(path: file), "is_dir exposes path");
+        assertTrue(is_readable(path: file), "is_readable exposes path");
+        assertTrue(is_writable(path: file), "is_writable exposes path");
+        assertEq(0, chmod(path: file, mode: 0600), "chmod exposes path and mode");
+        assertTrue(stat(path: file) != NOTHING, "stat exposes path");
+        assertTrue(lstat(path: file) != NOTHING, "lstat exposes path");
+        assertTrue(hstat(path: file) != NOTHING, "hstat exposes path");
+        assertTrue(hlstat(path: file) != NOTHING, "hlstat exposes path");
+        assertTrue(statvfs(path: file) != NOTHING, "statvfs exposes path");
+        assertTrue(inlist(file, glob(pattern: file)), "glob exposes pattern");
+        assertTrue(absolute_path(path: file), "absolute_path exposes path");
+        assertTrue(absolute_path_unix(path: file), "absolute_path_unix exposes path");
+        assertTrue(absolute_path(path: realpath(path: file)), "realpath exposes path");
+
+        rename(source_path: file, target_path: target);
+        assertFalse(is_file(path: file), "rename moved source");
+        assertTrue(is_file(path: target), "rename moved target");
+        int old_mask = umask(mask: 022);
+        assertEq(022, umask(mask: old_mask), "umask exposes mask");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("chdir(path: \"/\"); mkdir(path: \"/tmp/qore-na\", mode: 0777, parents: True); "
+            "mkdir_ex(path: \"/tmp/qore-na\", mode: 0777, parents: True); mkfifo(path: \"/tmp/qore-na-fifo\"); "
+            "unlink(path: \"/tmp/qore-na\"); rmdir(path: \"/tmp/qore-na\"); "
+            "chown(path: \"/tmp/qore-na\", owner: -1, group: -1); "
+            "lchown(path: \"/tmp/qore-na\", owner: -1, group: -1); "
+            "readlink(path: \"/tmp/qore-na-link\"); "
+            "symlink(target_path: \"/tmp/qore-na-target\", link_path: \"/tmp/qore-na-link\"); "
+            "is_socket(path: \"/tmp/qore-na\"); is_pipe(path: \"/tmp/qore-na\"); "
+            "is_cdev(path: \"/tmp/qore-na\"); is_bdev(path: \"/tmp/qore-na\"); "
+            "is_dev(path: \"/tmp/qore-na\"); is_link(path: \"/tmp/qore-na\"); "
+            "is_executable(path: \"/bin/sh\"); absolute_path_windows(path: \"C:\\\\temp\");",
+            "file-named");
+    }
+
+    reviewedReadOnlyFileBuiltinOptIn() {
+        string file = sprintf("%s%sqore-na-readonly-file-%d-%s.txt", tmp_location(), DirSep, getpid(),
+            get_random_bytes(size: 4).toHex());
+        on_exit unlink(path: file);
+
+        {
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC, 0600, "UTF-8");
+            f.write("first\nsecond");
+        }
+
+        assertEq("first\nsecond", ReadOnlyFile::readTextFile(path: file, encoding: "UTF-8",
+            max_file_len: -1), "ReadOnlyFile readTextFile exposes path, encoding, and max_file_len");
+        assertEq(binary("first\nsecond"), ReadOnlyFile::readBinaryFile(path: file, max_file_len: -1),
+            "ReadOnlyFile readBinaryFile exposes path and max_file_len");
+        assertTrue(ReadOnlyFile::stat(path: file) != NOTHING, "ReadOnlyFile stat exposes path");
+        assertTrue(ReadOnlyFile::lstat(path: file) != NOTHING, "ReadOnlyFile lstat exposes path");
+        assertTrue(ReadOnlyFile::hstat(path: file) != NOTHING, "ReadOnlyFile hstat exposes path");
+        assertTrue(ReadOnlyFile::hlstat(path: file) != NOTHING, "ReadOnlyFile hlstat exposes path");
+        assertTrue(ReadOnlyFile::statvfs(path: file) != NOTHING, "ReadOnlyFile statvfs exposes path");
+
+        ReadOnlyFile rof(path: file, encoding: "UTF-8");
+        assertTrue(rof.isDataAvailable(timeout_ms: 0), "ReadOnlyFile isDataAvailable exposes timeout_ms");
+        assertEq("first", rof.read(size: 5, timeout_ms: -1),
+            "ReadOnlyFile constructor and read expose names");
+        rof.setPos(position: 0);
+        assertEq("first", rof.readLine(include_eol: False, eol: "\n"),
+            "ReadOnlyFile readLine exposes include_eol and eol");
+        rof.setPos(position: 0);
+        assertEq(binary("fi"), rof.readBinary(size: 2, timeout_ms: -1),
+            "ReadOnlyFile readBinary exposes size and timeout_ms");
+        assertEq(binary("rs"), rof.readShortBinary(size: 2, timeout_ms: -1),
+            "ReadOnlyFile readShortBinary exposes size and timeout_ms");
+        rof.setEncoding(encoding: "UTF-8");
+        assertEq("UTF-8", rof.getEncoding(), "ReadOnlyFile setEncoding exposes encoding");
+
+        Queue queue();
+        rof.setEventQueue(queue: queue, argument: "read-only", with_data: False);
+        rof.setEventQueue();
+        rof.close();
+        rof.open(path: file, encoding: "UTF-8");
+        assertEq("first", rof.read(size: 5, timeout_ms: -1), "ReadOnlyFile open exposes path and encoding");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("ReadOnlyFile f(\"/tmp/qore-na-readonly\"); "
+            "f.startPollRead(path: \"/tmp/qore-na-readonly\", as_string: True, max_bytes: 1);",
+            "readonly-file-named");
+    }
+
+    reviewedLibraryBuiltinOptIn() {
+        assertEq("file.txt", basename(path: "/tmp/file.txt"), "basename exposes path");
+        assertEq("/tmp", dirname(path: "/tmp/file.txt"), "dirname exposes path");
+        assertTrue(strerror(error_number: 0) != NOTHING, "strerror exposes error_number");
+        srand(seed: 1);
+        assertEq(0, sleep(seconds: 0), "sleep exposes seconds");
+        assertEq(0, usleep(microseconds: 0), "usleep exposes microseconds");
+        assertEq(0, usleep(duration: 0ms), "usleep date variant exposes duration");
+
+        TreeMap tm();
+        tm.put(path: "api/v1", value: "handler");
+        *string unmatched;
+        assertEq("handler", tm.get(path: "api/v1/users", unmatched: \unmatched),
+            "TreeMap get exposes path and unmatched");
+        assertEq("users", unmatched, "TreeMap get writes unmatched suffix");
+        assertEq("handler", tm.take(path: "api/v1"), "TreeMap take exposes path");
+
+        string original_http2 = get_global_http2_mode();
+        on_exit set_global_http2_mode(mode: original_http2);
+        set_global_http2_mode(mode: "auto");
+        assertEq("auto", get_global_http2_mode(), "HTTP/2 mode string variant exposes mode");
+        set_global_http2_mode(mode: HTTP2Mode::Disabled);
+        assertEq("disabled", get_global_http2_mode(), "HTTP/2 mode enum variant exposes mode");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub ql_lib_named_exit() { exit(status: 0); } "
+            "sub ql_lib_named_exec() { exec(command: \"/bin/true\"); } "
+            "sub ql_lib_named_system() { system(command: \"true\"); } "
+            "sub ql_lib_named_setgroups() { setgroups(group_ids: ()); } "
+            "sub ql_lib_named_kill() { kill(pid: 0, signal: 0); } "
+            "sub ql_lib_named_setuid() { setuid(uid: 0); seteuid(uid: 0); } "
+            "sub ql_lib_named_setgid() { setgid(gid: 0); setegid(gid: 0); } "
+            "sub ql_lib_named_gethostbyname() { gethostbyname(hostname: \"localhost\"); "
+            "gethostbyname_long(hostname: \"localhost\"); } "
+            "sub ql_lib_named_gethostbyaddr() { gethostbyaddr(address: \"127.0.0.1\", family: AF_INET); "
+            "gethostbyaddr_long(address: \"127.0.0.1\", family: AF_INET); } "
+            "sub ql_lib_named_getaddrinfo() { getaddrinfo(node: \"localhost\", service: NOTHING, "
+            "family: AF_UNSPEC, flags: 0); getaddrinfo_async(node: \"localhost\", service: NOTHING, "
+            "family: AF_UNSPEC, flags: 0, socktype: SOCK_STREAM, protocol: 0, timeout: -1); } "
+            "sub ql_lib_named_getnameinfo() { getnameinfo_async(address: \"127.0.0.1\", family: AF_INET, "
+            "port: 0, timeout: -1); } "
+            "sub ql_lib_named_closefds() { close_all_fd(standard_fds: False); } "
+            "sub ql_lib_named_options() { qore_set_library_options(options: 0); } "
+            "sub ql_lib_named_blacklist() { qore_add_module_to_blacklist(name: \"NamedArgsTest\", "
+            "message: \"test\"); qore_add_module_to_blacklist_ex(name: \"NamedArgsTest\", message: \"test\"); }",
+            "library-named");
+    }
+
+    reviewedParseOptionsClassBuiltinOptIn() {
+        ParseOptions opts = new ParseOptions(parse_options: PO_NO_NETWORK);
+        assertTrue(opts.hasAll(parse_options: PO_NO_NETWORK), "ParseOptions integer constructor exposes parse_options");
+
+        opts.set(name: "no-filesystem");
+        assertTrue(opts.hasAny(name: "no-filesystem"), "ParseOptions string methods expose name");
+        opts.clear(name: "no-filesystem");
+        assertFalse(opts.hasAny(name: "no-filesystem"), "ParseOptions clear exposes name");
+
+        opts.set(parse_options: PO_NO_GUI);
+        assertTrue(opts.hasAny(parse_options: PO_NO_GUI), "ParseOptions set exposes parse_options");
+        opts.clear(parse_options: PO_NO_GUI);
+        assertFalse(opts.hasAny(parse_options: PO_NO_GUI), "ParseOptions clear exposes parse_options");
+
+        ParseOptions other = new ParseOptions(names: ("no-database",));
+        ParseOptions merged = opts.merge(other: other);
+        assertTrue(merged.hasAll(other: other), "ParseOptions object variants expose other");
+        assertTrue(merged.hasAny(name: "no-database"), "ParseOptions list constructor exposes names");
+
+        ParseOptions masked = merged.mask(parse_options: PO_NO_DATABASE);
+        assertTrue(masked.equals(other: other), "ParseOptions mask and equals expose reviewed names");
+    }
+
+    reviewedThreadBuiltinOptIn() {
+        save_thread_data(data: {"na-thread-key": "value"});
+        assertEq("value", get_thread_data(key: "na-thread-key"), "thread data lookup exposes key");
+        assertEq({"na-thread-key": "value"}, remove_thread_data(key_list: ("na-thread-key",)),
+            "thread data removal exposes keys");
+        save_thread_data(key: "na-thread-key", value: "deleted");
+        delete_thread_data(key_list: ("na-thread-key",));
+        assertNothing(get_thread_data(key: "na-thread-key"), "thread data deletion exposes keys");
+        assertTrue(get_parent_caller_location(offset: 0) != NOTHING, "caller location exposes offset");
+
+        assertEq((2, 4, 6), parallel_map(callable: auto sub(auto x) { return x * 2; }, items: (1, 2, 3),
+            thread_count: 1), "parallel_map exposes callable, items, and thread_count");
+        list<auto> seen = ();
+        parallel_foreach(callable: sub(auto x) { seen += x; }, items: (1, 2, 3), thread_count: 1);
+        assertEq((1, 2, 3), seen, "parallel_foreach exposes callable, items, and thread_count");
+
+        Channel ch(1);
+        ch.send("payload");
+        hash<auto> selected = channel_select(cases: ({"channel": ch, "op": "recv"},), timeout: 0);
+        assertEq(0, selected.index, "channel_select exposes cases");
+        assertEq("payload", selected.value, "channel_select receives the ready value");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub ql_thread_named_cancel() { cancel_thread(thread_id: 1, reason: NOTHING); } "
+            "sub ql_thread_named_stack() { set_default_thread_stack_size(stack_size: 1024 * 1024); } "
+            "sub ql_thread_named_init() { set_thread_init(callback: NOTHING); } "
+            "sub ql_thread_named_name() { set_thread_name(name: \"qore-na\"); } "
+            "sub ql_thread_named_tz() { set_thread_tz(timezone: new TimeZone(\"UTC\")); } "
+            "sub ql_thread_named_resource() { set_thread_resource(resource: sub(auto arg) {}, argument: NOTHING); "
+            "remove_thread_resource(resource: sub() {}); }",
+            "thread-named");
+    }
+
+    reviewedProgramControlBuiltinOptIn() {
+        ParseOptions opts("allow-debugger");
+        opts.set(parse_options: PO_NEW_STYLE);
+        Program p(opts);
+        p.parse("sub program_control_named() { ProgramControl pc = ProgramControl::getProgram(); "
+            "bool variable_exists; Breakpoint breakpoint(); "
+            "pc.isDefined(parse_define: \"NAMED_PROGRAM_CONTROL\"); "
+            "pc.getDefine(parse_define: \"NAMED_PROGRAM_CONTROL\"); "
+            "pc.existsFunction(function_name: \"main\"); "
+            "pc.getGlobalVariable(variable_name: \"ARGV\", found: \\variable_exists); "
+            "pc.setGlobalVarValue(variable_name: \"named_program_control_value\", value: 1); "
+            "pc.assignBreakpoint(breakpoint: breakpoint); "
+            "pc.getStatementIdInfo(statement_id: 1, list_breakpoints: False); "
+            "pc.findStatementId(file: \"program-control-named\", line: 1); "
+            "pc.findFunctionStatementId(function_name: \"main\", params: NOTHING); "
+            "pc.findFunctionVariants(function_name: \"main\"); "
+            "ProgramControl::resolveProgramId(program_id: pc.getProgramId()); }",
+            "program-control-named");
+    }
+
+    reviewedSandboxManagerBuiltinOptIn() {
+        SandboxManager sm();
+        sm.setMemoryLimit(max_bytes: 1024 * 1024);
+        assertEq(1024 * 1024, sm.getMemoryLimit(), "SandboxManager memory limit exposes max_bytes");
+        sm.setCPUTimeLimit(max_cpu_time_ms: 1000);
+        assertEq(1000, sm.getCPUTimeLimit(), "SandboxManager CPU limit exposes max_cpu_time_ms");
+        sm.setWallTimeLimit(max_wall_time_ms: 2000);
+        assertEq(2000, sm.getWallTimeLimit(), "SandboxManager wall limit exposes max_wall_time_ms");
+        sm.setMaxThreads(max_threads: 2);
+        assertEq(2, sm.getMaxThreads(), "SandboxManager thread limit exposes max_threads");
+        sm.setMaxRecursionDepth(max_depth: 20);
+        assertEq(20, sm.getMaxRecursionDepth(), "SandboxManager recursion limit exposes max_depth");
+
+        string cwd = getcwd();
+        sm.addFilesystemAllowedPath(path: cwd, access_modes: QSEC_READ);
+        sm.addFilesystemDeniedPath(path: cwd);
+        sm.setFilesystemSandboxRoot(path: cwd);
+        sm.setFilesystemDefaultPolicy(allow: True);
+        assertTrue(sm.getFilesystemDefaultPolicy(), "SandboxManager filesystem default policy exposes allow");
+
+        sm.addNetworkAllowedHost(host_pattern: "example.com");
+        sm.addNetworkAllowedIPRange(cidr: "203.0.113.0/24");
+        sm.addNetworkDeniedIPRange(cidr: "198.51.100.0/24");
+        sm.addNetworkAllowedPort(port: 443, protocol: QSEC_NET_TCP);
+        sm.addNetworkAllowedPortRange(start_port: 8000, end_port: 9000, protocol: QSEC_NET_TCP);
+        sm.setNetworkDefaultPolicy(allow: True);
+        assertTrue(sm.getNetworkDefaultPolicy(), "SandboxManager network default policy exposes allow");
+    }
+
+    reviewedProgramClassBuiltinOptIn() {
+        ParseOptions opts = new ParseOptions(parse_options: PO_NEW_STYLE);
+        Program p = new Program(parse_options: opts, independent: True);
+        p.parse(code: "sub na_program_function(int value) { return value + 1; } "
+            "class NAProgramStatic { static string echo(string value) { return value; } }",
+            label: "program-named-runtime", warning_mask: WARN_NONE, source: NOTHING, offset: NOTHING);
+
+        assertTrue(p.existsFunction(function_name: "na_program_function"), "Program existsFunction exposes function_name");
+        assertEq(42, p.callFunctionArgs(function_name: "na_program_function", arguments: (41,)),
+            "Program callFunctionArgs exposes function_name and arguments");
+        assertEq("ok", p.callStaticMethodArgs(class_name: "NAProgramStatic", method_name: "echo",
+            arguments: ("ok",)), "Program callStaticMethodArgs exposes class_name, method_name, and arguments");
+
+        p.define(parse_define: "NA_PROGRAM_DEFINE", value: "defined");
+        assertTrue(p.isDefined(parse_define: "NA_PROGRAM_DEFINE"), "Program isDefined exposes parse_define");
+        assertEq("defined", p.getDefine(parse_define: "NA_PROGRAM_DEFINE"),
+            "Program getDefine exposes parse_define");
+        p.undefine(parse_define: "NA_PROGRAM_DEFINE");
+        assertFalse(p.isDefined(parse_define: "NA_PROGRAM_DEFINE"), "Program undefine exposes parse_define");
+
+        bool found = True;
+        assertNothing(p.getGlobalVariable(variable_name: "no_such_global", found: \found),
+            "Program getGlobalVariable exposes found");
+        assertFalse(found, "Program getGlobalVariable updates found");
+
+        p.setParseOptions(parse_options: PO_REQUIRE_TYPES);
+        p.disableParseOptions(parse_options: PO_REQUIRE_TYPES);
+        p.setScriptPath(path: "/tmp/qore-program-named.q");
+        p.setTimeZoneRegion(region: "UTC");
+        p.setTimeZoneUTCOffset(seconds_east: 0);
+        p.setTimeZone(zone: new TimeZone(region: "UTC"));
+        p.setExecMode(mode: EM_AST);
+        assertTrue(p.findFunctionVariants(function_name: "na_program_function").size() > 0,
+            "Program findFunctionVariants exposes function_name");
+        assertTrue(p.getCallReference(identifier: "na_program_function") != NOTHING,
+            "Program getCallReference exposes identifier");
+        assertTrue(p.getExpression(source: "1 + 1", label: "program-expression-named") != NOTHING,
+            "Program getExpression exposes source and label");
+
+        Program pending = new Program(parse_options: PO_NEW_STYLE, independent: True);
+        pending.parsePending(code: "sub na_program_pending() { return 7; }",
+            label: "program-named-pending", warning_mask: WARN_NONE, source: NOTHING, offset: NOTHING);
+        pending.parseCommit(warning_mask: WARN_NONE);
+        assertEq(7, pending.callFunctionArgs(function_name: "na_program_pending", arguments: ()),
+            "Program parsePending and parseCommit expose parser names");
+
+        Program sandboxed = new Program(parse_options: PO_NEW_STYLE, independent: True);
+        sandboxed.setSandboxManager(sandbox_manager: new SandboxManager());
+
+        assertTrue(Program::hasParseOption(name: "new-style"), "Program static hasParseOption exposes name");
+        assertTrue(Program::getCallerCapabilityMask(frame_offset: 0) != NOTHING,
+            "Program static getCallerCapabilityMask exposes frame_offset");
+
+        Program parse_only = new Program(parse_options: PO_NEW_STYLE | PO_ALLOW_INJECTION
+            | PO_NO_CHILD_PO_RESTRICTIONS, independent: True);
+        parse_only.parse(code: "sub program_named_api(Program p, Program target) { "
+            "p.importFunction(function_name: \"html_encode\"); "
+            "p.importFunction(function_name: \"html_encode\", import_as: \"html_encode_named\", inject: False); "
+            "p.importGlobalVariable(variable_name: \"ARGV\", readonly: True); "
+            "p.importGlobalVariable(variable_name: \"ARGV\", import_as: \"PROGRAM_ARGV\", readonly: True); "
+            "p.importClass(class_name: \"Qore::TimeZone\", import_as: NOTHING, inject: False, "
+            "module_visibility: CSP_UNCHANGED, reexport: False); "
+            "p.importHashDecl(hashdecl_name: \"ExceptionInfo\", import_as: NOTHING, reexport: False); "
+            "p.loadModule(module_name: \"reflection\", warning_mask: WARN_NONE); "
+            "p.loadModuleWarn(module_name: \"reflection\", warning_mask: WARN_NONE); "
+            "p.loadUserModuleWithProgram(module_name: \"NamedArgsTest\", program: target, warning_mask: WARN_NONE); "
+            "p.loadUserModuleWithProgramWarn(module_name: \"NamedArgsTest\", program: target, "
+            "warning_mask: WARN_NONE); "
+            "p.loadApplyToUserModule(module_name: \"NamedArgsTest\", reinject: False, "
+            "warning_mask: WARN_NONE, reexport: False); "
+            "p.loadApplyToUserModuleWarn(module_name: \"NamedArgsTest\", reinject: False, "
+            "warning_mask: WARN_NONE, reexport: False); "
+            "p.loadApplyToPrivateUserModule(module_name: \"NamedArgsTest\", warning_mask: WARN_NONE); "
+            "p.loadApplyToPrivateUserModuleWarn(module_name: \"NamedArgsTest\", warning_mask: WARN_NONE); "
+            "p.setThreadInit(callback: NOTHING); "
+            "p.setGlobalVarValue(variable_name: \"program_named_api_value\", value: 1); "
+            "p.issueModuleCmd(module_name: \"jni\", command: \"noop\"); "
+            "Program::issueModuleCmd(module_name: \"jni\", command: \"noop\"); "
+            "} ",
+            label: "program-named-api-parse", warning_mask: WARN_NONE, source: NOTHING, offset: NOTHING);
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", sub () {
+            Program unsupported = new Program(parse_options: PO_NEW_STYLE, independent: True);
+            unsupported.parse(code: "Program p(PO_NEW_STYLE); p.callFunction(name: \"missing\");",
+                label: "program-varargs-named-unsupported", warning_mask: WARN_NONE, source: NOTHING,
+                offset: NOTHING);
+        });
+    }
+
+    reviewedDebugProgramBuiltinOptIn() {
+        ParseOptions opts("allow-debugger");
+        opts.set(parse_options: PO_NEW_STYLE);
+        Program p(opts);
+        p.parse("class NamedDebugProgram inherits DebugProgram { "
+            "onAttach(ProgramControl pgm, reference rs, reference rtsid) {} "
+            "onDetach(ProgramControl pgm, reference rs, reference rtsid) {} "
+            "onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, "
+            "reference flow, reference rs, reference rtsid) {} "
+            "onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference rtsid) {} "
+            "onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, "
+            "reference rtsid) {} "
+            "onException(ProgramControl pgm, int statementId, hash ex, reference dismiss, reference rs, "
+            "reference rtsid) {} "
+            "onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rtsid) {} "
+            "} "
+            "sub debug_program_callbacks_named(DebugProgram dbg, ProgramControl pc) { "
+            "int run_state = DebugRun; int run_to_statement_id = 0; int flow = DebugFlowContinue; "
+            "auto return_value = NOTHING; bool dismiss = False; "
+            "dbg.onAttach(program: pc, run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onDetach(program: pc, run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onStep(program: pc, block_statement_id: 1, statement_id: NOTHING, breakpoint_id: NOTHING, "
+            "flow: \\flow, run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onFunctionEnter(program: pc, statement_id: 1, run_state: \\run_state, "
+            "run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onFunctionExit(program: pc, statement_id: 1, return_value: \\return_value, "
+            "run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onException(program: pc, statement_id: 1, exception: (\"err\": \"NAMED-DEBUG\"), "
+            "dismiss: \\dismiss, run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onExit(program: pc, statement_id: 1, return_value: \\return_value, "
+            "run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "} "
+            "sub debug_program_named() { "
+            "debug_program_callbacks_named(new NamedDebugProgram(), ProgramControl::getProgram()); }",
+            "debug-program-named");
+    }
+
+    reviewedThreadClassBuiltinOptIn() {
+        Queue q = new Queue(max_size: 2);
+        q.push(value: "tail", timeout_ms: 0);
+        q.insert(value: "head", timeout_ms: 0);
+        assertEq("head", q.get(timeout_ms: 0), "Queue get exposes timeout_ms");
+        assertEq("tail", q.pop(timeout_ms: 0), "Queue constructor and insert/push expose names");
+        q.setError(error: "NAMED-QUEUE-ERROR", description: "named queue error");
+        q.clearError();
+
+        Channel ch = new Channel(capacity: 1);
+        assertTrue(ch.trySend(value: "payload"), "Channel trySend exposes value");
+        assertEq("payload", ch.recv(timeout_ms: 0), "Channel recv exposes timeout_ms");
+        ch.send(value: "iter", timeout_ms: 0);
+        ch.close();
+        ChannelIterator it = new ChannelIterator(channel: ch);
+        assertTrue(it.next(), "ChannelIterator constructor exposes channel");
+        assertEq("iter", it.getValue(), "ChannelIterator receives channel values");
+
+        Semaphore sem = new Semaphore(permits: 1);
+        sem.acquire(timeout_ms: -1);
+        sem.release(permits: 1);
+        AutoSemaphore as = new AutoSemaphore(semaphore: sem);
+        as.release();
+        as.acquire(timeout_ms: -1);
+
+        Counter counter = new Counter(initial_value: 0);
+        assertEq(0, counter.waitForZero(timeout_ms: -1), "Counter exposes initial_value and timeout_ms");
+
+        WaitGroup wg();
+        assertEq(0, wg.wait(timeout_ms: 0), "WaitGroup wait exposes timeout_ms");
+        wg.add(count: 1);
+        assertEq(1, wg.getCount(), "WaitGroup add exposes count");
+        wg.done();
+
+        Mutex mutex();
+        assertEq(0, mutex.lock(timeout_ms: 0), "Mutex lock exposes timeout_ms");
+        mutex.unlock();
+        {
+            AutoLock lock = new AutoLock(mutex: mutex);
+            lock.unlock();
+        }
+
+        Gate gate();
+        assertEq(0, gate.enter(timeout_ms: 0), "Gate enter exposes timeout_ms");
+        gate.exit();
+        AutoGate gate_lock = new AutoGate(gate: gate);
+        delete gate_lock;
+
+        {
+            RWLock rwlock();
+            assertEq(0, rwlock.readLock(timeout_ms: 0), "RWLock readLock exposes timeout_ms");
+            rwlock.readUnlock();
+            AutoReadLock read_lock = new AutoReadLock(lock: rwlock);
+        }
+        {
+            RWLock rwlock();
+            assertEq(0, rwlock.writeLock(timeout_ms: 0), "RWLock writeLock exposes timeout_ms");
+            rwlock.writeUnlock();
+            AutoWriteLock write_lock = new AutoWriteLock(lock: rwlock);
+        }
+
+        Promise promise();
+        Future future = promise.getFuture();
+        promise.set(value: "resolved");
+        assertEq("resolved", future.get(timeout_ms: 0), "Promise set and Future get expose names");
+        Promise error_promise();
+        Future error_future = error_promise.getFuture();
+        error_promise.setError(error: "NAMED-PROMISE-ERROR", description: "named promise error",
+            argument: "detail");
+        assertThrows("NAMED-PROMISE-ERROR", "named promise error",
+            sub() { error_future.get(timeout_ms: 0); });
+
+        ThreadPool thread_pool = new ThreadPool(max_threads: 2, min_idle_threads: 0, max_idle_threads: 1,
+            idle_release_timeout: 1s);
+        Counter thread_pool_counter(1);
+        thread_pool.submit(task: sub () { thread_pool_counter.dec(); }, cancel_callback: NOTHING);
+        assertEq(0, thread_pool_counter.waitForZero(timeout_ms: 10s), "ThreadPool submit exposes task");
+        thread_pool.stopWait();
+
+        Mutex cond_mutex();
+        Condition cond();
+        cond_mutex.lock();
+        on_exit cond_mutex.unlock();
+        assertEq(ETIMEDOUT, cond.wait(lock: cond_mutex, timeout_ms: 1),
+            "Condition wait exposes lock and timeout_ms");
+        assertEq(ETIMEDOUT, cond.wait(lock: cond_mutex, timeout_date: 1ms),
+            "Condition wait exposes timeout_date");
+        assertEq(0, cond.wait_count(lock: cond_mutex), "Condition wait_count exposes lock");
+    }
+
+    reviewedEventLoopClassBuiltinOptIn() {
+        EventLoop loop();
+        int timer_id = loop.addTimer(deadline: now_us(), user_data: "named-timer");
+        *list<hash<EventPollInfo>> timer_events = loop.poll(timeout_ms: 0);
+        assertEq(1, timer_events.size(), "EventLoop poll exposes timeout_ms");
+        assertEq(timer_id, timer_events[0].timer_id, "EventLoop addTimer exposes deadline");
+        assertEq("named-timer", timer_events[0].timer_udata, "EventLoop addTimer exposes user_data");
+        assertFalse(loop.cancelTimer(timer_id: timer_id), "EventLoop cancelTimer exposes timer_id");
+
+        EventNotifier notifier();
+        loop.add(notifier: notifier, events: SOCK_POLLIN);
+        notifier.notify();
+        *list<hash<EventPollInfo>> notifier_events = loop.poll(timeout_ms: 1s);
+        assertEq(1, notifier_events.size(), "EventLoop add exposes notifier and events");
+        assertTrue((notifier_events[0].events & SOCK_POLLIN) != 0, "EventLoop returns notifier readiness");
+        loop.del(notifier: notifier);
+        notifier.acknowledge();
+    }
+
+    reviewedSocketLowLevelBuiltinOptIn() {
+        Socket sock();
+        sock.setEncoding(encoding: "UTF-8");
+        assertEq("UTF-8", sock.getEncoding(), "Socket setEncoding exposes encoding");
+        sock.setCharset(encoding: "UTF-8");
+        assertEq("UTF-8", sock.getCharset(), "Socket setCharset exposes encoding");
+        sock.setAlpnProtocols(protocols: ("h2", "http/1.1"));
+        assertEq(0, sock.setUserTimeout(timeout_ms: 1000), "Socket setUserTimeout exposes timeout_ms");
+        assertEq(1000, sock.getUserTimeout(), "Socket user timeout is stored on unopened sockets");
+        sock.acceptAllCertificates(accept_all: True);
+        assertTrue(sock.getAcceptAllCertificates(), "Socket acceptAllCertificates exposes accept_all");
+        assertFalse(sock.captureRemoteCertificates(enabled: True),
+            "Socket captureRemoteCertificates exposes enabled and returns previous value");
+        assertEq("hello", Socket::parseServerSentEvent(event_text: "data: hello\n\n").data,
+            "Socket parseServerSentEvent exposes event_text");
+        assertEq((), Socket::poll(items: (), timeout_ms: 0), "Socket poll exposes items and timeout_ms");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub socket_low_level_named(Socket s, InputStream input_stream, OutputStream output_stream, "
+            "Queue queue, SSLCertificate certificate, SSLPrivateKey private_key) { "
+            "binary bin = <00>; string text = \"x\"; "
+            "s.startPollConnect(target: \"example.com:80\"); "
+            "s.startPollConnectSsl(target: \"example.com:443\"); "
+            "s.startPollSend(data: text); s.startPollSend(data: bin); "
+            "s.startPollRecvString(size: 1); s.startPollRecvBinary(size: 1); "
+            "s.startPollReadHttpBody(content_length: 0, chunked: False, connection_close: False); "
+            "s.startPollRecvUntilBytesString(pattern: \"\\r\\n\"); "
+            "s.startPollRecvUntilBytesBinary(pattern: \"\\r\\n\"); "
+            "s.startPollRecvFrom(max_size: 128); "
+            "s.startPollSendTo(host: \"127.0.0.1\", port: 9, data: bin, family: AF_INET); "
+            "s.connect(target: \"example.com:80\", timeout_ms: 0); "
+            "s.connectINET(host: \"example.com\", service: \"80\", timeout_ms: 0, family: AF_UNSPEC, "
+            "socket_type: SOCK_STREAM, protocol: 0); "
+            "s.connectUNIX(path: \"/tmp/qore-na-socket\", socket_type: SOCK_STREAM, protocol: 0); "
+            "s.connectSSL(target: \"example.com:443\", timeout_ms: 0); "
+            "s.connectINETSSL(host: \"example.com\", service: \"443\", timeout_ms: 0, family: AF_UNSPEC, "
+            "socket_type: SOCK_STREAM, protocol: 0); "
+            "s.connectUNIXSSL(path: \"/tmp/qore-na-socket\", socket_type: SOCK_STREAM, protocol: 0); "
+            "s.bind(target: \"127.0.0.1:0\", reuse_address: True); "
+            "s.bind(port: 0, reuse_address: True); "
+            "s.bindUNIX(path: \"/tmp/qore-na-socket\", socket_type: SOCK_STREAM, protocol: 0); "
+            "s.bindINET(bind_address: NOTHING, service: \"0\", reuse_address: True, family: AF_UNSPEC, "
+            "socket_type: SOCK_STREAM, protocol: 0); "
+            "s.accept(timeout_ms: 0); s.acceptSSL(timeout_ms: 0); s.listen(backlog: 1); "
+            "s.send(data: bin, timeout_ms: 0); s.send(data: text, timeout_ms: 0); "
+            "s.sendBinary(data: bin, timeout_ms: 0); s.sendBinary(data: text, timeout_ms: 0); "
+            "s.send2(data: bin, timeout_ms: 0); s.send2(data: text, timeout_ms: 0); "
+            "s.sendBinary2(data: bin, timeout_ms: 0); s.sendBinary2(data: text, timeout_ms: 0); "
+            "s.sendFromInputStream(input_stream: input_stream, size: -1, timeout_ms: 0); "
+            "s.sendi1(value: 1, timeout_ms: 0); s.sendi2(value: 1, timeout_ms: 0); "
+            "s.sendi4(value: 1, timeout_ms: 0); s.sendi8(value: 1, timeout_ms: 0); "
+            "s.sendi2LSB(value: 1, timeout_ms: 0); s.sendi4LSB(value: 1, timeout_ms: 0); "
+            "s.sendi8LSB(value: 1, timeout_ms: 0); "
+            "s.recv(size: 1, timeout_ms: 0); s.recvBinary(size: 1, timeout_ms: 0); "
+            "s.recvToOutputStream(output_stream: output_stream, size: -1, timeout_ms: 0); "
+            "s.recvi1(timeout_ms: 0); s.recvi2(timeout_ms: 0); s.recvi4(timeout_ms: 0); "
+            "s.recvi8(timeout_ms: 0); s.recvi2LSB(timeout_ms: 0); s.recvi4LSB(timeout_ms: 0); "
+            "s.recvi8LSB(timeout_ms: 0); s.recvu1(timeout_ms: 0); s.recvu2(timeout_ms: 0); "
+            "s.recvu4(timeout_ms: 0); s.recvu2LSB(timeout_ms: 0); s.recvu4LSB(timeout_ms: 0); "
+            "s.setSendTimeout(timeout_ms: 0); s.setRecvTimeout(timeout_ms: 0); "
+            "s.isDataAvailable(timeout_ms: 0); s.isWriteFinished(timeout_ms: 0); "
+            "s.setCertificate(certificate: certificate); s.setCertificate(pem: \"\"); s.setCertificate(der: bin); "
+            "s.setPrivateKey(private_key: private_key); s.setPrivateKey(pem: \"\", password: NOTHING); "
+            "s.setPrivateKey(der: bin); "
+            "s.setCertificateAndPrivateKey(certificate: certificate, private_key: private_key); "
+            "s.setEventQueue(queue: queue, argument: NOTHING, with_data: False); "
+            "s.setNoDelay(enabled: True); s.getPeerInfo(host_lookup: False); s.getSocketInfo(host_lookup: False); "
+            "s.upgradeClientToSSL(timeout_ms: 0); s.upgradeServerToSSL(timeout_ms: 0); "
+            "s.setWarningQueue(warning_ms: 1, warning_bytes: 1, queue: queue, argument: NOTHING, min_ms: 1s); "
+            "s.setSslVerifyMode(mode: SSL_VERIFY_NONE); "
+            "s.setMaxChunkedBodySize(max_body_size: 0); "
+            "s.setHttp2MaxRequestBodySize(max_request_body_size: 0); "
+            "Socket::resolveAddrInfo(node: NOTHING, service: \"80\", family: AF_UNSPEC, flags: 0, "
+            "socket_type: SOCK_STREAM, protocol: 0, timeout_ms: 0); "
+            "}",
+            "socket-low-level-named");
+    }
+
+    reviewedSocketHttpBuiltinOptIn() {
+        Program p(PO_NEW_STYLE);
+        p.parse("sub socket_http_named(Socket s) { hash<auto> info; hash<auto> headers = {}; binary data = <00>; "
+            "StringOutputStream output_stream(); StringInputStream input_stream(source: \"body\"); "
+            "code send_callback = sub () { return NOTHING; }; code receive_callback = sub (hash<auto> h) {}; "
+            "code trailers_callback = *hash<auto> sub () { return NOTHING; }; "
+            "s.startPollSendHttpResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: \"body\"); "
+            "s.startPollSendHttpResponseAndReadHeader(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: data, idle_timeout: 1s); "
+            "s.startPollSendHttpResponseWithStreamAndReadHeader(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: input_stream, content_length: 4, idle_timeout: 1s); "
+            "s.startPollSendHttpChunkedResponseAndReadHeader(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: input_stream, idle_timeout: 1s); "
+            "s.startPollSendHttpResponseWithStream(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: input_stream, content_length: 4); "
+            "s.startPollSendHttpChunkedResponseWithStream(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: input_stream); "
+            "s.sendHTTPMessage(method: \"POST\", path: \"/path\", http_version: \"1.1\", headers: headers, "
+            "body: \"body\", info: \\info, timeout_ms: 0); "
+            "s.sendHTTPMessage(method: \"POST\", path: \"/path\", http_version: \"1.1\", headers: headers, "
+            "body: data, info: \\info, timeout_ms: 0); "
+            "s.sendHTTPMessageWithCallback(send_callback: send_callback, method: \"POST\", path: \"/path\", "
+            "http_version: \"1.1\", headers: headers, info: \\info, timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: \"body\", timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: \"body\", info: \\info, timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: data, timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: data, info: \\info, timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, input_stream: input_stream, max_chunk_size: 1024, info: \\info, "
+            "timeout_ms: 0, trailers_callback: trailers_callback); "
+            "s.sendHTTPResponseWithCallback(send_callback: send_callback, status_code: 200, "
+            "status_description: \"OK\", http_version: \"1.1\", headers: headers, timeout_ms: 0); "
+            "s.sendHTTPResponseWithCallback(send_callback: send_callback, status_code: 200, "
+            "status_description: \"OK\", http_version: \"1.1\", headers: headers, info: \\info, timeout_ms: 0); "
+            "s.sendHTTPChunkedBodyFromInputStream(input_stream: input_stream, max_chunk_size: 1024, "
+            "timeout_ms: 0, trailers_callback: trailers_callback); "
+            "s.sendHTTPChunkedBodyTrailer(trailer: headers, timeout_ms: 0); "
+            "s.readHTTPHeader(timeout_ms: 0, info: \\info); s.readHTTPHeaderString(timeout_ms: 0); "
+            "s.readHTTPChunkedBody(timeout_ms: 0); s.readHTTPChunkedBodyBinary(timeout_ms: 0); "
+            "s.readHTTPChunk(timeout_ms: 0); "
+            "s.readHTTPChunkedBodyToOutputStream(output_stream: output_stream, timeout_ms: 0); "
+            "s.readHTTPChunkedBodyWithCallback(receive_callback: receive_callback, timeout_ms: 0); "
+            "s.readHTTPChunkedBodyBinaryWithCallback(receive_callback: receive_callback, timeout_ms: 0); "
+            "s.readServerSentEvent(content_encoding: \"identity\", timeout_ms: 0); }",
+            "socket-http-named");
+    }
+
+    reviewedSocketHttp2BuiltinOptIn() {
+        Program p(PO_NEW_STYLE);
+        p.parse("sub socket_http2_named(Socket s) { binary data = <00>; StringInputStream input_stream(source: "
+            "\"body\"); hash<auto> headers = {}; "
+            "s.startPollReadHttp2Request(options: {\"headers_only\": True}); "
+            "s.startPollSendHttp2Response(stream_id: 1, status_code: 200, headers: headers, body: data); "
+            "s.startPollSendHttp2StreamingResponse(stream_id: 1, status_code: 200, headers: headers, "
+            "body: input_stream, chunk_size: 1024); "
+            "s.submitHttp2PushPromise(stream_id: 1, path: \"/style.css\", headers: headers); "
+            "s.submitHttp2Response(stream_id: 1, status_code: 200, headers: headers, body: data); "
+            "s.setHttp2ConnectProtocolEnabled(enabled: True); "
+            "s.submitHttp2ConnectResponse(stream_id: 1, status_code: 200, headers: headers); "
+            "s.startPollSendHttp2ConnectResponse(stream_id: 1, status_code: 200, headers: headers); "
+            "s.waitForHttp2StreamDrain(stream_id: 1, timeout_ms: 0); "
+            "s.submitHttp2StreamingResponseHeaders(stream_id: 1, status_code: 200, headers: headers); "
+            "s.sendHttp2StreamData(stream_id: 1, data: data, end_stream: False); "
+            "s.sendHttp2Trailers(stream_id: 1, trailers: {\"grpc-status\": \"0\"}); "
+            "s.cleanupHttp2Stream(stream_id: 1); s.resetHttp2Stream(stream_id: 1); "
+            "s.submitHttp2StreamingResponseWithStream(stream_id: 1, status_code: 200, headers: headers, "
+            "body: input_stream); "
+            "s.submitHttp2Request(headers: headers, body: data, streaming: False); "
+            "s.cancelHttp2Stream(stream_id: 1); }",
+            "socket-http2-named");
+    }
+
+    reviewedSocketQuicBuiltinOptIn() {
+        Program p(PO_NEW_STYLE);
+        p.parse("sub socket_quic_named(Socket s) { binary data = <00>; StringInputStream input_stream(source: "
+            "\"body\"); Queue q(); hash<auto> headers = {}; "
+            "s.startPollQuicConnect(host: \"example.com\", port: 443, family: AF_INET); "
+            "s.startPollQuicAccept(options: {\"headers_only\": True}); "
+            "s.startPollQuicSendResponse(session_id: 1, stream_id: 0, status_code: 200, headers: headers, "
+            "body: data); "
+            "s.submitQuicRequest(method: \"GET\", path: \"/\", headers: headers, body: data); "
+            "s.submitQuicRequestStreaming(method: \"POST\", path: \"/stream\", headers: headers); "
+            "s.sendQuicClientStreamData(stream_id: 0, body: data, end_stream: False); "
+            "s.waitForQuicClientStreamDrain(stream_id: 0, timeout_ms: 0); "
+            "s.cancelQuicStream(session_id: 1, stream_id: 0); "
+            "s.submitQuicResponse(session_id: 1, stream_id: 0, status_code: 200, headers: headers, body: data); "
+            "s.submitQuicShutdownNotice(session_id: 1); s.submitQuicShutdown(session_id: 1); "
+            "s.getQuicSessionGoawayState(session_id: 1); s.isQuicGoawayReceived(session_id: 1); "
+            "s.getQuicPeerCertificate(session_id: 1); "
+            "s.startPollQuicSendStreamingResponse(session_id: 1, stream_id: 0, status_code: 200, "
+            "headers: headers, body: input_stream, chunk_size: 1024); "
+            "s.submitQuicResponseStreaming(session_id: 1, stream_id: 0, status_code: 200, headers: headers); "
+            "s.submitQuicStreamData(session_id: 1, stream_id: 0, body: data, end_stream: False); "
+            "s.submitQuicStreamingResponseWithStream(session_id: 1, stream_id: 0, status_code: 200, "
+            "headers: headers, body: input_stream); "
+            "s.waitForQuicStreamDrain(session_id: 1, stream_id: 0, timeout_ms: 0); "
+            "s.submitQuicConnectResponse(session_id: 1, stream_id: 0, status_code: 200, headers: headers); "
+            "s.readQuicConnectStreamData(session_id: 1, stream_id: 0); "
+            "s.readQuicStreamDataBlock(session_id: 1, stream_id: 0, timeout_ms: 0); "
+            "s.isQuicStreamComplete(session_id: 1, stream_id: 0); "
+            "s.cleanupQuicStream(session_id: 1, stream_id: 0); "
+            "s.registerQuicConnectStreamQueue(session_id: 1, stream_id: 0, queue: q); "
+            "s.deregisterQuicConnectStreamQueue(session_id: 1, stream_id: 0); "
+            "s.registerQuicConnectStreamFrameState(session_id: 1, stream_id: 0, queue: q); "
+            "s.deregisterQuicConnectStreamFrameState(session_id: 1, stream_id: 0); "
+            "s.resetQuicStream(session_id: 1, stream_id: 0); "
+            "s.submitQuicDatagram(session_id: 1, stream_id: 0, data: data); "
+            "s.readQuicDatagram(session_id: 1, stream_id: 0, timeout_ms: 0); "
+            "s.registerQuicDatagramQueue(session_id: 1, stream_id: 0, queue: q); "
+            "s.unregisterQuicDatagramQueue(session_id: 1, stream_id: 0); "
+            "s.getQuicMaxDatagramSize(session_id: 1, stream_id: 0); "
+            "s.isQuicDatagramSupported(session_id: 1); }",
+            "socket-quic-named");
+    }
+
+    reviewedHttpReadinessBuiltinOptIn() {
+        AbstractHttpPollConnection conn();
+        EventNotifier notifier();
+
+        assertTrue(conn.registerReadyNotifier(notifier: notifier),
+            "AbstractHttpPollConnection registerReadyNotifier exposes notifier");
+        assertFalse(conn.waitForReady(timeout_ms: 0ms),
+            "AbstractHttpPollConnection waitForReady exposes timeout_ms");
+        conn.onConnectionReady();
+        assertTrue(conn.waitForReady(timeout_ms: 0ms),
+            "AbstractHttpPollConnection reports readiness after onConnectionReady");
+        notifier.acknowledge();
+
+        HttpClientConnectionBase base();
+        assertFalse(base.waitForReadyOrError(timeout_ms: 1),
+            "HttpClientConnectionBase waitForReadyOrError exposes timeout_ms");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub http_poll_constructors_named(Socket socket, object operation, *object certificate, "
+            "*object private_key) { "
+            "HttpKeepAlivePollOperationBase keep_alive(socket: socket, timeout_ms: 1000); "
+            "HttpIdlePollOperationBase idle(socket: socket, timeout_ms: 1s); "
+            "HttpClientPingPollOperationBase ping(operation: operation, min_status: 200, max_status: 299, "
+            "error_code: \"HTTP-PING-ERROR\", header_name: NOTHING, header_prefix: NOTHING, "
+            "websocket_key: NOTHING); "
+            "HttpAcceptPollOperationBase accept(listener: socket, accept_operation: operation, "
+            "ssl_required: False, certificate: certificate, private_key: private_key, "
+            "ssl_verify_flags: 0, accept_all_certificates: False, http_version: \"1.1\", "
+            "perform_ssl_handshake: True); }",
+            "http-poll-constructors-named");
+        Program p2(PO_NEW_STYLE);
+        p2.parse("sub http2_poll_operation_base_named(Socket socket, object initial_read_operation, "
+            "object send_operation, object read_operation, Queue queue, *EventNotifier notifier) { "
+            "Http2PollOperationBase h2(socket: socket, initial_read_operation: initial_read_operation, "
+            "headers_only: True); "
+            "h2.injectSendOp(send_operation: send_operation); "
+            "h2.injectReadOp(read_operation: read_operation); "
+            "h2.registerStreamQueue(stream_id: 1, queue: queue, notifier: notifier); "
+            "h2.registerStreamFrameState(stream_id: 1, queue: queue); "
+            "h2.onStreamData(stream_id: 1); }",
+            "http2-poll-operation-base-named");
+        Program p3(PO_NEW_STYLE);
+        p3.parse("sub http1_client_poll_operation_base_named(Socket socket, "
+            "AbstractHttpPollConnection connection, Promise promise, EventNotifier notifier, "
+            "Queue queue, object channel) { "
+            "Http1ClientPollOperationBase h1(socket: socket, connect_target: \"localhost:80\", "
+            "target_host: \"localhost\", target_port: 80, ssl_required: False, "
+            "proxy_tunnel: False, plain_proxy: False, connection: connection); "
+            "h1.setIdleTimeout(idle_timeout_ms: 1000); "
+            "h1.setProtocolSwitchedListener(listener: connection); "
+            "h1.submitRequest(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "promise: promise, max_streams: 1); "
+            "h1.submitRequestWithNotifier(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "promise: promise, notifier: notifier, max_streams: 1); "
+            "h1.submitRequestStreaming(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "channel: channel, max_streams: 1, streaming: True, body_streaming: False, "
+            "notifier: NOTHING, sse_install_eligible: False); "
+            "h1.pushSendData(data: NOTHING); "
+            "h1.setTrailers(trailers: NOTHING); "
+            "h1.submitRequestSse(method: \"GET\", path: \"/events\", headers: NOTHING, body: NOTHING, "
+            "queue: queue, max_streams: 1, notifier: notifier); "
+            "h1.cancelStream(stream_id: 1); "
+            "h1.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
+            "http1-client-poll-operation-base-named");
+        Program p4(PO_NEW_STYLE);
+        p4.parse("sub http2_client_poll_operation_base_named(Socket socket, "
+            "AbstractHttpPollConnection connection, Promise promise, EventNotifier notifier, "
+            "Queue queue, object channel) { "
+            "Http2ClientPollOperationBase h2c(socket: socket, connect_target: \"localhost:443\", "
+            "target_host: \"localhost\", target_port: 443, ssl_required: True, "
+            "proxy_tunnel: False, connection: connection); "
+            "h2c.setIdleTimeout(idle_timeout_ms: 1000); "
+            "h2c.setPingInterval(ping_interval_ms: 500); "
+            "h2c.submitRequest(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "promise: promise, max_streams: 10); "
+            "h2c.submitRequestWithNotifier(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "promise: promise, notifier: notifier, max_streams: 10); "
+            "h2c.submitRequestStreaming(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "channel: channel, max_streams: 10, streaming: True, notifier: NOTHING, "
+            "sse_install_eligible: False); "
+            "h2c.submitRequestSse(method: \"GET\", path: \"/events\", headers: NOTHING, body: NOTHING, "
+            "queue: queue, max_streams: 10, notifier: notifier); "
+            "h2c.cancelStream(stream_id: 1); "
+            "h2c.sendStreamData(stream_id: 1, data: \"chunk\", end_stream: False); "
+            "h2c.registerStreamQueue(stream_id: 1, queue: queue, notifier: notifier); "
+            "h2c.installFrameState(stream_id: 1, message_queue: queue); "
+            "h2c.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
+            "http2-client-poll-operation-base-named");
+        Program p5(PO_NEW_STYLE);
+        p5.parse("sub http3_client_poll_operation_base_named(Socket socket, "
+            "AbstractHttpPollConnection connection, Promise promise, EventNotifier notifier, "
+            "Queue queue, object channel) { "
+            "Http3ClientPollOperationBase h3(socket: socket, host: \"localhost\", port: 443, "
+            "connection: connection, family: AF_UNSPEC, connect_timeout: 1s); "
+            "h3.setQuicStreamLimit(stream_limit: 10); "
+            "h3.checkCapacity(max_streams: 10); "
+            "h3.endSubmitOk(stream_id: 1); "
+            "h3.setStreamStreaming(stream_id: 1); "
+            "h3.registerStreamWithPromise(stream_id: 1, promise: promise); "
+            "h3.registerStreamWithPromiseAndNotifier(stream_id: 1, promise: promise, notifier: notifier); "
+            "h3.registerStreamWithChannel(stream_id: 1, channel: channel, notifier: NOTHING, "
+            "sse_install_eligible: False); "
+            "h3.registerStreamWithQueue(stream_id: 1, queue: queue, notifier: notifier); "
+            "h3.cancelStream(stream_id: 1); "
+            "h3.waitStreamCapacity(timeout_ms: 10); "
+            "h3.setSubmitError(error_code: \"HTTP3-ERROR\", description: \"failure\"); "
+            "h3.registerStreamNotify(stream_id: 1); "
+            "h3.installFrameState(stream_id: 1, message_queue: queue); "
+            "h3.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
+            "http3-client-poll-operation-base-named");
+        Program p6(PO_NEW_STYLE);
+        p6.parse("sub http3_server_poll_operation_named(Socket socket, object controller, "
+            "object listener, object target, Queue queue, hash<SocketPollResultInfo> result, "
+            "SSLCertificate certificate, SSLPrivateKey private_key, InputStream stream) { "
+            "Http3ServerPollOperation h3s(socket: socket, drain_timeout: 5s, headers_only: True, "
+            "max_request_body_size: 1048576); "
+            "h3s.startSendResponse(status_code: 200, headers: {}, body: binary(\"ok\")); "
+            "h3s.startSendStreamingResponse(status_code: 200, headers: {}, body: stream, "
+            "chunk_size: 8192); "
+            "h3s.shutdown(session_id: 1); "
+            "h3s.reloadCertificate(certificate: certificate, private_key: private_key); "
+            "h3s.setCompletionContext(controller: controller, listener: listener, target: target, "
+            "owner: \"listener\"); "
+            "h3s.setConnectionCompletionContext(controller: controller, connection_unique_hash: \"uh\", "
+            "state: \"Http3\"); "
+            "h3s.onComplete(result: result); "
+            "h3s.registerStreamQueue(session_id: 1, stream_id: 2, queue: queue); "
+            "h3s.registerStreamListener(session_id: 1, stream_id: 2, listener: listener); "
+            "h3s.onStreamData(stream_key: \"1:2\"); }",
+            "http3-server-poll-operation-named");
+        Program p7(PO_NEW_STYLE);
+        p7.parse("sub websocket_poll_operation_bases_named(Socket socket) { "
+            "code callback = sub () {}; "
+            "WebSocketClientPollOperationBase client(socket: socket); "
+            "client.sendText(text: \"hello\"); "
+            "client.sendBinary(data: binary(\"hello\")); "
+            "client.sendPing(payload: binary(\"ping\")); "
+            "client.sendPong(payload: binary(\"pong\")); "
+            "client.sendRawFrame(frame_data: binary(\"frame\")); "
+            "client.sendClose(code: 1000, reason: \"normal\"); "
+            "client.getReceivedFrameBlocking(timeout_ms: 10); "
+            "client.setHasExtensions(enabled: True); "
+            "client.setHeartbeat(heartbeat_interval_ms: 1000); "
+            "client.setIdleTimeout(idle_timeout_ms: 30000); "
+            "HttpWebSocketPollOperationBase server(socket: socket); "
+            "server.sendText(text: \"hello\"); "
+            "server.sendBinary(data: binary(\"hello\")); "
+            "server.sendPing(payload: binary(\"ping\")); "
+            "server.sendClose(code: 1000, reason: \"normal\"); "
+            "server.setMaxFrameSize(max_frame_size: 1048576); "
+            "server.sendRawFrame(frame_data: binary(\"frame\")); "
+            "server.setFrameCallback(callback: callback); "
+            "server.setSendTimeout(timeout_ms: 30000); "
+            "server.setHeartbeat(heartbeat_interval_ms: 1000); "
+            "server.setEchoMode(enabled: True); }",
+            "websocket-poll-operation-bases-named");
+        Program p8(PO_NEW_STYLE);
+        p8.parse("sub poll_pipeline_named(Socket socket, Promise promise, object channel) { "
+            "PollPipeline pipe(socket: socket); "
+            "PollPipeline delegate(goal: \"delegate\"); "
+            "pipe.addConnect(target: \"localhost:80\"); "
+            "pipe.addConnectSsl(target: \"localhost:443\"); "
+            "pipe.addSend(payload: \"GET / HTTP/1.1\\r\\n\\r\\n\"); "
+            "pipe.addReadHttpBody(method: \"GET\"); "
+            "pipe.addDelegate(operation: delegate); "
+            "pipe.addRecvExact(byte_count: 4, as_string: True); "
+            "pipe.addRecvUntilBytes(pattern: \"\\r\\n\", as_string: True); "
+            "pipe.addRecvData(as_string: False); "
+            "pipe.addValidateHeaderPrefix(header_name: \"content-type\", expected_prefix: \"text/\", "
+            "error_code: \"HTTP-ERROR\"); "
+            "pipe.addExtractOutputField(field_name: \"body\"); "
+            "pipe.addValidateWebSocketAccept(websocket_key: \"key\", error_code: \"WEBSOCKET-ERROR\"); "
+            "pipe.addValidateStatus(min_status: 200, max_status: 299, error_code: \"HTTP-ERROR\"); "
+            "pipe.addBranchOnStatus(min_status: 200, max_status: 299, true_step: 1, false_step: 2); "
+            "pipe.addSendFromContext(context_key: \"request\"); "
+            "pipe.addRecvLineResponse(code_key: \"code\", text_key: \"text\", error_code: \"PROTO-ERROR\"); "
+            "pipe.addBranchOnContextKey(context_key: \"ok\", true_step: 1, false_step: 2); "
+            "pipe.addBranchOnContextValue(context_key: \"state\", value: \"ready\", true_step: 1, "
+            "false_step: 2); "
+            "pipe.addSetContextValue(context_key: \"state\", value: \"ready\"); "
+            "pipe.addSetContextBinary(context_key: \"request\", value: binary(\"data\")); "
+            "pipe.addCheckContains(source_key: \"text\", substring: \"ok\", result_key: \"has_ok\"); "
+            "pipe.addValidateResponsePrefix(expected_prefix: \"+OK\", error_code: \"POP3-ERROR\"); "
+            "pipe.addMakePop3ApopCommand(command_key: \"command\", present_key: \"present\", "
+            "username: \"user\", password: \"pass\"); "
+            "pipe.addSetContextBool(context_key: \"ok\", value: True); "
+            "pipe.addSelectContextValue(result_key: \"result\", condition_key: \"ok\", "
+            "true_source_key: \"a\", false_source_key: \"b\"); "
+            "pipe.addContextOr(result_key: \"either\", key_a: \"a\", key_b: \"b\"); "
+            "pipe.addGoto(target_step: 1); "
+            "pipe.addPushQueue(queue_id: 1); "
+            "pipe.addDrainQueueSend(queue_id: 1); "
+            "pipe.addYield(resume_step: 1); "
+            "pipe.setStepTarget(step_index: 1, true_step: 2, false_step: 3); "
+            "pipe.addWsControlFrameHandler(send_queue_id: 1, client_mask: True); "
+            "pipe.addBranchOnWsControlFrame(true_step: 1, false_step: 2); "
+            "pipe.addBranchOnWsClosed(true_step: 1, false_step: 2); "
+            "pipe.addBranchOnWsClosingDone(true_step: 1, false_step: 2); "
+            "pipe.addBranchOnEof(true_step: 1, false_step: 2); "
+            "pipe.addBranchOnHasFrame(true_step: 1, false_step: 2); "
+            "pipe.getQueueItem(queue_id: 1); "
+            "pipe.getQueueItemBlocking(queue_id: 1, timeout_ms: 10); "
+            "pipe.pushQueueItem(queue_id: 1, item: \"data\"); "
+            "pipe.queueHasItems(queue_id: 1); "
+            "pipe.getQueueSize(queue_id: 1); "
+            "pipe.setResultPromise(promise: promise); "
+            "pipe.setResultChannel(channel: channel); }",
+            "poll-pipeline-named");
+    }
+
+    reviewedSqlClassBuiltinOptIn() {
+        assertEq("pgsql:u/p@db", Datasource::makeConfigString(config: (
+            "type": "pgsql",
+            "user": "u",
+            "pass": "p",
+            "db": "db",
+        )), "Datasource::makeConfigString exposes config");
+    }
+
+    reviewedHttpClientClassBuiltinOptIn() {
+        HTTPClient client = new HTTPClient(options: {
+            "url": "http://example.com/base",
+            "timeout": 1s,
+            "connect_timeout": 1s,
+        });
+
+        client.setHTTPVersion(version: "1.1");
+        assertEq("1.1", client.getHTTPVersion(), "HTTPClient setHTTPVersion exposes version");
+
+        client.setHttp2Enabled(enabled: True);
+        assertTrue(client.isHttp2Enabled(), "HTTPClient setHttp2Enabled exposes enabled");
+        client.setHttp2Mode(mode: "disabled");
+        assertEq("disabled", client.getHttp2Mode(), "HTTPClient setHttp2Mode string variant exposes mode");
+        client.setHttp2Mode(mode: HTTP2Mode::Auto);
+        assertEq("auto", client.getHttp2Mode(), "HTTPClient setHttp2Mode enum variant exposes mode");
+
+        client.setHttp3Mode(mode: "disabled");
+        assertEq("disabled", client.getHttp3Mode(), "HTTPClient setHttp3Mode string variant exposes mode");
+        client.setHttp3Mode(mode: HTTP3Mode::Auto);
+        assertEq("auto", client.getHttp3Mode(), "HTTPClient setHttp3Mode enum variant exposes mode");
+
+        client.setHttp2Settings(settings: NOTHING);
+        client.setTimeout(timeout_ms: 1234);
+        assertEq(1234, client.getTimeout(), "HTTPClient setTimeout exposes timeout_ms");
+        client.setConnectTimeout(timeout_ms: 5678);
+        assertEq(5678, client.getConnectTimeout(), "HTTPClient setConnectTimeout exposes timeout_ms");
+        client.setEncoding(encoding: "UTF-8");
+        assertEq("UTF-8", client.getEncoding(), "HTTPClient setEncoding exposes encoding");
+        client.setAssumedEncoding(encoding: "utf-8");
+        assertEq("utf-8", client.getAssumedEncoding(), "HTTPClient setAssumedEncoding exposes encoding");
+
+        client.setURL(url: "http://example.com/next");
+        assertTrue(client.getURL(code: URL_NORMAL).startsWith(prefix: "http://example.com/next"),
+            "HTTPClient setURL and getURL expose url and code");
+        client.setProxyURL(url: "http://proxy.example.com:8080/");
+        assertTrue(client.getProxyURL().startsWith(prefix: "http://proxy.example.com:8080"),
+            "HTTPClient setProxyURL exposes url");
+        client.setProxySecure(secure: True);
+        assertTrue(client.isProxySecure(), "HTTPClient setProxySecure exposes secure");
+        client.setSecure(secure: False);
+
+        client.setMaxRedirects(max_redirects: 2);
+        assertEq(2, client.getMaxRedirects(), "HTTPClient setMaxRedirects exposes max_redirects");
+        client.setUseConnectionManager(enabled: False);
+        assertTrue(client.getUseConnectionManager(), "HTTPClient setUseConnectionManager exposes enabled");
+        client.setNoDelay(enabled: True);
+        assertTrue(client.getNoDelay(), "HTTPClient setNoDelay exposes enabled");
+
+        client.setUserPassword(username: "user", password: "pass");
+        assertEq("user", client.getUsername(), "HTTPClient setUserPassword exposes username");
+        assertEq("pass", client.getPassword(), "HTTPClient setUserPassword exposes password");
+        client.setProxyUserPassword(username: "proxy_user", password: "proxy_pass");
+        assertEq("proxy_user", client.getProxyUsername(), "HTTPClient setProxyUserPassword exposes username");
+        assertEq("proxy_pass", client.getProxyPassword(), "HTTPClient setProxyUserPassword exposes password");
+
+        client.addDefaultHeaders(headers: {"X-Named-Args": "1"});
+        assertEq("1", client.getDefaultHeaders()."X-Named-Args",
+            "HTTPClient addDefaultHeaders exposes headers");
+        client.setDefaultPath(path: "/default");
+        assertEq("/default", client.getDefaultPath(), "HTTPClient setDefaultPath exposes path");
+        client.setConnectionPath(uri_path: "/connection");
+        assertEq("/connection", client.getConnectionPath(), "HTTPClient setConnectionPath exposes uri_path");
+
+        client.setErrorPassthru(enabled: True);
+        assertTrue(client.getErrorPassthru(), "HTTPClient setErrorPassthru exposes enabled");
+        client.setRedirectPassthru(enabled: True);
+        assertTrue(client.getRedirectPassthru(), "HTTPClient setRedirectPassthru exposes enabled");
+        client.setEncodingPassthru(enabled: True);
+        assertTrue(client.getEncodingPassthru(), "HTTPClient setEncodingPassthru exposes enabled");
+        client.setPreEncodedUrls(enabled: True);
+        assertTrue(client.getPreEncodedUrls(), "HTTPClient setPreEncodedUrls exposes enabled");
+
+        Queue queue();
+        client.setEventQueue(queue: queue, argument: "event", with_data: False);
+        client.setWarningQueue(warning_ms: 1, warning_bytes: 1024, queue: queue, argument: "warning",
+            min_ms: 1ms);
+        client.clearWarningQueue();
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub httpclient_named_unexecuted() { HTTPClient hc(); hash<auto> info; binary data = <00>; "
+            "StringOutputStream output_stream(); StringInputStream input_stream(source: \"body\"); "
+            "code send_callback = sub () { return NOTHING; }; code receive_callback = sub (hash<auto> h) {}; "
+            "code trailers_callback = *hash<auto> sub () { return NOTHING; }; "
+            "hc.setHttp2StreamPriority(stream_id: 1, weight: 16, dependency: 0, exclusive: False); "
+            "hc.sendHttp2Connect(path: \"/chat\", headers: NOTHING, protocol: \"websocket\", info: \\info); "
+            "hc.sendHttp3Connect(path: \"/chat\", headers: NOTHING, protocol: \"websocket\", info: \\info); "
+            "hc.sendHttp2StreamData(stream_id: 1, data: data, end_stream: False, timeout_ms: 0); "
+            "hc.sendHttp3StreamData(stream_id: 1, data: data, end_stream: False, timeout_ms: 0); "
+            "hc.readHttp2StreamData(stream_id: 1, timeout_ms: 0); "
+            "hc.readHttp3StreamData(stream_id: 1, timeout_ms: 0); "
+            "hc.hasHttp2StreamData(stream_id: 1); "
+            "hc.isHttp2StreamClosed(stream_id: 1); hc.isHttp3StreamClosed(stream_id: 1); "
+            "hc.isHttp2DataAvailable(stream_id: 1, timeout_ms: 0); hc.isDataAvailable(timeout_ms: 0); "
+            "hc.readHTTPChunk(timeout_ms: 0); hc.readHTTPChunkedBody(timeout_ms: 0); "
+            "hc.readHTTPChunkedBodyBinary(timeout_ms: 0); "
+            "hc.readServerSentEvent(content_encoding: \"gzip\", timeout_ms: 0); "
+            "hc.readServerSentEvent(timeout_ms: 0); "
+            "hc.recvBinary(size: 1, timeout_ms: 0); "
+            "hc.startPollSendRecv(method: \"POST\", path: \"/path\", body: \"body\", headers: NOTHING); "
+            "hc.startPollSendRecv(method: \"POST\", path: \"/path\", body: data, headers: NOTHING); "
+            "hc.startPollSendAndStream(method: \"POST\", path: \"/events\", body: \"body\", headers: NOTHING); "
+            "hc.startPollSendAndStream(method: \"POST\", path: \"/events\", body: data, headers: NOTHING); "
+            "hc.send(body: \"body\", method: \"POST\", path: \"/path\", headers: NOTHING, "
+            "read_response_body: False, info: \\info); "
+            "hc.send(body: data, method: \"POST\", path: \"/path\", headers: NOTHING, "
+            "read_response_body: False, info: \\info); "
+            "hc.send(output_stream: output_stream, body: \"body\", method: \"POST\", path: \"/path\", "
+            "headers: NOTHING, timeout_ms: 0, read_response_body: False, info: \\info, "
+            "receive_callback: receive_callback); "
+            "hc.sendAndStream(method: \"POST\", path: \"/events\", body: data, headers: NOTHING, info: \\info); "
+            "hc.sendWithSendCallback(send_callback: send_callback, method: \"POST\", path: \"/path\", "
+            "headers: NOTHING, timeout_ms: 0, read_response_body: False, info: \\info); "
+            "hc.sendWithRecvCallback(receive_callback: receive_callback, body: \"body\", method: \"POST\", "
+            "path: \"/path\", headers: NOTHING, timeout_ms: 0, read_response_body: False, info: \\info); "
+            "hc.sendWithRecvCallback(receive_callback: receive_callback, body: data, method: \"POST\", "
+            "path: \"/path\", headers: NOTHING, timeout_ms: 0, read_response_body: False, info: \\info); "
+            "hc.sendChunked(output_stream: output_stream, input_stream: input_stream, method: \"POST\", "
+            "max_chunk_size: 1024, path: \"/path\", headers: NOTHING, timeout_ms: 0, "
+            "read_response_body: False, info: \\info, receive_callback: receive_callback, "
+            "trailers_callback: trailers_callback); "
+            "hc.sendWithCallbacks(send_callback: send_callback, receive_callback: receive_callback, "
+            "method: \"POST\", path: \"/path\", headers: NOTHING, timeout_ms: 0, "
+            "read_response_body: False, info: \\info); "
+            "hc.get(path: \"/path\", headers: NOTHING, info: \\info); "
+            "hc.head(path: \"/path\", headers: NOTHING, info: \\info); "
+            "hc.post(path: \"/path\", body: \"body\", headers: NOTHING, info: \\info); "
+            "hc.post(path: \"/path\", body: data, headers: NOTHING, info: \\info); }",
+            "httpclient-class-named");
+    }
+
+    reviewedAsyncIoControllerBuiltinOptIn() {
+        AsyncIoController::setAutostop(auto_stop: True);
+        AsyncIoController::setLogger(logger: NOTHING);
+        AsyncIoController::setTimerCallback(callback: NOTHING);
+        AsyncIoController::setMaxCallbackWorkers(max_workers: 0);
+
+        Counter counter(1);
+        AsyncIoController::submitTask(task: sub () { counter.dec(); }, cancel_callback: NOTHING);
+        assertEq(0, counter.waitForZero(timeout_ms: 10s), "AsyncIoController submitTask exposes task");
+
+        int timer_id = AsyncIoController::addTimer(deadline: now_us() + 10s,
+            user_data: "named-arguments-timer");
+        assertTrue(AsyncIoController::cancelTimer(timer_id: timer_id),
+            "AsyncIoController addTimer/cancelTimer expose timer names");
+
+        assertFalse(AsyncIoController::cancelByKey(key: "named-arguments-no-key"),
+            "AsyncIoController cancelByKey exposes key");
+        assertEq(0, AsyncIoController::cancelByOwner(owner: "named-arguments-no-owner"),
+            "AsyncIoController cancelByOwner exposes owner");
+        AsyncIoController::flushCallbacksByOwner(owner: "named-arguments-no-owner");
+
+        assertTrue(AsyncIoController::waitReady(timeout_ms: 10s),
+            "AsyncIoController waitReady exposes timeout_ms");
+        assertTrue(AsyncIoController::waitForProcessing(timeout_ms: 10s),
+            "AsyncIoController waitForProcessing exposes timeout_ms");
+    }
+
+    reviewedStreamBuiltinOptIn() {
+        BinaryInputStream bis = new BinaryInputStream(source: binary("abc"));
+        assertEq(binary("ab"), bis.read(limit: 2), "BinaryInputStream constructor and read expose names");
+
+        StringInputStream sis = new StringInputStream(source: "alpha");
+        assertEq(binary("al"), sis.read(limit: 2), "StringInputStream constructor and read expose names");
+
+        BinaryOutputStream bos();
+        bos.write(data: <0102>);
+        assertEq(<0102>, bos.getData(), "BinaryOutputStream write exposes data");
+
+        StringOutputStream sos = new StringOutputStream(encoding: "UTF-8");
+        sos.write(data: binary("ab"));
+        assertEq("ab", sos.getData(), "StringOutputStream constructor and write expose names");
+
+        string stream_file = sprintf("%s%sqore-na-stream-%d-%s.txt", tmp_location(), DirSep, getpid(),
+            get_random_bytes(size: 4).toHex());
+        string line_file = sprintf("%s%sqore-na-lines-%d-%s.txt", tmp_location(), DirSep, getpid(),
+            get_random_bytes(size: 4).toHex());
+        on_exit unlink(path: stream_file);
+        on_exit unlink(path: line_file);
+
+        FileOutputStream file_out = new FileOutputStream(path: stream_file, append: False, mode: 0600,
+            encoding: "UTF-8");
+        file_out.write(data: binary("abcdef"));
+        file_out.close();
+        FileInputStream file_in = new FileInputStream(path: stream_file, timeout_ms: -1,
+            nonblocking_open: False);
+        assertEq(binary("ab"), file_in.read(limit: 2), "FileInputStream constructor and read expose names");
+        assertEq(binary("cd"), file_in.readWithTimeout(limit: 2, timeout_ms: -1),
+            "FileInputStream readWithTimeout exposes names");
+        assertEq(binary("ef"), file_in.readNonBlock(limit: 2), "FileInputStream readNonBlock exposes limit");
+
+        FileOutputStream line_out = new FileOutputStream(path: line_file, append: False, mode: 0600,
+            encoding: "UTF-8");
+        line_out.write(data: binary("first\nsecond"));
+        line_out.close();
+        FileLineIterator fli = new FileLineIterator(path: line_file, encoding: "UTF-8",
+            line_separator: "\n", trim_line: True, nonblocking_open: False);
+        assertTrue(fli.next(), "FileLineIterator constructor exposes path and line_separator");
+        assertEq("first", fli.getValue(), "FileLineIterator trims named line separator");
+
+        StreamReader sr = new StreamReader(input_stream: new StringInputStream(source: "line1\nline2"),
+            encoding: "UTF-8");
+        assertEq("line1", sr.readLine(line_separator: "\n", trim_line: True),
+            "StreamReader readLine exposes line_separator and trim_line");
+        assertEq(binary("line2"), sr.readBinary(limit: -1), "StreamReader readBinary exposes limit");
+
+        sr = new StreamReader(input_stream: new StringInputStream(source: "abc"), encoding: "UTF-8");
+        assertEq("ab", sr.readString(limit: 2), "StreamReader readString exposes limit");
+
+        BufferedStreamReader bsr = new BufferedStreamReader(input_stream: new StringInputStream(source: "x\ny"),
+            encoding: "UTF-8", buffer_size: 2);
+        assertEq("x", bsr.readLine(line_separator: "\n", trim_line: True),
+            "BufferedStreamReader constructor exposes input_stream, encoding, and buffer_size");
+
+        BinaryOutputStream writer_out();
+        StreamWriter sw = new StreamWriter(output_stream: writer_out, encoding: "UTF-8");
+        sw.print(text: "a");
+        sw.write(text: "b");
+        sw.write(data: <63>);
+        sw.vprintf(format: "%s", format_args: ("d",));
+        sw.f_vprintf(format: "%2s", format_args: ("ef",));
+        sw.writei1(value: 65);
+        assertEq(binary("abcdefA"), writer_out.getData(),
+            "StreamWriter exposes output_stream, text, data, format_args, and value names");
+
+        StreamPipe pipe = new StreamPipe(sync_close: False, timeout_ms: 1s, buffer_size: 1024);
+        PipeOutputStream pipe_out = pipe.getOutputStream();
+        PipeInputStream pipe_in = pipe.getInputStream();
+        pipe_out.write(data: binary("xy"));
+        pipe_out.close();
+        assertEq(binary("xy"), pipe_in.read(limit: 10), "StreamPipe and pipe streams expose names");
+
+        EncodingConversionInputStream ecis = new EncodingConversionInputStream(
+            input_stream: new BinaryInputStream(source: binary("abc")), source_encoding: "UTF-8",
+            target_encoding: "UTF-8");
+        assertEq(binary("abc"), ecis.read(limit: 10),
+            "EncodingConversionInputStream exposes input_stream and encoding names");
+
+        BinaryOutputStream conversion_out();
+        EncodingConversionOutputStream ecos = new EncodingConversionOutputStream(output_stream: conversion_out,
+            source_encoding: "UTF-8", target_encoding: "UTF-8");
+        ecos.write(data: binary("cd"));
+        ecos.close();
+        assertEq(binary("cd"), conversion_out.getData(),
+            "EncodingConversionOutputStream exposes output_stream and encoding names");
+
+        InputStreamLineIterator isli = new InputStreamLineIterator(
+            input_stream: new StringInputStream(source: "first\nsecond"), encoding: "UTF-8",
+            line_separator: "\n", trim_line: True, buffer_size: 64);
+        assertTrue(isli.next(), "InputStreamLineIterator input stream variant accepts named arguments");
+        assertEq("first", isli.getValue(), "InputStreamLineIterator trims named line separator");
+
+        InputStreamLineIterator srli = new InputStreamLineIterator(
+            stream_reader: new StreamReader(input_stream: new StringInputStream(source: "third\nfourth"),
+                encoding: "UTF-8"), line_separator: "\n", trim_line: True);
+        assertTrue(srli.next(), "InputStreamLineIterator StreamReader variant accepts named arguments");
+        assertEq("third", srli.getValue(), "InputStreamLineIterator StreamReader variant trims named separator");
+
+        DataLineIterator dli = new DataLineIterator(source: "a,b\nc,d", line_separator: "\n", trim_line: True);
+        assertTrue(dli.next(), "DataLineIterator named constructor creates iterator");
+        assertEq(("a", "b"), dli.getSplitLine(separator: ",", quote: "'", line_separator: "\n",
+            trim_unquoted: False), "AbstractLineIterator getSplitLine exposes separator and line_separator");
+
+        StringSplitIterator split_it = new StringSplitIterator(source: "left:right", separator: ":");
+        assertTrue(split_it.next(), "StringSplitIterator named constructor creates iterator");
+        assertEq("left", split_it.getValue(), "StringSplitIterator exposes source and separator");
+
+        StringRegexSplitIterator regex_it = new StringRegexSplitIterator(source: "left:right",
+            separator_pattern: ":", options: 0, with_separator: False);
+        assertTrue(regex_it.next(), "StringRegexSplitIterator named constructor creates iterator");
+        assertEq("left", regex_it.getValue(),
+            "StringRegexSplitIterator exposes source and separator_pattern");
+    }
+
+    reviewedSerializableBuiltinOptIn() {
+        hash<auto> value = {"a": 1};
+
+        binary binary_data = Serializable::serialize(value: value, flags: 0);
+        assertEq(value, Serializable::deserialize(binary_data: binary_data, flags: 0),
+            "Serializable static serialize and deserialize expose value and binary_data");
+
+        hash<SerializationInfo> serialization_info = Serializable::serializeToData(value: value, flags: 0);
+        assertEq(value, Serializable::deserialize(serialization_info: serialization_info, flags: 0),
+            "Serializable static serializeToData exposes value");
+
+        StringOutputStream output_stream();
+        Serializable::serialize(value: value, output_stream: output_stream, flags: 0);
+        string string_data = output_stream.getData();
+        assertEq(value, Serializable::deserialize(string_data: string_data, flags: 0),
+            "Serializable static serialize exposes output_stream and deserialize exposes string_data");
+
+        assertEq(value, Serializable::deserialize(serialization_info: Serializable::deserializeToData(
+            binary_data: binary_data, flags: 0), flags: 0),
+            "Serializable deserializeToData exposes binary_data");
+        assertEq(value, Serializable::deserialize(serialization_info: Serializable::deserializeToData(
+            input_stream: new StringInputStream(source: string_data), flags: 0), flags: 0),
+            "Serializable deserializeToData exposes input_stream");
+
+        NA_Serializable obj = new NA_Serializable(value: 7);
+        hash<SerializationInfo> object_info = obj.serializeToData(flags: 0);
+        assertEq(7, Serializable::deserialize(serialization_info: object_info, flags: 0).value,
+            "Serializable instance serializeToData exposes flags");
+
+        binary object_data = obj.serialize(flags: 0);
+        assertEq(7, Serializable::deserialize(binary_data: object_data, flags: 0).value,
+            "Serializable instance serialize exposes flags");
+
+        StringOutputStream object_stream();
+        obj.serialize(output_stream: object_stream, flags: 0);
+        assertEq(7, Serializable::deserialize(string_data: object_stream.getData(), flags: 0).value,
+            "Serializable instance serialize exposes output_stream");
+    }
+
+    reviewedIteratorBuiltinOptIn() {
+        Sequence seq = new Sequence(start: 10);
+        assertEq(10, seq.getCurrent(), "Sequence constructor exposes start");
+
+        SingleValueIterator single_it = new SingleValueIterator(value: "only");
+        assertTrue(single_it.next(), "SingleValueIterator named constructor creates iterator");
+        assertEq("only", single_it.getValue(), "SingleValueIterator exposes value");
+
+        RangeIterator range_it = new RangeIterator(0, 1, 1, "tick");
+        assertTrue(range_it.next(), "RangeIterator value override constructor creates iterator");
+        assertEq("tick", range_it.getValue(), "RangeIterator keeps value override positional");
+
+        RangeIterator numeric_range_it = new RangeIterator(start: 0, stop: 1, step: 1);
+        assertTrue(numeric_range_it.next(), "RangeIterator allows value to be omitted");
+        assertEq(0, numeric_range_it.getValue(), "RangeIterator omitted value yields numeric values");
+
+        RangeIterator stop_it = new RangeIterator(stop: 1);
+        assertTrue(stop_it.next(), "RangeIterator stop-only constructor exposes stop");
+        assertEq(0, stop_it.getValue(), "RangeIterator stop-only constructor starts at zero");
+
+        RangeIterator xrange_it = xrange(0, 1, 1, "x");
+        assertTrue(xrange_it.next(), "xrange keeps value override positional");
+        assertEq("x", xrange_it.getValue(), "xrange value override is preserved");
+        RangeIterator numeric_xrange_it = xrange(start: 0, stop: 1, step: 1);
+        assertTrue(numeric_xrange_it.next(), "xrange allows value to be omitted");
+        assertEq(0, numeric_xrange_it.getValue(), "xrange omitted value yields numeric values");
+        assertTrue(xrange(stop: 1).next(), "xrange stop-only variant exposes stop");
+
+        StringCharIterator char_it = new StringCharIterator(source: "a");
+        assertTrue(char_it.next(), "StringCharIterator named constructor creates iterator");
+        assertEq(ord("a"), char_it.getValue(), "StringCharIterator exposes source");
+
+        list<auto> values = (10, 20);
+        ListIterator list_it = new ListIterator(list_value: values);
+        assertTrue(list_it.next(), "ListIterator named constructor creates iterator");
+        assertTrue(list_it.set(position: 1), "ListIterator exposes position");
+        assertEq(20, list_it.getValue(), "ListIterator exposes list_value");
+        ListReverseIterator list_rev_it = new ListReverseIterator(list_value: values);
+        assertTrue(list_rev_it.next(), "ListReverseIterator exposes list_value");
+        assertEq(20, list_rev_it.getValue(), "ListReverseIterator starts from the end");
+
+        hash<auto> hash_value = {"first": 1, "second": 2};
+        HashIterator hash_it = new HashIterator(hash_value: hash_value);
+        assertTrue(hash_it.next(), "HashIterator exposes hash_value");
+        HashReverseIterator hash_rev_it = new HashReverseIterator(hash_value: hash_value);
+        assertTrue(hash_rev_it.next(), "HashReverseIterator exposes hash_value");
+        HashKeyIterator hash_key_it = new HashKeyIterator(hash_value: hash_value);
+        assertTrue(hash_key_it.next(), "HashKeyIterator exposes hash_value");
+        HashKeyReverseIterator hash_key_rev_it = new HashKeyReverseIterator(hash_value: hash_value);
+        assertTrue(hash_key_rev_it.next(), "HashKeyReverseIterator exposes hash_value");
+        HashPairIterator hash_pair_it = new HashPairIterator(hash_value: hash_value);
+        assertTrue(hash_pair_it.next(), "HashPairIterator exposes hash_value");
+        HashPairReverseIterator hash_pair_rev_it = new HashPairReverseIterator(hash_value: hash_value);
+        assertTrue(hash_pair_rev_it.next(), "HashPairReverseIterator exposes hash_value");
+
+        list<auto> rows = ({"value": "first"}, {"value": "second"});
+        ListHashIterator list_hash_it = new ListHashIterator(list_value: rows);
+        assertTrue(list_hash_it.next(), "ListHashIterator exposes list_value");
+        assertEq("first", list_hash_it.getKeyValue(key: "value"), "ListHashIterator exposes key");
+        assertTrue(list_hash_it.set(position: 1), "ListHashIterator exposes position");
+        assertEq("second", list_hash_it.memberGate(key: "value"), "ListHashIterator memberGate exposes key");
+        ListHashReverseIterator list_hash_rev_it = new ListHashReverseIterator(list_value: rows);
+        assertTrue(list_hash_rev_it.next(), "ListHashReverseIterator exposes list_value");
+        assertEq("second", list_hash_rev_it.memberGate(key: "value"),
+            "ListHashReverseIterator memberGate exposes key");
+
+        hash<auto> columns = {"value": ("first", "second"), "fixed": "constant"};
+        HashListIterator hash_list_it = new HashListIterator(hash_value: columns);
+        assertTrue(hash_list_it.next(), "HashListIterator exposes hash_value");
+        assertEq("first", hash_list_it.getKeyValue(key: "value"), "HashListIterator exposes key");
+        hash_list_it.set(position: 1);
+        assertEq("second", hash_list_it.memberGate(key: "value"), "HashListIterator memberGate exposes key");
+        HashListReverseIterator hash_list_rev_it = new HashListReverseIterator(hash_value: columns);
+        assertTrue(hash_list_rev_it.next(), "HashListReverseIterator exposes hash_value");
+        assertEq("second", hash_list_rev_it.memberGate(key: "value"),
+            "HashListReverseIterator memberGate exposes key");
+
+        NA_Child obj();
+        ObjectIterator object_it = new ObjectIterator(object_value: obj);
+        assertTrue(object_it.next(), "ObjectIterator exposes object_value");
+        ObjectReverseIterator object_rev_it = new ObjectReverseIterator(object_value: obj);
+        assertTrue(object_rev_it.next(), "ObjectReverseIterator exposes object_value");
+        ObjectKeyIterator object_key_it = new ObjectKeyIterator(object_value: obj);
+        assertTrue(object_key_it.next(), "ObjectKeyIterator exposes object_value");
+        ObjectKeyReverseIterator object_key_rev_it = new ObjectKeyReverseIterator(object_value: obj);
+        assertTrue(object_key_rev_it.next(), "ObjectKeyReverseIterator exposes object_value");
+        ObjectPairIterator object_pair_it = new ObjectPairIterator(object_value: obj);
+        assertTrue(object_pair_it.next(), "ObjectPairIterator exposes object_value");
+        ObjectPairReverseIterator object_pair_rev_it = new ObjectPairReverseIterator(object_value: obj);
+        assertTrue(object_pair_rev_it.next(), "ObjectPairReverseIterator exposes object_value");
+    }
+
+    reviewedRegexClassBuiltinOptIn() {
+        Regex regex = new Regex(pattern: "([a-z]+)(\\d+)", options: 0);
+        assertTrue(regex.match(subject: "alpha42"), "Regex constructor and match expose pattern and subject");
+        assertEq(2, regex.count(subject: "alpha42 beta7"), "Regex count exposes subject");
+        assertEq(("alpha", "42"), regex.extractGroups(subject: "alpha42"),
+            "Regex extractGroups exposes subject");
+
+        Regex named_regex = new Regex(pattern: "(?<word>[a-z]+)", options: 0);
+        auto named = named_regex.extractNamedGroups(subject: "alpha");
+        assertEq("alpha", named.word, "Regex extractNamedGroups exposes subject");
+        auto detailed = named_regex.extractDetailed(subject: "alpha");
+        assertEq("alpha", detailed[0].match, "Regex extractDetailed exposes subject");
+
+        RegexExtract extractor = new RegexExtract(pattern: "([a-z]+)(\\d+)", options: 0);
+        assertTrue(extractor.match(subject: "beta7"), "RegexExtract constructor and match expose subject");
+        assertEq(("beta", "7"), extractor.extractGroups(subject: "beta7"),
+            "RegexExtract extractGroups exposes subject");
+        assertEq(2, extractor.count(subject: "beta7 gamma8"), "RegexExtract count exposes subject");
+
+        RegexExtract named_extractor = new RegexExtract(pattern: "(?<word>[a-z]+)", options: 0);
+        named = named_extractor.extractNamedGroups(subject: "beta");
+        assertEq("beta", named.word, "RegexExtract extractNamedGroups exposes subject");
+        detailed = named_extractor.extractDetailed(subject: "beta");
+        assertEq("beta", detailed[0].match, "RegexExtract extractDetailed exposes subject");
+
+        RegexSubst subst = new RegexSubst(pattern: "\\d+", replacement: "NUM", options: RE_Global);
+        assertEq("aNUMbNUM", subst.subst(subject: "a1b2"), "RegexSubst default replacement exposes subject");
+        assertEq("aXbX", subst.subst(subject: "a1b2", replacement: "X"),
+            "RegexSubst replacement override exposes replacement");
+        assertEq("a[1]b[2]", subst.subst(subject: "a1b2",
+            callback: string sub(hash<RegexMatchInfo> m) { return "[" + m.match + "]"; }),
+            "RegexSubst callback replacement exposes callback");
+    }
+
+    reviewedPseudoMethodOptIn() {
+        assertEq((1).fullType(False), (1).fullType(with_namespaces: False),
+            "value pseudo-method exposes with_namespaces");
+        assertEq((True).toString("UTF-8"), (True).toString(encoding: "UTF-8"),
+            "value pseudo-method exposes encoding");
+
+        binary bin = binary("abcabc");
+        assertEq(1, bin.find(pattern: binary("bc"), byte_offset: 0), "binary find exposes pattern and byte_offset");
+        assertEq(4, bin.rfind(pattern: binary("bc"), byte_offset: -1), "binary rfind exposes pattern and byte_offset");
+        assertEq(bin.split(binary("bc")), bin.split(separator: binary("bc")),
+            "binary split exposes separator");
+        assertEq("YQ==", binary("a").toBase64(max_line_length: -1), "binary toBase64 exposes max_line_length");
+        assertEq("6162", binary("ab").toHexArray(byte_prefix: NOTHING, byte_suffix: NOTHING, bytes_per_line: 0,
+            line_separator: NOTHING), "binary toHexArray exposes formatting arguments");
+        assertEq("bc", bin.substr(start: 1, length: 2).toString(encoding: "UTF-8"),
+            "binary substr exposes start and length");
+
+        string text = "alpha\nbeta\nalpha";
+        assertEq(text.find("ph", 0), text.find(substring: "ph", offset: 0),
+            "string find exposes substring and offset");
+        assertEq(text.rfind("alpha", -1), text.rfind(substring: "alpha", offset: -1),
+            "string rfind exposes substring and offset");
+        assertEq(text.substr(0, 5), text.substr(start: 0, length: 5), "string substr exposes length");
+        assertEq(text.split("\n", True), text.split(separator: "\n", with_separator: True),
+            "string split exposes separator and with_separator");
+        assertEq("'a', b".split(",", "'", True), "'a', b".split(separator: ",", quote: "'", trim_unquoted: True),
+            "string split quote variant exposes separator, quote, and trim_unquoted");
+        assertTrue(text.splitString(separator: "\n") != NOTHING, "string splitString exposes separator");
+        assertTrue(text.splitLinesRegex(separator_pattern: "\n", options: 0, with_separator: False) != NOTHING,
+            "string splitLinesRegex exposes separator_pattern");
+        assertEq(text.splitRegex("\n", 0, False, -1), text.splitRegex(separator_pattern: "\n", options: 0,
+            with_separator: False, limit: -1), "string splitRegex exposes regex separator with options");
+        assertTrue(text.regex(pattern: "^alpha", options: 0), "string regex exposes pattern");
+        assertEq(2, text.regexCount(pattern: "alpha", options: 0), "string regexCount exposes pattern");
+        assertEq(text.regexExtract("(alpha)", 0), text.regexExtract(pattern: "(alpha)", options: 0),
+            "string regexExtract exposes pattern");
+        assertEq(text.regexExtractNamed("(?<word>alpha)", 0),
+            text.regexExtractNamed(pattern: "(?<word>alpha)", options: 0),
+            "string regexExtractNamed exposes pattern");
+        assertEq(text.regexExtractDetailed("alpha", 0), text.regexExtractDetailed(pattern: "alpha", options: 0),
+            "string regexExtractDetailed exposes pattern");
+        assertEq(text.getUnicode(0), text.getUnicode(offset: 0), "string getUnicode exposes offset");
+        assertEq(text.getByte(0), text.getByte(byte_offset: 0), "string getByte exposes byte_offset");
+        assertTrue(text.startsWith(prefix: "alpha"), "string startsWith exposes prefix");
+        assertTrue(text.endsWith(suffix: "alpha"), "string endsWith exposes suffix");
+        assertTrue(text.contains(substring: "beta"), "string contains exposes substring");
+        int byte_count = 0;
+        assertEq("alpha", text.getLine(offset: 0, line_separator: "\n", trim_line: True, byte_count: \byte_count),
+            "string getLine exposes line_separator and byte_count");
+        assertEq(6, byte_count, "string getLine writes byte_count");
+        assertEq("<tag>", "&lt;tag&gt;".getDecoded(decoding_flags: CD_ALL), "string getDecoded exposes decoding_flags");
+        assertEq("&lt;tag&gt;", "<tag>".getEncoded(encoding_flags: CE_HTML), "string getEncoded exposes encoding_flags");
+        assertEq("YQ==", "a".toBase64(max_line_length: -1), "string toBase64 exposes max_line_length");
+        assertEq("YQ", "a".toBase64Url(max_line_length: -1), "string toBase64Url exposes max_line_length");
+        assertEq(255, "ff".toInt(base: 16), "string toInt exposes base");
+        assertEq(0, "abc".comparePartial(other_string: "ab"), "string comparePartial exposes other_string");
+        assertTrue("abc".equalPartial(other_string: "ab"), "string equalPartial exposes other_string");
+        assertTrue("/api/v1".equalPartialPath(other_string: "/api"), "string equalPartialPath exposes other_string");
+
+        assertEq(date(seconds: 0).format("YYYY"), date(seconds: 0).format(format: "YYYY"),
+            "date format exposes format");
+        assertEq((255).toBase(16), (255).toBase(base: 16), "int toBase exposes base");
+        assertEq((255).encodeMsb(2), (255).encodeMsb(size: 2), "int encodeMsb exposes size");
+        assertEq((255).encodeLsb(2), (255).encodeLsb(size: 2), "int encodeLsb exposes size");
+        assertEq((1234).format(".,0"), (1234).format(format: ".,0"), "int format exposes format");
+        assertEq((1234).format(2, ".", ","), (1234).format(precision: 2, decimal_separator: ".",
+            thousands_separator: ","), "int format exposes precision and separators");
+        assertEq((12.5).toBase(10), (12.5).toBase(base: 10), "float toBase exposes base");
+        assertEq((12.5).format(".,1"), (12.5).format(format: ".,1"), "float format exposes format");
+        assertEq((12.5n).toString(NF_Default), (12.5n).toString(format_flags: NF_Default),
+            "number toString exposes format_flags");
+        assertEq((12.5n).format(2, ".", ","), (12.5n).format(precision: 2, decimal_separator: ".",
+            thousands_separator: ","), "number format exposes precision and separators");
+
+        hash<auto> h = {"a": 1};
+        assertTrue(h.hasKey(key: "a"), "hash hasKey exposes key");
+        assertTrue(h.hasKeyValue(key: "a"), "hash hasKeyValue exposes key");
+        assertTrue(h.compareKeys(other_hash: {"a": 2}), "hash compareKeys exposes other_hash");
+        assertFalse(NOTHING.hasKey(key: "a"), "nothing hasKey exposes key");
+        assertFalse(NOTHING.hasKeyValue(key: "a"), "nothing hasKeyValue exposes key");
+
+        assertEq("a:b:c", ("a", "b", "c").join(separator: ":"), "list join exposes separator");
+        assertTrue((1, 2, 3).contains(value: 2), "list contains exposes value");
+        assertTrue((1, 2, 3).rangeIterator(value: "x") != NOTHING, "list rangeIterator exposes value");
+
+        assertTrue(self.hasCallableMethod(method: "reviewedPseudoMethodOptIn"),
+            "object hasCallableMethod exposes method");
+        assertTrue(self.hasCallableNormalMethod(method: "reviewedPseudoMethodOptIn"),
+            "object hasCallableNormalMethod exposes method");
+        assertFalse(self.hasCallableStaticMethod(method: "reviewedPseudoMethodOptIn"),
+            "object hasCallableStaticMethod exposes method");
+        assertTrue(self.getCallReference(identifier: "reviewedPseudoMethodOptIn") != NOTHING,
+            "object getCallReference exposes identifier");
+    }
+
+    parseFailures() {
+        assertThrows("NAMED-ARG-DUPLICATE", "duplicate named argument 'a'", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a) {} f(a: 1, a: 2);", "duplicate-name");
+        });
+
+        assertThrows("NAMED-ARG-UNKNOWN", "named argument 'z' does not match any accessible parameter", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a) {} f(z: 1);", "unknown-name");
+        });
+
+        assertThrows("NAMED-ARG-POSITIONAL-AFTER-NAMED", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a, int b) {} f(a: 1, 2);", "positional-after-named");
+        });
+
+        assertThrows("NAMED-ARG-OVERWRITES-POSITIONAL", "named argument 'a' would overwrite a positional argument", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a, int b) {} f(1, a: 2);", "overwrite-positional");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "call-reference or closure calls without a parse-time-resolved signature", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a) {} code c = \\f(); c(a: 1);", "call-reference");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sprintf(fmt: \"%s\", value: \"x\");", "builtin-not-opted-in");
+        });
+
+        assertThrows("NAMED-ARG-UNKNOWN", "accessible named parameters are 'values' and 'comparator'", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sort(arg: 1);", "builtin-unknown-name");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "varargs-only variants cannot accept named arguments", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(...) {} f(a: 1);", "varargs-only");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous or depends on runtime argument types", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("abs(value: 1);", "ambiguous-builtin-named");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "Datasource::constructor\\(description: string\\)", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("Datasource ds = new Datasource(description: \"a/b@c(utf8)\");",
+                "datasource-constructor-not-opted-in");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "DatasourcePool::constructor\\(description: string\\)", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("DatasourcePool ds = new DatasourcePool(description: \"a/b@c(utf8)\");",
+                "datasource-pool-constructor-not-opted-in");
+        });
+
+        assertThrows("NAMED-ARG-UNKNOWN", "named argument 'missing' does not match any accessible parameter", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("class B { constructor(int a) {} } class C inherits B { constructor() : B(missing: 1) {} } C c();",
+                "base-constructor-unknown");
+        });
+    }
+}

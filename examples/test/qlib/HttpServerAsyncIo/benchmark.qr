@@ -3,7 +3,8 @@
 
 %disable-warning unreferenced-variable
 
-%requires ../../../../qlib/HttpServerAsyncIo
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires HttpServerAsyncIo
 
 %exec-class Benchmark
 

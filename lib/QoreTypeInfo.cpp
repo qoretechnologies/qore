@@ -45,9 +45,15 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QorePluginRegistry.h"
+#include "qore/intern/QoreTypeSpecMatchRegistry.h"
+#include "qore/intern/qore_thread_intern.h"
+#include "qore/QoreIteratorBase.h"
 
 #include <algorithm>
+#include <memory>
 #include <set>
+#include <string>
 
 const QoreAnyTypeInfo staticAnyTypeInfo;
 const QoreAutoTypeInfo staticAutoTypeInfo;
@@ -97,6 +103,9 @@ const QoreAutoNoNarrowHashOrNothingTypeInfo staticAutoNoNarrowHashOrNothingTypeI
 const QoreListTypeInfo staticListTypeInfo;
 const QoreListOrNothingTypeInfo staticListOrNothingTypeInfo;
 const QoreEmptyListTypeInfo staticEmptyListTypeInfo;
+
+const QoreBufferTypeInfo staticBufferTypeInfo;
+const QoreBufferOrNothingTypeInfo staticBufferOrNothingTypeInfo;
 
 const QoreAutoListTypeInfo staticAutoListTypeInfo;
 const QoreAutoListOrNothingTypeInfo staticAutoListOrNothingTypeInfo;
@@ -182,6 +191,7 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *autoHashTypeInfo = &staticAutoHashTypeInfo,
    *autoNoNarrowHashTypeInfo = &staticAutoNoNarrowHashTypeInfo,
    *listTypeInfo = &staticListTypeInfo,
+   *bufferTypeInfo = &staticBufferTypeInfo,
    *autoListTypeInfo = &staticAutoListTypeInfo,
    *autoNoNarrowListTypeInfo = &staticAutoNoNarrowListTypeInfo,
    *emptyListTypeInfo = &staticEmptyListTypeInfo,
@@ -224,6 +234,7 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *autoHashOrNothingTypeInfo = &staticAutoHashOrNothingTypeInfo,
    *autoNoNarrowHashOrNothingTypeInfo = &staticAutoNoNarrowHashOrNothingTypeInfo,
    *listOrNothingTypeInfo = &staticListOrNothingTypeInfo,
+   *bufferOrNothingTypeInfo = &staticBufferOrNothingTypeInfo,
    *autoListOrNothingTypeInfo = &staticAutoListOrNothingTypeInfo,
    *autoNoNarrowListOrNothingTypeInfo = &staticAutoNoNarrowListOrNothingTypeInfo,
    *nullOrNothingTypeInfo = &staticNullOrNothingTypeInfo,
@@ -291,6 +302,22 @@ tmap_t ch_map,          // complex hash map
    csl_map,             // complex softlist map
    cslon_map;           // complex softlist or nothing map
 
+struct ComplexBufferCacheKey {
+    QoreBufferElementType elementType;
+    bool nullableElements;
+
+    bool operator<(const ComplexBufferCacheKey& other) const {
+        if (elementType != other.elementType) {
+            return elementType < other.elementType;
+        }
+        return nullableElements < other.nullableElements;
+    }
+};
+
+typedef std::map<ComplexBufferCacheKey, QoreTypeInfo*> complex_buffer_map_t;
+static complex_buffer_map_t cb_map,       // complex buffer map
+                            cbon_map;     // complex buffer or nothing map
+
 // Cache for union types - keyed by sorted vector of member types
 typedef std::map<type_vec_t, QoreUnionTypeInfo*> union_map_t;
 static union_map_t union_map,       // union types
@@ -318,9 +345,61 @@ struct ComplexCodeCacheKey {
 typedef std::map<ComplexCodeCacheKey, QoreComplexCodeTypeInfo*> complex_code_map_t;
 static complex_code_map_t complex_code_map;
 
-// Cache for parameterized HashPairInfo types based on value type
-typedef std::map<const QoreTypeInfo*, TypedHashDecl*> hp_decl_map_t;
-static hp_decl_map_t hp_decl_map;
+struct ParameterizedClassCacheKey {
+    const QoreClass* baseClass;
+    type_vec_t typeArgs;
+    bool orNothing;
+
+    bool operator<(const ParameterizedClassCacheKey& other) const {
+        if (baseClass != other.baseClass) return baseClass < other.baseClass;
+        if (typeArgs.size() != other.typeArgs.size()) return typeArgs.size() < other.typeArgs.size();
+        for (size_t i = 0; i < typeArgs.size(); ++i) {
+            if (typeArgs[i] != other.typeArgs[i]) return typeArgs[i] < other.typeArgs[i];
+        }
+        return orNothing < other.orNothing;
+    }
+};
+
+typedef std::map<ParameterizedClassCacheKey, QoreParameterizedClassTypeInfo*> parameterized_class_map_t;
+static parameterized_class_map_t parameterized_class_map;
+
+enum TypeParameterOwnerKind : unsigned {
+    TPO_CLASS = 0,
+    TPO_HASHDECL = 1,
+    TPO_SIGNATURE = 2,
+};
+
+struct TypeParameterCacheKey {
+    const void* owner;
+    unsigned ownerKind;
+    size_t index;
+    bool orNothing;
+
+    bool operator<(const TypeParameterCacheKey& other) const {
+        if (ownerKind != other.ownerKind) return ownerKind < other.ownerKind;
+        if (owner != other.owner) return owner < other.owner;
+        if (index != other.index) return index < other.index;
+        return orNothing < other.orNothing;
+    }
+};
+
+typedef std::map<TypeParameterCacheKey, QoreTypeParameterTypeInfo*> type_parameter_map_t;
+static type_parameter_map_t type_parameter_map;
+
+struct WildcardTypeCacheKey {
+    QoreWildcardKind kind;
+    const QoreTypeInfo* bound;
+
+    bool operator<(const WildcardTypeCacheKey& other) const {
+        if (kind != other.kind) {
+            return kind < other.kind;
+        }
+        return bound < other.bound;
+    }
+};
+
+typedef std::map<WildcardTypeCacheKey, QoreWildcardTypeInfo*> wildcard_type_map_t;
+static wildcard_type_map_t wildcard_type_map;
 
 // rwlock for global type map
 static QoreRWLock extern_type_info_map_lock;
@@ -362,6 +441,7 @@ void init_qore_types() {
     do_maps(NT_NUMBER,          "number", numberTypeInfo, numberOrNothingTypeInfo);
     do_maps(NT_BINARY,          "binary", binaryTypeInfo, binaryOrNothingTypeInfo);
     do_maps(NT_LIST,            "list", listTypeInfo, listOrNothingTypeInfo);
+    do_maps(NT_BUFFER,          "buffer", bufferTypeInfo, bufferOrNothingTypeInfo);
     do_maps(NT_HASH,            "hash", hashTypeInfo, hashOrNothingTypeInfo);
     do_maps(NT_OBJECT,          "object", objectTypeInfo, objectOrNothingTypeInfo);
     do_maps(NT_ALL,             "any", anyTypeInfo, anyTypeInfo);
@@ -432,6 +512,10 @@ void delete_qore_types() {
         delete i.second;
     for (auto& i : cslon_map)
         delete i.second;
+    for (auto& i : cb_map)
+        delete i.second;
+    for (auto& i : cbon_map)
+        delete i.second;
     // Clean up union type cache
     for (auto& i : union_map)
         delete i.second;
@@ -440,9 +524,15 @@ void delete_qore_types() {
     // Clean up typed callable type cache
     for (auto& i : complex_code_map)
         delete i.second;
-    // Clean up hash pair info decl cache
-    for (auto& i : hp_decl_map)
-        typed_hash_decl_private::get(*i.second)->deref();
+    // Clean up parameterized class type cache
+    for (auto& i : parameterized_class_map)
+        delete i.second;
+    // Clean up symbolic class type parameter cache
+    for (auto& i : type_parameter_map)
+        delete i.second;
+    // Clean up wildcard type argument cache
+    for (auto& i : wildcard_type_map)
+        delete i.second;
 }
 
 void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {
@@ -475,6 +565,13 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
     }
 
     {
+        const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
+        if (pti) {
+            return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), false);
+        }
+    }
+
+    {
         const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
         if (ti) {
             return qore_get_complex_hash_type(ti);
@@ -485,6 +582,15 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
         const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
         if (ti) {
             return qore_get_complex_list_type(ti);
+        }
+    }
+
+    {
+        const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexBufferOrNothing(typeInfo);
+        if (ti) {
+            const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(ti);
+            assert(bti);
+            return qore_get_complex_buffer_type(bti->getBufferElementType(), bti->hasNullableElements());
         }
     }
 
@@ -539,6 +645,13 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
     }
 
     {
+        const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
+        if (pti) {
+            return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
+        }
+    }
+
+    {
         const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
         if (ti)
             return qore_get_complex_hash_or_nothing_type(ti);
@@ -554,6 +667,16 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
         const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
         if (ti)
             return qore_get_complex_list_or_nothing_type(ti);
+    }
+
+    {
+        const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexBuffer(typeInfo);
+        if (ti) {
+            const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(ti);
+            assert(bti);
+            return qore_get_complex_buffer_or_nothing_type(bti->getBufferElementType(),
+                bti->hasNullableElements());
+        }
     }
 
     {
@@ -642,6 +765,57 @@ const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vt
     return ti;
 }
 
+static QoreString qore_make_complex_buffer_name(QoreBufferElementType element_type, bool nullable_elements,
+        bool or_nothing) {
+    QoreString rv;
+    if (or_nothing) {
+        rv.concat('*');
+    }
+    rv.concat("buffer<");
+    if (nullable_elements) {
+        rv.concat('*');
+    }
+    rv.concat(qore_buffer_element_type_name(element_type));
+    rv.concat('>');
+    return rv;
+}
+
+const QoreTypeInfo* qore_get_complex_buffer_type(QoreBufferElementType elementType, bool nullableElements) {
+    assert(elementType != QoreBufferElementType::Invalid);
+
+    AutoLocker al(ctl);
+
+    ComplexBufferCacheKey key{elementType, nullableElements};
+    complex_buffer_map_t::iterator i = cb_map.lower_bound(key);
+    if (i != cb_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreComplexBufferTypeInfo* ti = new QoreComplexBufferTypeInfo(elementType, nullableElements);
+    cb_map.insert(i, complex_buffer_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_complex_buffer_or_nothing_type(QoreBufferElementType elementType,
+        bool nullableElements) {
+    assert(elementType != QoreBufferElementType::Invalid);
+
+    const QoreTypeInfo* value_type = qore_get_complex_buffer_type(elementType, nullableElements);
+
+    AutoLocker al(ctl);
+
+    ComplexBufferCacheKey key{elementType, nullableElements};
+    complex_buffer_map_t::iterator i = cbon_map.lower_bound(key);
+    if (i != cbon_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreComplexBufferOrNothingTypeInfo* ti = new QoreComplexBufferOrNothingTypeInfo(elementType, nullableElements,
+        value_type);
+    cbon_map.insert(i, complex_buffer_map_t::value_type(key, ti));
+    return ti;
+}
+
 const QoreTypeInfo* qore_get_complex_softlist_type(const QoreTypeInfo* vti) {
     if (vti == autoTypeInfo) {
         return softAutoListTypeInfo;
@@ -716,6 +890,616 @@ const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInf
     return ti;
 }
 
+static type_vec_t normalize_parameterized_class_args(const std::vector<const QoreTypeInfo*>& args) {
+    type_vec_t rv;
+    rv.reserve(args.size());
+    for (const QoreTypeInfo* arg : args) {
+        rv.push_back(arg == autoNoNarrowTypeInfo ? autoTypeInfo : arg);
+    }
+    return rv;
+}
+
+static QoreString build_parameterized_class_name(const QoreClass* qc, const type_vec_t& args, bool or_nothing,
+        bool path) {
+    QoreString rv;
+    if (or_nothing) {
+        rv.concat('*');
+    }
+    rv.concat("object<");
+    rv.concat(path ? qc->getPath() : qc->getName());
+    rv.concat('<');
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (i) {
+            rv.concat(", ");
+        }
+        rv.concat(path ? QoreTypeInfo::getPath(args[i]) : QoreTypeInfo::getName(args[i]));
+    }
+    rv.concat(">>");
+    return rv;
+}
+
+static q_accept_vec_t make_parameterized_class_accept_vec(const QoreParameterizedClassTypeInfo* ti,
+        bool or_nothing) {
+    q_accept_vec_t rv {{QoreParameterizedClassTypeSpec(ti), nullptr, !or_nothing}};
+    if (or_nothing) {
+        rv.emplace_back(QoreTypeSpec(NT_NOTHING), nullptr);
+        rv.emplace_back(QoreTypeSpec(NT_NULL),
+            [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); });
+    }
+    return rv;
+}
+
+static q_return_vec_t make_parameterized_class_return_vec(const QoreParameterizedClassTypeInfo* ti,
+        bool or_nothing) {
+    q_return_vec_t rv {{QoreParameterizedClassTypeSpec(ti), !or_nothing}};
+    if (or_nothing) {
+        rv.emplace_back(QoreTypeSpec(NT_NOTHING));
+    }
+    return rv;
+}
+
+QoreParameterizedClassTypeInfo::QoreParameterizedClassTypeInfo(const QoreClass* qc,
+        const std::vector<const QoreTypeInfo*>& type_args, bool n_or_nothing,
+        const QoreParameterizedClassTypeInfo* value_type)
+        : QoreTypeInfo(
+            make_parameterized_class_accept_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            make_parameterized_class_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            build_parameterized_class_name(qc, normalize_parameterized_class_args(type_args), n_or_nothing, false)),
+        base_class(qc),
+        type_args(normalize_parameterized_class_args(type_args)),
+        or_nothing(n_or_nothing) {
+    assert(base_class);
+    assert(!this->type_args.empty());
+    assert(!or_nothing || value_type);
+    pname = build_parameterized_class_name(base_class, this->type_args, or_nothing, true).c_str();
+}
+
+QoreParameterizedClassTypeSpec::QoreParameterizedClassTypeSpec(const QoreParameterizedClassTypeInfo* ti)
+        : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_PARAMCLASS) {
+}
+
+static QoreString build_type_parameter_name(const char* name, bool or_nothing) {
+    QoreString rv;
+    if (or_nothing) {
+        rv.concat('*');
+    }
+    rv.concat(name);
+    return rv;
+}
+
+static q_accept_vec_t make_type_parameter_accept_vec(const QoreTypeParameterTypeInfo* ti, bool or_nothing) {
+    q_accept_vec_t rv {{QoreTypeParameterTypeSpec(ti), nullptr, !or_nothing}};
+    if (or_nothing) {
+        rv.emplace_back(QoreTypeSpec(NT_NOTHING), nullptr);
+        rv.emplace_back(QoreTypeSpec(NT_NULL),
+            [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); });
+    }
+    return rv;
+}
+
+static q_return_vec_t make_type_parameter_return_vec(const QoreTypeParameterTypeInfo* ti, bool or_nothing) {
+    q_return_vec_t rv {{QoreTypeParameterTypeSpec(ti), !or_nothing}};
+    if (or_nothing) {
+        rv.emplace_back(QoreTypeSpec(NT_NOTHING));
+    }
+    return rv;
+}
+
+QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, size_t n_index, const char* name,
+        bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
+        : QoreTypeInfo(
+            make_type_parameter_accept_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            make_type_parameter_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            build_type_parameter_name(name, n_or_nothing)),
+        owner_class(owner),
+        index(n_index),
+        param_name(name),
+        or_nothing(n_or_nothing) {
+    assert(owner_class);
+    assert(name && *name);
+    assert(!or_nothing || value_type);
+    pname = tname.c_str();
+}
+
+QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const TypedHashDecl* owner, size_t n_index,
+        const char* name, bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
+        : QoreTypeInfo(
+            make_type_parameter_accept_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            make_type_parameter_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            build_type_parameter_name(name, n_or_nothing)),
+        owner_hashdecl(owner),
+        index(n_index),
+        param_name(name),
+        or_nothing(n_or_nothing) {
+    assert(owner_hashdecl);
+    assert(name && *name);
+    assert(!or_nothing || value_type);
+    pname = tname.c_str();
+}
+
+QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const UserSignature* owner, size_t n_index,
+        const char* name, bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
+        : QoreTypeInfo(
+            make_type_parameter_accept_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            make_type_parameter_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            build_type_parameter_name(name, n_or_nothing)),
+        owner_signature(owner),
+        index(n_index),
+        param_name(name),
+        or_nothing(n_or_nothing) {
+    assert(owner_signature);
+    assert(name && *name);
+    assert(!or_nothing || value_type);
+    pname = tname.c_str();
+}
+
+QoreTypeParameterTypeSpec::QoreTypeParameterTypeSpec(const QoreTypeParameterTypeInfo* ti)
+        : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_TYPEPARAM) {
+}
+
+static QoreString build_wildcard_type_name(QoreWildcardKind kind, const QoreTypeInfo* bound, bool path) {
+    QoreString rv("?");
+    if (kind == QoreWildcardKind::Extends) {
+        rv.concat(" extends ");
+        rv.concat(path ? QoreTypeInfo::getPath(bound) : QoreTypeInfo::getName(bound));
+    } else if (kind == QoreWildcardKind::Super) {
+        rv.concat(" super ");
+        rv.concat(path ? QoreTypeInfo::getPath(bound) : QoreTypeInfo::getName(bound));
+    }
+    return rv;
+}
+
+static q_accept_vec_t make_wildcard_accept_vec(const QoreWildcardTypeInfo* ti, QoreWildcardKind kind,
+        const QoreTypeInfo* bound) {
+    q_accept_vec_t rv {{QoreWildcardTypeSpec(ti), nullptr, true}};
+    if (kind != QoreWildcardKind::Super || !bound) {
+        return rv;
+    }
+    rv.reserve(bound->getAcceptVecSize() + 1);
+    for (const QoreAcceptSpec& spec : bound->getAcceptSpecs()) {
+        rv.push_back(spec);
+    }
+    return rv;
+}
+
+static q_return_vec_t make_wildcard_return_vec(QoreWildcardKind kind, const QoreTypeInfo* bound) {
+    if (kind == QoreWildcardKind::Extends && bound) {
+        q_return_vec_t rv;
+        rv.reserve(bound->return_vec.size());
+        for (const QoreReturnSpec& spec : bound->return_vec) {
+            rv.push_back(spec);
+        }
+        return rv;
+    }
+    return q_return_vec_t {{NT_ALL}};
+}
+
+QoreWildcardTypeInfo::QoreWildcardTypeInfo(QoreWildcardKind n_kind, const QoreTypeInfo* n_bound)
+        : QoreTypeInfo(make_wildcard_accept_vec(this, n_kind, n_bound),
+            make_wildcard_return_vec(n_kind, n_bound),
+            build_wildcard_type_name(n_kind, n_bound, false)),
+        kind(n_kind),
+        bound(n_bound) {
+    assert(kind == QoreWildcardKind::Unbounded || bound);
+    pname = build_wildcard_type_name(kind, bound, true).c_str();
+}
+
+QoreWildcardTypeSpec::QoreWildcardTypeSpec(const QoreWildcardTypeInfo* ti)
+        : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_WILDCARD) {
+}
+
+const QoreTypeInfo* qore_get_parameterized_class_type(const QoreClass* qc,
+        const std::vector<const QoreTypeInfo*>& args, bool or_nothing) {
+    assert(qc);
+    assert(!args.empty());
+
+    type_vec_t normalized_args = normalize_parameterized_class_args(args);
+    const QoreParameterizedClassTypeInfo* value_type = nullptr;
+    if (or_nothing) {
+        value_type = static_cast<const QoreParameterizedClassTypeInfo*>(
+            qore_get_parameterized_class_type(qc, normalized_args, false));
+    }
+
+    AutoLocker al(ctl);
+
+    ParameterizedClassCacheKey key {qc, normalized_args, or_nothing};
+    parameterized_class_map_t::iterator i = parameterized_class_map.lower_bound(key);
+    if (i != parameterized_class_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreParameterizedClassTypeInfo* ti = new QoreParameterizedClassTypeInfo(qc, normalized_args, or_nothing,
+        value_type);
+    parameterized_class_map.insert(i, parameterized_class_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t index, const char* name,
+        bool or_nothing) {
+    assert(owner);
+    assert(name && *name);
+
+    const QoreTypeParameterTypeInfo* value_type = nullptr;
+    if (or_nothing) {
+        value_type = static_cast<const QoreTypeParameterTypeInfo*>(
+            qore_get_type_parameter_type(owner, index, name, false));
+    }
+
+    AutoLocker al(ctl);
+
+    TypeParameterCacheKey key {owner, TPO_CLASS, index, or_nothing};
+    type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
+    if (i != type_parameter_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHashDecl* owner, size_t index,
+        const char* name, bool or_nothing) {
+    assert(owner);
+    assert(name && *name);
+
+    const QoreTypeParameterTypeInfo* value_type = nullptr;
+    if (or_nothing) {
+        value_type = static_cast<const QoreTypeParameterTypeInfo*>(
+            qore_get_hashdecl_type_parameter_type(owner, index, name, false));
+    }
+
+    AutoLocker al(ctl);
+
+    TypeParameterCacheKey key {owner, TPO_HASHDECL, index, or_nothing};
+    type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
+    if (i != type_parameter_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* owner, size_t index,
+        const char* name, bool or_nothing) {
+    assert(owner);
+    assert(name && *name);
+
+    const QoreTypeParameterTypeInfo* value_type = nullptr;
+    if (or_nothing) {
+        value_type = static_cast<const QoreTypeParameterTypeInfo*>(
+            qore_get_signature_type_parameter_type(owner, index, name, false));
+    }
+
+    AutoLocker al(ctl);
+
+    TypeParameterCacheKey key {owner, TPO_SIGNATURE, index, or_nothing};
+    type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
+    if (i != type_parameter_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(const QoreTypeInfo* ti) {
+    return dynamic_cast<const QoreTypeParameterTypeInfo*>(ti);
+}
+
+static const QoreTypeInfo* qore_get_wildcard_type_intern(QoreWildcardKind kind, const QoreTypeInfo* bound) {
+    assert(kind == QoreWildcardKind::Unbounded || bound);
+
+    if (kind == QoreWildcardKind::Unbounded) {
+        bound = nullptr;
+    } else if (bound == autoNoNarrowTypeInfo) {
+        bound = autoTypeInfo;
+    }
+
+    AutoLocker al(ctl);
+
+    WildcardTypeCacheKey key {kind, bound};
+    wildcard_type_map_t::iterator i = wildcard_type_map.lower_bound(key);
+    if (i != wildcard_type_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreWildcardTypeInfo* ti = new QoreWildcardTypeInfo(kind, bound);
+    wildcard_type_map.insert(i, wildcard_type_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_wildcard_type() {
+    return qore_get_wildcard_type_intern(QoreWildcardKind::Unbounded, nullptr);
+}
+
+const QoreTypeInfo* qore_get_wildcard_extends_type(const QoreTypeInfo* bound) {
+    assert(bound);
+    return qore_get_wildcard_type_intern(QoreWildcardKind::Extends, bound);
+}
+
+const QoreTypeInfo* qore_get_wildcard_super_type(const QoreTypeInfo* bound) {
+    assert(bound);
+    return qore_get_wildcard_type_intern(QoreWildcardKind::Super, bound);
+}
+
+bool qore_type_contains_wildcard(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return false;
+    }
+    if (QoreTypeInfo::getWildcardType(ti)) {
+        return true;
+    }
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+            if (qore_type_contains_wildcard(arg)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        if (hp->isParameterizedHashDecl()) {
+            for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                if (qore_type_contains_wildcard(arg)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool qore_type_contains_type_parameter(const QoreTypeInfo* ti) {
+    if (!ti || !QoreTypeInfo::hasType(ti)) {
+        return false;
+    }
+
+    signed char cached = ti->getContainsTypeParameterCache();
+    if (cached != -1) {
+        return cached != 0;
+    }
+
+    if (qore_get_type_parameter_type_info(ti)) {
+        ti->setContainsTypeParameterCache(true);
+        return true;
+    }
+
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+            if (qore_type_contains_type_parameter(arg)) {
+                ti->setContainsTypeParameterCache(true);
+                return true;
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
+    if (const QoreWildcardTypeInfo* wti = QoreTypeInfo::getWildcardType(ti)) {
+        bool rv = qore_type_contains_type_parameter(wti->getBound());
+        ti->setContainsTypeParameterCache(rv);
+        return rv;
+    }
+
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        if (hp->isParameterizedHashDecl()) {
+            for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                if (qore_type_contains_type_parameter(arg)) {
+                    ti->setContainsTypeParameterCache(true);
+                    return true;
+                }
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        if (qore_type_contains_type_parameter(cti->getReturnType())) {
+            ti->setContainsTypeParameterCache(true);
+            return true;
+        }
+        for (const QoreTypeInfo* param : cti->getParamTypes()) {
+            if (qore_type_contains_type_parameter(param)) {
+                ti->setContainsTypeParameterCache(true);
+                return true;
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
+    if (QoreTypeInfo::getUnionType(ti)) {
+        for (const QoreReturnSpec& rt : ti->return_vec) {
+            const QoreTypeInfo* member = rt.spec.getTypeInfo();
+            if (member && member != nothingTypeInfo && qore_type_contains_type_parameter(member)) {
+                ti->setContainsTypeParameterCache(true);
+                return true;
+            }
+        }
+        ti->setContainsTypeParameterCache(false);
+        return false;
+    }
+
+    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    if (subtype && qore_type_contains_type_parameter(subtype)) {
+        ti->setContainsTypeParameterCache(true);
+        return true;
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (subtype && qore_type_contains_type_parameter(subtype)) {
+        ti->setContainsTypeParameterCache(true);
+        return true;
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    bool rv = subtype && qore_type_contains_type_parameter(subtype);
+    ti->setContainsTypeParameterCache(rv);
+    return rv;
+}
+
+const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())
+        : ti;
+}
+
+const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, receiver_type_info, type_param_inst)
+        : ti;
+}
+
+static qore_type_result_e qore_wildcard_accepts(const QoreWildcardTypeInfo* target_wc,
+        const QoreTypeInfo* source_arg, bool& may_not_match, bool& may_need_filter) {
+    assert(target_wc);
+    if (target_wc->getKind() == QoreWildcardKind::Unbounded) {
+        may_not_match = true;
+        return QTI_AMBIGUOUS;
+    }
+
+    const QoreTypeInfo* bound = target_wc->getBound();
+    assert(bound);
+    if (target_wc->getKind() == QoreWildcardKind::Extends) {
+        qore_type_result_e max_result = QTI_NOT_EQUAL;
+        qore_type_result_e rv = QoreTypeInfo::parseAccepts(bound, source_arg, may_not_match, may_need_filter,
+            max_result);
+        return rv == QTI_NOT_EQUAL ? rv : QTI_AMBIGUOUS;
+    }
+
+    qore_type_result_e max_result = QTI_NOT_EQUAL;
+    qore_type_result_e rv = QoreTypeInfo::parseAccepts(source_arg, bound, may_not_match, may_need_filter,
+        max_result);
+    return rv == QTI_NOT_EQUAL ? rv : QTI_AMBIGUOUS;
+}
+
+qore_type_result_e qore_generic_type_arg_accepts(const QoreTypeInfo* target_arg,
+        const QoreTypeInfo* source_arg, bool& may_not_match, bool& may_need_filter) {
+    if (QoreTypeInfo::equal(target_arg, source_arg)) {
+        return QTI_IDENT;
+    }
+
+    const QoreWildcardTypeInfo* target_wc = QoreTypeInfo::getWildcardType(target_arg);
+    if (!target_wc) {
+        return QTI_NOT_EQUAL;
+    }
+
+    const QoreWildcardTypeInfo* source_wc = QoreTypeInfo::getWildcardType(source_arg);
+    if (!source_wc) {
+        return qore_wildcard_accepts(target_wc, source_arg, may_not_match, may_need_filter);
+    }
+
+    if (target_wc->getKind() == QoreWildcardKind::Unbounded) {
+        may_not_match = true;
+        return QTI_AMBIGUOUS;
+    }
+
+    if (target_wc->getKind() == source_wc->getKind() && source_wc->getBound()) {
+        return qore_wildcard_accepts(target_wc, source_wc->getBound(), may_not_match, may_need_filter);
+    }
+
+    return QTI_NOT_EQUAL;
+}
+
+qore_type_result_e qore_parameterized_class_accepts(const QoreParameterizedClassTypeInfo* target_pti,
+        const QoreTypeInfo* source_type, bool& may_not_match, bool& may_need_filter) {
+    assert(target_pti);
+    const QoreParameterizedClassTypeInfo* source_pti = QoreTypeInfo::getParameterizedClassType(source_type);
+    if (!source_pti) {
+        return QTI_NOT_EQUAL;
+    }
+
+    const QoreTypeInfo* mapped_type = qore_class_private::get(*source_pti->getBaseClass())
+        ->getParameterizedBaseTypeInfo(source_pti, target_pti->getBaseClass());
+    const QoreParameterizedClassTypeInfo* mapped_pti = QoreTypeInfo::getParameterizedClassType(mapped_type);
+    if (!mapped_pti || mapped_pti->getArgCount() != target_pti->getArgCount()) {
+        return QTI_NOT_EQUAL;
+    }
+
+    qore_type_result_e rv = QTI_IDENT;
+    const type_vec_t& target_args = target_pti->getTypeArgs();
+    const type_vec_t& source_args = mapped_pti->getTypeArgs();
+    for (size_t i = 0, e = target_args.size(); i < e; ++i) {
+        qore_type_result_e arg_rv = qore_generic_type_arg_accepts(target_args[i], source_args[i], may_not_match,
+            may_need_filter);
+        if (arg_rv == QTI_NOT_EQUAL) {
+            return QTI_NOT_EQUAL;
+        }
+        if (arg_rv < rv) {
+            rv = arg_rv;
+        }
+    }
+    return rv;
+}
+
+static const TypedHashDecl* qore_get_hashdecl_base(const TypedHashDecl* hd) {
+    const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+    return hp->isParameterizedHashDecl() ? hp->getParameterizedBase() : hd;
+}
+
+static const TypedHashDecl* qore_get_hashdecl_mapped_to_base(const TypedHashDecl* source_hd,
+        const TypedHashDecl* target_base) {
+    const TypedHashDecl* current = source_hd;
+    while (current) {
+        const TypedHashDecl* current_base = qore_get_hashdecl_base(current);
+        if (typed_hash_decl_private::get(*current_base)->equal(*typed_hash_decl_private::get(*target_base))) {
+            return current;
+        }
+        current = typed_hash_decl_private::get(*current)->getParentHashDecl();
+    }
+    return nullptr;
+}
+
+qore_type_result_e qore_parameterized_hashdecl_accepts(const TypedHashDecl* target_hd,
+        const TypedHashDecl* source_hd, bool& may_not_match, bool& may_need_filter) {
+    assert(target_hd);
+    assert(source_hd);
+
+    const typed_hash_decl_private* target_hp = typed_hash_decl_private::get(*target_hd);
+    const typed_hash_decl_private* source_hp = typed_hash_decl_private::get(*source_hd);
+    if (source_hp->equal(*target_hp)) {
+        return QTI_IDENT;
+    }
+
+    const TypedHashDecl* target_base = qore_get_hashdecl_base(target_hd);
+    const TypedHashDecl* mapped_source = qore_get_hashdecl_mapped_to_base(source_hd, target_base);
+    if (!mapped_source) {
+        return QTI_NOT_EQUAL;
+    }
+
+    const typed_hash_decl_private* mapped_hp = typed_hash_decl_private::get(*mapped_source);
+    if (!target_hp->isParameterizedHashDecl() || !mapped_hp->isParameterizedHashDecl()) {
+        return source_hp->isDescendantOf(*target_hp) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+    }
+
+    const type_vec_t& target_args = target_hp->getTypeArgs();
+    const type_vec_t& source_args = mapped_hp->getTypeArgs();
+    if (target_args.size() != source_args.size()) {
+        return QTI_NOT_EQUAL;
+    }
+
+    qore_type_result_e rv = source_hd == mapped_source ? QTI_IDENT : QTI_AMBIGUOUS;
+    for (size_t i = 0, e = target_args.size(); i < e; ++i) {
+        qore_type_result_e arg_rv = qore_generic_type_arg_accepts(target_args[i], source_args[i], may_not_match,
+            may_need_filter);
+        if (arg_rv == QTI_NOT_EQUAL) {
+            return QTI_NOT_EQUAL;
+        }
+        if (arg_rv < rv) {
+            rv = arg_rv;
+        }
+    }
+    return rv == QTI_IDENT && source_hd != mapped_source ? QTI_AMBIGUOUS : rv;
+}
+
 // Helper function to create a normalized key for union type caching
 // Preserve declaration order so union resolution honors the first matching type.
 static type_vec_t normalize_union_key(const type_vec_t& member_types) {
@@ -755,7 +1539,7 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     if (member_types.size() == 1) {
         const QoreTypeInfo* ti = member_types[0];
         if (or_nothing) {
-            const QoreTypeInfo* orn = get_or_nothing_type(ti);
+            const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
             return orn ? orn : ti;
         }
         return ti;
@@ -789,7 +1573,7 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
 
     for (const QoreTypeInfo* ti : key) {
         // Add accept types from this member
-        for (const auto& a : ti->accept_vec) {
+        for (const auto& a : ti->getAcceptSpecs()) {
             accept_vec.push_back(a);
         }
         // Add return types from this member
@@ -819,11 +1603,8 @@ const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_type
     return qore_get_union_type(member_types, true);
 }
 
-// Forward declaration
-static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str);
-
 // Helper function to parse a type string into a QoreParseTypeInfo with proper subtypes
-static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str) {
+QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str) {
     // Trim whitespace
     while (*type_str && isspace(*type_str)) ++type_str;
     if (!*type_str) return nullptr;
@@ -831,6 +1612,24 @@ static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str) {
     std::string str(type_str);
     while (!str.empty() && isspace(str.back())) str.pop_back();
     if (str.empty()) return nullptr;
+
+    if (str == "?") {
+        return new QoreParseTypeInfo(QoreWildcardKind::Unbounded);
+    }
+
+    const char* extends_kw = "? extends ";
+    const char* super_kw = "? super ";
+    if (!strncmp(str.c_str(), extends_kw, strlen(extends_kw))
+            || !strncmp(str.c_str(), super_kw, strlen(super_kw))) {
+        QoreWildcardKind kind = str[2] == 'e' ? QoreWildcardKind::Extends : QoreWildcardKind::Super;
+        const char* bound_str = str.c_str() + (kind == QoreWildcardKind::Extends
+            ? strlen(extends_kw) : strlen(super_kw));
+        while (*bound_str && isspace(*bound_str)) {
+            ++bound_str;
+        }
+        QoreParseTypeInfo* bound = qore_parse_type_string_to_pti(bound_str);
+        return new QoreParseTypeInfo(kind, bound ? bound : new QoreParseTypeInfo(strdup("auto")));
+    }
 
     // Check for or-nothing prefix
     bool or_nothing = false;
@@ -891,7 +1690,7 @@ static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str) {
             while (!current.empty() && isspace(current.front())) current.erase(0, 1);
             if (!current.empty()) {
                 // Recursively parse this subtype
-                QoreParseTypeInfo* sub_pti = parse_type_string_to_pti(current.c_str());
+                QoreParseTypeInfo* sub_pti = qore_parse_type_string_to_pti(current.c_str());
                 if (sub_pti) {
                     subtypes.push_back(sub_pti);
                 }
@@ -944,7 +1743,7 @@ static const QoreTypeInfo* parse_and_resolve_type_string(const char* type_str, c
     }
 
     // Parse the type string into a QoreParseTypeInfo with proper structure
-    QoreParseTypeInfo* pti = parse_type_string_to_pti(type_str);
+    QoreParseTypeInfo* pti = qore_parse_type_string_to_pti(type_str);
     if (!pti) return nullptr;
 
     return QoreParseTypeInfo::resolveAndDelete(pti, loc, err);
@@ -1138,6 +1937,203 @@ const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* re
     return qore_get_complex_code_type(return_type, param_types, varargs, true);
 }
 
+static const QoreTypeInfo* get_substituted_type_param_arg(const QoreTypeParameterTypeInfo* tpi,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
+    if (const UserSignature* owner_signature = tpi->getOwnerSignature()) {
+        if (!type_param_inst || type_param_inst->owner != owner_signature
+                || tpi->getIndex() >= type_param_inst->type_args.size()) {
+            return nullptr;
+        }
+
+        const QoreTypeInfo* arg = type_param_inst->type_args[tpi->getIndex()];
+        return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+    }
+
+    if (const TypedHashDecl* owner_hashdecl = tpi->getOwnerHashDecl()) {
+        const TypedHashDecl* receiver_hashdecl = QoreTypeInfo::getTypedHash(receiver_type_info);
+        if (!receiver_hashdecl) {
+            return nullptr;
+        }
+
+        const typed_hash_decl_private* receiver_hp = typed_hash_decl_private::get(*receiver_hashdecl);
+        const TypedHashDecl* base_hashdecl = receiver_hp->getParameterizedBase();
+        if (!base_hashdecl || !base_hashdecl->equal(owner_hashdecl)) {
+            return nullptr;
+        }
+
+        const std::vector<const QoreTypeInfo*>& args = receiver_hp->getTypeArgs();
+        if (tpi->getIndex() >= args.size()) {
+            return nullptr;
+        }
+
+        const QoreTypeInfo* arg = args[tpi->getIndex()];
+        return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+    }
+
+    const QoreParameterizedClassTypeInfo* receiver_pti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
+    if (!receiver_pti) {
+        const QoreClass* receiver_class = QoreTypeInfo::getUniqueReturnClass(receiver_type_info);
+        if (receiver_class) {
+            const QoreTypeInfo* owner_type = qore_class_private::get(*receiver_class)
+                ->getConcreteParameterizedBaseTypeInfo(tpi->getOwnerClass());
+            const QoreParameterizedClassTypeInfo* owner_pti = QoreTypeInfo::getParameterizedClassType(owner_type);
+            if (owner_pti && tpi->getIndex() < owner_pti->getArgCount()) {
+                const QoreTypeInfo* arg = owner_pti->getTypeArgs()[tpi->getIndex()];
+                return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+            }
+        }
+        const qore_class_private* owner = qore_class_private::get(*tpi->getOwnerClass());
+        if (receiver_class && owner->rawConstructionDefaultsToAuto()
+                && qore_class_private::runtimeCheckCompatibleClass(*tpi->getOwnerClass(), *receiver_class)
+                    != QTI_NOT_EQUAL) {
+            return tpi->isOrNothing() ? get_or_nothing_type_check(autoTypeInfo) : autoTypeInfo;
+        }
+        return nullptr;
+    }
+
+    const QoreTypeInfo* owner_type = qore_class_private::get(*receiver_pti->getBaseClass())
+        ->getParameterizedBaseTypeInfo(receiver_pti, tpi->getOwnerClass());
+    const QoreParameterizedClassTypeInfo* owner_pti = QoreTypeInfo::getParameterizedClassType(owner_type);
+    if (!owner_pti || tpi->getIndex() >= owner_pti->getArgCount()) {
+        return nullptr;
+    }
+
+    const QoreTypeInfo* arg = owner_pti->getTypeArgs()[tpi->getIndex()];
+    return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+}
+
+const QoreTypeInfo* qore_get_object_receiver_type_info(const QoreObject* self) {
+    if (!self) {
+        return nullptr;
+    }
+    const QoreTypeInfo* ti = self->getInstantiatedTypeInfo();
+    return ti ? ti : self->getClass()->getTypeInfo();
+}
+
+const QoreTypeInfo* qore_get_current_receiver_type_info() {
+    const QoreTypeInfo* ti = runtime_get_receiver_type_info();
+    return ti ? ti : qore_get_object_receiver_type_info(runtime_get_stack_object());
+}
+
+const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const QoreTypeInfo* receiver_type_info) {
+    return qore_substitute_type_params(ti, receiver_type_info, runtime_get_type_param_instantiation());
+}
+
+const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_inst) {
+    if (!ti || (!receiver_type_info && (!type_param_inst || type_param_inst->empty()))) {
+        return ti;
+    }
+
+    if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
+        const QoreTypeInfo* subst = get_substituted_type_param_arg(tpi, receiver_type_info, type_param_inst);
+        return subst ? subst : ti;
+    }
+
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        type_vec_t args;
+        args.reserve(pti->getArgCount());
+        bool changed = false;
+        for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+            const QoreTypeInfo* subst = qore_substitute_type_params(arg, receiver_type_info, type_param_inst);
+            args.push_back(subst);
+            if (subst != arg) {
+                changed = true;
+            }
+        }
+        return changed ? qore_get_parameterized_class_type(pti->getBaseClass(), args, pti->isOrNothing()) : ti;
+    }
+
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        if (hp->isParameterizedHashDecl()) {
+            type_vec_t args;
+            args.reserve(hp->getTypeArgs().size());
+            bool changed = false;
+            for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                const QoreTypeInfo* subst = qore_substitute_type_params(arg, receiver_type_info, type_param_inst);
+                args.push_back(subst);
+                if (subst != arg) {
+                    changed = true;
+                }
+            }
+            if (changed) {
+                const typed_hash_decl_private* base = typed_hash_decl_private::get(*hp->getParameterizedBase());
+                return base->getParameterizedTypeInfo(args, QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING));
+            }
+        }
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        const QoreTypeInfo* ret = qore_substitute_type_params(cti->getReturnType(), receiver_type_info,
+            type_param_inst);
+        type_vec_t params;
+        params.reserve(cti->getParamTypes().size());
+        bool changed = ret != cti->getReturnType();
+        for (const QoreTypeInfo* param : cti->getParamTypes()) {
+            const QoreTypeInfo* subst = qore_substitute_type_params(param, receiver_type_info, type_param_inst);
+            params.push_back(subst);
+            if (subst != param) {
+                changed = true;
+            }
+        }
+        return changed ? qore_get_complex_code_type(ret, params, cti->hasVarArgs(), cti->isOrNothing()) : ti;
+    }
+
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti)) {
+        type_vec_t members;
+        bool changed = false;
+        for (const QoreReturnSpec& rt : ti->return_vec) {
+            const QoreTypeInfo* member = rt.spec.getTypeInfo();
+            if (member == nothingTypeInfo) {
+                continue;
+            }
+            const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info, type_param_inst);
+            members.push_back(subst);
+            if (subst != member) {
+                changed = true;
+            }
+        }
+        return changed ? qore_get_union_type(members, uti->isOrNothing()) : ti;
+    }
+
+    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    if (subtype) {
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
+        if (subst != subtype) {
+            return QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)
+                ? qore_get_complex_hash_or_nothing_type(subst)
+                : qore_get_complex_hash_type(subst);
+        }
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (subtype) {
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
+        if (subst != subtype) {
+            bool is_soft = !strncmp(QoreTypeInfo::getName(ti), "softlist<", 9)
+                || !strncmp(QoreTypeInfo::getName(ti), "*softlist<", 10);
+            if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+                return is_soft ? qore_get_complex_softlist_or_nothing_type(subst)
+                    : qore_get_complex_list_or_nothing_type(subst);
+            }
+            return is_soft ? qore_get_complex_softlist_type(subst) : qore_get_complex_list_type(subst);
+        }
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    if (subtype) {
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
+        if (subst != subtype) {
+            return QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)
+                ? qore_get_complex_reference_or_nothing_type(subst)
+                : qore_get_complex_reference_type(subst);
+        }
+    }
+
+    return ti;
+}
+
 const QoreTypeInfo* qore_get_complex_code_type_from_signature(const AbstractFunctionSignature* sig,
         bool or_nothing) {
     if (!sig) {
@@ -1255,10 +2251,14 @@ const QoreTypeInfo* getTypeInfoForType(qore_type_t t) {
 const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
     qore_type_t t = get_node_type(n);
     switch (t) {
-        case NT_OBJECT:
-            return static_cast<const QoreObject*>(n)->getClass()->getTypeInfo();
-        case NT_WEAKREF:
-            return static_cast<const WeakReferenceNode*>(n)->get()->getClass()->getTypeInfo();
+        case NT_OBJECT: {
+            const QoreObject* obj = static_cast<const QoreObject*>(n);
+            return obj->getInstantiatedTypeInfo() ? obj->getInstantiatedTypeInfo() : obj->getClass()->getTypeInfo();
+        }
+        case NT_WEAKREF: {
+            const QoreObject* obj = static_cast<const WeakReferenceNode*>(n)->get();
+            return obj->getInstantiatedTypeInfo() ? obj->getInstantiatedTypeInfo() : obj->getClass()->getTypeInfo();
+        }
         case NT_HASH:
             return static_cast<const QoreHashNode*>(n)->getTypeInfo();
         case NT_WEAKREF_HASH:
@@ -1267,6 +2267,10 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
             return static_cast<const QoreListNode*>(n)->getTypeInfo();
         case NT_WEAKREF_LIST:
             return static_cast<const WeakListReferenceNode*>(n)->get()->getTypeInfo();
+        case NT_BUFFER:
+            return static_cast<const QoreBufferNode*>(n)->getTypeInfo();
+        case NT_PLUGIN_VALUE:
+            return qore_plugin_get_value_type_info(n);
         case NT_REFERENCE:
             return static_cast<const ReferenceNode*>(n)->getTypeInfo();
         case NT_RUNTIME_CLOSURE: {
@@ -1338,7 +2342,7 @@ const char* getBuiltinTypeName(qore_type_t type) {
 }
 
 // only called for complex hashes and lists
-static qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
+qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
         bool& may_not_match, bool& may_need_filter) {
     //printd(5, "match_type() '%s' <- '%s'\n", QoreTypeInfo::getName(this_type), QoreTypeInfo::getName(that_type));
     qore_type_result_e res = QoreTypeInfo::parseAccepts(this_type, that_type, may_not_match, may_need_filter);
@@ -1356,6 +2360,20 @@ static qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTy
 
 const char* QoreTypeSpec::getName() const {
     return QoreTypeInfo::getName(getTypeInfo());
+}
+
+const QoreClass* QoreTypeSpec::getClass() const {
+    if (typespec == QTS_CLASS) {
+        return u.qc;
+    }
+    if (typespec == QTS_PARAMCLASS) {
+        return getParameterizedClassTypeInfo()->getBaseClass();
+    }
+    return nullptr;
+}
+
+const QoreParameterizedClassTypeInfo* QoreTypeSpec::getParameterizedClassTypeInfo() const {
+    return typespec == QTS_PARAMCLASS ? static_cast<const QoreParameterizedClassTypeInfo*>(u.ti) : nullptr;
 }
 
 const char* QoreTypeSpec::getTypeName() const {
@@ -1382,331 +2400,31 @@ const char* QoreTypeSpec::getSimpleTypeName() const {
     return nullptr;
 }
 
+static const std::string& getQoreTypeSpecMatchRegistryValidationError() {
+    static const std::string error = []() {
+        std::string validation_error;
+        if (!qore_type_spec_validate_match_registry(validation_error)) {
+            return validation_error;
+        }
+        return std::string();
+    }();
+    return error;
+}
+
 qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_match, bool& may_need_filter,
         qore_type_result_e& max_result, bool known_initial_assignment) const {
     //printd(5, "QoreTypeSpec::match() typespec: %d t.typespec: %d\n", (int)typespec, (int)t.typespec);
-    switch (typespec) {
-        case QTS_CLASS: {
-            switch (t.typespec) {
-                case QTS_CLASS: {
-                    qore_type_result_e rv =
-                        qore_class_private::get(*t.u.qc)->parseCheckCompatibleClass(*qore_class_private::get(*u.qc),
-                            may_not_match);
-                    max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-                    return rv;
-                }
-                default: {
-                    qore_type_t tt = t.getType();
-                    if (tt == NT_ALL || tt == NT_OBJECT) {
-                        may_not_match = true;
-                        max_result = QTI_IDENT;
-                        return QTI_AMBIGUOUS;
-                    }
-                    break;
-                }
-            }
-            // see if the right side is a reference type
-            qore_type_result_e rv = tryMatchReferenceType(t, may_not_match);
-            max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-            return rv;
-        }
-        case QTS_HASHDECL: {
-            switch (t.typespec) {
-                /** NOTE: QTS_COMPLEXHASH with auto (hash<auto>) is not allowed on the RHS, even with
-                    may_not_match = true, because ATM it would also match with any immediate hash without
-                    a specific value type
-                */
-                case QTS_HASHDECL: {
-                    const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
-                    const typed_hash_decl_private* source = typed_hash_decl_private::get(*t.u.hd);
-                    qore_type_result_e rv;
-                    if (source->parseEqual(*target)) {
-                        // Exact match
-                        rv = QTI_IDENT;
-                    } else if (source->isDescendantOf(*target)) {
-                        // Source is a derived hashdecl of target - compatible
-                        rv = QTI_AMBIGUOUS;
-                    } else if (target->isDescendantOf(*source)) {
-                        // Target is a derived hashdecl of source - may not match at runtime
-                        may_not_match = true;
-                        rv = QTI_AMBIGUOUS;
-                    } else {
-                        rv = QTI_NOT_EQUAL;
-                    }
-                    max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-                    return rv;
-                }
-                case QTS_TYPE:
-                    if (t.getType() == NT_ALL || t.getType() == NT_HASH) {
-                        may_not_match = true;
-                        max_result = QTI_IDENT;
-                        return QTI_AMBIGUOUS;
-                    }
-                    // fall down to the next case
-                default: {
-                    break;
-                }
-            }
-            // see if the right side is a reference type
-            qore_type_result_e rv = tryMatchReferenceType(t, may_not_match);
-            max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-            return rv;
-        }
-        case QTS_COMPLEXHASH: {
-            //printd(5, "QoreTypeSpec::match() %d: t.typespec: %d '%s'\n", typespec, (int)t.typespec, QoreTypeInfo::getName(u.ti));
-            switch (t.typespec) {
-                case QTS_COMPLEXHASH: {
-                    //printd(5, "QoreTypeSpec::match() t.typespec: complexlist <- %d '%s' <- '%s' rc: %d)\n",
-                    //    (int)t.typespec, QoreTypeInfo::getName(u.ti), QoreTypeInfo::getName(t.u.ti),
-                    //    match_type(u.ti, t.u.ti, may_not_match, may_need_filter));
-                    qore_type_result_e rv = is_auto_vti(u.ti)
-                        ? QTI_NEAR
-                        : match_type(u.ti, t.u.ti, may_not_match, may_need_filter);
-                    if (rv > QTI_NOT_EQUAL) {
-                        max_result = QTI_IDENT;
-                    } else {
-                        max_result = rv;
-                    }
-                    return rv;
-                }
-                case QTS_EMPTYHASH: {
-                    max_result = QTI_NEAR;
-                    return QTI_NEAR;
-                }
-                case QTS_HASHDECL: {
-                    qore_type_result_e rv = is_auto_vti(u.ti)
-                        ? QTI_NEAR
-                        : QTI_NOT_EQUAL;
-                    max_result = rv;
-                    return rv;
-                }
-                case QTS_TYPE:
-                    if (t.getType() == NT_HASH && is_auto_vti(u.ti)) {
-                        max_result = QTI_IDENT;
-                        return QTI_NEAR;
-                    }
-                    if (t.getType() == NT_ALL) {
-                        may_not_match = true;
-                        max_result = QTI_IDENT;
-                        return QTI_AMBIGUOUS;
-                    }
-                    // fall down to the next case
-                default: {
-                    break;
-                }
-            }
-            // see if the right side is a reference type
-            qore_type_result_e rv = tryMatchReferenceType(t, may_not_match);
-            max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-            return rv;
-        }
-        case QTS_COMPLEXSOFTLIST:
-        case QTS_COMPLEXLIST: {
-            printd(5, "QoreTypeSpec::match() %d: t.typespec: %d '%s'\n", typespec, (int)t.typespec,
-                QoreTypeInfo::getName(u.ti));
-            switch (t.typespec) {
-                case QTS_COMPLEXSOFTLIST:
-                case QTS_COMPLEXLIST: {
-                    //printd(5, "QoreTypeSpec::match() t.typespec: complexlist <- %d '%s' <- '%s' rc: %d)\n", (int)t.typespec, QoreTypeInfo::getName(u.ti), QoreTypeInfo::getName(t.u.ti), match_type(u.ti, t.u.ti, may_not_match, may_need_filter));
-                    qore_type_result_e rv = is_auto_vti(u.ti)
-                        ? QTI_NEAR
-                        : match_type(u.ti, t.u.ti, may_not_match, may_need_filter);
-                    if (rv > QTI_NOT_EQUAL) {
-                        max_result = QTI_IDENT;
-                    } else {
-                        max_result = rv;
-                    }
-                    return rv;
-                }
-                case QTS_EMPTYLIST: {
-                    max_result = QTI_NEAR;
-                    return QTI_NEAR;
-                }
-                case QTS_CLASS: {
-                    if (typespec == QTS_COMPLEXSOFTLIST) {
-                        // see if type matches the complex type
-                        qore_type_result_e rv = match_type(u.ti, t.u.qc->getTypeInfo(), may_not_match, may_need_filter);
-                        if (rv > QTI_NOT_EQUAL) {
-                            max_result = QTI_IDENT;
-                        } else {
-                            max_result = rv;
-                        }
-                        return rv;
-                    }
-                    break;
-                }
-                case QTS_TYPE: {
-                    if (t.getType() == NT_LIST && is_auto_vti(u.ti)) {
-                        max_result = QTI_IDENT;
-                        return QTI_NEAR;
-                    }
-                    if (t.getType() == NT_ALL) {
-                        may_not_match = true;
-                        max_result = QTI_IDENT;
-                        return QTI_AMBIGUOUS;
-                    }
-                }
-                // fall down to next case
-                default: {
-                    if (typespec == QTS_COMPLEXSOFTLIST) {
-                        // see if type matches the complex type
-                        return match_type(u.ti, t.getTypeInfo(), may_not_match, may_need_filter);
-                    }
-                    break;
-                }
-            }
-            // see if the right side is a reference type
-            qore_type_result_e rv = tryMatchReferenceType(t, may_not_match);
-            max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-            return rv;
-        }
-        case QTS_COMPLEXREF: {
-            //printd(5, "QoreTypeSpec::match() t.typespec: %d '%s'\n", (int)t.typespec, QoreTypeInfo::getName(u.ti));
-            switch (t.typespec) {
-                case QTS_COMPLEXHARDREF:
-                case QTS_COMPLEXREF: {
-                    //printd(5, "pcr: '%s' '%s' eq: %d ss: %d\n", QoreTypeInfo::getName(t.u.ti), QoreTypeInfo::getName(u.ti), QoreTypeInfo::equal(u.ti, t.u.ti), QoreTypeInfo::outputSuperSetOf(t.u.ti, u.ti));
-                    // the passed argument's type must be a superset or equal to the reference type's subtype
-                    // that is; if the types are different, the reference type's subtype must be more restrictive than the passed type's
-                    qore_type_result_e ref_res = QoreTypeInfo::runtimeTypeMatch(t.u.ti, u.ti);
-                    if (ref_res != QTI_NOT_EQUAL) {
-                        max_result = QTI_IDENT;
-                        return ref_res;
-                    }
-                    qore_type_result_e rv = QoreTypeInfo::outputSuperSetOf(t.u.ti, u.ti) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
-                    max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-                    return rv;
-                }
-                case QTS_HARDREF: {
-                    max_result = QTI_IDENT;
-                    return QTI_IDENT;
-                }
-                case QTS_TYPE:
-                    if (t.getType() == NT_REFERENCE) {
-                        may_not_match = true;
-                        max_result = QTI_IDENT;
-                        return QTI_AMBIGUOUS;
-                    }
-                    return QTI_NOT_EQUAL;
-                    // check if types match
-                    //return checkMatchType(t, may_not_match, max_result);
+    const std::string& registry_error = getQoreTypeSpecMatchRegistryValidationError();
+    assert(registry_error.empty());
+    if (!registry_error.empty()) {
+        max_result = QTI_NOT_EQUAL;
+        return QTI_NOT_EQUAL;
+    }
 
-                case QTS_EMPTYLIST:
-                case QTS_EMPTYHASH: {
-                    // check if types match
-                    if (!u.ti || u.ti->accept_vec.empty()) {
-                        return QTI_AMBIGUOUS;
-                    }
-                    qore_type_result_e rv = QTI_NOT_EQUAL;
-                    for (auto& at : u.ti->accept_vec) {
-                        qore_type_result_e t_max_result = QTI_NOT_EQUAL;
-                        qore_type_result_e res = at.spec.checkMatchType(t, may_not_match, t_max_result);
-                        if (res == QTI_NOT_EQUAL && !may_not_match) {
-                            may_not_match = true;
-                        }
-                        if (res > rv) {
-                            if (t_max_result > max_result) {
-                                max_result = t_max_result;
-                            }
-                            rv = res;
-                        }
-                    }
-                    if (u.ti->accept_vec.size() == 1) {
-                        return rv;
-                    }
-                    if (rv > QTI_AMBIGUOUS) {
-                        return QTI_AMBIGUOUS;
-                    }
-                    return rv;
-                }
-
-                default:
-                    return QTI_NOT_EQUAL;
-            }
-            return QTI_NOT_EQUAL;
-        }
-        case QTS_ENUM: {
-            // Enum types match only if they are the same enum
-            switch (t.typespec) {
-                case QTS_ENUM: {
-                    // Same enum declaration = exact match
-                    if (u.ed == t.u.ed) {
-                        max_result = QTI_IDENT;
-                        return QTI_IDENT;
-                    }
-                    if (qore_enum_decl_private::get(*u.ed)->parseEqual(*qore_enum_decl_private::get(*t.u.ed))) {
-                        max_result = QTI_IDENT;
-                        return QTI_IDENT;
-                    }
-                    // Different enums = no match
-                    return QTI_NOT_EQUAL;
-                }
-                case QTS_TYPE: {
-                    // This is the "incoming" direction: can type t be accepted by this enum?
-                    // base type → enum: REJECT (require explicit cast<enum<X>>())
-                    // Only NT_ALL (auto) is accepted to allow runtime flexibility
-                    if (t.u.t == NT_ALL) {
-                        may_not_match = true;
-                        max_result = QTI_IDENT;
-                        return QTI_AMBIGUOUS;
-                    }
-                    return QTI_NOT_EQUAL;
-                }
-                default:
-                    return QTI_NOT_EQUAL;
-            }
-        }
-        case QTS_TYPE:
-            if (u.t == NT_REFERENCE) {
-                if (known_initial_assignment) {
-                    if ((t.typespec == QTS_TYPE && t.u.t == NT_REFERENCE)
-                        || t.typespec == QTS_HARDREF || t.typespec == QTS_COMPLEXHARDREF
-                        || t.typespec == QTS_COMPLEXREF) {
-                        max_result = QTI_IDENT;
-                        return QTI_AMBIGUOUS;
-                    }
-                } else {
-                    max_result = QTI_IDENT;
-                    return QTI_AMBIGUOUS;
-                }
-            }
-            // fall down to next case
-        case QTS_EMPTYLIST:
-        case QTS_EMPTYHASH: {
-            qore_type_result_e rv = checkMatchType(t, may_not_match, max_result);
-            if (rv == QTI_NOT_EQUAL) {
-                // see if the right side is a reference type
-                rv = tryMatchReferenceType(t, may_not_match);
-                max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-            }
-            return rv;
-        }
-        case QTS_COMPLEXHARDREF: {
-            switch (t.typespec) {
-                case QTS_HARDREF: {
-                    max_result = QTI_IDENT;
-                    return QTI_IDENT;
-                }
-                case QTS_COMPLEXHARDREF: {
-                    qore_type_result_e rv = QoreTypeInfo::parseAccepts(t.u.ti, u.ti, may_not_match, may_need_filter,
-                        max_result);
-                    if (may_not_match && rv > QTI_NOT_EQUAL) {
-                        rv = QTI_NOT_EQUAL;
-                    }
-                    return rv;
-                }
-                case QTS_TYPE: {
-                    qore_type_result_e rv = t.u.t == NT_REFERENCE ? QTI_IDENT : QTI_NOT_EQUAL;
-                    max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
-                    return rv;
-                }
-                default:
-                    break;
-            }
-        }
-        case QTS_HARDREF: {
-            return checkMatchType(t, may_not_match, max_result);
-        }
+    const QoreTypeSpecMatchHandlerInfo* info = getQoreTypeSpecMatchHandler(typespec);
+    if (info && info->handler) {
+        QoreTypeSpecMatchCtx ctx{t, may_not_match, may_need_filter, max_result, known_initial_assignment};
+        return info->handler(*this, ctx);
     }
     return QTI_NOT_EQUAL;
 }
@@ -1727,7 +2445,7 @@ qore_type_result_e QoreTypeSpec::checkMatchType(const QoreTypeSpec& t, bool& may
     }
     if (u.t == ot) {
         // check special cases
-        if ((u.t == NT_LIST || u.t == NT_HASH) && t.typespec != QTS_TYPE && t.typespec != QTS_EMPTYLIST
+        if ((u.t == NT_LIST || u.t == NT_HASH || u.t == NT_BUFFER) && t.typespec != QTS_TYPE && t.typespec != QTS_EMPTYLIST
                 && t.typespec != QTS_EMPTYHASH) {
             max_result = QTI_NEAR;
             return QTI_NEAR;
@@ -1777,12 +2495,18 @@ qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bo
 }
 
 qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
-    if (typespec == QTS_CLASS) {
+    if (typespec == QTS_TYPEPARAM) {
+        return QTI_AMBIGUOUS;
+    } else if (typespec == QTS_WILDCARD) {
+        return QTI_NOT_EQUAL;
+    } else if (typespec == QTS_CLASS || typespec == QTS_PARAMCLASS) {
         return t == NT_OBJECT ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_HASHDECL || typespec == QTS_COMPLEXHASH) {
         return t == NT_HASH ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_COMPLEXLIST) {
         return t == NT_LIST ? QTI_IDENT : QTI_NOT_EQUAL;
+    } else if (typespec == QTS_COMPLEXBUFFER) {
+        return t == NT_BUFFER ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_COMPLEXSOFTLIST) {
         if (t == NT_LIST) {
             return QTI_IDENT;
@@ -1827,6 +2551,23 @@ static bool type_spec_accept_object(const QoreClass& type_class, const QoreClass
     return false;
 }
 
+static bool qore_generic_container_value_may_fold_to(const QoreTypeInfo* target_ti,
+        const QoreTypeInfo* source_ti) {
+    if (!QoreTypeInfo::hasType(target_ti) || !QoreTypeInfo::hasType(source_ti)) {
+        return false;
+    }
+
+    const QoreTypeInfo* hash_value_type = QoreTypeInfo::getComplexHashValueType(source_ti);
+    if ((hash_value_type == autoTypeInfo || hash_value_type == autoNoNarrowTypeInfo)
+            && QoreTypeInfo::parseAcceptsReturns(target_ti, NT_HASH)) {
+        return true;
+    }
+
+    const QoreTypeInfo* list_value_type = QoreTypeInfo::getComplexListValueType(source_ti);
+    return (list_value_type == autoTypeInfo || list_value_type == autoNoNarrowTypeInfo)
+        && QoreTypeInfo::parseAcceptsReturns(target_ti, NT_LIST);
+}
+
 bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const char* arg_type,
         bool obj, int param_num, const char* param_name, QoreValue& n, LValueHelper* lvhelper, QoreHashNode* h,
         bool& err) const {
@@ -1834,6 +2575,10 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
     const QoreTypeInfo* ti = h->getValueTypeInfo();
     if (QoreTypeInfo::equal(u.ti, ti)) {
         return true;
+    }
+    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
+            && !qore_generic_container_value_may_fold_to(u.ti, ti)) {
+        return false;
     }
 
     // try to fold values into our type; value types are not identical;
@@ -1850,7 +2595,10 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
             }
         }
     } else {
-        qore_hash_private::get(*h)->complexTypeInfo = &typeInfo;
+        // Use the base complex type, not the optional field type
+        const QoreTypeInfo* complex_type = qore_get_complex_hash_type(u.ti);
+        qore_hash_private* hp = qore_hash_private::get(*h);
+        hp->complexTypeInfo = complex_type;
     }
 
     // now we have to fold the value types into our type
@@ -1858,6 +2606,17 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
     while (i.next()) {
         hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
+
+        if (QoreTypeInfo::runtimeAcceptsValue(u.ti, hn) == QTI_NOT_EQUAL
+                && !QoreTypeInfo::retypeValue(hn, u.ti, xsink)) {
+            ha.swap(hn);
+            err = true;
+            if (xsink && *xsink) {
+                xsink->appendLastDescription(" (while folding values into type 'hash<%s>')",
+                    QoreTypeInfo::getName(u.ti));
+            }
+            return true;
+        }
         u.ti->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, hn, lvhelper);
         ha.swap(hn);
         if (xsink && *xsink) {
@@ -1878,6 +2637,10 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     if (QoreTypeInfo::equal(u.ti, ti)) {
         return true;
     }
+    if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
+            && !qore_generic_container_value_may_fold_to(u.ti, ti)) {
+        return false;
+    }
 
     // try to fold values into our type; value types are not identical;
     // we have to get a new list
@@ -1896,12 +2659,24 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
         lp = qore_list_private::get(*l);
     } else {
         lp = qore_list_private::get(*l);
-        lp->complexTypeInfo = &typeInfo;
+        // Use the base complex type, not the optional field type
+        const QoreTypeInfo* complex_type = qore_get_complex_list_type(u.ti);
+        lp->complexTypeInfo = complex_type;
     }
 
     // now we have to fold the value types into our type
     for (size_t i = 0; i < l->size(); ++i) {
         QoreValue ln(lp->takeExists(i));
+        if (QoreTypeInfo::runtimeAcceptsValue(u.ti, ln) == QTI_NOT_EQUAL
+                && !QoreTypeInfo::retypeValue(ln, u.ti, xsink)) {
+            lp->swap(i, ln);
+            err = true;
+            if (xsink && *xsink) {
+                xsink->appendLastDescription(" (while folding values into type 'list<%s>')",
+                    QoreTypeInfo::getName(u.ti));
+            }
+            return true;
+        }
         u.ti->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, ln, lvhelper);
         lp->swap(i, ln);
         if (xsink && *xsink) {
@@ -1913,6 +2688,23 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     }
 
     return true;
+}
+
+static bool qore_complex_buffer_accepts_runtime(const QoreTypeInfo* target_ti, const QoreBufferNode& source,
+        bool& needs_nullable_copy) {
+    needs_nullable_copy = false;
+    const QoreComplexBufferTypeInfo* target = QoreTypeInfo::getComplexBufferType(target_ti);
+    if (!target || target->getBufferElementType() != source.getElementType()) {
+        return false;
+    }
+    if (target->hasNullableElements() == source.hasNullableElements()) {
+        return true;
+    }
+    if (target->hasNullableElements() && !source.hasNullableElements()) {
+        needs_nullable_copy = true;
+        return true;
+    }
+    return false;
 }
 
 bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, q_type_map_t map,
@@ -1927,9 +2719,52 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
     switch (typespec) {
         case QTS_CLASS: {
             if (t == NT_OBJECT) {
-                ok = type_spec_accept_object(*u.qc, *n.get<const QoreObject>()->getClass(), priv_error);
+                const QoreObject* obj = n.get<const QoreObject>();
+                const qore_class_private* target = qore_class_private::get(*u.qc);
+                if (!obj->getInstantiatedTypeInfo() || !target->hasTypeParams()
+                        || target->rawAcceptsParameterized()) {
+                    ok = type_spec_accept_object(*u.qc, *obj->getClass(), priv_error);
+                }
             } else if (t == NT_WEAKREF) {
-                ok = type_spec_accept_object(*u.qc, *n.get<const WeakReferenceNode>()->get()->getClass(), priv_error);
+                const QoreObject* obj = n.get<const WeakReferenceNode>()->get();
+                const qore_class_private* target = qore_class_private::get(*u.qc);
+                if (!obj->getInstantiatedTypeInfo() || !target->hasTypeParams()
+                        || target->rawAcceptsParameterized()) {
+                    ok = type_spec_accept_object(*u.qc, *obj->getClass(), priv_error);
+                }
+            }
+            break;
+        }
+        case QTS_PARAMCLASS: {
+            const QoreObject* obj = nullptr;
+            if (t == NT_OBJECT) {
+                obj = n.get<const QoreObject>();
+            } else if (t == NT_WEAKREF) {
+                obj = n.get<const WeakReferenceNode>()->get();
+            }
+            if (obj && obj->getInstantiatedTypeInfo() == u.ti) {
+                ok = true;
+            } else if (obj && obj->getInstantiatedTypeInfo()) {
+                const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
+                if (target_pti) {
+                    bool type_may_not_match = false;
+                    bool type_may_need_filter = false;
+                    ok = qore_parameterized_class_accepts(target_pti, obj->getInstantiatedTypeInfo(),
+                        type_may_not_match, type_may_need_filter) != QTI_NOT_EQUAL;
+                }
+            } else if (obj) {
+                const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
+                if (target_pti) {
+                    const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
+                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
+                    bool type_may_not_match = false;
+                    bool type_may_need_filter = false;
+                    if (QoreTypeInfo::equal(mapped_type, u.ti)
+                            || qore_parameterized_class_accepts(target_pti, mapped_type, type_may_not_match,
+                                type_may_need_filter) != QTI_NOT_EQUAL) {
+                        ok = true;
+                    }
+                }
             }
             break;
         }
@@ -1943,8 +2778,13 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             if (hd) {
                 const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
                 const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
+                bool type_may_not_match = false;
+                bool type_may_need_filter = false;
                 // Accept if same hashdecl or source is a descendant of target
-                if (source->equal(*target) || source->isDescendantOf(*target)) {
+                if (source->equal(*target)
+                        || qore_parameterized_hashdecl_accepts(u.hd, hd, type_may_not_match, type_may_need_filter)
+                            != QTI_NOT_EQUAL
+                        || (!target->isParameterizedHashDecl() && source->isDescendantOf(*target))) {
                     ok = true;
                 }
             }
@@ -1997,6 +2837,29 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             }
             break;
         }
+        case QTS_COMPLEXBUFFER: {
+            if (n.getType() == NT_BUFFER) {
+                QoreBufferNode* b = n.get<QoreBufferNode>();
+                bool needs_nullable_copy = false;
+                ok = qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy);
+                if (needs_nullable_copy) {
+                    QoreBufferNode* copy = b->copy(true, xsink);
+                    if (!copy) {
+                        return true;
+                    }
+                    AbstractQoreNode* old = n.assign(copy);
+                    if (lvhelper) {
+                        lvhelper->saveTemp(old);
+                    } else {
+                        discard(old, xsink);
+                        if (xsink && *xsink) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            break;
+        }
         case QTS_HARDREF: {
             if (n.getType() == NT_REFERENCE) {
                 ok = true;
@@ -2015,7 +2878,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 if (QoreTypeInfo::outputSuperSetOf(ti, u.ti)) {
                     // issue #2891: do not create a value in the source reference if none already exists
                     // do not process if there is no type restriction
-                    LValueHelper lvh(r, xsink, true);
+                    LValueHelper lvh(*r, xsink, true);
                     //printd(5, "lvh: %d *xsink: %d\n", (bool)lvh, (bool)*xsink);
                     if (lvh) {
                         QoreValue val = lvh.getReferencedValue();
@@ -2075,6 +2938,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             }
             break;
         }
+
     }
 
     if (ok) {
@@ -2114,6 +2978,12 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_COMPLEXHARDREF:
         case QTS_COMPLEXREF:
             return QoreTypeInfo::equal(u.ti, other.u.ti);
+        case QTS_COMPLEXBUFFER:
+            return u.ti == other.u.ti;
+        case QTS_PARAMCLASS:
+        case QTS_TYPEPARAM:
+        case QTS_WILDCARD:
+            return u.ti == other.u.ti;
         case QTS_HARDREF:
              return true;
         case QTS_ENUM:
@@ -2138,6 +3008,11 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 obj = n.get<const WeakReferenceNode>()->get();
             }
             if (obj) {
+                const qore_class_private* target = qore_class_private::get(*u.qc);
+                if (obj->getInstantiatedTypeInfo() && target->hasTypeParams()
+                        && !target->rawAcceptsParameterized()) {
+                    return QTI_NOT_EQUAL;
+                }
                 qore_type_result_e rv = qore_class_private::runtimeCheckCompatibleClass(*u.qc, *obj->getClass());
                 if (rv == QTI_NOT_EQUAL) {
                     return rv;
@@ -2147,6 +3022,47 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                     return QTI_NOT_EQUAL;
                 }
                 return (rv == QTI_IDENT && exact) ? QTI_IDENT : QTI_AMBIGUOUS;
+            }
+            return QTI_NOT_EQUAL;
+        }
+
+        case QTS_PARAMCLASS: {
+            const QoreObject* obj = nullptr;
+            if (ot == NT_OBJECT) {
+                obj = n.get<const QoreObject>();
+            } else if (ot == NT_WEAKREF) {
+                obj = n.get<const WeakReferenceNode>()->get();
+            }
+            if (!obj || !obj->isValid()) {
+                return QTI_NOT_EQUAL;
+            }
+            if (obj->getInstantiatedTypeInfo() == u.ti) {
+                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            }
+            if (obj->getInstantiatedTypeInfo()) {
+                const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
+                if (target_pti) {
+                    bool type_may_not_match = false;
+                    bool type_may_need_filter = false;
+                    qore_type_result_e rv = qore_parameterized_class_accepts(target_pti, obj->getInstantiatedTypeInfo(),
+                        type_may_not_match, type_may_need_filter);
+                    if (rv != QTI_NOT_EQUAL) {
+                        return exact && rv == QTI_IDENT ? QTI_IDENT : QTI_AMBIGUOUS;
+                    }
+                }
+            } else {
+                const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
+                if (target_pti) {
+                    const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
+                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
+                    bool type_may_not_match = false;
+                    bool type_may_need_filter = false;
+                    if (QoreTypeInfo::equal(mapped_type, u.ti)
+                            || qore_parameterized_class_accepts(target_pti, mapped_type, type_may_not_match,
+                                type_may_need_filter) != QTI_NOT_EQUAL) {
+                        return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                    }
+                }
             }
             return QTI_NOT_EQUAL;
         }
@@ -2163,6 +3079,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
                 if (source->equal(*target)) {
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                bool type_may_not_match = false;
+                bool type_may_need_filter = false;
+                qore_type_result_e rv = qore_parameterized_hashdecl_accepts(u.hd, hd, type_may_not_match,
+                    type_may_need_filter);
+                if (rv != QTI_NOT_EQUAL) {
+                    return exact && rv == QTI_IDENT ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                if (target->isParameterizedHashDecl()) {
+                    return QTI_NOT_EQUAL;
                 }
                 // Accept if source is a descendant of target (derived → base)
                 if (source->isDescendantOf(*target)) {
@@ -2187,6 +3113,13 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             }
             if (is_auto_vti(u.ti)) {
                 return QTI_NEAR;
+            }
+            // CRITICAL: A hasddecl-typed hash (with a specific structure) cannot match a complex hash type
+            // with a SPECIFIC value type (a flexible map with string keys). They are mutually exclusive types.
+            // This prevents incorrect variant selection when a hasddecl is passed where a complex hash
+            // with specific value type is expected. However, hash<auto> should accept any hash including hasddecls.
+            if (h->getHashDecl() && u.ti != autoTypeInfo) {
+                return QTI_NOT_EQUAL;
             }
             if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
@@ -2238,6 +3171,18 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             return QTI_NOT_EQUAL;
         }
 
+        case QTS_COMPLEXBUFFER: {
+            if (ot != NT_BUFFER) {
+                return QTI_NOT_EQUAL;
+            }
+            const QoreBufferNode* b = n.get<const QoreBufferNode>();
+            bool needs_nullable_copy = false;
+            if (!qore_complex_buffer_accepts_runtime(u.ti, *b, needs_nullable_copy)) {
+                return QTI_NOT_EQUAL;
+            }
+            return needs_nullable_copy ? QTI_NEAR : (exact ? QTI_IDENT : QTI_AMBIGUOUS);
+        }
+
         case QTS_COMPLEXREF:
             if (ot == NT_REFERENCE) {
                 const QoreTypeInfo* ti = n.get<const ReferenceNode>()->getLValueTypeInfo();
@@ -2283,6 +3228,9 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
                 }
             }
+            if (u.t == NT_BUFFER && ot == NT_BUFFER) {
+                return QTI_NEAR;
+            }
 
             if (u.t == NT_ALL || u.t == ot) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
@@ -2301,6 +3249,9 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             }
             return QTI_NOT_EQUAL;
         }
+
+        case QTS_TYPEPARAM:
+            return QTI_NOT_EQUAL;
 
         default:
             assert(false);
@@ -2434,8 +3385,453 @@ bool return_vec_compare(const q_return_vec_t& a, const q_return_vec_t& b) {
     return typespec_vec_compare<q_return_vec_t>(a, b);
 }
 
+static const char* qore_type_arg_plural(size_t count) {
+    return count == 1 ? "" : "s";
+}
+
+static void qore_raise_type_arg_count_error(const QoreProgramLocation* loc, const char* resolved_name,
+        const char* kind, const char* generic_name, size_t expected, size_t required, size_t actual,
+        const char* missing_param, int& err) {
+    if (expected == required) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic %s '%s' declares %d type "
+            "parameter%s, but %d type argument%s %s provided", resolved_name, kind, generic_name, (int)expected,
+            qore_type_arg_plural(expected), (int)actual, qore_type_arg_plural(actual),
+            actual == 1 ? "was" : "were");
+    } else if (actual < required && missing_param) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic %s '%s' declares %d type "
+            "parameter%s (%d required, %d defaulted), but %d type argument%s %s provided; missing required type "
+            "parameter '%s'", resolved_name, kind, generic_name, (int)expected, qore_type_arg_plural(expected),
+            (int)required, (int)(expected - required), (int)actual, qore_type_arg_plural(actual),
+            actual == 1 ? "was" : "were", missing_param);
+    } else {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic %s '%s' declares %d type "
+            "parameter%s (%d required, %d defaulted), but %d type argument%s %s provided", resolved_name, kind,
+            generic_name, (int)expected, qore_type_arg_plural(expected), (int)required,
+            (int)(expected - required), (int)actual, qore_type_arg_plural(actual),
+            actual == 1 ? "was" : "were");
+    }
+    err = -1;
+}
+
+static const QoreTypeInfo* qore_resolve_parse_default_type_arg(const char* default_type,
+        const QoreProgramLocation* loc, int& err) {
+    std::unique_ptr<QoreParseTypeInfo> default_pti(qore_parse_type_string_to_pti(default_type));
+    if (!default_pti) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve generic type parameter default '%s'",
+            default_type ? default_type : "");
+        err = -1;
+        return autoTypeInfo;
+    }
+    const QoreTypeInfo* arg = QoreParseTypeInfo::resolveAny(default_pti.get(), loc, err);
+    return arg ? arg : autoTypeInfo;
+}
+
+static const QoreTypeInfo* qore_resolve_runtime_default_type_arg(const char* default_type) {
+    std::unique_ptr<QoreParseTypeInfo> default_pti(qore_parse_type_string_to_pti(default_type));
+    return default_pti ? QoreParseTypeInfo::resolveRuntime(default_pti.get()) : nullptr;
+}
+
+static int qore_check_parse_type_arg_bound(const QoreProgramLocation* loc, const char* resolved_name,
+        const char* kind, const char* generic_name, const char* param_name, const char* bound_type,
+        const QoreTypeInfo* arg) {
+    if (!bound_type || !*bound_type) {
+        return 0;
+    }
+
+    int err = 0;
+    std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
+    if (!bound_pti) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve bound type '%s' for type parameter '%s' of "
+            "generic %s '%s'", bound_type, param_name, kind, generic_name);
+        return -1;
+    }
+
+    const QoreTypeInfo* bound = QoreParseTypeInfo::resolveAny(bound_pti.get(), loc, err);
+    if (err) {
+        return -1;
+    }
+
+    bool may_not_match = false;
+    qore_type_result_e res = QoreTypeInfo::parseAccepts(bound, arg, may_not_match);
+    if (res == QTI_NOT_EQUAL || may_not_match) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; type argument '%s' for type parameter "
+            "'%s' of generic %s '%s' does not satisfy bound '%s'", resolved_name,
+            QoreTypeInfo::getName(arg), param_name, kind, generic_name, bound_type);
+        return -1;
+    }
+
+    return 0;
+}
+
+static bool qore_runtime_type_arg_satisfies_bound(const char* bound_type, const QoreTypeInfo* arg) {
+    if (!bound_type || !*bound_type) {
+        return true;
+    }
+
+    std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
+    if (!bound_pti) {
+        return false;
+    }
+
+    const QoreTypeInfo* bound = QoreParseTypeInfo::resolveRuntime(bound_pti.get());
+    if (!bound) {
+        return false;
+    }
+
+    bool may_not_match = false;
+    qore_type_result_e res = QoreTypeInfo::parseAccepts(bound, arg, may_not_match);
+    return res != QTI_NOT_EQUAL && !may_not_match;
+}
+
+static const QoreTypeInfo* qore_resolve_parse_type_parameter(const NamedScope& cscope, bool or_nothing) {
+    if (cscope.size() != 1) {
+        return nullptr;
+    }
+
+    const char* name = cscope.getIdentifier();
+    const typed_hash_decl_private* hd = parse_get_hashdecl_type_param_context();
+    if (hd && hd->hasTypeParams()) {
+        for (size_t i = 0, e = hd->getTypeParamCount(); i < e; ++i) {
+            const char* param = hd->getTypeParamName(i);
+            if (!strcmp(name, param)) {
+                return qore_get_hashdecl_type_parameter_type(hd->getHashDecl(), i, param, or_nothing);
+            }
+        }
+    }
+
+    const UserSignature* sig = parse_get_signature_type_param_context();
+    if (sig && sig->hasTypeParameters()) {
+        for (size_t i = 0, e = sig->getTypeParameterCount(); i < e; ++i) {
+            const char* param = sig->getTypeParameterName(i);
+            if (!strcmp(name, param)) {
+                return qore_get_signature_type_parameter_type(sig, i, param, or_nothing);
+            }
+        }
+    }
+
+    qore_class_private* qc = parse_get_class_priv();
+    if (qc && qc->hasTypeParams()) {
+        for (size_t i = 0, e = qc->getTypeParamCount(); i < e; ++i) {
+            const char* param = qc->getTypeParamName(i);
+            if (!strcmp(name, param)) {
+                return qore_get_type_parameter_type(qc->cls, i, param, or_nothing);
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+static TypedHashDecl* qore_parse_try_find_hashdecl(const NamedScope& nscope) {
+    return qore_root_ns_private::get(*getRootNS())->parseTryFindHashDecl(nscope);
+}
+
+static const TypedHashDecl* qore_resolve_parse_hashdecl_type(const QoreParseTypeInfo& pti,
+        const QoreProgramLocation* loc, int& err) {
+    const TypedHashDecl* hd = qore_parse_try_find_hashdecl(*pti.cscope);
+    if (!hd) {
+        return nullptr;
+    }
+
+    const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+    if (!pti.hasExplicitSubtypeList()) {
+        if (hp->hasTypeParams()) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic hashdecl '%s' declares %d "
+                "type parameter%s and must be used with explicit type arguments", QoreParseTypeInfo::getName(&pti),
+                pti.cscope->ostr, (int)hp->getTypeParamCount(), qore_type_arg_plural(hp->getTypeParamCount()));
+            err = -1;
+            return hd;
+        }
+        return hd;
+    }
+
+    if (!hp->hasTypeParams()) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; hashdecl '%s' does not declare type "
+            "parameters, so it cannot be used with %d type argument%s", QoreParseTypeInfo::getName(&pti),
+            pti.cscope->ostr, (int)pti.subtypes.size(), qore_type_arg_plural(pti.subtypes.size()));
+        err = -1;
+        return hd;
+    }
+
+    size_t expected = hp->getTypeParamCount();
+    size_t required = hp->getTypeParamRequiredCount();
+    size_t actual = pti.subtypes.size();
+    if (actual < required || actual > expected) {
+        const char* missing = actual < required ? hp->getTypeParamName(actual) : nullptr;
+        qore_raise_type_arg_count_error(loc, QoreParseTypeInfo::getName(&pti), "hashdecl", pti.cscope->ostr,
+            expected, required, actual, missing, err);
+        return hd;
+    }
+
+    type_vec_t args;
+    args.reserve(expected);
+    for (const auto& st : pti.subtypes) {
+        const QoreTypeInfo* arg = QoreParseTypeInfo::resolveAny(st, loc, err);
+        if (err) {
+            return hd;
+        }
+        args.push_back(arg);
+    }
+    for (size_t i = actual; i < expected; ++i) {
+        const char* default_type = hp->getTypeParamDefaultType(i);
+        assert(default_type);
+        args.push_back(qore_resolve_parse_default_type_arg(default_type, loc, err));
+        if (err) {
+            return hd;
+        }
+    }
+
+    for (size_t i = 0; i < expected; ++i) {
+        if (qore_check_parse_type_arg_bound(loc, QoreParseTypeInfo::getName(&pti), "hashdecl", pti.cscope->ostr,
+                hp->getTypeParamName(i), hp->getTypeParamBoundType(i), args[i])) {
+            err = -1;
+            return hd;
+        }
+    }
+
+    const TypedHashDecl* parameterized_hd = hp->getParameterizedHashDecl(args);
+    return parameterized_hd ? parameterized_hd : hd;
+}
+
+static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const QoreParseTypeInfo& pti,
+        const QoreProgramLocation* loc, int& err, bool or_nothing) {
+    const QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *pti.cscope, false);
+    if (!qc) {
+        return nullptr;
+    }
+
+    if (!qc->hasTypeParameters()) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; class '%s' does not declare type "
+            "parameters, so it cannot be used with %d type argument%s", QoreParseTypeInfo::getName(&pti),
+            pti.cscope->ostr, (int)pti.subtypes.size(), qore_type_arg_plural(pti.subtypes.size()));
+        err = -1;
+        return autoTypeInfo;
+    }
+
+    size_t expected = qc->getTypeParameterCount();
+    size_t required = qc->getTypeParameterRequiredCount();
+    size_t actual = pti.subtypes.size();
+    if (actual < required || actual > expected) {
+        const char* missing = actual < required ? qc->getTypeParameterName(actual) : nullptr;
+        qore_raise_type_arg_count_error(loc, QoreParseTypeInfo::getName(&pti), "class", pti.cscope->ostr,
+            expected, required, actual, missing, err);
+        return autoTypeInfo;
+    }
+
+    type_vec_t args;
+    args.reserve(expected);
+    for (const auto& st : pti.subtypes) {
+        const QoreTypeInfo* arg = QoreParseTypeInfo::resolveAny(st, loc, err);
+        if (err) {
+            return autoTypeInfo;
+        }
+        args.push_back(arg);
+    }
+    for (size_t i = actual; i < expected; ++i) {
+        const char* default_type = qc->getTypeParameterDefaultType(i);
+        assert(default_type);
+        args.push_back(qore_resolve_parse_default_type_arg(default_type, loc, err));
+        if (err) {
+            return autoTypeInfo;
+        }
+    }
+
+    for (size_t i = 0; i < expected; ++i) {
+        if (qore_check_parse_type_arg_bound(loc, QoreParseTypeInfo::getName(&pti), "class", pti.cscope->ostr,
+                qc->getTypeParameterName(i), qc->getTypeParameterBoundType(i), args[i])) {
+            err = -1;
+            return autoTypeInfo;
+        }
+    }
+
+    return qc->getTypeInfo(args, or_nothing);
+}
+
+static const QoreTypeInfo* qore_resolve_runtime_parameterized_class_type(const QoreParseTypeInfo& pti,
+        bool or_nothing) {
+    const QoreClass* qc = qore_root_ns_private::get(*getRootNS())->runtimeFindScopedClass(*pti.cscope);
+    if (!qc || !qc->hasTypeParameters()) {
+        return nullptr;
+    }
+
+    size_t expected = qc->getTypeParameterCount();
+    size_t actual = pti.subtypes.size();
+    if (actual < qc->getTypeParameterRequiredCount() || actual > expected) {
+        return nullptr;
+    }
+
+    type_vec_t args;
+    args.reserve(expected);
+    for (const auto& st : pti.subtypes) {
+        const QoreTypeInfo* arg = QoreParseTypeInfo::resolveRuntime(st);
+        if (!arg) {
+            return nullptr;
+        }
+        args.push_back(arg);
+    }
+    for (size_t i = actual; i < expected; ++i) {
+        const QoreTypeInfo* arg = qore_resolve_runtime_default_type_arg(qc->getTypeParameterDefaultType(i));
+        if (!arg) {
+            return nullptr;
+        }
+        args.push_back(arg);
+    }
+
+    for (size_t i = 0; i < expected; ++i) {
+        if (!qore_runtime_type_arg_satisfies_bound(qc->getTypeParameterBoundType(i), args[i])) {
+            return nullptr;
+        }
+    }
+
+    return qc->getTypeInfo(args, or_nothing);
+}
+
+static const TypedHashDecl* qore_resolve_runtime_hashdecl_type(const QoreParseTypeInfo& pti) {
+    const qore_ns_private* ns;
+    const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->runtimeFindHashDeclIntern(*pti.cscope, ns);
+    if (!hd) {
+        return nullptr;
+    }
+
+    const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+    if (!pti.hasExplicitSubtypeList()) {
+        return hp->hasTypeParams() ? nullptr : hd;
+    }
+
+    if (!hp->hasTypeParams()) {
+        return nullptr;
+    }
+
+    size_t expected = hp->getTypeParamCount();
+    size_t actual = pti.subtypes.size();
+    if (actual < hp->getTypeParamRequiredCount() || actual > expected) {
+        return nullptr;
+    }
+
+    type_vec_t args;
+    args.reserve(expected);
+    for (const auto& st : pti.subtypes) {
+        const QoreTypeInfo* arg = QoreParseTypeInfo::resolveRuntime(st);
+        if (!arg) {
+            return nullptr;
+        }
+        args.push_back(arg);
+    }
+    for (size_t i = actual; i < expected; ++i) {
+        const QoreTypeInfo* arg = qore_resolve_runtime_default_type_arg(hp->getTypeParamDefaultType(i));
+        if (!arg) {
+            return nullptr;
+        }
+        args.push_back(arg);
+    }
+
+    for (size_t i = 0; i < expected; ++i) {
+        if (!qore_runtime_type_arg_satisfies_bound(hp->getTypeParamBoundType(i), args[i])) {
+            return nullptr;
+        }
+    }
+
+    return hp->getParameterizedHashDecl(args);
+}
+
+static const QoreTypeInfo* qore_resolve_parse_wildcard_type_arg(const QoreParseTypeInfo& pti,
+        const QoreProgramLocation* loc, int& err) {
+    if (!pti.isWildcardTypeArg()) {
+        return nullptr;
+    }
+    if (pti.wildcard_kind == QoreWildcardKind::Unbounded) {
+        return qore_get_wildcard_type();
+    }
+
+    const QoreTypeInfo* bound = QoreParseTypeInfo::resolveAny(pti.wildcard_bound, loc, err);
+    if (err) {
+        return autoTypeInfo;
+    }
+    if (QoreTypeInfo::getWildcardType(bound)) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "wildcard type argument '%s' cannot use another wildcard as its "
+            "bound", QoreParseTypeInfo::getName(&pti));
+        err = -1;
+        return autoTypeInfo;
+    }
+    return pti.wildcard_kind == QoreWildcardKind::Extends
+        ? qore_get_wildcard_extends_type(bound)
+        : qore_get_wildcard_super_type(bound);
+}
+
+static const QoreTypeInfo* qore_resolve_runtime_wildcard_type_arg(const QoreParseTypeInfo& pti) {
+    if (!pti.isWildcardTypeArg()) {
+        return nullptr;
+    }
+    if (pti.wildcard_kind == QoreWildcardKind::Unbounded) {
+        return qore_get_wildcard_type();
+    }
+    const QoreTypeInfo* bound = QoreParseTypeInfo::resolveRuntime(pti.wildcard_bound);
+    if (!bound || QoreTypeInfo::getWildcardType(bound)) {
+        return nullptr;
+    }
+    return pti.wildcard_kind == QoreWildcardKind::Extends
+        ? qore_get_wildcard_extends_type(bound)
+        : qore_get_wildcard_super_type(bound);
+}
+
+static constexpr const char* qore_buffer_supported_element_types =
+    "int8, int16, int32, int64, float32, float64, bool, string, decimal128";
+
+static const QoreTypeInfo* qore_resolve_runtime_buffer_type(const QoreParseTypeInfo& pti, bool or_nothing) {
+    if (pti.subtypes.size() != 1 || pti.subtypes[0]->hasExplicitSubtypeList()) {
+        return nullptr;
+    }
+
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    if (!qore_buffer_element_type_from_name(pti.subtypes[0]->cscope->ostr, element_type)) {
+        return nullptr;
+    }
+
+    return or_nothing
+        ? qore_get_complex_buffer_or_nothing_type(element_type, pti.subtypes[0]->or_nothing)
+        : qore_get_complex_buffer_type(element_type, pti.subtypes[0]->or_nothing);
+}
+
+static const QoreTypeInfo* qore_resolve_parse_buffer_type(const QoreParseTypeInfo& pti,
+        const QoreProgramLocation* loc, int& err) {
+    if (pti.subtypes.size() != 1) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s' with %d type arguments; base type 'buffer' "
+            "takes exactly one storage element type: %s. Use 'buffer<*T>' for nullable elements and '*buffer<T>' "
+            "for an optional buffer value", QoreParseTypeInfo::getName(&pti), (int)pti.subtypes.size(),
+            qore_buffer_supported_element_types);
+        err = -1;
+        return pti.or_nothing ? bufferOrNothingTypeInfo : bufferTypeInfo;
+    }
+
+    const QoreParseTypeInfo* element = pti.subtypes[0];
+    if (element->hasExplicitSubtypeList()) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; buffer<T> element type cannot itself have "
+            "type arguments; supported storage element types are: %s", QoreParseTypeInfo::getName(&pti),
+            qore_buffer_supported_element_types);
+        err = -1;
+        return pti.or_nothing ? bufferOrNothingTypeInfo : bufferTypeInfo;
+    }
+
+    QoreBufferElementType element_type = QoreBufferElementType::Invalid;
+    if (!qore_buffer_element_type_from_name(element->cscope->ostr, element_type)) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid buffer element type '%s'. "
+            "Supported storage element types are: %s. Use 'buffer<*T>' for nullable elements and '*buffer<T>' for "
+            "an optional buffer value", QoreParseTypeInfo::getName(&pti), element->cscope->ostr,
+            qore_buffer_supported_element_types);
+        err = -1;
+        return pti.or_nothing ? bufferOrNothingTypeInfo : bufferTypeInfo;
+    }
+
+    return pti.or_nothing
+        ? qore_get_complex_buffer_or_nothing_type(element_type, element->or_nothing)
+        : qore_get_complex_buffer_type(element_type, element->or_nothing);
+}
+
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntime() const {
-    if (!subtypes.empty())
+    if (isWildcardTypeArg()) {
+        return qore_resolve_runtime_wildcard_type_arg(*this);
+    }
+    if (hasExplicitSubtypeList())
         return resolveRuntimeSubtype();
 
     const QoreTypeInfo* rv = or_nothing ? getBuiltinUserOrNothingTypeInfo(cscope->ostr) : getBuiltinUserTypeInfo(cscope->ostr);
@@ -2443,6 +3839,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntime() const {
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
+    if (!strcmp(cscope->ostr, "buffer")) {
+        return qore_resolve_runtime_buffer_type(*this, or_nothing);
+    }
     if (!strcmp(cscope->ostr, "hash")) {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
@@ -2450,8 +3849,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
             // resolve hashdecl
-            const qore_ns_private* ns;
-            const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->runtimeFindHashDeclIntern(*subtypes[0]->cscope, ns);
+            const TypedHashDecl* hd = qore_resolve_runtime_hashdecl_type(*subtypes[0]);
             if (!hd)
                 return nullptr;
             return hd->getTypeInfo(or_nothing);
@@ -2564,6 +3962,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
             return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
 
+        if (subtypes[0]->hasExplicitSubtypeList()) {
+            return qore_resolve_runtime_parameterized_class_type(*subtypes[0], or_nothing);
+        }
+
         // resolve class
         return resolveRuntimeClass(*subtypes[0]->cscope, or_nothing);
     }
@@ -2646,6 +4048,17 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         while (!return_type_str.empty() && isspace(return_type_str.front())) {
             return_type_str.erase(0, 1);
         }
+        // If the subtype was flagged as or-nothing (a leading `*` on the
+        // callable's return type — e.g. `code<*Foo(string)>`), getSubTypes
+        // consumed the `*` into subtypes[0]->or_nothing instead of leaving
+        // it on the ostr string.  The `*` applies to the callable's return
+        // type, not to the whole callable, so re-prepend it here before
+        // resolving so the return type is resolved as or-nothing.
+        if (subtypes[0]->or_nothing && !return_type_str.empty()
+                && return_type_str != "nothing"
+                && return_type_str[0] != '*') {
+            return_type_str.insert(0, "*");
+        }
 
         // Resolve return type
         const QoreTypeInfo* returnType = nullptr;
@@ -2718,19 +4131,43 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
 
         return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
     }
+    const QoreTypeInfo* rv = qore_resolve_runtime_parameterized_class_type(*this, or_nothing);
+    if (rv) {
+        return rv;
+    }
+    const TypedHashDecl* hd = qore_resolve_runtime_hashdecl_type(*this);
+    if (hd) {
+        return hd->getTypeInfo(or_nothing);
+    }
     return nullptr;
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeClass(const NamedScope& cscope, bool or_nothing) {
     // resolve class
     const QoreClass* qc = qore_root_ns_private::get(*getRootNS())->runtimeFindScopedClass(cscope);
-    if (!qc)
-        return nullptr;
+    if (qc)
+        return or_nothing ? qc->getOrNothingTypeInfo() : qc->getTypeInfo();
 
-    return or_nothing ? qc->getOrNothingTypeInfo() : qc->getTypeInfo();
+    // check for hashdecl (must be checked after class lookup)
+    const qore_ns_private* ns;
+    const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->runtimeFindHashDeclIntern(cscope, ns);
+    if (hd) {
+        if (typed_hash_decl_private::get(*hd)->hasTypeParams()) {
+            return nullptr;
+        }
+        return hd->getTypeInfo(or_nothing);
+    }
+
+    return nullptr;
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation* loc, int& err) const {
+    if (isWildcardTypeArg()) {
+        return qore_resolve_parse_wildcard_type_arg(*this, loc, err);
+    }
+    if (!strcmp(cscope->ostr, "buffer")) {
+        return qore_resolve_parse_buffer_type(*this, loc, err);
+    }
     if (!strcmp(cscope->ostr, "hash")) {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
@@ -2738,11 +4175,15 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
             // resolve hashdecl
-            const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc,
-                *subtypes[0]->cscope);
-            //printd(5, "QoreParseTypeInfo::resolveSubtype() this: %p '%s' hd: %p '%s' type: %p (pgm: %p)\n", this,
-            //  getName(), hd, hd ? hd->getName() : "n/a", hd ? hd->getTypeInfo(false) : nullptr, getProgram());
-            return hd ? hd->getTypeInfo(or_nothing) : hashTypeInfo;
+            const TypedHashDecl* hd = qore_resolve_parse_hashdecl_type(*subtypes[0], loc, err);
+            if (hd) {
+                return hd->getTypeInfo(or_nothing);
+            }
+            // Unknown hashdecl - raise parse error
+            parseException(*loc, "PARSE-EXCEPTION", "illegal access to unknown member in undefined hashdecl '%s'",
+                subtypes[0]->cscope->ostr);
+            err = -1;
+            return hashTypeInfo;
         }
         if (subtypes.size() == 2) {
             if (strcmp(subtypes[0]->cscope->ostr, "string")) {
@@ -2864,6 +4305,18 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         }
 
         if (!strcmp(subtypes[0]->cscope->ostr, "auto")) {
+            return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
+        }
+
+        if (subtypes[0]->hasExplicitSubtypeList()) {
+            const QoreTypeInfo* rv = qore_resolve_parse_parameterized_class_type(*subtypes[0], loc, err,
+                or_nothing);
+            if (rv || err) {
+                return rv ? rv : autoTypeInfo;
+            }
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; object subtype '%s' must name a class",
+                getName(), subtypes[0]->getName());
+            err = -1;
             return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
         }
 
@@ -3073,6 +4526,16 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
     }
 
+    const QoreTypeInfo* rv = qore_resolve_parse_parameterized_class_type(*this, loc, err, or_nothing);
+    if (rv || err) {
+        return rv ? rv : autoTypeInfo;
+    }
+
+    const TypedHashDecl* hd = qore_resolve_parse_hashdecl_type(*this, loc, err);
+    if (hd || err) {
+        return hd ? hd->getTypeInfo(or_nothing) : autoTypeInfo;
+    }
+
     parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; type '%s' does not take subtype declarations",
         getName(), cscope->getIdentifier());
     err = -1;
@@ -3080,7 +4543,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolve(const QoreProgramLocation* loc, int& err) const {
-    if (!subtypes.empty()) {
+    if (isWildcardTypeArg()) {
+        return qore_resolve_parse_wildcard_type_arg(*this, loc, err);
+    }
+    if (hasExplicitSubtypeList()) {
         return resolveSubtype(loc, err);
     }
 
@@ -3088,8 +4554,16 @@ const QoreTypeInfo* QoreParseTypeInfo::resolve(const QoreProgramLocation* loc, i
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveAny(const QoreProgramLocation* loc, int& err) const {
-    if (!subtypes.empty()) {
+    if (isWildcardTypeArg()) {
+        return qore_resolve_parse_wildcard_type_arg(*this, loc, err);
+    }
+    if (hasExplicitSubtypeList()) {
         return resolveSubtype(loc, err);
+    }
+
+    const QoreTypeInfo* type_param = qore_resolve_parse_type_parameter(*cscope, or_nothing);
+    if (type_param) {
+        return type_param;
     }
 
     const QoreTypeInfo* rv = or_nothing
@@ -3105,6 +4579,11 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveAndDelete(const QoreProgramLocatio
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* loc, const NamedScope& cscope,
         bool or_nothing, int& err) {
+    const QoreTypeInfo* type_param = qore_resolve_parse_type_parameter(cscope, or_nothing);
+    if (type_param) {
+        return type_param;
+    }
+
     // check for typedef first (both simple names and scoped names)
     TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope);
     if (td) {
@@ -3162,6 +4641,18 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
         return ed->getTypeInfo(or_nothing);
     }
 
+    // check for hashdecl (must be checked after class/enum lookup)
+    const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc, cscope);
+    if (hd) {
+        if (typed_hash_decl_private::get(*hd)->hasTypeParams()) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve generic hashdecl '%s' without explicit type "
+                "arguments", cscope.ostr);
+            err = -1;
+            return autoTypeInfo;
+        }
+        return hd->getTypeInfo(or_nothing);
+    }
+
     // type not found - raise error
     parse_error(*loc, "reference to undefined type '%s'", cscope.ostr);
     err = -1;
@@ -3169,8 +4660,53 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
 }
 
 QoreValue QoreHashDeclTypeInfo::getDefaultQoreValueImpl() const {
-    return qore_hash_private::newHashDecl(accept_vec[0].spec.getHashDecl());
-    //return new QoreHashNode(accept_vec[0].spec.getHashDecl(), xsink);
+    return qore_hash_private::newHashDecl(getFirstAcceptSpec().spec.getHashDecl());
+    //return new QoreHashNode(getFirstAcceptSpec().spec.getHashDecl(), xsink);
+}
+
+QoreComplexBufferTypeInfo::QoreComplexBufferTypeInfo(QoreBufferElementType element_type, bool nullable_elements)
+        : QoreTypeInfo(q_accept_vec_t {{QoreComplexBufferTypeSpec(this), nullptr, true}},
+            q_return_vec_t {{QoreComplexBufferTypeSpec(this), true}},
+            qore_make_complex_buffer_name(element_type, nullable_elements, false)),
+        element_type(element_type),
+        nullable_elements(nullable_elements) {
+    assert(element_type != QoreBufferElementType::Invalid);
+    pname = qore_make_complex_buffer_name(element_type, nullable_elements, false);
+}
+
+QoreComplexBufferTypeInfo::QoreComplexBufferTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
+        const QoreString& tname, QoreBufferElementType element_type, bool nullable_elements)
+        : QoreTypeInfo(std::move(a_vec), std::move(r_vec), tname), element_type(element_type),
+        nullable_elements(nullable_elements) {
+    assert(element_type != QoreBufferElementType::Invalid);
+}
+
+const QoreTypeInfo* QoreComplexBufferTypeInfo::getElementTypeInfo() const {
+    return qore_buffer_element_scalar_type_info(element_type, nullable_elements);
+}
+
+void QoreComplexBufferTypeInfo::getThisTypeImpl(QoreString& str) const {
+    qore_string_private::get(str)->concat(&tname);
+}
+
+QoreValue QoreComplexBufferTypeInfo::getDefaultQoreValueImpl() const {
+    return new QoreBufferNode(element_type, nullable_elements);
+}
+
+QoreComplexBufferOrNothingTypeInfo::QoreComplexBufferOrNothingTypeInfo(QoreBufferElementType element_type,
+        bool nullable_elements, const QoreTypeInfo* value_type)
+        : QoreComplexBufferTypeInfo(q_accept_vec_t {
+            {QoreComplexBufferTypeSpec(value_type), nullptr},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        }, q_return_vec_t {{QoreComplexBufferTypeSpec(value_type)}, {NT_NOTHING}},
+            qore_make_complex_buffer_name(element_type, nullable_elements, true), element_type, nullable_elements) {
+    assert(value_type);
+    pname = qore_make_complex_buffer_name(element_type, nullable_elements, true);
+}
+
+void QoreComplexBufferOrNothingTypeInfo::getThisTypeImpl(QoreString& str) const {
+    str.sprintf("%s or no value (NOTHING)", QoreTypeInfo::getName(getFirstAcceptSpec().spec.getComplexBuffer()));
 }
 
 QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti) : QoreComplexListTypeInfo(q_accept_vec_t {
@@ -3287,40 +4823,33 @@ void map_get_plain_list(QoreValue& n, ExceptionSink* xsink) {
 
 const QoreTypeInfo* QoreTypeInfo::getHashPairType(const QoreTypeInfo* valueType) {
     // For auto/auto!/any value types, return autoHashTypeInfo as the element type
-    if (!valueType || is_auto_vti(valueType) || valueType == anyTypeInfo) {
+    if (!valueType || is_auto_vti(valueType) || valueType == anyTypeInfo || !hasType(valueType)
+            || !hashdeclKeyValueInfo) {
         return autoHashTypeInfo;
     }
 
-    // Check cache under lock
-    {
-        AutoLocker al(ctl);
-        hp_decl_map_t::iterator i = hp_decl_map.lower_bound(valueType);
-        if (i != hp_decl_map.end() && i->first == valueType) {
-            return i->second->getTypeInfo();
-        }
+    type_vec_t typeArgs;
+    typeArgs.push_back(valueType);
+    return hashdeclKeyValueInfo->getParameterizedHashDecl(typeArgs)->getTypeInfo();
+}
+
+static const QoreTypeInfo* get_known_iterator_element_type(const QoreClass* qc, const QoreTypeInfo* valueType) {
+    if (!qc) {
+        return nullptr;
     }
 
-    // Create a new TypedHashDecl for this value type
-    // HashPairInfo has "key" (string) and "value" (valueType)
-    TypedHashDecl* hd = new TypedHashDecl("HashPairInfo", "Qore::HashPairInfo");
-    typed_hash_decl_private::get(*hd)->addMember("key", stringTypeInfo, QoreValue());
-    typed_hash_decl_private::get(*hd)->addMember("value", valueType, QoreValue());
-    typed_hash_decl_private::get(*hd)->setSystemPublic();
-
-    // Cache it under lock
-    {
-        AutoLocker al(ctl);
-        // Check again in case another thread added it
-        hp_decl_map_t::iterator i = hp_decl_map.lower_bound(valueType);
-        if (i != hp_decl_map.end() && i->first == valueType) {
-            // Another thread added it - clean up and use theirs
-            typed_hash_decl_private::get(*hd)->deref();
-            return i->second->getTypeInfo();
-        }
-        hp_decl_map.insert(i, hp_decl_map_t::value_type(valueType, hd));
+    const char* className = qc->getName();
+    if (!strcmp(className, "HashPairIterator") || !strcmp(className, "HashPairReverseIterator")
+            || !strcmp(className, "ObjectPairIterator") || !strcmp(className, "ObjectPairReverseIterator")) {
+        return QoreTypeInfo::getHashPairType(valueType);
     }
 
-    return hd->getTypeInfo();
+    if (!strcmp(className, "HashKeyIterator") || !strcmp(className, "HashKeyReverseIterator")
+            || !strcmp(className, "ObjectKeyIterator") || !strcmp(className, "ObjectKeyReverseIterator")) {
+        return stringTypeInfo;
+    }
+
+    return nullptr;
 }
 
 const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iteratorClass,
@@ -3331,11 +4860,26 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
 
     const char* className = iteratorClass->getName();
 
+    // Handle object iterators. Object members do not have a single static value
+    // type, but pair/key iterator element shapes are still known.
+    if (!strcmp(className, "ObjectPairIterator") || !strcmp(className, "ObjectPairReverseIterator")) {
+        return autoHashTypeInfo;
+    }
+    if (!strcmp(className, "ObjectKeyIterator") || !strcmp(className, "ObjectKeyReverseIterator")) {
+        return stringTypeInfo;
+    }
+    if (!strcmp(className, "ObjectIterator") || !strcmp(className, "ObjectReverseIterator")) {
+        return autoTypeInfo;
+    }
+
     // Handle hash iterators
     const QoreTypeInfo* hashValueType = getUniqueReturnComplexHash(sourceTypeInfo);
     if (!hashValueType) {
         // Also try hash-or-nothing types
         hashValueType = getReturnComplexHashOrNothing(sourceTypeInfo);
+    }
+    if (!hashValueType && parseReturns(sourceTypeInfo, NT_HASH) != QTI_NOT_EQUAL) {
+        hashValueType = autoTypeInfo;
     }
 
     if (hashValueType) {
@@ -3349,6 +4893,19 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
         }
         // HashIterator / HashReverseIterator: return value type
         if (!strcmp(className, "HashIterator") || !strcmp(className, "HashReverseIterator")) {
+            return hashValueType;
+        }
+        // HashListIterator / HashListReverseIterator: return row hashes
+        if (!strcmp(className, "HashListIterator") || !strcmp(className, "HashListReverseIterator")) {
+            return autoHashTypeInfo;
+        }
+        // AbstractIterator from `<hash>::iterator()` — the pseudo-method
+        // declares AbstractIterator as its static return type but at
+        // runtime creates a HashIterator (Pseudo_QC_Hash.qpp:303-305).
+        // Surface the value type anyway so the common `map {...},
+        // h.iterator()` pattern sees $1 typed correctly rather than
+        // degrading through the abstract-base signature.
+        if (!strcmp(className, "AbstractIterator")) {
             return hashValueType;
         }
     }
@@ -3365,9 +4922,54 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
         if (!strcmp(className, "ListIterator") || !strcmp(className, "ListReverseIterator")) {
             return listElementType;
         }
+        // DEBUG: re-enable AbstractIterator-on-list to probe regression
+        if (!strcmp(className, "AbstractIterator")) {
+            return listElementType;
+        }
     }
 
     return nullptr;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getAbstractIteratorElementType(const QoreTypeInfo* iteratorTypeInfo) {
+    if (!QC_ABSTRACTITERATOR || !iteratorTypeInfo || !hasType(iteratorTypeInfo)) {
+        return nullptr;
+    }
+
+    const QoreTypeInfo* abstract_iterator_type = nullptr;
+
+    const QoreParameterizedClassTypeInfo* pti = getParameterizedClassType(iteratorTypeInfo);
+    if (pti) {
+        const QoreTypeInfo* valueType = pti->getArgCount() ? pti->getTypeArgs()[0] : autoTypeInfo;
+        const QoreTypeInfo* knownType = get_known_iterator_element_type(pti->getBaseClass(), valueType);
+        if (knownType) {
+            return knownType;
+        }
+
+        abstract_iterator_type = qore_class_private::get(*pti->getBaseClass())
+            ->getParameterizedBaseTypeInfo(pti, QC_ABSTRACTITERATOR);
+    }
+
+    if (!abstract_iterator_type) {
+        const QoreClass* qc = getUniqueReturnClass(iteratorTypeInfo);
+        if (qc) {
+            const QoreTypeInfo* knownType = get_known_iterator_element_type(qc, autoTypeInfo);
+            if (knownType) {
+                return knownType;
+            }
+
+            abstract_iterator_type = qore_class_private::get(*qc)
+                ->getConcreteParameterizedBaseTypeInfo(QC_ABSTRACTITERATOR);
+        }
+    }
+
+    const QoreParameterizedClassTypeInfo* abstract_pti = getParameterizedClassType(abstract_iterator_type);
+    if (!abstract_pti || abstract_pti->getBaseClass() != QC_ABSTRACTITERATOR
+            || abstract_pti->getTypeArgs().empty()) {
+        return nullptr;
+    }
+
+    return abstract_pti->getTypeArgs()[0];
 }
 
 const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue& iteratorExpr,
@@ -3375,11 +4977,13 @@ const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue&
     // First try list element type (existing behavior for list<T> sources)
     const QoreTypeInfo* implicitArgType = getUniqueReturnComplexList(iteratorTypeInfo);
 
-    // If not a list, check if it's an iterator class and get element type from source type
+    // For iterator-valued pseudo-method calls, prefer source-aware typing before
+    // generic iterator base classes.  This preserves precise types for calls
+    // like h.pairIterator() and avoids leaking unresolved legacy raw base type
+    // parameters from iterators such as HashListIterator.
     if (!implicitArgType) {
         const QoreClass* qc = getUniqueReturnClass(iteratorTypeInfo);
         if (qc) {
-            // Try to get the source type from the iterator expression if it's a method call
             const QoreTypeInfo* sourceType = nullptr;
             if (iteratorExpr.getType() == NT_OPERATOR) {
                 const QoreDotEvalOperatorNode* dotOp =
@@ -3397,5 +5001,682 @@ const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue&
         }
     }
 
+    if (!implicitArgType) {
+        implicitArgType = getAbstractIteratorElementType(iteratorTypeInfo);
+    }
+
+    // If not a list or iterator, check if it's a hashdecl type (for "map expr, <Decl>{}")
+    // When iterating over a hashdecl hash, $1 gets the hashdecl type
+    if (!implicitArgType && iteratorTypeInfo) {
+        if (parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL) {
+            const TypedHashDecl* thd = getUniqueReturnHashDecl(iteratorTypeInfo);
+            if (thd) {
+                implicitArgType = iteratorTypeInfo;
+            }
+        }
+    }
+
+    // If we still don't have an element type, but know the iterator is list-like or an iterator class,
+    // return autoTypeInfo instead of null. This ensures $1 gets a definite type (auto) for hash literal
+    // type inference, allowing "map {$1: $1}, untyped_list" to produce hash<auto> instead of plain hash.
+    if (!implicitArgType && iteratorTypeInfo) {
+        // Check if it's a list type (even without element type info)
+        if (parseReturns(iteratorTypeInfo, NT_LIST) != QTI_NOT_EQUAL) {
+            implicitArgType = autoTypeInfo;
+        }
+    }
+
     return implicitArgType;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getReturnComplexHashOrNothing(const QoreTypeInfo* ti) {
+    if (!ti || !hasType(ti)) {
+        return nullptr;
+    }
+    if (ti->return_vec.size() > 1) {
+        if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT))
+            return nullptr;
+    }
+    return ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
+        ? autoTypeInfo
+        : ti->return_vec[0].spec.getComplexHash();
+}
+
+const QoreTypeInfo* QoreTypeInfo::getReturnComplexBufferOrNothing(const QoreTypeInfo* ti) {
+    if (!ti || !hasType(ti)) {
+        return nullptr;
+    }
+    if (ti->return_vec.size() > 1) {
+        if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
+            return nullptr;
+        }
+    }
+    return ti->return_vec[0].spec.getComplexBuffer();
+}
+
+void QoreTypeInfo::getNodeType(QoreString& str, const QoreValue& n) {
+    qore_type_t nt = n.getType();
+    if (nt == NT_NOTHING) {
+        str.concat("no value");
+        return;
+    }
+    if (nt != NT_OBJECT) {
+        str.sprintf("type '%s'", n.getFullTypeName());
+        return;
+    }
+    const QoreObject* obj = n.get<const QoreObject>();
+    if (!obj->isValid()) {
+        str.sprintf("no value (deleted object of class '%s')", obj->getClassName());
+        return;
+    }
+    str.sprintf("an object of class '%s'", obj->getClassName());
+}
+
+void QoreTypeInfo::ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name) {
+    if (!param_num && param_name && param_name[0] == '<') {
+        str.concat(param_name);
+        str.concat(' ');
+        return;
+    }
+    if (param_name && param_name[0] == '<') {
+        str.concat(param_name);
+        str.concat(' ');
+    }
+    if (param_num) {
+        str.sprintf("parameter %d ", param_num);
+        if (param_name && param_name[0] != '<')
+            str.sprintf("('%s') ", param_name);
+    } else if (param_name)
+        str.sprintf("%s '%s' ", arg_type, param_name);
+    else {
+        str.concat(arg_type);
+        str.concat(' ');
+    }
+}
+
+int QoreTypeInfo::doAcceptError(bool priv_error, const char* arg_type, bool obj, int param_num, const char* param_name,
+        const QoreValue& n, ExceptionSink* xsink) const {
+    if (priv_error) {
+        if (obj) {
+            doObjectPrivateClassException(param_name, xsink);
+        } else {
+            doPrivateClassException(arg_type, param_num + 1, param_name, xsink);
+        }
+    } else {
+        if (obj) {
+            doObjectHashDeclTypeException(arg_type, param_name, n, xsink);
+        } else {
+            doTypeException(arg_type, param_num + 1, param_name, n, xsink);
+        }
+    }
+    return -1;
+}
+
+int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const char* param_name, const QoreValue& n,
+        ExceptionSink* xsink) const {
+    // xsink may be null in case parse exceptions have been disabled in the QoreProgram object
+    // for example if there was a "requires" error
+    if (!xsink)
+        return -1;
+
+    QoreStringNode* desc = new QoreStringNode;
+    QoreTypeInfo::ptext(*desc, arg_type, param_num, param_name);
+    desc->sprintf("expects type '%s', but got ", tname.c_str());
+    QoreTypeInfo::getNodeType(*desc, n);
+    desc->concat(" instead");
+    // Add a hint about type narrowing for lvalue/key assignments when the expected type is a simple type
+    // that could have come from type narrowing of hash<auto>
+    if (!strcmp(arg_type, "lvalue") && isSimpleTypeNarrowed()) {
+        desc->concat("; this may be due to type narrowing from hash<auto>; to store values of "
+            "different types, use 'hash<auto!> h()' or 'hash h = cast<hash>({...})'");
+    }
+    xsink->raiseException("RUNTIME-TYPE-ERROR", desc);
+    return -1;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getElementType(const QoreTypeInfo* ti) {
+    if (!hasType(ti)) {
+        return nullptr;
+    }
+    assert(!ti->return_vec.empty());
+    if (ti == autoListTypeInfo
+        || ti == autoListOrNothingTypeInfo
+        || ti == softAutoListTypeInfo
+        || ti == softAutoListOrNothingTypeInfo
+        || ti == autoHashTypeInfo
+        || ti == autoHashOrNothingTypeInfo) {
+        return autoTypeInfo;
+    }
+    return ti->return_vec[0].spec.getElementType();
+}
+
+const TypedHashDecl* QoreTypeInfo::getTypedHash(const QoreTypeInfo* ti) {
+    if (!hasType(ti)) {
+        return nullptr;
+    }
+    assert(!ti->return_vec.empty());
+    // CRITICAL FIX Phase 2: Don't extract hashdecl from optional complex hash types
+    // For optional types like *hash<string, hash<DataProviderExpressionInfo>>,
+    // return_vec has 2 specs: [actual_type, NOTHING].
+    // Only reject if the base type is a complex hash (not a hashdecl itself)
+    if (ti->return_vec.size() > 1) {
+        // For optional types, check if base type is a complex hash by examining typespec
+        if (ti->return_vec[0].spec.getTypeSpec() == QTS_COMPLEXHASH) {
+            // It's an optional complex hash type - don't extract hashdecl from it
+            // This prevents the inner hashdecl from being incorrectly applied to the outer hash
+            return nullptr;
+        }
+        // It's an optional type but not a complex hash (e.g., *hashdecl)
+        // Fall through to extract the hashdecl
+    }
+    return ti->return_vec[0].spec.getHashDecl();
+}
+
+const QoreTypeInfo* QoreTypeInfo::getComplexHashValueType(const QoreTypeInfo* ti) {
+    if (!hasType(ti)) {
+        return nullptr;
+    }
+    assert(!ti->return_vec.empty());
+    if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo) {
+        return autoTypeInfo;
+    }
+    return ti->return_vec[0].spec.getComplexHash();
+}
+
+const QoreTypeInfo* QoreTypeInfo::getComplexListValueType(const QoreTypeInfo* ti) {
+    if (!hasType(ti)) {
+        return nullptr;
+    }
+    assert(!ti->return_vec.empty());
+    if (ti == autoListTypeInfo || ti == autoListOrNothingTypeInfo) {
+        return autoTypeInfo;
+    }
+    // Handle or_nothing types which have 2 return specs (actual type + NOTHING)
+    // CRITICAL FIX: Validate structure for optional types
+    if (ti->return_vec.size() > 1) {
+        // Optional type must have exactly 2 specs: [actual_type, NOTHING]
+        if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
+            // Malformed optional type - reject it to prevent type corruption
+            return nullptr;
+        }
+    }
+    return ti->return_vec[0].spec.getComplexList();
+}
+
+const QoreComplexBufferTypeInfo* QoreTypeInfo::getComplexBufferType(const QoreTypeInfo* ti) {
+    if (!hasType(ti)) {
+        return nullptr;
+    }
+    assert(!ti->return_vec.empty());
+    return dynamic_cast<const QoreComplexBufferTypeInfo*>(ti->return_vec[0].spec.getComplexBuffer());
+}
+
+const QoreTypeInfo* qore_get_complex_buffer_value_type(const QoreTypeInfo* ti) {
+    const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(ti);
+    return bti ? bti->getElementTypeInfo() : nullptr;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getComplexBufferValueType(const QoreTypeInfo* ti) {
+    return qore_get_complex_buffer_value_type(ti);
+}
+
+bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink) {
+    if (!v.hasNode() || !target_ti || target_ti == autoTypeInfo) {
+        return true;
+    }
+
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(target_ti)) {
+        if (v.getType() != NT_HASH) {
+            return true;
+        }
+        const QoreHashNode* src = v.get<const QoreHashNode>();
+        if (src->getHashDecl() == hd) {
+            return true;
+        }
+        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHash(
+            src, /*runtime_check=*/true, xsink);
+        if (!coerced || (xsink && xsink->isException())) {
+            if (coerced) {
+                coerced->deref(xsink);
+            }
+            return false;
+        }
+        v.discard(nullptr);
+        v = coerced;
+        return true;
+    }
+
+    const QoreTypeInfo* inner_h_vt = QoreTypeInfo::getComplexHashValueType(target_ti);
+    if (inner_h_vt) {
+        if (v.getType() != NT_HASH) {
+            return true;
+        }
+        QoreHashNode* h = v.get<QoreHashNode>();
+        if (!h->is_unique()) {
+            QoreHashNode* copy = h->copy();
+            v.discard(nullptr);
+            v = copy;
+            h = copy;
+        }
+        if (inner_h_vt != autoTypeInfo) {
+            HashIterator hi(h);
+            size_t i = 0;
+            while (hi.next()) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "hash value retyping")) {
+                    return false;
+                }
+                hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
+                QoreValue cur(ha.swap(QoreValue()));
+                if (!QoreTypeInfo::retypeValue(cur, inner_h_vt, xsink)) {
+                    ha.swap(cur);
+                    return false;
+                }
+                ha.swap(cur);
+                ++i;
+            }
+        }
+        qore_hash_private::get(*h)->complexTypeInfo
+            = qore_get_complex_hash_type(inner_h_vt);
+        return true;
+    }
+
+    const QoreTypeInfo* inner_l_vt = QoreTypeInfo::getComplexListValueType(target_ti);
+    if (inner_l_vt) {
+        if (v.getType() != NT_LIST) {
+            return true;
+        }
+        QoreListNode* l = v.get<QoreListNode>();
+        if (!l->is_unique()) {
+            QoreListNode* copy = l->copy();
+            v.discard(nullptr);
+            v = copy;
+            l = copy;
+        }
+        qore_list_private* lp = qore_list_private::get(*l);
+        if (inner_l_vt != autoTypeInfo) {
+            size_t n = l->size();
+            for (size_t i = 0; i < n; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "list value retyping")) {
+                    return false;
+                }
+                QoreValue cur = lp->swap(i, QoreValue());
+                if (!QoreTypeInfo::retypeValue(cur, inner_l_vt, xsink)) {
+                    lp->swap(i, cur);
+                    return false;
+                }
+                lp->swap(i, cur);
+            }
+        }
+        lp->complexTypeInfo = qore_get_complex_list_type(inner_l_vt);
+        return true;
+    }
+
+    return true;
+}
+
+qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second,
+        bool& may_not_match, bool& may_need_filter, qore_type_result_e& max_result,
+        bool known_initial_assignment) {
+    /*
+    if (first == second) {
+        // issue
+        max_result = QTI_IDENT;
+        return QTI_IDENT;
+    }
+    */
+    if (first == autoTypeInfo) {
+        // If parameter is auto and argument is untyped (also auto),
+        // require runtime matching so specific types can be preferred
+        if (!hasType(second)) {
+            may_not_match = true;
+            max_result = QTI_AMBIGUOUS;
+            return QTI_AMBIGUOUS;
+        }
+        // For union types, check all components against auto via instance method
+        // This ensures proper scoring for union variant selection
+        if (second && second->return_vec.size() > 1) {
+            return first->parseAccepts(second, may_not_match, may_need_filter, max_result, known_initial_assignment);
+        }
+        max_result = QTI_WILDCARD;
+        return QTI_WILDCARD;
+    }
+    if (!hasType(first)) {
+        if (!may_need_filter && isComplex(second))
+            may_need_filter = true;
+        max_result = QTI_WILDCARD;
+        return QTI_WILDCARD;
+    }
+    if (!hasType(second)) {
+        if (!may_need_filter) {
+            // check if we could need a runtime filter
+            for (auto& i : first->getAcceptSpecs()) {
+                if (i.map) {
+                    may_need_filter = true;
+                    break;
+                }
+            }
+        }
+        max_result = QTI_IDENT;
+        may_not_match = true;
+        return QTI_AMBIGUOUS;
+    }
+    return first->parseAccepts(second, may_not_match, may_need_filter, max_result, known_initial_assignment);
+}
+
+qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool& may_not_match,
+        bool& may_need_filter, qore_type_result_e& max_result, bool known_initial_assignment) const {
+    //printd(5, "QoreTypeInfo::parseAccepts() '%s' <- '%s'\n", tname.c_str(), typeInfo->tname.c_str());
+    // Restore develop's logic: iterate source return_vec components against target accept_vec.
+    // For union types (return_vec.size() > 1), all components are checked; return QTI_AMBIGUOUS
+    // when ok=true (not QTI_IDENT, which incorrectly signals exact identity for unions and
+    // changes variant resolution behavior).
+    if (typeInfo->return_vec.size() > getAcceptSpecs().size()) {
+        may_not_match = true;
+    }
+
+    bool ok = false;
+    for (auto& rt : typeInfo->return_vec) {
+        bool t_no_match = true;
+        for (auto& at : getAcceptSpecs()) {
+            qore_type_result_e t_max_result = QTI_NOT_EQUAL;
+            qore_type_result_e res = parseAcceptsIntern(at, rt, may_not_match, may_need_filter, t_no_match, ok,
+                t_max_result, known_initial_assignment);
+            if (res == QTI_IDENT) {
+                max_result = t_max_result;
+                return res;
+            } else if (res == QTI_AMBIGUOUS || res == QTI_NEAR || res == QTI_WILDCARD) {
+                max_result = t_max_result;
+                assert(ok);
+                if (may_not_match) {
+                    return res;
+                }
+                break;
+            }
+        }
+        if (t_no_match) {
+            if (!may_not_match) {
+                may_not_match = true;
+                if (ok) {
+                    return QTI_AMBIGUOUS;
+                }
+            }
+        }
+    }
+    if (ok) {
+        return QTI_AMBIGUOUS;
+    }
+    may_not_match = false;
+    return QTI_NOT_EQUAL;
+}
+
+qore_type_result_e QoreTypeInfo::runtimeTypeMatch(const QoreTypeInfo* typeInfo) const {
+    //printd(5, "QoreTypeInfo::runtimeTypeMatch() '%s' <=> '%s'\n", tname.c_str(), typeInfo->tname.c_str());
+    if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->getAcceptVecSize() != getAcceptVecSize()) {
+        return QTI_NOT_EQUAL;
+    }
+
+    // check accept types
+    qore_type_result_e rc = QTI_IDENT;
+    for (size_t i = 0; i < getAcceptVecSize(); ++i) {
+        bool may_not_match = false;
+        bool may_need_filter = false;
+        qore_type_result_e res = getAcceptSpec(i).spec.match(typeInfo->getAcceptSpec(i).spec, may_not_match, may_need_filter);
+        //printd(5, " + accept: %s %d <=> %s %d: %d\n", QoreTypeInfo::getName(getAcceptSpec(i).spec.getBaseTypeInfo()), getAcceptSpec(i).spec.getTypeSpec(), QoreTypeInfo::getName(typeInfo->getAcceptSpec(i).spec.getBaseTypeInfo()), typeInfo->getAcceptSpec(i).spec.getTypeSpec(), res);
+        if (res < QTI_NEAR) {
+            return QTI_NOT_EQUAL;
+        }
+        if (res < rc) {
+            rc = res;
+        }
+    }
+
+    // check return types
+    for (size_t i = 0; i < return_vec.size(); ++i) {
+        bool may_not_match = false;
+        bool may_need_filter = false;
+        qore_type_result_e res = return_vec[i].spec.match(typeInfo->return_vec[i].spec, may_not_match, may_need_filter);
+        //printd(5, " + return: %s %d <=> %s %d: %d\n", QoreTypeInfo::getName(return_vec[i].spec.getBaseTypeInfo()), return_vec[i].spec.getTypeSpec(), QoreTypeInfo::getName(typeInfo->return_vec[i].spec.getBaseTypeInfo()), typeInfo->return_vec[i].spec.getTypeSpec(), res);
+        if (res < QTI_NEAR) {
+            return QTI_NOT_EQUAL;
+        }
+        if (res < rc) {
+            rc = res;
+        }
+    }
+
+    return rc;
+}
+
+bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInfo* ntype) {
+    // issue #3005: if the first element had no type, then there is no common type
+    if (!ctype || ctype == anyTypeInfo) {
+        ctype = nullptr;
+        return false;
+    }
+    if (ctype == ntype) {
+        return true;
+    }
+    if (!QoreTypeInfo::hasType(ntype)) {
+        // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
+        ctype = ntype == anyTypeInfo ? nullptr : ntype;
+        return false;
+    }
+
+    // ctype |* NOTHING -> *type
+    // only call get_or_nothing_type() if ctype doesn't already accept NOTHING
+    if (!QoreTypeInfo::parseAcceptsReturns(ctype, NT_NOTHING) && QoreTypeInfo::isType(ntype, NT_NOTHING)) {
+        const QoreTypeInfo* ti = get_or_nothing_type(ctype);
+        ctype = ti;
+        return ctype != autoTypeInfo ? true : false;
+    }
+
+    // ctype==NOTHING | type -> *type
+    if (QoreTypeInfo::isType(ctype, NT_NOTHING)) {
+        ctype = get_or_nothing_type_check(ntype);
+        return ctype != autoTypeInfo ? true : false;
+    }
+
+    // ctype |* *ctype -> *ctype
+    // if the new type is a superset of the existing common type, then use the new type
+    if (ntype->superSetOf(ctype)) {
+        ctype = ntype;
+        return true;
+    }
+
+    // try to find a common base type
+    // if we're dealing with types that return multiple types, then they are not compatible
+    if (ctype->return_vec.size() > 1 || ntype->return_vec.size() > 1) {
+        // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
+        ctype = autoTypeInfo;
+        return false;
+    }
+
+    // see if we have a complex type
+    const QoreTypeInfo* bti = ctype->return_vec[0].spec.getBaseTypeInfo();
+    if (bti == ntype->return_vec[0].spec.getBaseTypeInfo()) {
+        // issue #3429: when performing type folding with complex types, do not use subtype "any" but rather use "auto"
+        if (bti == hashTypeInfo) {
+            // Check if both are hashdecls before degrading to autoHashTypeInfo
+            // Fixes issue where hashdecl type infos from different module load instances are incorrectly
+            // degraded to hash<auto>, causing overload resolution failures and type checking errors
+            const TypedHashDecl* hd1 = ctype->return_vec[0].spec.getHashDecl();
+            const TypedHashDecl* hd2 = ntype->return_vec[0].spec.getHashDecl();
+            if (hd1 && hd2) {
+                const typed_hash_decl_private* thd1 = typed_hash_decl_private::get(*hd1);
+                const typed_hash_decl_private* thd2 = typed_hash_decl_private::get(*hd2);
+                // Preserve hashdecl structure only when both types describe
+                // the same declaration or a parent/child hierarchy.  Unrelated
+                // hashdecls must fall back to hash<auto>; otherwise the first
+                // element's hashdecl is incorrectly applied to later elements.
+                if (thd1->equal(*thd2) || thd2->isDescendantOf(*thd1)) {
+                    return true;
+                }
+                if (thd1->isDescendantOf(*thd2)) {
+                    ctype = ntype;
+                    return true;
+                }
+            }
+            ctype = autoHashTypeInfo;
+        } else if (bti == listTypeInfo) {
+            ctype = autoListTypeInfo;
+        } else if (bti == softListTypeInfo) {
+            ctype = softAutoListTypeInfo;
+        } else if (bti == hashOrNothingTypeInfo) {
+            ctype = autoHashOrNothingTypeInfo;
+        } else if (bti == listOrNothingTypeInfo) {
+            ctype = autoListOrNothingTypeInfo;
+        } else if (bti == softListOrNothingTypeInfo) {
+            ctype = softAutoListOrNothingTypeInfo;
+        } else {
+            ctype = bti;
+        }
+        return true;
+    }
+    // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
+    ctype = autoTypeInfo;
+    return false;
+}
+
+bool QoreTypeInfo::superSetOf(const QoreTypeInfo* t) const {
+    if (getAcceptVecSize() < t->getAcceptVecSize() || return_vec.size() < t->return_vec.size())
+        return false;
+
+    for (unsigned i = 0; i < t->getAcceptVecSize(); ++i) {
+        if (t->getAcceptSpec(i).spec != getAcceptSpec(i).spec)
+            return false;
+    }
+
+    for (unsigned i = 0; i < t->return_vec.size(); ++i) {
+        if (t->return_vec[i].spec != return_vec[i].spec)
+            return false;
+    }
+
+    return true;
+}
+
+bool QoreTypeInfo::outputSuperSetOf(const QoreTypeInfo* t) const {
+    if (return_vec.size() < t->return_vec.size())
+        return false;
+
+    for (unsigned i = 0; i < t->return_vec.size(); ++i) {
+        bool may_not_match = false;
+        bool may_need_filter = false;
+        if (!return_vec[i].spec.match(t->return_vec[i].spec, may_not_match, may_need_filter))
+            return false;
+        if (may_not_match)
+            return false;
+    }
+
+    return true;
+}
+
+void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+        const char* param_name, QoreValue& n, LValueHelper* lvhelper) const {
+    // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
+    // For optional types (return_vec.size() > 1), we need to ensure complex hash/list
+    // handlers are tried BEFORE hashdecl handlers to prevent incorrect routing.
+    // This prevents inner hashdecls from being extracted and applied to outer containers.
+
+    if (return_vec.size() > 1 && return_vec[1].spec.match(NT_NOTHING) == QTI_IDENT) {
+        // This is a proper optional type. For optional complex hashes/lists, try those first.
+        // Check if return_vec[0] indicates a complex hash or list
+        q_typespec_t base_typespec = return_vec[0].spec.getTypeSpec();
+        if (base_typespec == QTS_COMPLEXHASH || base_typespec == QTS_COMPLEXLIST ||
+            base_typespec == QTS_COMPLEXSOFTLIST) {
+            // Try complex hash/list specs first
+            for (auto& t : getAcceptSpecs()) {
+                q_typespec_t spec_type = t.spec.getTypeSpec();
+                if (spec_type == QTS_COMPLEXHASH || spec_type == QTS_COMPLEXLIST ||
+                    spec_type == QTS_COMPLEXSOFTLIST) {
+                    if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
+                        return;
+                    }
+                }
+            }
+            // If complex handlers didn't work, try hashdecl/other handlers
+            for (auto& t : getAcceptSpecs()) {
+                q_typespec_t spec_type = t.spec.getTypeSpec();
+                if (spec_type != QTS_COMPLEXHASH && spec_type != QTS_COMPLEXLIST &&
+                    spec_type != QTS_COMPLEXSOFTLIST) {
+                    if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
+                        return;
+                    }
+                }
+            }
+            doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink);
+            return;
+        }
+    }
+
+    // Normal routing for non-optional or non-complex types
+    for (auto& t : getAcceptSpecs()) {
+        if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
+            return;
+        }
+    }
+    doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink);
+}
+
+qore_type_result_e QoreTypeInfo::parseAcceptsIntern(const QoreAcceptSpec& at, const QoreReturnSpec& rt,
+        bool& may_not_match, bool& may_need_filter, bool& t_no_match, bool& ok, qore_type_result_e& max_result,
+        bool known_initial_assignment) {
+    //printd(5, "QoreTypeInfo::parseAcceptsIntern() at: %d rt: %d rc: %d\n", (int)at.spec.getTypeSpec(),
+    //    (int)rt.spec.getTypeSpec(), at.spec.match(rt.spec, may_not_match, may_need_filter));
+    qore_type_result_e res = at.spec.match(rt.spec, may_not_match, may_need_filter, max_result,
+        known_initial_assignment);
+    switch (res) {
+        case QTI_IDENT:
+            if (at.exact && rt.exact) {
+                if (at.map && !may_need_filter) {
+                    may_need_filter = true;
+                }
+                return QTI_IDENT;
+            }
+        // fall down to next case
+        case QTI_NEAR:
+        case QTI_AMBIGUOUS:
+        case QTI_WILDCARD:
+            if (at.map && !may_need_filter) {
+                may_need_filter = true;
+            }
+            if (t_no_match) {
+                t_no_match = false;
+                if (!ok) {
+                    ok = true;
+                    if (may_not_match) {
+                        return res;
+                    }
+                }
+            }
+
+        // fall down to default
+        default:
+            break;
+    }
+    return QTI_NOT_EQUAL;
+}
+
+bool QoreParseTypeInfo::paramTypesIdentical(
+        const QoreTypeInfo* ti_a, const QoreParseTypeInfo* pti_a,
+        const QoreTypeInfo* ti_b, const QoreParseTypeInfo* pti_b,
+        bool& recheck) {
+    // Both resolved types: direct comparison
+    if (ti_a && ti_b) {
+        return QoreTypeInfo::isInputIdentical(ti_a, ti_b);
+    }
+    // a resolved, b unresolved
+    if (ti_a && pti_b) {
+        return parseStageOneIdenticalWithParsed(pti_b, ti_a, recheck);
+    }
+    // a unresolved, b resolved
+    if (pti_a && ti_b) {
+        return parseStageOneIdenticalWithParsed(pti_a, ti_b, recheck);
+    }
+    // Both unresolved: compare parse-time types
+    if (pti_a && pti_b) {
+        return parseStageOneIdentical(pti_a, pti_b, recheck);
+    }
+    // Both untyped (nullptr): identical
+    return true;
 }

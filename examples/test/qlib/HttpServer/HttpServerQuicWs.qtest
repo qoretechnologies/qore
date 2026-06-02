@@ -34,18 +34,19 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/WebSocketUtil.qm
-%requires ../../../../qlib/WebSocketHandler.qm
-%requires ../../../../qlib/WebSocketClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
 
 %exec-class HttpServerQuicWsTest
 
@@ -72,6 +73,16 @@ class EchoWsConnection inherits WebSocketConnection {
     #! is closed (clean close frame, transport reset, or connection close).
     connectionClosed() {
         closed_signal.push("closed");
+    }
+}
+
+#! Sends an initial message from registered(), before the first client frame arrives
+class RegisteredSendWsConnection inherits EchoWsConnection {
+    constructor(WebSocketHandler handler, Queue closed_signal) : EchoWsConnection(handler, closed_signal) {
+    }
+
+    registered() {
+        send("registered-welcome");
     }
 }
 
@@ -110,6 +121,12 @@ class EchoWsHandler inherits WebSocketHandler {
         if (debug_output) {
             vprintf("WARN " + fmt + "\n", argv);
         }
+    }
+}
+
+class RegisteredSendWsHandler inherits EchoWsHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new RegisteredSendWsConnection(self, closed_signal);
     }
 }
 
@@ -177,10 +194,12 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
 
         addTestCase("WebSocket text echo over HTTP/3", \testH3WsTextEcho());
+        addTestCase("WebSocket registered send over HTTP/3", \testH3WsRegisteredSend());
         addTestCase("WebSocket binary echo over HTTP/3", \testH3WsBinaryEcho());
         addTestCase("WebSocket close handshake over HTTP/3", \testH3WsCloseHandshake());
         addTestCase("WebSocket multiple messages over HTTP/3", \testH3WsMultipleMessages());
         addTestCase("concurrent WebSocket streams over HTTP/3", \testH3WsConcurrentStreams());
+        addTestCase("required HTTP/3 WebSocket does not fall back", \testH3WsRequiredRejectsFallback());
         addTestCase("concurrent HTTP/3 WebSocket listener retention", \testH3WsConcurrentListenerRetention());
         addTestCase("abnormal disconnect over HTTP/3", \testH3WsAbnormalDisconnect());
         addTestCase("HTTP/3 WebSocket first send after connect is fast", \testH3WsFirstSendAfterConnectFast());
@@ -198,7 +217,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Helper to create an HTTP/3 server with WebSocket handler
-    private hash<auto> setupServer(EchoWsHandler ws_handler) {
+    private hash<auto> setupServer(EchoWsHandler ws_handler, bool enable_h3 = True) {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
@@ -212,7 +231,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
-            "enable_h3": True,
+            "enable_h3": enable_h3,
         });
         server.waitForAsyncIo();
 
@@ -246,6 +265,33 @@ l50Xb2GWQesIt9k5jF5IOw==
         WebSocketClient wsc(cb, opts);
         wsc.connect();
         return wsc;
+    }
+
+    #! Test initial server send from registered() over HTTP/3
+    testH3WsRegisteredSend() {
+        RegisteredSendWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        Queue msgs();
+        WebSocketClient wsc = createH3Client(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            }
+        }, setup.port);
+        on_exit wsc.disconnect();
+
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+        assertEq("registered-welcome", msgs.get(5s),
+            "HTTP/3 WebSocket should receive data sent from registered()");
     }
 
     #! Test WebSocket text echo over HTTP/3
@@ -550,6 +596,43 @@ l50Xb2GWQesIt9k5jF5IOw==
                 assertTrue(found, sprintf("%s should contain %y", stream_tag, expected));
             }
         }
+    }
+
+    #! Test that http3_mode=required fails instead of falling back to HTTP/1.1
+    testH3WsRequiredRejectsFallback() {
+        EchoWsHandler ws_handler();
+        hash<auto> setup = setupServer(ws_handler, False);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        code cb = sub (*data msg) {
+        };
+
+        WebSocketClient wsc(cb, {
+            "url": "wss://127.0.0.1:" + setup.port,
+            "logger": mLogger,
+            "http3_mode": "required",
+            "ssl_verify_cert": False,
+            "timeout": 2s,
+            "connect_timeout": 2s,
+        });
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+
+        bool got_error = False;
+        try {
+            wsc.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            assertRegex("^(HTTP3-CONNECT-ERROR|HTTP3-TIMEOUT|HTTPCLIENT-TIMEOUT|HTTPCLIENT-CONNECT-ERROR|QUIC-ERROR|QUIC-HANDSHAKE-TIMEOUT)$",
+                ex.err, "expected HTTP/3 or QUIC error type, got: " + ex.err);
+        }
+        assertTrue(got_error, "required HTTP/3 WebSocket connection must not fall back to HTTP/1.1");
     }
 
     #! Test listener retention when many HTTP/3 WebSocket streams register concurrently

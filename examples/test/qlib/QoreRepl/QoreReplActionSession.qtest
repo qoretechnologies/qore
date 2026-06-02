@@ -24,9 +24,10 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 %requires reflection
-%requires ../../../../qlib/QoreRepl
+%requires QoreRepl
 
 %exec-class QoreReplActionSessionTest
 

@@ -35,7 +35,16 @@
 #include <utility>
 #include <vector>
 
+class LocalVar;
+
 class ThreadLocalVariableData : public ThreadLocalData<LocalVarValue> {
+private:
+    // Record of where each frame boundary marker is stored for O(1) lookup at pop time
+    struct FrameMarkerRecord {
+        Block* block;   // block containing the marker
+        int pos;        // position of the marker within the block
+    };
+    std::vector<FrameMarkerRecord> frame_marker_stack;
 public:
     // clears and marks all variables as finalized on the stack
     DLLLOCAL void finalize(SafeDerefHelper& sdh) {
@@ -69,11 +78,10 @@ public:
 
     DLLLOCAL LocalVarValue* instantiate() {
         if (curr->pos == QORE_THREAD_STACK_BLOCK) {
-            if (curr->next)
+            if (curr->next) {
                 curr = curr->next;
-            else {
+            } else {
                 curr->next = new Block(curr);
-                //printf("this: %p: add curr: %p, curr->next: %p\n", this, curr, curr->next);
                 curr = curr->next;
             }
         }
@@ -82,7 +90,6 @@ public:
 
     DLLLOCAL void uninstantiate(ExceptionSink* xsink) {
         uninstantiateIntern();
-        //printd(5, "ThreadLocalVariableData::uninstantiate() this: %p '%s' pos: %d\n", this, curr->var[curr->pos].id, curr->pos);
         curr->var[curr->pos].uninstantiate(xsink);
     }
 
@@ -98,15 +105,22 @@ public:
                 delete curr->next;
                 curr->next = 0;
             }
+            assert(curr->prev);
             curr = curr->prev;
-            assert(curr);
         }
         --curr->pos;
     }
 
     DLLLOCAL LocalVarValue* find(const char* id) {
+        LocalVarValue* rv = findMaybe(id);
+        assert(rv);
+        return rv;
+    }
+
+    // returns nullptr if not found; avoids assertions for lookup checks
+    DLLLOCAL LocalVarValue* findMaybe(const char* id) {
         Block* w = curr;
-        while (true) {
+        while (w) {
             int p = w->pos;
             while (p) {
                 --p;
@@ -115,38 +129,85 @@ public:
                     return var;
             }
             w = w->prev;
-#ifdef DEBUG
-            if (!w) {
-                p = curr->pos - 1;
-                printd(0, "ThreadLocalVariableData::find() this: %p no local variable '%s' (%p) on stack (pgm: %p) "
-                    "p: %d\n", this, id, id, getProgram(), p);
-                while (p >= 0) {
-                    printd(0, "var p: %d: %s (%p) (frame_boundary: %d)\n", p, curr->var[p].id, curr->var[p].id,
-                        curr->var[p].frame_boundary);
-                    --p;
+        }
+        return nullptr;
+    }
+
+    DLLLOCAL LocalVarValue* find(const LocalVar* local) {
+        LocalVarValue* rv = findMaybe(local);
+        assert(rv);
+        return rv;
+    }
+
+    DLLLOCAL LocalVarValue* findMaybe(const LocalVar* local) {
+        if (!local) {
+            return nullptr;
+        }
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                LocalVarValue* var = &w->var[p];
+                if (var->local_var == local && !var->frame_boundary) {
+                    return var;
                 }
             }
-#endif
-            assert(w);
+            w = w->prev;
         }
-        // to avoid a warning on most compilers - note that this generates a warning on recent versions of aCC!
-        return 0;
+        return nullptr;
     }
 
     DLLLOCAL void pushFrameBoundary() {
         ++frame_count;
-        //printd(5, "ThreadLocalVariableData::pushFrameBoundary(): fc:%d\n", frame_count);
         LocalVarValue* v = instantiate();
         v->setFrameBoundary();
+        v->frame_marker_id = frame_count;  // Store the frame count this marker belongs to
+
+        // Record the exact location of this marker for O(1) lookup at pop time
+        // Note: instantiate() incremented curr->pos, so the marker is at curr->pos - 1
+        frame_marker_stack.push_back({curr, (int)curr->pos - 1});
     }
 
     DLLLOCAL void popFrameBoundary() {
         assert(frame_count >= 0);
-        --frame_count;
-        //printd(5, "ThreadLocalVariableData::popFrameBoundary(): fc:%d\n", frame_count);
-        uninstantiateIntern();
+        assert(!frame_marker_stack.empty());
+
+        // Retrieve the recorded marker location (O(1) lookup via stack-based tracking)
+        FrameMarkerRecord rec = frame_marker_stack.back();
+        frame_marker_stack.pop_back();
+
+        // Navigate back to the marker position, cleaning up any variables that
+        // weren't properly uninstantiated by the function.
+        //
+        // Note: del() handles static_assignment variables (e.g. "self") safely
+        // by calling unassignIgnore() instead of removeValue().
+        //
+        // curr->pos should be at or near the marker position since the function
+        // should have uninstantiated most of its variables already.
+
+        // Navigate to the marker position - same block case
+        if (curr == rec.block) {
+            // Same block - uninstantiate back to the marker
+            while (curr->pos > rec.pos) {
+                uninstantiate(nullptr);
+            }
+        } else {
+            // Different block - navigate back and clean up
+            while (curr != rec.block || curr->pos > rec.pos) {
+                uninstantiate(nullptr);
+            }
+        }
+
+        // Verify the marker is where we recorded it
+        assert(curr == rec.block);
+        assert(curr->pos == rec.pos);
         assert(curr->var[curr->pos].frame_boundary);
+        assert(curr->var[curr->pos].frame_marker_id == frame_count);
+
+        // Clear the marker in place
         curr->var[curr->pos].frame_boundary = false;
+        --frame_count;
     }
 
     DLLLOCAL int getFrame(int frame, Block*& w, int& p);

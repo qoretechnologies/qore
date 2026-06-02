@@ -154,7 +154,7 @@ public class MewsRestTableDataProvider inherits MewsRestDataProviderBase {
 
         @see requestSearchRecordsImpl()
     */
-    private DataProvider::AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private DataProvider::AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         AbstractDataProvider prov = sdp.getChildProviderPath(config.path);
         int limit = min(search_options.limit ?? MaxRecords, MaxRecords);
@@ -182,7 +182,7 @@ public class MewsRestTableDataProvider inherits MewsRestDataProviderBase {
                 }
             }
         }
-        return new DefaultRecordIterator(new ListIterator(l), NOTHING, search_options, record_type);
+        return new DefaultRecordIterator<hash<auto>>(new ListIterator<hash<auto>>(l), NOTHING, search_options, record_type);
     }
 
     private AbstractDataProviderBulkRecordInterface searchRecordsBulkImpl(int block_size = 1000,

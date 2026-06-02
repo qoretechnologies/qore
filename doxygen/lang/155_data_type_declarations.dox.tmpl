@@ -27,6 +27,7 @@
     |@ref object_type "object"|@ref object|@ref object|Restricts values to @ref object values
     |@ref classname_type "object<...>"|@ref object|@ref object|Restricts values to objects of the specific class
     |@ref classname_type "<classname>"|@ref object|@ref object|Restricts values to objects of the specific class given; either the class name can be given (ex: @ref Qore::Thread::Mutex "Mutex" or a qualified path to the class: @ref Qore::Thread::Mutex)
+    |@ref generic_class_type "Class<T>"|@ref object|@ref object|Restricts values to objects of a builtin or source-defined class with the declared type arguments
     |@ref null_type "null"|@ref null|@ref null|Restricts values to %Qore's @ref null type; this type has few (if any) practical applications and has been included for completeness' sake
     |@ref nothing_type "nothing"|@ref nothing|@ref nothing|Restricts values to %Qore's @ref nothing type; this type is mostly useful for declaring that a function or method returns no value
     |@ref timeout_type "timeout"|@ref integer, @ref date|@ref integer|Accepts @ref integer, @ref date and converts dates to an integer value representing milliseconds and returns the integer; incoming integers are assumed to represent milliseconds
@@ -243,6 +244,29 @@ hash<MyHash> sub foo(int x) {
 }
     @endcode
 
+    Generic hashdecls can be used by supplying type arguments to the hashdecl
+    name inside the \c hash type. The resulting type is a concrete typed hash,
+    and its members are checked after substituting the type arguments into the
+    hashdecl declaration:
+
+    @code{.py}
+hashdecl Result<T> {
+    string status;
+    T value;
+}
+
+hash<Result<int>> int_result(("status": "ok", "value": 1));
+int value = int_result.value;
+
+hash<Result<string>> string_result(("status": "ok", "value": "done"));
+string text = string_result.value;
+    @endcode
+
+    Source-defined generic hashdecls require explicit type arguments in type
+    positions. For example, <tt>hash&lt;Result&lt;int&gt;&gt;</tt> is valid, while
+    <tt>hash&lt;Result&gt;</tt> is rejected because the member type \c T cannot be
+    resolved without a concrete argument.
+
     This type is supported at parse-time and at runtime; to convert such values to an untyped hash, assign it
     to a @ref hash_type "hash" lvalue, use @ref cast "cast<hash>(...)" on the value, call the @ref Qore::hash() "hash()"
     function on the value, or assign it to an untyped lvalue.  Each of these options can be used to convert a type-safe
@@ -437,6 +461,348 @@ Mutex sub foo(Qore::Thread::Mutex m = new Mutex()) {
     return m;
 }
     @endcode
+
+    @section generic_class_type Generic Class Types
+
+    Builtin and source-defined classes can declare type parameters. These
+    classes can be used with type arguments in any type position, which makes
+    the type argument part of the object's runtime type and of parse-time
+    method checking.
+
+    @par Generic Queue Example
+    @code{.py}
+Queue<int> q();
+q.push(value: 10);
+q.push(value: 20);
+
+int first = q.get(timeout_ms: 0);
+int second = q.pop(timeout_ms: 0);
+    @endcode
+
+    The declared type is enforced at producer methods. For example, the following
+    call is rejected before the program runs:
+
+    @code{.py}
+Queue<int> q();
+q.push(value: "not an int");  # PARSE-TYPE-ERROR
+    @endcode
+
+    @par Generic Channel Example
+    @code{.py}
+Channel<string> ch(2);
+ch.send(value: "ready");
+
+*string message = ch.recv(timeout_ms: 100ms);
+    @endcode
+
+    @par Generic Future Example
+    @code{.py}
+Promise<hash<auto>> p();
+Future<hash<auto>> f = p.getFuture();
+
+p.set(value: {"status": 200, "body": "ok"});
+hash<auto> response = f.get(timeout_ms: 5s);
+    @endcode
+
+    @par Generic TreeMap Example
+    @code{.py}
+TreeMap<code> handlers();
+handlers.put(path: "api/v1", value: \handleApiV1());
+
+*code handler = handlers.get(path: "api/v1/users");
+if (exists handler) {
+    handler();
+}
+    @endcode
+
+    Parameterized class types are invariant when concrete type arguments are
+    used. For example, <tt>Queue&lt;auto&gt;</tt> is a concrete value-erased
+    queue type; it is not a wildcard that accepts every queue instantiation:
+
+    @code{.py}
+Queue<int> ints();
+Queue<auto> values();
+
+values = ints;  # PARSE-TYPE-ERROR
+    @endcode
+
+    Use-site wildcard type arguments are available when an API needs to accept
+    a family of compatible generic instantiations:
+
+    @code{.py}
+Queue<int> ints();
+
+Queue<?> any_queue = ints;                 # accepts any Queue<T>
+Queue<? extends number> number_source = ints;  # values can be read as number
+Queue<? super int> int_sink = ints;        # int values can be written safely
+    @endcode
+
+    The unbounded wildcard <tt>?</tt> accepts any type argument for assignment
+    and runtime checks, but methods using the wildcarded type parameter cannot
+    accept new values of that unknown type. An upper-bound wildcard
+    <tt>? extends T</tt> is read-oriented: methods returning the type parameter
+    return \c T, while methods accepting the type parameter reject concrete
+    values. A lower-bound wildcard <tt>? super T</tt> is write-oriented:
+    methods accepting the type parameter accept \c T, while methods returning
+    the type parameter return \c auto because the precise stored type is not
+    known.
+
+    Wildcards are only type annotations; they are not concrete object
+    instantiations:
+
+    @code{.py}
+Queue<?> q();  # MISSING-TYPE-ARGUMENTS
+    @endcode
+
+    Migrated generic builtin classes keep source compatibility with existing raw
+    code. A raw declaration such as <tt>Queue q()</tt> constructs a
+    <tt>Queue&lt;auto&gt;</tt> object, and a raw \c Queue annotation accepts
+    migrated parameterized queue objects. Use explicit type arguments in new code
+    when the element or result type is known.
+
+    Generic builtin classes include value containers, iterators, and poll
+    operations. Generic builtin hashdecls describe result records whose payload
+    type matches the associated class type parameter:
+
+    @code{.py}
+Queue<int> q();
+q.push(value: 10);
+hash<QueueTryResult<int>> maybe_value = q.tryPop();
+
+list<string> names = ("alice", "bob");
+ListIterator<string> it(names);
+while (it.next()) {
+    string name = it.getValue();
+}
+
+hash<string, int> values = {"one": 1};
+HashPairIterator<int> pair_it(values);
+hash<KeyValueInfo<int>> pair = pair_it.getValue();
+
+AbstractPollOperation<auto> connect = sock.startPollConnect(target: "example.com:443");
+    @endcode
+
+    @par Source-Defined Generic Class Example
+    @code{.py}
+class Box<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Box<string> box("ready");
+string value = box.get();
+    @endcode
+
+    Type parameters can declare defaults and upper bounds. Defaults are used
+    when a generic type position explicitly omits the argument with
+    <tt>&lt;&gt;</tt>, and bounds are checked after explicit arguments or
+    inferred arguments are applied:
+
+    @code{.py}
+class IntBox<T: int = int> {
+    private {
+        T value;
+    }
+
+    constructor(T value = 1) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+IntBox<> default_box();        # same type as IntBox<int>
+IntBox<int> explicit_box(2);
+# IntBox<string> bad("x");     # PARSE-TYPE-ERROR: string violates T: int
+    @endcode
+
+    Source-defined generic classes can inherit generic base classes and pass
+    through their own type parameters:
+
+    @code{.py}
+class Base<T> {
+    T echo(T value) {
+        return value;
+    }
+}
+
+class Child<T> inherits Base<T> {
+}
+
+Child<int> child();
+int value = child.echo(42);
+    @endcode
+
+    Source-defined generic class types are runtime checked. Concrete type
+    arguments are invariant; use wildcard arguments such as
+    <tt>Box&lt;?&gt;</tt>, <tt>Box&lt;? extends int&gt;</tt>, or
+    <tt>Box&lt;? super int&gt;</tt> when a variable or parameter should accept
+    more than one instantiation. Source-defined generic classes do not provide
+    raw compatibility by default; use explicit type arguments such as
+    <tt>Box&lt;int&gt;</tt> or <tt>Box&lt;auto&gt;</tt>.
+
+    Static methods on source-defined generic classes can use class type
+    parameters when the call target supplies concrete type arguments:
+
+    @code{.py}
+class Factory<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    static Factory<T> make(T value) {
+        return new Factory<T>(value);
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Factory<int> f = Factory<int>::make(10);
+int made = f.get();
+    @endcode
+
+    Functions, methods, and static methods can also declare their own type
+    parameters. These method-level type parameters are independent of class type
+    parameters and can be inferred from arguments or supplied explicitly at the
+    call site:
+
+    @code{.py}
+T sub identity<T>(T value) {
+    return value;
+}
+
+int i = identity(1);
+string s = identity<string>(value: "ready");
+
+class Chooser<T> {
+    static U choose<U>(T left, U right) {
+        return right;
+    }
+}
+
+string chosen = Chooser<int>::choose<string>(1, "one");
+    @endcode
+
+    Constructor calls can infer class type arguments from constructor arguments
+    when the inferred instantiation is unique:
+
+    @code{.py}
+class InferredBox<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+auto inferred = new InferredBox(10);         # creates InferredBox<int>
+auto named = new InferredBox(value: 11);     # named constructor calls work too
+int inferred_value = inferred.get();
+    @endcode
+
+    Expected result types also supply class type arguments for constructor calls,
+    return expressions, and static factory calls:
+
+    @code{.py}
+InferredBox<int> typed_target = new InferredBox(12);
+
+InferredBox<int> make_box() {
+    return new InferredBox(13);
+}
+
+Factory<int> inferred_factory = Factory::make(14);
+    @endcode
+
+    Explicit type arguments take precedence over inference. If inference cannot
+    choose a unique instantiation, or an inferred type argument violates a bound,
+    parsing raises a \c PARSE-TYPE-ERROR and the call should be written with an
+    explicit receiver such as <tt>InferredBox&lt;int&gt;</tt> or
+    <tt>Factory&lt;int&gt;::make(...)</tt>. Classes marked with
+    <tt>[legacy_raw]</tt> or <tt>[legacy_raw_construct]</tt> keep their legacy
+    behavior: raw constructor calls create the all-<tt>auto</tt> instantiation
+    instead of inferring type arguments from constructor values.
+
+    Generic source bodies keep the same source-visible behavior in all
+    execution modes. AST and AOT metadata paths use runtime type-parameter
+    substitution, while IR/JIT execution can internally cache specialized source
+    bodies for concrete receiver and method type-argument tuples.
+
+    Serialization preserves specialized generic object types. A serialized
+    object with runtime type <tt>Box&lt;int&gt;</tt> or
+    <tt>Queue&lt;string&gt;</tt> is deserialized with the same parameterized type
+    path, so runtime type checks still see the concrete type arguments.
+
+    Reflection, AST parser output, qpp metadata, QoreApiMetadata, and
+    QoreCodeFormat preserve generic class and hashdecl declarations, type
+    argument spellings, defaults, bounds, wildcards, and parameterized
+    inheritance. Tooling that generates examples should prefer concrete type
+    arguments instead of raw compatibility spellings when the value type is
+    known.
+
+    @par Source Raw-Compatibility Attributes
+    Source-defined generic classes that migrate an existing raw class API can
+    opt into raw compatibility with class attributes written after the class
+    name or type-parameter list:
+
+    @code{.py}
+class LegacyBox<T> [legacy_raw] {
+    constructor(T value) {
+    }
+}
+
+LegacyBox raw("value");              # same runtime type as LegacyBox<auto>
+LegacyBox<string> typed("value");
+LegacyBox accepted = typed;          # raw annotation accepts typed object
+    @endcode
+
+    The separate forms make migration intent explicit:
+
+    @code{.py}
+class RawAccepts<T> [legacy_raw_accepts] {
+    constructor(T value) {
+    }
+}
+
+RawAccepts<int> typed_accepts(1);
+RawAccepts raw_accepts = typed_accepts;  # allowed
+# RawAccepts invalid(1);                 # raw declaration construction still rejected
+
+class RawConstructs<T> [legacy_raw_construct] {
+    constructor(T value) {
+    }
+}
+
+RawConstructs raw_constructs(1);         # creates RawConstructs<auto>
+RawConstructs<int> typed_constructs(1);
+# RawConstructs raw_target = typed_constructs;  # raw annotation still rejected
+    @endcode
+
+    <tt>[legacy_raw]</tt> enables both behaviors. These attributes are intended
+    for compatibility migrations only; they should not be used to make raw
+    annotations a general wildcard type for new APIs.
 
     <hr>
     @section null_type null

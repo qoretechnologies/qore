@@ -7,8 +7,9 @@
 %no-child-restrictions
 
 # for negative testing of loadApplyUserModule
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
 
 %requires ./MyTestModule.qm
 #/;
@@ -16,7 +17,7 @@
 %exec-class InjectionTest
 
 public namespace Test {
-    class FileLineIteratorFake inherits AbstractIterator {
+    class FileLineIteratorFake inherits AbstractIterator<string> {
         private {
             bool valid = False;
         }

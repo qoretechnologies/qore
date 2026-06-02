@@ -39,9 +39,14 @@
 #include "qore/intern/QoreSQLStatement.h"
 #include "qore/intern/DatasourceStatementHelper.h"
 
+#include <map>
 #include <set>
+#include <string>
+#include <utility>
+#include <vector>
 
 typedef std::set<QoreSQLStatement*> stmt_set_t;
+typedef std::vector<std::pair<std::string, const QoreTypeInfo*>> qore_dbi_typed_result_members_t;
 
 struct qore_ds_private {
     // mutex
@@ -85,6 +90,7 @@ struct qore_ds_private {
 
     // interface for the parent class
     DatasourceStatementHelper* dsh;
+    std::map<std::string, const TypedHashDecl*> typed_result_hashdecl_cache;
 
     DLLLOCAL qore_ds_private(Datasource* n_ds, DBIDriver* ndsl, DatasourceStatementHelper* dsh) : ds(n_ds),
             dsl(ndsl), opt(new QoreHashNode(autoTypeInfo)), dsh(dsh) {
@@ -105,6 +111,7 @@ struct qore_ds_private {
     DLLLOCAL ~qore_ds_private() {
         assert(!private_data);
         assert(stmt_set.empty());
+        clearTypedResultHashDeclCache();
         ExceptionSink xsink;
         if (opt) {
             opt->deref(&xsink);
@@ -135,6 +142,11 @@ struct qore_ds_private {
     }
 
     DLLLOCAL void statementExecuted(int rc);
+
+    DLLLOCAL void clearTypedResultHashDeclCache();
+
+    DLLLOCAL const TypedHashDecl* getTypedResultHashDecl(const char* driver_name, const std::string& signature,
+            const qore_dbi_typed_result_members_t& members, ExceptionSink* xsink);
 
     DLLLOCAL void copyOptions(const Datasource* ods);
 
@@ -262,6 +274,7 @@ struct qore_ds_private {
             isopen = false;
             in_transaction = false;
             active_transaction = false;
+            clearTypedResultHashDeclCache();
             return 0;
         }
         return -1;

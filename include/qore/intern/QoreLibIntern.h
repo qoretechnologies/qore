@@ -33,6 +33,8 @@
 
 #define _QORE_QORELIBINTERN_H
 
+#include <string>
+
 class RuntimeConfig;
 
 //#define _QORE_CYCLE_CHECK 1
@@ -170,6 +172,8 @@ enum q_setpub_t : unsigned char {
     CSP_SETPUB = 2,
 };
 
+#include "qore/intern/QoreParseAnalysis.h"
+
 struct QoreParseContext {
     QoreProgram* pgm;
     LocalVar* oflag = nullptr;
@@ -177,6 +181,23 @@ struct QoreParseContext {
     int pflag = 0;
     int lvids = 0;
     const QoreTypeInfo* typeInfo = nullptr;
+    QoreParseAnalysis analysis;
+    //! Optional, non-binding hint: when the surrounding context has a
+    //! concrete declared target type (assignment lvalue, function param,
+    //! return type, ...) and the rvalue's own inference would otherwise
+    //! land on `auto`, sub-expressions that understand the hint may
+    //! narrow to match.  NEVER mandatory — every consumer must fall back
+    //! to its own inference when the hint is null or incompatible.  The
+    //! authoritative type-check still happens at the assignment site via
+    //! `QoreTypeInfo::parseAccepts()`; this field only tightens upstream
+    //! inference when it would otherwise default to auto.
+    //!
+    //! Motivation + scope: see `design/parser-lvalue-type-propagation.md`.
+    const QoreTypeInfo* expected_type_info = nullptr;
+    //! True when parse initialization of the current expression saw a qcc
+    //! --stub external constant. Constants with such dependencies cannot be
+    //! folded at compile time; AOT must preserve their initializer expression.
+    bool external_stub_constant_ref = false;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
@@ -197,6 +218,59 @@ struct QoreParseContext {
         int rv = pflag;
         pflag |= flags;
         return rv;
+    }
+
+    DLLLOCAL bool isLocalDefinitelyAssigned(LocalVar* local) const;
+
+    DLLLOCAL bool needsGuardForLocal(LocalVar* local) const;
+
+    DLLLOCAL const QoreTypeInfo* guaranteedType(LocalVar* local) const;
+
+    DLLLOCAL void markLocalAssignment(LocalVar* local, bool assigned, const QoreTypeInfo* type = nullptr);
+
+    DLLLOCAL bool expressionCanThrow() const {
+        return !analysis.neverThrows();
+    }
+
+    DLLLOCAL void markExpressionNeverThrows() {
+        analysis.setFlag(QoreParseAnalysis::NeverThrows);
+    }
+
+    DLLLOCAL void markExpressionMayThrow() {
+        analysis.flags &= ~QoreParseAnalysis::NeverThrows;
+    }
+
+    DLLLOCAL bool isExpressionDefinitelyAssigned() const {
+        return analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+
+    DLLLOCAL bool isExpressionNeverNothing() const {
+        return analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+    }
+
+    DLLLOCAL const QoreTypeInfo* expressionAnalysisType() const {
+        return analysis.known_type ? analysis.known_type : analysis.narrowed_type;
+    }
+
+    DLLLOCAL bool expressionHasKnownType() const {
+        return analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo);
+    }
+
+    DLLLOCAL void markExpressionType(const QoreTypeInfo* typeInfo) {
+        analysis.known_type = typeInfo;
+        if (typeInfo) {
+            analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        } else {
+            analysis.flags &= ~QoreParseAnalysis::KnownTypeInfo;
+        }
+    }
+
+    DLLLOCAL void markExpressionNeverNothing() {
+        analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    }
+
+    DLLLOCAL void markExpressionMayBeNothing() {
+        analysis.flags &= ~QoreParseAnalysis::NeverNothing;
     }
 };
 
@@ -232,6 +306,21 @@ private:
     int pflag;
 };
 
+class QoreParseContextAnalysisHelper {
+public:
+    DLLLOCAL QoreParseContextAnalysisHelper(QoreParseContext& parse_context)
+            : parse_context(parse_context), saved(parse_context.analysis) {
+    }
+
+    DLLLOCAL ~QoreParseContextAnalysisHelper() {
+        parse_context.analysis = saved;
+    }
+
+private:
+    QoreParseContext& parse_context;
+    QoreParseAnalysis saved;
+};
+
 class QoreParseContextLvarHelper {
 public:
     DLLLOCAL QoreParseContextLvarHelper(QoreParseContext& parse_context, LVList*& lvars)
@@ -262,26 +351,7 @@ DLLLOCAL void inc_container_obj(const AbstractQoreNode* n, int dt);
 
 DLLLOCAL AbstractQoreNode* missing_openssl_feature(const char* f, ExceptionSink* xsink);
 
-struct ParseWarnOptions {
-    QoreParseOptions parse_options;
-    int warn_mask = 0;
-
-    DLLLOCAL ParseWarnOptions() {
-    }
-
-    DLLLOCAL ParseWarnOptions(const QoreParseOptions& n_parse_options, int n_warn_mask = 0)
-            : parse_options(n_parse_options), warn_mask(n_warn_mask) {
-    }
-
-    DLLLOCAL void operator=(const ParseWarnOptions& pwo) {
-        parse_options = pwo.parse_options;
-        warn_mask = pwo.warn_mask;
-    }
-
-    DLLLOCAL bool operator==(const ParseWarnOptions& pwo) const {
-        return parse_options == pwo.parse_options && warn_mask == pwo.warn_mask;
-    }
-};
+#include "qore/intern/ParseWarnOptions.h"
 
 struct QoreProgramLineLocation {
     int16_t start_line = -1,
@@ -705,7 +775,8 @@ DLLLOCAL QoreHashNode* statvfs_to_hash(const struct statvfs& statvfs);
 // only called in stage 1 parsing: true means node requires run-time evaluation
 //DLLLOCAL bool needsEval(AbstractQoreNode* n);
 
-DLLLOCAL const char* check_hash_key(const QoreHashNode* h, const char* key, const char* err, ExceptionSink* xsink);
+DLLLOCAL bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std::string& value,
+        ExceptionSink* xsink);
 
 // class for master namespace of all builtin classes, constants, etc
 class StaticSystemNamespace : public RootQoreNamespace {

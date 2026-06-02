@@ -93,6 +93,76 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
         return record - field_list;
     }
 
+    #! Returns True if configured fields can be removed from a column block directly
+    private bool canUseColumnShapes() {
+        foreach string field in (field_list) {
+            if (field.find(".") >= 0) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! Removes fields from a DataFrame by selecting the remaining columns
+    private auto removeDataFrameFields(auto records) {
+        hash<string, bool> remove_set = map {$1: True}, field_list;
+        list<string> keep_fields;
+        foreach string name in (records.columnNames()) {
+            if (!remove_set{name}) {
+                push keep_fields, name;
+            }
+        }
+        return records.select(keep_fields);
+    }
+
+    #! Processes an explicitly-shaped block without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
+        if (!field_list) {
+            throw "PROCESSOR-ERROR", "QoreRemoveFieldsProcessor: no field list configured; "
+                "provide the 'fields' option";
+        }
+        if (!canUseColumnShapes()) {
+            list<auto> rows = shape == DataProviderShape::RowRecords
+                ? (records,) : AbstractDataProcessor::convertShape(records, shape, DataProviderShape::RowRecords);
+            *list<auto> selected = processRecordsImpl(rows);
+            if (!selected) {
+                return;
+            }
+            if (shape == DataProviderShape::RowRecords) {
+                return selected.size() == 1 ? selected[0] : selected;
+            }
+            switch (shape) {
+                case DataProviderShape::HashOfLists:
+                    return AbstractDataProcessor::recordsToHashList(selected);
+                case DataProviderShape::DataFrameBlock:
+                    return AbstractDataProcessor::getDataFrameClass().newObject(selected);
+                case DataProviderShape::BufferColumns:
+                    return ColumnarResult::fromRows(selected);
+            }
+        }
+
+        switch (shape) {
+            case DataProviderShape::RowRecords:
+                return processRecordImpl(records);
+            case DataProviderShape::DataFrameBlock:
+                return removeDataFrameFields(records);
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    return ColumnarResult::fromColumnHash(records.toColumnHash() - field_list);
+                }
+                return records - field_list;
+            case DataProviderShape::HashOfLists:
+                return records - field_list;
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("%s cannot process unsupported data shape %s",
+            self.className(), AbstractDataProcessor::shapeName(shape));
+    }
+
+    #! Processes hash-of-lists blocks without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        return processRecordsShapeImpl(records, DataProviderShape::HashOfLists);
+    }
+
     #! Computes the output type based on the input type and the configured field removal list
     /** @param input_type the output type from the preceding pipeline state
 
@@ -121,14 +191,25 @@ public class QoreRemoveFieldsProcessor inherits AbstractDataProvider {
         return rv.getFields() ? rv : NOTHING;
     }
 
-    #! Indicates that this processor does not support the bulk API
+    #! Indicates that this processor supports the bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield
     private int getProcessorCapabilitiesImpl() {
         return DPC_TRANSFORM;
+    }
+
+    #! Returns supported input shapes
+    private list<DataProviderShape> supportedInputShapesImpl() {
+        return (DataProviderShape::DataFrameBlock, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists, DataProviderShape::RowRecords);
+    }
+
+    #! Returns supported output shapes
+    private list<DataProviderShape> supportedOutputShapesImpl() {
+        return supportedInputShapesImpl();
     }
 }
 }

@@ -4,11 +4,12 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/PerplexityDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires PerplexityDataProvider
 
 %try-module json
 %define NoJson
@@ -581,7 +582,8 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         }
 
         # Test stream-chat
-        AbstractDataProvider stream = prov.getChildProvider("stream-chat");
+        PerplexityChatStreamDataProvider stream = cast<PerplexityChatStreamDataProvider>(
+            prov.getChildProvider("stream-chat"));
         StreamObserver stream_observer();
         cast<Observable>(stream).registerObserver(stream_observer);
         cast<DelayedObservable>(stream).observersReady();

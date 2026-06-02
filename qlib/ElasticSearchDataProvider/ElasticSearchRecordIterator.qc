@@ -25,7 +25,7 @@
 #! contains all public definitions in the ElasticSearchDataProvider module
 public namespace ElasticSearchDataProvider {
 #! Defines the record iterator class for Table-based iterators
-public class ElasticSearchRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class ElasticSearchRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     public {
     }
 

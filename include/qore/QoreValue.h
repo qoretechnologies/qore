@@ -41,6 +41,7 @@
 #include <cstring>
 #include <cassert>
 #include <type_traits>
+#include <string>
 
 // ============================================================================
 // Legacy type definitions - kept for QoreLValue and binary module compatibility
@@ -58,12 +59,14 @@ typedef unsigned char valtype_t;
 #define QV_Node  (valtype_t)3  //!< for heap-allocated values
 #define QV_Ref   (valtype_t)4  //!< for references (when used with lvalues)
 #define QV_Enum  (valtype_t)5  //!< for enum values (stores const QoreEnumMember*)
+#define QV_Value (valtype_t)6  //!< for inline QoreValue storage in lvalues
 ///@}
 
 // Forward declarations
 class AbstractQoreNode;
 class QoreStringNode;
 class QoreString;
+class QoreEncoding;
 class ExceptionSink;
 class QoreTypeInfo;
 class QoreValue;
@@ -71,12 +74,21 @@ class RuntimeConfig;
 class QoreEnumMember;
 
 //! this is the union that stores values in QoreLValue (legacy - kept for QoreLValue compatibility)
+/** The may_alias attribute tells the compiler that pointers to this type may alias with any other
+    pointer type, preventing strict-aliasing-based misoptimizations when the same memory is accessed
+    through different pointer contexts (e.g., via LValueHelper's dual val/qv pointer pattern).
+*/
+#if defined(__GNUC__) || defined(__clang__)
+union __attribute__((may_alias)) qore_value_u {
+#else
 union qore_value_u {
+#endif
     bool b;                     //!< for boolean values
     int64 i;                    //!< for integer values
     double f;                   //!< for double values
     AbstractQoreNode* n;        //!< for all heap-allocated values
     const QoreEnumMember* em;   //!< for enum member pointers (QV_Enum)
+    uint64_t qv;                //!< for inline QoreValue bits (QV_Value)
 };
 
 // ============================================================================
@@ -235,9 +247,12 @@ namespace detail {
  * TAG ALLOCATION (bits 63-48):
  *   < 0xFFC0:      Encoded doubles (raw bits + 2^48)
  *   0xFFC0-0xFFC6: Short strings (length in bits 51-48)
+ *   0xFFC7-0xFFCF: Reserved by the short-string decoder family
  *   0xFFF9:        48-bit signed integers
  *   0xFFFA:        Pointers to AbstractQoreNode
  *   0xFFFB:        Special values (nothing=0, null=1, false=2, true=3)
+ *   0xFFFD:        Enum member pointers
+ *   0xFFFE-0xFFFF: Reserved for future plugin immediate tags
  *
  * INTEGER RANGE: +/-140,737,488,355,328 (+/-2^47)
  *   - Covers virtually all practical integer usage
@@ -264,7 +279,11 @@ namespace detail {
     - pointers to AbstractQoreNode for heap-allocated values
     - special values (nothing, null, true, false)
 */
+#if defined(__GNUC__) || defined(__clang__)
+class __attribute__((may_alias)) QoreValue {
+#else
 class QoreValue {
+#endif
     friend class ValueHolder;
     friend class ValueOptionalRefHolder;
     friend class ValueEvalRefHolder;
@@ -283,14 +302,35 @@ private:
     //! Boundary for double detection: encoded doubles are always below this value.
     static constexpr uint64_t DOUBLE_BOUNDARY   = 0xFFF9000000000000ULL;
 
-    // Tag values (high 16 bits) - all must be >= DOUBLE_BOUNDARY
-    static constexpr uint64_t TAG_INT48         = 0xFFF9000000000000ULL;
-    static constexpr uint64_t TAG_POINTER       = 0xFFFA000000000000ULL;
-    static constexpr uint64_t TAG_SPECIAL       = 0xFFFB000000000000ULL;
+    // Non-double tag values and tag families.
+    static constexpr uint16_t TAG16_INT48       = 0xFFF9;
+    static constexpr uint16_t TAG16_POINTER     = 0xFFFA;
+    static constexpr uint16_t TAG16_SPECIAL     = 0xFFFB;
+    static constexpr uint16_t TAG16_ENUM        = 0xFFFD;
+    static constexpr uint16_t TAG12_SHORTSTR    = 0xFFC;
+    static constexpr uint16_t TAG16_SHORTSTR_FIRST = 0xFFC0;
+    static constexpr uint16_t TAG16_SHORTSTR_LAST  = 0xFFCF;
+    static constexpr uint16_t TAG16_PLUGIN_IMMEDIATE_FIRST = 0xFFFE;
+    static constexpr uint16_t TAG16_PLUGIN_IMMEDIATE_LAST  = 0xFFFF;
+
+    static constexpr uint64_t TAG_INT48         = static_cast<uint64_t>(TAG16_INT48) << 48;
+    static constexpr uint64_t TAG_POINTER       = static_cast<uint64_t>(TAG16_POINTER) << 48;
+    static constexpr uint64_t TAG_SPECIAL       = static_cast<uint64_t>(TAG16_SPECIAL) << 48;
     //! Short strings: 0xFFC + (length in bits 48-50), so 0xFFC0-0xFFC6
-    static constexpr uint64_t TAG_SHORTSTR_BASE = 0xFFFC000000000000ULL;
+    static constexpr uint64_t TAG_SHORTSTR_BASE = static_cast<uint64_t>(TAG12_SHORTSTR) << 52;
     //! Enum values: stores pointer to QoreEnumMember, zero allocation, zero ref-counting
-    static constexpr uint64_t TAG_ENUM          = 0xFFFD000000000000ULL;
+    static constexpr uint64_t TAG_ENUM          = static_cast<uint64_t>(TAG16_ENUM) << 48;
+
+    static_assert(TAG16_SHORTSTR_LAST < TAG16_INT48,
+        "short-string tag family must remain below the non-double value tag boundary");
+    static_assert(TAG16_INT48 < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "inline integer tag must not collide with plugin immediate tags");
+    static_assert(TAG16_POINTER < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "pointer tag must not collide with plugin immediate tags");
+    static_assert(TAG16_SPECIAL < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "special-value tag must not collide with plugin immediate tags");
+    static_assert(TAG16_ENUM < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "enum tag must not collide with plugin immediate tags");
 
     // Masks
     static constexpr uint64_t TAG_MASK          = 0xFFFF000000000000ULL;
@@ -443,6 +483,30 @@ public:
         return bits == 0 || tag() == TAG_SPECIAL;
     }
 
+    //! First reserved high-16-bit tag for future plugin immediates.
+    DLLLOCAL static constexpr uint16_t firstPluginImmediateTag() noexcept {
+        return TAG16_PLUGIN_IMMEDIATE_FIRST;
+    }
+
+    //! Last reserved high-16-bit tag for future plugin immediates.
+    DLLLOCAL static constexpr uint16_t lastPluginImmediateTag() noexcept {
+        return TAG16_PLUGIN_IMMEDIATE_LAST;
+    }
+
+    //! Returns true if a high-16-bit tag is reserved for future plugin immediates.
+    DLLLOCAL static constexpr bool isReservedPluginImmediateTag(uint16_t tag) noexcept {
+        return tag >= TAG16_PLUGIN_IMMEDIATE_FIRST && tag <= TAG16_PLUGIN_IMMEDIATE_LAST;
+    }
+
+    //! Returns true if a high-16-bit tag is owned by the built-in QoreValue encoding.
+    DLLLOCAL static constexpr bool isBuiltinNanboxTag(uint16_t tag) noexcept {
+        return tag == TAG16_INT48
+            || tag == TAG16_POINTER
+            || tag == TAG16_SPECIAL
+            || (tag >= TAG16_SHORTSTR_FIRST && tag <= TAG16_SHORTSTR_LAST)
+            || tag == TAG16_ENUM;
+    }
+
     // ========================================================================
     // Value extraction (fast, no type conversion)
     // ========================================================================
@@ -483,16 +547,84 @@ public:
     // Short string operations
     // ========================================================================
 
-    //! Try to create a short string inline. Returns false if string is too long.
+    //! Try to create a short string inline.
+    /** @param out receives the inline value on success
+        @param str string bytes to store
+        @param len byte length of \a str
+        @return true if the string fits inline, false otherwise
+    */
     DLLEXPORT static bool tryMakeShortString(QoreValue& out, const char* str, size_t len);
 
-    //! Create a short string (asserts if too long)
+    //! Create a short string.
+    /** @param str string bytes to store
+        @param len byte length of \a str
+        @return inline string value
+        @note asserts if \a len is greater than SHORTSTR_MAX_BYTES
+    */
     DLLEXPORT static QoreValue makeShortString(const char* str, size_t len);
+
+    //! Create a Qore string value using default encoding.
+    /** @param str string bytes to store
+        @param len byte length of \a str
+        @return string value, using inline storage when the effective encoding is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const char* str, size_t len);
+
+    //! Create a Qore string value using default encoding.
+    /** @param str null-terminated string bytes to store
+        @return string value, using inline storage when the effective encoding is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const char* str);
+
+    //! Create a Qore string value with the given encoding.
+    /** @param str string bytes to store
+        @param len byte length of \a str
+        @param enc string encoding; QCS_DEFAULT is used when null
+        @return string value, using inline storage when \a enc is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const char* str, size_t len, const QoreEncoding* enc);
+
+    //! Create a Qore string value with the given encoding.
+    /** @param str null-terminated string bytes to store
+        @param enc string encoding; QCS_DEFAULT is used when null
+        @return string value, using inline storage when \a enc is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const char* str, const QoreEncoding* enc);
+
+    //! Create a Qore string value using default encoding.
+    /** @param str string bytes to store
+        @return string value, using inline storage when the effective encoding is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const std::string& str);
+
+    //! Create a Qore string value with the given encoding.
+    /** @param str string bytes to store
+        @param enc string encoding; QCS_DEFAULT is used when null
+        @return string value, using inline storage when \a enc is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const std::string& str, const QoreEncoding* enc);
+
+    //! Create a UTF-8 Qore string value.
+    /** @param str UTF-8 string bytes to store
+        @param len byte length of \a str
+        @return UTF-8 string value, using inline storage when the byte length fits
+    */
+    DLLEXPORT static QoreValue makeUtf8StringValue(const char* str, size_t len);
+
+    //! Create a UTF-8 Qore string value.
+    /** @param str null-terminated UTF-8 string bytes to store
+        @return UTF-8 string value, using inline storage when the byte length fits
+    */
+    DLLEXPORT static QoreValue makeUtf8StringValue(const char* str);
 
     //! Get length of short string (asserts if not a short string)
     DLLLOCAL size_t shortStringLen() const {
         assert(isShortString());
-        return (bits >> 48) & 0xF;
+        size_t len = (bits >> 48) & 0xF;
+        if (len > SHORTSTR_MAX_BYTES) {
+            len = SHORTSTR_MAX_BYTES;
+        }
+        return len;
     }
 
     //! Extract short string into buffer (must have space for at least 7 bytes)
@@ -568,7 +700,7 @@ public:
     DLLEXPORT bool isEqualSoft(const QoreValue& other, ExceptionSink* xsink) const;
 
     //! Value comparison (checks if same pointer for nodes)
-    DLLEXPORT bool isEqualValue(const QoreValue& other);
+    DLLEXPORT bool isEqualValue(const QoreValue& other) const;
 
     // ========================================================================
     // Value assignment and manipulation

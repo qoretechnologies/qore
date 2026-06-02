@@ -37,6 +37,8 @@
 extern QoreListNode* ARGV, * QORE_ARGV;
 extern QoreHashNode* ENV;
 
+#include <deque>
+
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -62,6 +64,7 @@ class QoreSandboxManager;
 #include <cstdarg>
 #include <map>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include <set>
 
@@ -89,21 +92,49 @@ private:
     qore_ns_private* ns;
 };
 
-// local variable container
-typedef safe_dslist<LocalVar*> local_var_list_t;
-
 // expression type
 typedef StatementBlock* q_exp_t;
 
-class LocalVariableList : public local_var_list_t {
+// Local-variable arena: owns the LocalVar objects created via
+// `qore_program_private::createLocalVar` for the lifetime of the
+// Program.  Previously a `safe_dslist<LocalVar*>` with per-element
+// `new LocalVar` + list-node allocation; replaced with a
+// `std::deque<LocalVar>` because:
+//
+//   1. AOT batch loading allocates millions of LocalVars during
+//      `setupFromAOTMetadata` (~5 per variant × 656k variants for
+//      qwf), and the per-element malloc+list-push was ~30% of
+//      readAndSetupVariantSignature time.
+//   2. `std::deque` gives stable pointers across push_back (unlike
+//      `std::vector`), so existing consumers that hold `LocalVar*`
+//      keep working.  Deque allocates chunks (~4KB) rather than
+//      one allocation per LocalVar → amortized O(1) without the
+//      per-element allocator overhead.
+//   3. Deque's destructor destroys the LocalVars in-place when the
+//      Program ends — replaces the manual `for (auto v : ...) delete v`
+//      loop in the old `LocalVariableList` dtor.
+//
+// Thread-safety note: this container was a `safe_dslist` with
+// whatever concurrency guarantees that gave.  In practice the only
+// caller that mutates is `createLocalVar`, which is only invoked
+// during parse/AOT-deserialization (single-threaded boot phase).
+// No runtime thread iterates the arena during user execution.
+class LocalVariableList : private std::deque<LocalVar> {
 public:
-    DLLLOCAL LocalVariableList() {
+    using std::deque<LocalVar>::size;
+    using std::deque<LocalVar>::empty;
+    using std::deque<LocalVar>::begin;
+    using std::deque<LocalVar>::end;
+    using std::deque<LocalVar>::iterator;
+    using std::deque<LocalVar>::const_iterator;
+
+    DLLLOCAL LocalVar* emplace(const char* name, const QoreTypeInfo* typeInfo) {
+        std::deque<LocalVar>::emplace_back(name, typeInfo);
+        return &std::deque<LocalVar>::back();
     }
 
-    DLLLOCAL ~LocalVariableList() {
-        for (local_var_list_t::iterator i = begin(), e = end(); i != e; ++i) {
-            delete *i;
-        }
+    DLLLOCAL void clear() {
+        std::deque<LocalVar>::clear();
     }
 };
 
@@ -225,6 +256,13 @@ public:
     */
     DLLLOCAL int dbgStep(const StatementBlock* blockStatement, const AbstractStatement* statement, ExceptionSink* xsink);
     /**
+        Executed for source-stripped IR synthetic block markers.  These markers
+        provide AST-compatible onBlock events while stepping, but must not be
+        used for run-to-statement or breakpoint matching because their metadata
+        identity is line-derived and can collide with the real statement marker.
+    */
+    DLLLOCAL int dbgSyntheticBlockStep(const StatementBlock* blockStatement, ExceptionSink* xsink);
+    /**
         Executed when a function is entered. If step-over is requested then flag is cleared not to break
     */
     DLLLOCAL void dbgFunctionEnter(const StatementBlock* statement, ExceptionSink* xsink);
@@ -274,6 +312,10 @@ public:
         return runState != DBG_RS_DETACH
             || attachFlag.load(std::memory_order_acquire)
             || breakFlag.load(std::memory_order_acquire);
+    }
+
+    DLLLOCAL bool hasBreakFlag() const {
+        return breakFlag;
     }
 
 private:
@@ -366,6 +408,21 @@ class qore_program_private_base {
 public:
     LocalVariableList local_var_list;
 
+    //! Interned `argv` LocalVar shared across every AOT-deserialized variant.
+    //! Every variant passes the identical `("argv", autoListOrNothingTypeInfo)`
+    //! pair to createLocalVar — in qwf that's 656 k variants × 1 = 656 k
+    //! emplaces on the shared deque.  Sharing one LocalVar is safe because
+    //! runtime evaluation identifies variables by (LocalVar*, stack frame),
+    //! and argv is instantiated per-call on the thread-local stack, so the
+    //! shared pointer never aliases between concurrent invocations.
+    LocalVar* shared_aot_argv = nullptr;
+
+    //! Interned `self` LocalVar per class.  All variants of a given class's
+    //! methods pass the same `("self", classTypeInfo)` pair — sharing one
+    //! per class removes ~(methods-per-class) emplaces × (classes) off the
+    //! hot path.  Same safety argument as shared_aot_argv.
+    std::unordered_map<const QoreClass*, LocalVar*> shared_aot_self;
+
     // for the thread counter, used only with plock
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
@@ -416,6 +473,29 @@ public:
     // modules loadded with parse commands
     strset_t parse_modules;
 
+    struct ModuleParseCommand {
+        std::string module;
+        std::string command;
+    };
+
+    //! `%module-cmd(<module>) <command>` directives executed while parsing this Program.
+    /** Source-stripped AOT artifacts must replay these commands because they can
+        mutate parser/runtime state outside the serialized namespace tree (for
+        example JNI classpath/import commands that create dynamic classes).
+    */
+    std::vector<ModuleParseCommand> module_parse_commands;
+
+    //! per-Program module search-path lists populated by %prepend-module-path and %append-module-path
+    /** Stored in insertion order (most-recently-prepended path sits at index 0 for prepended_module_paths).
+        Consulted by QoreModuleManager::loadModuleIntern's path search: prepended paths first,
+        then the process-global moduleDirList, then appended paths last.
+        Serialised into AOT binaries (QORE_AOT_FEAT_MODULE_PATH_LISTS) so AOT-compiled modules
+        can resolve their dependencies without requiring QORE_MODULE_DIR at runtime.
+    */
+    std::vector<std::string> prepended_module_paths;
+    //! per-Program appended module search paths (see prepended_module_paths)
+    std::vector<std::string> appended_module_paths;
+
     // parse lock, making parsing actions atomic and thread-safe, also for runtime thread attachment
     mutable QoreThreadLock plock;
 
@@ -444,8 +524,90 @@ public:
         parsing_in_progress : 1,
         ns_const : 1,
         ns_vars : 1,
-        expression_mode : 1
+        expression_mode : 1,
+        parsing_stub_declarations : 1
         ;
+
+    qore_exec_mode_t exec_mode = QEM_AST;
+    bool user_requested_exec_mode = false;
+    bool ir_dump = false;
+    bool ir_fallback_warn = false;
+    bool ir_fallback_warned = false;
+    bool ir_fallback_report = false;
+
+    // IR fallback tracking - counts by category
+    mutable QoreThreadLock ir_fallback_lock;
+    typedef std::map<std::string, int> ir_fallback_counts_t;
+    mutable ir_fallback_counts_t ir_fallback_counts;
+
+    struct PluginFallbackSiteInfo {
+        std::string file;
+        int line = -1;
+        std::string operation_name;
+        std::string lhs_type;
+        std::string rhs_type;
+        std::string reason;
+    };
+
+    mutable QoreThreadLock plugin_fallback_lock;
+    mutable std::deque<PluginFallbackSiteInfo> plugin_fallback_sites;
+
+    DLLLOCAL void recordPluginFallbackSite(PluginFallbackSiteInfo&& info, size_t limit) const {
+        if (!limit) {
+            return;
+        }
+        AutoLocker al(plugin_fallback_lock);
+        if (plugin_fallback_sites.size() >= limit) {
+            size_t drop = plugin_fallback_sites.size() - limit + 1;
+            plugin_fallback_sites.erase(plugin_fallback_sites.begin(), plugin_fallback_sites.begin() + drop);
+        }
+        plugin_fallback_sites.push_back(std::move(info));
+    }
+
+    DLLLOCAL std::vector<PluginFallbackSiteInfo> getPluginFallbackSites() const {
+        AutoLocker al(plugin_fallback_lock);
+        return std::vector<PluginFallbackSiteInfo>(plugin_fallback_sites.begin(), plugin_fallback_sites.end());
+    }
+
+    DLLLOCAL void clearPluginFallbackSites() const {
+        AutoLocker al(plugin_fallback_lock);
+        plugin_fallback_sites.clear();
+    }
+
+    //! Records an IR fallback event for later reporting
+    DLLLOCAL void recordIRFallback(const std::string& reason) const {
+        // Always bump the counter under ir_fallback_report so tests can
+        // observe + assert on the fallback surface.  Also emit on
+        // QORE_IR_TRACE_FALLBACK=1 so ad-hoc investigations can see
+        // every fallback event without needing the C++ API.
+        if (ir_fallback_report) {
+            AutoLocker al(ir_fallback_lock);
+            ir_fallback_counts[reason]++;
+        }
+        if (getenv("QORE_IR_TRACE_FALLBACK")) {
+            fprintf(stderr, "[ir-fallback] %s\n", reason.c_str());
+            fflush(stderr);
+        }
+    }
+
+    //! Prints the IR fallback report to stderr
+    DLLLOCAL void printIRFallbackReport() const {
+        if (!ir_fallback_report) {
+            return;
+        }
+        AutoLocker al(ir_fallback_lock);
+        if (ir_fallback_counts.empty()) {
+            return;
+        }
+        printe("\n=== IR Fallback Report ===\n");
+        int total = 0;
+        for (const auto& entry : ir_fallback_counts) {
+            printe("  %s: %d\n", entry.first.c_str(), entry.second);
+            total += entry.second;
+        }
+        printe("  Total fallbacks: %d\n", total);
+        printe("==========================\n");
+    }
 
     typedef std::set<q_exp_t> q_exp_set_t;
     q_exp_set_t exp_set;
@@ -515,6 +677,7 @@ public:
             ns_const(false),
             ns_vars(false),
             expression_mode(false),
+            parsing_stub_declarations(false),
             pwo(n_parse_options),
             pgm(n_pgm) {
         printd(QPP_DBG_LVL, "qore_program_private_base::qore_program_private_base() this: %p pgm: %p po: " QLLD "\n",
@@ -529,6 +692,9 @@ public:
             TZ = QTZM.getLocalZoneInfo();
             newProgram();
         }
+        // Apply parse-option implications once pwo.parse_options is fully populated
+        // (setParent may OR in inherited restrictions from the parent Program).
+        applyParseOptionImplications();
 
         // initialize global vars
         // check if PO_NO_EXTERNAL_INFO is set - if so, provide empty values for ARGV, QORE_ARGV, and ENV
@@ -585,8 +751,38 @@ public:
         return pwo.parse_options & ~po & ~PO_FREE_STYLE_OPTIONS;
     }
 
+    // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
+    // (currently: PO_MODERN implies QoreParseOptions::NO_SUMMARIZE, which lives at bit 69)
+    DLLLOCAL void applyParseOptionImplications() {
+        if ((pwo.parse_options & PO_MODERN) == PO_MODERN) {
+            pwo.parse_options |= QoreParseOptions::NO_SUMMARIZE;
+        }
+    }
+
+    // Decide whether a filename should auto-enable %modern during parseFile().
+    // Returns false if the basename's extension is exactly ".q" (legacy is the
+    // only opt-out based on extension) or if the environment variable
+    // QORE_OLD_STYLE_DEFAULT is set to a non-empty, non-"0" value (global
+    // escape hatch for users migrating legacy codebases). Otherwise returns
+    // true, so all other extensions — .qr, .qc, .qm, .qtest, .qsd, .qfd, .qrd,
+    // .qore, or no extension at all — automatically get PO_MODERN.
+    DLLLOCAL static bool should_auto_enable_modern(const char* filename) {
+        const char* env = getenv("QORE_OLD_STYLE_DEFAULT");
+        if (env && *env && strcmp(env, "0") != 0) {
+            return false;
+        }
+        const char* base = strrchr(filename, '/');
+        base = base ? base + 1 : filename;
+        const char* dot = strrchr(base, '.');
+        if (dot && !strcmp(dot, ".q")) {
+            return false;
+        }
+        return true;
+    }
+
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options = po;
+        applyParseOptionImplications();
     }
 
     DLLLOCAL bool checkSetParseOptions(const QoreParseOptions& po) {
@@ -597,11 +793,29 @@ public:
 
     DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options |= po;
+        applyParseOptionImplications();
     }
 
     DLLLOCAL void addParseModule(const char* mod) {
         parse_modules.insert(mod);
     }
+
+    DLLLOCAL void addModuleParseCommand(const char* mod, const QoreString& cmd) {
+        module_parse_commands.push_back(ModuleParseCommand{mod ? mod : "", cmd.c_str()});
+    }
+
+    //! Applies a %prepend-module-path / %append-module-path directive argument to this Program.
+    /** Expands ${NAME} variable references (predefined macros + process environment) in `raw_path`,
+        de-duplicates against the current list, and prepends/appends the expanded absolute path.
+
+        @param prepend true for %prepend-module-path (new path added at index 0); false for %append-module-path
+        @param raw_path the raw quoted-or-unquoted argument as captured by the scanner; leading and
+               trailing whitespace and surrounding double-quotes are stripped
+        @param loc parse location for error reporting
+
+        @return 0 on success, -1 on parse error (parseException raised via parse_error)
+    */
+    DLLLOCAL int applyModulePathDirective(bool prepend, std::string raw_path, const QoreProgramLocation& loc);
 
 protected:
     typedef vector_map_t<const char*, AbstractQoreProgramExternalData*> extmap_t;
@@ -670,6 +884,11 @@ class QoreBreakpoint;
 
 class qore_program_private : public qore_program_private_base {
 public:
+    //! Returns true if a debugger is currently attached to this program
+    DLLLOCAL bool hasDebuggerAttached() const {
+        return dpgm != nullptr;
+    }
+
     typedef std::map<const char*, int, ltstr> section_offset_map_t;
     // map for line to statement
     typedef std::map<int, AbstractStatement*> sline_statement_map_t;
@@ -1111,6 +1330,34 @@ public:
     // caller must have grabbed the lock and put the current program on the program stack
     DLLLOCAL int internParseCommit(bool standard_parse = true);
 
+    // Validate IR/JIT execution mode requirements (must use PO_MODERN)
+    // Called at parse completion to ensure exec mode doesn't degrade silently at runtime
+    static void ensureIrExecMode(qore_program_private* priv, ExceptionSink* xsink) {
+        // JIT/IR/Tiered exec modes only support PO_MODERN; fallback to AST otherwise.
+        if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT || priv->exec_mode == QEM_TIERED)
+            && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
+
+            // If user explicitly requested IR or JIT mode, that's an error condition
+            if (priv->user_requested_exec_mode && priv->exec_mode != QEM_TIERED) {
+                const char* mode_str = priv->exec_mode == QEM_IR ? "IR" : "JIT";
+                if (xsink) {
+                    xsink->raiseException("EXEC-MODE-ERROR", "Cannot execute in %s mode: code must use %%modern "
+                        "(requires %%new-style, %%require-types, %%strict-args, and %%strong-encapsulation). "
+                        "Please add '%%modern' directive to enable optimized execution modes.", mode_str);
+                }
+                return;
+            }
+
+            // For tiered (default) or if not explicitly requested, silently degrade
+            if (!priv->ir_fallback_warned) {
+                printd(5, "IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
+                priv->ir_fallback_warned = true;
+                priv->recordIRFallback("parse: requires %modern (PO_MODERN)");
+            }
+            priv->exec_mode = QEM_AST;
+        }
+    }
+
     DLLLOCAL int parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
         ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
         assert(xsink);
@@ -1126,6 +1373,12 @@ public:
 
         // finalize parsing, back out or commit all changes
         int rc = internParseCommit();
+
+        // Validate exec mode immediately after parse completion
+        // (IR/JIT modes require PO_MODERN; fail explicitly if user requested but conditions not met)
+        if (!*xsink) {
+            ensureIrExecMode(this, xsink);
+        }
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -1200,6 +1453,11 @@ public:
             // finalize parsing, back out or commit all changes
             internParseCommit();
 
+            // Validate exec mode (IR/JIT requires %modern)
+            if (!*xsink) {
+                ensureIrExecMode(this, xsink);
+            }
+
 #ifdef DEBUG
             parseSink = nullptr;
 #endif
@@ -1256,6 +1514,11 @@ public:
         // parse text given
         if (!internParsePending(xsink, code, label, orig_src, offset))
             internParseCommit();   // finalize parsing, back out or commit all changes
+
+        // Validate exec mode (IR/JIT requires %modern)
+        if (!*xsink) {
+            ensureIrExecMode(this, xsink);
+        }
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -1407,10 +1670,12 @@ public:
         }
         ON_BLOCK_EXIT(fclose, fp);
 
-        // check for .qr extension and auto-enable modern mode
-        size_t len = strlen(filename);
-        if (len > 3 && !strcmp(filename + len - 3, ".qr")) {
+        // Auto-enable %modern for every file except when the extension is exactly
+        // '.q' (legacy by design) or the QORE_OLD_STYLE_DEFAULT env var is set to
+        // disable the default globally.  See should_auto_enable_modern().
+        if (should_auto_enable_modern(filename)) {
             pwo.parse_options |= PO_MODERN;
+            applyParseOptionImplications();
             pgm->setWarningMask(QP_WARN_ALL);
         }
 
@@ -1581,8 +1846,17 @@ public:
         if (run) {
             if (!tlpd->inst) {
                 doTopLevelInstantiation(*tlpd);
-            } else if (pwo.parse_options & PO_ALLOW_REPARSE) {
-                // In REPL mode, check if there are new local variables to instantiate
+            } else {
+                // Catch up on new top-level vars added after the tlpd was first
+                // initialized. Two scenarios:
+                //  1. REPL mode (PO_ALLOW_REPARSE): new statements may add vars.
+                //  2. A runtime context-switch into this program fired before its
+                //     parse finished — e.g. a reflection callback during another
+                //     module's init creates the tlpd with a partial LVList, and
+                //     the remaining top-level vars (like `x` in `%requires Foo;
+                //     string x = ...;`) are added to the LVList afterwards.
+                //     Without this, those vars never get instantiated and any
+                //     later access walks off the lvstack.
                 const LVList* lvl = sb.getLVList();
                 if (lvl && lvl->size() > tlpd->inst_count) {
                     doTopLevelInstantiation(*tlpd);
@@ -1728,9 +2002,14 @@ public:
 
         QoreStringNodeHolder d(desc);
         if (!requires_exception) {
+            ExceptionSink* sink = parseSink ? parseSink : pendingParseSink;
+            if (!sink) {
+                pendingParseSink = new ExceptionSink;
+                sink = pendingParseSink;
+            }
             if ((only_first_except && !exceptions_raised) || !only_first_except) {
                 QoreException *ne = new ParseException(loc, err, d.release());
-                parseSink->raiseException(ne);
+                sink->raiseException(ne);
             }
             exceptions_raised++;
         }
@@ -1992,6 +2271,18 @@ public:
 
     DLLLOCAL void importHashDecl(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
             const char* new_name = nullptr, q_setpub_t set_pub = CSP_UNCHANGED, bool reexport = false);
+
+    //! Returns true while qcc --stub files are being parsed as declaration-only sources.
+    DLLLOCAL bool isParsingStubDeclarations() const {
+        return parsing_stub_declarations;
+    }
+
+    //! Sets qcc --stub declaration-only parse mode and returns the previous value.
+    DLLLOCAL bool setParsingStubDeclarations(bool v) {
+        bool old = parsing_stub_declarations;
+        parsing_stub_declarations = v;
+        return old;
+    }
 
     DLLLOCAL const char* addString(const char* str) {
         str_set_t::iterator i = str_set.lower_bound(str);
@@ -2406,6 +2697,7 @@ public:
     DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         QoreParseOptions rv = pgm.priv->pwo.parse_options;
         pgm.priv->pwo.parse_options = po;
+        pgm.priv->applyParseOptionImplications();
         return rv;
     }
 
@@ -2591,6 +2883,16 @@ public:
         return statementIds[statementId-1];
     }
 
+    DLLLOCAL void getRegisteredStatementLocations(std::vector<const QoreProgramLocation*>& locs) const {
+        AutoLocker al(&plock);
+        locs.reserve(locs.size() + statementIds.size());
+        for (const AbstractStatement* stmt : statementIds) {
+            if (stmt && stmt->loc) {
+                locs.push_back(stmt->loc);
+            }
+        }
+    }
+
     DLLLOCAL QoreListNode* getStatementIds(ExceptionSink* xsink) const {
         ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), xsink);
         AutoLocker al(&plock);
@@ -2638,6 +2940,10 @@ public:
     }
 
     DLLLOCAL void addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement* statement, int offs, const char* section, int sectionOffs);
+    DLLLOCAL AbstractStatement* findStatementInIndexIntern(const name_section_sline_statement_map_t& statementIndex,
+            const char* key, int line) const;
+    DLLLOCAL AbstractStatement* findIndexedStatementForLocation(const char* file, const char* source,
+            int start_line, int offset) const;
     DLLLOCAL static void registerStatement(QoreProgram* pgm, AbstractStatement* statement, bool addToIndex);
     DLLLOCAL QoreHashNode* getSourceIndicesIntern(name_section_sline_statement_map_t* statementIndex, ExceptionSink* xsink) const;
     DLLLOCAL QoreHashNode* getSourceLabels(ExceptionSink* xsink) {

@@ -3,17 +3,18 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/RestClientDataProvider
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/ConnectionProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires RestClientDataProvider
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ConnectionProvider
 %requires json
 
 %exec-class GenericApiCallAutoInjectionTest
@@ -173,7 +174,7 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
                 DataProviderActionCatalog::getActionHash(app_name);
             *hash<DataProviderActionInfo> a = actions{AbstractDataProvider::GenericApiCallActionName};
             assertTrue(exists a, "make-api-call should be auto-registered");
-            assertEq(DPAT_API, a.action_code);
+            assertEq(cast<int>(DPAT_API), cast<int>(a.action_code));
             assertEq("/" + AbstractDataProvider::GenericApiCallChildName, a.path);
             assertEq("Make an API call", a.display_name);
 

@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTConstFoldingTest
+
+class AOTConstFoldingTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTConstFoldingTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT module folded constants", \testAOTModuleFoldedConstants());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTConstFoldingMod {
+    version = \"1.0\";
+    desc = \"AOT folded constant regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTConstFoldingMod {
+    public const FLAGS = (1, 2, 4, 8);
+    public const MASK = foldl $1 | $2, FLAGS;
+    public const NAMES = (\"a\", \"b\", \"c\");
+    public const NAME_HASH = map {$1: True}, NAMES;
+    public const HAS_A = NAME_HASH{\"a\"};
+    public const NAME_COUNT = NAMES.size();
+    public const KV = {\"k1\": 10, \"k2\": 20};
+    public const RKV = map {$1.value: $1.key}, KV.pairIterator();
+    public const OS = \"linux\";
+    public const SEP = (OS == \"Windows\" ? \"\\\\\" : \"/\");
+    public const REL_DATE = P10Y4M200DT99H140S;
+    public const KV_KEYS = KV.keys();
+    public const BIG_FLAGS = FLAGS + (16,);
+    public const SELECTED = select FLAGS, $1 >= 4;
+
+    public string sub verify() {
+        if (MASK != 15) {
+            return \"bad mask\";
+        }
+        if (!HAS_A || NAME_COUNT != 3 || !NAME_HASH{\"b\"} || !NAME_HASH{\"c\"}) {
+            return \"bad name hash\";
+        }
+        if (RKV{\"10\"} != \"k1\" || RKV{\"20\"} != \"k2\") {
+            return \"bad reverse hash\";
+        }
+        if (SEP != \"/\") {
+            return \"bad sep\";
+        }
+        hash<auto> info = REL_DATE.info();
+        if (info.year != 10 || info.month != 4 || info.day != 200 || info.hour != 99
+                || info.minute != 0 || info.second != 140 || info.microsecond != 0) {
+            return \"bad date\";
+        }
+        if (KV_KEYS.size() != 2 || !KV{KV_KEYS[0]} || !KV{KV_KEYS[1]}) {
+            return \"bad keys\";
+        }
+        if (BIG_FLAGS.size() != 5 || BIG_FLAGS[4] != 16) {
+            return \"bad concat\";
+        }
+        if (SELECTED.size() != 2 || SELECTED[0] != 4 || SELECTED[1] != 8) {
+            return \"bad select\";
+        }
+        return \"ok\";
+    }
+}
+";
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    testAOTModuleFoldedConstants() {
+        TmpDir tmp("qore-aot-const-folding-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTConstFoldingMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern\n%requires AOTConstFoldingMod\nprintf(\"%s\\n\", AOTConstFoldingMod::verify());\n");
+        script.close();
+
+        string qmod_path = qmod_dir + "/AOTConstFoldingMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled folded-constant module: " + compile_out);
+
+        assertEq("ok\n", runModule(qmod_dir, script_path),
+            "AOT qmod preserves folded constant values");
+        assertEq("ok\n", runModule(src_dir, script_path),
+            "source module preserves folded constant values");
+    }
+}

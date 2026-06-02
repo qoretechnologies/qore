@@ -5,17 +5,18 @@
 %define NoJson
 %endtry
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/RestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires ConnectionProvider
+%requires Logger
+%requires HttpServerUtil
+%requires RestClient
 %ifndef NoJson
-%requires ../../../../qlib/ZeyosRestClient.qm
+%requires ZeyosRestClient
 %endif
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
+%requires HttpServerAsyncIo
+%requires HttpServer
 
 %requires qore >= 0.9.11
 

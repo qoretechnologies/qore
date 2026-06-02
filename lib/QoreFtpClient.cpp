@@ -41,6 +41,7 @@
 #include "qore/intern/QC_FtpDataPollOperation.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
 #include "qore/intern/SocketSyncPoll.h"
@@ -553,6 +554,24 @@ struct qore_ftp_private {
         }
     }
 
+    DLLLOCAL void cancelAsync(ExceptionSink* xsink) const {
+        // This intentionally does not touch ctrl_op / ctrl_op_obj.  It can be
+        // called while another thread is blocked in waitForCompletion() holding
+        // m; cancelByOwner() delivers onComplete(), wakes that waiter, and lets
+        // the normal locked disconnect path clean up ownership afterwards.
+        ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+        if (!*xsink && *ctl_obj) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
+                static_cast<AsyncIoControllerPriv*>(
+                    (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
+                xsink);
+            if (!*xsink && *ctl_priv) {
+                SimpleRefHolder<QoreStringNode> owner(new QoreStringNode(async_owner));
+                ctl_priv->cancelByOwner(*owner, xsink);
+            }
+        }
+    }
+
     DLLLOCAL void setNetworkFamily(int family) {
         this->family = family;
     }
@@ -862,7 +881,8 @@ struct qore_ftp_private {
             QoreHashNode* h = output->get<QoreHashNode>();
             QoreValue msg = h->getKeyValue("message");
             if (msg.getType() == NT_STRING) {
-                return msg.get<QoreStringNode>()->stringRefSelf();
+                QoreStringNodeValueHelper str(msg);
+                return str.getReferencedValue();
             }
         }
         return new QoreStringNode("");
@@ -889,7 +909,8 @@ struct qore_ftp_private {
             QoreHashNode* h = output->get<QoreHashNode>();
             QoreValue msg = h->getKeyValue("message");
             if (msg.getType() == NT_STRING) {
-                return msg.get<QoreStringNode>()->stringRefSelf();
+                QoreStringNodeValueHelper str(msg);
+                return str.getReferencedValue();
             }
         }
         return new QoreStringNode("");
@@ -1219,7 +1240,7 @@ struct qore_ftp_private {
         // it is safe to release our local ref here once the priv is adopted.
         SimpleRefHolder<QoreSocketObject> accepted_sock_holder(
             static_cast<QoreSocketObject*>(
-                accepted_obj->getReferencedPrivateData(CID_SOCKET, xsink)));
+                 accepted_obj->getReferencedPrivateData(CID_SOCKET, xsink)));
         QoreSocketObject* accepted_sock = *accepted_sock_holder;
         if (*xsink || !accepted_sock) {
             if (!*xsink) {
@@ -1717,7 +1738,14 @@ struct qore_ftp_private {
     }
 
     DLLLOCAL void disconnect() {
-        m.lock();
+        if (m.trylock()) {
+            ExceptionSink xsink;
+            cancelAsync(&xsink);
+            if (xsink) {
+                xsink.clear();
+            }
+            m.lock();
+        }
         disconnectIntern();
         m.unlock();
     }

@@ -1,0 +1,255 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%exec-class BenchGenericAotSpecialization
+
+# Benchmark kernels for deciding whether source-stripped AOT needs native
+# specialization per generic type-argument tuple.
+
+hashdecl BenchTiming {
+    string mode;
+    string kernel;
+    int inner;
+    int samples;
+    int warmup;
+    float min_ms;
+    float median_ms;
+    float mean_ms;
+    float max_ms;
+    float stdev_ms;
+    int checksum;
+}
+
+hashdecl BenchGenericResult<T> {
+    T value;
+    list<T> values;
+}
+
+class BenchGenericBox<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T echo(T value) {
+        T local = value;
+        self.value = local;
+        return self.value;
+    }
+}
+
+class BenchStaticChooser<T> {
+    static U choose<U>(T left, U right) {
+        return right;
+    }
+}
+
+T sub BenchGenericIdentity<T>(T value) {
+    T local = value;
+    return local;
+}
+
+int sub benchGenericClassMethod(int inner) {
+    BenchGenericBox<int> box(0);
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += box.echo(i);
+    }
+    return checksum;
+}
+
+int sub benchMethodGenericFunction(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += BenchGenericIdentity<int>(i);
+    }
+    return checksum;
+}
+
+int sub benchStaticGenericMethod(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += BenchStaticChooser<int>::choose<int>(i, i + 1);
+    }
+    return checksum;
+}
+
+int sub benchGenericHashdeclRecords(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        list<int> values = (i, i + 1, i + 2);
+        hash<BenchGenericResult<int>> result(("value": i, "values": values));
+        checksum += result.value + result.values[1];
+    }
+    return checksum;
+}
+
+int sub benchTypedListLiteral(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        list<int> values = (i, i + 1, i + 2);
+        checksum += values[1];
+    }
+    return checksum;
+}
+
+int sub benchPlainHashRecord(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        list<int> values = (i, i + 1, i + 2);
+        hash<auto> result = ("value": i, "values": values);
+        checksum += result.value + result.values[1];
+    }
+    return checksum;
+}
+
+int sub benchGenericHashdeclConstructOnly(int inner) {
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        list<int> values = (i, i + 1, i + 2);
+        hash<BenchGenericResult<int>> result(("value": i, "values": values));
+        checksum += i;
+    }
+    return checksum;
+}
+
+int sub benchGenericHashdeclAccessOnly(int inner) {
+    list<int> values = (1, 2, 3);
+    hash<BenchGenericResult<int>> result(("value": 1, "values": values));
+    int checksum = 0;
+    for (int i = 0; i < inner; i++) {
+        checksum += result.value + result.values[1];
+    }
+    return checksum;
+}
+
+hash<BenchTiming> sub measureKernel(string mode, string kernel, int inner, int samples, int warmup, code<int()> fn) {
+    int checksum = 0;
+    for (int i = 0; i < warmup; i++) {
+        checksum = fn();
+    }
+
+    list<float> timings_ms = ();
+    for (int i = 0; i < samples; i++) {
+        date start = now_us();
+        checksum = fn();
+        date finish = now_us();
+        timings_ms += get_duration_microseconds(finish - start) / 1000.0;
+    }
+
+    list<auto> sorted = sort(timings_ms);
+    int n = sorted.size();
+    float min_ms = sorted[0].toFloat();
+    float max_ms = sorted[n - 1].toFloat();
+    float median_ms = sorted[n / 2].toFloat();
+    float sum_ms = 0.0;
+    foreach auto timing in (sorted) {
+        sum_ms += timing.toFloat();
+    }
+    float mean_ms = sum_ms / n;
+    float sq_sum = 0.0;
+    foreach auto timing in (sorted) {
+        float t = timing.toFloat();
+        sq_sum += (t - mean_ms) * (t - mean_ms);
+    }
+
+    hash<BenchTiming> timing((
+        "mode": mode,
+        "kernel": kernel,
+        "inner": inner,
+        "samples": samples,
+        "warmup": warmup,
+        "min_ms": min_ms,
+        "median_ms": median_ms,
+        "mean_ms": mean_ms,
+        "max_ms": max_ms,
+        "stdev_ms": sqrt(sq_sum / n),
+        "checksum": checksum,
+    ));
+    return timing;
+}
+
+nothing sub printHeader() {
+    printf("%-20s %-28s %10s %10s %10s %10s %10s %10s %18s\n",
+        "mode", "kernel", "inner", "median_ms", "mean_ms", "min_ms", "max_ms", "stdev_ms", "checksum");
+    printf("%s\n", strmul("-", 130));
+}
+
+nothing sub printTiming(hash<BenchTiming> timing) {
+    printf("%-20s %-28s %10d %10.3f %10.3f %10.3f %10.3f %10.3f %18d\n",
+        timing.mode, timing.kernel, timing.inner, timing.median_ms, timing.mean_ms, timing.min_ms, timing.max_ms,
+        timing.stdev_ms, timing.checksum);
+}
+
+nothing sub usage() {
+    printf("usage: generic-aot-specialization.qr [--mode=NAME] [--samples=N] [--warmup=N] [--inner=N] "
+        "[--hash-inner=N] [--no-header]\n");
+}
+
+class BenchGenericAotSpecialization {
+    constructor() {
+        string mode = "qore";
+        int samples = 7;
+        int warmup = 2;
+        int inner = 400000;
+        int hash_inner = 50000;
+        bool header = True;
+
+        foreach string arg in (ARGV) {
+            if (arg =~ /^--mode=/) {
+                mode = arg.substr(7);
+            } else if (arg =~ /^--samples=/) {
+                samples = arg.substr(10).toInt();
+            } else if (arg =~ /^--warmup=/) {
+                warmup = arg.substr(9).toInt();
+            } else if (arg =~ /^--inner=/) {
+                inner = arg.substr(8).toInt();
+            } else if (arg =~ /^--hash-inner=/) {
+                hash_inner = arg.substr(13).toInt();
+            } else if (arg == "--no-header") {
+                header = False;
+            } else if (arg == "-h" || arg == "--help") {
+                usage();
+                exit(0);
+            } else {
+                stderr.printf("unknown argument: %s\n", arg);
+                usage();
+                exit(2);
+            }
+        }
+
+        if (samples <= 0 || warmup < 0 || inner <= 0 || hash_inner <= 0) {
+            stderr.printf("samples, inner, and hash-inner must be positive; warmup must be non-negative\n");
+            exit(2);
+        }
+
+        if (header) {
+            printHeader();
+        }
+
+        printTiming(measureKernel(mode, "generic_class_method", inner, samples, warmup,
+            int sub () { return benchGenericClassMethod(inner); }));
+        printTiming(measureKernel(mode, "method_generic_function", inner, samples, warmup,
+            int sub () { return benchMethodGenericFunction(inner); }));
+        printTiming(measureKernel(mode, "static_generic_method", inner, samples, warmup,
+            int sub () { return benchStaticGenericMethod(inner); }));
+        printTiming(measureKernel(mode, "generic_hashdecl_records", hash_inner, samples, warmup,
+            int sub () { return benchGenericHashdeclRecords(hash_inner); }));
+        printTiming(measureKernel(mode, "typed_list_literal", hash_inner, samples, warmup,
+            int sub () { return benchTypedListLiteral(hash_inner); }));
+        printTiming(measureKernel(mode, "plain_hash_record", hash_inner, samples, warmup,
+            int sub () { return benchPlainHashRecord(hash_inner); }));
+        printTiming(measureKernel(mode, "hashdecl_construct_only", hash_inner, samples, warmup,
+            int sub () { return benchGenericHashdeclConstructOnly(hash_inner); }));
+        printTiming(measureKernel(mode, "hashdecl_access_only", hash_inner, samples, warmup,
+            int sub () { return benchGenericHashdeclAccessOnly(hash_inner); }));
+    }
+}

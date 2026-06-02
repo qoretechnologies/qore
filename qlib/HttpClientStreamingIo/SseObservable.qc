@@ -64,7 +64,7 @@ obs.observersReady();
 
 namespace Priv {
 
-class SseNotifierPollOperation inherits Qore::AbstractPollOperation {
+class SseNotifierPollOperation inherits Qore::AbstractPollOperation<auto> {
     private {
         EventNotifier notifier;
         code<bool()> drain;
@@ -678,9 +678,11 @@ public class SseObservable inherits DataProvider::DelayedObservable {
 
     #! Deserializes SSE event data based on the serialization setting
     private auto deserializeData(string buf) {
+%ifndef NoJson
         if (serialization == "json") {
             return parse_json(buf);
         }
+%endif
         return buf;
     }
 }

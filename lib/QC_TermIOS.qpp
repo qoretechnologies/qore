@@ -549,9 +549,9 @@ int lflag = t.getLFlag();
 lflag &= ~ICANON;
 lflag &= ~ECHO;
 lflag &= ~ISIG;
-t.setLFlag(lflag);
-t.setCC(VMIN, 1);
-t.setCC(VTIME, 0);
+t.setLFlag(flag: lflag);
+t.setCC(offset: VMIN, value: 1);
+t.setCC(offset: VTIME, value: 0);
 stdin.setTerminalAttributes(TCSADRAIN, t);
 
 stdout.printf("Press any key: ");
@@ -698,10 +698,10 @@ lflag &= ~ICANON;
 lflag &= ~ECHO;
 # do not check for special input characters (INTR, QUIT, and SUSP)
 lflag &= ~ISIG;
-termios.setLFlag(lflag);
+termios.setLFlag(flag: lflag);
     @endcode
  */
-nothing TermIOS::setLFlag(softint flag) {
+nothing TermIOS::setLFlag(softint flag) [flags=NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
    s->set_lflag((int)flag);
    return QoreValue();
@@ -721,10 +721,10 @@ nothing TermIOS::setLFlag(softint flag) {
 int cflag = termios.getCFlag();
 cflag = (cflag & ~CSIZE) | CS8 | CSTOPB;
 cflag = (cflag | CLOCAL | CREAD) & ~CRTSCTS;
-termios.setCFlag(cflag);
+termios.setCFlag(flag: cflag);
     @endcode
  */
-nothing TermIOS::setCFlag(softint flag) {
+nothing TermIOS::setCFlag(softint flag) [flags=NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
    s->set_cflag((int)flag);
    return QoreValue();
@@ -744,10 +744,10 @@ nothing TermIOS::setCFlag(softint flag) {
 int oflag = termios.getOFlag();
 # translate linefeeds to crlf
 oflag |= ONLCR;
-termios.setOFlag(oflag);
+termios.setOFlag(flag: oflag);
     @endcode
  */
-nothing TermIOS::setOFlag(softint flag) {
+nothing TermIOS::setOFlag(softint flag) [flags=NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
    s->set_oflag((int)flag);
    return QoreValue();
@@ -767,10 +767,10 @@ nothing TermIOS::setOFlag(softint flag) {
 int iflag = termios.getIFlag();
 # ring bell on input queue full
 iflag |= IMAXBEL;
-termios.setIFlag(iflag);
+termios.setIFlag(flag: iflag);
     @endcode
  */
-nothing TermIOS::setIFlag(softint flag) {
+nothing TermIOS::setIFlag(softint flag) [flags=NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
    s->set_iflag((int)flag);
    return QoreValue();
@@ -780,7 +780,7 @@ nothing TermIOS::setIFlag(softint flag) {
 }
 
 //! Returns the integer value for the given control character from the given @ref tattr_control_character_constants "control character code"
-/** @param cc the @ref tattr_control_character_constants "control character code" for the character to retrieve
+/** @param offset the @ref tattr_control_character_constants "control character code" for the character to retrieve
 
     @return the integer value for the given control character from the given @ref tattr_control_character_constants "control character code"
 
@@ -790,16 +790,16 @@ nothing TermIOS::setIFlag(softint flag) {
     @par Example:
     @code{.py}
 # get minimum characters to return on a read
-int vmin = t.getCC(VMIN);
+int vmin = t.getCC(offset: VMIN);
 # get character input timer in 0.1 second increments
-int vtime = t.getCC(VTIME);
+int vtime = t.getCC(offset: VTIME);
     @endcode
 
     @throw TERMIOS-CC-ERROR the @ref tattr_control_character_constants "control character" is invalid
  */
-int TermIOS::getCC(softint cc) {
+int TermIOS::getCC(softint offset) [flags=NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
-   return s->get_cc(cc, xsink);
+   return s->get_cc(offset, xsink);
 #else
    return missing_method_error("TermIOS::getCC", "TERMIOS", xsink);
 #endif
@@ -815,15 +815,15 @@ int TermIOS::getCC(softint cc) {
     @par Example:
     @code{.py}
 # set minimum characters to return on a read
-t.setCC(VMIN, 1);
+t.setCC(offset: VMIN, value: 1);
 
 # set character input timer in 0.1 second increments (= no timer)
-t.setCC(VTIME, 0);
+t.setCC(offset: VTIME, value: 0);
     @endcode
 
     @throw TERMIOS-CC-ERROR the @ref tattr_control_character_constants "control character" is invalid
  */
-nothing TermIOS::setCC(softint offset, softint value) {
+nothing TermIOS::setCC(softint offset, softint value) [flags=NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
    s->set_cc(offset, (cc_t)value, xsink);
    return QoreValue();
@@ -840,10 +840,10 @@ nothing TermIOS::setCC(softint offset, softint value) {
 
     @par Example:
     @code{.py}
-bool b = termios.isEqual(termios2);
+bool b = termios.isEqual(termios: termios2);
     @endcode
  */
-bool TermIOS::isEqual(Termios[QoreTermIOS] termios) [flags=CONSTANT] {
+bool TermIOS::isEqual(Termios[QoreTermIOS] termios) [flags=CONSTANT,NAMED_ARGS] {
 #ifdef HAVE_TERMIOS_H
    return s->is_equal(*termios);
 #else

@@ -4,9 +4,18 @@
 %modern
 %allow-weak-references
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class ThreadObjectTest
+
+sub threadObjectDump(int sig) {
+    printf("=== THREAD_OBJECT_DUMP signal=%d pid=%d num_threads=%d thread_list=%Y ===\n",
+        sig, getpid(), num_threads(), thread_list());
+    printf("thread_stacks=%Y\n", get_all_thread_call_stacks());
+    printf("=== END THREAD_OBJECT_DUMP ===\n");
+    flush();
+}
 
 # this class implements a background thread that does not extend the scope of the object
 # and is shut down cleanly when the object goes out of scope - this allows objects
@@ -16,9 +25,11 @@ class TransparentObjectThreadTest {
     private:internal {
         Counter end(1);
         bool stop;
+        int sleep_us;
     }
 
-    constructor() {
+    constructor(int nsleep_us = 50000) {
+        sleep_us = nsleep_us;
         # we have to let the test method dereference the object before finishing the method
         # otherwise there is a race condition where the destructor is run in the background
         # thread and will wait on the end counter before it can be decremented
@@ -43,7 +54,7 @@ class TransparentObjectThreadTest {
 
         # loop until we are signaled to stop
         while (!self.stop) {
-            usleep(50ms);
+            usleep(self.sleep_us);
         }
     }
 }
@@ -58,10 +69,15 @@ class ThreadObjectTest inherits QUnit::Test {
         addTestCase("Test Queue", \testQueue());
         addTestCase("Test Thread", \testThread());
         addTestCase("Test TransparentObjectThreadTest", \transparentObjectThreadTest());
+        addTestCase("Test TransparentObjectThreadTest JIT cleanup", \transparentObjectThreadJitCleanupTest());
         set_return_value(main());
     }
 
     globalSetUp() {
+        if (getenv("QORE_THREAD_OBJECT_DUMP_ON_SIGNAL")) {
+            set_signal_handler(SIGUSR1, \threadObjectDump());
+        }
+
         threads = 5;
         iters = 2000;
     }
@@ -80,6 +96,13 @@ class ThreadObjectTest inherits QUnit::Test {
 
     transparentObjectThreadTest() {
         TransparentObjectThreadTest t();
+        assertTrue(True);
+    }
+
+    transparentObjectThreadJitCleanupTest() {
+        for (int i = 0; i < 1000; ++i) {
+            TransparentObjectThreadTest t(1000);
+        }
         assertTrue(True);
     }
 }

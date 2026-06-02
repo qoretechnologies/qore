@@ -62,18 +62,18 @@ extern QoreClass* QC_HASHITERATOR;
 
     @see HashKeyReverseIterator
  */
-qclass HashKeyIterator [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator];
+qclass HashKeyIterator [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator<auto>];
 
 //! Creates the hash iterator object
-/** @param h the hash to iterate
+/** @param hash_value the hash to iterate
 
     @par Example:
     @code{.py}
 HashKeyIterator hi(h);
     @endcode
  */
-HashKeyIterator::constructor(hash<auto> h) {
-   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(h), xsink);
+HashKeyIterator::constructor(hash<auto> hash_value) [flags=NAMED_ARGS] {
+   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(hash_value), xsink);
    p->setView(QoreHashIterator::VIEW_KEY);
    self->setPrivate(CID_HASHKEYITERATOR, p.release());
 }

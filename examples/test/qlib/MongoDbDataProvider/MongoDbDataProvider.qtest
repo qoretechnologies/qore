@@ -4,12 +4,13 @@
 %modern
 
 # Use relative paths for qlib modules to test current development version
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/RestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires ConnectionProvider
+%requires DataProvider
+%requires RestClient
 
 # mongodb builtin module - optional, may not be built if libmongoc is not available
 %try-module mongodb
@@ -18,7 +19,7 @@
 
 # Module under test - also optional since it requires mongodb
 %ifndef NoMongoDB
-%requires ../../../../qlib/MongoDbDataProvider
+%requires MongoDbDataProvider
 %endif
 
 %exec-class MongoDbDataProviderTest
@@ -40,6 +41,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
         setenv("QORE_MONGODB_VERBOSE", sprintf("%d", verbose));
         setenv("MONGOC_LOG_LEVEL", verbose > 2 ? "debug" : "warning");
 %ifndef NoMongoDB
+        addTestCase("typed API metadata test", \typedApiMetadataTest());
         addTestCase("connection test", \connectionTest());
         addTestCase("factory test", \factoryTest());
         addTestCase("data provider hierarchy test", \hierarchyTest());
@@ -70,6 +72,18 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
 %ifndef NoMongoDB
     private checkModule() {
         # Module is available, nothing to do
+    }
+
+    typedApiMetadataTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%requires MongoDbDataProvider
+
+sub typed_mongodb_provider(MongoDbDataProvider::MongoDbCollectionDataProvider provider) {
+    AbstractDataProviderRecordIterator<hash<auto>> iter = provider.searchRecords();
+    hash<auto> rec = iter.getValue();
+}
+", "mongodb data provider typed API");
     }
 
     private bool ensureConnection() {

@@ -16,4 +16,27 @@
 
     @section DEPRECATED
     Code with this flag is deprecated and may be removed in a future version of %Qore; if a variant with this flag is resolved at parse time, a @ref deprecated warning is raised (assuming this warning is enabled).
+
+    @section NAMED_ARGS
+    Builtin functions and methods with this flag accept @ref function_named_arguments "named-argument calls".
+    User-defined functions and methods accept named arguments automatically when their signature is resolved at parse
+    time; builtin variants must opt in explicitly so parameter names are not exposed as a public calling interface by
+    accident.
+
+    @par Example:
+    @code{.cpp}
+binary ws_encode_frame(data message, int opcode, softbool masked,
+        softbool fin = True, int rsv_bits = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // ...
+}
+    @endcode
+
+    Callers can then use the qpp parameter names at the call site:
+
+    @code{.py}
+binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: False, fin: True);
+    @endcode
+
+    @note Only fixed parameters are part of the named-argument surface. Varargs-only builtin variants should not use
+    this flag, and public parameter names should be reviewed before enabling it.
 */

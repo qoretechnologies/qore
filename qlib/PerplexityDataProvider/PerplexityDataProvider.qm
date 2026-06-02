@@ -33,6 +33,10 @@
 %requires(reexport) DataProvider
 %requires(reexport) PerplexityRestClient
 
+%try-module json
+%define NoJson
+%endtry
+
 module PerplexityDataProvider {
     version = "1.0";
     desc = "user module providing a data provider API for Perplexity AI services";

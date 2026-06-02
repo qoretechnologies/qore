@@ -1,0 +1,43 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFramePluginOps
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFramePluginOps {
+    constructor() {
+        Bench::BenchRunner r("dataframe_plugin_ops");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+        r.setup = sub () {
+            df = DataFrameBench::makeBufferFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::RowMask selected = ((df.column("status") == "active")
+                & (df.column("amount") >= 1000.0))
+                & ~(df.column("flag") == True);
+            DataFrame::DataFrame filtered = df[selected];
+            if (!filtered.numRows()) {
+                throw "BENCHMARK-ERROR", "dataframe_plugin_ops selected no rows";
+            }
+            list<auto> ids = filtered["id"];
+            if (ids[0] < 0) {
+                throw "BENCHMARK-ERROR", "dataframe_plugin_ops returned an invalid id";
+            }
+        };
+
+        exit(r.run());
+    }
+}

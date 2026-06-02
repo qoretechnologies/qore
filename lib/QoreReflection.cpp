@@ -34,6 +34,7 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/typed_hash_decl_private.h"
 
 const char* get_access_string(ClassAccess access) {
     switch (access) {
@@ -138,6 +139,55 @@ bool qore_type_code_has_varargs(const QoreTypeInfo* ti) {
     return code_type && code_type->hasVarArgs();
 }
 
+bool qore_type_is_parameterized(const QoreTypeInfo* ti) {
+    if (QoreTypeInfo::getParameterizedClassType(ti)) {
+        return true;
+    }
+    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    return hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl();
+}
+
+const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti) {
+    const QoreParameterizedClassTypeInfo* parameterized_type = QoreTypeInfo::getParameterizedClassType(ti);
+    if (parameterized_type) {
+        return &parameterized_type->getTypeArgs();
+    }
+    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    if (hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl()) {
+        return &typed_hash_decl_private::get(*hd)->getTypeArgs();
+    }
+    return nullptr;
+}
+
+bool qore_type_is_type_parameter(const QoreTypeInfo* ti) {
+    return qore_get_type_parameter_type_info(ti) != nullptr;
+}
+
+const QoreClass* qore_type_get_type_parameter_owner_class(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->getOwnerClass() : nullptr;
+}
+
+const TypedHashDecl* qore_type_get_type_parameter_owner_hashdecl(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->getOwnerHashDecl() : nullptr;
+}
+
+size_t qore_type_get_type_parameter_index(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->getIndex() : static_cast<size_t>(-1);
+}
+
+const char* qore_type_get_type_parameter_name(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->getParameterName().c_str() : nullptr;
+}
+
+bool qore_type_parameter_accepts_nothing(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->isOrNothing() : false;
+}
+
 bool qore_type_is_union(const QoreTypeInfo* ti) {
     return QoreTypeInfo::getUnionType(ti) != nullptr;
 }
@@ -178,6 +228,11 @@ bool QoreExternalVariant::isBuiltin() const {
     return !reinterpret_cast<const AbstractQoreFunctionVariant*>(this)->isUser();
 }
 
+bool QoreExternalVariant::isNamedCallable() const {
+    const AbstractQoreFunctionVariant* v = reinterpret_cast<const AbstractQoreFunctionVariant*>(this);
+    return v->isNamedCallable() && (!v->hasVarargs() || v->numParams());
+}
+
 bool QoreExternalVariant::hasBody() const {
     return reinterpret_cast<const AbstractQoreFunctionVariant*>(this)->hasBody();
 }
@@ -213,8 +268,21 @@ const name_vec_t& QoreExternalVariant::getParamNames() const {
 }
 
 const QoreExternalProgramLocation* QoreExternalVariant::getSourceLocation() const {
-    const UserVariantBase* uvb = reinterpret_cast<const AbstractQoreFunctionVariant*>(this)->getUserVariantBase();
-    return reinterpret_cast<const QoreExternalProgramLocation*>(uvb ? uvb->getUserSignature()->getParseLocation() : &loc_builtin);
+    const AbstractQoreFunctionVariant* v = reinterpret_cast<const AbstractQoreFunctionVariant*>(this);
+    const UserVariantBase* uvb = v->getUserVariantBase();
+    if (uvb) {
+        return reinterpret_cast<const QoreExternalProgramLocation*>(
+            uvb->getUserSignature()->getParseLocation());
+    }
+    // Builtin variant — prefer the per-variant .qpp source location
+    // pushed by QoreBuiltinSrcLocHelper during registration.  Falls
+    // back to the `<builtin>,-1,-1` sentinel when no location was
+    // registered (hand-written addBuiltinVariant callers that don't
+    // wrap the call in the helper).
+    if (const QoreProgramLocation* bloc = v->getBuiltinSourceLocation()) {
+        return reinterpret_cast<const QoreExternalProgramLocation*>(bloc);
+    }
+    return reinterpret_cast<const QoreExternalProgramLocation*>(&loc_builtin);
 }
 
 const QoreMethod* QoreExternalMethodVariant::getMethod() const {

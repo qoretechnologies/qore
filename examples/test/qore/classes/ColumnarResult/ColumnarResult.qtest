@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ColumnarResultTest
+
+class ColumnarResultTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ColumnarResult", "1.0", \ARGV) {
+        addTestCase("serializable inheritance", \serializableInheritance());
+        addTestCase("mixed buffer round trip", \mixedBufferRoundTrip());
+        addTestCase("sliced buffer round trip", \slicedBufferRoundTrip());
+        addTestCase("row result round trip", \rowResultRoundTrip());
+        set_return_value(main());
+    }
+
+    private serializableInheritance() {
+        ColumnarResult result = makeMixedResult();
+        assertEq(True, result instanceof Serializable);
+    }
+
+    private mixedBufferRoundTrip() {
+        ColumnarResult result = makeMixedResult();
+        ColumnarResult copy = roundTrip(result);
+        assertColumnarEq(result, copy);
+    }
+
+    private slicedBufferRoundTrip() {
+        ColumnarResult result = makeMixedResult().slice(offset: 1, count: 2);
+        ColumnarResult copy = roundTrip(result);
+        assertColumnarEq(result, copy);
+    }
+
+    private rowResultRoundTrip() {
+        ColumnarResult result = ColumnarResult::fromRows((
+            ("id": 1, "name": "alpha", "amount": 1.25n),
+            ("id": 2, "name": NOTHING, "amount": -2.50n),
+            ("id": 3, "name": "gamma", "amount": NOTHING),
+        ));
+
+        ColumnarResult copy = roundTrip(result);
+        assertColumnarEq(result, copy);
+    }
+
+    private ColumnarResult makeMixedResult() {
+        return ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3, 4)),
+            "maybe_id": new buffer<*int64>((1, NOTHING, 3, 4)),
+            "flag": new buffer<bool>((True, False, True, False)),
+            "maybe_flag": new buffer<*bool>((True, NOTHING, False, True)),
+            "amount": new buffer<*decimal128>((1.20n, NOTHING, -4.50n, 7n)),
+            "name": new buffer<*string>(("alpha", NOTHING, "gamma", "")),
+            "note": ("first", NOTHING, "third", "fourth"),
+        });
+    }
+
+    private ColumnarResult roundTrip(ColumnarResult result) {
+        binary serialized = Serializable::serialize(result);
+        return Serializable::deserialize(serialized);
+    }
+
+    private assertColumnarEq(ColumnarResult expected, ColumnarResult actual) {
+        assertEq(expected.numRows(), actual.numRows());
+        assertEq(expected.numCols(), actual.numCols());
+        assertEq(expected.columnNames(), actual.columnNames());
+        assertEq(expected.schemaV2(), actual.schemaV2());
+        assertEq(expected.toRows(), actual.toRows());
+
+        hash<auto> expected_columns = expected.toColumnHash();
+        hash<auto> actual_columns = actual.toColumnHash();
+        foreach string name in (expected.columnNames()) {
+            auto expected_value = expected_columns.(name);
+            auto actual_value = actual_columns.(name);
+            assertEq(expected_value.fullType(), actual_value.fullType(), name + " type");
+            assertEq(columnValues(expected_value), columnValues(actual_value), name + " values");
+        }
+    }
+
+    private list<auto> columnValues(auto value) {
+        return value.type() == Type::List ? value : value.toList();
+    }
+}

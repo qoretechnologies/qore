@@ -5,8 +5,9 @@
 %no-child-restrictions
 %allow-injection
 
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
 %exec-class ImportModuleMergeTest
 
 # Define classes in the test program that we'll import into sub-Programs

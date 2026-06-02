@@ -39,11 +39,7 @@
 %requires(reexport) Logger
 %requires AsyncSocketIo
 %requires HttpClientIo
-
-# Optional AsyncAPI support
-%try-module AsyncApi >= 1.0
-%define NoAsyncApi
-%endtry
+%requires AsyncApi >= 1.0
 
 %try-module yaml >= 0.7.3
 %define NoYaml
@@ -249,6 +245,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_4 v2.4
+    - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketClient
+      metadata always resolves the typed AsyncAPI validator members and methods
     - fixed a wedged-connection bug where @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()"
       returned @ref False and could not recover when the async event thread had exited (\c tid cleared) while
       auto-reconnect was enabled; @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" now detects
@@ -1303,7 +1301,8 @@ ws.connect();
     */
     bool reconnect() {
         bool need_start = False;
-        *int old_tid;
+        bool notify_closed = False;
+
         {
             AutoLock al(m);
 
@@ -1334,23 +1333,59 @@ ws.connect();
                 }
                 do_reconnect = True;
                 need_start = True;
-            } else if (!do_reconnect) {
-                do_reconnect = True;
-                # wake up any sleeping threads
-                sleep_cond.broadcast();
-                if (poll_op) {
-                    # Send close frame for async mode
-                    if (!async_close_sent && !poll_op.goalReached()) {
-                        async_close_sent = True;
-                        poll_op.sendClose(WSCC_NormalClosure);
+            } else {
+                # check if already reconnecting
+                if (!do_reconnect) {
+                    do_reconnect = True;
+                    # wake up any sleeping threads
+                    sleep_cond.broadcast();
+                    if (poll_op) {
+                        # Send close frame for async mode
+                        if (!async_close_sent && !poll_op.goalReached()) {
+                            async_close_sent = True;
+                            sendClose(WSCC_NormalClosure);
+                        }
+                        wakeAsyncIo();
                     }
-                    wakeAsyncIo();
+                }
+
+                if (tid == -1) {
+                    # Async mode has no event thread; -1 is only a sentinel.  Clean
+                    # up directly instead of waiting for a thread termination signal
+                    # that might never be produced if no delivery task is active.
+                    stopAsyncIo();
+                    shutdownAndCloseUnlocked();
+                    {
+                        AutoLock dal(delivery_mutex);
+                        delivery_active = False;
+                    }
+                    clearTid();
+                    # clearTid() releases do_reconnect; keep the reconnect latch set
+                    # until startReconnect() has been scheduled.
+                    do_reconnect = True;
+                    cid = -1;
+                    need_start = True;
+                    notify_closed = True;
+                } else {
+                    # wait for the event thread to terminate
+                    waitTidCleared(tid);
                 }
             }
-            old_tid = tid;
-            if (old_tid) {
-                # wait for the event thread to terminate
-                waitTidCleared(old_tid);
+        }
+
+        if (notify_closed) {
+            try {
+                closingConnection();
+            } catch (hash<ExceptionInfo> ex) {
+                try {
+                    logError("Exception in closing WebSocketClient callback: %s",
+                        get_exception_string(ex));
+                } catch () {
+                    # ignore
+                }
+            }
+            if (!self) {
+                return True;
             }
         }
 
@@ -1365,7 +1400,7 @@ ws.connect();
                     do_reconnect = False;
                 }
                 try {
-                    logError("startReconnect from reconnect() recovery path failed: %s",
+                    logError("startReconnect from reconnect() failed: %s",
                         get_exception_string(ex));
                 } catch (hash<ExceptionInfo> ex0) {
                     if (ex0.err != "OBJECT-ALREADY-DELETED") {
@@ -1918,6 +1953,7 @@ ws.setEventQueue();
         if (!http_opts.http_version) {
             http_opts.http_version = "auto";
         }
+        normalizeHttp3ModeOption();
         # remove the "token" option and use it if the Authorization header is not set
         if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {
             http_opts.headers.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
@@ -2410,8 +2446,10 @@ ws.setEventQueue();
                 }
                 *object op = poll_op;
                 if (!op) {
-                    AutoLock al(delivery_mutex);
-                    delivery_active = False;
+                    {
+                        AutoLock al(delivery_mutex);
+                        delivery_active = False;
+                    }
                     return;
                 }
                 *hash<auto> msg = op.getReceivedMessage();
@@ -2451,14 +2489,18 @@ ws.setEventQueue();
             if (!self) {
                 return;
             }
+            bool done = False;
             {
                 AutoLock al(delivery_mutex);
                 if (delivery_pending == last_seen) {
                     # No new callbacks since we started; safe to stop
                     delivery_active = False;
-                    return;
+                    done = True;
                 }
                 # New callbacks arrived; loop and drain again
+            }
+            if (done) {
+                return;
             }
         }
     }
@@ -2797,6 +2839,56 @@ ws.setEventQueue();
         logArgs(LoggerLevel::ERROR, fmt, argv);
     }
 
+    #! Reads a WebSocket message from a stream (HTTP/2 or HTTP/3)
+    /** Large WebSocket frames may be split across multiple protocol DATA frames,
+        so data is accumulated until a complete WebSocket frame is available.
+
+        @param frame_buf reference to the persistent frame buffer for this stream
+        @param read_data callback \c code<*binary(int)> that accepts a timeout in milliseconds and returns stream data
+        @param proto_label protocol label for error messages (e.g. \c "HTTP/2", \c "HTTP/3")
+
+        @return WebSocket message info hash
+
+        @since WebSocketClient 2.4
+    */
+    private hash<WsMsgInfo> readWsMessageFromStream(
+            reference<*binary> frame_buf,
+            code<*binary(int)> read_data,
+            string proto_label) {
+        binary buf = frame_buf ?? binary();
+        date deadline = now_us() + timeout_ms;
+        while (True) {
+            *int needed = ws_get_frame_size(buf);
+            if (exists needed && buf.size() >= needed) {
+                binary frame = buf.substr(0, needed);
+                frame_buf = buf.size() > needed ? buf.substr(needed) : NOTHING;
+                return ws_parse_frame(frame);
+            }
+
+            date remaining = deadline - now_us();
+            if (remaining <= 0s) {
+                throw "WEBSOCKET-ERROR", sprintf("timeout reading WebSocket frame from %s stream "
+                    "(have %d bytes, need %s)", proto_label, buf.size(),
+                    exists needed ? needed.toString() : "unknown");
+            }
+
+            int read_timeout_ms = min(remaining.durationMilliseconds(), 100);
+            *binary data = read_data(read_timeout_ms);
+            if (data) {
+                buf += data;
+            }
+
+            *int needed2 = ws_get_frame_size(buf);
+            if (exists needed2 && buf.size() >= needed2) {
+                binary frame = buf.substr(0, needed2);
+                frame_buf = buf.size() > needed2 ? buf.substr(needed2) : NOTHING;
+                return ws_parse_frame(frame);
+            } else if (!data && buf.empty()) {
+                throw "WEBSOCKET-ERROR", sprintf("no data available from %s stream", proto_label);
+            }
+        }
+    }
+
     private sendClose(int code, *string txtmsg) {
         if (!WSCCMap{code}) {
             logError("Attempt to send invalid close code %d; expecting one of: %y", code,
@@ -2835,6 +2927,58 @@ ws.setEventQueue();
         return rh;
     }
 
+    #! Normalizes the http3_mode constructor option to match HTTPClient semantics
+    private normalizeHttp3ModeOption() {
+        if (!exists http_opts.http3_mode) {
+            http_opts.http3_mode = "auto";
+            return;
+        }
+
+        auto mode = http_opts.http3_mode;
+        if (mode.typeCode() == NT_STRING) {
+            switch (tolower(mode)) {
+                case "disabled":
+                case "0":
+                    http_opts.http3_mode = "disabled";
+                    return;
+                case "auto":
+                case "1":
+                    http_opts.http3_mode = "auto";
+                    return;
+                case "required":
+                case "2":
+                    http_opts.http3_mode = "required";
+                    return;
+            }
+            raiseError("option hash to WebSocketClient::constructor() has invalid 'http3_mode' value %y; "
+                "valid values are: 'disabled', 'auto', 'required', 0, 1, or 2", mode);
+        }
+
+        if (mode.typeCode() == NT_INT) {
+            switch (mode.toInt()) {
+                case 0:
+                    http_opts.http3_mode = "disabled";
+                    return;
+                case 1:
+                    http_opts.http3_mode = "auto";
+                    return;
+                case 2:
+                    http_opts.http3_mode = "required";
+                    return;
+            }
+            raiseError("option hash to WebSocketClient::constructor() has invalid 'http3_mode' value %d; "
+                "valid values are: 0 (disabled), 1 (auto), or 2 (required)", mode.toInt());
+        }
+
+        raiseError("option hash to WebSocketClient::constructor() has invalid 'http3_mode' type %y; "
+            "expecting string or int", mode.fullType());
+    }
+
+    #! Returns True if HTTP/3 was explicitly required by the constructor options
+    private bool isHttp3Required() {
+        return http_opts.http3_mode == "required";
+    }
+
     #! Performs the HTTP socket connection to the WebSocket server
     /** All connections use the HttpClientIo path. TLS connections with "auto" or
         explicit H2/H3 race protocols via the HCIO manager; all other connections
@@ -2855,6 +2999,7 @@ ws.setEventQueue();
                 return normalizeConnectResponse(connectViaHcioAuto(hdr, \info, reconnect));
             } catch (hash<ExceptionInfo> ex) {
                 if (http_opts.http_version == "auto"
+                        && !isHttp3Required()
                         && isHcioFallbackError(ex.err)) {
                     logInfo("HttpClientIo WebSocket failed (%s: %s); falling back to HTTP/1.1",
                         ex.err, ex.desc);
@@ -3139,7 +3284,7 @@ ws.setEventQueue();
         string protocol;
         if (force_protocol) {
             protocol = force_protocol;
-        } else if (http_opts.http3_mode == "required") {
+        } else if (isHttp3Required()) {
             protocol = "h3";
         } else {
             switch (http_opts.http_version) {
@@ -6062,7 +6207,7 @@ public class WebSocketClientHcioPollOp {
 %ifdef __REMOVED_WEBSOCKET_CONNECT_AND_RUN_POLL_OPERATION__
 # thread), which prevents them from delegating to C++ poll operations that require
 # I/O-thread execution. The DelegatingPollOperation approach is used instead.
-public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOperation {
+public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOperation<auto> {
     private {
         #! The WebSocketClient that created this operation
         WebSocketClient wsc;
@@ -6351,7 +6496,7 @@ public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOper
 
     @since WebSocketClient 2.4
 */
-public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
+public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation<bool> {
     private {
         #! The WebSocketClient that created this operation
         WebSocketClient wsc;
@@ -6486,7 +6631,7 @@ public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
 
     @since WebSocketClient 2.4
 */
-public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation {
+public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation<hash<auto>> {
     private {
         #! The WebSocketClient that created this operation
         WebSocketClient wsc;

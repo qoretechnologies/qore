@@ -1,0 +1,41 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameFilterGroupBy
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameFilterGroupBy {
+    constructor() {
+        Bench::BenchRunner r("dataframe_filter_groupby");
+        r.iterations = 10;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+
+        r.setup = sub () {
+            df = DataFrameBench::makeFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::RowMask selected = (df.column("status") == "active")
+                & (df.column("score") >= 90.0);
+            DataFrame::DataFrame filtered = df.filter(selected);
+            DataFrame::DataFrame grouped = filtered.groupBy(("region",)).agg({
+                "amount": "sum",
+                "id": "count",
+            });
+            DataFrameBench::verifyRows("dataframe_filter_groupby", grouped, 1);
+        };
+
+        exit(r.run());
+    }
+}

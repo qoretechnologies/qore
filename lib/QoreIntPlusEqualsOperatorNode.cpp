@@ -37,5 +37,14 @@ QoreValue QoreIntPlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
     LValueHelper v(left, xsink);
     if (*xsink)
         return QoreValue();
+
+    // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
+    // Note: timeout type stores its value as an int (milliseconds), so this specialized int += is used
+    if (rh->getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+        int64 ms = rh->get<const DateTimeNode>()->getRelativeMilliseconds();
+        // do plus-equals with milliseconds
+        return v.plusEqualsBigInt(ms, "<+= operator>");
+    }
+
     return v.plusEqualsBigInt(rh->getAsBigInt(), "<+= operator>");
 }

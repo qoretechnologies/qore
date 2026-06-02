@@ -12,6 +12,8 @@
 
 using namespace QoreTokenizer;
 
+extern const TypedHashDecl* hashdeclTokenizerModelInputBatch;
+
 //! HuggingFace-compatible text tokenizer
 /** Implements the full tokenization pipeline from tokenizer.json:
     normalize → pre-tokenize → model tokenize → post-process
@@ -137,6 +139,85 @@ hash<auto> HFTokenizer::encodeAdvanced(string text, *hash<auto> options) {
 */
 list<hash<auto>> HFTokenizer::encodeBatch(list<string> texts, *hash<auto> options) {
     return tok->encodeBatch(texts, options, xsink);
+}
+
+//! Encodes one text as dense int64 model input buffers
+/** @param text the input text to tokenize
+    @param options same core options as encodeAdvanced: \c text_pair,
+    \c max_length, \c truncation, \c padding, \c add_special_tokens, and
+    \c pad_token_id
+
+    @return a hash containing dense \c buffer<int64> values for \c input_ids,
+    \c attention_mask, and \c token_type_ids, plus \c shape, \c rows,
+    \c columns, \c sequence_lengths, and \c dtype metadata
+
+    This method avoids materializing per-token Qore lists and is intended for
+    direct conversion to @ref Qore::ML::Tensor values with
+    \c ML::Tensor::fromBuffer().
+
+    @par Example:
+    @code{.py}
+hash<auto> batch = tok.encodeForModel("Hello, world!", {
+    "max_length": 16,
+    "padding": "max_length",
+});
+ML::Tensor ids = ML::Tensor::fromBuffer(batch.input_ids, batch.shape);
+    @endcode
+
+    @since tokenizer 1.2
+*/
+hash<TokenizerModelInputBatch> HFTokenizer::encodeForModel(string text, *hash<auto> options)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return tok->encodeForModel(text, options, xsink);
+}
+
+//! Encodes a batch of texts as dense int64 model input buffers
+/** @param texts list of texts to tokenize
+    @param options same core options as encodeAdvanced. If no fixed
+    \c max_length padding is requested, variable-length rows are padded to the
+    longest row in the batch so the returned buffers are rectangular.
+
+    @return a hash containing row-major dense \c buffer<int64> values for
+    \c input_ids, \c attention_mask, and \c token_type_ids
+
+    @throw TOKENIZER-ERROR if padding is required but no pad token is available
+
+    @par Example:
+    @code{.py}
+hash<auto> batch = tok.encodeBatchForModel(("short text", "longer input"), {
+    "truncation": "longest_first",
+    "padding": "batch_longest",
+});
+hash<auto> inputs = {
+    "input_ids": ML::Tensor::fromBuffer(batch.input_ids, batch.shape),
+    "attention_mask": ML::Tensor::fromBuffer(batch.attention_mask, batch.shape),
+};
+    @endcode
+
+    @since tokenizer 1.2
+*/
+hash<TokenizerModelInputBatch> HFTokenizer::encodeBatchForModel(list<string> texts, *hash<auto> options)
+        [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return tok->encodeBatchForModel(texts, options, xsink);
+}
+
+//! Encodes a batch of text pairs as dense int64 model input buffers
+/** @param texts first sequence for every row
+    @param text_pairs second sequence for every row; must be the same length as
+        \a texts
+    @param options same core options as encodeAdvanced
+
+    This method is intended for cross-encoder rerankers and sequence-pair
+    classifiers where each row has a query/passage or premise/hypothesis pair.
+
+    @return a hash containing row-major dense \c buffer<int64> values for
+    \c input_ids, \c attention_mask, and \c token_type_ids
+
+    @since tokenizer 1.2
+*/
+hash<TokenizerModelInputBatch> HFTokenizer::encodeBatchPairsForModel(list<string> texts, list<string> text_pairs,
+        *hash<auto> options) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return tok->encodeBatchPairsForModel(texts, text_pairs, options, xsink);
 }
 
 //! Returns the pad token ID, or -1 if no pad token

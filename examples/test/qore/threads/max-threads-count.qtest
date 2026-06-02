@@ -3,8 +3,9 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
 
 %exec-class MaxThreadCountTest
 
@@ -39,6 +40,95 @@ public class MaxThreadCountTest inherits QUnit::Test {
         }
         if (ENV.SKIP_MAX_THREAD_TEST) {
             testSkip("skipping max thread test due to environment variable");
+        }
+        if (PlatformOS == "Linux") {
+            *int thread_limit = getLinuxThreadLimit();
+            if (thread_limit !== NOTHING && thread_limit > 20000) {
+                testSkip(sprintf("skipping max thread test: effective Linux thread limit %d exceeds harness-safe "
+                    "limit %d", thread_limit, 20000));
+            }
+        }
+    }
+
+    private *int getLinuxThreadLimit() {
+        *int limit = getLinuxCgroupPidsLimit();
+        *int rlimit = getLinuxProcessRLimit();
+        if (rlimit !== NOTHING && (limit === NOTHING || rlimit < limit)) {
+            limit = rlimit;
+        }
+        return limit;
+    }
+
+    private *int getLinuxProcessRLimit() {
+        try {
+            string limits = File::readTextFile("/proc/self/limits");
+            foreach string line in (limits.split("\n")) {
+                *string value = (line =~ x/^Max processes\s+(\S+)/)[0];
+                if (value === NOTHING || value == "unlimited") {
+                    continue;
+                }
+                return value.toInt();
+            }
+        } catch () {
+        }
+        return NOTHING;
+    }
+
+    private *int getLinuxCgroupPidsLimit() {
+        *int limit;
+        try {
+            string cgroups = File::readTextFile("/proc/self/cgroup");
+            foreach string line in (cgroups.split("\n")) {
+                if (!line) {
+                    continue;
+                }
+                list<string> parts = line.split(":");
+                if (parts.size() < 3) {
+                    continue;
+                }
+
+                *int cgroup_limit = getCgroupPathPidsLimit(parts[2]);
+                if (cgroup_limit !== NOTHING && (limit === NOTHING || cgroup_limit < limit)) {
+                    limit = cgroup_limit;
+                }
+            }
+        } catch () {
+        }
+        return limit;
+    }
+
+    private *int getCgroupPathPidsLimit(string cgroup_path) {
+        *int limit;
+        string path = cgroup_path;
+        while (True) {
+            string file = "/sys/fs/cgroup" + (path == "/" ? "" : path) + "/pids.max";
+            *int path_limit = readPositiveIntFile(file);
+            if (path_limit !== NOTHING && (limit === NOTHING || path_limit < limit)) {
+                limit = path_limit;
+            }
+            if (!path || path == "/") {
+                break;
+            }
+
+            int slash = path.rfind("/");
+            path = slash <= 0 ? "/" : path[0..slash - 1];
+        }
+        return limit;
+    }
+
+    private *int readPositiveIntFile(string path) {
+        try {
+            if (!is_file(path)) {
+                return NOTHING;
+            }
+            string value = trim(File::readTextFile(path));
+            if (!value || value == "max") {
+                return NOTHING;
+            }
+            int rv = value.toInt();
+            return rv > 0 ? rv : NOTHING;
+        } catch () {
+            return NOTHING;
         }
     }
 

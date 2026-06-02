@@ -6,7 +6,8 @@
 # assert tests with no return value
 %disable-warning return-value-ignored
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class ParseDatasourceTest
 

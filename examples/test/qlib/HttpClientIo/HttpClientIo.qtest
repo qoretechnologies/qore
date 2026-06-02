@@ -29,14 +29,15 @@
 %modern
 
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/AsyncSocketIo
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires AsyncSocketIo
 
 %exec-class HttpClientIoTest
 
@@ -3019,6 +3020,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "logger": mLogger,
         });
 
+        # Step 0: Warm up the connection synchronously so the H/3 handshake is
+        # complete by the time we start submitting concurrent work.  A fixed
+        # sleep is not deterministic on slow CI runners (Tart VM macOS hosts
+        # saw the background request lose the ALPN race against the
+        # notifications), so issue a small known-good request and only then
+        # kick off the long-running and notification traffic.
+        mgr.request(mQuicUrl, "GET", "/echo");
+
         # Step 1: Start a long-running request in background
         Counter bg_done(1);
         background sub() {
@@ -3030,10 +3039,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             }
         }();
 
-        # Give the background request time to establish the connection
-        usleep(500ms);
-
-        # Step 2: Submit 3 async notifications on the same connection
+        # Step 2: Submit 3 async notifications on the same (now-pooled) connection
         for (int i = 0; i < 3; ++i) {
             string body = sprintf("{\"id\":%d,\"msg\":\"cancel\"}", i);
             hash<auto> result = mgr.submitRequestAsync(mQuicUrl, "POST", "/notif",

@@ -3,7 +3,9 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
 
 %exec-class HashDeclTest
 
@@ -41,6 +43,16 @@ public hashdecl ComplexDefaults {
     list<string> items = ();
     list<int> numbers = ();
     hash<string, string> metadata = {};
+}
+
+public hashdecl RuntimeFoldExpression {
+    int code;
+    string name;
+}
+
+public hashdecl RuntimeFoldContainer {
+    *hash<string, hash<RuntimeFoldExpression>> expressions;
+    *list<hash<RuntimeFoldExpression>> expression_list;
 }
 
 hashdecl Issue3654 {
@@ -99,6 +111,7 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("namespaced typed hash literal", \namespacedTypedHashLiteral());
         addTestCase("hashdecl inheritance", \testHashDeclInheritance());
         addTestCase("complex type defaults", \testComplexTypeDefaults());
+        addTestCase("generic container hashdecl folding", \testGenericContainerHashDeclFolding());
         set_return_value(main());
     }
 
@@ -1022,5 +1035,63 @@ class HashDeclTest inherits QUnit::Test {
             assertEq(0, result[1]);
             assertEq(0, result[2]);
         }
+    }
+
+    testGenericContainerHashDeclFolding() {
+        TypedHash th("RuntimeFoldExpression");
+
+        auto src = {
+            "one": {
+                "code": 1,
+                "name": "first",
+            },
+        };
+        auto typed_map = map {
+            $1.key: th.doCast($1.value)
+        }, src.pairIterator();
+
+        hash<RuntimeFoldContainer> c = <RuntimeFoldContainer>{
+            "expressions": typed_map,
+        };
+        assertEq(True, c.expressions.one instanceof hash<RuntimeFoldExpression>);
+        assertEq(1, c.expressions.one.code);
+        assertEq("first", c.expressions.one.name);
+
+        auto untyped_map = {
+            "two": {
+                "code": 2,
+                "name": "second",
+            },
+        };
+        hash<RuntimeFoldContainer> c2 = <RuntimeFoldContainer>{
+            "expressions": untyped_map,
+        };
+        assertEq(True, c2.expressions.two instanceof hash<RuntimeFoldExpression>);
+        assertEq(2, c2.expressions.two.code);
+
+        auto typed_list = (
+            th.doCast({
+                "code": 3,
+                "name": "third",
+            }),
+        );
+        hash<RuntimeFoldContainer> c3 = <RuntimeFoldContainer>{
+            "expression_list": typed_list,
+        };
+        assertEq(True, c3.expression_list[0] instanceof hash<RuntimeFoldExpression>);
+        assertEq("third", c3.expression_list[0].name);
+
+        auto bad_map = {
+            "bad": {
+                "code": "not an int",
+                "name": "bad",
+            },
+        };
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            hash<RuntimeFoldContainer> bad = <RuntimeFoldContainer>{
+                "expressions": bad_map,
+            };
+            delete bad;
+        });
     }
 }

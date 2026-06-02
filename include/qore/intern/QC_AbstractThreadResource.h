@@ -58,7 +58,8 @@ public:
       // issue #3551: if the first exception is "OBJECT-ALREADY-DELETED", then ignore
       if (*xsink) {
           const QoreValue err = xsink->getExceptionErr();
-          if (err.getType() == NT_STRING && *err.get<const QoreStringNode>() == "OBJECT-ALREADY-DELETED") {
+          QoreStringValueHelper err_str(err);
+          if (err.getType() == NT_STRING && !strcmp(err_str->c_str(), "OBJECT-ALREADY-DELETED")) {
               xsink->clear();
           }
       }

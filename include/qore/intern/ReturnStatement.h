@@ -55,6 +55,10 @@ public:
         return true;
     }
 
+    DLLLOCAL QoreValue getExpression() const {
+        return exp;
+    }
+
 private:
     QoreValue exp{};
 

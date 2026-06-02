@@ -38,6 +38,8 @@
 
 #include <map>
 
+enum class QoreBufferElementType : uint8_t;
+
 // global default values
 DLLEXPORT extern QoreListNode* emptyList;
 DLLEXPORT extern QoreHashNode* emptyHash;
@@ -60,6 +62,7 @@ DLLEXPORT extern const QoreTypeInfo* anyTypeInfo,
    *dateAbsoluteTypeInfo,
    *dateRelativeTypeInfo,
    *objectTypeInfo,
+   *bufferTypeInfo,
    *hashTypeInfo,
    *emptyHashTypeInfo,
    *autoHashTypeInfo,
@@ -100,6 +103,7 @@ DLLEXPORT extern const QoreTypeInfo* anyTypeInfo,
    *boolOrNothingTypeInfo,
    *binaryOrNothingTypeInfo,
    *objectOrNothingTypeInfo,
+   *bufferOrNothingTypeInfo,
    *dateOrNothingTypeInfo,
    *dateAbsoluteOrNothingTypeInfo,
    *dateRelativeOrNothingTypeInfo,
@@ -217,11 +221,21 @@ DLLEXPORT const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo
 DLLEXPORT const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInfo* valueTypeInfo);
 
 // @since %Qore 2.3
+DLLEXPORT const QoreTypeInfo* qore_get_complex_buffer_type(QoreBufferElementType elementType,
+    bool nullable_elements = false);
+// @since %Qore 2.3
+DLLEXPORT const QoreTypeInfo* qore_get_complex_buffer_or_nothing_type(QoreBufferElementType elementType,
+    bool nullable_elements = false);
+
+// @since %Qore 2.3
 DLLEXPORT const QoreTypeInfo* qore_get_complex_code_type(const QoreTypeInfo* return_type,
     const type_vec_t& param_types, bool varargs = false, bool or_nothing = false);
 // @since %Qore 2.3
 DLLEXPORT const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* return_type,
     const type_vec_t& param_types, bool varargs = false);
+
+DLLEXPORT const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t index, const char* name,
+    bool or_nothing = false);
 
 //! Creates or retrieves a cached union type for the given member types
 /** @param member_types vector of member types

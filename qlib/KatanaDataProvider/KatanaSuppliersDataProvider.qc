@@ -44,7 +44,7 @@ public class KatanaSuppliersDataProvider inherits KatanaDataProviderBase {
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return new KatanaSupplierDataType().getFields();
     }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Katana has no GET /suppliers/{id}; fetch a single record via the ids= filter
         return runListSearch("suppliers", where_cond, search_options, "id", True);

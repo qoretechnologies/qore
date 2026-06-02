@@ -228,22 +228,23 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 
     A worker thread is started while the ThreadPool is running that waits for tasks in an internal task queue and allocates the tasks
     to worker threads.   If an idle thread is available, the task is submitted to that thread immediately, otherwise, if the ThreadPool
-    is not already at maximum capacity (the \a max argument to @ref Qore::Thread::ThreadPool::constructor() "ThreadPool::constructor()"),
+    is not already at maximum capacity (the \a max_threads argument to @ref Qore::Thread::ThreadPool::constructor() "ThreadPool::constructor()"),
     a new thread is started and the task is allocated to the new thread.  Otherwise, the task will block until a thread becomes free, at
     which time the task is allocated to the newly-freed worker thread.
 
     When a worker thread has no more tasks to execute, it will either be returned to the pool to wait in an idle state if possible, or it
-    will terminate.  Threads are returned to the idle pool if there are fewer than \a maxidle threads in the idle pool already or if
+    will terminate.  Threads are returned to the idle pool if there are fewer than \a max_idle_threads threads in the idle pool already or if
     there are more tasks in the queue than idle threads.
 
-    ThreadPools downscale over time when demand is lower according to the \a release_ms argument to
-    @ref Qore::Thread::ThreadPool::constructor() "ThreadPool::constructor()"; when there more than \a minidle threads in the idle pool,
-    then for each time period defined by \a release_ms, a single thread in the idle pool is released until the number of threads in the
-    idle pool reaches \a minidle.
+    ThreadPools downscale over time when demand is lower according to the \a idle_release_timeout argument to
+    @ref Qore::Thread::ThreadPool::constructor() "ThreadPool::constructor()"; when there are more than
+    \a min_idle_threads threads in the idle pool, then for each time period defined by \a idle_release_timeout,
+    a single thread in the idle pool is released until the number of threads in the idle pool reaches
+    \a min_idle_threads.
 
-    Therefore the \a minidle argument defines the "ground state" of the ThreadPool (how many idle threads are waiting for tasks), and
-    the \a release_ms argument defines the period in which the ThreadPool returns to its ground state after demand for threads results
-    in a condition where there are temporarily more than \a minidle threads in the idle pool.
+    Therefore the \a min_idle_threads argument defines the "ground state" of the ThreadPool (how many idle threads are waiting for tasks), and
+    the \a idle_release_timeout argument defines the period in which the ThreadPool returns to its ground state after demand for threads results
+    in a condition where there are temporarily more than \a min_idle_threads threads in the idle pool.
 
     If the ThreadPool is stopped when tasks are still in the queue, then any cancellation @ref closure "closure" or
     @ref call_reference "call reference" for the task is executed; see @ref Qore::Thread::ThreadPool::submit() "ThreadPool::submit()"
@@ -251,7 +252,7 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 
     @par Example:
     @code{.py}
-ThreadPool tp(10, 2, 4);
+ThreadPool tp(max_threads: 10, min_idle_threads: 2, max_idle_threads: 4);
     @endcode
 
     @since %Qore 0.8.8
@@ -261,41 +262,57 @@ qclass ThreadPool [dom=THREAD_CLASS; arg=ThreadPool* tp; ns=Qore::Thread];
 //! creates the pool with the given parameters; idle worker threads are started immediately if necessary
 /** @par Example:
     @code{.py}
-ThreadPool tp(10, 2, 4);
+ThreadPool tp(max_threads: 10, min_idle_threads: 2, max_idle_threads: 4);
     @endcode
 
-    When worker threads complete, the thread is returned to the pool if there are less than \a minidle threads in the idle list or there are more tasks in the queue than the number of idle threads.
+    When worker threads complete, the thread is returned to the pool if there are less than \a min_idle_threads threads in the idle list or there are more tasks in the queue than the number of idle threads.
 
-    @param max the maximum number of threads in the pool
-    @param minidle the minimum number of free idle threads to keep ready
-    @param maxidle the maximum number of idle threads to keep ready
-    @param release_ms this value gives the delay in terminating single idle threads when \a maxidle > \a minidle and there are more than \a minidle threads in the idle pool; for example, if \a release_ms = \c 10s then when there are more than \a minidle threads in the idle pool, every 10 seconds an idle thread is terminated until there are \a minidle threads in the pool.  Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
+    @param max_threads the maximum number of threads in the pool
+    @param min_idle_threads the minimum number of free idle threads to keep ready
+    @param max_idle_threads the maximum number of idle threads to keep ready
+    @param idle_release_timeout this value gives the delay in terminating single idle threads when
+    \a max_idle_threads > \a min_idle_threads and there are more than \a min_idle_threads threads in the idle
+    pool; for example, if \a idle_release_timeout = \c 10s then when there are more than
+    \a min_idle_threads threads in the idle pool, every 10 seconds an idle thread is terminated until there are
+    \a min_idle_threads threads in the pool.  Note that like all %Qore functions and methods taking timeout
+    values, a @ref relative_dates "relative date/time value" can be used to make the units clear
+    (i.e. \c 2m = two minutes, etc.)
 
-    @throw THREADPOOL-ERROR minidle > max, maxidle > max or minidle > maxidle, or release_ms < 0
+    @throw THREADPOOL-ERROR min_idle_threads > max_threads, max_idle_threads > max_threads or min_idle_threads > max_idle_threads, or idle_release_timeout < 0
  */
-ThreadPool::constructor(int max = 0, int minidle = 0, int maxidle = 0, timeout release_ms = 5s) {
-    if (max > 0) {
-        if (minidle > max) {
-            xsink->raiseException("THREADPOOL-ERROR", "cannot create a ThreadPool object with minidle (%d) > max (%d)", minidle, max);
+ThreadPool::constructor(int max_threads = 0, int min_idle_threads = 0, int max_idle_threads = 0,
+        timeout idle_release_timeout = 5s) [flags=NAMED_ARGS] {
+    if (max_threads > 0) {
+        if (min_idle_threads > max_threads) {
+            xsink->raiseException("THREADPOOL-ERROR",
+                "cannot create a ThreadPool object with min_idle_threads (%d) > max_threads (%d)",
+                min_idle_threads, max_threads);
             return;
         }
-        if (maxidle > max) {
-            xsink->raiseException("THREADPOOL-ERROR", "cannot create a ThreadPool object with maxidle (%d) > max (%d)", maxidle, max);
+        if (max_idle_threads > max_threads) {
+            xsink->raiseException("THREADPOOL-ERROR",
+                "cannot create a ThreadPool object with max_idle_threads (%d) > max_threads (%d)",
+                max_idle_threads, max_threads);
             return;
         }
     }
-    if (maxidle > 0) {
-        if (minidle > maxidle) {
-            xsink->raiseException("THREADPOOL-ERROR", "cannot create a ThreadPool object with minidle (%d) > maxidle (%d)", minidle, maxidle);
+    if (max_idle_threads > 0) {
+        if (min_idle_threads > max_idle_threads) {
+            xsink->raiseException("THREADPOOL-ERROR",
+                "cannot create a ThreadPool object with min_idle_threads (%d) > max_idle_threads (%d)",
+                min_idle_threads, max_idle_threads);
             return;
         }
     }
-    if (release_ms < 0) {
-        xsink->raiseException("THREADPOOL-ERROR", "cannot create a ThreadPool object with release_ms < 0 (value passed: %d)", release_ms);
+    if (idle_release_timeout < 0) {
+        xsink->raiseException("THREADPOOL-ERROR",
+            "cannot create a ThreadPool object with idle_release_timeout < 0 (value passed: %d)",
+            idle_release_timeout);
         return;
     }
 
-    ReferenceHolder<ThreadPool> tp(new ThreadPool(xsink, max, minidle, maxidle, release_ms), xsink);
+    ReferenceHolder<ThreadPool> tp(new ThreadPool(xsink, max_threads, min_idle_threads, max_idle_threads,
+        idle_release_timeout), xsink);
     if (*xsink)
         return;
 
@@ -348,14 +365,17 @@ ThreadPool::stopWait() {
 //! submit a task to the pool
 /** @par Example:
     @code{.py}
-tp.submit(sub () { call_function(arg); });
+tp.submit(task: sub () { call_function(arg); });
     @endcode
 
     @param task the @ref closure "closure" or @ref call_reference "call reference" to execute
-    @param cancel an optional  @ref closure "closure" or @ref call_reference "call reference" to execute if the ThreadPool is stopped before the task can be executed; note that cancellation code is run serially for each task in order of submission in the ThreadPool's worker thread after the ThreadPool has been shut down
+    @param cancel_callback an optional  @ref closure "closure" or @ref call_reference "call reference" to
+    execute if the ThreadPool is stopped before the task can be executed; note that cancellation code is run
+    serially for each task in order of submission in the ThreadPool's worker thread after the ThreadPool has
+    been shut down
  */
-ThreadPool::submit(code task, *code cancel) {
-    tp->submit(task->refRefSelf(), cancel ? cancel->refRefSelf() : 0, xsink);
+ThreadPool::submit(code task, *code cancel_callback) [flags=NAMED_ARGS] {
+    tp->submit(task->refRefSelf(), cancel_callback ? cancel_callback->refRefSelf() : 0, xsink);
 }
 
 //! returns a description of the ThreadPool

@@ -73,7 +73,7 @@ public class ZohoInventoryItemGroupsDataProvider inherits ZohoInventoryDataProvi
     }
 
     #! Searches for item groups
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
             params.organization_id = search_options.organization_id;
@@ -82,7 +82,7 @@ public class ZohoInventoryItemGroupsDataProvider inherits ZohoInventoryDataProvi
             params.group_name = search_options.group_name;
         }
         hash<auto> response = doGet("/itemgroups", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.itemgroups ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.itemgroups ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

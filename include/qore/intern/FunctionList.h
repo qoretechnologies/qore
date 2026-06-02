@@ -174,7 +174,13 @@ public:
                 continue;
             }
 
-            assert(!findNode(i->first));
+            // If an entry with this name already exists in the target, it's a benign
+            // same-origin duplicate — scanMergeCommittedNamespace already accepted it
+            // (same QoreFunction pointer or same from_module). Skip the copy to avoid
+            // re-inserting the entry and to preserve the original's ownership/refcount.
+            if (findNode(i->first)) {
+                continue;
+            }
             FunctionEntry* fe = new ModuleImportedFunctionEntry(*i->second, ns);
             //printd(5, "FunctionList::mergePublic() this: %p merging in %s (%p)\n", this, i->first, fe);
             assert(!fe->isUserPublic());

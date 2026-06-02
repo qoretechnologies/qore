@@ -51,6 +51,266 @@ class MyClass inherits MyBaseClass {
 }
     @endcode
 
+    @subsection generic_classes Generic Classes
+    Classes can declare formal type parameters in their public API. User code
+    supplies concrete type arguments in type positions, as documented in
+    @ref generic_class_type "Generic Class Types". Generic builtin classes now
+    include the threading value-container classes @ref Qore::Thread::Queue
+    "Queue<T>", @ref Qore::Thread::Channel "Channel<T>",
+    @ref Qore::Thread::Promise "Promise<T>", and
+    @ref Qore::Thread::Future "Future<T>", the iterator hierarchy such as
+    @ref Qore::AbstractIterator "AbstractIterator<T>" and
+    @ref Qore::HashIterator "HashIterator<V>", and poll operation classes such
+    as @ref Qore::AbstractPollOperation "AbstractPollOperation<T>". Other
+    value-carrying builtin classes, such as @ref Qore::TreeMap "TreeMap<V>",
+    use type parameters where one stable value type moves through the object.
+
+    @par Example
+    @code{.py}
+Queue<int> queue();
+queue.push(value: 42);
+int value = queue.pop(timeout_ms: 0);
+
+Promise<string> promise();
+Future<string> future = promise.getFuture();
+promise.set(value: "done");
+string result = future.get(timeout_ms: 1s);
+
+hash<string, int> data = {"one": 1, "two": 2};
+HashIterator<int> iterator(data);
+while (iterator.next()) {
+    int current = iterator.getValue();
+}
+
+TreeMap<code> route_handlers();
+route_handlers.put(path: "api/v1", value: \handleApiV1());
+*code handler = route_handlers.get(path: "api/v1/users");
+
+AbstractPollOperation<auto> op = sock.startPollConnect(target: "example.com:443");
+    @endcode
+
+    Generic builtin class types are runtime checked. Concrete type arguments
+    are invariant, so <tt>Queue&lt;int&gt;</tt> and
+    <tt>Queue&lt;auto&gt;</tt> are different concrete types. Use wildcard
+    arguments when an annotation should accept multiple instantiations:
+
+    @code{.py}
+Queue<int> ints();
+Queue<?> any_queue = ints;
+Queue<? extends number> number_source = ints;
+Queue<? super int> int_sink = ints;
+    @endcode
+
+    Migrated legacy builtin classes still support raw declarations such as
+    <tt>Queue q()</tt> for compatibility; raw construction creates the
+    explicit <tt>Queue&lt;auto&gt;</tt> form. New examples should use concrete type
+    arguments when the value or result type is known and <tt>&lt;auto&gt;</tt>
+    only when the operation genuinely returns different shapes.
+
+    Source-defined classes can also declare type parameters and use them in
+    members, method signatures, constructors, local variables, and inherited
+    generic base classes:
+
+    @par Source-Defined Generic Class Example
+    @code{.py}
+class Box<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Box<int> box(42);
+int value = box.get();
+
+class Base<T> {
+    T echo(T value) {
+        return value;
+    }
+}
+
+class Child<T> inherits Base<T> {
+}
+
+Child<int> child();
+int echoed = child.echo(value);
+    @endcode
+
+    Type parameters can have defaults and upper bounds:
+
+    @code{.py}
+class IntBox<T: int = int> {
+    private {
+        T value;
+    }
+
+    constructor(T value = 1) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+IntBox<> default_box();
+IntBox<int> explicit_box(2);
+# IntBox<string> invalid("x");  # PARSE-TYPE-ERROR
+    @endcode
+
+    Static methods on source-defined generic classes can use class type
+    parameters when the call target is parameterized:
+
+    @code{.py}
+class Factory<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    static Factory<T> make(T value) {
+        return new Factory<T>(value);
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Factory<int> f = Factory<int>::make(10);
+int made = f.get();
+    @endcode
+
+    Methods and static methods can also declare their own call-local type
+    parameters after the method name. These type parameters can be inferred from
+    call arguments or supplied explicitly:
+
+    @code{.py}
+class Mapper<T> {
+    T get(T value) {
+        return value;
+    }
+
+    U convert<U>(T source, U target) {
+        return target;
+    }
+
+    static U choose<U>(T source, U target) {
+        return target;
+    }
+}
+
+Mapper<int> mapper();
+string inferred_method = mapper.convert(1, "one");
+string explicit_method = mapper.convert<string>(2, target: "two");
+string static_value = Mapper<int>::choose<string>(3, "three");
+    @endcode
+
+    The receiver type in <tt>Factory&lt;int&gt;::make(...)</tt> supplies the
+    concrete type argument used for argument checking, local declarations, and
+    return checking inside the static method body. Qore can also infer class
+    type arguments at expression sites:
+
+    @code{.py}
+auto inferred = new Factory(10);             # creates Factory<int>
+auto named = new Factory(value: 11);         # named constructor arguments work
+Factory<int> target = new Factory(12);       # assignment target supplies T
+
+Factory<int> make_factory() {
+    return new Factory(13);                  # return type supplies T
+}
+
+Factory<int> made_by_static = Factory::make(14);
+    @endcode
+
+    Explicit receiver type arguments take precedence. Inference uses constructor
+    arguments and reliable expected result types, applies type-parameter defaults
+    where possible, and checks bounds after inference. Ambiguous constructor
+    overloads or invalid inferred bounds raise \c PARSE-TYPE-ERROR; write the
+    explicit spelling, for example <tt>Factory&lt;int&gt;</tt>, when the inferred
+    type is not unique.
+
+    Source-defined generic class types are runtime checked. Concrete type
+    arguments are invariant; use wildcard annotations such as
+    <tt>Box&lt;?&gt;</tt>, <tt>Box&lt;? extends int&gt;</tt>, or
+    <tt>Box&lt;? super int&gt;</tt> when callers should pass a compatible
+    family of instantiations. Unlike migrated builtin classes, source-defined
+    generic classes do not provide raw compatibility by default. If inference
+    cannot determine all required type arguments, use explicit type arguments
+    such as <tt>Box&lt;int&gt;</tt> or <tt>Box&lt;auto&gt;</tt>.
+
+    Object serialization preserves specialized generic class types. A
+    deserialized <tt>Box&lt;int&gt;</tt> or <tt>Queue&lt;string&gt;</tt> object keeps the
+    same parameterized runtime type, and runtime checks such as
+    <tt>instanceof Box&lt;int&gt;</tt> continue to use the concrete type arguments.
+
+    The Reflection API exposes generic metadata on loaded classes and typed
+    hashes with type-parameter name, default, and bound accessors. The
+    QoreApiMetadata module merges the same information from AST parsing,
+    runtime reflection, and qpp metadata so tools can render signatures and
+    generated examples with the generic spelling.
+
+    Existing source classes that are migrated to generic form can opt into
+    legacy raw compatibility by placing a compatibility attribute after the
+    class name or type-parameter list and before any \c inherits clause:
+
+    @code{.py}
+class LegacyBox<T> [legacy_raw] {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+LegacyBox raw("text");              # raw construction creates LegacyBox<auto>
+LegacyBox<string> typed("text");
+LegacyBox accepted = typed;         # raw annotation accepts LegacyBox<string>
+
+class AcceptsOnly<T> [legacy_raw_accepts] {
+    constructor(T value) {
+    }
+}
+
+AcceptsOnly<int> typed_accepts(1);
+AcceptsOnly raw_accepts = typed_accepts;  # allowed
+# AcceptsOnly invalid(1);                 # raw declaration construction rejected
+
+class ConstructsOnly<T> [legacy_raw_construct] {
+    constructor(T value) {
+    }
+}
+
+ConstructsOnly raw_constructs(1);         # creates ConstructsOnly<auto>
+ConstructsOnly<int> typed_constructs(1);
+# ConstructsOnly raw_target = typed_constructs;  # PARSE-TYPE-ERROR
+    @endcode
+
+    The supported compatibility attributes are
+    <tt>[legacy_raw_accepts]</tt>, <tt>[legacy_raw_construct]</tt>, and
+    <tt>[legacy_raw]</tt>. The combined <tt>[legacy_raw]</tt> form enables
+    both raw annotation acceptance and raw construction defaulting to
+    <tt>&lt;auto&gt;</tt>. Classes with raw-construction compatibility keep that
+    behavior: raw constructor calls create the all-<tt>auto</tt> instantiation
+    instead of inferring from constructor argument values. These attributes
+    should be used only for migration compatibility.
+
     @note No semicolon (\c ";") is required to terminate a class declaration (in fact using a semicolon would raise a parse exception).
 
     @par Out-Of-Line Class Declaration Syntax

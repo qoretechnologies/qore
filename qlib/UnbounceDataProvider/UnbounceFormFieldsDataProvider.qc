@@ -87,7 +87,7 @@ public class UnbounceFormFieldsDataProvider inherits UnbounceDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (!search_options.page_id) {
             throw "UNBOUNCE-ERROR", "page_id is required for listing form fields";
@@ -96,7 +96,7 @@ public class UnbounceFormFieldsDataProvider inherits UnbounceDataProviderBase {
         list<hash<auto>> all_records = fetchAllPages(
             "pages/" + search_options.page_id + "/form_fields",
             "form_fields", NOTHING, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

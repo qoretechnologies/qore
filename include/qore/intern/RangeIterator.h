@@ -87,6 +87,14 @@ public:
         val.discard(xsink);
     }
 
+    using AbstractPrivateData::deref;
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            val.discard(xsink);
+            delete this;
+        }
+    }
+
     DLLLOCAL bool next() {
         ++m_position;
         m_valid = m_increasing ? (calculateCurrent() < m_stop) : (calculateCurrent() > m_stop);

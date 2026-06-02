@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class ClosuresTest
 
@@ -21,10 +22,33 @@ list<auto> sub closures(string x) {
     return (inc, dec);
 }
 
+code<string()> sub nestedClosureFactory() {
+    string prefix = "nested";
+    int a = 2;
+
+    return string sub () {
+        return string sub () {
+            return sprintf("%s-%n", prefix, ++a);
+        }();
+    };
+}
+
+code<int()> sub closureValueCaptureFactory() {
+    code<int()> inner = int sub () {
+        return 1;
+    };
+
+    return int sub () {
+        return inner();
+    };
+}
+
 public class ClosuresTest inherits QUnit::Test {
     constructor() : Test("Closures test", "1.0") {
         addTestCase("First test", \testPart1(), NOTHING);
         addTestCase("Second test", \testPart2(), NOTHING);
+        addTestCase("Nested transitive capture", \testNestedTransitiveCapture(), NOTHING);
+        addTestCase("Captured closure value", \testCapturedClosureValue(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -52,5 +76,18 @@ public class ClosuresTest inherits QUnit::Test {
         c(\str);
 
         assertEq("hi", str, "closure with reference arg");
+    }
+
+    testNestedTransitiveCapture() {
+        code<string()> c = nestedClosureFactory();
+
+        assertEq("nested-3", c(), "first nested closure call");
+        assertEq("nested-4", c(), "second nested closure call");
+    }
+
+    testCapturedClosureValue() {
+        code<int()> c = closureValueCaptureFactory();
+
+        assertEq(1, c(), "returned closure can call captured closure value");
     }
 }

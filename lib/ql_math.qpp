@@ -78,9 +78,9 @@ const MININT = qore(QoreValue(-LLONG_MAX - 1));
 */
 ///@{
 
-//! Returns the multiple of <b>-prec</b>-th power of 10 that is closest to <b>num</b> (numbers halfway between two such powers of 10 are rounded away from zero). (So, for non-negative <b>prec</b> just returns <b>num</b>).
-/** @param num an integer number to round
-  * @param prec precision
+//! Returns the multiple of <b>-precision</b>-th power of 10 that is closest to <b>value</b> (numbers halfway between two such powers of 10 are rounded away from zero). (So, for non-negative <b>precision</b> just returns <b>value</b>).
+/** @param value an integer number to round
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -90,17 +90,17 @@ const MININT = qore(QoreValue(-LLONG_MAX - 1));
   *     round( 6450, -5);  // returns      0
   * @endcode
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-int round(softint num, int prec = 0) [flags=CONSTANT] {
-    return round_ceil_floor_intern(num, prec, ROUND);
+int round(softint value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
+    return round_ceil_floor_intern(value, precision, ROUND);
 }
 
-//! Returns the multiple of <b>-prec</b>-th power of 10 that is closest to <b>num</b> (numbers halfway between two such powers of 10 are rounded away from zero).
+//! Returns the multiple of <b>-precision</b>-th power of 10 that is closest to <b>value</b> (numbers halfway between two such powers of 10 are rounded away from zero).
 /** @par Platform Availability
   * @ref Qore::Option::HAVE_ROUND
-  * @param num a number to round
-  * @param prec precision
+  * @param value a number to round
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -112,27 +112,27 @@ int round(softint num, int prec = 0) [flags=CONSTANT] {
   *     round(-6450.36481, -5);  // returns     0.0
   * @endcode
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-float round(softfloat num, int prec = 0) [flags=CONSTANT] {
+float round(softfloat value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
 #ifdef HAVE_ROUND
-    if (prec > 0) {
-        int c = pow(10, prec);
-        return round(c*num)/c;
+    if (precision > 0) {
+        int c = pow(10, precision);
+        return round(c*value)/c;
     }
-    if (prec < 0) {
-        int c = pow(10, -prec);
-        return c*round(num/c);
+    if (precision < 0) {
+        int c = pow(10, -precision);
+        return c*round(value/c);
     }
-    return round(num);
+    return round(value);
 #else
     return missing_function_error("round", "ROUND", xsink);
 #endif
 }
 
-//! Returns the multiple of <b>-prec</b>-th power of 10 that is closest to <b>num</b> (numbers halfway between two such powers of 10 are rounded away from zero).
-/** @param num a number to round
-  * @param prec precision
+//! Returns the multiple of <b>-precision</b>-th power of 10 that is closest to <b>value</b> (numbers halfway between two such powers of 10 are rounded away from zero).
+/** @param value a number to round
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -144,10 +144,10 @@ float round(softfloat num, int prec = 0) [flags=CONSTANT] {
   *     round(-645084.36481772n, -7);  // returns       0n
   * @endcode
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-number round(number num, int prec = 0) [flags=CONSTANT] {
-    return qore_number_private::doRoundNR(*num, mpfr_round, prec);
+number round(number value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doRoundNR(*value, mpfr_round, precision);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -157,9 +157,9 @@ float round() [flags=RUNTIME_NOOP] {
    return 0;
 }
 
-//! Returns the smallest multiple of <b>-prec</b>-th power of 10 that is greater than or equal to <b>num</b>. (Thus, for non-negative <b>prec</b> just returns <b>num</b>).
-/** @param num an integer number to process (to round upwards)
-  * @param prec precision
+//! Returns the smallest multiple of <b>-precision</b>-th power of 10 that is greater than or equal to <b>value</b>. (Thus, for non-negative <b>precision</b> just returns <b>value</b>).
+/** @param value an integer number to process (to round upwards)
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -169,17 +169,17 @@ float round() [flags=RUNTIME_NOOP] {
   *     ceil(-34500, -8);  // returns 0
   * @endcode
   *
-  * @see floor(softint num, int prec = 0)
+  * @see floor(softint value, int precision = 0)
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-int ceil(int num, int prec = 0) [flags=CONSTANT] {
-    return round_ceil_floor_intern(num, prec, CEIL);
+int ceil(int value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
+    return round_ceil_floor_intern(value, precision, CEIL);
 }
 
-//! Returns the smallest multiple of <b>-prec</b>-th power of 10 that is greater than or equal to <b>num</b>.
-/** @param num the number to process (to round upwards)
-  * @param prec precision
+//! Returns the smallest multiple of <b>-precision</b>-th power of 10 that is greater than or equal to <b>value</b>.
+/** @param value the number to process (to round upwards)
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -191,25 +191,25 @@ int ceil(int num, int prec = 0) [flags=CONSTANT] {
   *     ceil(-34500.28, -7);  // returns 0.0
   * @endcode
   *
-  * @see floor(softfloat num, int prec = 0)
+  * @see floor(softfloat value, int precision = 0)
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-float ceil(softfloat num, int prec = 0) [flags=CONSTANT] {
-    if (prec > 0) {
-        int c = pow(10, prec);
-        return ceil(c*num)/c;
+float ceil(softfloat value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
+    if (precision > 0) {
+        int c = pow(10, precision);
+        return ceil(c*value)/c;
     }
-    if (prec < 0) {
-        int c = pow(10, -prec);
-        return c*ceil(num/c);
+    if (precision < 0) {
+        int c = pow(10, -precision);
+        return c*ceil(value/c);
     }
-    return ceil(num);
+    return ceil(value);
 }
 
-//! Returns the smallest multiple of <b>-prec</b>-th power of 10 that is greater than or equal to <b>num</b>.
-/** @param num the number to process (to round upwards)
-  * @param prec precision
+//! Returns the smallest multiple of <b>-precision</b>-th power of 10 that is greater than or equal to <b>value</b>.
+/** @param value the number to process (to round upwards)
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -221,12 +221,12 @@ float ceil(softfloat num, int prec = 0) [flags=CONSTANT] {
   *     ceil(-34500.28n, -7);  // returns 0n
   * @endcode
   *
-  * @see floor(number num, int prec = 0)
+  * @see floor(number value, int precision = 0)
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-number ceil(number num, int prec = 0) [flags=CONSTANT] {
-    return qore_number_private::doRoundNR(*num, mpfr_ceil, prec);
+number ceil(number value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doRoundNR(*value, mpfr_ceil, precision);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -236,9 +236,9 @@ float ceil() [flags=RUNTIME_NOOP] {
    return 0;
 }
 
-//! Returns the largest multiple of <b>-prec</b>-th power of 10 that is less than or equal to <b>num</b>. (Thus, for non-negative <b>prec</b> just returns <b>num</b>).
-/** @param num an integer number to process (to round downwards)
-  * @param prec precision
+//! Returns the largest multiple of <b>-precision</b>-th power of 10 that is less than or equal to <b>value</b>. (Thus, for non-negative <b>precision</b> just returns <b>value</b>).
+/** @param value an integer number to process (to round downwards)
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -248,17 +248,17 @@ float ceil() [flags=RUNTIME_NOOP] {
   *     floor( 34500, -8);  // returns 0
   * @endcode
   *
-  * @see ceil(softint num, int prec = 0)
+  * @see ceil(softint value, int precision = 0)
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-int floor(int num, int prec = 0) [flags=CONSTANT] {
-    return round_ceil_floor_intern(num, prec, FLOOR);
+int floor(int value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
+    return round_ceil_floor_intern(value, precision, FLOOR);
 }
 
-//! Returns the largest multiple of <b>-prec</b>-th power of 10 that is less than or equal to <b>num</b>.
-/** @param f the number to process (to round downwards)
-  * @param prec precision
+//! Returns the largest multiple of <b>-precision</b>-th power of 10 that is less than or equal to <b>value</b>.
+/** @param value the number to process (to round downwards)
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -270,25 +270,25 @@ int floor(int num, int prec = 0) [flags=CONSTANT] {
   *     floor(-34500.28, -7);  // returns -10000000.0
   * @endcode
   *
-  * @see ceil(softfloat num, int prec = 0)
+  * @see ceil(softfloat value, int precision = 0)
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-float floor(softfloat f, int prec = 0) [flags=CONSTANT] {
-    if (prec > 0) {
-        int c = pow(10, prec);
-        return floor(c*f)/c;
+float floor(softfloat value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
+    if (precision > 0) {
+        int c = pow(10, precision);
+        return floor(c*value)/c;
     }
-    if (prec < 0) {
-        int c = pow(10, -prec);
-        return c*floor(f/c);
+    if (precision < 0) {
+        int c = pow(10, -precision);
+        return c*floor(value/c);
     }
-    return floor(f);
+    return floor(value);
 }
 
-//! Returns the largest multiple of <b>-prec</b>-th power of 10 that is less than or equal to <b>num</b>.
-/** @param num the number to process (to round downwards)
-  * @param prec precision
+//! Returns the largest multiple of <b>-precision</b>-th power of 10 that is less than or equal to <b>value</b>.
+/** @param value the number to process (to round downwards)
+  * @param precision rounding precision
   *
   * @par Example:
   * @code{.py}
@@ -300,12 +300,12 @@ float floor(softfloat f, int prec = 0) [flags=CONSTANT] {
   *     floor(-34500.28n, -7);  // returns -10000000n
   * @endcode
   *
-  * @see ceil(number num, int prec = 0)
+  * @see ceil(number value, int precision = 0)
   *
-  * @since %Qore 0.8.13 this function accepts the <b>prec</b> argument to specify the rounding precision
+  * @since %Qore 0.8.13 this function accepts the <b>precision</b> argument to specify the rounding precision
   */
-number floor(number num, int prec = 0) [flags=CONSTANT] {
-    return qore_number_private::doRoundNR(*num, mpfr_floor, prec);
+number floor(number value, int precision = 0) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doRoundNR(*value, mpfr_floor, precision);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -317,8 +317,8 @@ float floor() [flags=RUNTIME_NOOP] {
 
 //! Returns a number raised to the power of another number
 /**
-    @param x the number to raise to the power of \a y
-    @param y the power to raise \a x to
+    @param base the number to raise to the power of \a exponent
+    @param exponent the power to raise \a base to
 
     @return a number raised to the power of another number
 
@@ -329,18 +329,18 @@ number z = pow(x, y);
 
     @throw DIVISION-BY-ZERO in pow(x, y), if x = 0 then y must be a non-negative value
  */
-number pow(number x, number y) [flags=RET_VALUE_ONLY] {
-    // NOTE: mpfr_pow() will abort if zero is passed as y
-    if (y->zero()) {
+number pow(number base, number exponent) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // NOTE: mpfr_pow() will abort if zero is passed as the exponent
+    if (exponent->zero()) {
         return new QoreNumberNode(1ll);
     }
-    return qore_number_private::doBinary(*x, mpfr_pow, *y, xsink);
+    return qore_number_private::doBinary(*base, mpfr_pow, *exponent, xsink);
 }
 
 //! Returns a number raised to the power of another number
 /**
-    @param x the number to raise to the power of \a y
-    @param y the power to raise \a x to
+    @param base the number to raise to the power of \a exponent
+    @param exponent the power to raise \a base to
 
     @return a number raised to the power of another number
 
@@ -352,23 +352,24 @@ float z = pow(x, y);
     @throw DIVISION-BY-ZERO in pow(x, y), if x = 0 then y must be a non-negative value
     @throw INVALID-POW-ARGUMENTS in pow(x, y), x cannot be negative when y is not an integer value
  */
-float pow(softfloat x = 0.0, softfloat y = 0.0) [flags=RET_VALUE_ONLY] {
-    if (x == 0.0 && y < 0) {
-        return xsink->raiseException("DIVISION-BY-ZERO", "pow(x, y) if x = 0 then y must be a non-negative value");
+float pow(softfloat base = 0.0, softfloat exponent = 0.0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (base == 0.0 && exponent < 0) {
+        return xsink->raiseException("DIVISION-BY-ZERO", "pow(base, exponent): if base = 0 then exponent must be a "
+            "non-negative value");
     }
 
-    if (x < 0 && y != ceil(y)) {
-        return xsink->raiseException("INVALID-POW-ARGUMENTS", "pow(x, y) x cannot be negative when y is not an "
-            "integer value");
+    if (base < 0 && exponent != ceil(exponent)) {
+        return xsink->raiseException("INVALID-POW-ARGUMENTS", "pow(base, exponent): base cannot be negative when "
+            "exponent is not an integer value");
     }
 
-    return pow(x, y);
+    return pow(base, exponent);
 }
 
 //! Returns a number raised to the power of another number
 /**
-    @param x the number to raise to the power of \a y
-    @param y the power to raise \a x to
+    @param base the number to raise to the power of \a exponent
+    @param exponent the power to raise \a base to
 
     @return a number raised to the power of another number
 
@@ -380,17 +381,18 @@ int z = pow(x, y);
     @throw DIVISION-BY-ZERO in pow(x, y), if x = 0 then y must be a non-negative value
     @throw INVALID-POW-ARGUMENTS in pow(x, y), x cannot be negative when y is not an integer value
  */
-int pow(int x = 0, int y = 0) [flags=RET_VALUE_ONLY] {
-    if (!x && y < 0) {
-        return xsink->raiseException("DIVISION-BY-ZERO", "pow(x, y) if x = 0 then y must be a non-negative value");
+int pow(int base = 0, int exponent = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (!base && exponent < 0) {
+        return xsink->raiseException("DIVISION-BY-ZERO", "pow(base, exponent): if base = 0 then exponent must be a "
+            "non-negative value");
     }
 
-    return (int64)pow((double)x, (double)y);
+    return (int64)pow((double)base, (double)exponent);
 }
 
 //! Returns the absolute value of the argument passed
 /**
-    @param i the value to process
+    @param value the value to process
 
     @return the absolute value of the argument passed
 
@@ -401,13 +403,13 @@ int i = abs(-20); # returns 20
 
     @note equivalent to <int>::abs()
  */
-int abs(int i) [flags=CONSTANT] {
-    return i < 0 ? -i : i;
+int abs(int value) [flags=CONSTANT,NAMED_ARGS] {
+    return value < 0 ? -value : value;
 }
 
 //! Returns the absolute value of the argument passed
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the absolute value of the argument passed
 
@@ -418,13 +420,13 @@ number n = abs(-20n); # returns 20n
 
     @note equivalent to <number>::abs()
  */
-number abs(number n) [flags=CONSTANT] {
-    return qore_number_private::doUnary(*n, mpfr_abs);
+number abs(number value) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doUnary(*value, mpfr_abs);
 }
 
 //! Returns the absolute value of the argument passed
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the absolute value of the argument passed
 
@@ -435,8 +437,8 @@ float f = abs(-20.2); # returns 20.2
 
     @note equivalent to <float>::abs()
  */
-float abs(softfloat f) [flags=CONSTANT] {
-    return fabs(f);
+float abs(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+    return fabs(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -458,7 +460,7 @@ float abs() [flags=RUNTIME_NOOP] {
 number z = hypot(x, y);
     @endcode
  */
-number hypot(number x, number y) [flags=CONSTANT] {
+number hypot(number x, number y) [flags=CONSTANT,NAMED_ARGS] {
     return qore_number_private::doBinary(*x, mpfr_hypot, *y);
 }
 
@@ -474,7 +476,7 @@ number hypot(number x, number y) [flags=CONSTANT] {
 float z = hypot(x, y);
     @endcode
  */
-float hypot(softfloat x, softfloat y) [flags=CONSTANT] {
+float hypot(softfloat x, softfloat y) [flags=CONSTANT,NAMED_ARGS] {
     return hypot(x, y);
 }
 
@@ -487,7 +489,7 @@ float hypot() [flags=RUNTIME_NOOP] {
 
 //! Returns the square root of the number passed
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the square root of the number passed
 
@@ -496,13 +498,13 @@ float hypot() [flags=RUNTIME_NOOP] {
 number x = sqrt(y);
     @endcode
  */
-number sqrt(number n) [flags=CONSTANT] {
-    return qore_number_private::doUnary(*n, mpfr_sqrt);
+number sqrt(number value) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doUnary(*value, mpfr_sqrt);
 }
 
 //! Returns the square root of the number passed
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the square root of the number passed
 
@@ -511,8 +513,8 @@ number sqrt(number n) [flags=CONSTANT] {
 float x = sqrt(y);
     @endcode
  */
-float sqrt(softfloat f) [flags=CONSTANT] {
-    return sqrt(f);
+float sqrt(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+    return sqrt(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -524,7 +526,7 @@ float sqrt() [flags=RUNTIME_NOOP] {
 
 //! Returns the cube root of the number passed
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the cube root of the number passed
 
@@ -533,13 +535,13 @@ float sqrt() [flags=RUNTIME_NOOP] {
 number x = cbrt(y);
     @endcode
  */
-number cbrt(number n) [flags=CONSTANT] {
-    return qore_number_private::doUnary(*n, mpfr_cbrt);
+number cbrt(number value) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doUnary(*value, mpfr_cbrt);
 }
 
 //! Returns the cube root of the number passed
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the cube root of the number passed
 
@@ -548,8 +550,8 @@ number cbrt(number n) [flags=CONSTANT] {
 float x = cbrt(y);
     @endcode
  */
-float cbrt(softfloat f) [flags=CONSTANT] {
-    return cbrt(f);
+float cbrt(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+    return cbrt(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -561,7 +563,7 @@ float cbrt() [flags=RUNTIME_NOOP] {
 
 //! Returns the sine of the number in radians passed
 /**
-    @param n the angle in radians
+    @param value the angle in radians
 
     @return the sine of the number in radians passed
 
@@ -570,13 +572,13 @@ float cbrt() [flags=RUNTIME_NOOP] {
 number x = sin(y);
     @endcode
  */
-number sin(number n) [flags=CONSTANT] {
-    return qore_number_private::doUnary(*n, mpfr_sin);
+number sin(number value) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doUnary(*value, mpfr_sin);
 }
 
 //! Returns the sine of the number in radians passed
 /**
-    @param f the angle in radians
+    @param value the angle in radians
 
     @return the sine of the number in radians passed
 
@@ -585,8 +587,8 @@ number sin(number n) [flags=CONSTANT] {
 float x = sin(y);
     @endcode
  */
-float sin(softfloat f) [flags=CONSTANT] {
-    return sin(f);
+float sin(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+    return sin(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -598,7 +600,7 @@ float sin() [flags=RUNTIME_NOOP] {
 
 //! Returns the cosine of the number in radians passed
 /**
-    @param n the angle in radians
+    @param value the angle in radians
 
     @return the cosine of the number in radians passed
 
@@ -607,13 +609,13 @@ float sin() [flags=RUNTIME_NOOP] {
 number x = cos(y);
     @endcode
  */
-number cos(number n) [flags=CONSTANT] {
-    return qore_number_private::doUnary(*n, mpfr_cos);
+number cos(number value) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doUnary(*value, mpfr_cos);
 }
 
 //! Returns the cosine of the number in radians passed
 /**
-    @param f the angle in radians
+    @param value the angle in radians
 
     @return the cosine of the number in radians passed
 
@@ -622,8 +624,8 @@ number cos(number n) [flags=CONSTANT] {
 float x = cos(y);
     @endcode
  */
-float cos(float f) [flags=CONSTANT] {
-    return cos(f);
+float cos(float value) [flags=CONSTANT,NAMED_ARGS] {
+    return cos(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -635,7 +637,7 @@ float cos() [flags=RUNTIME_NOOP] {
 
 //! Returns the tangent of the number in radians passed
 /**
-    @param n the angle in radians
+    @param value the angle in radians
 
     @return the tangent of the number in radians passed
 
@@ -644,13 +646,13 @@ float cos() [flags=RUNTIME_NOOP] {
 number x = tan(y);
     @endcode
  */
-number tan(number n) [flags=CONSTANT] {
-    return qore_number_private::doUnary(*n, mpfr_tan);
+number tan(number value) [flags=CONSTANT,NAMED_ARGS] {
+    return qore_number_private::doUnary(*value, mpfr_tan);
 }
 
 //! Returns the tangent of the number in radians passed
 /**
-    @param f the angle in radians
+    @param value the angle in radians
 
     @return the tangent of the number in radians passed
 
@@ -659,8 +661,8 @@ number tan(number n) [flags=CONSTANT] {
 float x = tan(y);
     @endcode
  */
-float tan(softfloat f) [flags=CONSTANT] {
-    return tan(f);
+float tan(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+    return tan(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -672,7 +674,7 @@ float tan() [flags=RUNTIME_NOOP] {
 
 //! Returns the value in radians of the arc sine of the given value
 /**
-    @param n the sine value to process
+    @param value the sine value to process
 
     @return the value in radians of the arc sine of the given value
 
@@ -681,13 +683,13 @@ float tan() [flags=RUNTIME_NOOP] {
 number x = asin(y);
     @endcode
  */
-number asin(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_asin);
+number asin(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_asin);
 }
 
 //! Returns the value in radians of the arc sine of the given value
 /**
-    @param f the sine value to process
+    @param value the sine value to process
 
     @return the value in radians of the arc sine of the given value
 
@@ -696,8 +698,8 @@ number asin(number n) [flags=CONSTANT] {
 float x = asin(y);
     @endcode
  */
-float asin(softfloat f) [flags=CONSTANT] {
-   return asin(f);
+float asin(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return asin(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -709,7 +711,7 @@ float asin() [flags=RUNTIME_NOOP] {
 
 //! Returns the value in radians of the arc cosine of the given value
 /**
-    @param n the cosine value to process
+    @param value the cosine value to process
 
     @return the value in radians of the arc cosine of the given value
 
@@ -718,13 +720,13 @@ float asin() [flags=RUNTIME_NOOP] {
 number x = acos(y);
     @endcode
  */
-number acos(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_acos);
+number acos(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_acos);
 }
 
 //! Returns the value in radians of the arc cosine of the given value
 /**
-    @param f the cosine value to process
+    @param value the cosine value to process
 
     @return the value in radians of the arc cosine of the given value
 
@@ -733,13 +735,13 @@ number acos(number n) [flags=CONSTANT] {
 float x = acos(y);
     @endcode
  */
-float acos(softfloat f) [flags=CONSTANT] {
-   return acos(f);
+float acos(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return acos(value);
 }
 
 //! Returns the value in radians of the arc tangent of the given value
 /**
-    @param n the tangent value to process
+    @param value the tangent value to process
 
     @return the value in radians of the arc tangent of the given value
 
@@ -748,13 +750,13 @@ float acos(softfloat f) [flags=CONSTANT] {
 number x = atan(y);
     @endcode
  */
-number atan(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_atan);
+number atan(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_atan);
 }
 
 //! Returns the value in radians of the arc tangent of the given value
 /**
-    @param f the tangent value to process
+    @param value the tangent value to process
 
     @return the value in radians of the arc tangent of the given value
 
@@ -763,8 +765,8 @@ number atan(number n) [flags=CONSTANT] {
 float x = atan(y);
     @endcode
  */
-float atan(softfloat f) [flags=CONSTANT] {
-   return atan(f);
+float atan(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return atan(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -786,7 +788,7 @@ float atan() [flags=RUNTIME_NOOP] {
 number f = atan2(y, x);
     @endcode
  */
-number atan2(number y, number x) [flags=CONSTANT] {
+number atan2(number y, number x) [flags=CONSTANT,NAMED_ARGS] {
    return qore_number_private::doBinary(*y, mpfr_atan2, *x);
 }
 
@@ -802,7 +804,7 @@ number atan2(number y, number x) [flags=CONSTANT] {
 float f = atan2(y, x);
     @endcode
  */
-float atan2(softfloat y, softfloat x) [flags=CONSTANT] {
+float atan2(softfloat y, softfloat x) [flags=CONSTANT,NAMED_ARGS] {
    return atan2(y, x);
 }
 
@@ -815,7 +817,7 @@ float atan2() [flags=RUNTIME_NOOP] {
 
 //! Returns the hyperbolic sine of the given value
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the hyperbolic sine of the given value
 
@@ -824,13 +826,13 @@ float atan2() [flags=RUNTIME_NOOP] {
 number x = sinh(y);
     @endcode
  */
-number sinh(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_sinh);
+number sinh(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_sinh);
 }
 
 //! Returns the hyperbolic sine of the given value
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the hyperbolic sine of the given value
 
@@ -839,8 +841,8 @@ number sinh(number n) [flags=CONSTANT] {
 float x = sinh(y);
     @endcode
  */
-float sinh(softfloat f) [flags=CONSTANT] {
-   return sinh(f);
+float sinh(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return sinh(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -852,7 +854,7 @@ float sinh() [flags=RUNTIME_NOOP] {
 
 //! Returns the hyperbolic cosine of the given value
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the hyperbolic cosine of the given value
 
@@ -861,13 +863,13 @@ float sinh() [flags=RUNTIME_NOOP] {
 number x = cosh(y);
     @endcode
  */
-number cosh(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_cosh);
+number cosh(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_cosh);
 }
 
 //! Returns the hyperbolic cosine of the given value
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the hyperbolic cosine of the given value
 
@@ -876,8 +878,8 @@ number cosh(number n) [flags=CONSTANT] {
 float x = cosh(y);
     @endcode
  */
-float cosh(softfloat f) [flags=CONSTANT] {
-   return cosh(f);
+float cosh(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return cosh(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -889,7 +891,7 @@ float cosh() [flags=RUNTIME_NOOP] {
 
 //! Returns the hyperbolic tangent of the given value
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the hyperbolic tangent of the given value
 
@@ -898,13 +900,13 @@ float cosh() [flags=RUNTIME_NOOP] {
 number x = tanh(y);
     @endcode
  */
-number tanh(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_tanh);
+number tanh(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_tanh);
 }
 
 //! Returns the hyperbolic tangent of the given value
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the hyperbolic tangent of the given value
 
@@ -913,8 +915,8 @@ number tanh(number n) [flags=CONSTANT] {
 float x = tanh(y);
     @endcode
  */
-float tanh(softfloat f) [flags=CONSTANT] {
-   return tanh(f);
+float tanh(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return tanh(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -926,7 +928,7 @@ float tanh() [flags=RUNTIME_NOOP] {
 
 //! Returns the natural logarithm of the given value
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the natural logarithm of the given value
 
@@ -935,13 +937,13 @@ float tanh() [flags=RUNTIME_NOOP] {
 float x = nlog(y);
     @endcode
  */
-number nlog(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_log);
+number nlog(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_log);
 }
 
 //! Returns the natural logarithm of the given value
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the natural logarithm of the given value
 
@@ -950,8 +952,8 @@ number nlog(number n) [flags=CONSTANT] {
 float x = nlog(y);
     @endcode
  */
-float nlog(softfloat f) [flags=CONSTANT] {
-   return log(f);
+float nlog(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return log(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -963,7 +965,7 @@ float nlog() [flags=RUNTIME_NOOP] {
 
 //! Returns the base 10 logarithm of the given number
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the base 10 logarithm of the given value
 
@@ -972,13 +974,13 @@ float nlog() [flags=RUNTIME_NOOP] {
 number x = log10(y);
     @endcode
  */
-number log10(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_log10);
+number log10(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_log10);
 }
 
 //! Returns the base 10 logarithm of the given number
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the base 10 logarithm of the given value
 
@@ -987,8 +989,8 @@ number log10(number n) [flags=CONSTANT] {
 float x = log10(y);
     @endcode
  */
-float log10(softfloat f) [flags=CONSTANT] {
-   return log10(f);
+float log10(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return log10(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1000,7 +1002,7 @@ float log10() [flags=RUNTIME_NOOP] {
 
 //! Returns the natural logarithm of 1 + the given number
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the natural logarithm of 1 + the given number
 
@@ -1009,13 +1011,13 @@ float log10() [flags=RUNTIME_NOOP] {
 number x = log1p(y);
     @endcode
  */
-number log1p(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_log1p);
+number log1p(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_log1p);
 }
 
 //! Returns the natural logarithm of 1 + the given number
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the natural logarithm of 1 + the given number
 
@@ -1024,8 +1026,8 @@ number log1p(number n) [flags=CONSTANT] {
 float x = log1p(y);
     @endcode
  */
-float log1p(softfloat f) [flags=CONSTANT] {
-   return log1p(f);
+float log1p(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return log1p(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1037,7 +1039,7 @@ float log1p() [flags=RUNTIME_NOOP] {
 
 //! Returns the exponent of the given number
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the exponent of the given number
 
@@ -1046,8 +1048,8 @@ float log1p() [flags=RUNTIME_NOOP] {
 float x = logb(y);
     @endcode
  */
-float logb(softfloat f) [flags=CONSTANT] {
-   return logb(f);
+float logb(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return logb(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1059,7 +1061,7 @@ float logb() [flags=RUNTIME_NOOP] {
 
 //! Returns the value of \a e (the base of natural logarithms) raised to the power of the given number
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the value of \a e (the base of natural logarithms) raised to the power of the given number
 
@@ -1068,13 +1070,13 @@ float logb() [flags=RUNTIME_NOOP] {
 number x = exp(y);
     @endcode
  */
-number exp(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_exp);
+number exp(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_exp);
 }
 
 //! Returns the value of \a e (the base of natural logarithms) raised to the power of the given number
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the value of \a e (the base of natural logarithms) raised to the power of the given number
 
@@ -1083,8 +1085,8 @@ number exp(number n) [flags=CONSTANT] {
 float x = exp(y);
     @endcode
  */
-float exp(softfloat f) [flags=CONSTANT] {
-   return exp(f);
+float exp(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return exp(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1096,7 +1098,7 @@ float exp() [flags=RUNTIME_NOOP] {
 
 //! Returns the value of 2 raised to the power of the given number
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the value of 2 raised to the power of the given number
 
@@ -1105,13 +1107,13 @@ float exp() [flags=RUNTIME_NOOP] {
 number x = exp2(y);
     @endcode
  */
-number exp2(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_exp2);
+number exp2(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_exp2);
 }
 
 //! Returns the value of 2 raised to the power of the given number
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the value of 2 raised to the power of the given number
 
@@ -1120,11 +1122,11 @@ number exp2(number n) [flags=CONSTANT] {
 float x = exp2(y);
     @endcode
  */
-float exp2(softfloat f) [flags=CONSTANT] {
+float exp2(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
 #ifdef HAVE_EXP2
-   return exp2(f);
+   return exp2(value);
 #else
-   return pow(2, f);
+   return pow(2, value);
 #endif
 }
 
@@ -1137,7 +1139,7 @@ float exp2() [flags=RUNTIME_NOOP] {
 
 //! Returns the value of \a e (the base of natural logarithms) raised to the power of the given number - 1
 /**
-    @param n the value to process
+    @param value the value to process
 
     @return the value of \a e (the base of natural logarithms) raised to the power of the given number - 1
 
@@ -1146,13 +1148,13 @@ float exp2() [flags=RUNTIME_NOOP] {
 number x = exp1m(y);
     @endcode
  */
-number expm1(number n) [flags=CONSTANT] {
-   return qore_number_private::doUnary(*n, mpfr_expm1);
+number expm1(number value) [flags=CONSTANT,NAMED_ARGS] {
+   return qore_number_private::doUnary(*value, mpfr_expm1);
 }
 
 //! Returns the value of \a e (the base of natural logarithms) raised to the power of the given number - 1
 /**
-    @param f the value to process
+    @param value the value to process
 
     @return the value of \a e (the base of natural logarithms) raised to the power of the given number - 1
 
@@ -1161,8 +1163,8 @@ number expm1(number n) [flags=CONSTANT] {
 float x = exp1m(y);
     @endcode
  */
-float expm1(softfloat f) [flags=CONSTANT] {
-    return expm1(f);
+float expm1(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+    return expm1(value);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1173,17 +1175,17 @@ float expm1() [flags=RUNTIME_NOOP] {
 }
 
 //! Compares numbers with a given epsilon
-/** @param n1 the first number
-    @param n2 the second number
+/** @param left the first number
+    @param right the second number
     @param epsilon the maximum difference in the numbers under which they are considered equal
 
-    @return -1 if \a n1 is less then \a n2, 0 if the difference between the numbers is less than \a epsilon, 1 if
-    \a n1 is greater than \a n2
+    @return -1 if \a left is less then \a right, 0 if the difference between the numbers is less than \a epsilon, 1 if
+    \a left is greater than \a right
 
     @since %Qore 0.9.5
 */
-int compare(number n1, number n2, number epsilon) [flags=CONSTANT] {
-    SimpleRefHolder<QoreNumberNode> v(n1->doMinus(*n2));
+int compare(number left, number right, number epsilon) [flags=CONSTANT,NAMED_ARGS] {
+    SimpleRefHolder<QoreNumberNode> v(left->doMinus(*right));
     if (v->zero()) {
         return 0;
     }
@@ -1196,17 +1198,17 @@ int compare(number n1, number n2, number epsilon) [flags=CONSTANT] {
 }
 
 //! Compares numbers with a given epsilon
-/** @param n1 the first number
-    @param n2 the second number
+/** @param left the first number
+    @param right the second number
     @param epsilon the maximum difference in the numbers under which they are considered equal
 
-    @return -1 if \a n1 is less then \a n2, 0 if the difference between the numbers is less than \a epsilon, 1 if
-    \a n1 is greater than \a n2
+    @return -1 if \a left is less then \a right, 0 if the difference between the numbers is less than \a epsilon, 1 if
+    \a left is greater than \a right
 
     @since %Qore 0.9.5
 */
-int compare(float n1, float n2, float epsilon) [flags=CONSTANT] {
-    double v = n1 - n2;
+int compare(float left, float right, float epsilon) [flags=CONSTANT,NAMED_ARGS] {
+    double v = left - right;
     if (v == 0.0) {
         return 0;
     }

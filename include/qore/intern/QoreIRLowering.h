@@ -1,0 +1,514 @@
+/* -*- indent-tabs-mode: nil -*- */
+/*
+    QoreIRLowering.h
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#ifndef _QORE_INTERN_QOREIRLOWERING_H
+#define _QORE_INTERN_QOREIRLOWERING_H
+
+#include <stack>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+#include <qore/intern/QoreIRBuilder.h>
+#include <qore/intern/QoreParseAnalysis.h>
+
+// Forward declaration for obe_type_e enum
+enum obe_type_e;
+
+class QoreParseContext;
+class QoreParseListNode;
+class QoreListNode;
+class QoreValue;
+class VarRefNode;
+class AbstractStatement;
+class StatementBlock;
+class QoreTypeInfo;
+class LVList;
+class QoreMapOperatorNode;
+class QoreSelectOperatorNode;
+class QoreFoldlOperatorNode;
+class QoreFoldrOperatorNode;
+class QoreMapSelectOperatorNode;
+class QoreHashMapOperatorNode;
+class QoreHashMapSelectOperatorNode;
+class QoreIROnBlockExitInstruction;
+
+class QoreIRLowering;
+
+//! Per-callback state passed to plugin IR lowering hooks.
+/** Plugin lowering callbacks use this object to publish their lowered IR result
+ *  and, on failure, the diagnostic that should be propagated to the caller.
+ */
+class QoreIRLoweringContext {
+public:
+    //! Sets the diagnostic for a failed plugin lowering callback.
+    DLLLOCAL void setError(const std::string& message);
+    //! Sets the diagnostic for a failed plugin lowering callback.
+    DLLLOCAL void setError(const char* message);
+    //! Returns the current plugin lowering diagnostic.
+    DLLLOCAL const std::string& getError() const;
+    //! Sets the IR value produced by a successful plugin lowering callback.
+    DLLLOCAL void setResult(QoreIRValue value);
+    //! Returns the IR value produced by a successful plugin lowering callback.
+    DLLLOCAL QoreIRValue getResult() const;
+    //! Returns the active lowering pass for advanced callbacks that need it.
+    DLLLOCAL QoreIRLowering& getLowering() const;
+
+private:
+    friend class QoreIRLowering;
+
+    DLLLOCAL QoreIRLoweringContext(QoreIRLowering& lowering, std::string& error)
+            : lowering(lowering), error(error) {
+    }
+
+    QoreIRLowering& lowering;
+    std::string& error;
+    QoreIRValue result;
+};
+
+class QoreIRLowering {
+public:
+    //! Handler metadata for inline compilation at block exit points
+    /** Stores on_exit/on_success/on_error handler StatementBlocks along with their type
+     *  and location information. These are lowered inline at block exit points rather than
+     *  compiled as separate QoreIRFunction objects.
+     */
+    struct InlineHandler {
+        obe_type_e type;                                    //!< handler type (OBE_Unconditional/Success/Error)
+        StatementBlock* code;                               //!< handler code block
+        const QoreProgramLocation* loc;                     //!< source location for error reporting
+        QoreIROnBlockExitInstruction* obe_inst = nullptr;   //!< instruction to attach compiled handler IR
+    };
+
+    //! Captured variables needed by a handler for parent scope access
+    /** Phase 3b: Stores information about local and global variables referenced by a handler.
+     *  These are captured as parameters to the handler IR function so it can access parent scope.
+     */
+    struct HandlerVariableCapture {
+        std::vector<LocalVar*> referenced_locals;      //!< local vars referenced by handler
+        std::unordered_set<LocalVar*> referenced_set;  //!< set for O(1) duplicate detection
+    };
+
+    explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr);
+
+    QoreIRValue lowerExpression(const QoreValue& expr, std::string& error);
+    bool lowerStatement(const AbstractStatement* stmt, std::string& error);
+    bool lowerStatementBlock(const StatementBlock* block, std::string& error);
+    void setParseContext(QoreParseContext* parse_context);
+
+    //! Compile all handler bodies to separate QoreIRFunction objects and attach to OnBlockExit instructions
+    //! @param handlers handlers to compile for this block level
+    //! @param parent_func parent function for slot inheritance
+    //! @param error receives error message for any compilation failures (non-fatal)
+    //! @return number of handlers successfully compiled, -1 on error
+    int compileBlockHandlerIRs(const std::vector<InlineHandler>& handlers,
+        QoreIRFunction* parent_func, std::string& error);
+
+    //! @param error receives error message for any compilation failures (non-fatal)
+    //! @return number of handlers successfully compiled
+    int compileAllHandlerIRs(std::string& error);
+
+public:
+    // Expression handler methods - public for use by QoreIRExprRegistry
+    // These are implementation details not meant for external use
+    QoreIRValue lowerConstant(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerVarRef(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerAssignment(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerPlusEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMinusEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMultiplyEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerDivideEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerModuloEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerAndEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerOrEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerXorEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerPreIncrement(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerPostIncrement(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerPreDecrement(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerPostDecrement(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerPlus(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMinus(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMultiplication(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerDivision(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerModulo(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryAnd(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryOr(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryXor(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBinaryNot(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShiftLeft(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShiftRight(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShiftLeftEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShiftRightEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalNotEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalAbsoluteEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalAbsoluteNotEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalLessThan(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalLessThanOrEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalGreaterThan(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalGreaterThanOrEquals(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalComparison(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerUnaryPlus(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerUnaryMinus(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRange(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSquareBracketsRange(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSquareBrackets(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerShift(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerPush(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerUnshift(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSplice(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerExtract(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRemove(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerDelete(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerKeys(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRegexMatch(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRegexNMatch(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRegexExtract(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerRegexSubst(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerInstanceOf(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerTrim(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerChomp(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerTransliteration(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBackground(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerListAssignment(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerContainerLiteral(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerContainerElement(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerElements(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerDotEval(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerFoldl(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerFoldr(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashMap(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerHashMapSelect(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalAnd(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalOr(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerLogicalNot(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerNullCoalescing(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerValueCoalescing(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerCallReference(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerSelfCall(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
+
+private:
+    //! Phase 3b: Analyze handler code for variable references to enable parameter capture
+    /** Walks the handler AST to identify which parent scope variables are referenced.
+     *  These variables will be passed as parameters to the compiled handler IR function.
+     */
+    HandlerVariableCapture analyzeHandlerVariables(const StatementBlock* handler_code);
+
+    //! Phase 3b: Compile handler code to IR function with captured variable parameters
+    /** Creates a QoreIRFunction for the handler with captured variables passed as parameters.
+     *  The handler body is lowered into the new function, which can be executed from any context.
+     *  Returns nullptr on compilation failure.
+     */
+    QoreIRFunction* compileHandlerToIR(const StatementBlock* handler_code,
+            const HandlerVariableCapture& capture, std::string& error);
+
+    //! Native IR lowering for map operator with implicit argument context
+    QoreIRValue lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for select operator with implicit argument context
+    QoreIRValue lowerSelectNative(const QoreSelectOperatorNode* select, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for foldl operator with implicit argument context
+    QoreIRValue lowerFoldlNative(const QoreFoldlOperatorNode* foldl, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for foldr operator (reverse iteration)
+    QoreIRValue lowerFoldrNative(const QoreFoldrOperatorNode* foldr, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for map+select operator
+    QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for hash map operator
+    QoreIRValue lowerHashMapNative(const QoreHashMapOperatorNode* hm, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for hash map+select operator
+    QoreIRValue lowerHashMapSelectNative(const QoreHashMapSelectOperatorNode* hms, const QoreValue& expr, std::string& error);
+    QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
+    bool guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
+    bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
+    QoreIRValue tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
+        const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
+        bool weak, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
+        LVUnaryOp unary_op = LVUnaryOp::PreInc,
+        LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push,
+        const QoreValue& pattern_expr = QoreValue());
+    bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
+    bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
+    bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
+    bool analysisIndicatesInt(const QoreParseAnalysis& analysis) const;
+    bool analysisIndicatesFloat(const QoreParseAnalysis& analysis) const;
+    bool analysisIndicatesDate(const QoreParseAnalysis& analysis) const;
+    bool guaranteedIntType(const QoreValue* expr) const;
+    bool guaranteedFloatType(const QoreValue* expr) const;
+    bool guaranteedNumberType(const QoreValue* expr) const;
+    bool guaranteedStringType(const QoreValue* expr) const;
+    bool guaranteedDateType(const QoreValue* expr) const;
+    const QoreTypeInfo* selectAnalysisType(const QoreParseAnalysis& analysis) const;
+    QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,
+        QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
+    QoreIROpcode selectNumericOpcode(const QoreValue& left, const QoreValue& right,
+        QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op,
+        QoreIROpcode number_op);
+    QoreIROpcode selectFoldOpcode(const QoreParseAnalysis& analysis,
+        QoreIROpcode any_op, QoreIROpcode int_op, QoreIROpcode float_op) const;
+    bool ensureBuilderContext(std::string& error) const;
+    QoreIRValue tryPluginLowering(const QoreValue& expr, std::string& error);
+    QoreIRBasicBlock* createBlock(const std::string& prefix);
+    QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
+        const QoreValue& expr);
+    bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
+        const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr, bool weak = false,
+        QoreIRValue* store_result = nullptr);
+    LocalVar* getLocalVarFromValue(const QoreValue& expr) const;
+    const QoreTypeInfo* getGuaranteedTypeForValue(const QoreValue* expr, const QoreTypeInfo* fallback) const;
+    bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
+        std::vector<QoreIRValue>& lowered, std::string& error);
+    bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
+    bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
+        const QoreParseListNode* parse_args, const QoreListNode* args) const;
+    bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
+        const QoreListNode* args) const;
+    QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
+        const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,
+        const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left, QoreIRValue right,
+        const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,
+        const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitHashKeyCompoundOp(const VarRefNode* container_var, const std::string& key_name,
+        const QoreValue& key_expr, QoreIROpcode arith_op, const QoreIRValue& right,
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitHashKeyDynamicCompoundOp(const VarRefNode* container_var, const QoreValue& key_expr,
+        QoreIROpcode arith_op, const QoreIRValue& right,
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitListKeyCompoundOp(const VarRefNode* container_var, const QoreValue& index_expr,
+        QoreIROpcode arith_op, const QoreIRValue& right,
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitHashKeyDirectStore(const VarRefNode* container_var, const std::string& key_name,
+        const QoreValue& key_expr, const QoreIRValue& value,
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitHashKeyDynamicStore(const VarRefNode* container_var, const QoreValue& key_expr,
+        const QoreIRValue& value, const QoreValue& full_expr,
+        const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitListIndexDirectStore(const VarRefNode* container_var, const QoreValue& index_expr,
+        const QoreIRValue& value, const QoreValue& full_expr,
+        const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
+    bool tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
+        QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target);
+    QoreIROpcode selectComparisonOpcode(const QoreValue& left, const QoreValue& right,
+        QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op);
+    bool expressionCanThrow(const QoreValue& expr) const;
+    void markLocalAssignmentFromExpression(const QoreValue& exp);
+    void markLocalUnassignmentFromExpression(const QoreValue& exp);
+
+    QoreIRBasicBlock* getCurrentExceptionTarget() const;
+    QoreIRBasicBlock* getGuardExceptionTarget() const;
+    void setLoopCheckpointExceptionTarget(QoreIRInstruction* inst, QoreIRBasicBlock* target,
+        QoreIRBasicBlock* handler = nullptr);
+    bool needsNotNothingGuard(const QoreValue& expr) const;
+    bool needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type,
+        bool allow_maybe_nothing = false) const;
+    void maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue& expr);
+    void maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue* expr,
+        const QoreProgramLocation* loc, const QoreTypeInfo* target_type,
+        bool allow_maybe_nothing = false);
+    const QoreProgramLocation* getExpressionLocation(const QoreValue& expr) const;
+    const QoreTypeInfo* getVarRefTypeInfo(const VarRefNode* var) const;
+    const QoreProgramLocation* getVarRefLocation(const VarRefNode* var) const;
+
+    //! Flags for emitBlockCleanups controlling cleanup behavior
+    enum CleanupFlags : unsigned {
+        CF_NONE = 0,
+        CF_SKIP_LVARS = 1,       //!< skip local var cleanup (for return - pre-instantiation handles it)
+        CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break)
+    };
+
+    //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
+    //! from innermost to target depth
+    /** Used by return/break/continue to properly unwind on_exit handlers, block-scoped
+     *  local variables, and reference foreach state in the correct interleaved order
+     *  matching AST mode. Inlines handler code when handlers have been lowered.
+     *  @param target_depth the cleanup_stack depth to unwind to
+     *  @param error output string for error messages
+     *  @param is_error true if exiting due to an exception
+     *  @param flags combination of CleanupFlags
+     *  @return false if lowering failed
+     */
+    bool emitBlockCleanups(size_t target_depth, std::string& error, bool is_error = false, unsigned flags = CF_NONE);
+
+    //! Determine if a handler should execute for a given exit type
+    /** Handlers are filtered by type:
+     *  - OBE_Unconditional: always executes
+     *  - OBE_Success: executes on normal (non-error) exits
+     *  - OBE_Error: executes only on error (exception) exits
+     */
+    bool shouldRunHandler(const InlineHandler& handler, bool is_error);
+
+    //! Lower all applicable handlers for the current block at an exit point
+    /** Lowers handler code inline into the IR in LIFO order.
+     *  @param is_error true if this is an error/exception exit
+     *  @param start_index start index in block_handlers (for multi-block context)
+     *  @param end_index end index in block_handlers (SIZE_MAX = through the end)
+     *  @param barrier_depth cleanup_stack depth to set as a hard floor while a
+     *    handler body is being inlined — any `emitBlockCleanups` invoked from a
+     *    non-local exit (return/break/continue) inside the handler body skips
+     *    the firing Scope entry (which still owns this handler range) so it
+     *    can't re-enter `lowerHandlersAtExit` on the same handlers. Cleanup
+     *    entries below that Scope, such as block locals, still run. SIZE_MAX =
+     *    no barrier. Implemented via a
+     *    HandlerBarrier entry pushed on cleanup_stack for the duration of the
+     *    handler body lowering.
+     *  @return false if lowering failed
+     */
+    bool lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index = 0,
+            size_t end_index = SIZE_MAX, size_t barrier_depth = SIZE_MAX);
+
+    QoreIRBuilder& builder;
+    QoreParseContext* parse_context = nullptr;
+    //! Values known to never be NOTHING (produced by typed opcodes)
+    std::unordered_set<uint32_t> never_nothing_values;
+    uint32_t block_counter = 0;
+    uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
+    int statement_block_depth = 0;  //!< Nesting depth for debug block markers
+    int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
+    QoreIRBasicBlock* guard_exception_target_override = nullptr;
+
+    //! Stack of active scope IDs for tracking nested on_exit handlers
+    std::vector<uint32_t> scope_stack;
+
+    //! Entry in the block cleanup stack for interleaved cleanup of on_exit handlers,
+    //! block-scoped local variables, and reference foreach state on break/continue/return
+    struct BlockCleanupEntry {
+        //! HandlerBarrier is a sentinel pushed around a handler body being
+        //! inlined by lowerHandlersAtExit().  It has no cleanup effect, but
+        //! emitBlockCleanups() uses it to skip the firing Scope entry so a
+        //! non-local exit inside the handler body cannot re-enter the same
+        //! handler range. Cleanup entries below that Scope still run.
+        enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar };
+        Type type;
+        uint32_t scope_id = 0;                    //!< scope ID for Scope entries
+        size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
+        const LVList* lvars = nullptr;             //!< local variables for Lvars entries
+        const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
+        QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
+        QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord
+        QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
+        QoreIRValue context_state;                 //!< Context* handle for Context entries
+        LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
+    };
+    //! Unified cleanup stack tracking scope exits, block-scoped locals, and ref foreach state
+    /** Entries are pushed in nesting order. Reverse iteration gives correct cleanup ordering.
+     *  For reference foreach, the ordering is:
+     *    RefForeach (state) → Scope (try scope) → RefForeachRecord (state, var, $#)
+     *  On break, all three are processed (fill remaining + write back).
+     *  On return, all three are processed (write back without fill remaining).
+     *  On continue, only body inner entries above RefForeachRecord are processed.
+     */
+    std::vector<BlockCleanupEntry> cleanup_stack;
+
+    //! Handlers registered for current block, to be lowered inline at exit points
+    std::vector<InlineHandler> block_handlers;
+
+    //! Top-level handlers saved before block_handlers is erased
+    /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise
+     *  be lost when lowerStatementBlock() erases block_handlers. Only populated at
+     *  the top-level block scope (block_handler_start == 0).
+     */
+    std::vector<InlineHandler> saved_top_level_handlers;
+
+    //! Stack of handler vector sizes at each block entry for nested block tracking
+    /** When entering a nested block, push the current block_handlers.size().
+     *  On exit, pop and restore to enable proper handler isolation between block scopes.
+     */
+    std::stack<size_t> handler_stack;
+
+    class GuardExceptionTargetOverrideScope {
+    public:
+        GuardExceptionTargetOverrideScope(QoreIRLowering& lowering, QoreIRBasicBlock* target);
+        ~GuardExceptionTargetOverrideScope();
+
+    private:
+        QoreIRLowering& lowering;
+        QoreIRBasicBlock* previous;
+    };
+
+    struct FlowTarget {
+        QoreIRBasicBlock* break_target = nullptr;
+        QoreIRBasicBlock* continue_target = nullptr;
+        bool is_switch = false;
+        int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
+        size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
+        QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
+    };
+    std::vector<FlowTarget> flow_stack;
+    std::vector<QoreIRBasicBlock*> exception_stack;
+    //! Scope stack depth at each exception handler's entry point.
+    //! Parallel to exception_stack — records scope_stack.size() when each handler was pushed.
+    //! Used to set QoreIRInvokeInstruction::exception_scope_depth so the IR interpreter
+    //! can execute on_error/on_exit handlers when an invoke throws.
+    std::vector<size_t> exception_scope_depth_stack;
+
+    //! Phase 3b: Maps OnBlockExitStatement to compiled handler IR
+    //! Stores compiled handlers during lowering, ready for Phase 4 execution
+    std::unordered_map<const OnBlockExitStatement*, std::unique_ptr<QoreIRFunction>> compiled_handlers;
+
+    //! Depth of active catch scopes that need CatchCleanup on non-local exit
+    int catch_cleanup_depth = 0;
+
+    //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
+    /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
+     * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
+     * This eliminates 6+ runtime calls (push/pop/load for arg and element) per loop iteration.
+     */
+    struct VirtualImplicitContext {
+        QoreIRValue arg0;      //!< virtual $1 value (offset 0)
+        QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
+        QoreIRValue element;   //!< virtual $# value
+        bool active = false;   //!< true when virtual context is in effect
+    };
+    VirtualImplicitContext virtual_implicit;
+
+    //! Counter for AST-delegated instructions (Call/Invoke with expr, DotEval* except
+    //! DotEvalMethodDirect/HashKeyAccess).  Used by lowerMapNative to determine whether
+    //! push/pop implicit arg calls are needed for the map body.
+    int ast_delegate_count = 0;
+};
+
+#endif

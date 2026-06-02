@@ -72,8 +72,8 @@ int WebSocketStreamFrameState::processFrames() {
         WsFrame frame = decoder.nextFrame(&xs);
         if (xs) {
             // Protocol-level decode error (reserved opcode, bad header, etc.)
-            const QoreStringNode* desc = xs.getExceptionDesc().get<const QoreStringNode>();
-            std::string m = desc ? desc->c_str() : "WebSocket decode error";
+            QoreStringValueHelper desc(xs.getExceptionDesc());
+            std::string m = *desc ? desc->c_str() : "WebSocket decode error";
             xs.clear();
             if (frame.payload) {
                 ExceptionSink dx;
@@ -171,8 +171,8 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
     ExceptionSink xs;
     bool complete = reassembler.processFrame(frame, &xs);
     if (xs) {
-        const QoreStringNode* desc = xs.getExceptionDesc().get<const QoreStringNode>();
-        std::string m = desc ? desc->c_str() : "WebSocket fragmentation error";
+        QoreStringValueHelper desc(xs.getExceptionDesc());
+        std::string m = *desc ? desc->c_str() : "WebSocket fragmentation error";
         xs.clear();
         setError(m, WSCC_ProtocolError);
         return;

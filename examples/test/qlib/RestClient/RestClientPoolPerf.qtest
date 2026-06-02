@@ -26,21 +26,22 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/Swagger.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/FsUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestSchemaValidator
+%requires Swagger
+%requires OpenApi3
+%requires RestClient
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires RestClientIo
+%requires FsUtil
 
 %try-module json >= 1.5
 %define NoJson
@@ -50,11 +51,15 @@
 
 class RestClientPoolPerfTest inherits QUnit::Test {
     public {
-        #! Thread counts for scalability tests
-        const ThreadCounts = (1, 5, 10, 25, 50);
+        #! Default thread counts for scalability tests.  The full stress profile is available with
+        #! QORE_RESTCLIENT_POOL_PERF_STRESS=1, but the default profile needs to leave margin for
+        #! run_tests.sh's fixed 300s per-test timeout after the preceding HTTP/3 suite.
+        const DefaultThreadCounts = (1, 5, 10);
+        const StressThreadCounts = (1, 5, 10, 25, 50);
 
         #! Requests per thread in throughput tests
-        const RequestsPerThread = 20;
+        const DefaultRequestsPerThread = 5;
+        const StressRequestsPerThread = 20;
     }
 
     private {
@@ -92,6 +97,23 @@ class RestClientPoolPerfTest inherits QUnit::Test {
 
     globalSetUp() {
         container_name = sprintf("qore-rest-pool-test-%d", getpid());
+
+        # Pre-flight: confirm podman is installed and the nginx:alpine
+        # image is already available locally.  Without this check, the
+        # later `podman run` call at line 168 would trigger an implicit
+        # image pull, which blocks for minutes on slow or offline
+        # networks before any timeout expires (`backquote` has no
+        # built-in cap).  Fast-failing here keeps `run_tests.sh` from
+        # stalling for ~5 minutes on hosts without a pre-pulled image.
+        if (system("command -v podman >/dev/null 2>&1")) {
+            testSkip("podman not installed");
+            return;
+        }
+        if (system("podman image exists docker.io/library/nginx:alpine")) {
+            testSkip("nginx:alpine image not available locally "
+                "(run `podman pull docker.io/library/nginx:alpine` to enable this test)");
+            return;
+        }
 
         # Generate self-signed cert
         string cert_path = tmp_dir.path + "/server.crt";
@@ -215,6 +237,14 @@ http {
         return (now_us() - start).durationMicroseconds() / 1000.0;
     }
 
+    private list<int> threadCounts() {
+        return ENV.QORE_RESTCLIENT_POOL_PERF_STRESS ? StressThreadCounts : DefaultThreadCounts;
+    }
+
+    private int requestsPerThread() {
+        return ENV.QORE_RESTCLIENT_POOL_PERF_STRESS ? StressRequestsPerThread : DefaultRequestsPerThread;
+    }
+
     #! Print latency statistics if verbose
     private printLatencyStats(string label, list<float> latencies) {
         if (m_options.verbose < 3 || !latencies) {
@@ -330,7 +360,7 @@ http {
         on_exit pool.shutdown();
 
         int thread_count = 20;
-        int per_thread = RequestsPerThread;
+        int per_thread = requestsPerThread();
         int total = thread_count * per_thread;
 
         Counter done(thread_count);
@@ -387,7 +417,7 @@ http {
         on_exit pool.shutdown();
 
         int thread_count = 20;
-        int per_thread = RequestsPerThread;
+        int per_thread = requestsPerThread();
         int total = thread_count * per_thread;
 
         Counter done(thread_count);
@@ -443,13 +473,13 @@ http {
             printf("\n  RestClientPool scalability (blocking I/O):\n");
         }
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClient::RestClientPool pool(
                 {"url": base_url, "data": "json", "accept_all_certs": True},
                 <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -502,14 +532,14 @@ http {
             printf("\n  RestClientIoPool scalability (async multiplexed I/O):\n");
         }
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClientIo::RestClientIoPool pool(
                 {"url": base_url, "data": "json", "error_passthru": True,
                  "accept_all_certs": True, "protocol": "h2"},
                 <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -570,7 +600,7 @@ http {
             }
         );
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClientIo::RestClientIoPool pool(
                 {"url": base_url, "data": "json", "error_passthru": True,
                  "accept_all_certs": True, "protocol": "h2"},
@@ -578,7 +608,7 @@ http {
                 shared_mgr);
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -643,7 +673,7 @@ http {
             }
         );
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClientIo::RestClientIoPool pool(
                 {"url": base_url, "data": "json", "error_passthru": True,
                  "accept_all_certs": True, "protocol": "h3"},
@@ -651,7 +681,7 @@ http {
                 shared_mgr);
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -714,14 +744,14 @@ http {
             printf("\n  RestClientPool H3 scalability (blocking I/O, HTTP/3 QUIC):\n");
         }
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClient::RestClientPool pool(
                 {"url": base_url, "data": "json", "accept_all_certs": True,
                  "http_version": "3.0"},
                 <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -774,14 +804,14 @@ http {
             printf("\n  RestClientIoPool H3 scalability (async multiplexed I/O, HTTP/3 QUIC):\n");
         }
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClientIo::RestClientIoPool pool(
                 {"url": base_url, "data": "json", "error_passthru": True,
                  "accept_all_certs": True, "protocol": "h3"},
                 <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -833,7 +863,7 @@ http {
         }
 
         int threads = 25;
-        int per_thread = RequestsPerThread;
+        int per_thread = requestsPerThread();
         int total = threads * per_thread;
 
         # --- RestClientPool (blocking) ---

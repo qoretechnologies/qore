@@ -33,8 +33,14 @@ public const DefaultMaxCacheEntries = 100;
     configurable maximum cache size (LRU eviction).
 
     The REST API contract:
-    - \c POST {base_path}/{name}/versions — register version (body: metadata + artifact)
+    - \c POST {base_path}/{name}/versions — register version; body contains
+      version metadata plus a base64 artifact
     - \c GET {base_path}/{name}/versions/{vid}/artifact — download artifact
+    - \c POST {base_path}/{name}/versions/{vid}/artifacts/{artifact} —
+      register a named artifact; body contains artifact metadata plus base64 data
+    - \c GET {base_path}/{name}/versions/{vid}/artifacts/{artifact} —
+      download a named artifact
+    - \c GET {base_path}/{name}/versions/{vid}/artifacts — list named artifacts
     - \c GET {base_path}/{name}/versions — list versions
     - \c GET {base_path} — list models
     - \c PUT {base_path}/{name}/versions/{vid}/tags/{tag} — tag version
@@ -55,7 +61,7 @@ public const DefaultMaxCacheEntries = 100;
     @code{.py}
     RestClient rc({"url": "https://api.example.com"});
     auto backend = new RestBackend(rc, "/models", "acme-corp", {
-        "get_headers": *hash<auto> sub() { return {"Authorization": "Bearer " + token}; },
+        "get_headers": sub () { return {"Authorization": "Bearer " + token}; },
         "max_cache_entries": 50,
     });
     auto reg = new ModelRegistry({"backend": backend});
@@ -71,7 +77,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         #! Base path for REST API endpoints
         string base_path;
 
-        #! Local artifact cache: key "{name}/{version_id}" → binary
+        #! Local artifact cache: key "{name}/{version_id}/{artifact_name}" → binary
         hash<string, binary> artifact_cache = {};
 
         #! Cache access order for LRU eviction (most recent at end)
@@ -92,8 +98,8 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         @param base_path the base path for model registry REST endpoints
         @param tenant_id optional tenant identifier for multi-tenant deployments
         @param options optional hash with:
-        - \c get_headers: callback code<*hash<auto>()>() returning extra headers
-          to include in each request (e.g., for authentication)
+        - \c get_headers: callback returning extra headers to include in each
+          request (e.g., for authentication)
         - \c max_cache_entries: maximum number of artifacts to cache locally
           (default @ref DefaultMaxCacheEntries); set to 0 to disable caching
     */
@@ -121,8 +127,27 @@ public class RestBackend inherits AbstractModelRegistryBackend {
     }
 
     binary loadArtifact(string name, string version_id) {
+        return loadNamedArtifact(name, version_id, "model");
+    }
+
+    nothing registerNamedArtifact(string name, string version_id, string artifact_name,
+            binary artifact, hash<ModelArtifactInfo> metadata) {
+        validateArtifactName(artifact_name);
+        metadata.name = artifact_name;
+        metadata.size = artifact.size();
+        hash<auto> body = metadata + {
+            "artifact_base64": make_base64_string(artifact),
+        };
+        doPost(getTenantPath() + "/" + encode_url_param(name)
+            + "/versions/" + encode_url_param(version_id)
+            + "/artifacts/" + encode_url_param(artifact_name), body);
+        invalidateCache(name, version_id, artifact_name);
+    }
+
+    binary loadNamedArtifact(string name, string version_id, string artifact_name) {
+        validateArtifactName(artifact_name);
         # Check local cache first
-        string cache_key = name + "/" + version_id;
+        string cache_key = makeCacheKey(name, version_id, artifact_name);
         {
             cache_mutex.lock();
             on_exit cache_mutex.unlock();
@@ -134,7 +159,10 @@ public class RestBackend inherits AbstractModelRegistryBackend {
 
         # Cache miss — download from REST API
         hash<auto> resp = doGet(getTenantPath() + "/" + encode_url_param(name)
-            + "/versions/" + encode_url_param(version_id) + "/artifact");
+            + "/versions/" + encode_url_param(version_id)
+            + (artifact_name == "model"
+                ? "/artifact"
+                : "/artifacts/" + encode_url_param(artifact_name)));
 
         binary artifact;
         if (resp.body.artifact_base64) {
@@ -157,6 +185,27 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         return artifact;
     }
 
+    list<hash<ModelArtifactInfo>> listArtifacts(string name, string version_id) {
+        hash<auto> resp = doGet(getTenantPath() + "/" + encode_url_param(name)
+            + "/versions/" + encode_url_param(version_id) + "/artifacts");
+        auto result = resp.body.artifacts;
+        if (!exists result && resp.body.typeCode() == NT_LIST) {
+            result = resp.body;
+        }
+        if (result.typeCode() == NT_LIST) {
+            return AbstractModelRegistryBackend::normalizeArtifactInfos(result);
+        }
+        hash<ModelVersionInfo> meta = getVersionMetadata(name, version_id);
+        return (<ModelArtifactInfo>{
+            "name": "model",
+            "role": "model",
+            "format": meta.format,
+            "size": meta.file_size,
+            "safe_to_parse": meta.format == "qml" || meta.format == "onnx",
+            "executable": meta.format == "qml" || meta.format == "onnx",
+        },);
+    }
+
     list<hash<ModelVersionInfo>> listVersions(string name) {
         hash<auto> resp = doGet(getTenantPath() + "/" + encode_url_param(name)
             + "/versions");
@@ -168,7 +217,12 @@ public class RestBackend inherits AbstractModelRegistryBackend {
             }
         }
         if (result.typeCode() == NT_LIST) {
-            return cast<list<hash<ModelVersionInfo>>>(result);
+            list<hash<ModelVersionInfo>> versions();
+            foreach auto version in (result) {
+                push versions, AbstractModelRegistryBackend::normalizeVersionInfo(
+                    cast<hash<auto>>(version));
+            }
+            return versions;
         }
         if (!exists result) {
             return ();
@@ -209,7 +263,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
     hash<ModelVersionInfo> getVersionMetadata(string name, string version_id) {
         hash<auto> resp = doGet(getTenantPath() + "/" + encode_url_param(name)
             + "/versions/" + encode_url_param(version_id));
-        return cast<hash<ModelVersionInfo>>(resp.body);
+        return AbstractModelRegistryBackend::normalizeVersionInfo(cast<hash<auto>>(resp.body));
     }
 
     list<string> listTenants() {
@@ -234,15 +288,31 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         @param name the model name
         @param version_id optional version ID; if not provided, all versions
         of the model are invalidated
+        @param artifact_name optional artifact name; if not provided, all
+        artifacts for the selected model version are invalidated
     */
-    nothing invalidateCache(string name, *string version_id) {
+    nothing invalidateCache(string name, *string version_id, *string artifact_name) {
         cache_mutex.lock();
         on_exit cache_mutex.unlock();
 
         if (version_id) {
-            string cache_key = name + "/" + version_id;
-            remove artifact_cache{cache_key};
-            cache_order = (map $1, cache_order, $1 != cache_key);
+            if (artifact_name) {
+                string cache_key = makeCacheKey(name, version_id, artifact_name);
+                remove artifact_cache{cache_key};
+                cache_order = (map $1, cache_order, $1 != cache_key);
+            } else {
+                string prefix = name + "/" + version_id + "/";
+                list<string> keys_to_remove();
+                foreach string key in (keys artifact_cache) {
+                    if (key.find(prefix) == 0) {
+                        push keys_to_remove, key;
+                    }
+                }
+                foreach string key in (keys_to_remove) {
+                    remove artifact_cache{key};
+                }
+                cache_order = (map $1, cache_order, $1.find(prefix) != 0);
+            }
         } else {
             evictModelFromCacheUnlocked(name);
         }
@@ -276,6 +346,24 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         string encoded = encode_uri_request(param);
         encoded = replace(encoded, "/", "%2F");
         return encoded;
+    }
+
+    #! Private: builds an artifact cache key
+    private static string makeCacheKey(string name, string version_id, string artifact_name) {
+        return name + "/" + version_id + "/" + artifact_name;
+    }
+
+    #! Private: validates an artifact name as a package-local filename
+    private static nothing validateArtifactName(string artifact_name) {
+        if (!artifact_name.val()) {
+            throw "ML-REGISTRY-ERROR", "artifact name must not be empty";
+        }
+        if (artifact_name == "." || artifact_name == ".."
+                || artifact_name =~ /[\\\/]/) {
+            throw "ML-REGISTRY-ERROR",
+                sprintf("invalid artifact name '%s': path separators and traversal "
+                    "segments are not allowed", artifact_name);
+        }
     }
 
     #! Private: adds an entry to the cache with LRU eviction

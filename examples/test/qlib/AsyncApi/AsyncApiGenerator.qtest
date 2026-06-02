@@ -32,9 +32,10 @@
 %define NoYaml
 %endtry
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AsyncApi.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires AsyncApi
 
 %exec-class AsyncApiGeneratorTest
 

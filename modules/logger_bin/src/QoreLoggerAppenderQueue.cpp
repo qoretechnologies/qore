@@ -149,7 +149,8 @@ QoreHashNode* QoreLoggerAppenderQueue::getEvent(int64 ms, ExceptionSink* xsink) 
     }
     if (*xsink) {
         const QoreValue v = xsink->getExceptionErr();
-        if (v.getType() == NT_STRING && *v.get<const QoreStringNode>() == "QUEUE-TIMEOUT") {
+        QoreStringValueHelper err(v);
+        if (v.getType() == NT_STRING && !strcmp(err->c_str(), "QUEUE-TIMEOUT")) {
             xsink->clear();
         }
         return nullptr;

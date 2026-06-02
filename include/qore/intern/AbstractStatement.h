@@ -34,6 +34,7 @@
 #define _QORE_ABSTRACTSTATEMENT_H
 
 #include <qore/common.h>
+#include "qore/intern/ParseWarnOptions.h"
 
 #define RC_RETURN       1
 #define RC_BREAK        2

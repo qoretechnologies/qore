@@ -149,12 +149,12 @@ public class ChargebeeSubscriptionsDataProvider inherits ChargebeeDataProviderBa
     }
 
     #! Searches for subscriptions
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If id provided, get single record
         if (search_options.id) {
             hash<auto> response = doGet("/subscriptions/" + search_options.id);
-            return new DefaultRecordIterator(new ListHashIterator((response.subscription,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((response.subscription,)),
                 where_cond, search_options, recordType.getFields());
         }
 
@@ -194,7 +194,7 @@ public class ChargebeeSubscriptionsDataProvider inherits ChargebeeDataProviderBa
             records = ();
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

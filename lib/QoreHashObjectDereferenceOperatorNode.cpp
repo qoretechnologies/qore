@@ -43,7 +43,14 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
 
     assert(!parse_context.typeInfo);
     // check iterator expression
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* lti = parse_context.typeInfo;
 
     // Preserve the PF_NARROWED_TYPE flag if set during left side parsing
@@ -61,9 +68,11 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     {
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.unsetFlags(PF_FOR_ASSIGNMENT);
+        QoreParseContextAnalysisHelper ah(parse_context);
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
@@ -86,7 +95,8 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
             bool only_class = (bool)QoreTypeInfo::getUniqueReturnClass(lti);
             qore_type_t rt = right.getType();
             if (rt == NT_STRING) {
-                const char* member = right.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper member_str(right);
+                const char* member = member_str->c_str();
                 if (qore_class_private::parseCheckMemberAccess(*qc, loc, member, parse_context.typeInfo,
                     parse_context.pflag) && !err) {
                     err = -1;
@@ -97,8 +107,10 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
             } else if (rt == NT_LIST) { // check object slices as well if strings are available
                 ConstListIterator li(right.get<const QoreListNode>());
                 while (li.next()) {
-                    if (li.getValue().getType() == NT_STRING) {
-                        const char* member = li.getValue().get<const QoreStringNode>()->c_str();
+                    QoreValue member_val = li.getValue();
+                    if (member_val.getType() == NT_STRING) {
+                        QoreStringValueHelper member_str(member_val);
+                        const char* member = member_str->c_str();
                         const QoreTypeInfo* mti = nullptr;
                         if (qore_class_private::parseCheckMemberAccess(*qc, loc, member, mti, parse_context.pflag)
                             && !err) {
@@ -115,25 +127,30 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
                     bool only_hashdecl = (bool)QoreTypeInfo::getUniqueReturnHashDecl(lti);
                     qore_type_t rt = right.getType();
                     if (rt == NT_STRING) {
-                        const char* member = right.get<const QoreStringNode>()->c_str();
+                        QoreStringValueHelper member_str(right);
+                        const char* member = member_str->c_str();
                         if (typed_hash_decl_private::get(*hd)->parseCheckMemberAccess(loc, member,
                             parse_context.typeInfo, parse_context.pflag) && !err) {
                             err = -1;
                         }
+                        parse_context.typeInfo = qore_substitute_type_params_if_needed(parse_context.typeInfo, lti);
                         if (!only_hashdecl && QoreTypeInfo::hasType(parse_context.typeInfo)) {
                             parse_context.typeInfo = get_or_nothing_type_check(parse_context.typeInfo);
                         }
                     } else if (rt == NT_LIST) { // check object slices as well if strings are available
                         ConstListIterator li(right.get<const QoreListNode>());
                         while (li.next()) {
-                            if (li.getValue().getType() == NT_STRING) {
-                                const char* member = li.getValue().get<const QoreStringNode>()->c_str();
+                            QoreValue member_val = li.getValue();
+                            if (member_val.getType() == NT_STRING) {
+                                QoreStringValueHelper member_str(member_val);
+                                const char* member = member_str->c_str();
                                 const QoreTypeInfo* mti = nullptr;
                                 if (typed_hash_decl_private::get(*hd)->parseCheckMemberAccess(loc, member, mti,
                                     parse_context.pflag)
                                     && !err) {
                                     err = -1;
                                 }
+                                mti = qore_substitute_type_params_if_needed(mti, lti);
                             }
                         }
                         // issue #3882: taking a slice of a hashdecl returns a hashdecl
@@ -199,6 +216,15 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     }
 
     typeInfo = parse_context.typeInfo;
+    parse_context.analysis.clear();
+    if (typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = typeInfo;
+    }
+    if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

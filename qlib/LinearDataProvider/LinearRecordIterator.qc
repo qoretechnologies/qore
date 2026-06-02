@@ -29,7 +29,7 @@ public namespace LinearDataProvider {
 /** This iterator handles Linear's Relay-style cursor-based pagination,
     fetching pages on-demand as the iterator progresses.
 */
-public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The REST client for API calls
         LinearRestClient::LinearRestClient rest;

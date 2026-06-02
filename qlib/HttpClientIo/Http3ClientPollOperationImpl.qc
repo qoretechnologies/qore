@@ -85,9 +85,9 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         while (True) {
             try {
                 if (streaming) {
-                    return sock.submitQuicRequestStreaming(method, path, req_headers);
+                    return sock.submitQuicRequestStreaming(method, path, req_headers, suppress_wake: True);
                 }
-                return sock.submitQuicRequest(method, path, req_headers, body);
+                return sock.submitQuicRequest(method, path, req_headers, body, suppress_wake: True);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
                         && retries < MaxStreamBlockedRetries) {

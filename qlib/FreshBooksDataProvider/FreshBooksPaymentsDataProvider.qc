@@ -85,14 +85,14 @@ public class FreshBooksPaymentsDataProvider inherits FreshBooksDataProviderBase 
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         setAccountIdFromSearchOpts(search_options);
 
         # If id provided, get single record
         if (search_options.id) {
             hash<auto> result = doGet(accountPath(sprintf("/payments/payments/%d", search_options.id)));
-            return new DefaultRecordIterator(new ListHashIterator((result.payment,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result.payment,)),
                 where_cond, search_options);
         }
 
@@ -121,7 +121,7 @@ public class FreshBooksPaymentsDataProvider inherits FreshBooksDataProviderBase 
             ++page;
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond, search_options);
     }
 
     #! Returns static provider info

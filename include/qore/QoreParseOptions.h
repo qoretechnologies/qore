@@ -181,6 +181,38 @@ public:
     */
     DLLEXPORT static const QoreParseOptions NO_NEW;
 
+    //! extended option: allow old behavior where soft types accept NULL like NOTHING (bit 68)
+    /** Enables pre-2.4 behavior where non-optional soft types (softint, softnumber, etc.)
+        accepted SQL NULL values and treated them like NOTHING. This is an AST-only option
+        for backward compatibility.
+        @since %Qore 2.4
+    */
+    DLLEXPORT static const QoreParseOptions BROKEN_SOFT_TYPES;
+
+    //! extended option: disallow the \c summarize statement (bit 69)
+    /** Enforced at parse time: when set, any \c summarize statement triggers a parse error.
+        Included in \c PO_MODERN so modern code always rejects \c summarize.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_SUMMARIZE;
+
+    //! extended option: disallow %prepend-module-path / %append-module-path directives (bit 70)
+    /** Enforced at parse time: when set, either directive raises a parse error.  Intended for
+        embedders that want to prevent programs from extending their own module search path
+        (see design/parse-directive-prepend-module-path.md "Sandboxing").  Not included in
+        \c PO_MODERN — modern scripts that legitimately vendor modules should be able to do so.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_MODULE_PATH_DIRECTIVES;
+
+    //! extended option: allow IEEE-unsafe floating-point optimizer rewrites (bit 71)
+    /** This option is off by default. Optimizers may only reassociate floating-point
+        plugin operations when this Program option is set and the registered operation
+        descriptor also sets QorePluginOpcodeInfoExtended::fp_reassociation_allowed.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions FP_FAST_MATH;
+
 private:
     int64 lo;  //!< bits 0-63 (compatible with legacy int64 parse options)
     int64 hi;  //!< bits 64-127 (extended parse options)

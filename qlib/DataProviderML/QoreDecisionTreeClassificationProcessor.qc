@@ -29,7 +29,7 @@ public namespace DataProviderML {
     mode to predict class labels for each record by learning decision rules from the data.
 
 */
-public class QoreDecisionTreeClassificationProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreDecisionTreeClassificationProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -264,9 +264,9 @@ public class QoreDecisionTreeClassificationProcessor inherits DataProvider::Abst
         return events;
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

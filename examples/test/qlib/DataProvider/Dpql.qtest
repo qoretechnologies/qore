@@ -4,11 +4,12 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/DataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires DataProvider
 
 %requires reflection
 
@@ -5598,8 +5599,8 @@ public class DpqlTest inherits QUnit::Test {
             },
         };
 
-        # Build a Qorus-only expression for testing (not in server_exprs)
-        hash<string, hash<DataProviderExpressionInfo>> qorus_only_exprs = {
+        # Build a local-only expression for testing (not in server_exprs)
+        hash<string, hash<DataProviderExpressionInfo>> local_only_exprs = {
             "qorus-trim": <DataProviderExpressionInfo>{
                 "type": DET_Function,
                 "name": "qorus-trim",
@@ -5619,8 +5620,8 @@ public class DpqlTest inherits QUnit::Test {
             },
         };
 
-        # Full expression map (server + Qorus-only)
-        hash<string, hash<DataProviderExpressionInfo>> all_exprs = server_exprs + qorus_only_exprs;
+        # Full expression map (server + local-only)
+        hash<string, hash<DataProviderExpressionInfo>> all_exprs = server_exprs + local_only_exprs;
 
         # --- Valid search expressions (no search diagnostics) ---
 
@@ -5653,14 +5654,14 @@ public class DpqlTest inherits QUnit::Test {
                 "DPQL-E040: message contains example");
         }
 
-        # --- DPQL-E041: Qorus-only op with field ref ---
+        # --- DPQL-E041: local-only op with field ref ---
 
         {
             list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(
                 'qorus-trim(@name) == "John"', fields, all_exprs, server_exprs);
             list<hash<DpqlDiagnostic>> e041 = select diags, $1.code == "DPQL-E041";
-            assertTrue(e041.size() > 0, "DPQL-E041: Qorus-only op with field ref");
-            assertTrue(e041[0].message.find("locally in Qorus") >= 0,
+            assertTrue(e041.size() > 0, "DPQL-E041: local-only op with field ref");
+            assertTrue(e041[0].message.find("evaluated locally") >= 0,
                 "DPQL-E041: message explains the issue");
             assertTrue(e041[0].message.find("server-supported") >= 0,
                 "DPQL-E041: message mentions server operators");
@@ -5710,7 +5711,7 @@ public class DpqlTest inherits QUnit::Test {
                 'qorus-trim(@name) == "John"', fields, all_exprs);
             list<hash<DpqlDiagnostic>> search_errs = select diags, $1.code =~ /^DPQL-E04/;
             assertEq(0, search_errs.size(),
-                "without server_expressions, Qorus-only ops with field refs are fine");
+                "without server_expressions, local-only ops with field refs are fine");
         }
 
         # --- User-friendly guidance in messages ---
@@ -5753,8 +5754,8 @@ public class DpqlTest inherits QUnit::Test {
             },
         };
 
-        # Qorus-only function
-        hash<string, hash<DataProviderExpressionInfo>> qorus_func = {
+        # Local-only function
+        hash<string, hash<DataProviderExpressionInfo>> local_func = {
             "qorus-trim": <DataProviderExpressionInfo>{
                 "type": DET_Function,
                 "name": "qorus-trim",
@@ -5774,17 +5775,17 @@ public class DpqlTest inherits QUnit::Test {
             },
         };
 
-        hash<string, hash<DataProviderExpressionInfo>> all_exprs = server_exprs + qorus_func;
+        hash<string, hash<DataProviderExpressionInfo>> all_exprs = server_exprs + local_func;
 
-        # Search context: top-level completions should filter out Qorus-only functions
+        # Search context: top-level completions should filter out local-only functions
         {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletionsWithSearchContext(
                 "", 0, fields, all_exprs, NOTHING, server_exprs);
             list<hash<DpqlCompletionItem>> funcs = select items, $1.kind == "function";
-            list<hash<DpqlCompletionItem>> qorus_funcs = select funcs,
+            list<hash<DpqlCompletionItem>> local_funcs = select funcs,
                 $1.label == "qorus-trim";
-            assertEq(0, qorus_funcs.size(),
-                "search context: Qorus-only function should not appear at top level");
+            assertEq(0, local_funcs.size(),
+                "search context: local-only function should not appear at top level");
         }
 
         # Search context: after field ref, only server operators
@@ -5808,10 +5809,10 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
                 "", 0, fields, all_exprs);
             list<hash<DpqlCompletionItem>> funcs = select items, $1.kind == "function";
-            list<hash<DpqlCompletionItem>> qorus_funcs = select funcs,
+            list<hash<DpqlCompletionItem>> local_funcs = select funcs,
                 $1.label == "qorus-trim";
-            assertEq(1, qorus_funcs.size(),
-                "non-search context: Qorus-only function should appear");
+            assertEq(1, local_funcs.size(),
+                "non-search context: local-only function should appear");
         }
 
         # Non-search context: all comparison operators offered
@@ -5842,7 +5843,7 @@ public class DpqlTest inherits QUnit::Test {
                 "free-form: literal-only comparison is valid");
         }
 
-        # Qorus-only operators with field refs are fine in non-search context
+        # Local-only operators with field refs are fine in non-search context
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
                 "custom-op": <DataProviderExpressionInfo>{

@@ -35,6 +35,7 @@
 
 #define _QORE_QOREPROGRAM_H
 
+#include <qore/common.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/Restrictions.h>
 #include <qore/OutputStream.h>
@@ -169,6 +170,15 @@ public:
         @param parse_options the parse options mask for the QoreProgram object
     */
     DLLEXPORT QoreProgram(const QoreParseOptions& parse_options);
+
+    //! creates the object and sets legacy int64 parse options
+    /** @deprecated use QoreProgram(const QoreParseOptions&) instead.
+        Kept exported for binary module compatibility with modules built before
+        QoreParseOptions replaced raw int64 parse-option bitfields.
+
+        @param parse_options the legacy int64 parse options mask for the QoreProgram object
+    */
+    DLLEXPORT QoreProgram(int64 parse_options);
 
     //! calls a function from the function name and returns the return value
     /** if the function does not exist, an exception is added to "xsink"
@@ -506,6 +516,15 @@ public:
     //! returns the parse options currently set for this program
     DLLEXPORT QoreParseOptions getParseOptions() const;
 
+    //! returns the low 64 bits of the parse options currently set for this program
+    /** @deprecated use getParseOptions() instead.
+        Kept exported for binary module compatibility with modules built before
+        QoreParseOptions replaced raw int64 parse-option bitfields.
+
+        @return the legacy int64 parse option bitfield
+    */
+    DLLEXPORT int64 getParseOptions64() const;
+
     //! sets the parse options and adds Qore-language exception information if an error occurs
     /**
         @param po the parse options to add to the parse option mask
@@ -795,6 +814,38 @@ public:
         @since %Qore 0.9
     */
     DLLEXPORT QoreHashNode* getThreadData();
+
+    //! sets the execution mode for this program
+    //! @param mode the execution mode to set
+    //! @param user_requested true if the user explicitly requested this mode (e.g. via --exec-mode)
+    DLLEXPORT void setExecMode(qore_exec_mode_t mode, bool user_requested = false);
+
+    //! gets the current execution mode for this program
+    DLLEXPORT qore_exec_mode_t getExecMode() const;
+
+    //! enables or disables IR dump before execution
+    DLLEXPORT void setIRDump(bool dump);
+
+    //! returns true if IR dump is enabled
+    DLLEXPORT bool getIRDump() const;
+
+    //! enables or disables IR fallback warnings to stderr
+    DLLEXPORT void setIRFallbackWarn(bool warn);
+
+    //! returns true if IR fallback warnings are enabled
+    DLLEXPORT bool getIRFallbackWarn() const;
+
+    //! enables or disables IR fallback reporting (counts by category at exit)
+    DLLEXPORT void setIRFallbackReport(bool report);
+
+    //! returns true if IR fallback reporting is enabled
+    DLLEXPORT bool getIRFallbackReport() const;
+
+    //! records an IR fallback event for later reporting
+    DLLEXPORT void recordIRFallback(const char* reason) const;
+
+    //! prints the IR fallback report to stderr (called at program exit)
+    DLLEXPORT void printIRFallbackReport() const;
 
     //! issues a module command for the given module; the module is loaded into the current %Program object if it is not already present
     /** @param module the module name; must be in the default character encoding (normally UTF-8)

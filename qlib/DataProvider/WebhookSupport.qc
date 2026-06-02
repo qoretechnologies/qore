@@ -27,7 +27,7 @@ public namespace DataProvider {
 
 #! Static webhook API callbacks
 /** This class provides a static API for data providers to create and delete webhooks.
-    The webhook infrastructure must be registered by the runtime environment (e.g., Qorus)
+    The webhook infrastructure must be registered by the runtime environment
     before data providers can use these methods.
 
     @par Webhook Creation Callback
@@ -54,7 +54,7 @@ public class DataProviderWebhook {
     }
 
     #! Register webhook creation and deletion APIs
-    /** Called by the runtime (e.g., Qorus) to provide webhook infrastructure
+    /** Called by the runtime to provide webhook infrastructure
 
         @param create a callback for creating webhooks; takes a hash with webhook config,
                returns a hash with \c url and \c ctx keys

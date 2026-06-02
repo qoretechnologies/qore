@@ -1,0 +1,276 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class BackgroundOperatorTest
+
+# BackgroundOperatorTest — IR-lowered `background` operator coverage.
+#
+# Exercises the five decomposed-call shapes that now use native IR lowering
+# instead of trampolining through qore_rt_invoke_expr:
+#   background self.method(args)         (SelfFunctionCallNode)
+#   background foo(args)                 (FunctionCallNode)
+#   background Class::staticMethod(args) (StaticMethodCallNode)
+#   background obj.method(args)          (QoreDotEvalOperatorNode)
+#   background callref(args)             (CallReferenceCallNode)
+#
+# Each test case runs the same source under --exec-mode=ast/ir/jit/tiered and
+# asserts the outputs agree — a divergence signals a bug in IR lowering.
+#
+# Tests synchronise via Counter/Queue so the main thread deterministically
+# observes the spawned thread's effect before asserting.
+class BackgroundOperatorTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("BackgroundOperatorTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+
+        addTestCase("self method call", \testSelfCall());
+        addTestCase("self method call (zero args)", \testSelfCallZeroArgs());
+        addTestCase("free function call", \testFreeFunctionCall());
+        addTestCase("free function call (zero args)", \testFreeFunctionCallZeroArgs());
+        addTestCase("static method call", \testStaticMethodCall());
+        addTestCase("static method call (zero args)", \testStaticMethodCallZeroArgs());
+        addTestCase("dot-eval method call", \testDotEvalCall());
+        addTestCase("dot-eval method call (zero args)", \testDotEvalCallZeroArgs());
+        addTestCase("call-ref / closure call", \testCallRefCall());
+        addTestCase("call-ref / closure call (zero args)", \testCallRefCallZeroArgs());
+        addTestCase("nested background calls", \testNestedBackground());
+        addTestCase("background params after loop local cleanup", \testParamsAfterLoopLocalCleanup());
+        addTestCase("background returns TID", \testReturnsTid());
+
+        set_return_value(main());
+    }
+
+    private runAndExpect(string code, string expect, string label) {
+        string modern = "%modern\n" + code;
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(modern);
+        tmp.file.close();
+        string path = tmp.path;
+        string ast = trim(backquote(sprintf("%s --enable-debug --exec-mode=ast %s 2>&1",
+            qore_bin, path)));
+        string ir = trim(backquote(sprintf("%s --enable-debug --exec-mode=ir %s 2>&1",
+            qore_bin, path)));
+        string jit = trim(backquote(sprintf("%s --enable-debug --exec-mode=jit %s 2>&1",
+            qore_bin, path)));
+        string tiered = trim(backquote(sprintf("%s --enable-debug --exec-mode=tiered %s 2>&1",
+            qore_bin, path)));
+        assertEq(expect, ast, label + " (AST)");
+        assertEq(expect, ir, label + " (IR)");
+        assertEq(expect, jit, label + " (JIT)");
+        assertEq(expect, tiered, label + " (tiered)");
+    }
+
+    testSelfCall() {
+        string code = "
+%requires Util
+class C {
+    public {
+        Qore::Thread::Queue q();
+        int base = 100;
+    }
+    run(int n) {
+        q.push(base + n);
+    }
+}
+sub main() {
+    C c();
+    background c.run(42);
+    printf(\"%d\\n\", c.q.get());
+}
+main();";
+        runAndExpect(code, "142", "self.method(args)");
+    }
+
+    testSelfCallZeroArgs() {
+        string code = "
+class C {
+    public { Qore::Thread::Queue q(); }
+    ping() { q.push(\"pong\"); }
+}
+sub main() {
+    C c();
+    background c.ping();
+    printf(\"%s\\n\", c.q.get());
+}
+main();";
+        runAndExpect(code, "pong", "self.method() zero args");
+    }
+
+    testFreeFunctionCall() {
+        string code = "
+our Qore::Thread::Queue q();
+int sub worker(int a, int b) {
+    q.push(a + b);
+    return a + b;
+}
+sub main() {
+    background worker(3, 4);
+    printf(\"%d\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "7", "free function call");
+    }
+
+    testFreeFunctionCallZeroArgs() {
+        string code = "
+our Qore::Thread::Queue q();
+sub greet() {
+    q.push(\"hi\");
+}
+sub main() {
+    background greet();
+    printf(\"%s\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "hi", "free function zero args");
+    }
+
+    testStaticMethodCall() {
+        string code = "
+our Qore::Thread::Queue q();
+class M {
+    static compute(int a, int b) {
+        q.push(a * b);
+    }
+}
+sub main() {
+    background M::compute(6, 7);
+    printf(\"%d\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "42", "Class::staticMethod(args)");
+    }
+
+    testStaticMethodCallZeroArgs() {
+        string code = "
+our Qore::Thread::Queue q();
+class M {
+    static tick() {
+        q.push(\"tock\");
+    }
+}
+sub main() {
+    background M::tick();
+    printf(\"%s\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "tock", "Class::staticMethod() zero args");
+    }
+
+    testDotEvalCall() {
+        string code = "
+our Qore::Thread::Queue q();
+class Widget {
+    process(int x, int y) {
+        q.push(x - y);
+    }
+}
+sub main() {
+    Widget w();
+    background w.process(10, 3);
+    printf(\"%d\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "7", "obj.method(args)");
+    }
+
+    testDotEvalCallZeroArgs() {
+        string code = "
+our Qore::Thread::Queue q();
+class Widget {
+    ping() {
+        q.push(\"pong\");
+    }
+}
+sub main() {
+    Widget w();
+    background w.ping();
+    printf(\"%s\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "pong", "obj.method() zero args");
+    }
+
+    testCallRefCall() {
+        string code = "
+our Qore::Thread::Queue q();
+sub main() {
+    code cb = int sub (int a, int b) { q.push(a + b); return a + b; };
+    background cb(11, 22);
+    printf(\"%d\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "33", "callref(args)");
+    }
+
+    testCallRefCallZeroArgs() {
+        string code = "
+our Qore::Thread::Queue q();
+sub main() {
+    code cb = sub () { q.push(\"fired\"); };
+    background cb();
+    printf(\"%s\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "fired", "callref() zero args");
+    }
+
+    testNestedBackground() {
+        # Outer background starts inner background; inner pushes to queue.
+        string code = "
+our Qore::Thread::Queue q();
+sub inner() { q.push(\"deep\"); }
+sub outer() {
+    background inner();
+}
+sub main() {
+    background outer();
+    printf(\"%s\\n\", q.get());
+}
+main();";
+        runAndExpect(code, "deep", "nested background");
+    }
+
+    testParamsAfterLoopLocalCleanup() {
+        string code = "
+our Qore::Thread::Queue q();
+sub produce(Qore::Thread::Queue out, int count) {
+    for (int i = 0; i < count; i++) {
+    }
+    out.push({\"completed\": count});
+}
+sub main() {
+    background produce(q, 10);
+    hash<auto> result = q.get();
+    printf(\"%y:%s\\n\", result.completed, type(result.completed));
+}
+main();";
+        runAndExpect(code, "10:integer", "background params after loop local cleanup");
+    }
+
+    testReturnsTid() {
+        # background returns a TID (non-zero int).  We don't check the exact
+        # value (thread-order dependent), just that it's positive, and that
+        # the spawned thread runs (synchronised via queue).
+        string code = "
+our Qore::Thread::Queue q();
+sub worker() { q.push(\"ran\"); }
+sub main() {
+    int tid = background worker();
+    string r = q.get();
+    printf(\"%s/%s\\n\", r, tid > 0 ? \"tid-ok\" : \"tid-bad\");
+}
+main();";
+        runAndExpect(code, "ran/tid-ok", "background returns TID");
+    }
+}

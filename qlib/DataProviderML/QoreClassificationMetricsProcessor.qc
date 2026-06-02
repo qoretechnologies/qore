@@ -33,7 +33,7 @@ public namespace DataProviderML {
     ClassificationMetricsEventInfo event summarizing the batch.
 
 */
-public class QoreClassificationMetricsProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreClassificationMetricsProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -194,9 +194,9 @@ public class QoreClassificationMetricsProcessor inherits DataProvider::AbstractD
         },);
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

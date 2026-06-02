@@ -66,12 +66,12 @@ public class LinearTeamDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for the team record (returns single record iterator)
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching team id=%y", teamId));
         hash<auto> data = doGraphQL(GetTeamQuery, {"id": teamId});
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: team found=%y", exists data.team));
-        return new DefaultRecordIterator(new ListHashIterator(data.team ? (data.team,) : ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data.team ? (data.team,) : ()),
             where_cond, search_options, recordType.getFields());
     }
 

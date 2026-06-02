@@ -144,7 +144,7 @@ public class Cin7CoreFindProductAvailabilityDataProvider inherits Cin7CoreDataPr
     }
 
     #! Searches for product availability
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -189,7 +189,7 @@ public class Cin7CoreFindProductAvailabilityDataProvider inherits Cin7CoreDataPr
         hash<auto> response = doGet("/ProductAvailability", params);
         list<hash<auto>> records = response.ProductAvailabilityList ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

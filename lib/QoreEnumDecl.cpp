@@ -34,6 +34,7 @@
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
+#include "qore/intern/qore_program_private.h"
 
 // QoreTypeSpec::getType() implementation
 qore_type_t QoreTypeSpec::getType() const {
@@ -43,6 +44,7 @@ qore_type_t QoreTypeSpec::getType() const {
         case QTS_EMPTYHASH:
             return u.t;
         case QTS_CLASS:
+        case QTS_PARAMCLASS:
             return NT_OBJECT;
         case QTS_COMPLEXHASH:
         case QTS_HASHDECL:
@@ -50,6 +52,8 @@ qore_type_t QoreTypeSpec::getType() const {
         case QTS_COMPLEXLIST:
         case QTS_COMPLEXSOFTLIST:
             return NT_LIST;
+        case QTS_COMPLEXBUFFER:
+            return NT_BUFFER;
         case QTS_HARDREF:
         case QTS_COMPLEXHARDREF:
         case QTS_COMPLEXREF:
@@ -57,6 +61,10 @@ qore_type_t QoreTypeSpec::getType() const {
         case QTS_ENUM:
             // Enum types return the base type of the enum
             return QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+        case QTS_TYPEPARAM:
+        case QTS_WILDCARD:
+            // Keep type parameters distinct from untyped auto/any in internal type checks.
+            return NT_NOTHING;
     }
     assert(false);
     return NT_NOTHING;
@@ -90,7 +98,7 @@ QoreEnumOrNothingTypeInfo::QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, con
 
 // QoreEnumTypeInfo::getDefaultQoreValueImpl() implementation
 QoreValue QoreEnumTypeInfo::getDefaultQoreValueImpl() const {
-    const QoreEnumDecl* ed = accept_vec[0].spec.getEnum();
+    const QoreEnumDecl* ed = getFirstAcceptSpec().spec.getEnum();
     // Return a TAG_ENUM value of the first member if there are any
     if (ed->getMemberCount() > 0) {
         QoreEnumMemberIterator it(*ed);
@@ -200,7 +208,9 @@ int qore_enum_decl_private::parseInit() {
             ExceptionSink xsink;
             ValueEvalOptimizedRefHolder v(val, &xsink);
             if (xsink) {
-                qore_program_private::addParseException(getProgram(), xsink);
+                // Use parse_error since qore_program_private.h has circular include deps
+                parse_error(QoreProgramLocation(), "enum member expression evaluation failed");
+                xsink.clear();
                 err = -1;
                 continue;
             }

@@ -3,13 +3,14 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/BulkSqlUtil
-%requires ../../../../qlib/MysqlSqlUtil.qm
-%requires ../../../../qlib/Schema
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires SqlUtil
+%requires BulkSqlUtil
+%requires MysqlSqlUtil
+%requires Schema
 
 %requires ./BulkSqlUtilTestBase.qm
 #/;

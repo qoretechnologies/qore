@@ -699,6 +699,13 @@ sse.setEventQueue();
             stop = True;
             # wake up any sleeping threads
             sleep_cond.broadcast();
+            if (hc.isOpen()) {
+                try {
+                    hc.disconnect();
+                } catch (hash<ExceptionInfo> ex) {
+                    # The reader thread may be observing the same close concurrently.
+                }
+            }
             # wait for the event thread to terminate
             waitTidCleared(tid);
             cid = -1;
@@ -961,7 +968,11 @@ sse.setEventQueue();
         }
 
         # Cleanup phase — also via the weak ref so a destroy mid-shutdown
-        # doesn't crash.  Each call may re-strengthen briefly.
+        # doesn't crash.  Each call may re-strengthen briefly.  This
+        # subsumes the earlier `if (!self) return;` issue #4697 guard:
+        # the OBJECT-ALREADY-DELETED catch below covers the same race
+        # without needing a manual `self`-liveness check (which would
+        # also need the weak-ref invocation pattern to be safe).
         try {
             if (client) {
                 client.eventLoopShutdown();
@@ -1162,7 +1173,11 @@ sse.setEventQueue();
         *data send_body;
         if (exists eff_body) {
             if (serialization == "json" && eff_body.typeCode() != NT_STRING) {
+%ifndef NoJson
                 send_body = make_json(eff_body);
+%else
+                throw "SSE-CLIENT-ERROR", "the json module is required to serialize JSON request bodies";
+%endif
             } else {
                 send_body = eff_body;
             }

@@ -48,12 +48,24 @@ public:
 
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
+    DLLLOCAL class StatementBlock* getTryBlock() const {
+        return try_block;
+    }
+
+    DLLLOCAL class StatementBlock* getCatchBlock() const {
+        return catch_block;
+    }
+
+    DLLLOCAL LocalVar* getCatchVar() const {
+        return id;
+    }
+
 private:
     class StatementBlock* try_block;
     class StatementBlock* catch_block;
     //class StatementBlock *finally;
     char* param;
-    LocalVar* id;
+    LocalVar* id = nullptr;
     const QoreTypeInfo* typeInfo;
     QoreParseTypeInfo* parseTypeInfo;
     const QoreProgramLocation* loc;

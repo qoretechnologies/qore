@@ -9,6 +9,9 @@
 #
 # QORE_EXECUTABLE - qore interpret executable
 # QORE_QPP_EXECUTABLE - qore qpp executable
+# QORE_QCC_EXECUTABLE - qore AOT compiler (qcc) executable
+# QORE_QCC_FORMAT_STAMP - dependency file updated when qcc AOT output can change
+# QORE_AOT_MODULES_DIR - install location for AOT-compiled user module .qmod artifacts
 
 
 if (CMAKE_VERSION VERSION_LESS 2.8.3)
@@ -26,11 +29,13 @@ if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
     set(QORE_INCLUDE_DIRS "${QORE_INCLUDE_DIR};@CMAKE_BINARY_DIR@/include")
     set(QORE_LIBRARY "@CMAKE_BINARY_DIR@/@CMAKE_SHARED_LIBRARY_PREFIX@qore@CMAKE_SHARED_LIBRARY_SUFFIX@")
     set(QORE_LIBRARIES ${QORE_LIBRARY})
+    set(QORE_BUILDTREE_USER_MODULE_PATH "@CMAKE_BINARY_DIR@/qlib-qmod:@CMAKE_SOURCE_DIR@/qlib")
 else()
     set(QORE_INCLUDE_DIR @CMAKE_INSTALL_FULL_INCLUDEDIR@)
     set(QORE_INCLUDE_DIRS ${QORE_INCLUDE_DIR})
     find_library(QORE_LIBRARY NAMES qore libqore HINTS "@CMAKE_INSTALL_FULL_LIBDIR@/")
     set(QORE_LIBRARIES ${QORE_LIBRARY})
+    set(QORE_BUILDTREE_USER_MODULE_PATH "")
 endif()
 
 # allow the module directory to be overridden (for example, when cross-compiling)
@@ -51,9 +56,33 @@ if(DEFINED QORE_USER_MODULE_VER_DIR)
 else()
     set(QORE_USER_MODULES_VER_DIR @USER_MODULE_VER_DIR@)
 endif()
+# allow the AOT user-module directory to be overridden
+if(DEFINED QORE_AOT_MODULE_DIR)
+    set(QORE_AOT_MODULES_DIR ${QORE_AOT_MODULE_DIR})
+elseif(NOT DEFINED QORE_AOT_MODULES_DIR)
+    set(QORE_AOT_MODULES_DIR ${QORE_MODULES_DIR})
+endif()
 
 set(QORE_API_VERSION @MODULE_API_MAJOR@.@MODULE_API_MINOR@)
+set(QORE_HAVE_GENERIC_CLASSES 1)
+set(QORE_HAVE_COLUMNAR_RESULT_V2 1)
+set(QORE_HAVE_ARROW_C_DATA_INTEROP 1)
+set(QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS 1)
+set(QORE_HAVE_EXTERNAL_BUFFER_STORAGE 1)
+set(QORE_HAVE_ARROW_DATAFRAME_INTEROP 1)
+set(QORE_HAVE_DECIMAL128_BUFFER 1)
+set(QORE_HAVE_DEVICE_BUFFER_STORAGE 1)
+set(QORE_LLVM_PACKAGE_VERSION "@LLVM_PACKAGE_VERSION@")
+set(QORE_LLVM_MAJOR_VERSION @QORE_LLVM_MAJOR_VERSION@)
+set(QORE_LLVM_INCLUDE_DIRS "@LLVM_INCLUDE_DIRS@")
 set(QORE_USERMODULE_DOXYGEN_TEMPLATE @CMAKE_INSTALL_FULL_DATADIR@/qore/Doxyfile.in)
+
+option(QORE_BUILD_AOT_MODULES
+       "Build AOT-compiled .qmod artifacts for user modules via qcc"
+       ON)
+option(QORE_AOT_LINK_SOURCE_MODULES
+       "Link generated .qmod artifacts into source qlib directories for qmod-first in-tree tests"
+       OFF)
 
 # metadata directory for .meta.json files (API documentation metadata)
 if(DEFINED QORE_METADATA_DIR_OVERRIDE)
@@ -72,6 +101,10 @@ if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
     else()
         set(QORE_QPP_EXECUTABLE "@CMAKE_BINARY_DIR@/qpp${CMAKE_EXECUTABLE_SUFFIX}")
     endif()
+    if(NOT DEFINED QORE_QCC_EXECUTABLE)
+        set(QORE_QCC_EXECUTABLE "@CMAKE_BINARY_DIR@/qcc${CMAKE_EXECUTABLE_SUFFIX}")
+    endif()
+    set(QORE_QCC_FORMAT_STAMP "@CMAKE_BINARY_DIR@/qcc-format.stamp")
     set(QORE_QDX_EXECUTABLE "@CMAKE_SOURCE_DIR@/doxygen/qdx")
     set(QORE_QM_METADATA_EXECUTABLE "@CMAKE_SOURCE_DIR@/bin/qore-extract-qm-metadata")
     if(DEFINED QJAR_EXECUTABLE)
@@ -89,6 +122,11 @@ else()
     else()
         set(QORE_QPP_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qpp${CMAKE_EXECUTABLE_SUFFIX})
     endif()
+    # allow the qcc executable to be overridden (for example, when cross-compiling)
+    if(NOT DEFINED QORE_QCC_EXECUTABLE)
+        set(QORE_QCC_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qcc${CMAKE_EXECUTABLE_SUFFIX})
+    endif()
+    set(QORE_QCC_FORMAT_STAMP "")
     set(QORE_QDX_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qdx)
     set(QORE_QM_METADATA_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qore-extract-qm-metadata)
     # allow the qjar executable to be overridden
@@ -99,20 +137,27 @@ else()
     endif()
 endif()
 
-# verify that qore-extract-qm-metadata can run (requires the json binary module);
-# if the json module is not installed, unset QORE_QM_METADATA_EXECUTABLE so that
-# downstream builds skip metadata extraction instead of failing
+# verify that qore-extract-qm-metadata can actually run end-to-end; it depends
+# on QoreApiMetadata::toJson(), which in turn requires the json binary module.
+# A simple "load json" probe is not sufficient: if the QoreApiMetadata .qmod
+# was AOT-compiled when json was unavailable, %try-module json baked in NoJson
+# and toJson() will throw at runtime even after json is installed later.
+# Exercise the toJson() entry point directly so we catch both situations and
+# disable metadata extraction (rather than failing downstream builds).
 if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_EXECUTABLE)
     execute_process(
-        COMMAND ${QORE_EXECUTABLE} -l json -ne ""
-        RESULT_VARIABLE _qore_json_result
+        COMMAND ${QORE_EXECUTABLE} [==[--exec=%modern
+%requires QoreApiMetadata
+QoreApiMetadata::toJson(<QoreApiMetadata::NamespaceInfo>{"name":"x","full_name":"x"});
+]==]
+        RESULT_VARIABLE _qore_qm_metadata_probe_result
         OUTPUT_QUIET ERROR_QUIET
     )
-    if(NOT _qore_json_result EQUAL 0)
-        message(STATUS "Qore json module not available; QM metadata extraction disabled")
+    if(NOT _qore_qm_metadata_probe_result EQUAL 0)
+        message(STATUS "qore-extract-qm-metadata cannot run (QoreApiMetadata::toJson() failed; json module unavailable or QoreApiMetadata was built without json support); QM metadata extraction disabled")
         unset(QORE_QM_METADATA_EXECUTABLE)
     endif()
-    unset(_qore_json_result)
+    unset(_qore_qm_metadata_probe_result)
 endif()
 
 # warning: the same prefix for current qore is used if there is no

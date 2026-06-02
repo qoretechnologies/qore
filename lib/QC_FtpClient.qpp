@@ -116,7 +116,7 @@ FtpClient ftp("ftp://user:pass@example.com:2021");
     @throw UNSUPPORTED-PROTOCOL Only \c "ftp" or \c "ftps" are allowed as the protocol in the URL
     @throw FTP-URL-ERROR No hostname given in the URL
 */
-FtpClient::constructor(string url) {
+FtpClient::constructor(string url) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreFtpClientClass> f(new QoreFtpClientClass(url, xsink), xsink);
     if (*xsink) {
         return;
@@ -236,7 +236,7 @@ nothing FtpClient::disconnect() {
 
     @see FtpClient::nlst()
 */
-*string FtpClient::list(string path) {
+*string FtpClient::list(string path) [flags=NAMED_ARGS] {
     return f->list(path->c_str(), true, xsink);
 }
 
@@ -282,7 +282,7 @@ nothing FtpClient::disconnect() {
 
     @see FtpClient::list()
 */
-*string FtpClient::nlst(string path) {
+*string FtpClient::nlst(string path) [flags=NAMED_ARGS] {
     return f->list(path->c_str(), false, xsink);
 }
 
@@ -320,7 +320,7 @@ ftp.cwd("/foo/bar");
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
-nothing FtpClient::cwd(string path) {
+nothing FtpClient::cwd(string path) [flags=NAMED_ARGS] {
     f->cwd(path->c_str(), xsink);
 }
 
@@ -345,12 +345,12 @@ ftp.put("/tmp/file-1.txt", "file.txt");
 
     @see FtpClient::putData()
 */
-nothing FtpClient::put(string local_path, *string remote_path) [dom=FILESYSTEM] {
+nothing FtpClient::put(string local_path, *string remote_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
     f->put(local_path->c_str(), remote_path ? remote_path->c_str() : 0, xsink);
 }
 
 //! Transfers the content of an @ref InputStream to the FTP server; if any errors occur, an exception is thrown
-/** @param is The input stream to send to the FTP server
+/** @param input_stream The input stream to send to the FTP server
     @param remote_path The name of the file on the server
 
     @par Events:
@@ -370,13 +370,13 @@ ftp.put(new FileInputStream("/tmp/file-1.txt"), "file.txt");
 
     @see FtpClient::putData()
 */
-nothing FtpClient::put(Qore::InputStream[InputStream] is, string remote_path) {
-    f->put(*is, remote_path->c_str(), xsink);
+nothing FtpClient::put(Qore::InputStream[InputStream] input_stream, string remote_path) [flags=NAMED_ARGS] {
+    f->put(*input_stream, remote_path->c_str(), xsink);
 }
 
 //! Renames/moves a file or directory; if any errors occur, an exception is thrown
-/** @param from The original file path on the server to rename/move
-    @param to The new path on the server
+/** @param source_path The original file path on the server to rename/move
+    @param target_path The new path on the server
 
     @par Events:
     @ref EVENT_FTP_SEND_MESSAGE, @ref EVENT_FTP_MESSAGE_RECEIVED, @ref EVENT_PACKET_READ, @ref EVENT_PACKET_SENT
@@ -391,8 +391,8 @@ ftp.rename("file.txt", "file.txt.orig");
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
-nothing FtpClient::rename(string from, string to) {
-    f->rename(from->c_str(), to->c_str(), xsink);
+nothing FtpClient::rename(string source_path, string target_path) [flags=NAMED_ARGS] {
+    f->rename(source_path->c_str(), target_path->c_str(), xsink);
 }
 
 //! Gets a file from the FTP server and stores it on the local filesystem; if any errors occur, an exception is thrown
@@ -418,13 +418,13 @@ ftp.get("file.txt", "/tmp/file-1.txt");
 
     @see FtpClient::getAsString(), FtpClient::getAsData()
 */
-nothing FtpClient::get(string remote_path, *string local_path) [dom=FILESYSTEM] {
+nothing FtpClient::get(string remote_path, *string local_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
     f->get(remote_path->c_str(), local_path ? local_path->c_str() : 0, xsink);
 }
 
 //! Gets a file from the FTP server and writes it to an OutputStream; if any errors occur, an exception is thrown
 /** @param remote_path The path on the server to the file to get
-    @param os The output stream to write the file to
+    @param output_stream The output stream to write the file to
 
     @par Events:
     @ref EVENT_FTP_SEND_MESSAGE, @ref EVENT_FTP_MESSAGE_RECEIVED, @ref EVENT_PACKET_READ, @ref EVENT_PACKET_SENT
@@ -443,8 +443,8 @@ ftp.get("file.txt", new FileOutputStream("/tmp/file-1.txt"));
     @see FtpClient::getAsString(), FtpClient::getAsData()
     @since %Qore 0.8.13
 */
-nothing FtpClient::get(string remote_path, Qore::OutputStream[OutputStream] os) {
-    f->get(remote_path->c_str(), *os, xsink);
+nothing FtpClient::get(string remote_path, Qore::OutputStream[OutputStream] output_stream) [flags=NAMED_ARGS] {
+    f->get(remote_path->c_str(), *output_stream, xsink);
 }
 
 //! Transfers string data to the FTP server and saves it as a file on the remote machine; if any errors occur, an exception is thrown
@@ -464,7 +464,7 @@ ftp.putData(str, "file.txt");
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
-nothing FtpClient::putData(string data, string remote_path) {
+nothing FtpClient::putData(string data, string remote_path) [flags=NAMED_ARGS] {
     f->putData(data->c_str(), data->size(), remote_path->c_str(), xsink);
 }
 
@@ -485,7 +485,7 @@ ftp.putData(bin, "file.pdf");
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
-nothing FtpClient::putData(binary data, string remote_path) {
+nothing FtpClient::putData(binary data, string remote_path) [flags=NAMED_ARGS] {
     f->putData(data->getPtr(), data->size(), remote_path->c_str(), xsink);
 }
 
@@ -514,7 +514,7 @@ string str = ftp.getAsString("file.txt");
 
     @since %Qore 1.3 added the \a encoding parameter
 */
-string FtpClient::getAsString(string remote_path, *string encoding) {
+string FtpClient::getAsString(string remote_path, *string encoding) [flags=NAMED_ARGS] {
     return f->getAsString(xsink, remote_path->c_str(), encoding ? QEM.findCreate(encoding) : QCS_DEFAULT);
 }
 
@@ -539,7 +539,7 @@ binary b = ftp.getAsBinary("file.pdf");
 
     @see FtpClient::getAsString() for a similar function returning the file's contents as a string; see FtpClient::get() for a function that will get a remote file and save it on the local filesystem
 */
-binary FtpClient::getAsBinary(string remote_path) {
+binary FtpClient::getAsBinary(string remote_path) [flags=NAMED_ARGS] {
     return f->getAsBinary(remote_path->c_str(), xsink);
 }
 
@@ -559,7 +559,7 @@ ftp.del("file-2.txt");
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
-nothing FtpClient::del(string remote_path) {
+nothing FtpClient::del(string remote_path) [flags=NAMED_ARGS] {
     f->del(remote_path->c_str(), xsink);
 }
 
@@ -579,7 +579,7 @@ ftp.mkdir("tmp");
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
-nothing FtpClient::mkdir(string remote_path) {
+nothing FtpClient::mkdir(string remote_path) [flags=NAMED_ARGS] {
     f->mkdir(remote_path->c_str(), xsink);
 }
 
@@ -599,32 +599,32 @@ ftp.rmdir("tmp");
 
     @note see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
 */
-nothing FtpClient::rmdir(string remote_path) {
+nothing FtpClient::rmdir(string remote_path) [flags=NAMED_ARGS] {
     f->rmdir(remote_path->c_str(), xsink);
 }
 
 //! Sets the user name to use for the next connection
-/** @param user the user name to use for the next connection
+/** @param username the user name to use for the next connection
 
     @par Example:
     @code{.py}
 ftp.setUserName("ftp");
     @endcode
 */
-nothing FtpClient::setUserName(string user) {
-    f->setUserName(user->c_str());
+nothing FtpClient::setUserName(string username) [flags=NAMED_ARGS] {
+    f->setUserName(username->c_str());
 }
 
 //! Sets the password to use for the next connection
-/** @param pass the password to use for the next connection
+/** @param password the password to use for the next connection
 
     @par Example:
     @code{.py}
 ftp.setPassword("ftp");
     @endcode
 */
-nothing FtpClient::setPassword(string pass) {
-    f->setPassword(pass->c_str());
+nothing FtpClient::setPassword(string password) [flags=NAMED_ARGS] {
+    f->setPassword(password->c_str());
 }
 
 //! Sets the hostname or address to use to connect to for the next connection
@@ -636,7 +636,7 @@ nothing FtpClient::setPassword(string pass) {
 ftp.setHostName("example.com");
     @endcode
 */
-nothing FtpClient::setHostName(string host) {
+nothing FtpClient::setHostName(string host) [flags=NAMED_ARGS] {
     f->setHostName(host->c_str());
 }
 
@@ -650,7 +650,7 @@ ftp.setPort(2021);
 
     @throw FTPCLIENT-SETPORT-PARAMETER-ERROR port \<= 0 number passed as argument
 */
-nothing FtpClient::setPort(int port) {
+nothing FtpClient::setPort(int port) [flags=NAMED_ARGS] {
     if (port <= 0) {
         xsink->raiseException("FTPCLIENT-SETPORT-PARAMETER-ERROR", "expecting positive port number as first "
             "parameter of FtpClient::setPort(softint port); got %d", port);
@@ -672,7 +672,7 @@ ftp.setURL("ftps://user:pass@example.com:2021");
     @throw UNSUPPORTED-PROTOCOL Only \c "ftp" and "ftps" are allowed as the protocol (scheme) in the URL
     @throw FTP-URL-ERROR No hostname given in the URL
 */
-nothing FtpClient::setURL(string url) {
+nothing FtpClient::setURL(string url) [flags=NAMED_ARGS] {
     f->setURL(url, xsink);
 
     const char* url_path = f->getUrlPath();
@@ -696,7 +696,7 @@ ftp.setNetworkFamily(AF_INET);
 
     @since %Qore 0.9.0
 */
-nothing FtpClient::setNetworkFamily(int family) {
+nothing FtpClient::setNetworkFamily(int family) [flags=NAMED_ARGS] {
     if (family != AF_INET && family != AF_INET6 && family != AF_UNSPEC) {
         xsink->raiseException("FTPCLIENT-SETNETWORKFAMILY-ERROR", "invalid network family " QLLD, family);
         return QoreValue();
@@ -749,7 +749,7 @@ hash<auto> h = ftp.getControlSocketInfo();
 
     @since %Qore 0.9.0
  */
-hash<auto> FtpClient::getControlSocketInfo(bool host_lookup = True) {
+hash<auto> FtpClient::getControlSocketInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return f->getControlSocketInfo(xsink, host_lookup);
 }
 
@@ -770,7 +770,7 @@ hash<auto> h = ftp.getControlSocketInfo();
 
     @since %Qore 0.9.0
  */
-hash<auto> FtpClient::getDataSocketInfo(bool host_lookup = True) {
+hash<auto> FtpClient::getDataSocketInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return f->getDataSocketInfo(xsink, host_lookup);
 }
 
@@ -791,7 +791,7 @@ hash<auto> h = ftp.getControlPeerInfo();
 
     @since %Qore 0.9.0
  */
-hash<auto> FtpClient::getControlPeerInfo(bool host_lookup = True) {
+hash<auto> FtpClient::getControlPeerInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return f->getControlPeerInfo(xsink, host_lookup);
 }
 
@@ -812,7 +812,7 @@ hash<auto> h = ftp.getDataPeerInfo();
 
     @since %Qore 0.9.0
  */
-hash<auto> FtpClient::getDataPeerInfo(bool host_lookup = True) {
+hash<auto> FtpClient::getDataPeerInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return f->getDataPeerInfo(xsink, host_lookup);
 }
 
@@ -880,7 +880,7 @@ ftp.setSecure(True);
 
     @throw SET-SECURE-ERROR this method cannot be called while the control connection is established
  */
-nothing FtpClient::setSecure(bool secure = True) {
+nothing FtpClient::setSecure(bool secure = True) [flags=NAMED_ARGS] {
     if (secure ? f->setSecure() : f->setInsecure()) {
         xsink->raiseException("SET-SECURE-ERROR", "this method cannot be called while the control connection is "
             "established");
@@ -1062,23 +1062,24 @@ ftp.setEventQueue(queue);
     @endcode
 
     @param queue a @ref Qore::Thread::Queue "Queue" object to receive FtpClient and Socket events on both the data and control connections; note that the Queue passed cannot have any maximum size set or a QUEUE-ERROR will be thrown
-    @param arg an argument that will be included in each event hash in the \a arg key
+    @param argument an argument that will be included in each event hash in the \c "arg" key
     @param with_data if @ref True, then the actual raw data transferred / received is also included in the events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 
     @see event_handling for more information
 
-    @since %Qore 0.9.4 added the \a arg and \a with_data options
+    @since %Qore 0.9.4 added the \a argument and \a with_data options
 */
-nothing FtpClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
+nothing FtpClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument, *bool with_data)
+        [flags=NAMED_ARGS] {
     if (queue->getMax() != -1) {
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
+    f->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Clears any Queue object that may be set on the FtpClient object so that @ref event_handling "I/O events" are no longer captured on the object on the data connection
@@ -1099,23 +1100,24 @@ ftp.setDataEventQueue(queue);
     @endcode
 
     @param queue a @ref Qore::Thread::Queue "Queue" object to receive FtpClient and Socket events on the data connection; note that the Queue passed cannot have any maximum size set or a QUEUE-ERROR will be thrown
-    @param arg an argument that will be included in each event hash in the \a arg key
+    @param argument an argument that will be included in each event hash in the \c "arg" key
     @param with_data if @ref True, then the actual raw data transferred / received is also included in the events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 
     @see event_handling for more information
 
-    @since %Qore 0.9.4 added the \a arg and \a with_data options
+    @since %Qore 0.9.4 added the \a argument and \a with_data options
  */
-nothing FtpClient::setDataEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
+nothing FtpClient::setDataEventQueue(Qore::Thread::Queue[Queue] queue, auto argument, *bool with_data)
+        [flags=NAMED_ARGS] {
     if (queue->getMax() != -1) {
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setDataEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
+    f->setDataEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Clears any Queue object that may be set on the FtpClient object so that @ref event_handling "I/O events" are no longer captured on the object on the control connection
@@ -1136,23 +1138,24 @@ ftp.setControlEventQueue(queue);
     @endcode
 
     @param queue a @ref Qore::Thread::Queue "Queue" object to receive FtpClient and Socket events on the control connection; note that the Queue passed cannot have any maximum size set or a QUEUE-ERROR will be thrown
-    @param arg an argument that will be included in each event hash in the \a arg key
+    @param argument an argument that will be included in each event hash in the \c "arg" key
     @param with_data if @ref True, then the actual raw data transferred / received is also included in the events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 
     @see event_handling for more information
 
-    @since %Qore 0.9.4 added the \a arg and \a with_data options
+    @since %Qore 0.9.4 added the \a argument and \a with_data options
 */
-nothing FtpClient::setControlEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
+nothing FtpClient::setControlEventQueue(Qore::Thread::Queue[Queue] queue, auto argument, *bool with_data)
+        [flags=NAMED_ARGS] {
     if (queue->getMax() != -1) {
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the FtpClient object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setControlEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
+    f->setControlEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -1172,7 +1175,7 @@ nothing FtpClient::clearWarningQueue() {
 //! Sets a @ref Qore::Thread::Queue "Queue" object to receive socket warnings
 /** @par Example:
     @code{.py}
-ftp.setWarningQueue(5000, 5000, queue, "socket-1");
+ftp.setWarningQueue(warning_ms: 5000, warning_bytes: 5000, queue: queue, argument: "socket-1");
     @endcode
 
     @param warning_ms the threshold in milliseconds for individual socket actions (send, receive, connect), if exceeded, a socket warning is placed on the warning queue with the following keys:
@@ -1180,21 +1183,21 @@ ftp.setWarningQueue(5000, 5000, queue, "socket-1");
     - \c "operation": a string giving the operation that caused the warning (ex: \c "connect")
     - \c "us": an integer giving the number of microseconds for the operation
     - \c "timeout": an integer giving the warning threshold in microseconds
-    - \c "arg": if any \c "arg" argument is passed to the @ref Qore::FtpClient::setWarningQueue() "FtpClient::setWarningQueue()" method, it will be included in the warning hash here
-    @param warning_bs value in bytes per second; if any call has performance below this threshold, a socket warning is placed on the warning queue with the following keys:
+    - \c "arg": if any \c "argument" argument is passed to the @ref Qore::FtpClient::setWarningQueue() "FtpClient::setWarningQueue()" method, it will be included in the warning hash here
+    @param warning_bytes value in bytes per second; if any call has performance below this threshold, a socket warning is placed on the warning queue with the following keys:
     - \c "type": a string with the constant value \c "SOCKET-THROUGHPUT-WARNING"
     - \c "dir": either \c "send" or \c "recv" depending on the direction of the data flow
     - \c "bytes": the amount of bytes sent
     - \c "us": an integer giving the number of microseconds for the operation
     - \c "bytes_sec": a float giving the transfer speed in bytes per second
     - \c "threshold": an integer giving the warning threshold in bytes per second
-    - \c "arg": if any \c "arg" argument is passed to the @ref Qore::FtpClient::setWarningQueue() "FtpClient::setWarningQueue()" method, it will be included in the warning hash here
+    - \c "arg": if any \c "argument" argument is passed to the @ref Qore::FtpClient::setWarningQueue() "FtpClient::setWarningQueue()" method, it will be included in the warning hash here
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive warning events
-    @param arg an optional argument to be placed in the \c "arg" key in each warning hash (could be used to identify the socket for example)
+    @param argument an optional argument to be placed in the \c "arg" key in each warning hash (could be used to identify the socket for example)
     @param min_ms the minimum transfer time with a resolution of milliseconds for a transfer to be eligible for triggering a warning; transfers that take less than this period of time are not eligible for raising a warning
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
-    @throw SOCKET-SETWARNINGQUEUE-ERROR at least one of \a warning_ms and \a warning_bs must be > 0
+    @throw SOCKET-SETWARNINGQUEUE-ERROR at least one of \a warning_ms and \a warning_bytes must be > 0
 
     @see FtpClient::clearWarningQueue()
 
@@ -1202,14 +1205,15 @@ ftp.setWarningQueue(5000, 5000, queue, "socket-1");
     - %Qore 0.8.9
     - %Qore 0.8.12 the minimum threshold for a warning is a transfer of at least 1024 bytes, smaller transfers will not result in a warning
  */
-nothing FtpClient::setWarningQueue(int warning_ms, int warning_bs, Queue[Queue] queue, auto arg, timeout min_ms = 1s) {
+nothing FtpClient::setWarningQueue(int warning_ms, int warning_bytes, Queue[Queue] queue, auto argument,
+        timeout min_ms = 1s) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1) {
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setWarningQueue(xsink, warning_ms, warning_bs, queue.release(), arg.refSelf(), min_ms);
+    f->setWarningQueue(xsink, warning_ms, warning_bytes, queue.release(), argument.refSelf(), min_ms);
 }
 
 //! Returns performance statistics for the socket
@@ -1263,13 +1267,13 @@ int FtpClient::getTimeout() [flags=CONSTANT] {
 
     @since %Qore 0.8.12.3
 */
-FtpClient::setTimeout(timeout timeout_ms) {
+FtpClient::setTimeout(timeout timeout_ms) [flags=NAMED_ARGS] {
     f->setTimeout(timeout_ms);
 }
 
 //! Sends a message on the control connection with a reply on the control connection only
-/** @param cmd the FTP command to send
-    @param arg the argument for the command
+/** @param command the FTP command to send
+    @param argument the argument for the command
 
     @return the response from the FTP server
 
@@ -1277,8 +1281,8 @@ FtpClient::setTimeout(timeout timeout_ms) {
 
     @since %Qore 0.9.4
 */
-hash<FtpResponseInfo> FtpClient::sendControlMessage(string cmd, string arg) {
-    return f->sendControlMessage(cmd->c_str(), arg->c_str(), xsink);
+hash<FtpResponseInfo> FtpClient::sendControlMessage(string command, string argument) [flags=NAMED_ARGS] {
+    return f->sendControlMessage(command->c_str(), argument->c_str(), xsink);
 }
 
 //! Returns @ref True if the client is connected to the server

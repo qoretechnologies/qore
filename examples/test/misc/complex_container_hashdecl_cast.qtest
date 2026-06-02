@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+
+%requires QUnit
+
+public namespace complex_container_hashdecl_cast_test;
+
+hashdecl VersionInfo {
+    string version_id;
+    list<string> tags = ();
+}
+
+class ComplexContainerHashdeclCastTest inherits QUnit::Test {
+    public {
+        const TEST_NAME = "Complex Container Hashdecl Cast Test";
+        const TEST_VERSION = "1.0";
+    }
+
+    testListCastRetypesNestedHashdeclValues() {
+        hash index = ("versions": (("version_id": "v1", "tags": ("stable")),));
+
+        list<hash<VersionInfo>> versions = cast<list<hash<VersionInfo>>>(index.versions);
+
+        assertEq(1, versions.size());
+        assertEq("v1", versions[0].version_id);
+        assertEq(("stable"), versions[0].tags);
+    }
+
+    testHashCastRetypesNestedHashdeclValues() {
+        hash index = ("latest": ("version_id": "v2", "tags": ("current")));
+
+        hash<string, hash<VersionInfo>> versions = cast<hash<string, hash<VersionInfo>>>(index);
+
+        assertEq("v2", versions.latest.version_id);
+        assertEq(("current"), versions.latest.tags);
+    }
+}

@@ -41,6 +41,20 @@
 
 %exec-class BaseLinkerDataProviderTest
 
+class QueueObserver inherits DataProvider::Observer {
+    private {
+        Queue q;
+    }
+
+    constructor(Queue q) {
+        self.q = q;
+    }
+
+    update(string event_id, hash<auto> data) {
+        q.push({"event_id": event_id, "data": data});
+    }
+}
+
 public class BaseLinkerDataProviderTest inherits QUnit::Test {
     private {
         #! BaseLinker REST client (async) for integration tests
@@ -581,34 +595,32 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
 
         BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
 
-        AbstractDataProvider watch;
+        DataProvider::AbstractWatchDataProviderBase watch;
         try {
             AbstractDataProvider events_dp = provider.getChildProvider("events");
-            watch = events_dp.getChildProvider("order-created");
+            watch = cast<DataProvider::AbstractWatchDataProviderBase>(events_dp.getChildProvider("order-created"));
         } catch (hash<ExceptionInfo> ex) {
             testSkip(sprintf("watch provider 'events/order-created' not available: %s", ex.desc));
         }
 
         # Observer that records events
         Queue eq();
-        code observer = sub (string event_id, hash<auto> data) {
-            eq.push({"event_id": event_id, "data": data});
-        };
+        QueueObserver observer(eq);
 
         try {
-            watch.registerObserver("qore-test", observer);
+            watch.registerObserver(observer);
         } catch (hash<ExceptionInfo> ex) {
             testSkip(sprintf("registerObserver unsupported on this build: %s", ex.desc));
         }
         try {
-            watch.startObserver({"poll_interval": BaseLinkerDataProvider::MinPollInterval});
+            watch.observersReady();
         } catch (hash<ExceptionInfo> ex) {
-            try { watch.stopObserver(); } catch (hash<ExceptionInfo> _) {}
-            testSkip(sprintf("startObserver unsupported: %s", ex.desc));
+            try { watch.stopEvents(); } catch (hash<ExceptionInfo> _) {}
+            testSkip(sprintf("observersReady unsupported: %s", ex.desc));
         }
 
         on_exit {
-            try { watch.stopObserver(); } catch (hash<ExceptionInfo> _) {}
+            try { watch.stopEvents(); } catch (hash<ExceptionInfo> _) {}
         }
 
         # Create an order to trigger the journal entry; reuse the orderCrudPersistenceTest payload shape,

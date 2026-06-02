@@ -92,13 +92,15 @@ RandomForest::constructor(hash<auto> options) {
         }
         v = options->getKeyValue("max_features");
         if (v.getType() == NT_STRING) {
-            max_features = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper str(v);
+            max_features = str->c_str();
         }
         v = options->getKeyValue("bootstrap");
         if (!v.isNullOrNothing()) { bootstrap = v.getAsBool(); }
         v = options->getKeyValue("task");
         if (v.getType() == NT_STRING) {
-            task = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper str(v);
+            task = str->c_str();
             if (task != "classification" && task != "regression") {
                 xsink->raiseException("ML-RANDOM-FOREST-ERROR",
                     "task must be 'classification' or 'regression'; got '%s'",
@@ -107,7 +109,10 @@ RandomForest::constructor(hash<auto> options) {
             }
         }
         v = options->getKeyValue("criterion");
-        if (v.getType() == NT_STRING) { criterion = v.get<const QoreStringNode>()->c_str(); }
+        if (v.getType() == NT_STRING) {
+            QoreStringValueHelper str(v);
+            criterion = str->c_str();
+        }
         v = options->getKeyValue("seed");
         if (!v.isNullOrNothing()) { seed = v.getAsBigInt(); }
     }

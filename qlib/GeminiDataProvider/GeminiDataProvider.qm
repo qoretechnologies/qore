@@ -33,6 +33,10 @@
 %requires(reexport) DataProvider
 %requires(reexport) GeminiRestClient
 
+%try-module json
+%define NoJson
+%endtry
+
 module GeminiDataProvider {
     version = "1.0";
     desc = "user module providing a data provider API for Google Gemini services";

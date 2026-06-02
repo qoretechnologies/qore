@@ -1,9 +1,9 @@
 #!/usr/bin/env qore
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
 %exec-class BasenameTest

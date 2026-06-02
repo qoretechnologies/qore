@@ -134,7 +134,7 @@ public class SendCloudServicePointsDataProvider inherits SendCloudDataProviderBa
         return new SendCloudServicePointDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
         foreach string k in (keys SearchOptions) {
@@ -152,7 +152,7 @@ public class SendCloudServicePointsDataProvider inherits SendCloudDataProviderBa
         } else {
             records = ();
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

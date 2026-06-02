@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/ParseNode.h"
 
 QoreString QoreMinusEqualsOperatorNode::op_str("-= operator expression");
 
@@ -55,11 +56,21 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
     }
     //const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
-    if (!QoreTypeInfo::isType(ti, NT_HASH)
-        && !QoreTypeInfo::isType(ti, NT_OBJECT)
-        && !QoreTypeInfo::isType(ti, NT_FLOAT)
-        && !QoreTypeInfo::isType(ti, NT_NUMBER)
-        && !QoreTypeInfo::isType(ti, NT_DATE)) {
+    // Dereference reference types before type checking so that
+    // reference<hash<...>> etc. are recognized correctly
+    const QoreTypeInfo* check_ti = ti;
+    if (QoreTypeInfo::isReference(ti)) {
+        const QoreTypeInfo* deref_ti = QoreTypeInfo::getReferenceTarget(ti);
+        if (deref_ti) {
+            check_ti = deref_ti;
+        }
+    }
+
+    if (!QoreTypeInfo::isType(check_ti, NT_HASH)
+        && !QoreTypeInfo::isType(check_ti, NT_OBJECT)
+        && !QoreTypeInfo::isType(check_ti, NT_FLOAT)
+        && !QoreTypeInfo::isType(check_ti, NT_NUMBER)
+        && !QoreTypeInfo::isType(check_ti, NT_DATE)) {
         // if the lhs type is not one of the above types,
         // there are 2 possibilities: the lvalue has no value, in which
         // case it takes the value of the right side, or if it's anything else it's
@@ -71,6 +82,12 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
             }
             parse_context.typeInfo = ti = bigIntTypeInfo;
             val = makeSpecialization<QoreIntMinusEqualsOperatorNode>();
+            if (val.hasNode()) {
+                auto* parse_node = dynamic_cast<ParseNode*>(val.getInternalNode());
+                if (parse_node) {
+                    parse_node->setParseAnalysis(parse_context.analysis);
+                }
+            }
             return err;
         } else {
             ti = nullptr;
@@ -136,6 +153,13 @@ QoreValue QoreMinusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink
     } else if (vtype == NT_NUMBER) {
         v.minusEqualsNumber(*new_right, "<-= operator>");
     } else if (vtype == NT_DATE) {
+        // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
+        if (new_right->getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            int64 ms = new_right->get<const DateTimeNode>()->getRelativeMilliseconds();
+            // do minus-equals with milliseconds
+            return v.minusEqualsBigInt(ms);
+        }
+        // Regular date arithmetic
         if (new_right->getType() == NT_DATE) {
             v.assign(v.getValue().get<DateTimeNode>()->subtractBy(*new_right->get<DateTimeNode>()));
         } else {
@@ -191,10 +215,17 @@ QoreValue QoreMinusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink
         }
     } else {
         // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
-        if (new_right->getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            int64 ms = new_right->get<const DateTimeNode>()->getRelativeMilliseconds();
-            // do minus-equals with milliseconds
-            return v.minusEqualsBigInt(ms);
+        // Note: timeout type stores its value as an int (milliseconds), so vtype will be NT_INT
+        if (new_right->getType() == NT_DATE) {
+            // For timeout variables (which store int but have timeoutTypeInfo),
+            // convert the right operand (date/time) to milliseconds for subtraction
+            if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+                int64 ms = new_right->get<const DateTimeNode>()->getRelativeMilliseconds();
+                // do minus-equals with milliseconds
+                return v.minusEqualsBigInt(ms);
+            }
+            // For non-timeout int types, convert date to int (for compatibility)
+            return v.minusEqualsBigInt(new_right->get<const DateTimeNode>()->getRelativeSeconds());
         }
 
         // do integer minus-equals

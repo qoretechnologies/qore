@@ -923,7 +923,7 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
     }
     if (ex_holder) {
         if (accept_timeout_returns_nothing && socket_exec_exception_is(*ex_holder, "SOCKET-TIMEOUT")
-                && !strcmp(static_cast<SocketPollOperationBase*>(accept_poller)->getStateImpl(), "accepting")) {
+                && accept_poller->timeoutBeforeAccept()) {
             return QoreValue();
         }
         socket_raise_poll_result_exception(*ex_holder, xsink);
@@ -1861,26 +1861,70 @@ static int check_response_code(int status_code, ExceptionSink* xsink) {
     return 0;
 }
 
-static int extractQuicBodyPtrLen(const AbstractQoreNode* body, const void*& ptr, size_t& len, ExceptionSink* xsink) {
+static int extractDataBodyPtrLen(const QoreValue& body, const void*& ptr, size_t& len, char short_buf[7],
+        ExceptionSink* xsink, const char* ex_name) {
     ptr = nullptr;
     len = 0;
-    if (!body) {
+    if (body.isNullOrNothing()) {
         return 0;
     }
-    qore_type_t t = body->getType();
+    if (body.isShortString()) {
+        body.getShortString(short_buf);
+        ptr = short_buf;
+        len = body.shortStringLen();
+        return 0;
+    }
+    qore_type_t t = body.getType();
     if (t == NT_BINARY) {
-        const BinaryNode* b = static_cast<const BinaryNode*>(body);
+        const BinaryNode* b = body.get<const BinaryNode>();
         ptr = b->getPtr();
         len = b->size();
     } else if (t == NT_STRING) {
-        const QoreStringNode* s = static_cast<const QoreStringNode*>(body);
+        const QoreStringNode* s = body.get<const QoreStringNode>();
         ptr = s->c_str();
         len = s->size();
     } else {
-        xsink->raiseException("QUIC-ERROR", "body must be string or binary, got type '%s'", body->getTypeName());
+        xsink->raiseException(ex_name, "body must be string or binary, got type '%s'", body.getTypeName());
         return -1;
     }
     return 0;
+}
+
+static int copyDataBodyToBinary(const QoreValue& body, SimpleRefHolder<BinaryNode>& holder,
+        const BinaryNode*& bin, ExceptionSink* xsink, const char* ex_name) {
+    const void* ptr = nullptr;
+    size_t len = 0;
+    char short_buf[7];
+    if (extractDataBodyPtrLen(body, ptr, len, short_buf, xsink, ex_name)) {
+        return -1;
+    }
+    if (len) {
+        holder = new BinaryNode;
+        holder->append(ptr, len);
+        bin = *holder;
+    }
+    return 0;
+}
+
+static int materializeDataBodyNode(const QoreValue& body, ValueHolder& holder,
+        const AbstractQoreNode*& node, ExceptionSink* xsink, const char* ex_name) {
+    node = nullptr;
+    if (body.isNullOrNothing()) {
+        return 0;
+    }
+    if (body.isShortString()) {
+        char short_buf[7];
+        body.getShortString(short_buf);
+        holder = QoreValue(new QoreStringNode(short_buf, body.shortStringLen(), QCS_UTF8));
+        node = holder->get<const AbstractQoreNode>();
+        return 0;
+    }
+    if (body.getType() == NT_BINARY || body.getType() == NT_STRING) {
+        node = body.get<const AbstractQoreNode>();
+        return 0;
+    }
+    xsink->raiseException(ex_name, "body must be string or binary, got type '%s'", body.getTypeName());
+    return -1;
 }
 
 //! Server-sent event hash
@@ -2463,7 +2507,7 @@ Socket::destructor() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollConnect(string target) {
+AbstractPollOperation<auto> Socket::startPollConnect(string target) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, false, target->c_str(), s),
         xsink);
@@ -2492,7 +2536,7 @@ AbstractPollOperation Socket::startPollConnect(string target) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollConnectSsl(string target) {
+AbstractPollOperation<auto> Socket::startPollConnectSsl(string target) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, true, target->c_str(), s),
         xsink);
@@ -2514,7 +2558,7 @@ AbstractPollOperation Socket::startPollConnectSsl(string target) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollSend(string data) {
+AbstractPollOperation<auto> Socket::startPollSend(string data) [flags=NAMED_ARGS] {
     SimpleRefHolder<QoreStringNode> tmp;
     if (data->getEncoding() != s->getEncoding()) {
         tmp = data->convertEncoding(s->getEncoding(), xsink);
@@ -2544,7 +2588,7 @@ AbstractPollOperation Socket::startPollSend(string data) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollSend(binary data) {
+AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketSendPollOperation(xsink, data->binRefSelf(), s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -2560,7 +2604,7 @@ AbstractPollOperation Socket::startPollSend(binary data) {
 
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send an HTTP response in non-blocking mode
 /** @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
+    @param status_description the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response; any \c "Content-Length" header here will be
     ignored and replaced with the actual body size
@@ -2572,7 +2616,7 @@ AbstractPollOperation Socket::startPollSend(binary data) {
 
     @par Example:
     @code{.py}
-    AbstractPollOperation op = sock.startPollSendHttpResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "Hello");
+    AbstractPollOperation<auto> op = sock.startPollSendHttpResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "Hello");
     while (!op.goalReached()) {
         int rc = sock.poll(op, 1s);
         if (rc < 0) {
@@ -2590,8 +2634,8 @@ AbstractPollOperation Socket::startPollSend(binary data) {
 
     @since %Qore 2.2
 */
-AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string status_desc, string http_version,
-        *hash<auto> headers, *data body) {
+AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, string status_description,
+        string http_version, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR",
@@ -2603,26 +2647,16 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
     QoreString hdr(s->getEncoding());
 
     // Write HTTP response status line
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Get body data and size
     const void* body_ptr = nullptr;
     size_t body_size = 0;
-    if (body) {
-        if (body->getType() == NT_BINARY) {
-            const BinaryNode* b = static_cast<const BinaryNode*>(body);
-            body_ptr = b->getPtr();
-            body_size = b->size();
-        } else if (body->getType() == NT_STRING) {
-            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            body_ptr = str->c_str();
-            body_size = str->size();
-        } else {
-            xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR",
-                "body must be a string or binary value; got type '%s' instead", body->getTypeName());
-            return QoreValue();
-        }
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 4), body_ptr, body_size, body_short_buf,
+            xsink, "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR")) {
+        return QoreValue();
     }
 
     // Add headers using the standard do_headers() function which properly handles Content-Length
@@ -2659,7 +2693,7 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
     read operations in the HTTP keep-alive path.
 
     @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
+    @param status_description the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response
     @param body optional message body to send with the response
@@ -2675,8 +2709,8 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_desc,
-        string http_version, *hash<auto> headers, *data body, timeout idle_timeout) {
+AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
+        string http_version, *hash<auto> headers, *data body, timeout idle_timeout) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
@@ -2688,26 +2722,16 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     QoreString hdr(s->getEncoding());
 
     // Write HTTP response status line
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Get body data and size
     const void* body_ptr = nullptr;
     size_t body_size = 0;
-    if (body) {
-        if (body->getType() == NT_BINARY) {
-            const BinaryNode* b = static_cast<const BinaryNode*>(body);
-            body_ptr = b->getPtr();
-            body_size = b->size();
-        } else if (body->getType() == NT_STRING) {
-            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            body_ptr = str->c_str();
-            body_size = str->size();
-        } else {
-            xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
-                "body must be a string or binary value; got type '%s' instead", body->getTypeName());
-            return QoreValue();
-        }
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 4), body_ptr, body_size, body_short_buf,
+            xsink, "SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR")) {
+        return QoreValue();
     }
 
     // Add headers
@@ -2748,7 +2772,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     I/O thread.
 
     @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Not Found")
+    @param status_description the HTTP status description (e.g. "OK", "Not Found")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response; must include Content-Length
     @param body the InputStream to read the response body from
@@ -2765,9 +2789,9 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
-        string status_desc, string http_version, *hash<auto> headers,
-        InputStream[InputStream] body, softint content_length, timeout idle_timeout) {
+AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
+        string status_description, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, softint content_length, timeout idle_timeout) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR",
@@ -2784,7 +2808,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
 
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Add headers (body size is set from Content-Length header, not body itself)
@@ -2848,7 +2872,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
     The handler thread returns immediately; all I/O happens on the I/O thread.
 
     @param status_code the HTTP status code (e.g. 200)
-    @param status_desc the HTTP status description (e.g. "OK")
+    @param status_description the HTTP status description (e.g. "OK")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers (Transfer-Encoding is set automatically)
     @param body the InputStream to read the response body from; EOF signals end of chunks
@@ -2858,9 +2882,9 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
-        string status_desc, string http_version, *hash<auto> headers,
-        InputStream[InputStream] body, timeout idle_timeout) {
+AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
+        string status_description, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, timeout idle_timeout) [flags=NAMED_ARGS] {
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR",
             "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
@@ -2883,7 +2907,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int 
     hdr_copy->removeKey("Content-Length", xsink);
 
     QoreString hdr_str(s->getEncoding());
-    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr_str.concat("\r\n");
     qore_socket_private::do_headers(hdr_str, *hdr_copy, 0);
 
@@ -2938,7 +2962,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int 
     The handler thread returns immediately; all I/O happens on the I/O thread.
 
     @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Not Found")
+    @param status_description the HTTP status description (e.g. "OK", "Not Found")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response; must include Content-Length
     @param body the InputStream to read the response body from
@@ -2952,9 +2976,9 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int 
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_code,
-        string status_desc, string http_version, *hash<auto> headers,
-        InputStream[InputStream] body, softint content_length) {
+AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int status_code,
+        string status_description, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, softint content_length) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR",
@@ -2971,7 +2995,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
 
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Add headers
@@ -3028,7 +3052,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
     on the I/O thread.
 
     @param status_code the HTTP status code (e.g. 200, 400); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Bad Request")
+    @param status_description the HTTP status description (e.g. "OK", "Bad Request")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response
     @param body the InputStream to read the response body from
@@ -3039,9 +3063,9 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpChunkedResponseWithStream(int status_code,
-        string status_desc, string http_version, *hash<auto> headers,
-        InputStream[InputStream] body) {
+AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(int status_code,
+        string status_description, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body) [flags=NAMED_ARGS] {
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR",
             "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
@@ -3061,7 +3085,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseWithStream(int sta
     hdr_copy->removeKey("Content-Length", xsink);
 
     QoreString hdr_str(s->getEncoding());
-    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr_str.concat("\r\n");
     qore_socket_private::do_headers(hdr_str, *hdr_copy, 0);
 
@@ -3114,7 +3138,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseWithStream(int sta
 
     @since %Qore 2.0
 */
-AbstractPollOperation Socket::startPollAccept() {
+AbstractPollOperation<auto> Socket::startPollAccept() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketAcceptPollOperation(xsink, s),
         xsink);
@@ -3139,7 +3163,7 @@ AbstractPollOperation Socket::startPollAccept() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvString(int size) {
+AbstractPollOperation<auto> Socket::startPollRecvString(int size) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvPollOperation(xsink, size, s, true), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3163,7 +3187,7 @@ AbstractPollOperation Socket::startPollRecvString(int size) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvBinary(int size) {
+AbstractPollOperation<auto> Socket::startPollRecvBinary(int size) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvPollOperation(xsink, size, s, false), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3186,7 +3210,7 @@ AbstractPollOperation Socket::startPollRecvBinary(int size) {
 
     @since %Qore 2.0
 */
-AbstractPollOperation Socket::startPollRecvData() {
+AbstractPollOperation<auto> Socket::startPollRecvData() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvDataPollOperation(xsink, s, false), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3218,7 +3242,8 @@ AbstractPollOperation Socket::startPollRecvData() {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chunked, bool connection_close) {
+AbstractPollOperation<auto> Socket::startPollReadHttpBody(int content_length, bool chunked,
+        bool connection_close) [flags=NAMED_ARGS] {
     // Use status_code=200 and is_head=false since this reads request bodies (not responses)
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -3248,7 +3273,7 @@ AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chu
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvUntilBytesString(string pattern) {
+AbstractPollOperation<auto> Socket::startPollRecvUntilBytesString(string pattern) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvUntilBytesPollOperation(xsink, pattern, s, true), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3272,7 +3297,7 @@ AbstractPollOperation Socket::startPollRecvUntilBytesString(string pattern) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) {
+AbstractPollOperation<auto> Socket::startPollRecvUntilBytesBinary(string pattern) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvUntilBytesPollOperation(xsink, pattern, s, false), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3306,7 +3331,7 @@ AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [dom=NETWORK] {
+AbstractPollOperation<auto> Socket::startPollRecvFrom(*int max_size) [flags=NAMED_ARGS; dom=NETWORK] {
     size_t ms = max_size ? (size_t)max_size : 65535;
     if (ms == 0 || ms > 65535) {
         ms = 65535;
@@ -3340,7 +3365,8 @@ AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [dom=NETWORK] {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendTo(string host, int port, binary data, *int family) [dom=NETWORK] {
+AbstractPollOperation<auto> Socket::startPollSendTo(
+        string host, int port, binary data, *int family) [flags=NAMED_ARGS; dom=NETWORK] {
     int fam = family ? (int)family : AF_UNSPEC;
 
     s->ref();
@@ -3387,7 +3413,7 @@ AbstractPollOperation Socket::startPollSendTo(string host, int port, binary data
 
     @since %Qore 2.0
 */
-AbstractPollOperation Socket::startPollReadHttpHeader() {
+AbstractPollOperation<auto> Socket::startPollReadHttpHeader() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketReadHttpHeaderPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3402,7 +3428,7 @@ AbstractPollOperation Socket::startPollReadHttpHeader() {
 }
 
 /*
-AbstractPollOperation Socket::startPollReadServerSentEvent() {
+AbstractPollOperation<auto> Socket::startPollReadServerSentEvent() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketReadServerSentEventPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3432,7 +3458,7 @@ AbstractPollOperation Socket::startPollReadServerSentEvent() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
+AbstractPollOperation<auto> Socket::startPollUpgradeClientToSSL() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketUpgradeClientSslPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3461,7 +3487,7 @@ AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollUpgradeServerToSSL() {
+AbstractPollOperation<auto> Socket::startPollUpgradeServerToSSL() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketUpgradeServerSslPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3518,7 +3544,7 @@ sock.connect("/tmp/socket");@endcode
     @see Socket::connectUNIX(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and
     Socket::connectUNIXSSL()
 */
-nothing Socket::connect(string target, timeout timeout_ms = -1) {
+nothing Socket::connect(string target, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_connect(self, s, target->c_str(), timeout_ms, false, xsink);
 }
 
@@ -3544,15 +3570,16 @@ sock.connectINET("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s);@endcode
     @param service The service name (ex: \c "http" or port number (given as or converted to a string) to connect to
     @param timeout_ms If a timeout value is passed and the connection takes longer to establish than the timeout, a \c "SOCKET-CONNECT-ERROR" exception is thrown. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
     @param family The address family to use to connect to the remote socket; see @ref network_address_family_constants
-    @param socktype The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and Socket::connectUNIXSSL()
 */
-nothing Socket::connectINET(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms,
+nothing Socket::connectINET(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC,
+        softint socket_type = SOCK_STREAM, softint protocol = 0) [flags=NAMED_ARGS] {
+    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socket_type, protocol, timeout_ms,
         false, xsink);
 }
 
@@ -3567,7 +3594,7 @@ sock.connectUNIX("/tmp/socket"); @endcode
     @ref EVENT_CONNECTING, @ref EVENT_CONNECTED
 
     @param path The socket will try to connect to a UNIX domain socket file on the local filesystem with the given name
-    @param socktype The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the socket
@@ -3576,8 +3603,9 @@ sock.connectUNIX("/tmp/socket"); @endcode
 
     @note UNIX domain sockets are not available on native Windows ports
 */
-nothing Socket::connectUNIX(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    socket_exec_connect_unix(self, s, path->c_str(), socktype, protocol, -1, false, xsink);
+nothing Socket::connectUNIX(string path, softint socket_type = SOCK_STREAM,
+        softint protocol = 0) [flags=NAMED_ARGS] {
+    socket_exec_connect_unix(self, s, path->c_str(), socket_type, protocol, -1, false, xsink);
 }
 
 //! Connects to a remote socket and attempts to establish a TLS/SSL connection; accepts an optional timeout value with a millisecond resolution
@@ -3609,7 +3637,7 @@ sock.connectSSL("/tmp/socket"); @endcode
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectUNIXSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 */
-nothing Socket::connectSSL(string target, timeout timeout_ms = -1) {
+nothing Socket::connectSSL(string target, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_connect(self, s, target->c_str(), timeout_ms, true, xsink);
 }
 
@@ -3635,7 +3663,7 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
     @param service The service name (ex: \c "http" or port number (given as or converted to a string) to connect to
     @param timeout_ms If a timeout value is passed and the connection takes longer to establish than the timeout, a \c "SOCKET-CONNECT-ERROR" exception is thrown. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
     @param family The address family to use to connect to the remote socket; see @ref network_address_family_constants
-    @param socktype The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
@@ -3643,8 +3671,10 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINET(), and Socket::connectUNIXSSL()
 */
-nothing Socket::connectINETSSL(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms,
+nothing Socket::connectINETSSL(string host, softstring service, timeout timeout_ms = -1,
+        softint family = AF_UNSPEC, softint socket_type = SOCK_STREAM,
+        softint protocol = 0) [flags=NAMED_ARGS] {
+    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socket_type, protocol, timeout_ms,
         true, xsink);
 }
 
@@ -3659,7 +3689,7 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
     @ref EVENT_CONNECTING, @ref EVENT_CONNECTED, @ref EVENT_START_SSL, @ref EVENT_SSL_ESTABLISHED
 
     @param path The socket will try to connect to a UNIX domain socket file on the local filesystem with the given name
-    @param socktype The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the socket
@@ -3669,8 +3699,9 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
 
     @note UNIX domain sockets are not available on native Windows ports
 */
-nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    socket_exec_connect_unix(self, s, path->c_str(), socktype, protocol, -1, true, xsink);
+nothing Socket::connectUNIXSSL(string path, softint socket_type = SOCK_STREAM,
+        softint protocol = 0) [flags=NAMED_ARGS] {
+    socket_exec_connect_unix(self, s, path->c_str(), socket_type, protocol, -1, true, xsink);
 }
 
 //! Opens and binds the socket to a port, interface and port (if the bind_to string has a format "host:port"), or UNIX domain socket file.
@@ -3687,15 +3718,15 @@ nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, soft
 if (sock.bind("/tmp/my-socket", True))
     throw "BIND-ERROR", strerror(); @endcode
 
-    @param str If a colon appears in the string, the string will be assumed to be a \c "bind_address:port" specification, and the port on the named IP address will be bound, otherwise, if the string contains no colon, the socket will be bound to a UNIX domain socket file on the local filesystem with the given name.  Note that a hostname or address in square brackets (ex: \c "[localhost]") will be looked up and bound as an IPv6 address; additionally, the method recognizes ipv6 addresses by embedded colons (:) in the address string (if surrounded by square brackets) and binds them as such.
-    @param reuseaddr If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state); note that this only applies to IPv4 (@ref AF_INET) and IPv6 (@ref AF_INET6) sockets; this option is ignored for UNIX (@ref AF_UNIX) sockets.
+    @param target If a colon appears in the string, the string will be assumed to be a \c "bind_address:port" specification, and the port on the named IP address will be bound, otherwise, if the string contains no colon, the socket will be bound to a UNIX domain socket file on the local filesystem with the given name.  Note that a hostname or address in square brackets (ex: \c "[localhost]") will be looked up and bound as an IPv6 address; additionally, the method recognizes ipv6 addresses by embedded colons (:) in the address string (if surrounded by square brackets) and binds them as such.
+    @param reuse_address If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state); note that this only applies to IPv4 (@ref AF_INET) and IPv6 (@ref AF_INET6) sockets; this option is ignored for UNIX (@ref AF_UNIX) sockets.
 
     @see Socket::bindINET() and Socket::bindUNIX()
 
     @note UNIX domain sockets are not available on native Windows ports
 */
-int Socket::bind(string str, softbool reuseaddr = False) {
-    return s->bind(str->c_str(), reuseaddr);
+int Socket::bind(string target, softbool reuse_address = False) [flags=NAMED_ARGS] {
+    return s->bind(target->c_str(), reuse_address);
 }
 
 //! Opens and binds the socket to an INET port on all interfaces
@@ -3709,12 +3740,12 @@ if (sock.bind(80, True))
     throw "BIND-ERROR", strerror(); @endcode
 
     @param port A port number to bind to on all interfaces
-    @param reuseaddr If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
+    @param reuse_address If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
 
     @see Socket::bindINET() and Socket::bindUNIX()
 */
-int Socket::bind(int port, softbool reuseaddr = False) {
-    return s->bind(port, reuseaddr);
+int Socket::bind(int port, softbool reuse_address = False) [flags=NAMED_ARGS] {
+    return s->bind(port, reuse_address);
 }
 
 //! Opens and binds the socket to the given UNIX domain socket file as given by the filename argument. If any errors occur, an exception is thrown
@@ -3725,7 +3756,7 @@ int Socket::bind(int port, softbool reuseaddr = False) {
 sock.bindUNIX("/tmp/socket"); @endcode
 
     @param path The path of the UNIX domain socket to create and bind to
-    @param socktype the type of socket; see Socket Type Constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type the type of socket; see Socket Type Constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol the protocol number for the socket; use 0 for the default protocol
 
     @throw SOCKET-BIND-ERROR Error opening socket for bind; error binding on socket
@@ -3734,8 +3765,9 @@ sock.bindUNIX("/tmp/socket"); @endcode
 
     @note UNIX domain sockets are not available on native Windows ports
 */
-nothing Socket::bindUNIX(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->bindUNIX(path->c_str(), socktype, protocol, xsink);
+nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
+        softint protocol = 0) [flags=NAMED_ARGS] {
+    s->bindUNIX(path->c_str(), socket_type, protocol, xsink);
 }
 
 //! Opens and binds the socket to the given IPv4 or IPv6 interface (or if no interface is given, then to all interfaces on the local system) and port (the port number will be derived from the service name if a numeric port number is not given)
@@ -3755,11 +3787,11 @@ sock.bindINET("localhost", 8080, False, AF_INET6); @endcode
     @code{.py} # bind to ipv6 host address fe80::21c:42ff:fe00:8, port 1001, reuse the address
 sock.bindINET("fe80::21c:42ff:fe00:8", 1001, True); @endcode
 
-    @param iface the host name or IP address to bind to
+    @param bind_address the host name or IP address to bind to
     @param service the service name (ex: "http" or port number (given as or converted to a string) to bind to
-    @param reuseaddr if this optional argument evaluates to True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
+    @param reuse_address if this optional argument evaluates to True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
     @param family the address family to use to bind; see Network Address Family Constants; \c AF_UNSPEC means to try all possible addres families
-    @param socktype the type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type the type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol the protocol number for the socket; use 0 for the default protocol
 
     @throw SOCKET-BIND-ERROR Both hostname and service name are empty or not set; error opening socket for bind; error binding on socket.
@@ -3767,16 +3799,16 @@ sock.bindINET("fe80::21c:42ff:fe00:8", 1001, True); @endcode
 
     @see Socket::bind() and Socket::bindUNIX()
 */
-nothing Socket::bindINET(*string iface, *softstring service, softbool reuseaddr = False, softint family = AF_UNSPEC,
-        softint socktype = SOCK_STREAM, softint protocol = 0) {
-    if ((!iface || iface->empty())
+nothing Socket::bindINET(*string bind_address, *softstring service, softbool reuse_address = False,
+        softint family = AF_UNSPEC, softint socket_type = SOCK_STREAM, softint protocol = 0) [flags=NAMED_ARGS] {
+    if ((!bind_address || bind_address->empty())
         && (!service || service->empty()))
-        return xsink->raiseException("SOCKET-BIND-ERROR", "both interace (first parameter) and service (second "
+        return xsink->raiseException("SOCKET-BIND-ERROR", "both bind_address (first parameter) and service (second "
             "parameter) were either not present or empty strings; at least one of the first 2 parameters must be "
             "present for a successful call to Socket::bindINET()");
 
-    s->bindINET(iface ? iface->c_str() : nullptr, service ? service->c_str() : nullptr, reuseaddr, family,
-        socktype, protocol, xsink);
+    s->bindINET(bind_address ? bind_address->c_str() : nullptr, service ? service->c_str() : nullptr,
+        reuse_address, family, socket_type, protocol, xsink);
 }
 
 //! Accepts connections on a listening socket
@@ -3816,7 +3848,7 @@ Socket Socket::accept() {
 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
-*Socket Socket::accept(timeout timeout_ms) {
+*Socket Socket::accept(timeout timeout_ms) [flags=NAMED_ARGS] {
     return socket_exec_accept(self, s, timeout_ms, false, true, xsink);
 }
 
@@ -3859,7 +3891,7 @@ Socket Socket::acceptSSL() {
 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
-*Socket Socket::acceptSSL(timeout timeout_ms) {
+*Socket Socket::acceptSSL(timeout timeout_ms) [flags=NAMED_ARGS] {
     return socket_exec_accept(self, s, timeout_ms, true, true, xsink);
 }
 
@@ -3877,7 +3909,7 @@ Socket Socket::acceptSSL() {
 
     @since %Qore 0.8.8 the \a backlog parameter was added
 */
-int Socket::listen(int backlog = 20) {
+int Socket::listen(int backlog = 20) [flags=NAMED_ARGS] {
     return checkOpenResult(s->listen((int)backlog), "listen", xsink);
 }
 
@@ -3891,7 +3923,7 @@ sock.send(data, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param bin Sends the binary data over the socket
+    @param data Sends the binary data over the socket
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -3909,8 +3941,8 @@ sock.send(data, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error like Socket::send2(); this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::send(binary bin, timeout timeout_ms = -1) {
-    return socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
+int Socket::send(binary data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    return socket_exec_send_binary(self, s, data->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends string data over the socket; string data is converted to the socket's encoding if necessary; if any errors occur, an exception is thrown
@@ -3924,7 +3956,7 @@ sock.send(str, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param str sends the string data over the socket without the trailing null ('\0') character; the string's encoding is converted to the socket's encoding if necessary
+    @param data sends the string data over the socket without the trailing null ('\0') character; the string's encoding is converted to the socket's encoding if necessary
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -3942,8 +3974,8 @@ sock.send(str, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error like Socket::send2(); this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::send(string str, timeout timeout_ms = -1) {
-    return socket_exec_send_string(self, s, str, timeout_ms, true, xsink);
+int Socket::send(string data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    return socket_exec_send_string(self, s, data, timeout_ms, true, xsink);
 }
 
 //! Sends string data over the socket without converting the string to the socket's encoding, but instead is sent exactly as-is; if any errors occur, an exception is thrown
@@ -3956,7 +3988,7 @@ sock.sendBinary(str);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param str string data to be sent (without any conversion to the socket's encoding) over the socket without the trailing null ('\0') character
+    @param data string data to be sent (without any conversion to the socket's encoding) over the socket without the trailing null ('\0') character
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -3973,8 +4005,8 @@ sock.sendBinary(str);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error like Socket::send2(); this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendBinary(string str, timeout timeout_ms = -1) {
-    return socket_exec_send_string_bytes(self, s, str, timeout_ms, xsink);
+int Socket::sendBinary(string data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    return socket_exec_send_string_bytes(self, s, data, timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -3987,7 +4019,7 @@ sock.sendBinary2(data);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param bin Sends the binary data over the socket
+    @param data Sends the binary data over the socket
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4004,8 +4036,8 @@ sock.sendBinary2(data);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error like Socket::send2(); this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendBinary(binary bin, timeout timeout_ms = -1) {
-    return socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
+int Socket::sendBinary(binary data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    return socket_exec_send_binary(self, s, data->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -4018,7 +4050,7 @@ sock.send2(data);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param bin Sends the binary data over the socket
+    @param data Sends the binary data over the socket
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
@@ -4033,8 +4065,8 @@ sock.send2(data);
 
     @since %Qore 0.8.4
 */
-nothing Socket::send2(binary bin, timeout timeout_ms = -1) {
-    socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
+nothing Socket::send2(binary data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_send_binary(self, s, data->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends string data over the socket; string data is converted to the socket's encoding if necessary; if any errors occur, an exception is thrown
@@ -4048,7 +4080,7 @@ sock.send2(str);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param str sends the string data over the socket without the trailing null ('\0') character; the string's encoding is converted to the socket's encoding if necessary
+    @param data sends the string data over the socket without the trailing null ('\0') character; the string's encoding is converted to the socket's encoding if necessary
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
@@ -4063,8 +4095,8 @@ sock.send2(str);
 
     @since %Qore 0.8.4
 */
-nothing Socket::send2(string str, timeout timeout_ms = -1) {
-    socket_exec_send_string(self, s, str, timeout_ms, true, xsink);
+nothing Socket::send2(string data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_send_string(self, s, data, timeout_ms, true, xsink);
 }
 
 //! Sends string data over the socket without converting the string to the socket's encoding, but instead is sent exactly as-is; if any errors occur, an exception is thrown
@@ -4077,7 +4109,7 @@ sock.sendBinary2(str);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param str string data to be sent (without any conversion to the socket's encoding) over the socket without the trailing null ('\0') character
+    @param data string data to be sent (without any conversion to the socket's encoding) over the socket without the trailing null ('\0') character
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
@@ -4091,8 +4123,8 @@ sock.sendBinary2(str);
 
     @since %Qore 0.8.4
 */
-nothing Socket::sendBinary2(string str, timeout timeout_ms = -1) {
-    socket_exec_send_string_bytes(self, s, str, timeout_ms, xsink);
+nothing Socket::sendBinary2(string data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_send_string_bytes(self, s, data, timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -4105,7 +4137,7 @@ sock.sendBinary2(data);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param bin Sends the binary data over the socket
+    @param data Sends the binary data over the socket
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
@@ -4119,8 +4151,8 @@ sock.sendBinary2(data);
 
     @since %Qore 0.8.4
 */
-nothing Socket::sendBinary2(binary bin, timeout timeout_ms = -1) {
-    socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
+nothing Socket::sendBinary2(binary data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_send_binary(self, s, data->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Reads data from an @ref InputStream and sends the bytes over the socket
@@ -4146,7 +4178,7 @@ sock.sendFromInputStream(input_stream, -1); # write all data available
     @since %Qore 0.8.13
 */
 nothing Socket::sendFromInputStream(Qore::InputStream[InputStream] input_stream, softint size = -1,
-        timeout timeout_ms = -1) {
+        timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_send_input_stream(self, s, *input_stream, const_cast<QoreObject*>(obj_input_stream), size,
         timeout_ms, xsink);
 }
@@ -4162,7 +4194,7 @@ sock.sendi1(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant byte will be sent
+    @param value the integer to send; only the least-significant byte will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4175,8 +4207,8 @@ sock.sendi1(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi1(softint i = 0, timeout timeout_ms = -1) {
-    char v = static_cast<char>(i);
+int Socket::sendi1(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    char v = static_cast<char>(value);
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4191,7 +4223,7 @@ sock.sendi2(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant 2 bytes will be sent
+    @param value the integer to send; only the least-significant 2 bytes will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4204,8 +4236,8 @@ sock.sendi2(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi2(softint i = 0, timeout timeout_ms = -1) {
-    short v = htons(static_cast<short>(i));
+int Socket::sendi2(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    short v = htons(static_cast<short>(value));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4220,7 +4252,7 @@ sock.sendi4(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant 4 bytes will be sent
+    @param value the integer to send; only the least-significant 4 bytes will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4233,8 +4265,8 @@ sock.sendi4(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi4(softint i = 0, timeout timeout_ms = -1) {
-    int v = htonl(static_cast<int>(i));
+int Socket::sendi4(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    int v = htonl(static_cast<int>(value));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4249,7 +4281,7 @@ sock.sendi8(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send
+    @param value the integer to send
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4262,8 +4294,8 @@ sock.sendi8(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi8(softint i = 0, timeout timeout_ms = -1) {
-    int64 v = i8MSB(i);
+int Socket::sendi8(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    int64 v = i8MSB(value);
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4278,7 +4310,7 @@ sock.sendi2LSB(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant 2 bytes will be sent
+    @param value the integer to send; only the least-significant 2 bytes will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4291,8 +4323,8 @@ sock.sendi2LSB(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi2LSB(softint i = 0, timeout timeout_ms = -1) {
-    short v = i2LSB(static_cast<short>(i));
+int Socket::sendi2LSB(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    short v = i2LSB(static_cast<short>(value));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4307,7 +4339,7 @@ sock.sendi4LSB(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant 4 bytes will be sent
+    @param value the integer to send; only the least-significant 4 bytes will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4320,8 +4352,8 @@ sock.sendi4LSB(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi4LSB(softint i = 0, timeout timeout_ms = -1) {
-    int v = i4LSB(static_cast<int>(i));
+int Socket::sendi4LSB(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    int v = i4LSB(static_cast<int>(value));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4336,7 +4368,7 @@ sock.sendi8LSB(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send
+    @param value the integer to send
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4349,8 +4381,8 @@ sock.sendi8LSB(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi8LSB(softint i = 0, timeout timeout_ms = -1) {
-    int64 v = i8LSB(i);
+int Socket::sendi8LSB(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    int64 v = i8LSB(value);
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4380,7 +4412,7 @@ string data = sock.recv(-1); # read all data available
     - Socket::setEncoding()
     - Socket::recvBinary()
 */
-string Socket::recv(softint size = 0, timeout timeout_ms = -1) {
+string Socket::recv(softint size = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_recv_string(self, s, size, timeout_ms, xsink);
 }
 
@@ -4408,7 +4440,7 @@ binary data = sock.recvBinary(-1); # read all data available
 
     @see Socket::recv()
 */
-binary Socket::recvBinary(softint size = 0, timeout timeout_ms = -1) {
+binary Socket::recvBinary(softint size = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_recv_binary(self, s, size, timeout_ms, xsink);
 }
 
@@ -4423,7 +4455,7 @@ sock.recvToOutputStream(os, -1); # read all data available
     @par Events:
     @ref EVENT_PACKET_READ
 
-    @param os The output stream to write the response body to; the stream must be I/O-thread-safe
+    @param output_stream The output stream to write the response body to; the stream must be I/O-thread-safe
     @param size the amount of data to read in bytes; to read until the remote closes the connection, use -1
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
@@ -4436,8 +4468,9 @@ sock.recvToOutputStream(os, -1); # read all data available
     @see Socket::recv()
     @since %Qore 0.8.13
 */
-nothing Socket::recvToOutputStream(Qore::OutputStream[OutputStream] os, softint size = -1, timeout timeout_ms = -1) {
-    socket_exec_recv_to_output_stream(self, s, *os, size, timeout_ms, xsink);
+nothing Socket::recvToOutputStream(Qore::OutputStream[OutputStream] output_stream, softint size = -1,
+        timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_recv_to_output_stream(self, s, *output_stream, size, timeout_ms, xsink);
 }
 
 //! Receives a 1-byte signed integer from the socket
@@ -4463,7 +4496,7 @@ int val = sock.recvi1();
 
     @see Socket::recvu1()
 */
-int Socket::recvi1(timeout timeout_ms = -1) {
+int Socket::recvi1(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     char b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4496,7 +4529,7 @@ int val = sock.recvi2();
 
     @see Socket::recvu2(), Socket::recvi2LSB(), Socket::recvu2LSB()
 */
-int Socket::recvi2(timeout timeout_ms = -1) {
+int Socket::recvi2(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     short b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4535,7 +4568,7 @@ int val = sock.recvi4();
 
     @see Socket::recvu4(), Socket::recvi4LSB(), Socket::recvu4LSB()
 */
-int Socket::recvi4(timeout timeout_ms = -1) {
+int Socket::recvi4(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     int b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4569,7 +4602,7 @@ int val = sock.recvi8();
 
     @see Socket::recvi8LSB()
 */
-int Socket::recvi8(timeout timeout_ms = -1) {
+int Socket::recvi8(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     int64 b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4602,7 +4635,7 @@ int val = sock.recvi2LSB();
 
     @see Socket::recvi2(), Socket::recvu2(), Socket::recvu2LSB()
 */
-int Socket::recvi2LSB(timeout timeout_ms = -1) {
+int Socket::recvi2LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     short b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4636,7 +4669,7 @@ int val = sock.recvi4LSB();
 
     @see Socket::recvi4(), Socket::recvu4(), Socket::recvu4LSB()
 */
-int Socket::recvi4LSB(timeout timeout_ms = -1) {
+int Socket::recvi4LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     int b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4670,7 +4703,7 @@ int val = sock.recvi8LSB();
 
     @see Socket::recvi8()
 */
-int Socket::recvi8LSB(timeout timeout_ms = -1) {
+int Socket::recvi8LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     int64 b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4704,7 +4737,7 @@ int val = sock.recvu1();
 
     @see Socket::recvi1()
 */
-int Socket::recvu1(timeout timeout_ms = -1) {
+int Socket::recvu1(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned char b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4737,7 +4770,7 @@ int val = sock.recvu2();
 
     @see Socket::recvi2(), Socket::recvi2LSB(), Socket::recvu2LSB()
 */
-int Socket::recvu2(timeout timeout_ms = -1) {
+int Socket::recvu2(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned short b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4771,7 +4804,7 @@ int val = sock.recvu4();
 
     @see Socket::recvi4(), Socket::recvi4LSB(), Socket::recvu4LSB()
 */
-int Socket::recvu4(timeout timeout_ms = -1) {
+int Socket::recvu4(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned int b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4805,7 +4838,7 @@ int val = sock.recvi2LSB();
 
     @see Socket::recvi2(), Socket::recvu2(), Socket::recvi2LSB()
 */
-int Socket::recvu2LSB(timeout timeout_ms = -1) {
+int Socket::recvu2LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned short b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4839,7 +4872,7 @@ int val = sock.recvu4LSB();
 
     @see Socket::recvi4(), Socket::recvu4(), Socket::recvi4LSB()
 */
-int Socket::recvu4LSB(timeout timeout_ms = -1) {
+int Socket::recvu4LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4887,7 +4920,7 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
 */
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, string body,
-        *reference<hash> info, timeout timeout_ms = -1) {
+        *reference<hash> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
     if (*xsink) {
@@ -4931,7 +4964,7 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
 */
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, *binary body,
-        *reference<hash<auto>> info, timeout timeout_ms = -1) {
+        *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     socket_exec_send_http_message(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
         body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
@@ -4948,7 +4981,7 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
     @par Events:
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
-    @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
+    @param send_callback The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
     @param method the HTTP method name to send (i.e. POST, HEAD, etc)
     @param path the path component of the URL
     @param http_version the HTTP protocol version (\c "1.0" or \c "1.1")
@@ -4966,11 +4999,11 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
 
     @since %Qore 0.8.10
 */
-nothing Socket::sendHTTPMessageWithCallback(code scb, string method, string path, string http_version,
-        hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPMessageWithCallback(code send_callback, string method, string path, string http_version,
+        hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     socket_exec_send_http_message_callback(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(),
-        headers, scb, timeout_ms, xsink);
+        headers, send_callback, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and an optional message body
@@ -4986,7 +5019,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
     @param body if present (and does not have a length of zero), the body to be sent with the message (if present, the \c "Content-Length" header will be automatically set); string data will be automatically converted to the Socket's encoding if necessary
@@ -4998,8 +5031,8 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SEND-ERROR send failed
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        string body, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, string body, timeout timeout_ms = -1) {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5008,7 +5041,7 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     if (*xsink) {
         return QoreValue();
     }
-    socket_exec_send_http_response(self, s, nullptr, status_code, status_desc->c_str(), http_version->c_str(),
+    socket_exec_send_http_response(self, s, nullptr, status_code, status_description->c_str(), http_version->c_str(),
         headers, tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
@@ -5027,7 +5060,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
@@ -5051,8 +5084,8 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
 
     @since %Qore 0.9.4
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        string body, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, string body, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5062,7 +5095,7 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     if (*xsink) {
         return QoreValue();
     }
-    socket_exec_send_http_response(self, s, *ohrh, status_code, status_desc->c_str(), http_version->c_str(),
+    socket_exec_send_http_response(self, s, *ohrh, status_code, status_description->c_str(), http_version->c_str(),
         headers, tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
@@ -5079,7 +5112,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
@@ -5096,13 +5129,13 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SEND-ERROR send failed
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        *binary body, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, *binary body, timeout timeout_ms = -1) {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
 
-    socket_exec_send_http_response(self, s, nullptr, status_code, status_desc->c_str(), http_version->c_str(),
+    socket_exec_send_http_response(self, s, nullptr, status_code, status_description->c_str(), http_version->c_str(),
         headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
@@ -5119,7 +5152,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
@@ -5141,14 +5174,14 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
 
     @since %Qore 0.9.4
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        *binary body, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, *binary body, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    socket_exec_send_http_response(self, s, *ohrh, status_code, status_desc->c_str(), http_version->c_str(),
+    socket_exec_send_http_response(self, s, *ohrh, status_code, status_description->c_str(), http_version->c_str(),
         headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
@@ -5164,7 +5197,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
     @ref EVENT_PACKET_SENT
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any string to be sent)
     @param headers a hash of additional headers to send (key-value pairs); note that the \c "Transfer-Encoding" header
     must be set to \c "chunked" manually with this call
@@ -5179,7 +5212,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
     connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions
     and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
     clear (i.e. \c 2m = two minutes, etc.)
-    @param tcb An optional trailer callback for message trailers to write in the outgoing chunked message; the
+    @param trailers_callback An optional trailer callback for message trailers to write in the outgoing chunked message; the
     callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers
     for the final chunk
 
@@ -5195,8 +5228,9 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
 
     @since %Qore 0.9.4
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096, *reference<hash<auto>> info, timeout timeout_ms = -1, *code tcb) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096,
+        *reference<hash<auto>> info, timeout timeout_ms = -1, *code trailers_callback) [flags=NAMED_ARGS] {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5207,9 +5241,9 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    socket_exec_send_http_response_input_stream(self, s, *ohrh, status_code, status_desc->c_str(),
+    socket_exec_send_http_response_input_stream(self, s, *ohrh, status_code, status_description->c_str(),
         http_version->c_str(), headers, *input_stream, const_cast<QoreObject*>(obj_input_stream), max_chunk_size,
-        tcb, timeout_ms, xsink);
+        trailers_callback, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body to send with chunked transfer encoding provided by a callback
@@ -5223,11 +5257,11 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
     @par Events:
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
-    @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a
+    @param send_callback The callback giving the chunked HTTP data to send; this callback must return either a string or a
     binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of
     message trailers can be sent or simply @ref nothing which will close the chunked message
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs); note that the \c "Transfer-Encoding" header
@@ -5248,14 +5282,14 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
 
     @since %Qore 0.8.10
 */
-nothing Socket::sendHTTPResponseWithCallback(code scb, softint status_code, string status_desc, string http_version,
-        hash<auto> headers, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponseWithCallback(code send_callback, softint status_code, string status_description,
+        string http_version, hash<auto> headers, timeout timeout_ms = -1) {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
 
-    socket_exec_send_http_response_callback(self, s, nullptr, status_code, status_desc->c_str(),
-        http_version->c_str(), headers, scb, timeout_ms, xsink);
+    socket_exec_send_http_response_callback(self, s, nullptr, status_code, status_description->c_str(),
+        http_version->c_str(), headers, send_callback, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body to send with chunked transfer encoding provided by a callback
@@ -5269,11 +5303,11 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
     @par Events:
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
-    @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a
+    @param send_callback The callback giving the chunked HTTP data to send; this callback must return either a string or a
     binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of
     message trailers can be sent or simply @ref nothing which will close the chunked message
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs); note that the \c "Transfer-Encoding" header
@@ -5297,15 +5331,16 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
 
     @since %Qore 0.9.4
 */
-nothing Socket::sendHTTPResponseWithCallback(code scb, softint status_code, string status_desc, string http_version,
-        hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponseWithCallback(code send_callback, softint status_code, string status_description,
+        string http_version, hash<auto> headers, *reference<hash<auto>> info,
+        timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    socket_exec_send_http_response_callback(self, s, *ohrh, status_code, status_desc->c_str(),
-        http_version->c_str(), headers, scb, timeout_ms, xsink);
+    socket_exec_send_http_response_callback(self, s, *ohrh, status_code, status_description->c_str(),
+        http_version->c_str(), headers, send_callback, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message body in chunked transfer encoding
@@ -5327,7 +5362,7 @@ sock.sendHTTPChunkedBodyFromInputStream(inputStream);
     connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions
     and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
     clear (i.e. \c 2m = two minutes, etc.)
-    @param tcb An optional trailer callback for message trailers to write in the outgoing chunked message; the
+    @param trailers_callback An optional trailer callback for message trailers to write in the outgoing chunked message; the
     callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers
     for the final chunk
 
@@ -5341,14 +5376,14 @@ sock.sendHTTPChunkedBodyFromInputStream(inputStream);
     @since %Qore 0.8.13
 */
 nothing Socket::sendHTTPChunkedBodyFromInputStream(Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096,
-        timeout timeout_ms = -1, *code tcb) {
+        timeout timeout_ms = -1, *code trailers_callback) [flags=NAMED_ARGS] {
     if (max_chunk_size < 1) {
         xsink->raiseException("HTTP-CHUNK-ERROR", "the max chunk size must be greater than 0; value given is: " QLLD,
             max_chunk_size);
         return QoreValue();
     }
     socket_exec_send_http_chunked_body_input_stream(self, s, *input_stream, const_cast<QoreObject*>(obj_input_stream),
-        max_chunk_size, tcb, timeout_ms, xsink);
+        max_chunk_size, trailers_callback, timeout_ms, xsink);
 }
 
 //! Sends the trialer of an HTTP message body in chunked transfer encoding
@@ -5375,7 +5410,7 @@ sock.sendHTTPChunkedBodyTrailer({});
 
     @since %Qore 0.8.13
 */
-nothing Socket::sendHTTPChunkedBodyTrailer(*hash<auto> trailer, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPChunkedBodyTrailer(*hash<auto> trailer, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_send_http_chunked_body_trailer(self, s, trailer, timeout_ms, xsink);
 }
 
@@ -5427,7 +5462,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     - %Qore 0.8.8 added the \c close, \c charset, \c body-content-type, and \c accept-charset info keys as well as the encoding handling based on the detected charset
     - %Qore 0.9.3 added the \c "headers-raw" key in the output \c info hash
 */
-hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>> info) {
+hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     return socket_exec_read_http_header(self, s, *ohrh, timeout_ms, xsink);
 }
@@ -5456,7 +5491,7 @@ string str = sock.readHTTPHeaderString(10s);
 
     @since %Qore 0.8.8
 */
-string Socket::readHTTPHeaderString(timeout timeout_ms = -1) {
+string Socket::readHTTPHeaderString(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_header_string(self, s, timeout_ms, xsink);
 }
 
@@ -5482,7 +5517,7 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
-hash<auto> Socket::readHTTPChunkedBody(timeout timeout_ms = -1) {
+hash<auto> Socket::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false, "readHTTPChunkedBody", xsink);
 }
 
@@ -5508,7 +5543,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
-hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
+hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false, "readHTTPChunkedBodyBinary", xsink);
 }
 
@@ -5539,7 +5574,7 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
-hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) {
+hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, true, "readHTTPChunk", xsink);
 }
 
@@ -5554,7 +5589,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @par Events:
     @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
 
-    @param os The output stream to write the response body to; the stream must be I/O-thread-safe
+    @param output_stream The output stream to write the response body to; the stream must be I/O-thread-safe
     @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return a hash of any HTTP footers received (with footer keys converted to lower case)
@@ -5567,9 +5602,10 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
     @throw SOCKET-WRITE-ERROR the OutputStream is not I/O-thread-safe
 */
-hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] os, timeout timeout_ms = -1) {
+hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] output_stream,
+        timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,
-        "readHTTPChunkedBodyToOutputStream", xsink, *os);
+        "readHTTPChunkedBodyToOutputStream", xsink, *output_stream);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -5583,7 +5619,7 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @par Events:
     @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
 
-    @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+    @param receive_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
     - \c "data": the string or binary data
     - \c "chunked": True if the data was received with chunked transfer encoding, False if not
     .
@@ -5601,9 +5637,9 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
 
     @since %Qore 0.8.10
 */
-Socket::readHTTPChunkedBodyWithCallback(code rcb, timeout timeout_ms = -1) {
+Socket::readHTTPChunkedBodyWithCallback(code receive_callback, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> ignored(socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false,
-        "readHTTPChunkedBodyWithCallback", xsink, nullptr, rcb), xsink);
+        "readHTTPChunkedBodyWithCallback", xsink, nullptr, receive_callback), xsink);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -5617,7 +5653,7 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @par Events:
     @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
 
-    @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+    @param receive_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
     - \c "data": the string or binary data
     - \c "chunked": True if the data was received with chunked transfer encoding, False if not
     .
@@ -5639,9 +5675,9 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
 
     @since %Qore 0.8.10
 */
-Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1) {
+Socket::readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> ignored(socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,
-        "readHTTPChunkedBodyBinaryWithCallback", xsink, nullptr, rcb), xsink);
+        "readHTTPChunkedBodyBinaryWithCallback", xsink, nullptr, receive_callback), xsink);
 }
 
 //! Read a server sent event message
@@ -5661,7 +5697,7 @@ Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1)
 
     @since %Qore 2.0
 */
-hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) {
+hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (!content_encoding || (*content_encoding == "identity")) {
         return socket_exec_read_server_sent_event(self, s, timeout_ms, xsink);
     }
@@ -5772,7 +5808,7 @@ if (sock.setSendTimeout(20s))
 
     @return 0 for success, -1 for error (check errno() for the actual error in this case)
 */
-int Socket::setSendTimeout(timeout timeout_ms) {
+int Socket::setSendTimeout(timeout timeout_ms) [flags=NAMED_ARGS] {
     return s->setSendTimeout(timeout_ms);
 }
 
@@ -5791,7 +5827,7 @@ if (sock.setRecvTimeout(20s))
 
     @return 0 for success, -1 for error (check errno() for the actual error in this case)
 */
-int Socket::setRecvTimeout(timeout timeout_ms) {
+int Socket::setRecvTimeout(timeout timeout_ms) [flags=NAMED_ARGS] {
     return s->setRecvTimeout(timeout_ms);
 }
 
@@ -5829,7 +5865,7 @@ string Socket::getEncoding() [flags=CONSTANT] {
 //! Sets the @ref character_encoding "character encoding" for the socket
 /** @param encoding the @ref character_encoding "character encoding" for the socket
 */
-nothing Socket::setEncoding(string encoding) {
+nothing Socket::setEncoding(string encoding) [flags=NAMED_ARGS] {
     s->setEncoding(QEM.findCreate(encoding));
 }
 
@@ -5845,7 +5881,7 @@ string Socket::getCharset() [flags=CONSTANT] {
 /** A method synonym for Socket::setEncoding(), kept for backwards-compatibility
     @param encoding The @ref character_encoding "character encoding" for the socket
 */
-nothing Socket::setCharset(string encoding) {
+nothing Socket::setCharset(string encoding) [flags=NAMED_ARGS] {
     s->setEncoding(QEM.findCreate(encoding));
 }
 
@@ -5868,8 +5904,22 @@ bool b = sock.isDataAvailable();
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
 */
-bool Socket::isDataAvailable(timeout timeout_ms = 0) {
+bool Socket::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return socket_exec_is_data_available(self, s, (int)timeout_ms, xsink);
+}
+
+//! Nonblocking idle-data probe for sockets already owned by async poll operations
+/** This method is intended for async poll operations that already received
+    socket readability from the async I/O controller and must distinguish
+    "still idle" from peer close without running a nested poll on the same fd.
+
+    @return 1 if application data is available, 0 if the socket is still idle,
+        -1 if the connection is closed or unusable
+
+    @since %Qore 2.3
+*/
+int Socket::checkIdleDataForAsyncPoll() {
+    return s->checkIdleDataForAsyncPoll(xsink);
 }
 
 //! Returns @ref True or @ref False depending on whether all the data has been written to the socket
@@ -5890,7 +5940,7 @@ bool b = sock.isWriteFinished();
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
 */
-bool Socket::isWriteFinished(timeout timeout_ms = 0) {
+bool Socket::isWriteFinished(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return socket_exec_wait_readiness(self, s, (int)timeout_ms, NB_SEND, SOCK_POLLOUT, "isWriteFinished",
         "waiting-write", "write-ready", xsink);
 }
@@ -5957,7 +6007,7 @@ sock.setAlpnProtocols(("h2", "http/1.1"));
 
     @since %Qore 2.2
 */
-nothing Socket::setAlpnProtocols(list<string> protocols) {
+nothing Socket::setAlpnProtocols(list<string> protocols) [flags=NAMED_ARGS] {
     s->setAlpnProtocols(protocols, xsink);
 }
 
@@ -6016,11 +6066,11 @@ bool Socket::isHttp2() [flags=CONSTANT] {
 sock.setCertificate(cert);
     @endcode
 
-    @param cert This must be an SSLCertificate object
+    @param certificate This must be an SSLCertificate object
 */
-nothing Socket::setCertificate(SSLCertificate[QoreSSLCertificate] cert) {
+nothing Socket::setCertificate(SSLCertificate[QoreSSLCertificate] certificate) [flags=NAMED_ARGS] {
     // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setCertificate()
-    s->setCertificate(cert.release());
+    s->setCertificate(certificate.release());
 }
 
 //! Sets the X.509 certificate to use for negotiating encrypted connections from the PEM-encoded string representing the X.509 certificate
@@ -6029,10 +6079,10 @@ nothing Socket::setCertificate(SSLCertificate[QoreSSLCertificate] cert) {
 sock.setCertificate(cert_string);
     @endcode
 
-    @param cert_pem the PEM-encoded string representing the X.509 certificate
+    @param pem the PEM-encoded string representing the X.509 certificate
 */
-nothing Socket::setCertificate(string cert_pem) {
-    SimpleRefHolder<QoreSSLCertificate> cert(new QoreSSLCertificate(cert_pem, xsink));
+nothing Socket::setCertificate(string pem) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLCertificate> cert(new QoreSSLCertificate(pem, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -6046,10 +6096,10 @@ nothing Socket::setCertificate(string cert_pem) {
 sock.setCertificate(cert_der);
     @endcode
 
-    @param cert_der the DER-encoded binary object representing the X.509 certificate
+    @param der the DER-encoded binary object representing the X.509 certificate
 */
-nothing Socket::setCertificate(binary cert_der) {
-    SimpleRefHolder<QoreSSLCertificate> cert(new QoreSSLCertificate(cert_der, xsink));
+nothing Socket::setCertificate(binary der) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLCertificate> cert(new QoreSSLCertificate(der, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -6063,11 +6113,11 @@ nothing Socket::setCertificate(binary cert_der) {
 sock.setPrivateKey(key);
     @endcode
 
-    @param key the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
+    @param private_key the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
 */
-nothing Socket::setPrivateKey(SSLPrivateKey[QoreSSLPrivateKey] key) {
+nothing Socket::setPrivateKey(SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
     // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setPrivateKey()
-    s->setPrivateKey(key.release());
+    s->setPrivateKey(private_key.release());
 }
 
 //! Sets the private key to use for negotiating encrypted connections along with the X.509 certificate from a PEM-encoded string representing the private key and an optional password
@@ -6076,11 +6126,11 @@ nothing Socket::setPrivateKey(SSLPrivateKey[QoreSSLPrivateKey] key) {
 sock.setPrivateKey(key_pem, password);
     @endcode
 
-    @param key_pem the PEM-encoded string representing the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
-    @param pass the password for the private key, if needed
+    @param pem the PEM-encoded string representing the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
+    @param password the password for the private key, if needed
 */
-nothing Socket::setPrivateKey(string key_pem, *string pass) {
-    SimpleRefHolder<QoreSSLPrivateKey> key(new QoreSSLPrivateKey(key_pem, pass ? pass->c_str() : 0, xsink));
+nothing Socket::setPrivateKey(string pem, *string password) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLPrivateKey> key(new QoreSSLPrivateKey(pem, password ? password->c_str() : 0, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -6093,10 +6143,10 @@ nothing Socket::setPrivateKey(string key_pem, *string pass) {
 sock.setPrivateKey(key_der);
     @endcode
 
-    @param key_der the DER-encoded binary object representing the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
+    @param der the DER-encoded binary object representing the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
 */
-nothing Socket::setPrivateKey(binary key_der) {
-    SimpleRefHolder<QoreSSLPrivateKey> key(new QoreSSLPrivateKey(key_der, xsink));
+nothing Socket::setPrivateKey(binary der) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLPrivateKey> key(new QoreSSLPrivateKey(der, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -6109,14 +6159,15 @@ nothing Socket::setPrivateKey(binary key_der) {
 sock.setCertificateAndPrivateKey(cert, key);
     @endcode
 
-    @param cert This must be an SSLCertificate object
-    @param key This must be an QoreSSLPrivateKey object
+    @param certificate This must be an SSLCertificate object
+    @param private_key This must be an QoreSSLPrivateKey object
 
     @since %Qore 1.11.0
 */
-nothing Socket::setCertificateAndPrivateKey(SSLCertificate[QoreSSLCertificate] cert, SSLPrivateKey[QoreSSLPrivateKey] key) {
+nothing Socket::setCertificateAndPrivateKey(SSLCertificate[QoreSSLCertificate] certificate,
+        SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
     // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setCertificateAndPrivateKey()
-    s->setCertificateAndPrivateKey(cert.release(), key.release());
+    s->setCertificateAndPrivateKey(certificate.release(), private_key.release());
 }
 
 //! Removes any @ref Qore::Thread::Queue "Queue" object from the Socket object so that @ref socket_events "socket events" are no longer added to the @ref Qore::Thread::Queue "Queue"
@@ -6139,23 +6190,24 @@ sock.setEventQueue(queue);
 
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive @ref socket_events "socket events"; note that
     the Queue passed cannot have any maximum size set or a QUEUE-ERROR will be thrown
-    @param arg an argument that will be included in each event hash in the \a arg key
+    @param argument an argument that will be included in each event hash in the \c "arg" key
     @param with_data if @ref True, then the actual raw data transferred / received is also included in the events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 
     @see @ref event_handling for more information
 
-    @since %Qore 0.9.4 added the \a arg and \a with_data options
+    @since %Qore 0.9.4 added the \a argument and \a with_data options
 */
-nothing Socket::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
+nothing Socket::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument,
+        *bool with_data) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which " \
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum " \
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    s->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
+    s->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Sets the boolean \c TCP_NODELAY setting for the socket
@@ -6171,14 +6223,14 @@ if (sock.setNoDelay(True))
     printf("error setting TCP_NODELAY: %s\n", strerror(errno()));
     @endcode
 
-    @param nd the boolean \c TCP_NODELAY setting for the socket
+    @param enabled the boolean \c TCP_NODELAY setting for the socket
 
     @return 0 for success, non-zero for errors; to get error information, see errno() and strerror()
 
     @see Socket::getNoDelay()
 */
-int Socket::setNoDelay(bool nd = True) {
-    return s->setNoDelay(nd);
+int Socket::setNoDelay(bool enabled = True) [flags=NAMED_ARGS] {
+    return s->setNoDelay(enabled);
 }
 
 //! Returns the \c TCP_NODELAY setting for the socket
@@ -6226,7 +6278,7 @@ sock.setUserTimeout(30000); # 30s — kernel reports a dead/unreachable peer
                             # hanging in the kernel's TCP retransmit window
     @endcode
 
-    @param ms timeout in milliseconds; 0 disables (kernel default)
+    @param timeout_ms timeout in milliseconds; 0 disables (kernel default)
 
     @return 0 on success, non-zero on \c setsockopt failure (see errno() and strerror())
 
@@ -6234,8 +6286,8 @@ sock.setUserTimeout(30000); # 30s — kernel reports a dead/unreachable peer
 
     @since %Qore 2.3
 */
-int Socket::setUserTimeout(int ms) {
-    return s->setUserTimeout((int)ms);
+int Socket::setUserTimeout(int timeout_ms) [flags=NAMED_ARGS] {
+    return s->setUserTimeout((int)timeout_ms);
 }
 
 //! Returns the \c TCP_USER_TIMEOUT value in milliseconds
@@ -6277,7 +6329,7 @@ hash<auto> h = sock.getPeerInfo();
 
     @since %Qore 0.8.8 added the \a host_lookup parameter
 */
-hash<auto> Socket::getPeerInfo(bool host_lookup = True) {
+hash<auto> Socket::getPeerInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return s->getPeerInfo(xsink, host_lookup);
 }
 
@@ -6298,7 +6350,7 @@ hash<auto> h = sock.getSocketInfo();
 
     @since %Qore 0.8.8 added the \a host_lookup parameter
 */
-hash<auto> Socket::getSocketInfo(bool host_lookup = True) {
+hash<auto> Socket::getSocketInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return s->getSocketInfo(xsink, host_lookup);
 }
 
@@ -6317,7 +6369,7 @@ sock.upgradeClientToSSL();
 
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
-nothing Socket::upgradeClientToSSL(timeout timeout_ms = -1) {
+nothing Socket::upgradeClientToSSL(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_upgrade_ssl(self, s, timeout_ms, false, xsink);
 }
 
@@ -6336,7 +6388,7 @@ sock.upgradeServerToSSL();
 
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
-nothing Socket::upgradeServerToSSL(timeout timeout_ms = -1) {
+nothing Socket::upgradeServerToSSL(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_upgrade_ssl(self, s, timeout_ms, true, xsink);
 }
 
@@ -6366,7 +6418,7 @@ sock.setWarningQueue(5000, 5000, queue, "socket-1");
     - \c "us": an integer giving the number of microseconds for the operation
     - \c "timeout": an integer giving the warning threshold in microseconds
     - \c "arg": if any \c "arg" argument is passed to the @ref Qore::Socket::setWarningQueue() "Socket::setWarningQueue()" method, it will be included in the warning hash here
-    @param warning_bs value in bytes per second; if any call has performance below this threshold, a socket warning is placed on the warning queue with the following keys:
+    @param warning_bytes value in bytes per second; if any call has performance below this threshold, a socket warning is placed on the warning queue with the following keys:
     - \c "type": a string with the constant value \c "SOCKET-THROUGHPUT-WARNING"
     - \c "dir": either \c "send" or \c "recv" depending on the direction of the data flow
     - \c "bytes": the amount of bytes sent
@@ -6375,11 +6427,11 @@ sock.setWarningQueue(5000, 5000, queue, "socket-1");
     - \c "threshold": an integer giving the warning threshold in bytes per second
     - \c "arg": if any \c "arg" argument is passed to the @ref Qore::Socket::setWarningQueue() "Socket::setWarningQueue()" method, it will be included in the warning hash here
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive warning events
-    @param arg an optional argument to be placed in the \c "arg" key in each warning hash (could be used to identify the socket for example)
+    @param argument an optional argument to be placed in the \c "arg" key in each warning hash (could be used to identify the socket for example)
     @param min_ms the minimum transfer time with a resolution of milliseconds for a transfer to be eligible for triggering a warning; transfers that take less than this period of time are not eligible for raising a warning
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
-    @throw SOCKET-SETWARNINGQUEUE-ERROR at least one of \a warning_ms and \a warning_bs must be > 0
+    @throw SOCKET-SETWARNINGQUEUE-ERROR at least one of \a warning_ms and \a warning_bytes must be > 0
 
     @see Socket::clearWarningQueue()
 
@@ -6387,14 +6439,15 @@ sock.setWarningQueue(5000, 5000, queue, "socket-1");
     - %Qore 0.8.9
     - %Qore 0.8.12 the minimum threshold for a warning is a transfer of at least 1024 bytes, smaller transfers will not result in a warning
 */
-nothing Socket::setWarningQueue(int warning_ms, int warning_bs, Queue[Queue] queue, auto arg, timeout min_ms = 1s) {
+nothing Socket::setWarningQueue(int warning_ms, int warning_bytes, Queue[Queue] queue, auto argument,
+        timeout min_ms = 1s) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    s->setWarningQueue(xsink, warning_ms, warning_bs, queue.release(), arg.refSelf(), min_ms);
+    s->setWarningQueue(xsink, warning_ms, warning_bytes, queue.release(), argument.refSelf(), min_ms);
 }
 
 //! Returns performance statistics for the socket
@@ -6464,7 +6517,7 @@ sock.setSslVerifyMode(SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT);
 
     @since %Qore 0.8.13
 */
-Socket::setSslVerifyMode(int mode) {
+Socket::setSslVerifyMode(int mode) [flags=NAMED_ARGS] {
     s->setSslVerifyMode((int)mode);
 }
 
@@ -6504,7 +6557,7 @@ sock.acceptAllCertificates();
 
     @since %Qore 0.8.13
 */
-Socket::acceptAllCertificates(bool accept_all = True) {
+Socket::acceptAllCertificates(bool accept_all = True) [flags=NAMED_ARGS] {
     s->acceptAllCertificates(accept_all);
 }
 
@@ -6533,7 +6586,7 @@ bool Socket::getAcceptAllCertificates() [flags=CONSTANT] {
 bool b = sock.captureRemoteCertificates();
     @endcode
 
-    @param set the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed
+    @param enabled the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed
 
     @return the old value of the flag
 
@@ -6541,8 +6594,8 @@ bool b = sock.captureRemoteCertificates();
 
     @since %Qore 0.9.3
 */
-bool Socket::captureRemoteCertificates(bool set = True) {
-    return s->captureRemoteCertificates(set);
+bool Socket::captureRemoteCertificates(bool enabled = True) [flags=NAMED_ARGS] {
+    return s->captureRemoteCertificates(enabled);
 }
 
 //! Returns any remote certificate captured or @ref nothing if there is none
@@ -6581,12 +6634,12 @@ int Socket::getConnectionId() [flags=CONSTANT] {
 /** When set, readHTTPChunkedBodyBinary() and readHTTPChunkedBody() will
     raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds this limit.
 
-    @param size maximum body size in bytes; 0 means unlimited
+    @param max_body_size maximum body size in bytes; 0 means unlimited
 
     @since %Qore 2.1
 */
-Socket::setMaxChunkedBodySize(int size) {
-    s->setMaxChunkedBodySize(size);
+Socket::setMaxChunkedBodySize(int max_body_size) [flags=NAMED_ARGS] {
+    s->setMaxChunkedBodySize(max_body_size);
 }
 
 //! Returns the maximum body size for chunked HTTP reads
@@ -6602,12 +6655,12 @@ int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
 /** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
     the stream to be reset with REFUSED_STREAM.
 
-    @param size maximum body size in bytes; 0 means unlimited
+    @param max_request_body_size maximum body size in bytes; 0 means unlimited
 
     @since %Qore 2.1
 */
-Socket::setHttp2MaxRequestBodySize(int size) {
-    s->setHttp2MaxRequestBodySize(size);
+Socket::setHttp2MaxRequestBodySize(int max_request_body_size) [flags=NAMED_ARGS] {
+    s->setHttp2MaxRequestBodySize(max_request_body_size);
 }
 
 //! Returns the maximum request body size for HTTP/2 streams
@@ -6630,7 +6683,7 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     @param family a hint for the address family, \c AF_UNSPEC means any family
     @param flags hint flags as per the \c getaddrinfo() call: \c AI_ADDRCONFIG, \c AI_ALL, \c AI_CANONNAME,
     \c AI_NUMERICHOST, \c AI_NUMERICSERV, \c AI_PASSIVE, \c AI_V4MAPPED
-    @param socktype a hint for the type of socket; 0 = any socket type
+    @param socket_type a hint for the type of socket; 0 = any socket type
     @param protocol a hint for the protocol number; 0 = the default protocol
     @param timeout_ms the timeout for the controller-backed resolution operation; -1 = never timeout
 
@@ -6640,19 +6693,19 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     @since %Qore 2.3
  */
 static list<hash<auto>> Socket::resolveAddrInfo(*string node, *softstring service,
-        softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0,
-        timeout timeout_ms = -1) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+        softint family = AF_UNSPEC, softint flags = 0, softint socket_type = SOCK_STREAM, softint protocol = 0,
+        timeout timeout_ms = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
     return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : nullptr,
-        service ? service->c_str() : nullptr, family, flags, socktype, protocol, timeout_ms);
+        service ? service->c_str() : nullptr, family, flags, socket_type, protocol, timeout_ms);
 }
 
 //! Parse the given string as a Server Sent Event (SSE) string
-/** @param str the string to parse as a Server Sent Event (SSE) string
+/** @param event_text the string to parse as a Server Sent Event (SSE) string
 
     @return a hash of the event information
 */
-static hash<SseMessageInfo> Socket::parseServerSentEvent(string str) {
-    return QoreSocket::parseServerSentEvent(xsink, str);
+static hash<SseMessageInfo> Socket::parseServerSentEvent(string event_text) [flags=NAMED_ARGS] {
+    return QoreSocket::parseServerSentEvent(xsink, event_text);
 }
 
 //! polls multiple sockets and returns all sockets with events
@@ -6687,7 +6740,8 @@ l = Socket::poll(l, 2s);
 
     @since %Qore 0.9.11
 */
-static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items, timeout timeout_ms) {
+static list<hash<SocketPollInfo>> Socket::poll(
+        list<hash<SocketPollInfo>> items, timeout timeout_ms) [flags=NAMED_ARGS] {
     return qore_socket_private::poll(items, timeout_ms, xsink);
 }
 
@@ -6698,7 +6752,7 @@ static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items,
     @par Example:
     @code{.py}
     # After accepting an HTTPS connection with HTTP/2 negotiated
-    AbstractPollOperation op = sock.startPollReadHttp2Request();
+    AbstractPollOperation<auto> op = sock.startPollReadHttp2Request();
     while (True) {
         *hash<SocketPollInfo> info = op.continuePoll();
         if (!info) {
@@ -6727,7 +6781,7 @@ static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items,
 
     @note The socket must be a TLS connection that has negotiated HTTP/2 via ALPN
 
-    @param opts optional hash with options:
+    @param options optional hash with options:
     - \c headers_only (bool): if @ref True "True", the poll completes when HEADERS are received
       (before END_STREAM); the stream stays in the session for incremental reading via the
       @ref HttpServerAsyncIo "HttpServerAsyncIo" @c register_body_queue closure (the I/O
@@ -6737,7 +6791,7 @@ static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items,
 
     @since %Qore 2.1 (headers_only option added in %Qore 2.3)
 */
-AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> opts) {
+AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ServerPollOperation(xsink, s), xsink);
     if (*xsink) {
@@ -6746,7 +6800,7 @@ AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> opts) {
 
     // Always propagate headers_only mode to the session (resets any sticky state
     // from a previous poll operation on the same connection)
-    bool headers_only = opts ? opts->getKeyValue("headers_only").getAsBool() : false;
+    bool headers_only = options ? options->getKeyValue("headers_only").getAsBool() : false;
     (reinterpret_cast<SocketHttp2ServerPollOperation*>(*poller))->setHeadersOnly(headers_only);
 
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -6766,7 +6820,7 @@ AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> opts) {
     @par Example:
     @code{.py}
     # After reading request with startPollReadHttp2Request()
-    AbstractPollOperation op = sock.startPollSendHttp2Response(
+    AbstractPollOperation<auto> op = sock.startPollSendHttp2Response(
         request.stream_id,
         200,
         {"Content-Type": "text/plain"},
@@ -6793,26 +6847,16 @@ AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> opts) {
 
     @since %Qore 2.1
 */
-AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
-        *data body) {
+AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
+        *data body) [flags=NAMED_ARGS] {
     s->ref();
 
     // Get body data
     const BinaryNode* body_bin = nullptr;
     SimpleRefHolder<BinaryNode> body_holder;
-    if (body) {
-        qore_type_t body_type = body->getType();
-        if (body_type == NT_BINARY) {
-            body_bin = static_cast<const BinaryNode*>(body);
-        } else if (body_type == NT_STRING) {
-            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            // Create a binary node from the string's raw bytes
-            size_t size = str->size();
-            void* copy = malloc(size);
-            memcpy(copy, str->c_str(), size);
-            body_holder = new BinaryNode(copy, size);
-            body_bin = *body_holder;
-        }
+    if (copyDataBodyToBinary(get_param_value(args, 3), body_holder, body_bin,
+            xsink, "HTTP2-ERROR")) {
+        return QoreValue();
     }
 
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -6852,8 +6896,8 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
 
     @since %Qore 2.2
 */
-AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
-        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
+        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) [flags=NAMED_ARGS] {
     // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
     InputStream* body_ptr = body.release();
     // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
@@ -6920,7 +6964,7 @@ AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id,
 
     @since %Qore 2.2
 */
-int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) {
+int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) [flags=NAMED_ARGS] {
     return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
 }
 
@@ -6939,22 +6983,14 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
 
     @since %Qore 2.2
 */
-nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
+nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers,
+        *data body) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    SimpleRefHolder<BinaryNode> body_holder;
-
-    if (body) {
-        qore_type_t body_type = body->getType();
-        if (body_type == NT_BINARY) {
-            const BinaryNode* bin = static_cast<const BinaryNode*>(body);
-            body_ptr = bin->getPtr();
-            body_len = bin->size();
-        } else if (body_type == NT_STRING) {
-            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            body_ptr = str->c_str();
-            body_len = str->size();
-        }
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 3), body_ptr, body_len, body_short_buf,
+            xsink, "HTTP2-ERROR")) {
+        return QoreValue();
     }
 
     s->submitHttp2Response(stream_id, status_code, headers, body_ptr, body_len, xsink);
@@ -6962,16 +6998,16 @@ nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> 
 
 //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
 /** Must be called before the HTTP/2 session is created (before the socket starts
-    processing HTTP/2 traffic). When \c enable is @ref False, the server will not
+    processing HTTP/2 traffic). When \c enabled is @ref False, the server will not
     advertise RFC 8441 extended CONNECT protocol support, so clients will not attempt
     WebSocket over HTTP/2 CONNECT.
 
-    @param enable @ref True to advertise ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
+    @param enabled @ref True to advertise ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
 
     @since %Qore 2.3
 */
-nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
-    s->setHttp2ConnectProtocolEnabled(enable);
+nothing Socket::setHttp2ConnectProtocolEnabled(bool enabled = True) [flags=NAMED_ARGS] {
+    s->setHttp2ConnectProtocolEnabled(enabled);
 }
 
 //! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
@@ -6991,7 +7027,8 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
 
     @since %Qore 2.3
 */
-nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
+nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     s->submitHttp2ConnectResponse(stream_id, status_code, headers, xsink);
 }
 
@@ -7005,7 +7042,7 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code, *hash
     @code{.py}
     # After reading a WebSocket CONNECT request with startPollReadHttp2Request()
     if (request.is_websocket_connect) {
-        AbstractPollOperation op = sock.startPollSendHttp2ConnectResponse(
+        AbstractPollOperation<auto> op = sock.startPollSendHttp2ConnectResponse(
             request.stream_id,
             200,
             {"sec-websocket-protocol": "graphql-ws"}
@@ -7032,8 +7069,8 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code, *hash
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, int status_code,
-        *hash<auto> headers) {
+AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream_id, int status_code,
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     s->ref();
 
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -7087,7 +7124,7 @@ AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, i
 
     @since %Qore 2.3
 */
-int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
+int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "waitForHttp2StreamDrain", xsink);
     if (*xsink) {
         return -1;
@@ -7114,7 +7151,7 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
     @since %Qore 2.3
 */
 nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_code,
-        *hash<auto> headers) {
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     s->submitHttp2StreamingResponseHeadersAsync((int32_t)stream_id, status_code, headers, xsink);
     return QoreValue();
 }
@@ -7134,7 +7171,7 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 
     @since %Qore 2.3
 */
-nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
+nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) [flags=NAMED_ARGS] {
     s->sendHttp2StreamDataAsync((int32_t)stream_id, data, (bool)end_stream, xsink);
     return QoreValue();
 }
@@ -7157,7 +7194,7 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 
     @since %Qore 2.3
 */
-nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) {
+nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) [flags=NAMED_ARGS] {
     s->sendHttp2TrailersAsync((int32_t)stream_id, trailers, xsink);
     return QoreValue();
 }
@@ -7169,7 +7206,7 @@ nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) 
 
     @since %Qore 2.3
 */
-nothing Socket::cleanupHttp2Stream(int stream_id) {
+nothing Socket::cleanupHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->cleanupHttp2StreamAsync((int32_t)stream_id);
     return QoreValue();
 }
@@ -7184,7 +7221,7 @@ nothing Socket::cleanupHttp2Stream(int stream_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::resetHttp2Stream(int stream_id) {
+nothing Socket::resetHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->resetHttp2StreamAsync((int32_t)stream_id, xsink);
     return QoreValue();
 }
@@ -7211,7 +7248,7 @@ nothing Socket::resetHttp2Stream(int stream_id) {
     @since %Qore 2.3
 */
 int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_code,
-        *hash<auto> headers, InputStream[InputStream] body) {
+        *hash<auto> headers, InputStream[InputStream] body) [flags=NAMED_ARGS] {
     // Pass raw pointer; only release from SimpleRefHolder if C++ takes ownership (rv == 0).
     // If rv == 1 (not I/O-thread-safe), the SimpleRefHolder destructor will deref the body.
     int rv = s->submitHttp2StreamingResponseWithStream((int32_t)stream_id, status_code, headers,
@@ -7239,7 +7276,7 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
     sock.sendHttp2StreamData(stream_id, body_data, False);
     sock.sendHttp2Trailers(stream_id, {"grpc-status": "0"});
 
-    AbstractPollOperation flush_op = sock.startPollHttp2Flush();
+    AbstractPollOperation<auto> flush_op = sock.startPollHttp2Flush();
     while (True) {
         *hash<SocketPollInfo> info = flush_op.continuePoll();
         if (!info) {
@@ -7255,7 +7292,7 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollHttp2Flush() {
+AbstractPollOperation<auto> Socket::startPollHttp2Flush() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketHttp2FlushPollOperation(xsink, s),
@@ -7284,7 +7321,7 @@ AbstractPollOperation Socket::startPollHttp2Flush() {
     @par Example:
     @code{.py}
     # After establishing an HTTP/2 connection
-    AbstractPollOperation op = sock.startPollHttp2ClientMultiplex();
+    AbstractPollOperation<auto> op = sock.startPollHttp2ClientMultiplex();
 
     # The operation continuously reads responses - use callbacks for dispatch
     while (op.getState() != "closed") {
@@ -7306,7 +7343,7 @@ AbstractPollOperation Socket::startPollHttp2Flush() {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
+AbstractPollOperation<auto> Socket::startPollHttp2ClientMultiplex() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ClientMultiplexPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -7339,28 +7376,13 @@ AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
 
     @since %Qore 2.3
 */
-int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) {
+int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (body) {
-        switch (body->getType()) {
-            case NT_BINARY: {
-                const BinaryNode* b = static_cast<const BinaryNode*>(body);
-                body_ptr = b->getPtr();
-                body_len = b->size();
-                break;
-            }
-            case NT_STRING: {
-                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-                body_ptr = str->c_str();
-                body_len = str->size();
-                break;
-            }
-            default:
-                xsink->raiseException("HTTP2-ERROR", "body must be string or binary, got type '%s'",
-                    body->getTypeName());
-                return -1;
-        }
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 1), body_ptr, body_len, body_short_buf,
+            xsink, "HTTP2-ERROR")) {
+        return -1;
     }
 
     int stream_id = s->submitHttp2Request(headers, body_ptr, body_len, xsink, streaming);
@@ -7379,7 +7401,7 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
 
     @since %Qore 2.3
 */
-nothing Socket::cancelHttp2Stream(int stream_id) {
+nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->cancelHttp2Stream(stream_id, xsink);
 }
 
@@ -7389,7 +7411,7 @@ nothing Socket::cancelHttp2Stream(int stream_id) {
     # Bind a UDP socket and start a QUIC client connection
     Socket sock();
     sock.bindINET("0.0.0.0", 0, True, AF_INET);
-    AbstractPollOperation op = sock.startPollQuicConnect("example.com", 443);
+    AbstractPollOperation<auto> op = sock.startPollQuicConnect("example.com", 443);
     @endcode
 
     @param host the remote host to connect to
@@ -7416,7 +7438,7 @@ nothing Socket::cancelHttp2Stream(int stream_id) {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int family = AF_INET) {
+AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, int family = AF_INET) [flags=NAMED_ARGS] {
     if (port < 1 || port > 65535) {
         xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
         return QoreValue();
@@ -7447,7 +7469,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     # Bind a UDP socket and accept QUIC connections
     Socket sock();
     sock.bindINET("0.0.0.0", 8443, True, AF_INET);
-    AbstractPollOperation op = sock.startPollQuicAccept();
+    AbstractPollOperation<auto> op = sock.startPollQuicAccept();
     @endcode
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a QUIC connection
@@ -7472,7 +7494,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available
     @throw SOCKET-NOT-OPEN if the socket is not open
 
-    @param opts optional options hash:
+    @param options optional options hash:
     - \c "headers_only": if @ref True, dispatches requests as soon as headers are received
       (before the full body arrives); the handler reads body data incrementally via
       @ref readQuicStreamDataBlock().  When enabled:
@@ -7488,7 +7510,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     @code{.py}
     Socket sock();
     sock.bindINET("0.0.0.0", 8443, True, AF_INET);
-    AbstractPollOperation op = sock.startPollQuicAccept({"headers_only": True});
+    AbstractPollOperation<auto> op = sock.startPollQuicAccept(options: {"headers_only": True});
     while (*hash<SocketPollInfo> info = op.continuePoll()) {
         Socket::poll((info,), 10s);
     }
@@ -7512,7 +7534,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
+AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketQuicServerPollOperation(xsink, s), xsink);
     if (*xsink) {
@@ -7520,12 +7542,12 @@ AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
     }
 
     // Apply options
-    if (opts) {
+    if (options) {
         SocketQuicServerPollOperation* sqspo = reinterpret_cast<SocketQuicServerPollOperation*>(*poller);
-        if (opts->getKeyValue("headers_only").getAsBool()) {
+        if (options->getKeyValue("headers_only").getAsBool()) {
             sqspo->setHeadersOnly(true);
         }
-        int64 max_body = opts->getKeyValue("max_request_body_size").getAsBigInt();
+        int64 max_body = options->getKeyValue("max_request_body_size").getAsBigInt();
         if (max_body > 0) {
             sqspo->setMaxRequestBodySize(max_body);
         }
@@ -7546,7 +7568,7 @@ AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
 /** @par Example:
     @code{.py}
     # After receiving an HTTP/3 request via startPollQuicAccept()
-    AbstractPollOperation op = sock.startPollQuicSendResponse(session_id, stream_id, 200, headers, body);
+    AbstractPollOperation<auto> op = sock.startPollQuicSendResponse(session_id, stream_id, 200, headers, body);
     @endcode
 
     @param session_id the QUIC session ID from the request
@@ -7562,8 +7584,8 @@ AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
-        *hash<auto> headers, *data body) {
+AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
+        *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7576,9 +7598,15 @@ AbstractPollOperation Socket::startPollQuicSendResponse(int session_id, int stre
         xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
         return QoreValue();
     }
+    ValueHolder materialized_body(xsink);
+    const AbstractQoreNode* body_node = nullptr;
+    if (materializeDataBodyNode(get_param_value(args, 4), materialized_body, body_node,
+            xsink, "QUIC-ERROR")) {
+        return QoreValue();
+    }
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
-        new SocketQuicSendResponsePollOperation(xsink, s, session_id, stream_id, status_code, headers, body),
+        new SocketQuicSendResponsePollOperation(xsink, s, session_id, stream_id, status_code, headers, body_node),
         xsink
     );
     if (*xsink) {
@@ -7622,6 +7650,9 @@ bool Socket::isQuic() [flags=CONSTANT] {
     @param path request path
     @param headers optional request headers
     @param body optional request body
+    @param suppress_wake if @ref True, the request is queued without waking the
+    async I/O controller; the caller must wake the owning poll operation after
+    registering response state
 
     @return the stream ID assigned to this request
 
@@ -7632,13 +7663,18 @@ bool Socket::isQuic() [flags=CONSTANT] {
 
     @since %Qore 2.3
 */
-int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body) {
+int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body,
+        bool suppress_wake = False) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 3), body_ptr, body_len, body_short_buf,
+            xsink, "QUIC-ERROR")) {
         return -1;
     }
-    int64_t stream_id = s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
+    int64_t stream_id = suppress_wake
+        ? s->submitQuicRequestNoWake(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink)
+        : s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
     return stream_id;
 }
 
@@ -7658,6 +7694,9 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @param method HTTP method (POST, etc.)
     @param path request path
     @param headers optional request headers
+    @param suppress_wake if @ref True, the request is queued without waking the
+    async I/O controller; the caller must wake the owning poll operation after
+    registering response state
 
     @return the stream ID assigned to this request
 
@@ -7665,8 +7704,11 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
 
     @since %Qore 2.3
 */
-int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers) {
-    int64_t stream_id = s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
+int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers,
+        bool suppress_wake = False) [flags=NAMED_ARGS] {
+    int64_t stream_id = suppress_wake
+        ? s->submitQuicRequestStreamingNoWake(method->c_str(), path->c_str(), headers, xsink)
+        : s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
     return stream_id;
 }
 
@@ -7710,7 +7752,7 @@ bool Socket::isQuicSessionClosed() [flags=CONSTANT] {
 
     @since %Qore 2.3
 */
-int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) {
+int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) [flags=NAMED_ARGS] {
     if (stream_id < 0) {
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
             (long long)stream_id);
@@ -7718,7 +7760,9 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
     }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 1), body_ptr, body_len, body_short_buf,
+            xsink, "QUIC-ERROR")) {
         return -1;
     }
     int rc = s->sendQuicClientStreamData(stream_id, body_ptr, body_len, (bool)end_stream, xsink);
@@ -7745,7 +7789,7 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
 
     @since %Qore 2.3
 */
-int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) {
+int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicClientStreamDrain", xsink);
     if (*xsink) {
         return -1;
@@ -7788,7 +7832,7 @@ int Socket::getQuicSessionId() {
 
     @since %Qore 2.3
 */
-nothing Socket::cancelQuicStream(int session_id, int stream_id) {
+nothing Socket::cancelQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7861,7 +7905,8 @@ nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
+nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers,
+        *data body) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7876,7 +7921,9 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
     }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 4), body_ptr, body_len, body_short_buf,
+            xsink, "QUIC-ERROR")) {
         return QoreValue();
     }
     s->submitQuicResponse(session_id, stream_id, status_code, headers, body_ptr, body_len, xsink);
@@ -7899,7 +7946,7 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
 
     @since %Qore 2.3
 */
-nothing Socket::submitQuicShutdownNotice(int session_id) {
+nothing Socket::submitQuicShutdownNotice(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7924,7 +7971,7 @@ nothing Socket::submitQuicShutdownNotice(int session_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::submitQuicShutdown(int session_id) {
+nothing Socket::submitQuicShutdown(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7950,7 +7997,7 @@ nothing Socket::submitQuicShutdown(int session_id) {
 
     @since %Qore 2.3
 */
-hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) {
+hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7976,7 +8023,7 @@ hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) {
 
     @since %Qore 2.3
 */
-bool Socket::isQuicGoawayReceived(int session_id) {
+bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         return false;
     }
@@ -8006,7 +8053,7 @@ bool Socket::isQuicGoawayReceived(int session_id) {
 
     @since %Qore 2.3
 */
-*SSLCertificate Socket::getQuicPeerCertificate(int session_id) {
+*SSLCertificate Socket::getQuicPeerCertificate(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8017,7 +8064,7 @@ bool Socket::isQuicGoawayReceived(int session_id) {
 //! Creates a poll operation for sending an HTTP/3 streaming response via InputStream
 /** @par Example:
     @code{.py}
-    AbstractPollOperation op = sock.startPollQuicSendStreamingResponse(
+    AbstractPollOperation<auto> op = sock.startPollQuicSendStreamingResponse(
         session_id, stream_id, 200, headers, input_stream);
     @endcode
 
@@ -8041,8 +8088,9 @@ bool Socket::isQuicGoawayReceived(int session_id) {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
-        int status_code, *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
+        int status_code, *hash<auto> headers, InputStream[InputStream] body,
+        *int chunk_size) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8114,7 +8162,7 @@ AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id,
     @since %Qore 2.3
 */
 nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int status_code,
-        *hash<auto> headers) {
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8157,7 +8205,7 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
     @since %Qore 2.3
 */
 int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
-        softbool end_stream = False) {
+        softbool end_stream = False) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return -1;
@@ -8168,7 +8216,9 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 2), body_ptr, body_len, body_short_buf,
+            xsink, "QUIC-ERROR")) {
         return -1;
     }
     int rc = s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,
@@ -8199,7 +8249,7 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     @since %Qore 2.3
 */
 int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
-        int status_code, *hash<auto> headers, InputStream[InputStream] body) {
+        int status_code, *hash<auto> headers, InputStream[InputStream] body) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
             (long long)session_id);
@@ -8257,7 +8307,7 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
     @since %Qore 2.3
 */
 int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
-        timeout timeout_ms = 5s) {
+        timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicStreamDrain", xsink);
     if (*xsink) {
         return -1;
@@ -8290,7 +8340,7 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
     @since %Qore 2.3
 */
 nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int status_code,
-        *hash<auto> headers) {
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8319,7 +8369,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @since %Qore 2.3
 */
-*binary Socket::readQuicConnectStreamData(int session_id, int stream_id) {
+*binary Socket::readQuicConnectStreamData(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8428,7 +8478,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @param session_id the QUIC session ID (from \c cx."header-info".session_id)
     @param stream_id the HTTP/3 stream ID (from \c cx."header-info".stream_id)
-    @param timeout the maximum time to wait for data; default 30s
+    @param timeout_ms the maximum time to wait for data; default 30s
 
     @return binary data if available, or @ref nothing if the stream is complete
     (END_STREAM received and no more buffered data)
@@ -8444,7 +8494,8 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @since %Qore 2.3
 */
-*binary Socket::readQuicStreamDataBlock(int session_id, int stream_id, timeout timeout = 30s) {
+*binary Socket::readQuicStreamDataBlock(int session_id, int stream_id,
+        timeout timeout_ms = 30s) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8453,7 +8504,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    return s->readQuicStreamDataBlock(session_id, stream_id, (int)timeout, xsink);
+    return s->readQuicStreamDataBlock(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
 //! Check if an HTTP/3 stream has received END_STREAM
@@ -8484,7 +8535,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @since %Qore 2.3
 */
-bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT] {
+bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     if (session_id <= 0 || stream_id < 0) {
         return true;
     }
@@ -8528,7 +8579,7 @@ bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT
 
     @since %Qore 2.3
 */
-nothing Socket::cleanupQuicStream(int session_id, int stream_id) {
+nothing Socket::cleanupQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8557,7 +8608,8 @@ nothing Socket::cleanupQuicStream(int session_id, int stream_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id, Queue[Queue] queue) {
+nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id,
+        Queue[Queue] queue) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8583,7 +8635,7 @@ nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id, Qu
 
     @since %Qore 2.3
 */
-nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) {
+nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         return QoreValue();
     }
@@ -8610,7 +8662,8 @@ nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) 
 
     @since %Qore 2.3
 */
-nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_id, Queue[Queue] queue) {
+nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_id,
+        Queue[Queue] queue) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
             (long long)session_id);
@@ -8631,7 +8684,7 @@ nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_i
 
 //! Deregister the WebSocket frame state machine for an HTTP/3 CONNECT tunnel
 /** @since %Qore 2.4 */
-nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream_id) {
+nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         return QoreValue();
     }
@@ -8655,7 +8708,7 @@ nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream
 
     @since %Qore 2.3
 */
-nothing Socket::resetQuicStream(int session_id, int stream_id) {
+nothing Socket::resetQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8689,7 +8742,7 @@ nothing Socket::resetQuicStream(int session_id, int stream_id) {
     @see @ref getQuicMaxDatagramSize()
     @see @ref isQuicDatagramSupported()
 */
-nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [dom=NETWORK] {
+nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8706,7 +8759,7 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID (anchor stream)
-    @param timeout maximum wait time (default 30 seconds)
+    @param timeout_ms maximum wait time (default 30 seconds)
 
     @return the datagram payload as binary data, or @ref nothing on timeout
 
@@ -8716,7 +8769,8 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
 
     @see @ref submitQuicDatagram()
 */
-*binary Socket::readQuicDatagram(int session_id, int stream_id, timeout timeout = 30s) [dom=NETWORK] {
+*binary Socket::readQuicDatagram(int session_id, int stream_id,
+        timeout timeout_ms = 30s) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8725,7 +8779,7 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    return s->readQuicDatagram(session_id, stream_id, (int)timeout, xsink);
+    return s->readQuicDatagram(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
 //! Registers a @ref Queue to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
@@ -8750,7 +8804,8 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
     @see @ref unregisterQuicDatagramQueue()
     @see @ref readQuicDatagram()
 */
-nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id, Queue[Queue] queue) [dom=NETWORK] {
+nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id,
+        Queue[Queue] queue) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8784,7 +8839,7 @@ nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id, Queue[Q
 
     @see @ref registerQuicDatagramQueue()
 */
-nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [dom=NETWORK] {
+nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8813,7 +8868,7 @@ nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [dom=
     @see @ref submitQuicDatagram()
     @see @ref isQuicDatagramSupported()
 */
-int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [dom=NETWORK] {
+int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return 0;
@@ -8840,7 +8895,7 @@ int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [dom=NETWORK] 
     @see @ref submitQuicDatagram()
     @see @ref getQuicMaxDatagramSize()
 */
-bool Socket::isQuicDatagramSupported(int session_id) [dom=NETWORK] {
+bool Socket::isQuicDatagramSupported(int session_id) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return false;

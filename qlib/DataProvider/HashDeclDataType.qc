@@ -45,7 +45,7 @@ public class HashDeclDataType inherits QoreDataType {
     }
 
     #! creates the object from a TypedHash Type
-    private constructor(Type type, *hash<auto> options, *hash<auto> tags, *hash<auto> default_value,
+    constructor(Type type, *hash<auto> options, *hash<auto> tags, *hash<auto> default_value,
             *hash<NameDescInfo> attr) : QoreDataType(type, options, tags, default_value, attr) {
         hd = type.getTypedHash();
     }
@@ -58,6 +58,9 @@ public class HashDeclDataType inherits QoreDataType {
         @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
+        if (!exists value) {
+            return QoreDataType::acceptsValue(value);
+        }
         return hd.doCast(value);
     }
 

@@ -77,6 +77,24 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
         return release_transaction;
     }
 
+    #! Returns a native columnar block according to the block size
+    /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
+
+        @note
+        - This call moves the internal record pointer forward, therefore multiple calls of this methods will
+          return different results as long as data is available
+        - If an implicit transaction is being used, reaching the end of the data will automatically roll back the
+          transaction
+    */
+    private *auto getShapedValueImpl() {
+        return stmt.fetchColumnar(block_size);
+    }
+
+    #! Returns the native pipeline shape produced by getShapedValueImpl()
+    private DataProviderShape getValueShapeImpl() {
+        return DataProviderShape::BufferColumns;
+    }
+
     #! Returns a hash of lists according to the block size
     /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
 

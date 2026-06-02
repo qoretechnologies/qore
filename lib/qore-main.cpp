@@ -40,6 +40,7 @@
 #include "qore/intern/QuicSessionTicketCache.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QoreJIT.h"
 
 #include <atomic>
 #include <cerrno>
@@ -334,6 +335,10 @@ void qore_cleanup() {
         purge_thread_resources(&xsink);
     }
 
+    // Shutdown JIT background thread FIRST before destroying programs/functions
+    // to avoid use-after-free: BgCompileWork holds raw pointers to UserVariantBase members
+    QoreJIT::instance().shutdown();
+
     // drop any user-module QoreObject references held by the async I/O
     // controller singleton (logger, timer callback, timer user data) BEFORE
     // user modules are unloaded, so their class data can finish refcounting
@@ -474,11 +479,18 @@ DLLEXPORT int JNI_OnLoad(void* vm, void* reserved) {
         if (xsink.isException()) {
             const QoreValue err = xsink.getExceptionErr();
             const QoreValue desc = xsink.getExceptionDesc();
-            const char* err_str = err.getType() == NT_STRING
-                ? err.get<const QoreStringNode>()->c_str() : "unknown error";
-            const char* desc_str = desc.getType() == NT_STRING
-                ? desc.get<const QoreStringNode>()->c_str() : "no description";
-            fprintf(stderr, "JNI_OnLoad: failed to load jni module: %s: %s\n", err_str, desc_str);
+            std::string err_storage = "unknown error";
+            if (err.getType() == NT_STRING) {
+                QoreStringValueHelper err_str(err);
+                err_storage = err_str->c_str();
+            }
+            std::string desc_storage = "no description";
+            if (desc.getType() == NT_STRING) {
+                QoreStringValueHelper desc_str(desc);
+                desc_storage = desc_str->c_str();
+            }
+            fprintf(stderr, "JNI_OnLoad: failed to load jni module: %s: %s\n", err_storage.c_str(),
+                desc_storage.c_str());
             fflush(stderr);
         } else {
             fprintf(stderr, "JNI_OnLoad: failed to load jni module (no exception info)\n");

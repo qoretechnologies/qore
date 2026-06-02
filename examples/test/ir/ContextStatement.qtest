@@ -1,0 +1,307 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class ContextStatementTest
+
+# ContextStatementTest — native-IR `context` loop coverage.
+#
+# Exercises the IR path for `context` after it became a real opcode pair
+# (ContextInit / MaxPos / SetPos / Destroy) in place of the former
+# `qore_rt_exec_statement` AST trampoline.  Each test runs the same source
+# under both `--exec-mode=ast` and `--exec-mode=jit` and asserts the outputs
+# agree — any divergence is a bug in the new lowering.
+class ContextStatementTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("ContextStatementTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+
+        addTestCase("basic context iteration", \testBasic());
+        addTestCase("where filter", \testWhere());
+        addTestCase("sort ascending", \testSortAsc());
+        addTestCase("sort descending", \testSortDesc());
+        addTestCase("break from body", \testBreak());
+        addTestCase("continue from body", \testContinue());
+        addTestCase("return from body", \testReturn());
+        addTestCase("exception from body", \testThrow());
+        addTestCase("nested contexts", \testNested());
+        addTestCase("empty context", \testEmpty());
+        addTestCase("non-hash context expression", \testNonHash());
+        addTestCase("named context with %name:field", \testNamedContext());
+        addTestCase("pseudo row %%", \testPseudoRow());
+        addTestCase("hash map pair iterator in context", \testHashMapPairIterator());
+
+        set_return_value(main());
+    }
+
+    private string runAndExpect(string code, string expect, string label) {
+        string modern = "%modern\n" + code;
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(modern);
+        tmp.file.close();
+        string path = tmp.path;
+        string ast = trim(backquote(sprintf("%s --enable-debug --exec-mode=ast %s 2>&1",
+            qore_bin, path)));
+        string ir = trim(backquote(sprintf("%s --enable-debug --exec-mode=ir %s 2>&1",
+            qore_bin, path)));
+        string jit = trim(backquote(sprintf("%s --enable-debug --exec-mode=jit %s 2>&1",
+            qore_bin, path)));
+        string tiered = trim(backquote(sprintf("%s --enable-debug --exec-mode=tiered %s 2>&1",
+            qore_bin, path)));
+        assertEq(expect, ast, label + " (AST)");
+        assertEq(expect, ir, label + " (IR)");
+        assertEq(expect, jit, label + " (JIT)");
+        assertEq(expect, tiered, label + " (tiered)");
+        return jit;
+    }
+
+    testBasic() {
+        string code = "
+int sub run() {
+    hash q = (\"name\": (\"a\", \"b\", \"c\"), \"age\": (1, 2, 3));
+    int total = 0;
+    context (q) {
+        total += %age;
+    }
+    return total;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "6", "sum of ages");
+    }
+
+    testWhere() {
+        string code = "
+int sub run() {
+    hash q = (\"name\": (\"a\", \"b\", \"c\"), \"age\": (1, 2, 3));
+    int sum = 0;
+    context (q) where (%age > 1) {
+        sum += %age;
+    }
+    return sum;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "5", "filtered sum");
+    }
+
+    testSortAsc() {
+        string code = "
+string sub run() {
+    hash q = (\"age\": (3, 1, 2), \"name\": (\"c\", \"a\", \"b\"));
+    list<string> seen = ();
+    context (q) sortBy (%age) {
+        seen += %name;
+    }
+    return seen.join(\",\");
+}
+printf(\"%s\\n\", run());";
+        runAndExpect(code, "a,b,c", "asc sort");
+    }
+
+    testSortDesc() {
+        string code = "
+string sub run() {
+    hash q = (\"age\": (3, 1, 2), \"name\": (\"c\", \"a\", \"b\"));
+    list<string> seen = ();
+    context (q) sortDescendingBy (%age) {
+        seen += %name;
+    }
+    return seen.join(\",\");
+}
+printf(\"%s\\n\", run());";
+        runAndExpect(code, "c,b,a", "desc sort");
+    }
+
+    testBreak() {
+        string code = "
+int sub run() {
+    hash q = (\"n\": (1, 2, 3, 4, 5));
+    int seen = 0;
+    context (q) {
+        if (%n == 3) {
+            break;
+        }
+        seen = %n;
+    }
+    return seen;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "2", "break at n=3");
+    }
+
+    testContinue() {
+        string code = "
+int sub run() {
+    hash q = (\"n\": (1, 2, 3, 4, 5));
+    int sum = 0;
+    context (q) {
+        if (%n % 2 == 0) {
+            continue;
+        }
+        sum += %n;
+    }
+    return sum;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "9", "sum of odd");
+    }
+
+    testReturn() {
+        string code = "
+int sub run() {
+    hash q = (\"n\": (10, 20, 30));
+    context (q) {
+        if (%n == 20) {
+            return %n;
+        }
+    }
+    return -1;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "20", "return from body");
+    }
+
+    testThrow() {
+        string code = "
+int sub run() {
+    hash q = (\"n\": (1, 2, 3));
+    int outer_total = 0;
+    try {
+        context (q) {
+            if (%n == 2) {
+                throw \"STOP\", \"found 2\";
+            }
+            outer_total += %n;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        outer_total = -outer_total;
+    }
+    return outer_total;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "-1", "exception from body unwinds context");
+    }
+
+    testNested() {
+        # Nested contexts — inner body's bareword %key resolves to the top
+        # (inner) frame; to reach the outer frame you must name it and use
+        # %name:key.  Both frames must survive round-trip cleanly across
+        # iteration boundaries.
+        string code = "
+int sub run() {
+    hash outer_data = (\"o\": (10, 20));
+    hash inner_data = (\"i\": (1, 2, 3));
+    int total = 0;
+    context outer (outer_data) {
+        context inner (inner_data) {
+            total += %outer:o + %i;
+        }
+    }
+    return total;
+}
+printf(\"%d\\n\", run());";
+        # outer iterates 2 rows, inner iterates 3 rows per outer → 6 iterations.
+        # outer = 10,20 inner = 1,2,3
+        # (10+1)+(10+2)+(10+3) + (20+1)+(20+2)+(20+3) = 36 + 66 = 102
+        runAndExpect(code, "102", "nested contexts");
+    }
+
+    testEmpty() {
+        string code = "
+int sub run() {
+    hash q = (\"n\": ());
+    int count = 0;
+    context (q) {
+        count++;
+    }
+    return count;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "0", "empty list -> body never runs");
+    }
+
+    testNonHash() {
+        # Non-hash context expression: per AST semantics, loop body is skipped
+        # (max_pos stays 0).  Exception-safety: frame still pushed + popped.
+        string code = "
+int sub run() {
+    int total = 0;
+    context (42) {
+        total++;
+    }
+    return total;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "0", "non-hash -> 0 iterations");
+    }
+
+    testNamedContext() {
+        string code = "
+int sub run() {
+    hash q = (\"n\": (5, 10, 15));
+    int sum = 0;
+    context myctx (q) {
+        sum += %myctx:n;
+    }
+    return sum;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "30", "named context field ref");
+    }
+
+    testPseudoRow() {
+        # %% is the whole current row as a hash.
+        string code = "
+int sub run() {
+    hash q = (\"n\": (1, 2, 3));
+    int seen = 0;
+    context (q) {
+        hash<auto> row = %%;
+        seen += row.n;
+    }
+    return seen;
+}
+printf(\"%d\\n\", run());";
+        runAndExpect(code, "6", "pseudo row %%");
+    }
+
+    testHashMapPairIterator() {
+        # Regression: direct $1.key / $1.value hash access inside a hash-map
+        # body lowered to InvokeHashKeyAccess in the context catch region.
+        # The IR interpreter must use the pre-evaluated iterator element, not
+        # re-evaluate the AST expression without the map operator's implicit $1.
+        string code = "
+public hashdecl AppenderParams {
+    *string name;
+    *int rotationCount;
+}
+
+public hashdecl LoggerParams {
+    *hash<string, hash<AppenderParams>> appenders;
+}
+
+string sub run() {
+    hash logger_info = (\"loggerid\": (6,), \"params\": ({\"appenders\": {\"1\": {\"name\": \"X\", \"rotationCount\": 10}}},));
+    hash<auto> loggerMap;
+    context (logger_info) {
+        hash<auto> tmp_params = %params;
+        hash<auto> params;
+        params.appenders = map {$1.key: cast<hash<AppenderParams>>($1.value)},
+            tmp_params.appenders.pairIterator();
+        loggerMap{%loggerid}.params = cast<hash<LoggerParams>>(params);
+    }
+    return sprintf(\"%s:%d\", loggerMap{\"6\"}.params.appenders{\"1\"}.name,
+        loggerMap{\"6\"}.params.appenders{\"1\"}.rotationCount);
+}
+printf(\"%s\\n\", run());";
+        runAndExpect(code, "X:10", "hash map pair iterator access in context");
+    }
+}

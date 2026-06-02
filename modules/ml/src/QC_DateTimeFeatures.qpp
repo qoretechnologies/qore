@@ -56,7 +56,8 @@ DateTimeFeatures::constructor(*hash<auto> options) {
             for (size_t i = 0; i < flist->size(); ++i) {
                 QoreValue fv = flist->retrieveEntry(i);
                 if (fv.getType() == NT_STRING) {
-                    features.push_back(fv.get<const QoreStringNode>()->c_str());
+                    QoreStringValueHelper feature(fv);
+                    features.push_back(feature->c_str());
                 } else {
                     xsink->raiseException("ML-DATETIMEFEATURES-ERROR",
                         "feature list element %d is not a string", (int)i);

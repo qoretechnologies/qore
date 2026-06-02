@@ -854,7 +854,8 @@ public class TestReporter {
             # issue #3857: there is no ARGV when Qore is initialized from other languages like Java
             p_argv = cast<list<string>>(ARGV ?? ());
         }
-        m_options = new GetOpt(opts).parse2(\p_argv);
+        GetOpt getopt(options: opts);
+        m_options = getopt.parse2(arguments: \p_argv);
         processOptions(\p_argv);
 
         # A map of print methods, categorised into three types: header, summary, testreport

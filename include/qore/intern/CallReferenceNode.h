@@ -107,6 +107,10 @@ public:
 
     DLLLOCAL virtual QoreFunction* getFunction() const;
 
+    DLLLOCAL const QoreMethod* getMethod() const {
+        return method;
+    }
+
 protected:
     const QoreMethod* method;
 

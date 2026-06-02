@@ -31,8 +31,39 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
+#include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QC_ChannelIterator.h"
+
+static const QoreTypeInfo* get_channel_value_type(const QoreTypeInfo* channel_type_info) {
+    const QoreParameterizedClassTypeInfo* channel_type = QoreTypeInfo::getParameterizedClassType(channel_type_info);
+    return channel_type && channel_type->getArgCount() ? channel_type->getTypeArgs()[0] : autoTypeInfo;
+}
+
+static const TypedHashDecl* get_channel_try_result_hashdecl(const QoreTypeInfo* channel_type_info) {
+    const QoreTypeInfo* value_type = get_channel_value_type(channel_type_info);
+    if (!QoreTypeInfo::hasType(value_type)) {
+        value_type = autoTypeInfo;
+    }
+    type_vec_t type_args;
+    type_args.push_back(value_type);
+    return hashdeclChannelTryResult->getParameterizedHashDecl(type_args);
+}
+
+//! Nonblocking Channel receive result
+/** @par Example:
+    @code{.py}
+*hash<ChannelTryResult<int>> result = ch.tryRecv();
+    @endcode
+
+    @since %Qore 2.3
+ */
+hashdecl Qore::Thread::ChannelTryResult<T> {
+    //! The value received from the Channel
+    T value;
+    //! True when a value was received
+    bool has_value;
+}
 
 //! A typed channel for inter-thread communication with close semantics
 /** Channel objects provide a Go-style channel for passing values between threads with backpressure
@@ -57,7 +88,7 @@ foreach auto val in (channel.iterator()) {
 
     @par Example: Producer-consumer pipeline
     @code{.py}
-Channel ch(10);  # buffered channel with capacity 10
+Channel<int> ch(10);  # buffered channel with capacity 10
 background sub() {
     for (int i = 0; i < 5; ++i) {
         ch.send(i);
@@ -71,7 +102,7 @@ foreach auto val in (ch.iterator()) {
 
     @par Example: Unbuffered synchronous handoff
     @code{.py}
-Channel ch(0);  # unbuffered — send() blocks until recv() is called
+Channel<string> ch(0);  # unbuffered, send() blocks until recv() is called
 background sub() {
     ch.send("hello");  # blocks until the main thread calls recv()
 }();
@@ -80,7 +111,7 @@ auto val = ch.recv();  # "hello"
 
     @par Example: Multiple producers, single consumer
     @code{.py}
-Channel ch(20);
+Channel<hash<auto>> ch(20);
 int num_producers = 4;
 Counter done(num_producers);
 
@@ -107,7 +138,7 @@ foreach auto val in (ch.iterator()) {
 
     @par Example: Backpressure with timeout
     @code{.py}
-Channel ch(100);  # bounded buffer for backpressure
+Channel<hash<auto>> ch(100);  # bounded buffer for backpressure
 background sub() {
     while (auto item = get_next_item()) {
         try {
@@ -126,7 +157,7 @@ background sub() {
 
     @par Example: Non-blocking send/recv
     @code{.py}
-Channel ch(5);
+Channel<int> ch(5);
 if (ch.trySend(42)) {
     printf("sent successfully\n");
 } else {
@@ -143,8 +174,8 @@ if (exists result) {
 
     @par Example: Fan-out to multiple workers
     @code{.py}
-Channel work_ch(50);
-Channel result_ch(50);
+Channel<hash<auto>> work_ch(50);
+Channel<hash<auto>> result_ch(50);
 
 # Start workers
 int num_workers = 4;
@@ -186,7 +217,7 @@ foreach auto result in (result_ch.iterator()) {
 
     @since %Qore 2.3
  */
-qclass Channel [dom=THREAD_CLASS; arg=QoreChannel* ch; ns=Qore::Thread];
+qclass Channel<T> [dom=THREAD_CLASS; arg=QoreChannel* ch; ns=Qore::Thread; legacy_raw];
 
 //! Creates the Channel with the given capacity
 /** @param capacity the buffer capacity; -1 = unlimited (unbounded buffer), 0 = unbuffered
@@ -194,16 +225,16 @@ qclass Channel [dom=THREAD_CLASS; arg=QoreChannel* ch; ns=Qore::Thread];
 
     @par Example:
     @code{.py}
-Channel ch(10);  # buffered with capacity 10
-Channel sync_ch(0);  # unbuffered
-Channel unlimited(-1);  # unlimited buffer (like Queue but with close semantics)
+Channel<int> ch(10);  # buffered with capacity 10
+Channel<int> sync_ch(0);  # unbuffered
+Channel<int> unlimited(-1);  # unlimited buffer (like Queue but with close semantics)
     @endcode
 
     @throw CHANNEL-ERROR capacity less than -1
 
     @since %Qore 2.3
  */
-Channel::constructor(int capacity = 0) {
+Channel::constructor(int capacity = 0) [flags=NAMED_ARGS] {
     if (capacity < -1) {
         xsink->raiseException("CHANNEL-ERROR",
             "Channel::constructor() called with invalid capacity " QLLD
@@ -244,7 +275,7 @@ ch.send(42);
     @throw CHANNEL-TIMEOUT timed out waiting to send
     @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
  */
-nothing Channel::send(auto value, timeout timeout_ms = 0) {
+nothing Channel::send(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     ch->send(value.refSelf(), timeout_ms, xsink);
 }
 
@@ -255,14 +286,14 @@ nothing Channel::send(auto value, timeout timeout_ms = 0) {
 
     @par Example:
     @code{.py}
-auto val = ch.recv();
+int val = ch.recv();
     @endcode
 
     @throw CHANNEL-ERROR channel deleted in another thread
     @throw CHANNEL-TIMEOUT timed out waiting to receive
     @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
  */
-auto Channel::recv(timeout timeout_ms = 0) {
+*T Channel::recv(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     bool timed_out = false;
     bool has_value = false;
     QoreValue rv = ch->recv(timeout_ms, xsink, timed_out, has_value);
@@ -285,7 +316,7 @@ if (ch.trySend(42)) {
 }
     @endcode
  */
-bool Channel::trySend(auto value) {
+bool Channel::trySend(T value) [flags=NAMED_ARGS] {
     QoreValue v = value.refSelf();
     if (ch->trySend(v)) {
         return true;
@@ -308,16 +339,26 @@ if (exists result) {
 }
     @endcode
  */
-auto Channel::tryRecv() {
+*hash<ChannelTryResult<T>> Channel::tryRecv() {
     bool has_value = false;
     QoreValue rv = ch->tryRecv(has_value);
     if (!has_value) {
         return QoreValue();
     }
-    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(get_channel_try_result_hashdecl(self->getInstantiatedTypeInfo()),
+        xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     h->setKeyValue("value", rv, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     h->setKeyValue("has_value", true, xsink);
-    return h;
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
 }
 
 //! Closes the channel; remaining values can still be received
@@ -393,6 +434,11 @@ foreach auto val in (ch.iterator()) {
 }
     @endcode
  */
-ChannelIterator Channel::iterator() {
-    return new QoreObject(QC_CHANNELITERATOR, getProgram(), new QoreChannelIterator(ch));
+ChannelIterator<T> Channel::iterator() {
+    const QoreParameterizedClassTypeInfo* channel_type
+        = QoreTypeInfo::getParameterizedClassType(self->getInstantiatedTypeInfo());
+    if (channel_type && channel_type->getArgCount()) {
+        return qore_new_channel_iterator_object(getProgram(), ch, channel_type->getTypeArgs());
+    }
+    return qore_new_channel_iterator_object(getProgram(), ch);
 }

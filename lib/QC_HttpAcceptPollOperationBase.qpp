@@ -454,40 +454,40 @@ qclass HttpAcceptPollOperationBase [
     private_members=object sock,string goal;
     ns=Qore;
     arg=HttpAcceptPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<hash<auto>>
 ];
 
 //! Creates the accept poll operation
 /** @param listener the server Socket to accept connections from
-    @param accept_op the SocketPollOperation from listener.startPollAccept() (already started)
-    @param ssl if True, SSL is required for this listener
-    @param cert SSL certificate (SSLCertificate object, or NOTHING)
-    @param key SSL private key (SSLPrivateKey object, or NOTHING)
+    @param accept_operation the SocketPollOperation from listener.startPollAccept() (already started)
+    @param ssl_required if True, SSL is required for this listener
+    @param certificate SSL certificate (SSLCertificate object, or NOTHING)
+    @param private_key SSL private key (SSLPrivateKey object, or NOTHING)
     @param ssl_verify_flags SSL verification flags for client certificate verification
-    @param ssl_accept_all_certs if True, accept all client certificates including self-signed
+    @param accept_all_certificates if True, accept all client certificates including self-signed
     @param http_version HTTP version mode: "auto", "1.0", "1.1", "2.0", "2", or "h2c"
-    @param do_ssl_handshake if False, defer SSL handshake to the caller
+    @param perform_ssl_handshake if False, defer SSL handshake to the caller
 */
-HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, object accept_op,
-        bool ssl, *object cert, *object key, int ssl_verify_flags,
-        bool ssl_accept_all_certs, string http_version, bool do_ssl_handshake) {
-    // Extract the SocketPollOperationBase from the accept_op QoreObject
-    const QoreClass* accept_cls = accept_op->getClass();
+HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, object accept_operation,
+        bool ssl_required, *object certificate, *object private_key, int ssl_verify_flags,
+        bool accept_all_certificates, string http_version, bool perform_ssl_handshake) [flags=NAMED_ARGS] {
+    // Extract the SocketPollOperationBase from the accept_operation QoreObject
+    const QoreClass* accept_cls = accept_operation->getClass();
     if (!accept_cls || !accept_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
         xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
-            "accept_op must be a SocketPollOperationBase subclass");
+            "accept_operation must be a SocketPollOperationBase subclass");
         return;
     }
 
     ReferenceHolder<SocketPollOperationBase> accept_priv(reinterpret_cast<SocketPollOperationBase*>(
-        const_cast<QoreObject*>(accept_op)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink)),
+        const_cast<QoreObject*>(accept_operation)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink)),
         xsink);
     if (*xsink || !accept_priv) {
         return;
     }
     if (accept_priv->needsWorkerDispatch()) {
         xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
-            "accept_op requires worker dispatch and cannot be used by HttpAcceptPollOperationBase");
+            "accept_operation requires worker dispatch and cannot be used by HttpAcceptPollOperationBase");
         return;
     }
 
@@ -500,26 +500,26 @@ HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, obje
     // The C++ listener_sock ref provides the needed listener reference for I/O operations.
     self->setValue("goal", new QoreStringNode("http_accept"), xsink);
 
-    // Extract SSLCertificate from the cert QoreObject (if provided)
+    // Extract SSLCertificate from the certificate QoreObject (if provided)
     QoreSSLCertificate* cert_ptr = nullptr;
-    if (cert) {
+    if (certificate) {
         cert_ptr = reinterpret_cast<QoreSSLCertificate*>(
-            const_cast<QoreObject*>(cert)->getReferencedPrivateData(CID_SSLCERTIFICATE, xsink));
+            const_cast<QoreObject*>(certificate)->getReferencedPrivateData(CID_SSLCERTIFICATE, xsink));
         if (*xsink) {
             return;
         }
         if (!cert_ptr) {
             xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
-                "cert must be an SSLCertificate object");
+                "certificate must be an SSLCertificate object");
             return;
         }
     }
 
-    // Extract SSLPrivateKey from the key QoreObject (if provided)
+    // Extract SSLPrivateKey from the private_key QoreObject (if provided)
     QoreSSLPrivateKey* key_ptr = nullptr;
-    if (key) {
+    if (private_key) {
         key_ptr = reinterpret_cast<QoreSSLPrivateKey*>(
-            const_cast<QoreObject*>(key)->getReferencedPrivateData(CID_SSLPRIVATEKEY, xsink));
+            const_cast<QoreObject*>(private_key)->getReferencedPrivateData(CID_SSLPRIVATEKEY, xsink));
         if (*xsink) {
             if (cert_ptr) {
                 cert_ptr->deref(xsink);
@@ -531,7 +531,7 @@ HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, obje
                 cert_ptr->deref(xsink);
             }
             xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
-                "key must be an SSLPrivateKey object");
+                "private_key must be an SSLPrivateKey object");
             return;
         }
     }
@@ -540,14 +540,14 @@ HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, obje
     QoreSocketObject* listener_ptr = *listener;
     listener_ptr->ref();
 
-    // Ref the accept_op QoreObject for DGC (the priv takes ownership)
-    const_cast<QoreObject*>(accept_op)->ref();
+    // Ref the accept_operation QoreObject for DGC (the priv takes ownership)
+    const_cast<QoreObject*>(accept_operation)->ref();
 
     self->setPrivate(CID_HTTPACCEPTPOLLOPERATIONBASE,
         new HttpAcceptPollOperationPriv(self, accept_priv.release(),
-            const_cast<QoreObject*>(accept_op),
-            listener_ptr, ssl, cert_ptr, key_ptr, ssl_verify_flags,
-            ssl_accept_all_certs, http_version->c_str(), do_ssl_handshake));
+            const_cast<QoreObject*>(accept_operation),
+            listener_ptr, ssl_required, cert_ptr, key_ptr, ssl_verify_flags,
+            accept_all_certificates, http_version->c_str(), perform_ssl_handshake));
 }
 
 //! Destroys the object
@@ -604,7 +604,7 @@ nothing HttpAcceptPollOperationBase::abort() {
 //! Returns the output of the operation
 /** @return a hash with keys: sock, ssl, is_http2, negotiated_protocol, http_version
 */
-auto HttpAcceptPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+hash<auto> HttpAcceptPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

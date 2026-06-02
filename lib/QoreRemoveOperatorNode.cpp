@@ -59,10 +59,46 @@ QoreValue QoreRemoveOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsi
 
 int QoreRemoveOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(exp, parse_context);
+    QoreParseAnalysis operand_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(exp, parse_context);
+        operand_analysis = parse_context.analysis;
+    }
     if (exp && !err) {
         err = checkLValue(exp, parse_context.pflag);
     }
+
+    // If remove is applied to a simple variable reference, reset its assignment tracking
+    // since remove unassigns the variable (sets it to NOTHING)
+    if (exp && exp.getType() == NT_VARREF && !err) {
+        VarRefNode* vrn = exp.get<VarRefNode>();
+        qore_var_t vtype = vrn->getType();
+        if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+            LocalVar* lvar = vrn->ref.id;
+            if (lvar) {
+                lvar->parseUnassigned();
+                // Reset narrowed type so the variable reverts to its declared
+                // type after branch merging (e.g., auto v; v = rec; ... remove v;
+                // should not leave v narrowed to hash<auto>)
+                lvar->parseResetNarrowedType();
+            }
+        }
+        // TODO: handle global and thread-local variables if needed
+    }
+
     returnTypeInfo = parse_context.typeInfo;
+    parse_context.analysis.clear();
+    if (returnTypeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = returnTypeInfo;
+        if (operand_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (operand_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }

@@ -4,8 +4,9 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
 
 %exec-class PipelineFanOutHangTest
 
@@ -176,6 +177,8 @@ class PipelineFanOutHangTest inherits QUnit::Test {
             \testFanOutBulkMetrics());
         addTestCase("fan-out BULK via factory, 3 procs per branch",
             \testFanOutBulkFactory());
+        addTestCase("fan-out row-record list expands before processor dispatch",
+            \testFanOutRowRecordListProcessors());
 
         set_return_value(main());
     }
@@ -422,5 +425,51 @@ class PipelineFanOutHangTest inherits QUnit::Test {
         assertTrue(info.bulk, "pipeline must be in bulk mode");
         assertEq(2, proc_a1.getCount(), "proc_a1 bulk batches");
         assertEq(2, proc_b1.getCount(), "proc_b1 bulk batches");
+    }
+
+    #! Row-record lists submitted as one queue item must be processed as multiple records
+    testFanOutRowRecordListProcessors() {
+        list<auto> output;
+        Mutex output_lock();
+
+        QoreRecordLimitProcessor limit({"limit": 5});
+        QoreSelectFieldsProcessor selector({"fields": "name"});
+
+        DataProviderPipeline pipe(<PipelineOptionInfo>{
+            "name": "fanout-row-record-list-processors",
+            "output_callback": sub (auto record) {
+                output_lock.lock();
+                on_exit output_lock.unlock();
+                push output, record;
+            },
+        });
+
+        int q1 = pipe.appendQueue(0);
+        int q2 = pipe.appendQueue(0);
+        pipe.append(q1, limit);
+        pipe.append(q2, selector);
+
+        list<auto> rows;
+        for (int i = 0; i < 10; ++i) {
+            push rows, {"id": i, "name": "record_" + i.toString()};
+        }
+
+        pipe.submit(rows);
+        pipe.waitDone();
+
+        assertEq(10, pipe.getInfo().record_count, "row-record list submission count");
+        assertEq(15, output.size(), "record-limit outputs 5 records and select-fields outputs 10");
+
+        int limited = 0;
+        int selected = 0;
+        foreach hash<auto> record in (output) {
+            if (record.hasKey("id")) {
+                ++limited;
+            } else if (record.hasKey("name")) {
+                ++selected;
+            }
+        }
+        assertEq(5, limited, "record-limit branch applies its row limit");
+        assertEq(10, selected, "select-fields branch transforms each row");
     }
 }

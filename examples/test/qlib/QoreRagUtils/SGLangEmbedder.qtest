@@ -6,15 +6,16 @@
 */
 
 %modern
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/SGLangRestClient.qm
-%requires ../../../../qlib/QoreRagUtils
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires SGLangRestClient
+%requires QoreRagUtils
 %requires QUnit
 
 %try-module json
@@ -23,7 +24,7 @@
 
 %exec-class SGLangEmbedderTest
 
-#! HTTP stub that records every request and returns a configurable response per path.
+#! HTTP test handler that records every request and returns a configurable response per path.
 class FakeEmbeddingHandler inherits AbstractHttpRequestHandler {
     public {
         list<hash<auto>> requests = ();

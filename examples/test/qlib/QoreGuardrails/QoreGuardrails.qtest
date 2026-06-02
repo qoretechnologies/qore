@@ -6,9 +6,10 @@
 */
 
 %modern
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/QoreGuardrails
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires QoreGuardrails
 %requires Util
 %requires QUnit
 

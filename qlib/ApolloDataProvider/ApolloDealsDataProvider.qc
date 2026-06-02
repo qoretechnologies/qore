@@ -100,20 +100,20 @@ public class ApolloDealsDataProvider inherits ApolloDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If deal_id provided, get single record
         if (search_options.deal_id) {
             hash<auto> result = doGet("opportunities/" + search_options.deal_id);
             hash<auto> opportunity = result.opportunity ?? result;
-            return new DefaultRecordIterator(new ListHashIterator((opportunity,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((opportunity,)),
                 where_cond, search_options);
         }
 
         # Use GET-based pagination for opportunities/search
         list<hash<auto>> records = fetchAllPages("opportunities/search", "opportunities",
             NOTHING, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
 
     #! Returns static provider info

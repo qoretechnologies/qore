@@ -190,15 +190,15 @@ SandboxManager::copy() {
 }
 
 //! Sets maximum memory usage in bytes
-/** @param bytes Maximum memory allocation in bytes (0 = unlimited)
+/** @param max_bytes Maximum memory allocation in bytes (0 = unlimited)
 
     @par Example:
     @code{.py}
-sm.setMemoryLimit(100 * 1024 * 1024);  # 100 MB
+sm.setMemoryLimit(max_bytes: 100 * 1024 * 1024);  # 100 MB
     @endcode
 */
-nothing SandboxManager::setMemoryLimit(int bytes) {
-    sm->setMemoryLimit(bytes);
+nothing SandboxManager::setMemoryLimit(int max_bytes) [flags=NAMED_ARGS] {
+    sm->setMemoryLimit(max_bytes);
 }
 
 //! Gets the memory limit
@@ -209,15 +209,15 @@ int SandboxManager::getMemoryLimit() {
 }
 
 //! Sets maximum CPU time in milliseconds
-/** @param ms Maximum CPU time in milliseconds (0 = unlimited)
+/** @param max_cpu_time_ms Maximum CPU time in milliseconds (0 = unlimited)
 
     @par Example:
     @code{.py}
-sm.setCPUTimeLimit(10000);  # 10 seconds
+sm.setCPUTimeLimit(max_cpu_time_ms: 10000);  # 10 seconds
     @endcode
 */
-nothing SandboxManager::setCPUTimeLimit(int ms) {
-    sm->setCPUTimeLimit(ms);
+nothing SandboxManager::setCPUTimeLimit(int max_cpu_time_ms) [flags=NAMED_ARGS] {
+    sm->setCPUTimeLimit(max_cpu_time_ms);
 }
 
 //! Gets the CPU time limit
@@ -228,15 +228,15 @@ int SandboxManager::getCPUTimeLimit() {
 }
 
 //! Sets maximum wall clock time in milliseconds
-/** @param ms Maximum wall clock time in milliseconds (0 = unlimited)
+/** @param max_wall_time_ms Maximum wall clock time in milliseconds (0 = unlimited)
 
     @par Example:
     @code{.py}
-sm.setWallTimeLimit(30000);  # 30 seconds
+sm.setWallTimeLimit(max_wall_time_ms: 30000);  # 30 seconds
     @endcode
 */
-nothing SandboxManager::setWallTimeLimit(int ms) {
-    sm->setWallTimeLimit(ms);
+nothing SandboxManager::setWallTimeLimit(int max_wall_time_ms) [flags=NAMED_ARGS] {
+    sm->setWallTimeLimit(max_wall_time_ms);
 }
 
 //! Gets the wall time limit
@@ -247,15 +247,15 @@ int SandboxManager::getWallTimeLimit() {
 }
 
 //! Sets maximum number of threads
-/** @param count Maximum number of threads (0 = unlimited)
+/** @param max_threads Maximum number of threads (0 = unlimited)
 
     @par Example:
     @code{.py}
-sm.setMaxThreads(4);
+sm.setMaxThreads(max_threads: 4);
     @endcode
 */
-nothing SandboxManager::setMaxThreads(int count) {
-    sm->setMaxThreads(count);
+nothing SandboxManager::setMaxThreads(int max_threads) [flags=NAMED_ARGS] {
+    sm->setMaxThreads(max_threads);
 }
 
 //! Gets the max threads limit
@@ -266,15 +266,15 @@ int SandboxManager::getMaxThreads() {
 }
 
 //! Sets maximum recursion depth
-/** @param depth Maximum recursion depth (0 = unlimited)
+/** @param max_depth Maximum recursion depth (0 = unlimited)
 
     @par Example:
     @code{.py}
-sm.setMaxRecursionDepth(100);
+sm.setMaxRecursionDepth(max_depth: 100);
     @endcode
 */
-nothing SandboxManager::setMaxRecursionDepth(int depth) {
-    sm->setMaxRecursionDepth(depth);
+nothing SandboxManager::setMaxRecursionDepth(int max_depth) [flags=NAMED_ARGS] {
+    sm->setMaxRecursionDepth(max_depth);
 }
 
 //! Gets the max recursion depth
@@ -369,11 +369,11 @@ static SandboxManager SandboxManager::createWebSafe() {
 
 //! Adds an allowed filesystem path with specific access modes
 /** @param path The filesystem path to allow (will be canonicalized)
-    @param mode Bitmask of QSEC_* flags specifying allowed access modes
+    @param access_modes Bitmask of QSEC_* flags specifying allowed access modes
 
     @par Example:
     @code{.py}
-sm.addFilesystemAllowedPath("/data/uploads", QSEC_READ | QSEC_WRITE);
+sm.addFilesystemAllowedPath(path: "/data/uploads", access_modes: QSEC_READ | QSEC_WRITE);
     @endcode
 
     @note The path is canonicalized using realpath(). The path must exist
@@ -381,8 +381,8 @@ sm.addFilesystemAllowedPath("/data/uploads", QSEC_READ | QSEC_WRITE);
 
     @throw FILESYSTEM-SECURITY-ERROR path does not exist or cannot be canonicalized
 */
-nothing SandboxManager::addFilesystemAllowedPath(string path, int mode) {
-    sm->filesystem().addAllowedPath(path->c_str(), mode, xsink);
+nothing SandboxManager::addFilesystemAllowedPath(string path, int access_modes) [flags=NAMED_ARGS] {
+    sm->filesystem().addAllowedPath(path->c_str(), access_modes, xsink);
 }
 
 //! Adds a denied filesystem path (takes precedence over allowed paths)
@@ -393,7 +393,7 @@ nothing SandboxManager::addFilesystemAllowedPath(string path, int mode) {
 
     @throw FILESYSTEM-SECURITY-ERROR path does not exist or cannot be canonicalized
 */
-nothing SandboxManager::addFilesystemDeniedPath(string path) {
+nothing SandboxManager::addFilesystemDeniedPath(string path) [flags=NAMED_ARGS] {
     sm->filesystem().addDeniedPath(path->c_str(), xsink);
 }
 
@@ -405,7 +405,7 @@ nothing SandboxManager::addFilesystemDeniedPath(string path) {
 
     @par Example:
     @code{.py}
-sm.setFilesystemSandboxRoot("/home/user/sandbox");
+sm.setFilesystemSandboxRoot(path: "/home/user/sandbox");
     @endcode
 
     @note When a sandbox root is set, all allowed paths must be within
@@ -413,7 +413,7 @@ sm.setFilesystemSandboxRoot("/home/user/sandbox");
 
     @throw FILESYSTEM-SECURITY-ERROR path does not exist or cannot be canonicalized
 */
-nothing SandboxManager::setFilesystemSandboxRoot(string path) {
+nothing SandboxManager::setFilesystemSandboxRoot(string path) [flags=NAMED_ARGS] {
     sm->filesystem().setSandboxRoot(path->c_str(), xsink);
 }
 
@@ -437,8 +437,8 @@ nothing SandboxManager::clearFilesystemSandboxRoot() {
         config->deref(xsink);
         return QoreValue();
     }
-    QoreStringNode* str = v.get<QoreStringNode>();
-    str->ref();
+    QoreStringNodeValueHelper str_value(v);
+    QoreStringNode* str = str_value.getReferencedValue();
     config->deref(xsink);
     return str;
 }
@@ -449,7 +449,7 @@ nothing SandboxManager::clearFilesystemSandboxRoot() {
     @note The default policy is "deny" for maximum security. Setting this
     to @ref Qore::True "True" means only explicitly denied paths will be blocked.
 */
-nothing SandboxManager::setFilesystemDefaultPolicy(bool allow) {
+nothing SandboxManager::setFilesystemDefaultPolicy(bool allow) [flags=NAMED_ARGS] {
     sm->filesystem().setDefaultPolicy(allow);
 }
 
@@ -470,19 +470,19 @@ hash<FilesystemSecurityConfigInfo> SandboxManager::getFilesystemConfiguration() 
 }
 
 //! Adds an allowed hostname pattern for network connections
-/** @param pattern Hostname pattern with optional wildcards (e.g., "*.example.com")
+/** @param host_pattern Hostname pattern with optional wildcards (e.g., "*.example.com")
 
     @par Example:
     @code{.py}
-sm.addNetworkAllowedHost("api.example.com");
-sm.addNetworkAllowedHost("*.trusted-domain.org");
+sm.addNetworkAllowedHost(host_pattern: "api.example.com");
+sm.addNetworkAllowedHost(host_pattern: "*.trusted-domain.org");
     @endcode
 
     @note Wildcards only match single domain components.
     "*.example.com" matches "api.example.com" but not "api.sub.example.com".
 */
-nothing SandboxManager::addNetworkAllowedHost(string pattern) {
-    sm->network().addAllowedHost(pattern->c_str(), xsink);
+nothing SandboxManager::addNetworkAllowedHost(string host_pattern) [flags=NAMED_ARGS] {
+    sm->network().addAllowedHost(host_pattern->c_str(), xsink);
 }
 
 //! Adds an allowed IP range in CIDR notation
@@ -490,11 +490,11 @@ nothing SandboxManager::addNetworkAllowedHost(string pattern) {
 
     @par Example:
     @code{.py}
-sm.addNetworkAllowedIPRange("203.0.113.0/24");   # IPv4
-sm.addNetworkAllowedIPRange("2001:db8::/32");    # IPv6
+sm.addNetworkAllowedIPRange(cidr: "203.0.113.0/24");   # IPv4
+sm.addNetworkAllowedIPRange(cidr: "2001:db8::/32");    # IPv6
     @endcode
 */
-nothing SandboxManager::addNetworkAllowedIPRange(string cidr) {
+nothing SandboxManager::addNetworkAllowedIPRange(string cidr) [flags=NAMED_ARGS] {
     sm->network().addAllowedIPRange(cidr->c_str(), xsink);
 }
 
@@ -503,39 +503,40 @@ nothing SandboxManager::addNetworkAllowedIPRange(string cidr) {
 
     @par Example:
     @code{.py}
-sm.addNetworkDeniedIPRange("192.168.0.0/16");
+sm.addNetworkDeniedIPRange(cidr: "192.168.0.0/16");
     @endcode
 */
-nothing SandboxManager::addNetworkDeniedIPRange(string cidr) {
+nothing SandboxManager::addNetworkDeniedIPRange(string cidr) [flags=NAMED_ARGS] {
     sm->network().addDeniedIPRange(cidr->c_str(), xsink);
 }
 
 //! Adds an allowed port for network connections
 /** @param port Port number to allow (1-65535)
-    @param proto Protocol flags (QSEC_NET_TCP, QSEC_NET_UDP, QSEC_NET_ALL)
+    @param protocol Protocol flags (QSEC_NET_TCP, QSEC_NET_UDP, QSEC_NET_ALL)
 
     @par Example:
     @code{.py}
-sm.addNetworkAllowedPort(443, QSEC_NET_TCP);  # HTTPS only
-sm.addNetworkAllowedPort(53, QSEC_NET_ALL);   # DNS on both TCP and UDP
+sm.addNetworkAllowedPort(port: 443, protocol: QSEC_NET_TCP);  # HTTPS only
+sm.addNetworkAllowedPort(port: 53, protocol: QSEC_NET_ALL);   # DNS on both TCP and UDP
     @endcode
 */
-nothing SandboxManager::addNetworkAllowedPort(int port, int proto = QSEC_NET_ALL) {
-    sm->network().addAllowedPort(port, proto);
+nothing SandboxManager::addNetworkAllowedPort(int port, int protocol = QSEC_NET_ALL) [flags=NAMED_ARGS] {
+    sm->network().addAllowedPort(port, protocol);
 }
 
 //! Adds an allowed port range for network connections
-/** @param low Lower bound of port range (inclusive)
-    @param high Upper bound of port range (inclusive)
-    @param proto Protocol flags
+/** @param start_port Lower bound of port range (inclusive)
+    @param end_port Upper bound of port range (inclusive)
+    @param protocol Protocol flags
 
     @par Example:
     @code{.py}
-sm.addNetworkAllowedPortRange(80, 443, QSEC_NET_TCP);  # HTTP and HTTPS
+sm.addNetworkAllowedPortRange(start_port: 80, end_port: 443, protocol: QSEC_NET_TCP);  # HTTP and HTTPS
     @endcode
 */
-nothing SandboxManager::addNetworkAllowedPortRange(int low, int high, int proto = QSEC_NET_ALL) {
-    sm->network().addAllowedPortRange(low, high, proto);
+nothing SandboxManager::addNetworkAllowedPortRange(int start_port, int end_port, int protocol = QSEC_NET_ALL)
+        [flags=NAMED_ARGS] {
+    sm->network().addAllowedPortRange(start_port, end_port, protocol);
 }
 
 //! Blocks all private/internal networks (SSRF prevention)
@@ -585,10 +586,10 @@ nothing SandboxManager::allowHTTPSOnly() {
 
     @par Example:
     @code{.py}
-sm.setNetworkDefaultPolicy(True);  # Allow by default, only deny listed
+sm.setNetworkDefaultPolicy(allow: True);  # Allow by default, only deny listed
     @endcode
 */
-nothing SandboxManager::setNetworkDefaultPolicy(bool allow) {
+nothing SandboxManager::setNetworkDefaultPolicy(bool allow) [flags=NAMED_ARGS] {
     sm->network().setDefaultPolicy(allow);
 }
 

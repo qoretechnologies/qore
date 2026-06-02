@@ -267,6 +267,9 @@ struct qore_socketsource_private {
 */
 DLLLOCAL bool qore_on_async_io_thread();
 
+//! Returns true if the calling thread is executing a Qore continuePoll() callback for async I/O
+DLLLOCAL bool qore_in_async_io_continue_poll_worker();
+
 #ifdef DEBUG
 //! Overrides the async I/O thread flag for focused unit tests
 /** @return the previous async I/O thread flag value
@@ -286,7 +289,12 @@ public:
 
 class PrivateQoreSocketTimeoutBase {
 public:
-    DLLLOCAL PrivateQoreSocketTimeoutBase(qore_socket_private* s) : sock(s), start(sock ? q_clock_getmicros() : 0) {
+    // Monotonic clock for the elapsed-time measurement (timeout warning and throughput
+    // accounting): a realtime clock jump between this capture and the post-op read in
+    // the helpers' destructors / finalize() would otherwise skew dt and mis-fire the
+    // socket timeout/throughput warning callbacks.  Matches ConnectionPool and
+    // DatasourcePool.
+    DLLLOCAL PrivateQoreSocketTimeoutBase(qore_socket_private* s) : sock(s), start(sock ? q_get_monotonic_us() : 0) {
     }
 
 protected:
@@ -360,7 +368,52 @@ struct SocketResolvedAddrInfo {
     std::string canonname;
 };
 
-class QoreCaresAddrInfoResolver;
+class QoreCaresAddrInfoResolver {
+public:
+    DLLLOCAL QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type, int protocol,
+            int flags = 0);
+
+    DLLLOCAL QoreCaresAddrInfoResolver(const char* host, const char* service, int family, int type, int protocol,
+            int flags = 0);
+
+    DLLLOCAL ~QoreCaresAddrInfoResolver();
+
+    //! Returns 0 when done, 1 when polling must continue, -1 on initialization or resolver error
+    DLLLOCAL int continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL const std::vector<SocketResolvedAddrInfo>& getAddresses() const {
+        return addrs;
+    }
+
+    DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const;
+    DLLLOCAL int getPollTimeoutMs() const;
+
+private:
+    DLLLOCAL int start(ExceptionSink* xsink);
+    DLLLOCAL void process(ExceptionSink* xsink);
+    DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable);
+    DLLLOCAL void complete(int new_status, struct ares_addrinfo* res);
+    DLLLOCAL int raiseError(ExceptionSink* xsink) const;
+
+    DLLLOCAL static void callback(void* arg, int status, int, struct ares_addrinfo* res);
+    DLLLOCAL static void sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable);
+
+    std::string host;
+    std::string service;
+    bool has_host = false;
+    bool has_service = false;
+    int family;
+    int type;
+    int protocol;
+    int flags;
+    ares_channel_t* channel = nullptr;
+    struct ares_addrinfo* result = nullptr;
+    std::vector<SocketResolvedAddrInfo> addrs;
+    std::unordered_map<int, int> fd_events;
+    int status = ARES_SUCCESS;
+    bool started = false;
+    bool done = false;
+};
 
 class QoreCaresNameInfoResolver {
 public:
@@ -405,7 +458,8 @@ private:
 class SocketConnectInetHappyEyeballsPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketConnectInetHappyEyeballsPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* host,
-            const char* service, int family = AF_UNSPEC, int type = SOCK_STREAM, int protocol = 0);
+            const char* service, int family = AF_UNSPEC, int type = SOCK_STREAM, int protocol = 0,
+            QoreSandboxManager* sandbox_manager = nullptr);
 
     DLLLOCAL ~SocketConnectInetHappyEyeballsPollState();
 
@@ -444,6 +498,7 @@ private:
 
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
     qore_socket_private* sock;
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager;
     std::string host, service;
     std::vector<SocketResolvedAddrInfo> addrs;
     std::vector<size_t> sorted_addrs;
@@ -483,7 +538,7 @@ private:
 class SocketConnectUnixPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketConnectUnixPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* name,
-            int type = SOCK_STREAM, int protocol = 0);
+            int type = SOCK_STREAM, int protocol = 0, QoreSandboxManager* sandbox_manager = nullptr);
 
     /** returns:
         - SOCK_POLLIN = wait for read and call this again
@@ -1594,8 +1649,11 @@ struct qore_socket_private : public QoreReferenceCounter {
     DLLLOCAL static void do_header(const char* key, QoreString& hdr, const QoreValue& v) {
         switch (v.getType()) {
             case NT_STRING:
-                hdr.sprintf("%s: %s\r\n", key, v.get<const QoreStringNode>()->c_str());
+            {
+                QoreStringValueHelper str(v);
+                hdr.sprintf("%s: %s\r\n", key, str->c_str());
                 break;
+            }
             case NT_INT:
                 hdr.sprintf("%s: " QLLD "\r\n", key, v.getAsBigInt());
                 break;
@@ -1638,9 +1696,11 @@ struct qore_socket_private : public QoreReferenceCounter {
                         addsize = false;
                         add_chunked = false;
                     } else if (!strcasecmp(key, "content-type")
-                        && (v.getType() == NT_STRING)
-                        && (*v.get<const QoreStringNode>() == "text/event-stream")) {
-                        addsize = false;
+                        && (v.getType() == NT_STRING)) {
+                        QoreStringValueHelper str(v);
+                        if (!strcmp(str->c_str(), "text/event-stream")) {
+                            addsize = false;
+                        }
                     }
                 }
                 if ((addsize || size) && !strcasecmp(key, "content-length")) {

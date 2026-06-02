@@ -59,11 +59,11 @@ public class SendCloudUsersDataProvider inherits SendCloudDataProviderBase {
         return new SendCloudUserDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> resp = doGet("user");
         hash<auto> record = resp.user ?? resp;
-        return new DefaultRecordIterator(new ListHashIterator((record,)),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((record,)),
             where_cond, search_options);
     }
 

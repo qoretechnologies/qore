@@ -142,7 +142,7 @@ public class ShippoTransactionsDataProvider inherits ShippoDataProviderBase {
     }
 
     #! Searches for transactions
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -176,7 +176,7 @@ public class ShippoTransactionsDataProvider inherits ShippoDataProviderBase {
         hash<auto> response = doGet("/transactions", params);
         list<hash<auto>> records = response.results ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

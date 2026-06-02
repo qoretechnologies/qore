@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QorePluginRegistry.h"
 
 QoreString QoreSquareBracketsRangeOperatorNode::op_str("x[m..n] operator expression");
 
@@ -52,16 +53,32 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
 
     assert(!typeInfo);
 
-    int err = parse_init_value(e[0], parse_context);
+    QoreParseAnalysis seq_analysis;
+    QoreParseAnalysis start_analysis;
+    QoreParseAnalysis end_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(e[0], parse_context);
+        seq_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* typeInfo0 = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(e[1], parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(e[1], parse_context) && !err) {
+            err = -1;
+        }
+        start_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* typeInfo1 = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(e[2], parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(e[2], parse_context) && !err) {
+            err = -1;
+        }
+        end_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* typeInfo2 = parse_context.typeInfo;
 
@@ -72,23 +89,41 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
         }
     }
 
-    if (QoreTypeInfo::hasType(typeInfo0)) {
+    bool plugin_range = false;
+    if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
+        QorePluginResolvedOperationInfo plugin_op;
+        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, typeInfo0, nullptr, "slice",
+            QorePluginHelperAbi::CallValueList, plugin_op, parse_xsink);
+        if (plugin_rc < 0 && !err) {
+            err = -1;
+        } else if (!plugin_rc) {
+            typeInfo = plugin_op.signature.return_type;
+            plugin_range = true;
+        }
+    }
+
+    if (QoreTypeInfo::hasType(typeInfo0) && !plugin_range) {
         if (QoreTypeInfo::isType(typeInfo0, NT_LIST))
             typeInfo = typeInfo0;
         else if (QoreTypeInfo::isType(typeInfo0, NT_STRING))
             typeInfo = stringTypeInfo;
         else if (QoreTypeInfo::isType(typeInfo0, NT_BINARY))
             typeInfo = binaryTypeInfo;
+        else if (QoreTypeInfo::isType(typeInfo0, NT_BUFFER))
+            typeInfo = typeInfo0;
         else if (QoreTypeInfo::parseReturns(typeInfo0, NT_LIST))
             typeInfo = get_or_nothing_type_check(typeInfo0);
         else if (QoreTypeInfo::parseReturns(typeInfo0, NT_STRING))
             typeInfo = stringOrNothingTypeInfo;
         else if (QoreTypeInfo::parseReturns(typeInfo0, NT_BINARY))
             typeInfo = binaryOrNothingTypeInfo;
+        else if (QoreTypeInfo::parseReturns(typeInfo0, NT_BUFFER))
+            typeInfo = get_or_nothing_type_check(typeInfo0);
         else {
             // raise an exception due to the invalid operand type
             parseException(*loc, "PARSE-TYPE-ERROR", "the operand for the range square brackets operator [m..n] is " \
-                "type '%s'; this operator only works with 'list', 'string', and 'binary'",
+                "type '%s'; this operator only works with 'list', 'string', 'binary', and 'buffer'",
                 QoreTypeInfo::getName(typeInfo0));
             if (!err) {
                 err = -1;
@@ -114,6 +149,19 @@ int QoreSquareBracketsRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParse
     }
 
     parse_context.typeInfo = typeInfo;
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (seq_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && start_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+        && end_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 
@@ -140,6 +188,21 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     ValueEvalRefHolder stop_index(rc, e[2], xsink);
     if (*xsink)
         return QoreValue();
+
+    if (qore_plugin_value_may_have_operation(*seq)) {
+        ReferenceHolder<QoreListNode> plugin_args(new QoreListNode(autoTypeInfo), xsink);
+        plugin_args->push(start_index->refSelf(), xsink);
+        plugin_args->push(stop_index->refSelf(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_call(getProgram(), "slice", *seq, *plugin_args,
+            plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
 
     bool empty = !getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink);
     if (*xsink)
@@ -169,11 +232,12 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
                 return new QoreStringNode;
             }
 
+            QoreStringNodeValueHelper str(*seq);
             if (start < stop) {
-                return seq->get<const QoreStringNode>()->substr(start, stop - start + 1, xsink);
+                return str->substr(start, stop - start + 1, xsink);
             }
 
-            SimpleRefHolder<QoreStringNode> tmp(seq->get<const QoreStringNode>()->reverse());
+            SimpleRefHolder<QoreStringNode> tmp(str->reverse());
             return tmp->substr(seq_size - start - 1, start - stop + 1, xsink);
         }
         case NT_BINARY: {
@@ -194,6 +258,13 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
             }
             return bin.release();
         }
+        case NT_BUFFER: {
+            const QoreBufferNode* b = seq->get<const QoreBufferNode>();
+            if (empty) {
+                return new QoreBufferNode(b->getElementType(), b->hasNullableElements());
+            }
+            return b->sliceRange(static_cast<size_t>(start), static_cast<size_t>(stop), xsink);
+        }
     }
 
     return QoreValue();
@@ -213,7 +284,7 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
     if (*xsink)
         return nullptr;
 
-    if (seq->getType() == NT_LIST) {
+    if (seq->getType() == NT_LIST || seq->getType() == NT_BUFFER) {
         QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
         bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
         int64 start, stop, seq_size;
@@ -267,7 +338,10 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
             val.setValue(seq->get<const QoreListNode>()->getReferencedEntry(i), true);
             break;
         case NT_STRING:
-            val.setValue(seq->get<const QoreStringNode>()->substr(i, 1, xsink), true);
+            {
+                QoreStringNodeValueHelper str(*seq);
+                val.setValue(str->substr(i, 1, xsink), true);
+            }
             break;
         case NT_BINARY: {
             const BinaryNode* b = seq->get<const BinaryNode>();
@@ -278,7 +352,11 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
                 val.setValue(bin, true);
                 bin->append((unsigned char*)b->getPtr() + i, 1);
             }
+            break;
         }
+        case NT_BUFFER:
+            val.setValue(seq->get<const QoreBufferNode>()->getReferencedEntry(i, xsink), true);
+            break;
     }
     return false;
 }
@@ -300,15 +378,21 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
         int64& seq_size, const QoreValue& start_index, const QoreValue& stop_index, bool broken_list_range,
         ExceptionSink* xsink) {
     qore_type_t seq_type = seq.getType();
-    if (seq_type != NT_LIST && seq_type != NT_STRING && seq_type != NT_BINARY) {
-        xsink->raiseException("ILLEGAL-EXPRESSION", "Index range can be applied only to lists, strings and binaries");
+    if (seq_type != NT_LIST && seq_type != NT_STRING && seq_type != NT_BINARY && seq_type != NT_BUFFER) {
+        xsink->raiseException("ILLEGAL-EXPRESSION", "Index range can be applied only to lists, strings, binaries, "
+            "and buffers");
         return false;
     }
 
     switch (seq_type) {
         case NT_LIST:   seq_size = seq.get<const QoreListNode>()->size(); break;
-        case NT_STRING: seq_size = seq.get<const QoreStringNode>()->size(); break;
+        case NT_STRING: {
+            QoreStringValueHelper str(seq);
+            seq_size = str->size();
+            break;
+        }
         case NT_BINARY: seq_size = seq.get<const BinaryNode>()->size(); break;
+        case NT_BUFFER: seq_size = seq.get<const QoreBufferNode>()->size(); break;
     }
 
     bool no_start = start_index.isNothing(),

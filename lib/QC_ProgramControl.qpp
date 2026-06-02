@@ -137,18 +137,22 @@ TimeZone ProgramControl::getTimeZone() {
 }
 
 //! Returns @ref True if the given @ref conditional_parsing "parse define" is defined in the current Program (does not have to have a value defined to return @ref True), @ref False if not
-/** see Qore::Program::isDefined "Program::isDefined()"
+/** @param parse_define the @ref conditional_parsing "parse define" name to check
+
+    @see Qore::Program::isDefined "Program::isDefined()"
  */
-bool ProgramControl::isDefined(string def) {
-   TempEncodingHelper t(def, QCS_DEFAULT, xsink);
+bool ProgramControl::isDefined(string parse_define) [flags=NAMED_ARGS] {
+   TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    return t ? qore_program_private::runTimeIsDefined(p, t->getBuffer()) : false;
 }
 
 //! Retrieves the value of the given @ref conditional_parsing "parse define" in the current Program
-/** see Qore::Program::getDefine "Program::getDefine()"
+/** @param parse_define the @ref conditional_parsing "parse define" name to get
+
+    @see Qore::Program::getDefine "Program::getDefine()"
  */
-auto ProgramControl::getDefine(string def) {
-   TempEncodingHelper t(def, QCS_DEFAULT, xsink);
+auto ProgramControl::getDefine(string parse_define) [flags=NAMED_ARGS] {
+   TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    return t ? qore_program_private::runTimeGetDefine(p, t->c_str()) : QoreValue();
 }
 
@@ -168,16 +172,18 @@ int ProgramControl::getProgramId() [flags=RET_VALUE_ONLY;] {
 
 //! Get instance of program id
 /**
+   @param program_id the ID of the program to resolve
+
    @see
       @ref Qore::ProgramControl::resolveProgramId "ProgramControl::resolveProgramId()"
 
    @throw PROGRAM-ERROR if the programId cannot identify @ref Qore::ProgramControl "ProgramControl" instance
 
  */
-static ProgramControl ProgramControl::resolveProgramId(int programId) [dom=DEBUGGER] {
-   QoreProgram* pgm = QoreProgram::resolveProgramId(programId);
+static ProgramControl ProgramControl::resolveProgramId(int program_id) [flags=NAMED_ARGS;dom=DEBUGGER] {
+   QoreProgram* pgm = QoreProgram::resolveProgramId(program_id);
    if (!pgm) {
-      return xsink->raiseException("PROGRAM-ERROR", "cannot find program for programId (%d)", programId);
+      return xsink->raiseException("PROGRAM-ERROR", "cannot find program for programId (%d)", program_id);
    }
    return QoreProgram::getQoreObject(pgm);
 }
@@ -206,36 +212,41 @@ list<int> ProgramControl::getThreadList() [flags=CONSTANT] {
 }
 
 //! Checks if a user function exists in the program object
-/** see Qore::Program::existsFunction "Program::existsFunction()"
+/** @param function_name the function name to check
+
+    @see Qore::Program::existsFunction "Program::existsFunction()"
  */
-bool ProgramControl::existsFunction(string name) [flags=RET_VALUE_ONLY] {
+bool ProgramControl::existsFunction(string function_name) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    if (!p->checkAllowDebugging(xsink))
       return false;
-   TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
+   TempEncodingHelper tmp(function_name, QCS_DEFAULT, xsink);
    if (!tmp)
       return false;
    return p->existsFunction(tmp->getBuffer());
 }
 
 //! Returns a the value of the global variable identified by the first string argument
-/** see Qore::Program::getGlobalVariable "Program::getGlobalVariable()"
+/** @param variable_name the global variable name
+    @param found optional reference assigned @ref True if the global variable exists, @ref False if not
+
+    @see Qore::Program::getGlobalVariable "Program::getGlobalVariable()"
  */
-auto ProgramControl::getGlobalVariable(string varname, *reference<bool> rexists) {
+auto ProgramControl::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
     if (!p->checkAllowDebugging(xsink))
         return QoreValue();
-    TempEncodingHelper t(varname, QCS_DEFAULT, xsink);
+    TempEncodingHelper t(variable_name, QCS_DEFAULT, xsink);
     if (!t)
         return QoreValue();
 
-    bool found;
-    ValueHolder rv(p->getGlobalVariableValue(t->c_str(), found), xsink);
+    bool is_found;
+    ValueHolder rv(p->getGlobalVariableValue(t->c_str(), is_found), xsink);
 
-    if (rexists) {
-        QoreTypeSafeReferenceHelper r(rexists, xsink);
+    if (found) {
+        QoreTypeSafeReferenceHelper r(found, xsink);
         if (!r)
             return QoreValue();
 
-        if (r.assign(found))
+        if (r.assign(is_found))
             return QoreValue();
     }
 
@@ -252,21 +263,24 @@ hash<auto> ProgramControl::getGlobalVars() [flags=CONSTANT] {
 }
 
 //! set the value of a global variable
-/** see Qore::Program::setGlobalVars "Program::setGlobalVars()"
+/** @param variable_name the global variable name
+    @param value the value to assign
+
+    @see Qore::Program::setGlobalVars "Program::setGlobalVars()"
  */
-nothing ProgramControl::setGlobalVarValue(string name, auto value) {
+nothing ProgramControl::setGlobalVarValue(string variable_name, auto value) [flags=NAMED_ARGS] {
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
-   p->setGlobalVarValue(name->c_str(), value.refSelf(), xsink);
+   p->setGlobalVarValue(variable_name->c_str(), value.refSelf(), xsink);
 }
 
 //! Assign @ref Breakpoint instance to @ref Qore::Program "Program". If breakpoint has been assigned to an program then is unassigned in the first step.
-/**
+/** @param breakpoint the breakpoint to assign to this program
  */
-nothing ProgramControl::assignBreakpoint(Breakpoint[QoreBreakpoint] bkpt) {
+nothing ProgramControl::assignBreakpoint(Breakpoint[QoreBreakpoint] breakpoint) [flags=NAMED_ARGS] {
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
-   p->assignBreakpoint(*bkpt, xsink);
+   p->assignBreakpoint(*breakpoint, xsink);
 }
 
 //! delete all breakpoints from instance
@@ -295,8 +309,8 @@ list<Breakpoint> ProgramControl::getBreakpoints() {
 
 //! get information related to statement id
 /**
-   @param statementId
-   @param listBreakpoints list also breakpoints assigned to statement, no effect if @ref no-debugging "%no-debugging" (since 0.9)
+   @param statement_id the statement ID to resolve
+   @param list_breakpoints list also breakpoints assigned to statement, no effect if @ref no-debugging "%no-debugging" (since 0.9)
 
    @return a hash of statement info
 
@@ -304,12 +318,12 @@ list<Breakpoint> ProgramControl::getBreakpoints() {
       @ref Qore::ProgramControl::findStatementId "ProgramControl::findStatementId()"
       @ref Qore::ProgramControl::findFunctionStatementId "ProgramControl::findFunctionStatementId()"
 */
-hash<StatementInfo> ProgramControl::getStatementIdInfo(int statementId, bool listBreakpoints = False) {
+hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool list_breakpoints = False) [flags=NAMED_ARGS] {
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
-   AbstractStatement* s = p->resolveStatementId(statementId);
+   AbstractStatement* s = p->resolveStatementId(statement_id);
    if (!s) {
-      return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot resolve statement id from (%d)", statementId);
+      return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot resolve statement id from (%d)", statement_id);
    }
    QoreHashNode* h = new QoreHashNode(hashdeclStatementInfo, nullptr);
    qore_hash_private* ph = qore_hash_private::get(*h);
@@ -318,7 +332,7 @@ hash<StatementInfo> ProgramControl::getStatementIdInfo(int statementId, bool lis
    ph->setKeyValueIntern("offset", s->loc->offset);
    ph->setKeyValueIntern("start_line", s->loc->start_line);
    ph->setKeyValueIntern("end_line", s->loc->end_line);
-   if (listBreakpoints && p->checkAllowDebugging(xsink)) {
+   if (list_breakpoints && p->checkAllowDebugging(xsink)) {
       QoreBreakpointList_t bl;
       p->getStatementBreakpoints(s, bl);
       QoreListNode *l = new QoreListNode(QC_BREAKPOINT->getTypeInfo());
@@ -356,7 +370,7 @@ list<int> ProgramControl::getStatementIds() {
       @ref Qore::ProgramControl::findFunctionStatementId "ProgramControl::findFunctionStatementId()"
 
 */
-int ProgramControl::findStatementId(string file, int line) {
+int ProgramControl::findStatementId(string file, int line) [flags=NAMED_ARGS] {
     if (!p->checkAllowDebugging(xsink))
         return 0;
     AbstractStatement* s = p->findStatement(file->c_str(), line);
@@ -368,19 +382,20 @@ int ProgramControl::findStatementId(string file, int line) {
 
 //! Find the first statement for function entry point
 /**
-   @param function name
+   @param function_name function name
    @param params param types to resolve particular variant
 
    @see
       @ref Qore::ProgramControl::findStatementId "ProgramControl::findStatementId()"
 */
-int ProgramControl::findFunctionStatementId(string function, *list params) {
+int ProgramControl::findFunctionStatementId(string function_name, *list params) [flags=NAMED_ARGS] {
     if (!p->checkAllowDebugging(xsink))
         return 0;
-    AbstractStatement* s = p->findFunctionStatement(function->c_str(), params, xsink);
+    AbstractStatement* s = p->findFunctionStatement(function_name->c_str(), params, xsink);
     if (!s) {
         if (!*xsink) {
-            xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s()\"", function->c_str());
+            xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s()\"",
+                function_name->c_str());
         }
         return QoreValue();
     }
@@ -388,18 +403,19 @@ int ProgramControl::findFunctionStatementId(string function, *list params) {
 }
 
 //! finds all variants of a function or class method and returns a list of the results
-/** @param function the function or class method name; may also be namespace-justified
+/** @param function_name the function or class method name; may also be namespace-justified
 
     @return a list of hashes or nothing if the name cannot be resolved; when matched, each hash element has the following keys:
     - \c desc: a string description of the call which includes the name and the full text call signature
     - \c params: a list object that gives the params in a format that can be used by @ref findFunctionStatementId
 */
-list<hash<auto>> ProgramControl::findFunctionVariants(string function) {
+list<hash<auto>> ProgramControl::findFunctionVariants(string function_name) [flags=NAMED_ARGS] {
     if (!p->checkAllowDebugging(xsink))
         return QoreValue();
-    ReferenceHolder<QoreListNode> vl(p->runtimeFindCallVariants(function->c_str(), xsink), xsink);
+    ReferenceHolder<QoreListNode> vl(p->runtimeFindCallVariants(function_name->c_str(), xsink), xsink);
     if (!vl)
-        return xsink->raiseException("PROGRAM-ERROR", "cannot find any function or method \"%s\"", function->c_str());
+        return xsink->raiseException("PROGRAM-ERROR", "cannot find any function or method \"%s\"",
+            function_name->c_str());
     return vl.release();
 }
 

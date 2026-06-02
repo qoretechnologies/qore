@@ -1,0 +1,53 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlRerankTextDataFrame
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires dataframe
+%requires DataProviderML
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlRerankTextDataFrame {
+    constructor() {
+        string model_path = OnnxBench::tokenRerankerModelPath();
+        if (!OnnxBench::canRunTextOnnx(model_path)) {
+            printf("dataproviderml_rerank_text_dataframe: skipped (ONNX text fixtures not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_rerank_text_dataframe");
+        r.iterations = 4;
+        r.warmup = 1;
+
+        int rows = OnnxBench::textRows();
+        DataFrame::DataFrame frame;
+        DataProviderML::QoreRerankerProcessor proc({
+            "query_field": "query",
+            "passage_field": "passage",
+            "top_k": rows,
+            "reranker_mode": "onnx",
+            "reranker_model_path": model_path,
+            "tokenizer_config_path": OnnxBench::tokenizerPath(),
+            "onnx_session_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "max_length": 24,
+        });
+
+        r.setup = sub () {
+            frame = OnnxBench::makeRerankFrame(rows);
+            r.bytes_processed = OnnxBench::approxTextBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataFrame::DataFrame result = proc.processRecordsShape(frame, DataProviderShape::DataFrameBlock);
+            OnnxBench::verifyRerankFrame("dataproviderml_rerank_text_dataframe", result, rows);
+        };
+
+        exit(r.run());
+    }
+}

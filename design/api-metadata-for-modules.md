@@ -15,6 +15,283 @@ by merging three data sources:
 The merge pipeline (in `SymbolMerger`) prioritizes: AST docs > qpp docs > reflection
 structure. This gives QLS access to documentation and type information for all Qore APIs.
 
+## Named Argument Metadata
+
+Function and method variant metadata must expose whether a variant supports named
+argument calls. This is required for QLS signature help, completion snippets, and
+generated examples: parameter names are not always valid call-site names for builtin
+variants, because builtin APIs opt in with `NAMED_ARGS` on a variant-by-variant basis.
+
+For every function, method, and constructor variant, metadata includes:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `named_callable` | `bool` | `True` when callers may use named-argument syntax for this variant |
+| `named_parameters` | `list<string>` | Parameter names accepted in named calls, excluding unnamed parameters and varargs |
+
+Examples:
+
+```json
+{
+  "name": "ws_encode_frame",
+  "signature": "binary ws_encode_frame(data message, int opcode, softbool masked, softbool fin = True, int rsv_bits = 0)",
+  "params": [
+    {"name": "message", "type_name": "data"},
+    {"name": "opcode", "type_name": "int"},
+    {"name": "masked", "type_name": "softbool"},
+    {"name": "fin", "type_name": "softbool", "default_value": "True"},
+    {"name": "rsv_bits", "type_name": "int", "default_value": "0"}
+  ],
+  "flags": ["RET_VALUE_ONLY", "NAMED_ARGS"],
+  "named_callable": true,
+  "named_parameters": ["message", "opcode", "masked", "fin", "rsv_bits"]
+}
+```
+
+```json
+{
+  "name": "printf",
+  "signature": "int printf(string fmt, ...)",
+  "params": [
+    {"name": "fmt", "type_name": "string"},
+    {"name": "", "type_name": "..."}
+  ],
+  "flags": [],
+  "named_callable": false,
+  "named_parameters": []
+}
+```
+
+### Source-Specific Rules
+
+- qpp `.meta.json`: `named_callable` is emitted from the `NAMED_ARGS` code flag.
+  `named_parameters` is the fixed qpp parameter-name list, excluding the varargs tail.
+- Reflection metadata: `named_callable` comes from
+  `Reflection::AbstractVariant::isNamedCallable()`, and `named_parameters` comes from
+  `Reflection::AbstractVariant::getNamedParameterNames()`.
+- QM/QC metadata: user-defined functions and methods are named-callable when the target
+  can be resolved at parse time. The metadata marks source variants as named-callable
+  except for varargs-only signatures; `named_parameters` contains fixed source parameter
+  names.
+
+Consumers should use `named_callable` before offering named-call snippets or diagnostics.
+They should use `named_parameters`, not just `params`, for builtin APIs because a builtin
+variant can have parameter names in documentation while remaining positional-only.
+
+## Generic Class Metadata
+
+QPP metadata also exposes builtin class type parameters when a class is declared
+with generic arguments, such as `qclass Queue<T>` or `qclass FutureImpl<T>
+[vparent=Future<T>]`. This is required so QLS and generated documentation can
+display the generic class spelling, preserve type-parameter names in signatures,
+and avoid presenting raw legacy classes as the only available API.
+
+For every class object, metadata may include:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `type_parameters` | `list<string>` | Formal class type parameter names in declaration order |
+| `type_parameter_defaults` | `hash<string, string>` | Default type argument by formal parameter name |
+| `type_parameter_bounds` | `hash<string, string>` | Concrete upper bound by formal parameter name |
+| `raw_accepts_parameterized` | `bool` | Raw annotations of this class accept parameterized instances for legacy compatibility |
+| `raw_construction_defaults_to_auto` | `bool` | Raw construction creates the explicit all-`auto` instantiation |
+
+Example:
+
+```json
+{
+  "name": "Queue",
+  "namespace_path": "Qore::Thread",
+  "type_parameters": ["T"],
+  "type_parameter_defaults": {},
+  "type_parameter_bounds": {},
+  "raw_accepts_parameterized": true,
+  "raw_construction_defaults_to_auto": true,
+  "instance_methods": [
+    {
+      "name": "push",
+      "signature": "nothing Queue<T>::push(T value, timeout timeout_ms = 0)",
+      "named_callable": true,
+      "named_parameters": ["value", "timeout_ms"]
+    },
+    {
+      "name": "pop",
+      "signature": "T Queue<T>::pop(timeout timeout_ms = 0)",
+      "named_callable": true,
+      "named_parameters": ["timeout_ms"]
+    }
+  ]
+}
+```
+
+Consumers should render the generic spelling (`Queue<T>`, `Future<T>`) and keep
+formal type parameters intact in examples. When generating example calls for a
+concrete use case, substitute the formal type parameter with a concrete type:
+
+```qore
+Queue<int> q();
+q.push(value: 42);
+int value = q.pop(timeout_ms: 0);
+
+Promise<string> p();
+Future<string> f = p.getFuture();
+p.set(value: "done");
+string result = f.get(timeout_ms: 1s);
+```
+
+When `raw_construction_defaults_to_auto` is true, raw examples may still be
+valid for compatibility, but new generated snippets should prefer explicit
+type arguments when the value type is known and use `<auto>` only when it is not.
+
+`type_parameters` is the canonical metadata key. `SymbolMerger` accepts the
+older `type_params` key as input only so stale qpp metadata in an existing build
+tree can still be merged during development; newly generated qpp metadata must
+emit `type_parameters`.
+
+Static methods on source-defined generic classes can also use the formal class
+type parameters. Metadata consumers should generate examples with a
+parameterized receiver so the call site contains enough information for type
+substitution:
+
+```qore
+Factory<int> f = Factory<int>::make(value: 42);
+```
+
+### Source-Specific Generic Rules
+
+- qpp `.meta.json`: generic classes and hashdecls emit `type_parameters`,
+  `type_parameter_defaults`, and `type_parameter_bounds`. Classes also emit
+  `raw_accepts_parameterized` and `raw_construction_defaults_to_auto` when a
+  raw-compatibility qpp attribute is present.
+- Reflection metadata: `Reflection::Class` and `Reflection::TypedHash` expose
+  formal type parameters, defaults, and bounds for loaded runtime symbols.
+- QM/QC metadata: `AstMetadataExtractor` reads source generic class and
+  hashdecl declarations, including defaults, bounds, parameterized hashdecl
+  parents, and source raw-compatibility attributes.
+
+## Generic Hashdecl Metadata
+
+Hashdecl metadata should expose formal type parameters the same way class
+metadata does. This is required for result records and provider payload records
+where a single logical field type should be visible to QLS, generated examples,
+and API documentation.
+
+For every hashdecl object, metadata may include:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `type_parameters` | `list<string>` | Formal hashdecl type parameter names in declaration order |
+| `type_parameter_defaults` | `hash<string, string>` | Default type argument by formal parameter name |
+| `type_parameter_bounds` | `hash<string, string>` | Concrete upper bound by formal parameter name |
+| `members` | `list<object>` | Member metadata with type strings that may reference formal parameters |
+
+Example:
+
+```json
+{
+  "name": "Result",
+  "namespace_path": "Example",
+  "type_parameters": ["T"],
+  "type_parameter_defaults": {},
+  "type_parameter_bounds": {},
+  "members": [
+    {"name": "status", "type_name": "string"},
+    {"name": "value", "type_name": "T"},
+    {"name": "values", "type_name": "list<T>"}
+  ]
+}
+```
+
+Concrete API signatures and examples should preserve parameterized hashdecl
+spelling in type paths:
+
+```json
+{
+  "name": "fetch",
+  "signature": "hash<Result<int>> fetch(int id)",
+  "return_type": "hash<Result<int>>"
+}
+```
+
+```qore
+hash<Result<int>> result = fetch(id: 42);
+int value = result.value;
+```
+
+Consumers must distinguish a raw generic hashdecl declaration (`Result<T>`) from
+a concrete typed hash use (`hash<Result<int>>`). New examples should use
+concrete type arguments whenever the payload type is known.
+
+## Structured Type-Use Metadata
+
+String type fields remain the canonical human-readable representation, but
+metadata consumers that need to reason about generic arguments should use the
+structured companion fields. These fields are populated by AST extraction,
+reflection extraction, and `QppDocIndex` enrichment.
+
+| Owner | String field | Structured field | Wildcard list field |
+|-------|--------------|------------------|---------------------|
+| parameter/member/constant | `type_name` | `type_info` | `wildcard_type_arguments` |
+| function/method | `return_type` | `return_type_info` | `return_wildcard_type_arguments` |
+| hashdecl | `parent_name` | `parent_type_info` | `parent_wildcard_type_arguments` |
+| class | `parents` | `parent_type_info` | `parent_wildcard_type_arguments` |
+
+`type_info` values use:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `text` | `string` | Original type string |
+| `base_type` | `string` | Base type without optional marker or type arguments |
+| `is_optional` | `bool` | `True` for leading `*` optional types |
+| `type_arguments` | `list<object>` | Ordered nested type argument metadata |
+| `wildcard_arguments` | `list<object>` | Flattened wildcard arguments in this type expression |
+
+Wildcard entries include `path`, `owner_type`, `argument_index`, `text`,
+`kind`, and optional `bound_type` / `bound_type_info`. The `kind` value is one
+of `unbounded`, `extends`, or `super`. `path` is a dot-separated argument path
+from the outer type; for example `hash<Result<? extends int>>` exposes the
+wildcard at path `0.0`.
+
+Example:
+
+```json
+{
+  "name": "operation",
+  "type_name": "AbstractPollOperation<?>",
+  "type_info": {
+    "text": "AbstractPollOperation<?>",
+    "base_type": "AbstractPollOperation",
+    "is_optional": false,
+    "type_arguments": [
+      {"text": "?", "is_wildcard": true, "wildcard_kind": "unbounded"}
+    ],
+    "wildcard_arguments": [
+      {
+        "path": "0",
+        "owner_type": "AbstractPollOperation",
+        "argument_index": 0,
+        "text": "?",
+        "kind": "unbounded"
+      }
+    ]
+  },
+  "wildcard_type_arguments": [
+    {
+      "path": "0",
+      "owner_type": "AbstractPollOperation",
+      "argument_index": 0,
+      "text": "?",
+      "kind": "unbounded"
+    }
+  ]
+}
+```
+
+Consumers should prefer the structured fields for wildcard-aware completions,
+signature help, generated examples, and module metadata indexes. The string
+fields should still be displayed to users and preserved for backward
+compatibility.
+
 ## Problem
 
 Previously, only the core `qore` repo generated `.meta.json` files from its 132+ qpp

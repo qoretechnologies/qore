@@ -24,16 +24,15 @@
 */
 
 %modern
-%require-types
-%strict-args
 %enable-all-warnings
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/BulkSqlUtil
-%requires ../../../../qlib/DbDataProvider
-%requires ../../../../qlib/Schema
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires BulkSqlUtil
+%requires DbDataProvider
+%requires Schema
 
 %exec-class DbTableDataProviderUpsertBulkTest
 
@@ -88,6 +87,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         addTestCase("upsertRecordsBulk default strategy", \testUpsertBulkDefaultStrategy());
         addTestCase("upsertRecordsBulk explicit strategy", \testUpsertBulkExplicitStrategy());
         addTestCase("upsertRecordsBulk insert then upsert", \testUpsertBulkInsertThenUpsert());
+        addTestCase("columnar bulk shapes", \testColumnarBulkShapes());
 
         set_return_value(main());
     }
@@ -245,5 +245,84 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         assertEq(250, rows[1].value, "bob value should be updated");
         assertEq("carol", rows[2].name, "carol should be inserted");
         assertEq(300, rows[2].value, "carol value should be correct");
+    }
+
+    #! Test that DB providers expose and consume native columnar bulk shapes
+    private testColumnarBulkShapes() {
+        Datasource ds;
+        try {
+            ds = getDatasource();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SKIP") {
+                testSkip(ex.desc);
+            }
+            rethrow;
+        }
+
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        Table t(ds, TestTableName);
+        AbstractTable at = t.getTable();
+        on_success at.commit();
+        on_error at.rollback();
+        at.del({});
+
+        DbTableDataProvider provider(at);
+        assertTrue(provider.supportsBulkReadShape(DataProviderShape::BufferColumns),
+            "table provider advertises BufferColumns bulk reads");
+        assertTrue(provider.supportsBulkCreateShape(DataProviderShape::BufferColumns),
+            "table provider advertises BufferColumns bulk creates");
+        assertTrue(provider.supportsBulkUpsertShape(DataProviderShape::BufferColumns),
+            "table provider advertises BufferColumns bulk upserts");
+
+        ColumnarResult create_columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((11, 12, 13)),
+            "name": ("delta", "echo", "foxtrot"),
+            "value": new buffer<int64>((1100, 1200, 1300)),
+        });
+        *hash<auto> created = provider.createRecordsBulk(create_columns, {"block_size": 2});
+        assertEq((11, 12, 13), created.id, "ColumnarResult create returns inserted ids");
+        assertEq(("delta", "echo", "foxtrot"), created.name, "ColumnarResult create returns inserted names");
+
+        AbstractDataProviderBulkRecordInterface table_bulk = provider.getBulkRecordInterface(2);
+        assertEq(DataProviderShape::BufferColumns, table_bulk.getValueShape(),
+            "table provider bulk iterator advertises BufferColumns");
+        *auto table_block = table_bulk.getShapedValue();
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(table_block),
+            "table provider bulk iterator returns BufferColumns data");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(table_block, DataProviderShape::BufferColumns),
+            "table provider shaped bulk read respects the block size");
+
+        DbDataProvider raw_provider(ds);
+        assertTrue(raw_provider.supportsBulkReadShape(DataProviderShape::BufferColumns),
+            "raw DB provider advertises BufferColumns bulk reads");
+        AbstractDataProviderBulkRecordInterface raw_bulk = raw_provider.getBulkRecordInterface(10, {
+            "sql": sprintf("select id, name, value from %s order by id", TestTableName),
+        });
+        assertEq(DataProviderShape::BufferColumns, raw_bulk.getValueShape(),
+            "raw DB provider bulk iterator advertises BufferColumns");
+        *auto raw_block = raw_bulk.getShapedValue();
+        hash<auto> raw_rows = AbstractDataProcessor::convertShape(raw_block, DataProviderShape::BufferColumns,
+            DataProviderShape::HashOfLists)[0];
+        assertEq((11, 12, 13), raw_rows.id, "raw DB provider shaped bulk read preserves ids");
+        assertEq(("delta", "echo", "foxtrot"), raw_rows.name, "raw DB provider shaped bulk read preserves names");
+        assertEq((1100, 1200, 1300), raw_rows.value, "raw DB provider shaped bulk read preserves values");
+
+        ColumnarResult upsert_columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((12, 13, 14)),
+            "name": ("echo-updated", "foxtrot-updated", "golf"),
+            "value": new buffer<int64>((2200, 2300, 2400)),
+        });
+        *list<string> upserted = provider.upsertRecordsBulk(upsert_columns, {"block_size": 2});
+        assertEq(3, upserted.size(), "ColumnarResult upsert returns a result per row");
+
+        list<auto> rows = at.selectRows({"orderby": "id"});
+        assertEq(4, rows.size(), "columnar create plus upsert leaves four rows");
+        assertEq("echo-updated", rows[1].name, "ColumnarResult upsert updates existing rows");
+        assertEq(2200, rows[1].value, "ColumnarResult upsert updates existing values");
+        assertEq("golf", rows[3].name, "ColumnarResult upsert inserts new rows");
+        assertEq(2400, rows[3].value, "ColumnarResult upsert inserts new values");
     }
 }

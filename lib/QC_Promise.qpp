@@ -30,6 +30,8 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreTypeInfo.h"
+#include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_FutureImpl.h"
 
@@ -43,38 +45,38 @@
 
     @par Example: Basic usage
     @code{.py}
-Promise p();
-Future f = p.getFuture();
-background sub() { p.set(42); }();
-auto result = f.get();  # blocks until set, returns 42
+Promise<int> p();
+Future<int> f = p.getFuture();
+background sub() { p.set(value: 42); }();
+int result = f.get(timeout_ms: 0);  # blocks until set, returns 42
     @endcode
 
     @par Example: Error propagation
     @code{.py}
-Promise p();
-Future f = p.getFuture();
+Promise<hash<auto>> p();
+Future<hash<auto>> f = p.getFuture();
 background sub() {
     try {
         auto data = fetch_data_from_api();
-        p.set(data);
+        p.set(value: data);
     } catch (hash<ExceptionInfo> ex) {
-        p.setError(ex.err, ex.desc, ex.arg);
+        p.setError(error: ex.err, description: ex.desc, argument: ex.arg);
     }
 }();
 # The exception is re-thrown to the consumer
-auto data = f.get();  # throws the same exception if setError() was called
+auto data = f.get(timeout_ms: 0);  # throws the same exception if setError() was called
     @endcode
 
     @par Example: Promise destroyed without set
     @code{.py}
-Future f;
+Future<int> f;
 {
-    Promise p();
+    Promise<int> p();
     f = p.getFuture();
     # p goes out of scope without calling set() or setError()
 }
 try {
-    f.get();
+    f.get(timeout_ms: 0);
 } catch (hash<ExceptionInfo> ex) {
     printf("%s: %s\n", ex.err, ex.desc);
     # prints: PROMISE-ERROR: Promise destroyed without setting a value
@@ -84,13 +86,13 @@ try {
     @par Example: Worker thread pattern
     @code{.py}
 # Create a pool of async workers
-list<Future> futures = ();
+list<Future<int>> futures = ();
 for (int i = 0; i < 10; ++i) {
-    Promise p();
+    Promise<int> p();
     push futures, p.getFuture();
-    background sub(Promise p, int id) {
-        on_error p.setError($1.err, $1.desc);
-        p.set(process_item(id));
+    background sub(Promise<int> p, int id) {
+        on_error p.setError(error: $1.err, description: $1.desc);
+        p.set(value: process_item(id));
     }(p, i);
 }
 
@@ -107,12 +109,12 @@ for (int i = 0; i < 10; ++i) {
 
     @since %Qore 2.3
  */
-qclass Promise [dom=THREAD_CLASS; arg=QorePromise* p; ns=Qore::Thread];
+qclass Promise<T> [dom=THREAD_CLASS; arg=QorePromise* p; ns=Qore::Thread; legacy_raw];
 
 //! Creates the Promise object
 /** @par Example:
     @code{.py}
-Promise p();
+Promise<int> p();
     @endcode
  */
 Promise::constructor() {
@@ -140,29 +142,29 @@ Promise::copy() {
 
     @par Example:
     @code{.py}
-p.set(42);
+p.set(value: 42);
     @endcode
 
     @throw PROMISE-ERROR Promise has already been resolved or rejected
  */
-nothing Promise::set(auto value) {
+nothing Promise::set(T value) [flags=NAMED_ARGS] {
     p->set(value.refSelf(), xsink);
 }
 
 //! Rejects the Future with an error
-/** @param err the error code string
-    @param desc the error description string
-    @param arg an optional error argument
+/** @param error the error code string
+    @param description the error description string
+    @param argument an optional error argument
 
     @par Example:
     @code{.py}
-p.setError("MY-ERROR", "something went wrong");
+p.setError(error: "MY-ERROR", description: "something went wrong");
     @endcode
 
     @throw PROMISE-ERROR Promise has already been resolved or rejected
  */
-nothing Promise::setError(string err, string desc, auto arg) {
-    p->setError(err->c_str(), desc->c_str(), arg.refSelf(), xsink);
+nothing Promise::setError(string error, string description, auto argument) [flags=NAMED_ARGS] {
+    p->setError(error->c_str(), description->c_str(), argument.refSelf(), xsink);
 }
 
 //! Returns the Future associated with this Promise
@@ -172,15 +174,20 @@ nothing Promise::setError(string err, string desc, auto arg) {
 
     @par Example:
     @code{.py}
-Future f = p.getFuture();
+Future<int> f = p.getFuture();
     @endcode
 
     @throw PROMISE-ERROR Future has already been retrieved from this Promise
  */
-Future Promise::getFuture() {
+Future<T> Promise::getFuture() {
     QoreFuture* future = p->getFuture(xsink);
     if (!future) {
         return QoreValue();
     }
-    return new QoreObject(QC_FUTUREIMPL, getProgram(), future);
+    const QoreParameterizedClassTypeInfo* promise_type
+        = QoreTypeInfo::getParameterizedClassType(self->getInstantiatedTypeInfo());
+    if (promise_type && promise_type->getArgCount()) {
+        return qore_new_future_impl_object(getProgram(), future, promise_type->getTypeArgs());
+    }
+    return qore_new_future_impl_object(getProgram(), future);
 }

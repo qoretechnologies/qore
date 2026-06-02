@@ -67,7 +67,7 @@ public class BitlyBsdsDataProvider inherits BitlyDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> response = doGet("bsds");
         # BSDs are returned as a simple string array; map to records
@@ -77,7 +77,7 @@ public class BitlyBsdsDataProvider inherits BitlyDataProviderBase {
                 records += {"domain": domain};
             }
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options);
     }
 

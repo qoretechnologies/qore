@@ -38,6 +38,9 @@
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
 #include "qore/intern/VRMutex.h"
+#include "qore/QoreProgram.h"
+#include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreParseTypeInfo.h"
 #include "qore/vector_map"
 #include "qore/vector_set"
 
@@ -244,6 +247,15 @@ public:
         return final;
     }
 
+    DLLLOCAL virtual bool isMethodSynchronized() const {
+        return false;
+    }
+
+    DLLLOCAL bool isStaticallyFastMethodCallEligible() const {
+        const UserVariantBase* uvb = getUserVariantBase();
+        return uvb && uvb->isStaticallyFastCallEligible() && !isMethodSynchronized();
+    }
+
     DLLLOCAL void clearAbstract() {
         assert(abstract);
         abstract = false;
@@ -255,10 +267,15 @@ public:
 
     DLLLOCAL void setNormalUserMethod(QoreMethod* n_qm, LocalVar* selfid) {
         setMethod(n_qm);
-        getUserVariantBase()->setSelfId(selfid);
-        assert(selfid);
-        assert(selfid->getTypeInfo());
-        assert(QoreTypeInfo::getUniqueReturnClass(selfid->getTypeInfo()));
+        UserVariantBase* uvb = getUserVariantBase();
+        // Only set selfid if the variant doesn't already have one
+        // (e.g., from AOT deserialization via setupFromAOTMetadata)
+        if (!uvb->getUserSignature()->getSelfId()) {
+            uvb->setSelfId(selfid);
+            assert(selfid);
+            assert(selfid->getTypeInfo());
+            assert(QoreTypeInfo::getUniqueReturnClass(selfid->getTypeInfo()));
+        }
     }
 
     DLLLOCAL const QoreMethod* method() const {
@@ -363,6 +380,10 @@ public:
     DLLLOCAL ~UserMethodVariant() {
     }
 
+    DLLLOCAL bool isMethodSynchronized() const override {
+        return synchronized;
+    }
+
     // the following defines the pure virtual functions that are common to all user variants
     COMMON_USER_VARIANT_FUNCTIONS
 
@@ -375,13 +396,15 @@ public:
 
         int err = 0;
 
-        // must be called even if "statements" is NULL
-        if (!mf->isStatic()) {
-            if (!isAbstract()) {
-                err = statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this);
+        // For AOT-compiled methods, statements is null (pre-compiled code)
+        if (statements) {
+            if (!mf->isStatic()) {
+                if (!isAbstract()) {
+                    err = statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this);
+                }
+            } else {
+                err = statements->parseInit(this, mf->MethodFunctionBase::getClass());
             }
-        } else {
-            err = statements->parseInit(this, mf->MethodFunctionBase::getClass());
         }
 
         // recheck types against committed types if necessary
@@ -426,6 +449,21 @@ public:
         BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);
+
+    //! Move BCAList from another constructor variant (for AOT fallback transplanting)
+    /** Takes ownership of the source's BCAList, leaving the source with nullptr.
+        This is needed when the main program's constructor was deserialized without
+        BCA (no source), and the fallback source parse provides the correct BCAList.
+    */
+    DLLLOCAL void transplantBCAList(UserConstructorVariant* src) {
+        if (src && src->bcal && !bcal) {
+            bcal = src->bcal;
+            src->bcal = nullptr;
+        }
+    }
+
+    //! Set the BCAList for AOT deserialization (takes ownership)
+    DLLLOCAL void setBCAList(BCAList* n_bcal);  // defined in QoreClass.cpp
 };
 
 #define UCONV(f) (reinterpret_cast<UserConstructorVariant*>(f))
@@ -451,9 +489,11 @@ public:
         // push return type on stack (no return value can be used)
         ParseCodeInfoHelper rtih("destructor", nothingTypeInfo);
 
-        // must be called even if statements is NULL
-        if (statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this) && !err) {
-            err = -1;
+        // For AOT-compiled methods, statements is null (pre-compiled code)
+        if (statements) {
+            if (statements->parseInitMethod(mf->MethodFunctionBase::getClass()->getTypeInfo(), this) && !err) {
+                err = -1;
+            }
         }
 
         // only 1 variant is possible, no need to recheck types
@@ -716,12 +756,14 @@ public:
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalMethod(ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,
-            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) const;
+            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
-            const qore_class_private* cctx = nullptr) const;
+            const qore_class_private* cctx = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalPseudoMethod(ExceptionSink* xsink, RuntimeConfig& rc,
@@ -745,11 +787,15 @@ public:
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalMethod(ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) const;
+            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
-            const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx = nullptr) const;
+            const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+            const qore_class_private* cctx = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 };
 
 #define SMETHF(f) (reinterpret_cast<StaticMethodFunction*>(f))
@@ -1046,6 +1092,9 @@ public:
     // accessing the object's data
     DLLLOCAL void addContextAccess(const QoreMemberInfo& mi, const qore_class_private* qc);
 
+    DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
+            const qore_class_private* member_class_ctx);
+
     // issue #2970: returns the number of parent class members to initialize
     DLLLOCAL size_t numParentMembers() const {
         return member_info_list ? member_info_list->size() : 0;
@@ -1156,7 +1205,10 @@ public:
         return val.assignInitial(v);
     }
 
-    DLLLOCAL int getLValue(LValueHelper& lvh) {
+    DLLLOCAL int getLValue(LValueHelper& lvh, const char* name = "<static variable>") {
+        if (!eval_init && evalInit(name, lvh.vl.xsink)) {
+            return -1;
+        }
         lvh.setAndLock(rwl);
         if (checkFinalized(lvh.vl.xsink)) {
             return -1;
@@ -1167,6 +1219,27 @@ public:
 
     DLLLOCAL void init() {
         val.set(getTypeInfo());
+        const QoreTypeInfo* ti = getTypeInfo();
+        // Initialize the actual node value for complex types that need a default container
+        // (hashes, lists, etc.) instead of leaving it as NOTHING/nullptr
+        // Only initialize to empty container for NON-nullable types
+        // Nullable types (*hash<T>, *list<T>) should default to NOTHING
+        if (QoreTypeInfo::isHashType(ti)
+                && QoreTypeInfo::parseReturns(ti, NT_NOTHING) == QTI_NOT_EQUAL) {
+            // getReturnComplexHashOrNothing() extracts element type T from hash<string,T>
+            // QoreHashNode(valueType) sets complexTypeInfo via qore_get_complex_hash_type()
+            val.assignInitial(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(ti)));
+        }
+        // Check if the typeInfo is for a list type and create empty list
+        // Only for non-nullable types
+        else if (QoreTypeInfo::isListType(ti)
+                && QoreTypeInfo::parseReturns(ti, NT_NOTHING) == QTI_NOT_EQUAL) {
+            // getReturnComplexListOrNothing() extracts element type T from list<T>
+            // QoreListNode(valueType) sets complexTypeInfo via qore_get_complex_list_type()
+            val.assignInitial(new QoreListNode(QoreTypeInfo::getReturnComplexListOrNothing(ti)));
+        }
+        // For other types (primitives, objects), the default is NOTHING
+        // which is correct for uninitialized references
     }
 
     // can be called during parse initialization, in which case the variable must be initialized first
@@ -1369,10 +1442,21 @@ public:
         assert(loc->start_line > 0);
     }
 
+    //! AOT constructor: takes pre-resolved classid and evaluated args (no parse_args/name/ns)
+    /** Used during AOT binary deserialization to reconstruct BCANode with pre-resolved data.
+        Takes ownership of n_args.
+    */
+    DLLLOCAL BCANode(qore_classid_t n_classid, QoreListNode* n_args,
+            const QoreProgramLocation* n_loc = &loc_builtin)
+            : FunctionCallBase(nullptr, n_args), loc(n_loc), classid(n_classid),
+              ns(nullptr), name(nullptr) {
+    }
+
     DLLLOCAL ~BCANode() {
         delete ns;
-        if (name)
+        if (name) {
             free(name);
+        }
     }
 
     // resolves classes, parses arguments, and attempts to find constructor variant
@@ -1387,6 +1471,10 @@ typedef std::vector<BCANode*> bcalist_t;
 // to a subprogram object
 class BCAList : public bcalist_t {
 public:
+   //! Default constructor for building list incrementally (AOT deserialization)
+   DLLLOCAL BCAList() {
+   }
+
    DLLLOCAL BCAList(BCANode* n) {
       push_back(n);
    }
@@ -1462,29 +1550,44 @@ public:
     const QoreProgramLocation* loc;
     NamedScope* cname = nullptr;
     char* cstr = nullptr;
+    QoreParseTypeInfo* parsed_type = nullptr;
+    const QoreTypeInfo* type_info = nullptr;
     QoreClass* sclass = nullptr;
     ClassAccess access;
     bool is_virtual : 1;
+    bool parameterized_parent_registered : 1;
 
     DLLLOCAL BCNode(const QoreProgramLocation* loc, NamedScope* c, ClassAccess a) : loc(loc), cname(c), access(a),
-            is_virtual(false) {
+            is_virtual(false), parameterized_parent_registered(false) {
     }
 
     // this method takes ownership of *str
     DLLLOCAL BCNode(const QoreProgramLocation* loc, char* str, ClassAccess a) : loc(loc), cstr(str), access(a),
-            is_virtual(false) {
+            is_virtual(false), parameterized_parent_registered(false) {
+    }
+
+    // this method takes ownership of *type
+    DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreParseTypeInfo* type, ClassAccess a) : loc(loc),
+            parsed_type(type), access(a), is_virtual(false), parameterized_parent_registered(false) {
     }
 
     // for builtin base classes
     DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, bool n_virtual = false) : loc(loc), sclass(qc),
-            access(Public), is_virtual(n_virtual) {
+            access(Public), is_virtual(n_virtual), parameterized_parent_registered(false) {
+    }
+
+    // for builtin base classes with explicit access level
+    DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, ClassAccess a, bool n_virtual = false)
+            : loc(loc), sclass(qc), access(a), is_virtual(n_virtual), parameterized_parent_registered(false) {
     }
 
     // called at runtime with committed classes
-    DLLLOCAL BCNode(const BCNode &old) : loc(old.loc), sclass(old.sclass), access(old.access),
-            is_virtual(old.is_virtual) {
+    DLLLOCAL BCNode(const BCNode &old) : loc(old.loc), type_info(old.type_info), sclass(old.sclass),
+            access(old.access), is_virtual(old.is_virtual),
+            parameterized_parent_registered(old.parameterized_parent_registered) {
         assert(!old.cname);
         assert(!old.cstr);
+        assert(!old.parsed_type);
         assert(old.sclass);
     }
 
@@ -1492,6 +1595,7 @@ public:
         delete cname;
         if (cstr)
             free(cstr);
+        delete parsed_type;
     }
 
     DLLLOCAL int tryResolveClass(QoreClass* cls, bool raise_error);
@@ -1842,6 +1946,11 @@ public:
         return (char*)buf;
     }
 
+    DLLLOCAL void setRawHash(const void* data) {
+        memcpy(buf, data, SH_SIZE);
+        is_set = true;
+    }
+
     DLLLOCAL void clear() {
         if (is_set) {
             is_set = false;
@@ -1923,6 +2032,7 @@ public:
         parse_resolve_class_members : 1,  // class members resolved
         parse_resolve_abstract : 1,       // abstract methods resolved
         has_transient_member : 1,         // has at least one transient member
+        parseCommitRuntimeInitDone : 1 = 0,   // has parseCommitRuntimeInit() been called?
         // re-export marker for cross-program imports.  Set by Program::
         // importClass(... reexport=True) on the host side; consulted by
         // qore_program_private::inheritParseImports() in ModuleManager's
@@ -1932,8 +2042,13 @@ public:
         // semantic and avoids diamond conflicts with namespace-merged
         // public classes (e.g. those brought in via %requires) that the
         // host never opted to expose to %requires children.
-        reexport : 1
+        reexport : 1,
+        raw_accepts_parameterized : 1,
+        raw_construction_defaults_to_auto : 1
         ;
+
+    std::vector<QoreGenericTypeParam> type_params;
+    std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
     mutable QoreReferenceCounter refs;  // existence references
@@ -2045,6 +2160,9 @@ public:
 
     // add a base class to this class
     DLLLOCAL void addBaseClass(QoreClass* qc, bool virt);
+
+    // add a base class to this class with explicit access level
+    DLLLOCAL void addBaseClass(QoreClass* qc, ClassAccess access, bool virt);
 
     // This function must only be called from QoreObject
     DLLLOCAL QoreValue evalMemberGate(QoreObject* self, const char* nme, ExceptionSink* xsink) const;
@@ -2166,9 +2284,73 @@ public:
         return typeInfo;
     }
 
+    DLLLOCAL const QoreTypeInfo* getTypeInfo(const std::vector<const QoreTypeInfo*>& args,
+            bool or_nothing = false) const {
+        return qore_get_parameterized_class_type(cls, args, or_nothing);
+    }
+
     DLLLOCAL const QoreTypeInfo* getOrNothingTypeInfo() const {
         return orNothingTypeInfo;
     }
+
+    DLLLOCAL bool hasTypeParams() const {
+        return !type_params.empty();
+    }
+
+    DLLLOCAL size_t getTypeParamCount() const {
+        return type_params.size();
+    }
+
+    DLLLOCAL const char* getTypeParamName(size_t index) const {
+        return index < type_params.size() ? type_params[index].name.c_str() : nullptr;
+    }
+
+    DLLLOCAL const char* getTypeParamDefaultType(size_t index) const {
+        return index < type_params.size() ? type_params[index].getDefaultType() : nullptr;
+    }
+
+    DLLLOCAL const char* getTypeParamBoundType(size_t index) const {
+        return index < type_params.size() ? type_params[index].getBoundType() : nullptr;
+    }
+
+    DLLLOCAL size_t getTypeParamRequiredCount() const {
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (type_params[i].hasDefault()) {
+                return i;
+            }
+        }
+        return type_params.size();
+    }
+
+    DLLLOCAL bool rawAcceptsParameterized() const {
+        return raw_accepts_parameterized;
+    }
+
+    DLLLOCAL bool rawConstructionDefaultsToAuto() const {
+        return raw_construction_defaults_to_auto;
+    }
+
+    DLLLOCAL void addTypeParam(const char* name, const char* default_type = nullptr) {
+        type_params.emplace_back(name, default_type);
+    }
+
+    DLLLOCAL void addTypeParam(const char* name, const char* default_type, const char* bound_type) {
+        type_params.emplace_back(name, default_type, bound_type);
+    }
+
+    DLLLOCAL void setLegacyRawGenericCompatibility(bool accepts_parameterized, bool construction_defaults_to_auto) {
+        raw_accepts_parameterized = accepts_parameterized;
+        raw_construction_defaults_to_auto = construction_defaults_to_auto;
+    }
+
+    DLLLOCAL void addParameterizedVirtualBase(const QoreTypeInfo* type_info) {
+        parameterized_vparents.push_back(type_info);
+    }
+
+    DLLLOCAL const QoreTypeInfo* getParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
+            const QoreClass* target_base) const;
+    DLLLOCAL const QoreTypeInfo* getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
+        bool allow_raw_self = true) const;
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
 
@@ -2552,6 +2734,31 @@ public:
         constlist.add(cname, value, cTypeInfo, access);
     }
 
+    //! Add a constant to a user class during AOT deserialization (does NOT set sys flag)
+    /** Constructs the `ConstantEntry` directly with `builtin=false` so it is
+        correctly marked as user-originated — `ConstantList::add()` unconditionally
+        sets `builtin=true`, which matches the system-constant add path used for
+        builtin namespaces but not user classes.  Leaving `builtin=true` here
+        makes `ConstantEntry::isUser()` return false, which causes the AOT
+        fallback-source transplant in QoreAOTRuntime to skip the NOTHING-valued
+        constant (the transplant guard explicitly filters on `isUser()` to avoid
+        touching system constants).  Without this, class constants whose init
+        function was flagged `has_unsupported_exprs` at AOT compile time never
+        get populated by the fallback parse and raise `AOT-PENDING-CONSTANT` on
+        first runtime access (e.g. `DbTableDataProvider::ProviderInfo`).
+    */
+    DLLLOCAL void addUserConstant(const char* cname, QoreValue value, ClassAccess access = Public,
+            const QoreTypeInfo* cTypeInfo = nullptr) {
+        assert(!constlist.inList(cname));
+        const QoreTypeInfo* ti = (cTypeInfo
+                || (value.hasNode() && value.getInternalNode()->needs_eval()))
+            ? cTypeInfo
+            : value.getTypeInfo();
+        ConstantEntry* ce = new ConstantEntry(&loc_builtin, cname, value, ti,
+            /*n_pub=*/true, /*n_init=*/true, /*n_builtin=*/false, access);
+        constlist.addEntry(cname, ce);
+    }
+
     DLLLOCAL void addBuiltinStaticVar(const char* vname, QoreValue value, ClassAccess access = Public, const QoreTypeInfo* vTypeInfo = nullptr);
 
     DLLLOCAL void parseAssimilateConstants(ConstantList &cmap, ClassAccess access) {
@@ -2841,7 +3048,8 @@ public:
     // the abstract methods
     DLLLOCAL QoreObject* execConstructor(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-        const QoreClass* obj_cls = nullptr, bool allow_abstract = false) const;
+        const QoreClass* obj_cls = nullptr, bool allow_abstract = false,
+        const QoreTypeInfo* object_type_info = nullptr) const;
 
     DLLLOCAL void addBuiltinMethod(const char* mname, MethodVariantBase* variant);
     DLLLOCAL void addBuiltinStaticMethod(const char* mname, MethodVariantBase* variant);
@@ -2924,7 +3132,8 @@ public:
     DLLLOCAL void initializeBuiltin();
 
     DLLLOCAL QoreValue evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,
-            const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
+            const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     DLLLOCAL QoreValue evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
@@ -3333,8 +3542,9 @@ public:
     }
 
     DLLLOCAL static QoreObject* execConstructor(const QoreClass& qc, RuntimeConfig& rc,
-            const AbstractQoreFunctionVariant* variant, const QoreListNode* args, ExceptionSink* xsink) {
-        return qc.priv->execConstructor(xsink, rc, variant, args);
+            const AbstractQoreFunctionVariant* variant, const QoreListNode* args, ExceptionSink* xsink,
+            const QoreTypeInfo* object_type_info = nullptr) {
+        return qc.priv->execConstructor(xsink, rc, variant, args, nullptr, false, object_type_info);
     }
 
     DLLLOCAL static bool injected(const QoreClass& qc) {
@@ -3661,21 +3871,29 @@ public:
     }
 
     DLLLOCAL QoreValue eval(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, const QoreListNode* args,
-            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) const {
+            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const {
         if (!static_flag) {
             assert(self);
-            return NMETHF(func)->evalMethod(xsink, rc, 0, self, args, cctx, pgm_ctx);
+            return NMETHF(func)->evalMethod(xsink, rc, 0, self, args, cctx, pgm_ctx,
+                explicit_type_param_instantiation);
         }
-        return SMETHF(func)->evalMethod(xsink, rc, 0, args, cctx, pgm_ctx);
+        return SMETHF(func)->evalMethod(xsink, rc, 0, args, cctx, pgm_ctx, receiver_type_info,
+            explicit_type_param_instantiation);
     }
 
     DLLLOCAL QoreValue evalTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, QoreListNode* args,
-            const qore_class_private* cctx = nullptr) const {
+            const qore_class_private* cctx = nullptr, const AbstractQoreFunctionVariant* variant = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const {
         if (!static_flag) {
             assert(self);
-            return NMETHF(func)->evalMethodTmpArgs(xsink, rc, nullptr, self, args, cctx);
+            return NMETHF(func)->evalMethodTmpArgs(xsink, rc, variant, self, args, cctx,
+                explicit_type_param_instantiation);
         }
-        return SMETHF(func)->evalMethodTmpArgs(xsink, rc, nullptr, args, cctx);
+        return SMETHF(func)->evalMethodTmpArgs(xsink, rc, variant, args, cctx, receiver_type_info,
+            explicit_type_param_instantiation);
     }
 
     DLLLOCAL QoreValue evalPseudoMethod(RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant,
@@ -3692,7 +3910,8 @@ public:
     }
 
     DLLLOCAL QoreValue evalNormalVariant(QoreObject* self, RuntimeConfig& rc, const QoreExternalMethodVariant* ev,
-            const QoreListNode* args, ExceptionSink* xsink) const;
+            const QoreListNode* args, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // returns the lowest access code for all variants
     DLLLOCAL ClassAccess getAccess() const;
@@ -3704,8 +3923,9 @@ public:
 
     DLLLOCAL static QoreValue evalNormalVariant(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
             QoreObject* self,
-            const QoreExternalMethodVariant* ev, const QoreListNode* args) {
-        return m.priv->evalNormalVariant(self, rc, ev, args, xsink);
+            const QoreExternalMethodVariant* ev, const QoreListNode* args,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
+        return m.priv->evalNormalVariant(self, rc, ev, args, xsink, explicit_type_param_instantiation);
     }
 
     DLLLOCAL static QoreValue evalPseudoMethod(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
@@ -3714,14 +3934,20 @@ public:
     }
 
     DLLLOCAL static QoreValue eval(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
-            const QoreListNode* args, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr) {
-        return m.priv->eval(xsink, rc, self, args, cctx, pgm_ctx);
+            const QoreListNode* args, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
+        return m.priv->eval(xsink, rc, self, args, cctx, pgm_ctx, receiver_type_info,
+            explicit_type_param_instantiation);
     }
 
     DLLLOCAL static QoreValue evalTmpArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
             QoreObject* self,
-            QoreListNode* args, const qore_class_private* cctx = nullptr) {
-        return m.priv->evalTmpArgs(xsink, rc, self, args, cctx);
+            QoreListNode* args, const qore_class_private* cctx = nullptr,
+            const AbstractQoreFunctionVariant* variant = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
+        return m.priv->evalTmpArgs(xsink, rc, self, args, cctx, variant, receiver_type_info,
+            explicit_type_param_instantiation);
     }
 
     DLLLOCAL static qore_method_private* get(QoreMethod& m) {

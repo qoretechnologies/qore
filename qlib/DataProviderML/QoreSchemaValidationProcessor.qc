@@ -30,7 +30,7 @@ public namespace DataProviderML {
     records are either enriched with validation error details, silently dropped, or cause an exception.
 
 */
-public class QoreSchemaValidationProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreSchemaValidationProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -157,104 +157,25 @@ public class QoreSchemaValidationProcessor inherits DataProvider::AbstractDataPr
                 "QoreSchemaValidationProcessor: not configured; provide constructor options";
         }
 
+        list<string> violations = validateRecord(record);
+        return finishRecord(record, violations);
+    }
+
+    #! Validates a single row record
+    private list<string> validateRecord(auto record) {
         list<string> violations = ();
 
         foreach string field_name in (keys schema) {
             hash<auto> rules = schema{field_name};
             auto val = DataProvider::AbstractDataProvider::getFieldValue(record, field_name);
-
-            # check required
-            bool is_required = rules.required.toBool();
-            if (!exists val) {
-                if (is_required) {
-                    push violations,
-                        sprintf("field '%s': required but missing or null", field_name);
-                }
-                # skip other checks for missing values
-                continue;
-            }
-
-            # check type
-            if (exists rules.type) {
-                string expected_type = rules.type;
-                string actual_type = val.type();
-                bool type_ok = False;
-                switch (expected_type) {
-                    case "string":
-                        type_ok = (actual_type == "string");
-                        break;
-                    case "int":
-                        type_ok = (actual_type == "integer");
-                        break;
-                    case "float":
-                        type_ok = (actual_type == "float" || actual_type == "integer");
-                        break;
-                    case "bool":
-                        type_ok = (actual_type == "bool");
-                        break;
-                    case "date":
-                        type_ok = (actual_type == "date");
-                        break;
-                    default:
-                        type_ok = (actual_type == expected_type);
-                        break;
-                }
-                if (!type_ok) {
-                    push violations,
-                        sprintf("field '%s': expected type %s, got %s",
-                            field_name, expected_type, actual_type);
-                }
-            }
-
-            # check numeric range
-            if (exists rules.min) {
-                if (val.toFloat() < rules.min.toFloat()) {
-                    push violations,
-                        sprintf("field '%s': value %g is below minimum %g",
-                            field_name, val.toFloat(), rules.min.toFloat());
-                }
-            }
-            if (exists rules.max) {
-                if (val.toFloat() > rules.max.toFloat()) {
-                    push violations,
-                        sprintf("field '%s': value %g exceeds maximum %g",
-                            field_name, val.toFloat(), rules.max.toFloat());
-                }
-            }
-
-            # check string length
-            if (exists rules.min_length) {
-                if (string(val).length() < rules.min_length.toInt()) {
-                    push violations,
-                        sprintf("field '%s': length %d is below minimum length %d",
-                            field_name, string(val).length(), rules.min_length.toInt());
-                }
-            }
-            if (exists rules.max_length) {
-                if (string(val).length() > rules.max_length.toInt()) {
-                    push violations,
-                        sprintf("field '%s': length %d exceeds maximum length %d",
-                            field_name, string(val).length(), rules.max_length.toInt());
-                }
-            }
-
-            # check allowed values
-            if (exists rules.allowed_values) {
-                bool found = False;
-                foreach auto av in (rules.allowed_values) {
-                    if (val == av) {
-                        found = True;
-                        break;
-                    }
-                }
-                if (!found) {
-                    push violations,
-                        sprintf("field '%s': value %y not in allowed values %y",
-                            field_name, val, rules.allowed_values);
-                }
-            }
+            appendFieldViolations(\violations, field_name, rules, val);
         }
 
+        return violations;
+    }
+
+    #! Applies the configured violation policy to one row
+    private *auto finishRecord(auto record, list<string> violations) {
         switch (on_violation) {
             case "enrich": {
                 hash<auto> result = {} + record;
@@ -281,9 +202,301 @@ public class QoreSchemaValidationProcessor inherits DataProvider::AbstractDataPr
         return record;
     }
 
-    #! Does not support bulk API
+    #! Adds validation errors for one field value
+    private appendFieldViolations(reference<list<string>> violations, string field_name,
+            hash<auto> rules, *auto val) {
+        # check required
+        bool is_required = rules.required.toBool();
+        if (!exists val) {
+            if (is_required) {
+                push violations,
+                    sprintf("field '%s': required but missing or null", field_name);
+            }
+            # skip other checks for missing values
+            return;
+        }
+
+        # check type
+        if (exists rules.type) {
+            string expected_type = rules.type;
+            string actual_type = val.type();
+            bool type_ok = False;
+            switch (expected_type) {
+                case "string":
+                    type_ok = (actual_type == "string");
+                    break;
+                case "int":
+                    type_ok = (actual_type == "integer");
+                    break;
+                case "float":
+                    type_ok = (actual_type == "float" || actual_type == "integer");
+                    break;
+                case "bool":
+                    type_ok = (actual_type == "bool");
+                    break;
+                case "date":
+                    type_ok = (actual_type == "date");
+                    break;
+                default:
+                    type_ok = (actual_type == expected_type);
+                    break;
+            }
+            if (!type_ok) {
+                push violations,
+                    sprintf("field '%s': expected type %s, got %s",
+                        field_name, expected_type, actual_type);
+            }
+        }
+
+        # check numeric range
+        if (exists rules.min) {
+            if (val.toFloat() < rules.min.toFloat()) {
+                push violations,
+                    sprintf("field '%s': value %g is below minimum %g",
+                        field_name, val.toFloat(), rules.min.toFloat());
+            }
+        }
+        if (exists rules.max) {
+            if (val.toFloat() > rules.max.toFloat()) {
+                push violations,
+                    sprintf("field '%s': value %g exceeds maximum %g",
+                        field_name, val.toFloat(), rules.max.toFloat());
+            }
+        }
+
+        # check string length
+        if (exists rules.min_length) {
+            if (string(val).length() < rules.min_length.toInt()) {
+                push violations,
+                    sprintf("field '%s': length %d is below minimum length %d",
+                        field_name, string(val).length(), rules.min_length.toInt());
+            }
+        }
+        if (exists rules.max_length) {
+            if (string(val).length() > rules.max_length.toInt()) {
+                push violations,
+                    sprintf("field '%s': length %d exceeds maximum length %d",
+                        field_name, string(val).length(), rules.max_length.toInt());
+            }
+        }
+
+        # check allowed values
+        if (exists rules.allowed_values) {
+            bool found = False;
+            foreach auto av in (rules.allowed_values) {
+                if (val == av) {
+                    found = True;
+                    break;
+                }
+            }
+            if (!found) {
+                push violations,
+                    sprintf("field '%s': value %y not in allowed values %y",
+                        field_name, val, rules.allowed_values);
+            }
+        }
+    }
+
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash<auto>>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreSchemaValidationProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        *hash<auto> columns = getShapeColumns(records, shape);
+        if (!exists columns) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        list<list<string>> all_errors = ();
+        list<bool> valid = ();
+        list<int> selected_indices = ();
+        for (int row = 0; row < count; ++row) {
+            list<string> violations = ();
+            foreach string field_name in (keys schema) {
+                hash<auto> rules = schema{field_name};
+                *auto val = getColumnRowValue(columns, field_name, row, count);
+                appendFieldViolations(\violations, field_name, rules, val);
+            }
+            bool is_valid = violations.lsize() == 0;
+            push all_errors, violations;
+            push valid, is_valid;
+            if (is_valid) {
+                push selected_indices, row;
+            }
+        }
+
+        switch (on_violation) {
+            case "enrich":
+                return addValidationColumns(records, shape, all_errors, valid);
+            case "drop":
+                return selectRows(records, shape, selected_indices);
+            case "throw": {
+                for (int i = 0; i < all_errors.lsize(); ++i) {
+                    if (all_errors[i]) {
+                        throw "VALIDATION-ERROR",
+                            sprintf("record failed validation: %s", all_errors[i].join("; ")),
+                            all_errors[i];
+                    }
+                }
+                return records;
+            }
+        }
+
+        return records;
+    }
+
+    #! Returns top-level columns needed by the schema, or NOTHING when row fallback is required
+    private *hash<auto> getShapeColumns(auto records, DataProvider::DataProviderShape shape) {
+        list<string> fields = keys schema;
+        foreach string field in (fields) {
+            if (field.find(".") >= 0) {
+                return;
+            }
+        }
+
+        if (shape == DataProvider::DataProviderShape::HashOfLists) {
+            hash<auto> columns;
+            foreach string field in (fields) {
+                if (records.hasKey(field)) {
+                    columns{field} = records{field};
+                }
+            }
+            return columns;
+        }
+
+        return DataProvider::AbstractDataProcessor::getTopLevelShapeColumns(records, shape, fields);
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
+    #! Reads one value from a shaped column, preserving missing-field semantics
+    private static *auto getColumnRowValue(hash<auto> columns, string field_name, int row, int count) {
+        if (!columns.hasKey(field_name)) {
+            return;
+        }
+
+        auto column = columns{field_name};
+        switch (column.typeCode()) {
+            case NT_BUFFER:
+            case NT_LIST:
+                if (column.lsize() != count) {
+                    throw "PROCESSOR-SHAPE-ERROR",
+                        sprintf("schema field %y has %d values but the shaped block has %d rows",
+                            field_name, column.lsize(), count);
+                }
+                return column[row];
+        }
+        return column;
+    }
+
+    #! Appends validation status columns while preserving the input shape
+    private auto addValidationColumns(auto records, DataProvider::DataProviderShape shape,
+            list<list<string>> errors, list<bool> valid) {
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                return records.withColumn("_validation_errors", errors).withColumn("_is_valid", valid);
+            case DataProvider::DataProviderShape::BufferColumns: {
+                hash<auto> columns = DataProvider::AbstractDataProcessor::isColumnarResult(records)
+                    ? records.toColumnHash()
+                    : records + {};
+                columns._validation_errors = errors;
+                columns._is_valid = valid;
+                return ColumnarResult::fromColumnHash(columns);
+            }
+            case DataProvider::DataProviderShape::HashOfLists: {
+                hash<auto> columns = records + {};
+                columns._validation_errors = errors;
+                columns._is_valid = valid;
+                return columns;
+            }
+        }
+        return records;
+    }
+
+    #! Selects valid rows for drop mode while preserving the input shape
+    private auto selectRows(auto records, DataProvider::DataProviderShape shape, list<int> selected_indices) {
+        hash<auto> columns;
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                foreach string name in (records.columnNames()) {
+                    columns{name} = QoreSchemaValidationProcessor::selectColumnValues(
+                        records.getColumn(name), selected_indices);
+                }
+                return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(columns);
+            case DataProvider::DataProviderShape::BufferColumns:
+                columns = DataProvider::AbstractDataProcessor::isColumnarResult(records)
+                    ? records.toColumnHash()
+                    : records + {};
+                foreach string name in (keys columns) {
+                    columns{name} = QoreSchemaValidationProcessor::selectColumnValues(
+                        columns{name}, selected_indices);
+                }
+                return ColumnarResult::fromColumnHash(columns);
+            case DataProvider::DataProviderShape::HashOfLists:
+                foreach string name in (keys records) {
+                    columns{name} = QoreSchemaValidationProcessor::selectColumnValues(
+                        records{name}, selected_indices);
+                }
+                return columns;
+        }
+        return records;
+    }
+
+    #! Selects row values from a list or dense buffer column
+    private static list<auto> selectColumnValues(auto column, list<int> selected_indices) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        list<auto> result;
+        if (values.typeCode() != NT_LIST) {
+            return DataProvider::AbstractDataProcessor::repeatValue(column, selected_indices.lsize());
+        }
+        foreach int index in (selected_indices) {
+            push result, values[index];
+        }
+        return result;
+    }
+
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

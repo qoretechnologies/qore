@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class ClassesTest
 
@@ -559,6 +560,16 @@ class Base {
 
 class BaseClassExceptionTest inherits Base {
     constructor() : Base(throw_exception()) {
+    }
+}
+
+class MemberGateOnlySliceTest {
+    private {
+        hash h = ("a": 1, "b": 2);
+    }
+
+    auto memberGate(string m) {
+        return h{m};
     }
 }
 
@@ -1129,6 +1140,8 @@ sub test() {
 
         # test memberGate
         assertEq("memberGate-a", t.a, "object memberGate() methods");
+        MemberGateOnlySliceTest mgs();
+        assertEq(("a": 1), mgs.(list("a")), "object memberGate() slice");
 
         # test memberNotification()
         t.x = 1;
@@ -1176,7 +1189,7 @@ sub test() {
         } catch (hash<ExceptionInfo> nex) {
             ex = nex;
         }
-        assertEq(561, ex.callstack[0].line);
+        assertEq(562, ex.callstack[0].line);
 
         Child2 c2();
         Child1 c1(c2);

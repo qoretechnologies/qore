@@ -126,7 +126,7 @@ Semaphore sem(5);
 
     @throw SEMAPHORE-ERROR negative initial permit count
  */
-Semaphore::constructor(int permits = 1) {
+Semaphore::constructor(int permits = 1) [flags=NAMED_ARGS] {
     if (permits < 0) {
         xsink->raiseException("SEMAPHORE-ERROR", "Semaphore::constructor() called with negative permits value " QLLD, permits);
         return;
@@ -166,7 +166,7 @@ sem.acquire();
     @throw SEMAPHORE-TIMEOUT timed out waiting for a permit
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked
  */
-nothing Semaphore::acquire(timeout timeout_ms = 0) {
+nothing Semaphore::acquire(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     bool timed_out = false;
     sem->acquire(timeout_ms, xsink, timed_out);
     if (timed_out && !*xsink) {
@@ -191,17 +191,17 @@ bool Semaphore::tryAcquire() {
 }
 
 //! Releases one or more permits, potentially waking blocked threads
-/** @param n the number of permits to release; must be >= 1
+/** @param permits the number of permits to release; must be >= 1
 
     @par Example:
     @code{.py}
 sem.release();
     @endcode
 
-    @throw SEMAPHORE-ERROR n < 1
+    @throw SEMAPHORE-ERROR \a permits < 1
  */
-nothing Semaphore::release(int n = 1) {
-    sem->release(n, xsink);
+nothing Semaphore::release(int permits = 1) [flags=NAMED_ARGS] {
+    sem->release(permits, xsink);
 }
 
 //! Returns the current number of available permits

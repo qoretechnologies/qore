@@ -54,6 +54,18 @@ extern QoreClass* QC_QUEUE;
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 extern QoreClass* QC_ASYNCIOCONTROLLER;
 
+static const QoreTypeInfo* async_io_get_socket_poll_result_queue_type_info() {
+    type_vec_t args;
+    args.push_back(hashdeclSocketPollResultInfo->getTypeInfo(false));
+    return QC_QUEUE->getTypeInfo(args, false);
+}
+
+static QoreObject* async_io_new_socket_poll_result_queue_object(Queue* queue) {
+    QoreObject* obj = new QoreObject(QC_QUEUE, getProgram(), queue);
+    obj->setInstantiatedTypeInfo(async_io_get_socket_poll_result_queue_type_info());
+    return obj;
+}
+
 static int qore_socket_poll_events_from_controller_events(int events) {
     int rv = 0;
     if (events & QORE_EV_READ) {
@@ -205,6 +217,13 @@ static thread_local bool inside_continue_poll_batch = false;
 //! making such operations promptly interruptible on cancel/shutdown.
 static thread_local std::string current_continue_poll_owner;
 
+//! True while a dispatcher worker is executing a Qore poll operation's continuePoll().
+/** Sync socket APIs are illegal here as well as on the I/O thread: they can
+    create nested controller waits on the same fd and corrupt/delay the parent
+    poll registration.
+*/
+static thread_local bool in_async_continue_poll_worker = false;
+
 //! True for the whole duration of a callback dispatch on this (worker) thread —
 //! i.e. while workerLoop() is running any callback (DT_CALLBACK / DT_ON_COMPLETE
 //! / DT_ABORT / stream / poll-complete) and its deref/cleanup section.  Read by
@@ -213,13 +232,16 @@ static thread_local std::string current_continue_poll_owner;
 //! destructor chain) when it drops an object's last reference — returns
 //! immediately instead of blocking.  A callback worker can NEVER safely block in
 //! waitForOwnerIdle(): it would wait for its own still-counted item, and/or for
-//! sibling callbacks for the same owner that are blocked on a lock (e.g.
-//! WebSocketClient::delivery_mutex) held by this worker's own call chain.  Both
-//! cycles were observed hanging WebSocketPerfTest at process exit.
+//! sibling callbacks for the same owner that are blocked on a lock held by this
+//! worker's own call chain.
 static thread_local bool on_callback_worker = false;
 
 bool qore_on_async_io_thread() {
     return on_async_io_thread;
+}
+
+bool qore_in_async_io_continue_poll_worker() {
+    return in_async_continue_poll_worker;
 }
 
 #ifdef DEBUG
@@ -230,11 +252,21 @@ bool qore_set_async_io_thread_for_test(bool value) {
 }
 #endif
 
-//! Returns the current time in microseconds since the epoch
+//! Returns a monotonic-clock timestamp in microseconds (for internal deadline arithmetic).
+/** All controller-internal deadlines (PollInfo::timeout_date_us, poll_timeout_deadline_us,
+    autostop_idle_since, timeout_heap entries, EINTR-retry remaining_us) are set and compared
+    via this function, so the clock must be consistent across all such uses but does NOT need
+    to match wall-clock time.  CLOCK_MONOTONIC is used so deadlines are not skewed by realtime
+    clock adjustments (NTP slewing, VM time sync) - without this, a backward realtime jump
+    can collapse a timed wait to a fraction of the intended duration (observed as a CI flake
+    in waitForNotifierExplicitSafetyTimeoutTest on Alpine arm64).
+
+    NOTE: this is distinct from `Cmd::timer_deadline_us` (AddTimer), which is a wall-clock
+    absolute deadline produced from `DateTime::getEpochMicrosecondsUTC()` - that flow uses
+    realtime semantics and is compared via `QoreEventLoop::q_epoch_us_fast()`, not this.
+*/
 static int64 get_epoch_us() {
-    int us;
-    int64 secs = q_epoch_us(us);
-    return secs * 1000000LL + us;
+    return q_get_monotonic_us();
 }
 
 static int start_socket_async_io_owner(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {
@@ -432,6 +464,42 @@ QoreHashNode* AsyncIoControllerPriv::makeSocketWaitGenerationException(PollInfo&
     return *xsink ? nullptr : ex.release();
 }
 
+bool AsyncIoControllerPriv::hasSocketWaitGenerationChanged(PollInfo& pinfo, QoreHashNode* poll_info) {
+    if (!pinfo.socket_wait_generation_valid || !poll_info) {
+        return false;
+    }
+
+    QoreValue v = poll_info->getKeyValue("socket");
+    QoreObject* obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
+    if (!obj) {
+        return false;
+    }
+
+    ExceptionSink local_xsink;
+    QoreSocketObject* sock = static_cast<QoreSocketObject*>(
+        obj->getReferencedPrivateData(CID_SOCKET, &local_xsink));
+    if (!sock) {
+        if (local_xsink) {
+            local_xsink.clear();
+        }
+        return false;
+    }
+
+    bool changed = false;
+    {
+        AutoLocker al(sock->priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+        changed = sp->fd_generation != pinfo.socket_wait_fd_generation
+            || sp->sock != pinfo.socket_wait_fd;
+    }
+
+    sock->deref(&local_xsink);
+    if (local_xsink) {
+        local_xsink.clear();
+    }
+    return changed;
+}
+
 void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink) {
     // Release refs and signal waiters for a command drained from cmdq that
     // will not be processed (because the I/O thread received Quit or is
@@ -597,10 +665,21 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
 
 // --- QoreCallDispatcher implementation ---
 
+static int get_default_callback_worker_cap() {
+    int hw = std::thread::hardware_concurrency();
+    if (hw <= 0) {
+        hw = 4;
+    }
+    int workers = hw >= QoreCallDispatcher::DEFAULT_WORKER_CAP / 4
+        ? QoreCallDispatcher::DEFAULT_WORKER_CAP
+        : hw * 4;
+    return std::max(1, workers);
+}
+
 QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* controller)
     : ctrl(controller) {
     if (max_workers <= 0) {
-        this->max_workers = DEFAULT_WORKER_CAP;
+        this->max_workers = get_default_callback_worker_cap();
     } else {
         this->max_workers = max_workers;
     }
@@ -916,25 +995,14 @@ void QoreCallDispatcher::waitForOwnerIdle(const std::string& owner) {
     // A dispatcher callback worker must NEVER block here.
     //
     // flushCallbacksByOwner() can be reached re-entrantly from a destructor that
-    // runs synchronously inside a dispatched callback — e.g. WebSocketClient
-    // teardown, where an owner-tagged onPollComplete callback drops the client's
-    // last reference and its destructor calls flushCallbacksByOwner(async_owner).
-    // A worker that blocks waiting for its owner to drain deadlocks the
-    // dispatcher in two distinct ways, BOTH observed in WebSocketPerfTest:
-    //   1. self-wait: the worker's OWN in-flight item is counted in
-    //      active_per_owner and is only decremented after the dispatch returns —
-    //      which cannot happen while it blocks here;
-    //   2. sibling-lock cycle: other callbacks for the same owner (the I/O thread
-    //      dispatches one onPollComplete per push, with no in-flight dedup) are
-    //      blocked acquiring a lock (WebSocketClient::delivery_mutex) that is held
-    //      by THIS worker's own destructor call chain — so they can never drain.
-    // There is no safe way to wait from inside a callback, so return immediately.
-    // This is the dispatcher-level analogue of WebSocketClient's existing
-    // delivery_thread_id==gettid() guard.  Safety: callers run cancelByOwner()
-    // before the flush and the callbacks themselves are guarded by
-    // OBJECT-ALREADY-DELETED (weak self) + SmartMutex Lock_Deleted checks, so a
-    // not-yet-run callback firing after destruction is handled, not a crash.
-    // External callers (not on a callback worker) still block until fully drained.
+    // runs synchronously inside a dispatched callback.  Waiting from the worker
+    // can deadlock in two ways:
+    //   1. self-wait: the worker's own in-flight item is still counted in
+    //      active_per_owner and cannot be decremented while the worker blocks;
+    //   2. sibling-lock cycle: another same-owner callback can be blocked on a
+    //      lock held by this worker's destructor call chain, while this worker
+    //      waits for that sibling to drain.
+    // External callers still block until the owner has fully drained.
     if (on_callback_worker) {
         return;
     }
@@ -1132,20 +1200,24 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                         // concurrent on the worker pool.
                         AutoLocker cpl(qore_continue_poll_lock);
 
-                        // Publish this op's owner for the duration of its
-                        // continuePoll() so any nested submit() (e.g. a
-                        // blocking waitForNotifier()) inherits it as a cancel
-                        // scope — see current_continue_poll_owner.  RAII so an
-                        // exception cannot leave it dangling.
-                        struct CPOwnerGuard {
+                        // Publish the Qore continuePoll() worker context so
+                        // nested submits inherit the cancel scope and sync
+                        // socket APIs fail fast instead of creating nested fd
+                        // polling on a controller-owned socket.
+                        struct CPContextGuard {
                             std::string prev;
-                            CPOwnerGuard(const std::string& o) : prev(current_continue_poll_owner) {
+                            bool prev_in_worker;
+                            CPContextGuard(const std::string& o)
+                                    : prev(current_continue_poll_owner),
+                                    prev_in_worker(in_async_continue_poll_worker) {
                                 current_continue_poll_owner = o;
+                                in_async_continue_poll_worker = true;
                             }
-                            ~CPOwnerGuard() {
+                            ~CPContextGuard() {
                                 current_continue_poll_owner = prev;
+                                in_async_continue_poll_worker = prev_in_worker;
                             }
-                        } cpo_guard(async_item.owner);
+                        } cp_context_guard(async_item.owner);
 
                         ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
                             &work_xsink);
@@ -1184,7 +1256,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                                         QoreValue v = sl->retrieveEntry(i);
                                         std::string skey;
                                         if (v.getType() == NT_STRING) {
-                                            skey = v.get<const QoreStringNode>()->c_str();
+                                            QoreStringValueHelper str(v);
+                                            skey = str->c_str();
                                         } else {
                                             skey = std::to_string(v.getAsBigInt());
                                         }
@@ -1223,8 +1296,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         }
 
         if (work_xsink) {
-            const QoreStringNode* err_str = work_xsink.getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc_str = work_xsink.getExceptionDesc().get<const QoreStringNode>();
+            QoreStringValueHelper err_str(work_xsink.getExceptionErr());
+            QoreStringValueHelper desc_str(work_xsink.getExceptionDesc());
             const char* type_name = getDispatchTypeName(async_item.type);
             const char* class_name = async_item.spop_obj ? async_item.spop_obj->getClassName() : "null";
             const char* owner = async_item.owner.empty() ? "-" : async_item.owner.c_str();
@@ -1236,35 +1309,35 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
                     "(type=%s class=%s owner=%s key=%s stream_key=%s)",
                     method_name ? method_name : "unknown",
-                    err_str ? err_str->c_str() : "?",
-                    desc_str ? desc_str->c_str() : "?",
+                    *err_str ? err_str->c_str() : "?",
+                    *desc_str ? desc_str->c_str() : "?",
                     type_name, class_name, owner, key, stream_key);
             } else {
                 fprintf(stderr, "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
                     "(type=%s class=%s owner=%s key=%s stream_key=%s)\n",
                     method_name ? method_name : "unknown",
-                    err_str ? err_str->c_str() : "?",
-                    desc_str ? desc_str->c_str() : "?",
+                    *err_str ? err_str->c_str() : "?",
+                    *desc_str ? desc_str->c_str() : "?",
                     type_name, class_name, owner, key, stream_key);
             }
             work_xsink.clear();
         }
 
         // NOTE: cb_worker_guard stays set through this cleanup section (it is
-        // only restored when the workerLoop iteration ends), so on_callback_worker
-        // remains true while the derefs below run their destructors.  This ensures a
-        // re-entrant flushCallbacksByOwner() from a destructor fired during a deref
-        // (e.g. spop_obj's final deref → owner destructor) is recognised as running
-        // on a callback worker and returns immediately rather than blocking — see
-        // waitForOwnerIdle() and on_callback_worker.
+        // only restored when the workerLoop iteration ends), so
+        // on_callback_worker remains true while the derefs below run their
+        // destructors.  This ensures a re-entrant flushCallbacksByOwner() from a
+        // destructor fired during a deref is recognised as running on a callback
+        // worker and returns immediately rather than blocking.
 
         // Drop per-owner tracking for this work item BEFORE derefing any
         // referenced objects.  spop_obj holds a back-chain to the owner (e.g.
         // HttpClientPollOperation → HttpClientConnection → HttpClientConnectionManager),
         // so its final deref can run the owner's destructor → closeAll() →
-        // flushCallbacksByOwner(owner).  Decrementing here keeps active_per_owner
-        // accurate for any external (non-worker) waiter even if this worker's
-        // teardown is lengthy.  Mirrors the per-program ordering fix below.
+        // flushCallbacksByOwner(owner), which waits for active_per_owner[owner]
+        // to reach zero.  If the worker's own count were still present, the
+        // worker would wait for itself and deadlock.  Mirrors the per-program
+        // ordering fix below.
         if (!async_item.owner.empty()) {
             AutoLocker al(m);
             auto it = active_per_owner.find(async_item.owner);
@@ -1463,7 +1536,15 @@ int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedC
             return -1;
         }
         if (!thread_pool) {
-            thread_pool = new ThreadPool(xsink, 0, 0, 8, 5000);
+            int max_workers;
+            {
+                AutoLocker al(m);
+                max_workers = max_callback_workers;
+            }
+            if (max_workers <= 0) {
+                max_workers = get_default_callback_worker_cap();
+            }
+            thread_pool = new ThreadPool(xsink, max_workers, 0, std::min(max_workers, 8), 5000);
             if (*xsink) {
                 delete thread_pool;
                 thread_pool = nullptr;
@@ -1613,7 +1694,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     v = info->getKeyValue("owner");
     std::string owner;
     if (v.getType() == NT_STRING) {
-        owner = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper str(v);
+        owner = str->c_str();
     }
     if (owner.empty()) {
         xsink->raiseException("ASYNC-IO-ERROR", "missing 'owner' field in SocketPollOperationInfo; "
@@ -1624,8 +1706,13 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // Get the key: custom key or socket unique hash
     v = info->getKeyValue("key");
     std::string uh;
-    if (v.getType() == NT_STRING && v.get<const QoreStringNode>()->size()) {
-        uh = v.get<const QoreStringNode>()->c_str();
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        if (str->size()) {
+            uh = str->c_str();
+        } else {
+            uh = getSocketHash(sock);
+        }
     } else {
         uh = getSocketHash(sock);
     }
@@ -1635,8 +1722,11 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // I/O thread and one processing barrier.
     v = info->getKeyValue("thread_key");
     std::string thread_key = uh;
-    if (v.getType() == NT_STRING && v.get<const QoreStringNode>()->size()) {
-        thread_key = v.get<const QoreStringNode>()->c_str();
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        if (str->size()) {
+            thread_key = str->c_str();
+        }
     }
 
     // Get timeout
@@ -1697,7 +1787,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // If no onComplete override and no shared queue, create a new result queue
     if (!has_qore_on_complete && !res.result_queue) {
         res.result_queue = new Queue();
-        res.new_queue_obj = new QoreObject(QC_QUEUE, getProgram(), res.result_queue);
+        res.new_queue_obj = async_io_new_socket_poll_result_queue_object(res.result_queue);
         res.result_queue->ref();  // extra ref for PollInfo storage
     }
 
@@ -2288,11 +2378,15 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
         return it != sock_to_thread.end() ? it->second : getThreadIndex(sock_hash);
     };
 
+    auto close_direct = [&]() -> int {
+        sock->closeIo(xsink);
+        return *xsink ? -1 : 0;
+    };
+
     if (on_async_io_thread) {
         int target_idx = get_target_idx();
         if (!inside_continue_poll_batch && current_io_thread_idx == target_idx) {
-            sock->closeIo(xsink);
-            return *xsink ? -1 : 0;
+            return close_direct();
         }
 
         // We cannot wait on another I/O thread from an I/O callback without
@@ -2301,13 +2395,61 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
         // current batch does not close fds while it still owns cached raw
         // operation pointers.
         IoThreadContext* target = nullptr;
+        bool do_direct_close = false;
         {
             AutoLocker al(m);
-            if (shutting_down) {
+            // During final runtime teardown cancelBySocketHash() has already
+            // removed active operations.  Do not restart an idle autostop
+            // controller just to close a socket from object destruction.
+            if ((shutting_down || qore_shutdown.load(std::memory_order_relaxed))
+                    && !inside_continue_poll_batch) {
+                do_direct_close = true;
+            } else if (shutting_down) {
                 xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
                 return -1;
             }
 
+            if (!do_direct_close) {
+                target = io_threads[target_idx].get();
+                if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
+                    startIntern(xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    target = io_threads[target_idx].get();
+                }
+
+                Command cmd;
+                cmd.cmd = IoCommand::CloseSocket;
+                cmd.sock_hash = sock_hash;
+                sock->ref();
+                cmd.close_sock = sock;
+                target->cmdq.push(std::move(cmd));
+                ++submit_seq;
+                ++target->submit_seq;
+            }
+        }
+        if (do_direct_close) {
+            return close_direct();
+        }
+        target->notifier->notify();
+        return *xsink ? -1 : 0;
+    }
+
+    int target_idx = get_target_idx();
+    IoThreadContext* target = nullptr;
+    AsyncOpCompletion* completion = nullptr;
+    bool do_direct_close = false;
+    {
+        AutoLocker al(m);
+        if (shutting_down || qore_shutdown.load(std::memory_order_relaxed)) {
+            while (io_exiting) {
+                io_waiting = true;
+                io_cond.wait(m);
+                io_waiting = false;
+            }
+            do_direct_close = true;
+        } else {
             target = io_threads[target_idx].get();
             if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
                 startIntern(xsink);
@@ -2317,49 +2459,21 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
                 target = io_threads[target_idx].get();
             }
 
+            completion = new AsyncOpCompletion(1);
             Command cmd;
             cmd.cmd = IoCommand::CloseSocket;
             cmd.sock_hash = sock_hash;
             sock->ref();
             cmd.close_sock = sock;
+            completion->ROreference();
+            cmd.completion = completion;
             target->cmdq.push(std::move(cmd));
             ++submit_seq;
             ++target->submit_seq;
         }
-        target->notifier->notify();
-        return *xsink ? -1 : 0;
     }
-
-    int target_idx = get_target_idx();
-    IoThreadContext* target = nullptr;
-    AsyncOpCompletion* completion = nullptr;
-    {
-        AutoLocker al(m);
-        if (shutting_down) {
-            xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
-            return -1;
-        }
-
-        target = io_threads[target_idx].get();
-        if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
-            startIntern(xsink);
-            if (*xsink) {
-                return -1;
-            }
-            target = io_threads[target_idx].get();
-        }
-
-        completion = new AsyncOpCompletion(1);
-        Command cmd;
-        cmd.cmd = IoCommand::CloseSocket;
-        cmd.sock_hash = sock_hash;
-        sock->ref();
-        cmd.close_sock = sock;
-        completion->ROreference();
-        cmd.completion = completion;
-        target->cmdq.push(std::move(cmd));
-        ++submit_seq;
-        ++target->submit_seq;
+    if (do_direct_close) {
+        return close_direct();
     }
 
     target->notifier->notify();
@@ -3897,6 +4011,24 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 }
                 PollInfo& pinfo = it->second;
                 if (pinfo.last_queued_gen == t.phase1_gen) {
+                    if (timed_out && pinfo.timeout_us > 0) {
+                        // A ready fd can queue an op before Step C sees its
+                        // expired operation timeout.  For elapsed positive
+                        // deadlines, the timeout must win, or level-triggered
+                        // readiness can keep the op alive forever (observed
+                        // with macOS kqueue connect-ready).  Do not apply this
+                        // to timeout_us == 0: those are nonblocking probes and
+                        // must still run continuePoll() when readiness is
+                        // available.
+                        for (auto& queued : ops_to_poll) {
+                            if (queued.key == key && queued.was_ready) {
+                                queued.timed_out = true;
+                                queued.was_ready = false;
+                                queued.ready_events = 0;
+                                return true;
+                            }
+                        }
+                    }
                     return false;  // already queued this iteration
                 }
                 if (pinfo.continue_poll_in_flight) {
@@ -4123,6 +4255,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             bool timed_out;
             bool completed;
             bool was_ready;  // true if triggered by a ready event (kqueue/epoll)
+            bool socket_wait_generation_changed;
         };
         std::vector<PollResult> poll_results;
 
@@ -4147,11 +4280,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             result.timed_out = op.timed_out;
             result.completed = false;
             result.was_ready = op.was_ready;
+            result.socket_wait_generation_changed = false;
 
             auto wait_it = t.cache.find(op.key);
             if (wait_it != t.cache.end()) {
                 result.ex_hash = makeSocketWaitGenerationException(wait_it->second, xsink);
                 if (result.ex_hash) {
+                    // The stale-fd guard is the terminal reason.  If the
+                    // operation timeout also expired, do not run timeout
+                    // abort/cleanup against the current socket fd.
+                    result.timed_out = false;
+                    result.socket_wait_generation_changed = true;
                     poll_results.push_back(std::move(result));
                     continue;
                 }
@@ -4372,6 +4511,21 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     unregisterExtraFds(t, result.key, xsink);
                     unregisterFromEventLoop(t, result.key, xsink);
 
+                    if (result.timed_out) {
+                        bool worker_abort = pinfo.has_qore_abort
+                            || (pinfo.spop_base && pinfo.spop_base->needsWorkerDispatch());
+                        if (worker_abort && on_async_io_thread) {
+                            ensureCallDispatcher();
+                            pinfo.spop_obj->ref();
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchAbortAsync(pinfo.spop_obj,
+                                pinfo.owner);
+                        } else if (pinfo.spop_base && !pinfo.has_qore_abort) {
+                            pinfo.spop_base->abort(xsink);
+                        } else {
+                            callAbort(pinfo.spop_obj, xsink);
+                        }
+                    }
+
                     bool handled = pinfo.spop_base
                         ? pinfo.spop_base->handleCompletion(false, result.ex_hash, xsink)
                         : false;
@@ -4431,8 +4585,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     bool should_close = false;
                     if (result.ex_hash && !result.timed_out) {
                         // Error path: close unless this is only the controller's
-                        // operation timeout.
-                        should_close = true;
+                        // operation timeout or fd-generation guard.  The guard
+                        // means the wait observed a stale fd; closing here could
+                        // close a replacement fd owned by the socket.
+                        should_close = !result.socket_wait_generation_changed;
                     }
                     if (!should_close && pinfo.spop_base && pinfo.spop_base->needsCloseOnComplete()) {
                         // C++ operation declares the connection is terminal
@@ -4495,7 +4651,20 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         bool needs_full_update = pinfo.cached_sock_hash.empty()
                             || events != pinfo.cached_events
                             || new_sock_obj != pinfo.cached_sock_obj;
-                        if (!needs_full_update && pinfo.spop_obj) {
+                        bool force_fd_reregister = hasSocketWaitGenerationChanged(pinfo,
+                            result.new_poll_info);
+                        if (force_fd_reregister) {
+                            needs_full_update = true;
+                        }
+                        if (pinfo.spop_base) {
+                            uint32_t gen = pinfo.spop_base->getFdGeneration();
+                            if (gen != pinfo.cached_fd_gen) {
+                                pinfo.cached_fd_gen = gen;
+                                needs_full_update = true;
+                                force_fd_reregister = true;
+                            }
+                        } else if (pinfo.spop_obj
+                                && pinfo.spop_obj->getClass()->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
                             SocketPollOperationBase* spop =
                                 static_cast<SocketPollOperationBase*>(
                                     pinfo.spop_obj->getReferencedPrivateData(
@@ -4505,6 +4674,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 if (gen != pinfo.cached_fd_gen) {
                                     pinfo.cached_fd_gen = gen;
                                     needs_full_update = true;
+                                    force_fd_reregister = true;
                                 }
                                 spop->deref(xsink);
                             }
@@ -4521,7 +4691,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 ASYNC_IO_TRACE("Phase3 UPDATE key='%s' sock='%s' events=%d\n",
                                     result.key.c_str(), sock_hash.c_str(), events);
                                 updateEventLoopRegistration(t, result.key, poll_sock, sock_hash,
-                                    events, xsink);
+                                    events, force_fd_reregister, xsink);
                                 pinfo.submit_route_sock_hash.clear();
                                 pinfo.submit_route_thread_idx = -1;
                                 updateExtraFds(t, result.key, poll_sock, result.new_poll_info,
@@ -4850,10 +5020,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         std::vector<QoreEventInfo> events;
         int count = t.loop->poll(events, timeout_ms, xsink);
         if (*xsink) {
-            const QoreStringNode* err = xsink->getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc = xsink->getExceptionDesc().get<const QoreStringNode>();
+            QoreStringValueHelper err(xsink->getExceptionErr());
+            QoreStringValueHelper desc(xsink->getExceptionDesc());
             log(QORE_LOG_LEVEL_ERROR, "EventLoop::poll() error: %s: %s",
-                err ? err->c_str() : "?", desc ? desc->c_str() : "?");
+                *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
             xsink->clear();
             continue;
         }
@@ -5018,14 +5188,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     std::move(c.buffer), &uring_xsink);
                 if (uring_xsink) {
                     // Log and clear — don't let one stream's error kill the loop
-                    const QoreStringNode* err = uring_xsink.getExceptionErr()
-                        .get<const QoreStringNode>();
-                    const QoreStringNode* desc = uring_xsink.getExceptionDesc()
-                        .get<const QoreStringNode>();
+                    QoreStringValueHelper err(uring_xsink.getExceptionErr());
+                    QoreStringValueHelper desc(uring_xsink.getExceptionDesc());
                     log(QORE_LOG_LEVEL_ERROR,
                         "io_uring completion error (stream %d): %s: %s",
-                        c.stream_id, err ? err->c_str() : "?",
-                        desc ? desc->c_str() : "?");
+                        c.stream_id, *err ? err->c_str() : "?",
+                        *desc ? desc->c_str() : "?");
                     uring_xsink.clear();
                 }
             }
@@ -5985,11 +6153,34 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 QoreObject* poll_sock = getSocketFromPollInfo(
                                     cmd.continue_poll_result, sock_hash, events, xsink);
                                 if (!*xsink && poll_sock) {
+                                    bool force_fd_reregister = hasSocketWaitGenerationChanged(pinfo,
+                                        cmd.continue_poll_result);
+                                    if (pinfo.spop_base) {
+                                        uint32_t gen = pinfo.spop_base->getFdGeneration();
+                                        if (gen != pinfo.cached_fd_gen) {
+                                            pinfo.cached_fd_gen = gen;
+                                            force_fd_reregister = true;
+                                        }
+                                    } else if (pinfo.spop_obj
+                                            && pinfo.spop_obj->getClass()->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
+                                        SocketPollOperationBase* spop =
+                                            static_cast<SocketPollOperationBase*>(
+                                                pinfo.spop_obj->getReferencedPrivateData(
+                                                    CID_SOCKETPOLLOPERATIONBASE, xsink));
+                                        if (spop) {
+                                            uint32_t gen = spop->getFdGeneration();
+                                            if (gen != pinfo.cached_fd_gen) {
+                                                pinfo.cached_fd_gen = gen;
+                                                force_fd_reregister = true;
+                                            }
+                                            spop->deref(xsink);
+                                        }
+                                    }
                                     pinfo.cached_sock_hash = sock_hash;
                                     pinfo.cached_events = events;
                                     pinfo.cached_sock_obj = poll_sock;
                                     updateEventLoopRegistration(t, cmd.key, poll_sock,
-                                        sock_hash, events, xsink);
+                                        sock_hash, events, force_fd_reregister, xsink);
                                     updateExtraFds(t, cmd.key, poll_sock,
                                         cmd.continue_poll_result, xsink);
                                 }
@@ -6163,7 +6354,8 @@ void AsyncIoControllerPriv::deliverBackstopCompletionIfUndelivered(PollInfo& pin
 }
 
 void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
-        QoreObject* socket, const std::string& sock_hash, int events, ExceptionSink* xsink) {
+        QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
+        ExceptionSink* xsink) {
     // Convert SOCK_POLLIN/SOCK_POLLOUT to QORE_EV_READ/QORE_EV_WRITE
     int ev_flags = 0;
     if (events & SOCK_POLLIN) {
@@ -6235,6 +6427,14 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
                 t.registered_fds[sock_hash] = curr_fd;
                 t.fd_to_sock_hash[curr_fd] = sock_hash;
                 t.registered_events[sock_hash] = union_events;
+            } else if (force_fd_reregister && union_events) {
+                // The fd number can be reused after close(), especially in
+                // Happy Eyeballs fallback.  epoll/kqueue may have dropped the
+                // old registration even though the integer fd is unchanged.
+                t.loop->modify(curr_fd, union_events, xsink);
+                t.fd_to_sock_hash[curr_fd] = sock_hash;
+                t.registered_events[sock_hash] = union_events;
+                fd_changed = true;
             }
             s->deref(xsink);
         }

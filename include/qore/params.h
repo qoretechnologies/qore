@@ -34,6 +34,7 @@
 #define _QORE_PARAMS_H
 
 #include <qore/AbstractQoreNode.h>
+#include <qore/QoreStringNode.h>
 #include <qore/ReferenceHolder.h>
 
 /** @file params.h
@@ -113,9 +114,6 @@ static QoreValue get_hard_value_param(const QoreListNode* n, size_t i) {
 //! returns a bool from a hard typed bool param
 #define HARD_QORE_VALUE_BOOL(list, i) get_hard_value_param(list, i).getAsBool()
 
-//! returns a const QoreStringNode* from a hard typed string param
-#define HARD_QORE_VALUE_STRING(list, i) get_hard_value_param(list, i).get<const QoreStringNode>()
-
 //! returns a const DateTimeNode* from a hard typed date param
 #define HARD_QORE_VALUE_DATE(list, i) get_hard_value_param(list, i).get<const DateTimeNode>()
 
@@ -145,13 +143,18 @@ static QoreValue get_hard_value_param(const QoreListNode* n, size_t i) {
 
 //! returns the QoreEncoding corresponding to the string passed or a default encoding
 static inline const QoreEncoding* get_value_encoding_param(const QoreListNode* n, size_t i, const QoreEncoding* def = QCS_DEFAULT) {
-    const QoreStringNode* str = HARD_QORE_VALUE_STRING(n, i);
-    return str ? QEM.findCreate(str) : def;
+    QoreValue v = get_hard_value_param(n, i);
+    if (v.isNullOrNothing()) {
+        return def;
+    }
+    QoreStringValueHelper str(v);
+    const QoreString* s = *str;
+    return s ? QEM.findCreate(s) : def;
 }
 
 static inline const QoreEncoding* get_hard_qore_value_encoding_param(const QoreListNode* n, size_t i) {
-    HARD_QORE_VALUE_PARAM(str, const QoreStringNode, n, i);
-    return QEM.findCreate(str);
+    QoreStringValueHelper str(get_hard_value_param(n, i));
+    return QEM.findCreate(*str);
 }
 
 #endif

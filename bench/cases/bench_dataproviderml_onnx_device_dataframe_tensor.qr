@@ -1,0 +1,64 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataProviderMlOnnxDeviceDataFrameTensor
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires dataframe
+%requires DataProviderML
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+#! DataProviderML ONNX tensor path with device binding enabled.
+/** With the default CPU provider the policy resolves to CPU output memory, so the
+    benchmark runs everywhere; set QORE_BENCH_ONNX_PROVIDER=CUDA to retain device
+    outputs. Transfer counters from the processor diagnostics are printed after the run.
+*/
+class BenchDataProviderMlOnnxDeviceDataFrameTensor {
+    constructor() {
+        string model_path = OnnxBench::modelPath();
+        if (!OnnxBench::canRunOnnx(model_path)) {
+            printf("dataproviderml_onnx_device_dataframe_tensor: skipped "
+                "(ONNX Runtime or test model not available)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_onnx_device_dataframe_tensor");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::rows();
+        DataFrame::DataFrame frame;
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": model_path,
+            "fields": "x",
+            "window_size": rows,
+            "output_mode": "tensor",
+            "execution_providers": OnnxBench::onnxProvider(),
+            "device_binding": True,
+            "output_device": OnnxBench::onnxOutputDevice(),
+            "materialize_outputs": OnnxBench::onnxMaterializeOutputs(),
+            "allow_host_fallback": True,
+        });
+
+        r.setup = sub () {
+            frame = OnnxBench::makeFloat32Frame(rows);
+            r.bytes_processed = OnnxBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            hash<auto> result = proc.processRecordsShape(frame, DataProviderShape::DataFrameBlock);
+            # shape-only check so device-resident outputs are not materialized in the hot loop
+            OnnxBench::verifyTensorShape("dataproviderml_onnx_device_dataframe_tensor", result.Y, rows);
+        };
+
+        int rc = r.run();
+        OnnxBench::reportTransfers("dataproviderml_onnx_device_dataframe_tensor",
+            proc.getDiagnostics().device_binding.transfers);
+        exit(rc);
+    }
+}

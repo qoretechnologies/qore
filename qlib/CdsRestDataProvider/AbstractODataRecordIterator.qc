@@ -27,7 +27,7 @@ public namespace CdsRestDataProvider {
 #! Abstract base class for OData record iterators
 /** Provides common OData query building logic used by both CDS and Business Central
 */
-public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIterator {
+public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The REST client object for API calls
         CdsRestClient::CdsRestClient rest;

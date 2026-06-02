@@ -478,6 +478,17 @@ QoreHashNode* QoreSQLStatement::fetchColumns(int rows, ExceptionSink* xsink) {
     return qore_dbi_private::get(*priv->ds->getDriver())->stmt_fetch_columns(this, rows, xsink);
 }
 
+QoreColumnarResult* QoreSQLStatement::fetchColumnar(int rows, ExceptionSink* xsink) {
+    DBActionHelper dba(*this, xsink, DAH_ACQUIRE);
+    if (!dba)
+        return nullptr;
+
+    if (checkStatus(xsink, dba, STMT_DEFINED, "fetchColumnar"))
+        return nullptr;
+
+    return qore_dbi_private::get(*priv->ds->getDriver())->stmt_fetch_columnar(this, rows, xsink);
+}
+
 QoreHashNode* QoreSQLStatement::describe(ExceptionSink* xsink) {
     DBActionHelper dba(*this, xsink, DAH_ACQUIRE);
     if (!dba)

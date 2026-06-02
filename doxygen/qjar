@@ -98,11 +98,16 @@ class QJar {
         }
         p.loadModule(module_load);
         p.parse("binary sub byte_code(Class cls) { return get_byte_code('::' + cls.getPathName()); }
-                 string sub java_name(Class cls) { return get_java_name('::' + cls.getPathName()); }", "api");
+                 string sub java_name(Class cls) { return get_java_name('::' + cls.getPathName()); }
+                 list<string> sub loaded_modules() { return keys get_module_hash(); }", "api");
 
         opts."module" = module_name;
         if (module_name =~ /^QorusFakeApi/) {
-            p.issueModuleCmd("jni", "mark-module-injected " + module_name);
+            foreach string name in (cast<list<string>>(p.callFunction("loaded_modules"))) {
+                if (name =~ /^QorusFakeApi/) {
+                    p.issueModuleCmd("jni", "mark-module-injected " + name);
+                }
+            }
         }
 
         # scan for classes from the module
@@ -119,15 +124,6 @@ class QJar {
 
             # do not try to generate bytecode for Java classes
             if (cls.getPathName() =~ /^Jni::/) {
-                continue;
-            }
-
-            # skip static-only classes (no constructor) — JNI byte code
-            # requires an instantiable class
-            if (!cls.hasConstructorMethod()) {
-                if (opts.verbose) {
-                    stderr.printf("skipping static-only class %y (no constructor)\n", cls.getPathName());
-                }
                 continue;
             }
 
@@ -189,7 +185,7 @@ class QJar {
         d.chdir(path);
 
         # get class files for all java files
-        foreach string fn in (d.listFiles("\\.java$")) {
+        foreach string fn in (d.listFileNames("\\.java$")) {
             string cls = basename(fn);
             cls =~ s/\.java$//;
             cls = ns + cls;
@@ -209,7 +205,7 @@ class QJar {
             }
         }
 
-        foreach string dir in (d.listDirs()) {
+        foreach string dir in (d.listDirNames()) {
             getClasses(path + DirSep + dir, ns + dir + "::");
         }
     }

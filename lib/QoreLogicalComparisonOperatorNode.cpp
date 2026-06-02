@@ -34,6 +34,23 @@
 
 QoreString QoreLogicalComparisonOperatorNode::logical_comparison_str("logical comparison (<=>) operator expression");
 
+static void set_binary_analysis_cmp(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 QoreValue QoreLogicalComparisonOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder l(left, xsink);
     if (*xsink)
@@ -52,10 +69,21 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
 
     // FIXME: check args to see if comparisons are possible and issue warnings / errors as appropriate
@@ -73,6 +101,8 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
             if (**xsink) {
                 err = -1;
             }
+            parse_context.typeInfo = val.getFullTypeInfo();
+            set_binary_analysis_cmp(parse_context, left_analysis, right_analysis);
         } else {
             // constants not resolved - skip parse-time folding, let runtime handle it
             del.release();
@@ -80,6 +110,7 @@ int QoreLogicalComparisonOperatorNode::parseInitImpl(QoreValue& val, QoreParseCo
     }
 
     parse_context.typeInfo = bigIntTypeInfo;
+    set_binary_analysis_cmp(parse_context, left_analysis, right_analysis);
     return err;
 }
 
@@ -92,31 +123,13 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
     qore_type_t lt = l.getType();
     qore_type_t rt = r.getType();
 
-    if (lt == NT_STRING) {
-        const QoreStringNode* ls = l.get<const QoreStringNode>();
-        if (rt == NT_STRING) {
-            const QoreStringNode* rs = r.get<const QoreStringNode>();
-            if (ls->getEncoding() != rs->getEncoding()) {
-                QoreStringValueHelper rstr(rs, ls->getEncoding(), xsink);
-                if (*xsink) {
-                    return 0;
-                }
-                return ls->compare(*rstr);
-            }
-            return ls->compare(rs);
-        }
+    if (lt == NT_STRING || rt == NT_STRING) {
+        QoreStringValueHelper ls(l);
         QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
         if (*xsink) {
             return 0;
         }
         return ls->compare(*rs);
-    } else if (rt == NT_STRING) {
-        const QoreStringNode* rs = r.get<const QoreStringNode>();
-        QoreStringValueHelper ls(l, rs->getEncoding(), xsink);
-        if (*xsink) {
-            return 0;
-        }
-        return ls->compare(rs);
     }
 
     if (lt == NT_NUMBER) {
@@ -138,7 +151,7 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
                 return ln->equals(*rn) ? 0 : 1;
             }
             case NT_FLOAT: {
-                float f = r.getAsFloat();
+                double f = r.getAsFloat();
                 if (std::isnan(f)) {
                     xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on right hand side of logical comparison operator");
                     return 0;
@@ -177,7 +190,7 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
 
         switch (lt) {
             case NT_FLOAT: {
-                float lf = l.getAsFloat();
+                double lf = l.getAsFloat();
                 if (std::isnan(lf)) {
                     xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on left hand side of logical comparison operator");
                     return 0;
@@ -206,13 +219,18 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
     }
 
     if (lt == NT_FLOAT || rt == NT_FLOAT) {
-        float lf = l.getAsFloat();
+        // Use double (not float) — getAsFloat() returns a 64-bit double; storing
+        // it in a 32-bit float silently truncates ~9 decimal digits of precision,
+        // so two distinct doubles that round to the same single-precision
+        // representation (e.g. 0.999999998 and 0.999999996 near saturation)
+        // would compare as equal, breaking sort stability.
+        double lf = l.getAsFloat();
         if (std::isnan(lf)) {
             xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on left hand side of logical comparison operator");
             return 0;
         }
 
-        float rf = r.getAsFloat();
+        double rf = r.getAsFloat();
         if (std::isnan(rf)) {
             xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on right hand side of logical comparison operator");
             return 0;

@@ -43,6 +43,7 @@
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/QC_EventNotifier.h"
+#include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
@@ -68,6 +69,7 @@
 
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <atomic>
 #include <cassert>
@@ -100,8 +102,12 @@ static const QoreStringNode* get_string_header_node(ExceptionSink* xsink, QoreHa
         return nullptr;
 
     qore_type_t t = n.getType();
-    if (t == NT_STRING)
-        return n.get<const QoreStringNode>();
+    if (t == NT_STRING) {
+        QoreStringNodeValueHelper str(n);
+        QoreStringNode* rv = str.getReferencedValue();
+        h.setKeyValue(header, rv, xsink);
+        return (xsink && *xsink) ? nullptr : rv;
+    }
     assert(t == NT_LIST);
     if (!allow_multiple) {
         xsink->raiseException("HTTP-HEADER-ERROR", "multiple \"%s\" headers received in HTTP message", header);
@@ -112,12 +118,14 @@ static const QoreStringNode* get_string_header_node(ExceptionSink* xsink, QoreHa
     // get first list entry
     n = l->retrieveEntry(0);
     assert(n.getType() == NT_STRING);
-    QoreStringNode* rv = n.get<QoreStringNode>()->copy();
+    QoreStringNodeValueHelper first(n);
+    QoreStringNode* rv = new QoreStringNode(**first);
     for (size_t i = 1; i < l->size(); ++i) {
         n = l->retrieveEntry(i);
         assert(n.getType() == NT_STRING);
         rv->concat(',');
-        qore_string_private::get(rv)->concat(n.get<const QoreStringNode>());
+        QoreStringValueHelper str(n);
+        qore_string_private::get(rv)->concat(*str);
     }
     // dereference old list and save reference to return value in header hash
     h.setKeyValue(header, rv, xsink);
@@ -128,6 +136,49 @@ static const char* get_string_header(ExceptionSink* xsink, QoreHashNode& h, cons
         bool allow_multiple = false) {
    const QoreStringNode* str = get_string_header_node(xsink, h, header, allow_multiple);
    return str && !str->empty() ? str->c_str() : nullptr;
+}
+
+// Reads a normalized string header without mutating the header hash.  Use this
+// after response headers may have been exposed through info/callback hashes.
+static QoreStringNode* get_string_header_node_ref(ExceptionSink* xsink, const QoreHashNode& h, const char* header,
+        bool allow_multiple = false) {
+    QoreValue n = h.getKeyValue(header);
+    if (n.isNothing())
+        return nullptr;
+
+    qore_type_t t = n.getType();
+    if (t == NT_STRING) {
+        QoreStringNodeValueHelper str(n);
+        return str.getReferencedValue();
+    }
+    assert(t == NT_LIST);
+    if (!allow_multiple) {
+        xsink->raiseException("HTTP-HEADER-ERROR", "multiple \"%s\" headers received in HTTP message", header);
+        return nullptr;
+    }
+
+    const QoreListNode* l = n.get<const QoreListNode>();
+    n = l->retrieveEntry(0);
+    assert(n.getType() == NT_STRING);
+    QoreStringNodeValueHelper first(n);
+    QoreStringNode* rv = new QoreStringNode(**first);
+    for (size_t i = 1; i < l->size(); ++i) {
+        n = l->retrieveEntry(i);
+        assert(n.getType() == NT_STRING);
+        rv->concat(',');
+        QoreStringValueHelper str(n);
+        qore_string_private::get(rv)->concat(*str);
+    }
+    return rv;
+}
+
+static std::optional<std::string> get_string_header_value(ExceptionSink* xsink, const QoreHashNode& h,
+        const char* header, bool allow_multiple = false) {
+    SimpleRefHolder<QoreStringNode> str(get_string_header_node_ref(xsink, h, header, allow_multiple));
+    if ((xsink && *xsink) || !str || str->empty()) {
+        return std::nullopt;
+    }
+    return std::string(str->c_str());
 }
 
 const char* QoreHttpClientObject::getHttpStatusMessage(int code) {
@@ -212,7 +263,7 @@ static void set_http2_response_info(ExceptionSink* xsink, QoreHashNode& headers,
 }
 
 static void set_body_content_type_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info) {
-    const QoreStringNode* ct = get_string_header_node(xsink, headers, "content-type", true);
+    SimpleRefHolder<QoreStringNode> ct(get_string_header_node_ref(xsink, headers, "content-type", true));
     if (*xsink || !ct || ct->empty()) {
         return;
     }
@@ -241,7 +292,8 @@ static void set_body_content_type_info(ExceptionSink* xsink, QoreHashNode& heade
         return;
     }
 
-    const char* orig_str = orig.get<const QoreStringNode>()->c_str();
+    QoreStringValueHelper orig_str_helper(orig);
+    const char* orig_str = orig_str_helper->c_str();
     const char* p = strstr(orig_str, "charset=");
     if (!p || (p != orig_str && *(p - 1) != ';' && *(p - 1) != ' ')) {
         return;
@@ -492,14 +544,17 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
     if (!body.isNullOrNothing()) {
         if (body.getType() == NT_BINARY) {
             const BinaryNode* bin = body.get<const BinaryNode>();
+            std::string content_encoding_storage;
             const char* content_encoding = nullptr;
             if (hdrs_v.getType() == NT_HASH) {
                 QoreValue cev = hdrs_v.get<const QoreHashNode>()->getKeyValue(
                     "content-encoding");
                 if (cev.getType() == NT_STRING) {
-                    const char* ce = cev.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper ce_str(cev);
+                    const char* ce = ce_str->c_str();
                     if (ce && *ce && strcasecmp(ce, "identity")) {
-                        content_encoding = ce;
+                        content_encoding_storage = ce;
+                        content_encoding = content_encoding_storage.c_str();
                     }
                 }
             }
@@ -563,7 +618,8 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
             // Infer http_version from protocol or stream_id presence
             QoreValue proto = src->getKeyValue("protocol");
             if (proto.getType() == NT_STRING) {
-                const char* p = proto.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper proto_str(proto);
+                const char* p = proto_str->c_str();
                 if (!strcmp(p, "h2")) {
                     rh->setKeyValue("http_version",
                         new QoreStringNode("2"), xsink);
@@ -597,7 +653,7 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
         const QoreHashNode* hdrs = hdrs_v.get<const QoreHashNode>();
         QoreValue ct = hdrs->getKeyValue("content-type");
         if (ct.getType() == NT_STRING) {
-            const QoreStringNode* cts = ct.get<const QoreStringNode>();
+            QoreStringValueHelper cts(ct);
             if (!cts->empty()) {
                 const char* s = cts->c_str();
                 while (*s == ' ') { ++s; }
@@ -620,8 +676,13 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
     // http_version, so derive the version from stream_id presence.
     if (!sc.isNullOrNothing()) {
         QoreValue sm_val = src->getKeyValue("status_message");
-        const char* sm_str = sm_val.getType() == NT_STRING
-            ? sm_val.get<const QoreStringNode>()->c_str() : "";
+        std::string sm_storage;
+        const char* sm_str = "";
+        if (sm_val.getType() == NT_STRING) {
+            QoreStringValueHelper sm(sm_val);
+            sm_storage = sm->c_str();
+            sm_str = sm_storage.c_str();
+        }
         if (!sm_str[0]) {
             sm_str = QoreHttpClientObject::getHttpStatusMessage(
                 (int)sc.getAsBigInt());
@@ -630,7 +691,8 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
         QoreValue proto = src->getKeyValue("protocol");
         QoreValue hv_src = src->getKeyValue("http_version");
         if (proto.getType() == NT_STRING) {
-            const char* p = proto.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper proto_str(proto);
+            const char* p = proto_str->c_str();
             if (!strcmp(p, "h2")) {
                 ver = "HTTP/2";
             } else if (!strcmp(p, "h3")) {
@@ -638,9 +700,9 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
             } else if (hv_src.getType() == NT_STRING) {
                 // H1 with explicit version — build URI inline to avoid
                 // a static buffer (thread safety)
+                QoreStringValueHelper hv(hv_src);
                 QoreStringNode* uri = new QoreStringNodeMaker("HTTP/%s %d %s",
-                    hv_src.get<const QoreStringNode>()->c_str(),
-                    (int)sc.getAsBigInt(), sm_str);
+                    hv->c_str(), (int)sc.getAsBigInt(), sm_str);
                 info_hash->setKeyValue("response-uri", uri, xsink);
                 ver = nullptr;  // skip default URI below
             }
@@ -676,11 +738,21 @@ static void setConnMgrResponseUri(QoreHashNode* info, const QoreHashNode* src,
         return;
     }
     QoreValue msg = src->getKeyValue("status_message");
-    const char* msg_str = msg.getType() == NT_STRING
-        ? msg.get<const QoreStringNode>()->c_str() : "";
+    std::string msg_storage;
+    const char* msg_str = "";
+    if (msg.getType() == NT_STRING) {
+        QoreStringValueHelper msg_helper(msg);
+        msg_storage = msg_helper->c_str();
+        msg_str = msg_storage.c_str();
+    }
     QoreValue proto = src->getKeyValue("protocol");
-    const char* proto_str = proto.getType() == NT_STRING
-        ? proto.get<const QoreStringNode>()->c_str() : "h1";
+    std::string proto_storage;
+    const char* proto_str = "h1";
+    if (proto.getType() == NT_STRING) {
+        QoreStringValueHelper proto_helper(proto);
+        proto_storage = proto_helper->c_str();
+        proto_str = proto_storage.c_str();
+    }
     // Map protocol token (h1/h2/h3) to HTTP version label
     const char* ver;
     if (!strcmp(proto_str, "h2")) {
@@ -691,9 +763,9 @@ static void setConnMgrResponseUri(QoreHashNode* info, const QoreHashNode* src,
         // For h1, prefer the http_version field if present
         QoreValue hv = src->getKeyValue("http_version");
         if (hv.getType() == NT_STRING) {
+            QoreStringValueHelper hv_str(hv);
             QoreStringNode* rv = new QoreStringNodeMaker("HTTP/%s %d %s",
-                hv.get<const QoreStringNode>()->c_str(), (int)sc.getAsBigInt(),
-                msg_str);
+                hv_str->c_str(), (int)sc.getAsBigInt(), msg_str);
             info->setKeyValue("response-uri", rv, xsink);
             return;
         }
@@ -1396,7 +1468,10 @@ struct qore_httpclient_priv {
     }
 
     //! Clears the streaming receive channel, closing it if open
-    DLLLOCAL void clearStreamingChannel() {
+    DLLLOCAL void clearStreamingChannel(QoreChannel* expected = nullptr) {
+        if (expected && streaming_recv_channel != expected) {
+            return;
+        }
         if (streaming_recv_channel) {
             streaming_recv_channel->close();
             ExceptionSink xsink;
@@ -1998,11 +2073,14 @@ struct qore_httpclient_priv {
             // any string will be converted to the socket's encoding before sending, so we have to compare the socket's
             // encoding and not the string's
             if (enc != QCS_ISO_8859_1) {
-                QoreStringNode* v = nh->getKeyValue(ct).get<QoreStringNode>();
-                assert(v->is_unique());
+                QoreValue ct_val = nh->getKeyValue(ct);
+                assert(ct_val.getType() == NT_STRING);
+                QoreStringValueHelper ct_str(ct_val);
+                QoreStringNode* v = new QoreStringNode(*ct_str);
                 QoreString code(string_body_enc->getCode());
                 code.tolwr();
                 v->sprintf(";charset=%s", code.c_str());
+                nh->setKeyValue(ct, v, xsink);
             }
         }
 
@@ -2477,7 +2555,7 @@ struct qore_httpclient_priv {
             return false;
         }
 
-        const QoreStringNode* challenge = get_string_header_node(xsink, ans, challenge_hdr);
+        SimpleRefHolder<QoreStringNode> challenge(get_string_header_node_ref(xsink, ans, challenge_hdr));
         if (*xsink || !challenge || challenge->empty()) {
             return false;
         }
@@ -2694,14 +2772,20 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
 
     // check if proxy is true
     n = opts->getKeyValue("proxy");
-    if (n.getType() == NT_STRING && http_priv->setProxyUrlUnlocked((n.get<const QoreStringNode>())->c_str(), xsink)) {
-        return -1;
+    if (n.getType() == NT_STRING) {
+        QoreStringValueHelper str(n);
+        if (http_priv->setProxyUrlUnlocked(str->c_str(), xsink)) {
+            return -1;
+        }
     }
 
     // parse url option if present
     n = opts->getKeyValue("url");
-    if (n.getType() == NT_STRING && http_priv->setUrlUnlocked((n.get<const QoreStringNode>())->c_str(), xsink)) {
-        return -1;
+    if (n.getType() == NT_STRING) {
+        QoreStringValueHelper str(n);
+        if (http_priv->setUrlUnlocked(str->c_str(), xsink)) {
+            return -1;
+        }
     }
 
     // set username and password, if applicable
@@ -2710,15 +2794,17 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         if (n.getType() == NT_STRING) {
             const QoreValue p = opts->getKeyValue("password");
             if (p.getType() == NT_STRING) {
-                http_priv->setUserPassword(n.get<const QoreStringNode>()->c_str(),
-                    p.get<const QoreStringNode>()->c_str());
+                QoreStringValueHelper user(n);
+                QoreStringValueHelper pass(p);
+                http_priv->setUserPassword(user->c_str(), pass->c_str());
             }
         }
     }
 
     n = opts->getKeyValue("default_path");
     if (n.getType() == NT_STRING) {
-        http_priv->default_path = (n.get<const QoreStringNode>())->c_str();
+        QoreStringValueHelper str(n);
+        http_priv->default_path = str->c_str();
     }
 
     // set default timeout if given in option hash - accept relative date/time values as well as integers
@@ -2734,7 +2820,8 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "'2.0', '3.0') as value for the \"http_version\" key in the options hash");
             return -1;
         }
-        if (setHTTPVersion((n.get<const QoreStringNode>())->c_str(), xsink)) {
+        QoreStringValueHelper str(n);
+        if (setHTTPVersion(str->c_str(), xsink)) {
             return -1;
         }
     }
@@ -2742,11 +2829,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("http3_mode");
     if (!n.isNothing()) {
         if (n.getType() == NT_STRING) {
-            const char* str = n.get<const QoreStringNode>()->c_str();
-            int mode = parseHttp3ModeString(str);
+            QoreStringValueHelper str(n);
+            int mode = parseHttp3ModeString(str->c_str());
             if (mode < 0) {
                 xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "invalid http3_mode value '%s'; "
-                    "valid values are: 'disabled', 'auto', 'required'", str);
+                    "valid values are: 'disabled', 'auto', 'required'", str->c_str());
                 return -1;
             }
             http_priv->http3_mode = mode;
@@ -2818,7 +2905,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "key in the options hash; got type \"%s\" instead", n.getTypeName());
             return -1;
         }
-        const QoreStringNode* val = n.get<const QoreStringNode>();
+        QoreStringValueHelper val(n);
         qore_socket_private::get(*priv->socket)->setAssumedEncoding(!val->empty() ? val->c_str() : nullptr);
     }
 
@@ -2831,7 +2918,8 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 return -1;
             }
         } else if (n.getType() == NT_STRING) {
-            cert = new QoreSSLCertificate(n.get<const QoreStringNode>(), xsink);
+            QoreStringValueHelper cert_str(n);
+            cert = new QoreSSLCertificate(*cert_str, xsink);
             if (*xsink) {
                 return -1;
             }
@@ -2851,7 +2939,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                     "\"ssl_cert_path\" key in the options hash; got type \"%s\" instead", n.getTypeName());
                 return -1;
             }
-            const QoreStringNode* path = n.get<const QoreStringNode>();
+            QoreStringValueHelper path(n);
             if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_cert_path\" option = \"%s\" "
                     "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
@@ -2879,6 +2967,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         }
     }
 
+    std::string key_password_storage;
     const char* key_password = nullptr;
     n = opts->getKeyValue("ssl_key_password");
     if (!n.isNothing()) {
@@ -2887,7 +2976,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "key in the options hash; got type \"%s\" instead", n.getTypeName());
             return -1;
         }
-        key_password = n.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper pass(n);
+        key_password_storage = pass->c_str();
+        key_password = key_password_storage.c_str();
     }
 
     n = opts->getKeyValue("ssl_key_data");
@@ -2900,7 +2991,8 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 return -1;
             }
         } else if (n.getType() == NT_STRING) {
-            pk = new QoreSSLPrivateKey(n.get<const QoreStringNode>(), key_password, xsink);
+            QoreStringValueHelper key_str(n);
+            pk = new QoreSSLPrivateKey(*key_str, key_password, xsink);
             if (*xsink) {
                 return -1;
             }
@@ -2920,7 +3012,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                     "\"ssl_key_path\" key in the options hash; got type \"%s\" instead", n.getTypeName());
                 return -1;
             }
-            const QoreStringNode* path = n.get<const QoreStringNode>();
+            QoreStringValueHelper path(n);
             if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_key_path\" option = \"%s\" "
                     "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
@@ -2981,9 +3073,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "\"encode_chars\" key in the options hash; got type \"%s\" instead", n.getTypeName());
             return -1;
         }
-        const QoreStringNode* chars = n.get<const QoreStringNode>();
+        QoreStringValueHelper chars(n);
         for (size_t i = 0, e = chars->size(); i < e; ++i) {
-            http_priv->setEncodeChar((*chars)[i]);
+            http_priv->setEncodeChar(chars->c_str()[i]);
         }
     }
 
@@ -2995,8 +3087,8 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 "\"encoding\" key in the options hash; got type \"%s\" instead", n.getTypeName());
             return -1;
         }
-        const QoreStringNode* enc_str = n.get<const QoreStringNode>();
-        const QoreEncoding* enc = QEM.findCreate(enc_str);
+        QoreStringValueHelper enc_str(n);
+        const QoreEncoding* enc = QEM.findCreate(*enc_str);
         priv->socket->setEncoding(enc);
         http_priv->enc = enc;
     }
@@ -4321,6 +4413,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     // Redirect + auth retry loop
     int redirect_count = 0;
     bool auth_retried = false;
+    std::string location_storage;
     const char* location = nullptr;
     ReferenceHolder<QoreHashNode> ans(xsink);
     int code = 0;
@@ -4447,7 +4540,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     bool done = false;
                     switch (res->getType()) {
                         case NT_STRING: {
-                            const QoreStringNode* str = res->get<const QoreStringNode>();
+                            QoreStringValueHelper str(*res);
                             if (str->empty()) {
                                 done = true;
                             } else {
@@ -4602,14 +4695,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     QoreValue err_val = h->getKeyValue("err");
                     if (!err_val.isNullOrNothing()) {
                         channel->close();
-                        const char* err_str = err_val.getType() == NT_STRING
-                            ? err_val.get<const QoreStringNode>()->c_str()
-                            : "HTTP-CLIENT-RECEIVE-ERROR";
+                        std::string err_str = "HTTP-CLIENT-RECEIVE-ERROR";
+                        if (err_val.getType() == NT_STRING) {
+                            QoreStringValueHelper err(err_val);
+                            err_str = err->c_str();
+                        }
                         QoreValue desc_val = h->getKeyValue("desc");
-                        const char* desc_str = desc_val.getType() == NT_STRING
-                            ? desc_val.get<const QoreStringNode>()->c_str()
-                            : "streaming request failed";
-                        xsink->raiseException(err_str, desc_str);
+                        std::string desc_str = "streaming request failed";
+                        if (desc_val.getType() == NT_STRING) {
+                            QoreStringValueHelper desc(desc_val);
+                            desc_str = desc->c_str();
+                        }
+                        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
                         return nullptr;
                     }
 
@@ -4630,9 +4727,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         }
 
                         if (info) {
-                            // set_body_content_type_info must run BEFORE
-                            // refSelf() of ans — see comment in non-
-                            // streaming path for the refcount reason.
                             set_body_content_type_info(xsink, **ans, *info);
                             info->setKeyValue("response-headers", ans->refSelf(), xsink);
                             QoreValue raw_hdrs = h->getKeyValue("headers_raw");
@@ -4694,6 +4788,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         // sendAndStream mode: store channel for later reads,
                         // don't drain the body
                         if (streaming) {
+                            AutoLocker al(msock->m);
                             clearStreamingChannel();
                             channel->ref();
                             streaming_recv_channel = *channel;
@@ -4713,8 +4808,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 const BinaryNode* bin = body_val.get<const BinaryNode>();
                                 os->write(bin->getPtr(), bin->size(), xsink);
                             } else if (body_val.getType() == NT_STRING) {
-                                const QoreStringNode* str =
-                                    body_val.get<const QoreStringNode>();
+                                QoreStringValueHelper str(body_val);
                                 os->write(str->c_str(), str->size(), xsink);
                             }
                             if (*xsink) {
@@ -4834,11 +4928,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 code = (int)ans->getKeyValue("status_code").getAsBigInt();
 
                 if (info) {
-                    // set_body_content_type_info mutates the headers hash
-                    // (folds multi-value headers) via get_string_header_node,
-                    // so it must run BEFORE we refSelf() ans into the info
-                    // hash — otherwise ans has reference_count() > 1 and
-                    // setKeyValue trips its uniqueness assertion.
                     set_body_content_type_info(xsink, **ans, *info);
                     info->setKeyValue("response-headers", ans->refSelf(), xsink);
                     if (*xsink) {
@@ -4911,12 +5000,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 QoreValue err_val = h->getKeyValue("err");
                 if (!err_val.isNullOrNothing()) {
                     channel->close();
-                    const char* err_str = err_val.getType() == NT_STRING
-                        ? err_val.get<const QoreStringNode>()->c_str() : "HTTP-CLIENT-RECEIVE-ERROR";
+                    std::string err_str = "HTTP-CLIENT-RECEIVE-ERROR";
+                    if (err_val.getType() == NT_STRING) {
+                        QoreStringValueHelper err(err_val);
+                        err_str = err->c_str();
+                    }
                     QoreValue desc_val = h->getKeyValue("desc");
-                    const char* desc_str = desc_val.getType() == NT_STRING
-                        ? desc_val.get<const QoreStringNode>()->c_str() : "streaming request failed";
-                    xsink->raiseException(err_str, desc_str);
+                    std::string desc_str = "streaming request failed";
+                    if (desc_val.getType() == NT_STRING) {
+                        QoreStringValueHelper desc(desc_val);
+                        desc_str = desc->c_str();
+                    }
+                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
                     return nullptr;
                 }
 
@@ -4939,11 +5034,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
 
                     if (info) {
-                        // set_body_content_type_info must run BEFORE
-                        // refSelf() of ans — ans has reference_count() > 1
-                        // after response-headers is set, which trips the
-                        // setKeyValue uniqueness assertion in
-                        // get_string_header_node's multi-value fold.
                         set_body_content_type_info(xsink, **ans, *info);
                         info->setKeyValue("response-headers", ans->refSelf(), xsink);
                         QoreValue raw_hdrs = h->getKeyValue("headers_raw");
@@ -4956,16 +5046,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     // Determine response transfer-encoding and content-encoding
                     // for body delivery decisions
                     {
-                        const char* te = get_string_header(xsink, **ans, "transfer-encoding");
-                        if (te && strcasestr(te, "chunked")) {
+                        std::optional<std::string> te = get_string_header_value(xsink, **ans,
+                            "transfer-encoding");
+                        if (te && strcasestr(te->c_str(), "chunked")) {
                             is_chunked_response = true;
                         }
                         if (*xsink) {
                             xsink->clear();
                         }
-                        const char* ce = get_string_header(xsink, **ans, "content-encoding");
-                        if (ce && *ce && strcasecmp(ce, "identity")) {
-                            resp_content_encoding = ce;
+                        std::optional<std::string> ce = get_string_header_value(xsink, **ans,
+                            "content-encoding");
+                        if (ce && !ce->empty() && strcasecmp(ce->c_str(), "identity")) {
+                            resp_content_encoding = *ce;
                         }
                         if (*xsink) {
                             xsink->clear();
@@ -4985,12 +5077,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         // per-event delivery.
                         bool is_event_stream = false;
                         {
-                            const char* ct = get_string_header(xsink,
+                            std::optional<std::string> ct = get_string_header_value(xsink,
                                 **ans, "content-type", true);
                             if (*xsink) {
                                 xsink->clear();
                             }
-                            if (ct && strcasestr(ct, "text/event-stream")) {
+                            if (ct && strcasestr(ct->c_str(), "text/event-stream")) {
                                 is_event_stream = true;
                             }
                         }
@@ -5065,7 +5157,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             const BinaryNode* bin = body_val.get<const BinaryNode>();
                             os->write(bin->getPtr(), bin->size(), xsink);
                         } else if (body_val.getType() == NT_STRING) {
-                            const QoreStringNode* str = body_val.get<const QoreStringNode>();
+                            QoreStringValueHelper str(body_val);
                             os->write(str->c_str(), str->size(), xsink);
                         }
                         if (*xsink) {
@@ -5079,7 +5171,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 const BinaryNode* bin = body_val.get<const BinaryNode>();
                                 accumulated_body->append(bin->getPtr(), bin->size());
                             } else if (body_val.getType() == NT_STRING) {
-                                const QoreStringNode* str = body_val.get<const QoreStringNode>();
+                                QoreStringValueHelper str(body_val);
                                 accumulated_body->append(str->c_str(), str->size());
                             }
                         } else {
@@ -5270,14 +5362,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 QoreValue err_val = h->getKeyValue("err");
                 if (!err_val.isNullOrNothing()) {
                     channel->close();
-                    const char* err_str = err_val.getType() == NT_STRING
-                        ? err_val.get<const QoreStringNode>()->c_str()
-                        : "HTTP-CLIENT-RECEIVE-ERROR";
+                    std::string err_str = "HTTP-CLIENT-RECEIVE-ERROR";
+                    if (err_val.getType() == NT_STRING) {
+                        QoreStringValueHelper err(err_val);
+                        err_str = err->c_str();
+                    }
                     QoreValue desc_val = h->getKeyValue("desc");
-                    const char* desc_str = desc_val.getType() == NT_STRING
-                        ? desc_val.get<const QoreStringNode>()->c_str()
-                        : "streaming request failed";
-                    xsink->raiseException(err_str, desc_str);
+                    std::string desc_str = "streaming request failed";
+                    if (desc_val.getType() == NT_STRING) {
+                        QoreStringValueHelper desc(desc_val);
+                        desc_str = desc->c_str();
+                    }
+                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
                     return nullptr;
                 }
 
@@ -5297,9 +5393,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
 
                     if (info) {
-                        // set_body_content_type_info BEFORE refSelf() — see
-                        // comment on the analogous guard elsewhere in this
-                        // function for the refcount/assertion rationale.
                         set_body_content_type_info(xsink, **ans, *info);
                         info->setKeyValue("response-headers", ans->refSelf(), xsink);
                         QoreValue raw_hdrs = h->getKeyValue("headers_raw");
@@ -5318,6 +5411,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     } else {
                         // Store the channel for later reads via
                         // readHTTPChunk / readServerSentEvent
+                        AutoLocker al(msock->m);
                         clearStreamingChannel();
                         channel->ref();
                         streaming_recv_channel = *channel;
@@ -5368,14 +5462,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             {
                 QoreValue err_val = raw_resp->getKeyValue("err");
                 if (!err_val.isNullOrNothing()) {
-                    const char* err_str = err_val.getType() == NT_STRING
-                        ? err_val.get<const QoreStringNode>()->c_str()
-                        : "HTTP-CLIENT-RECEIVE-ERROR";
+                    std::string err_str = "HTTP-CLIENT-RECEIVE-ERROR";
+                    if (err_val.getType() == NT_STRING) {
+                        QoreStringValueHelper err(err_val);
+                        err_str = err->c_str();
+                    }
                     QoreValue desc_val = raw_resp->getKeyValue("desc");
-                    const char* desc_str = desc_val.getType() == NT_STRING
-                        ? desc_val.get<const QoreStringNode>()->c_str()
-                        : "request failed";
-                    xsink->raiseException(err_str, desc_str);
+                    std::string desc_str = "request failed";
+                    if (desc_val.getType() == NT_STRING) {
+                        QoreStringValueHelper desc(desc_val);
+                        desc_str = desc->c_str();
+                    }
+                    xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
                     return nullptr;
                 }
                 QoreValue sc_val = raw_resp->getKeyValue("status_code");
@@ -5385,9 +5483,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     // cause is a RST_STREAM from the server (e.g., body
                     // size limit); for H1 it's a premature close.
                     QoreValue proto = raw_resp->getKeyValue("protocol");
-                    const char* proto_str = proto.getType() == NT_STRING
-                        ? proto.get<const QoreStringNode>()->c_str()
-                        : "h1";
+                    std::string proto_storage;
+                    const char* proto_str = "h1";
+                    if (proto.getType() == NT_STRING) {
+                        QoreStringValueHelper proto_helper(proto);
+                        proto_storage = proto_helper->c_str();
+                        proto_str = proto_storage.c_str();
+                    }
                     if (!strcmp(proto_str, "h2")) {
                         xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                             "HTTP/2 stream ended before response headers "
@@ -5414,8 +5516,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             code = (int)ans->getKeyValue("status_code").getAsBigInt();
 
             if (info) {
-                // set_body_content_type_info BEFORE refSelf() of ans — see
-                // comment on the analogous guards in the streaming paths.
                 set_body_content_type_info(xsink, **ans, *info);
                 info->setKeyValue("response-headers", ans->refSelf(), xsink);
                 if (*xsink) {
@@ -5441,9 +5541,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // send_internal behavior).  The conn_mgr path uses its own sockets
         // for I/O, but events are fired on msock's queue for user visibility.
         {
-            const char* cl = get_string_header(xsink, **ans, "content-length");
+            std::optional<std::string> cl = get_string_header_value(xsink, **ans, "content-length");
             if (!*xsink && cl) {
-                ssize_t len = strtoll(cl, nullptr, 10);
+                ssize_t len = strtoll(cl->c_str(), nullptr, 10);
                 msock->socket->priv->do_content_length_event(len, QORE_SOURCE_HTTPCLIENT);
             }
             if (*xsink) {
@@ -5465,15 +5565,23 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // Handle 3xx redirects (304 Not Modified passes through)
         if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
             host_override = false;
-            const QoreStringNode* mess = ans->getKeyValue("status_message").get<QoreStringNode>();
+            QoreValue mess_val = ans->getKeyValue("status_message");
+            QoreStringNodeValueHelper mess(mess_val);
+            const QoreStringNode* mess_node = mess_val.getType() == NT_STRING ? *mess : nullptr;
 
-            const QoreStringNode* loc = get_string_header_node(xsink, **ans, "location");
+            SimpleRefHolder<QoreStringNode> loc(get_string_header_node_ref(xsink, **ans, "location"));
             if (*xsink) {
                 return nullptr;
             }
-            location = loc && !loc->empty() ? loc->c_str() : nullptr;
+            if (loc && !loc->empty()) {
+                location_storage = loc->c_str();
+                location = location_storage.c_str();
+            } else {
+                location_storage.clear();
+                location = nullptr;
+            }
             if (!location) {
-                const char* msg = mess ? mess->c_str() : "<no message>";
+                const char* msg = mess_node ? mess_node->c_str() : "<no message>";
                 xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR",
                     "no redirect location given for status code %d: message: '%s'", code, msg);
                 return nullptr;
@@ -5484,10 +5592,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
 
             // Fire redirect event on the HTTPClient's event queue
-            msock->socket->priv->do_redirect_event(loc, mess, QORE_SOURCE_HTTPCLIENT);
+            msock->socket->priv->do_redirect_event(*loc, mess_node, QORE_SOURCE_HTTPCLIENT);
 
             if (redirectUrlUnlocked(location, this_connection, xsink)) {
-                const char* msg = mess ? mess->c_str() : "<no message>";
+                const char* msg = mess_node ? mess_node->c_str() : "<no message>";
                 xsink->appendLastDescription(": while setting URL for redirect location '%s' (code %d: "
                     "message: '%s')", location, code, msg);
                 return nullptr;
@@ -5507,7 +5615,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
                 tmp.clear();
                 tmp.sprintf("redirect-message-%d", redirect_count);
-                info->setKeyValue(tmp.c_str(), mess ? mess->refSelf() : QoreValue(), xsink);
+                info->setKeyValue(tmp.c_str(), mess_node ? mess_node->refSelf() : QoreValue(), xsink);
             }
 
             // Use updated connection path for the next iteration
@@ -5520,16 +5628,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
     // Check for max redirects exceeded
     if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
-        const char* mess = get_string_header(xsink, **ans, "status_message");
-        if (!mess) {
-            mess = "<no message>";
-        }
+        std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
+        const char* msg = mess ? mess->c_str() : "<no message>";
         if (!location) {
             location = "<no location>";
         }
         xsink->raiseException("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED",
             "maximum redirections (%d) exceeded; redirect code %d to '%s' ignored (message: '%s')",
-            max_redirects, code, location, mess);
+            max_redirects, code, location, msg);
         return nullptr;
     }
 
@@ -5539,7 +5645,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     {
         QoreValue proto = ans->getKeyValue("protocol");
         if (proto.getType() == NT_STRING) {
-            const char* p = proto.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper proto_str(proto);
+            const char* p = proto_str->c_str();
             if (!strcmp(p, "h2")) {
                 http2_active = true;
             } else if (!strcmp(p, "h3")) {
@@ -5555,7 +5662,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     if (http3_mode != HTTP3_MODE_DISABLED) {
         QoreValue alt_svc_val = ans->getKeyValue("alt-svc");
         if (alt_svc_val.getType() == NT_STRING) {
-            parseAltSvc(alt_svc_val.get<const QoreStringNode>()->c_str(),
+            QoreStringValueHelper alt_svc(alt_svc_val);
+            parseAltSvc(alt_svc->c_str(),
                 this_connection.host.c_str(), this_connection.port);
         }
     }
@@ -5614,13 +5722,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     // guard at the bottom of the legacy send_internal.
     if (!error_passthru && !recv_callback && !os && !*xsink
             && (code < 100 || code >= 300)) {
-        const char* mess = get_string_header(xsink, **ans, "status_message");
-        if (!mess) {
-            mess = "<no message>";
-        }
+        std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
+        const char* msg = mess ? mess->c_str() : "<no message>";
         assert(!*xsink);
         xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(),
-            "HTTP status code %d received: message: %s", code, mess);
+            "HTTP status code %d received: message: %s", code, msg);
         return nullptr;
     }
 
@@ -5839,13 +5945,11 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     }
 
     if (!error_passthru && !*xsink && (code < 100 || code >= 300)) {
-        const char* mess = get_string_header(xsink, **ans, "status_message");
-        if (!mess) {
-            mess = "<no message>";
-        }
+        std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
+        const char* msg = mess ? mess->c_str() : "<no message>";
         assert(!*xsink);
         xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(),
-            "HTTP status code %d received: message: %s", code, mess);
+            "HTTP status code %d received: message: %s", code, msg);
         return nullptr;
     }
 
@@ -5909,7 +6013,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                 if (v.getType() != NT_STRING) {
                     continue;
                 }
-                const char* val = v.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper header_val(v);
+                const char* val = header_val->c_str();
                 if (!strcasecmp(key, "Connection") && val
                         && strcasestr(val, "upgrade")) {
                     has_conn_upgrade = true;
@@ -6271,7 +6376,8 @@ public:
                 if (!peek_xsink && pv.getType() == NT_HASH) {
                     QoreValue proto = pv.get<QoreHashNode>()->getKeyValue("protocol");
                     if (proto.getType() == NT_STRING) {
-                        const char* p = proto.get<const QoreStringNode>()->c_str();
+                        QoreStringValueHelper proto_str(proto);
+                        const char* p = proto_str->c_str();
                         if (!strcmp(p, "h2")) {
                             priv_ref->http2_active = true;
                         }
@@ -6295,7 +6401,8 @@ public:
                     if (err_val.getType() == NT_STRING && priv_ref
                             && priv_ref->user_disconnect_in_progress.load(
                                 std::memory_order_acquire)) {
-                        const char* err = err_val.get<const QoreStringNode>()->c_str();
+                        QoreStringValueHelper err_str(err_val);
+                        const char* err = err_str->c_str();
                         if (!strcmp(err, "HTTP1-ABORT")) {
                             xsink->raiseException("SOCKET-NOT-OPEN",
                                 "socket disconnected during poll operation");
@@ -6426,19 +6533,21 @@ public:
             // Surface the connection's error, if any.
             ReferenceHolder<QoreHashNode> err_info(
                 pending_conn->getReferencedErrorInfo(), xsink);
-            const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
-            const char* desc_str = "connection closed before READY during poll";
+            std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
+            std::string desc_str = "connection closed before READY during poll";
             if (err_info) {
                 QoreValue ev = err_info->getKeyValue("err");
                 QoreValue dv = err_info->getKeyValue("desc");
                 if (ev.getType() == NT_STRING) {
-                    err_str = ev.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper err(ev);
+                    err_str = err->c_str();
                 }
                 if (dv.getType() == NT_STRING) {
-                    desc_str = dv.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper desc(dv);
+                    desc_str = desc->c_str();
                 }
             }
-            xsink->raiseException(err_str, "%s", desc_str);
+            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
@@ -6737,10 +6846,12 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             QoreValue ev = err_info->getKeyValue("err");
             QoreValue dv = err_info->getKeyValue("desc");
             if (ev.getType() == NT_STRING) {
-                err_str = ev.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper err(ev);
+                err_str = err->c_str();
             }
             if (dv.getType() == NT_STRING) {
-                desc_str = dv.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper desc(dv);
+                desc_str = desc->c_str();
             }
         }
         mgr.closeAndEvict(conn, xsink);
@@ -6818,10 +6929,12 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                     QoreValue ev = err_info->getKeyValue("err");
                     QoreValue dv = err_info->getKeyValue("desc");
                     if (ev.getType() == NT_STRING) {
-                        err_str = ev.get<const QoreStringNode>()->c_str();
+                        QoreStringValueHelper err(ev);
+                        err_str = err->c_str();
                     }
                     if (dv.getType() == NT_STRING) {
-                        desc_str = dv.get<const QoreStringNode>()->c_str();
+                        QoreStringValueHelper desc(dv);
+                        desc_str = desc->c_str();
                     }
                 }
                 mgr.closeAndEvict(conn, xsink);
@@ -6927,10 +7040,12 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
             QoreValue err_val = connect_xsink.getExceptionErr();
             QoreValue desc_val = connect_xsink.getExceptionDesc();
             if (err_val.getType() == NT_STRING) {
-                err_str = err_val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper err(err_val);
+                err_str = err->c_str();
             }
             if (desc_val.getType() == NT_STRING) {
-                desc_str = desc_val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper desc(desc_val);
+                desc_str = desc->c_str();
             }
         }
         connect_xsink.clear();
@@ -7047,19 +7162,21 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         // Truly never connected — surface the underlying error if available.
         ReferenceHolder<QoreHashNode> err_info(
             conn->getReferencedErrorInfo(), xsink);
-        const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
-        const char* desc_str = "connection failed during poll connect";
+        std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
+        std::string desc_str = "connection failed during poll connect";
         if (err_info) {
             QoreValue ev = err_info->getKeyValue("err");
             QoreValue dv = err_info->getKeyValue("desc");
             if (ev.getType() == NT_STRING) {
-                err_str = ev.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper err(ev);
+                err_str = err->c_str();
             }
             if (dv.getType() == NT_STRING) {
-                desc_str = dv.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper desc(dv);
+                desc_str = desc->c_str();
             }
         }
-        xsink->raiseException(err_str, "%s", desc_str);
+        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
         return nullptr;
     }
 
@@ -7094,18 +7211,26 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
         return nullptr;
     }
 
-    if (!http_priv->streaming_recv_channel) {
+    QoreChannel* ch_raw = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->streaming_recv_channel) {
+            ch_raw = http_priv->streaming_recv_channel;
+            ch_raw->ref();
+        }
+    }
+    if (!ch_raw) {
         // No channel — not in conn_mgr streaming mode
         return nullptr;
     }
-
-    QoreChannel* ch = http_priv->streaming_recv_channel;
+    ReferenceHolder<QoreChannel> ch(ch_raw, xsink);
 
     bool timed_out = false;
     bool has_value = false;
     ValueHolder rv(ch->recv(timeout_ms <= 0 ? 0 : timeout_ms, xsink, timed_out, has_value), xsink);
     if (*xsink) {
-        http_priv->clearStreamingChannel();
+        SafeLocker sl(priv->m);
+        http_priv->clearStreamingChannel(*ch);
         return nullptr;
     }
     if (timed_out) {
@@ -7115,7 +7240,8 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
     }
     if (!has_value) {
         // Channel closed = EOF
-        http_priv->clearStreamingChannel();
+        SafeLocker sl(priv->m);
+        http_priv->clearStreamingChannel(*ch);
         return new QoreHashNode(autoTypeInfo);
     }
 
@@ -7128,15 +7254,20 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
     // Check for error
     QoreValue err_val = h->getKeyValue("err");
     if (!err_val.isNullOrNothing()) {
-        http_priv->clearStreamingChannel();
-        const char* err_str = err_val.getType() == NT_STRING
-            ? err_val.get<const QoreStringNode>()->c_str()
-            : "HTTP-CLIENT-RECEIVE-ERROR";
+        SafeLocker sl(priv->m);
+        http_priv->clearStreamingChannel(*ch);
+        std::string err_str = "HTTP-CLIENT-RECEIVE-ERROR";
+        if (err_val.getType() == NT_STRING) {
+            QoreStringValueHelper err(err_val);
+            err_str = err->c_str();
+        }
         QoreValue desc_val = h->getKeyValue("desc");
-        const char* desc_str = desc_val.getType() == NT_STRING
-            ? desc_val.get<const QoreStringNode>()->c_str()
-            : "streaming request failed";
-        xsink->raiseException(err_str, desc_str);
+        std::string desc_str = "streaming request failed";
+        if (desc_val.getType() == NT_STRING) {
+            QoreStringValueHelper desc(desc_val);
+            desc_str = desc->c_str();
+        }
+        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
         return nullptr;
     }
 
@@ -7151,7 +7282,8 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
     // Check for end_stream
     QoreValue end_val = h->getKeyValue("end_stream");
     if (!end_val.isNullOrNothing()) {
-        http_priv->clearStreamingChannel();
+        SafeLocker sl(priv->m);
+        http_priv->clearStreamingChannel(*ch);
         return new QoreHashNode(autoTypeInfo);  // empty = EOF
     }
 
@@ -7166,16 +7298,23 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
         return nullptr;
     }
 
-    if (!http_priv->streaming_recv_channel) {
-        return nullptr;
-    }
-
     // Check buffer for complete SSE event (double newline delimiter)
     while (true) {
-        size_t sep = http_priv->sse_recv_buffer.find("\n\n");
-        if (sep != std::string::npos) {
-            std::string event_text = http_priv->sse_recv_buffer.substr(0, sep + 2);
-            http_priv->sse_recv_buffer.erase(0, sep + 2);
+        bool have_event = false;
+        std::string event_text;
+        {
+            SafeLocker sl(priv->m);
+            if (!http_priv->streaming_recv_channel) {
+                return nullptr;
+            }
+            size_t sep = http_priv->sse_recv_buffer.find("\n\n");
+            if (sep != std::string::npos) {
+                event_text = http_priv->sse_recv_buffer.substr(0, sep + 2);
+                http_priv->sse_recv_buffer.erase(0, sep + 2);
+                have_event = true;
+            }
+        }
+        if (have_event) {
             // Parse SSE event using the static Socket method
             SimpleRefHolder<QoreStringNode> event_str(
                 new QoreStringNode(event_text.c_str(), event_text.size(), QCS_UTF8));
@@ -7194,9 +7333,15 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
         QoreValue body_val = chunk->getKeyValue("body");
         if (body_val.isNullOrNothing()) {
             // EOF — parse any remaining buffer
-            if (!http_priv->sse_recv_buffer.empty()) {
-                std::string remaining = http_priv->sse_recv_buffer;
-                http_priv->sse_recv_buffer.clear();
+            std::string remaining;
+            {
+                SafeLocker sl(priv->m);
+                if (!http_priv->sse_recv_buffer.empty()) {
+                    remaining = http_priv->sse_recv_buffer;
+                    http_priv->sse_recv_buffer.clear();
+                }
+            }
+            if (!remaining.empty()) {
                 SimpleRefHolder<QoreStringNode> event_str(
                     new QoreStringNode(remaining.c_str(), remaining.size(), QCS_UTF8));
                 return parseSseEvent(xsink, **event_str);
@@ -7205,13 +7350,20 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
         }
 
         // Append body to buffer
+        std::string body;
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
-            http_priv->sse_recv_buffer.append(
-                reinterpret_cast<const char*>(bin->getPtr()), bin->size());
+            body.assign(reinterpret_cast<const char*>(bin->getPtr()), bin->size());
         } else if (body_val.getType() == NT_STRING) {
-            const QoreStringNode* str = body_val.get<const QoreStringNode>();
-            http_priv->sse_recv_buffer.append(str->c_str(), str->size());
+            QoreStringValueHelper str(body_val);
+            body.assign(str->c_str(), str->size());
+        }
+        if (!body.empty()) {
+            SafeLocker sl(priv->m);
+            if (!http_priv->streaming_recv_channel) {
+                return nullptr;
+            }
+            http_priv->sse_recv_buffer.append(body);
         }
     }
 }
@@ -7222,8 +7374,11 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
         return nullptr;
     }
 
-    if (!http_priv->streaming_recv_channel) {
-        return nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (!http_priv->streaming_recv_channel) {
+            return nullptr;
+        }
     }
 
     // Drain all chunks into a string
@@ -7245,7 +7400,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
             const BinaryNode* bin = body_val.get<const BinaryNode>();
             body->concat(reinterpret_cast<const char*>(bin->getPtr()), bin->size());
         } else if (body_val.getType() == NT_STRING) {
-            const QoreStringNode* str = body_val.get<const QoreStringNode>();
+            QoreStringValueHelper str(body_val);
             body->concat(str->c_str(), str->size());
         }
     }
@@ -7261,8 +7416,11 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout
         return nullptr;
     }
 
-    if (!http_priv->streaming_recv_channel) {
-        return nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (!http_priv->streaming_recv_channel) {
+            return nullptr;
+        }
     }
 
     // Drain all chunks into a binary node
@@ -7284,7 +7442,7 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout
             const BinaryNode* bin = body_val.get<const BinaryNode>();
             body->append(bin->getPtr(), bin->size());
         } else if (body_val.getType() == NT_STRING) {
-            const QoreStringNode* str = body_val.get<const QoreStringNode>();
+            QoreStringValueHelper str(body_val);
             body->append(str->c_str(), str->size());
         }
     }
@@ -7302,6 +7460,7 @@ QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* 
 }
 
 bool QoreHttpClientObject::hasStreamingChannel() const {
+    SafeLocker sl(priv->m);
     return http_priv->streaming_recv_channel != nullptr
         || !http_priv->sse_recv_buffer.empty();
 }
@@ -7312,12 +7471,21 @@ bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink)
         return false;
     }
 
-    if (http_priv->streaming_recv_channel) {
+    QoreChannel* ch_raw = nullptr;
+    {
+        SafeLocker sl(priv->m);
         // Consider buffered SSE text as immediately-pending — matches
         // readServerSentEventConnMgr which drains this buffer first.
         if (!http_priv->sse_recv_buffer.empty()) {
             return true;
         }
+        if (http_priv->streaming_recv_channel) {
+            ch_raw = http_priv->streaming_recv_channel;
+            ch_raw->ref();
+        }
+    }
+    if (ch_raw) {
+        ReferenceHolder<QoreChannel> ch(ch_raw, xsink);
         // Non-destructive wait on the channel: blocks up to timeout_ms
         // for the channel to become non-empty or closed.  Returning true
         // on "closed" is correct — the caller's next readHTTPChunk /
@@ -7325,7 +7493,7 @@ bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink)
         // the wait, a busy caller (e.g. ServerSentEventClient::eventLoop)
         // would burn CPU polling size() instead of blocking like the
         // legacy msock path did.
-        return http_priv->streaming_recv_channel->waitReadable(timeout_ms, xsink);
+        return ch->waitReadable(timeout_ms, xsink);
     }
     // No streaming channel: delegate to the Socket method, which executes its
     // readiness poll through the async I/O controller.
@@ -7545,8 +7713,18 @@ bool QoreHttpClientObject::getNoDelay() const {
 }
 
 bool QoreHttpClientObject::isConnected() const {
-    if (http_priv->streaming_recv_channel) {
-        return !http_priv->streaming_recv_channel->isClosed();
+    QoreChannel* ch_raw = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->streaming_recv_channel) {
+            ch_raw = http_priv->streaming_recv_channel;
+            ch_raw->ref();
+        }
+    }
+    if (ch_raw) {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreChannel> ch(ch_raw, &xsink);
+        return !ch->isClosed();
     }
     if (http_priv->msock->socket->isOpen()) {
         return true;

@@ -1,0 +1,59 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameDpShapeFilterGroup
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+%requires DataProviderDataFrame
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameDpShapeFilterGroup {
+    constructor() {
+        Bench::BenchRunner r("dataframe_dp_shape_filter_group");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+        hash<DataProviderExpression> expr = <DataProviderExpression>{
+            "exp": "&&",
+            "args": (
+                <DataProviderExpression>{
+                    "exp": "==",
+                    "args": (<DataProviderFieldReference>{"field": "status"}, "active"),
+                },
+                <DataProviderExpression>{
+                    "exp": ">=",
+                    "args": (<DataProviderFieldReference>{"field": "score"}, 90.0),
+                },
+            ),
+        };
+
+        r.setup = sub () {
+            df = DataFrameBench::makeFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            QoreFilterRecordsProcessor filter({"where_cond": expr});
+            DataFrame::DataFrame filtered = filter.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+            QoreGroupByProcessor grouper({
+                "group_by": "region",
+                "aggregates": "orders=count(),total=sum(amount),avg_amount=avg(amount)",
+            });
+            grouper.processRecordsShape(filtered, DataProviderShape::DataFrameBlock);
+            *list<auto> grouped_blocks = grouper.flushAndCollect();
+            if (!grouped_blocks || grouped_blocks.size() != 1) {
+                throw "BENCHMARK-ERROR", "dataframe_dp_shape_filter_group produced no grouped block";
+            }
+            DataFrameBench::verifyRows("dataframe_dp_shape_filter_group", grouped_blocks[0], 1);
+        };
+
+        exit(r.run());
+    }
+}

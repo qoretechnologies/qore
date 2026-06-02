@@ -47,15 +47,96 @@
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 #include "qore/intern/qore_program_private.h"
 
+#include <cstdlib>
+#include <cstring>
+#include <string>
+
 // Monotonic counter for globally unique object hashes.  Pointer addresses
 // alone are not unique because malloc reuses freed addresses; the counter
 // ensures every object gets a distinct hash even when allocated at a
 // previously-used address.
 static std::atomic<uint64_t> object_id_seq{0};
 
-qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p, QoreHashNode* n_data) :
+static const std::string qore_trace_object_refs_filter = [] {
+    const char* env = getenv("QORE_TRACE_OBJECT_REFS");
+    return env ? std::string(env) : std::string();
+}();
+
+static const bool qore_trace_object_refs_enabled = !qore_trace_object_refs_filter.empty();
+
+static bool qore_trace_object_refs_for_class(const char* cls) {
+    if (!qore_trace_object_refs_enabled || !cls) {
+        return false;
+    }
+    const char* filter = qore_trace_object_refs_filter.c_str();
+    if (!strcmp(filter, "*")) {
+        return true;
+    }
+
+    const size_t cls_len = strlen(cls);
+    const char* pos = filter;
+    while (*pos) {
+        while (*pos == ',' || *pos == ' ' || *pos == '\t') {
+            ++pos;
+        }
+        const char* end = pos;
+        while (*end && *end != ',') {
+            ++end;
+        }
+        const char* token_end = end;
+        while (token_end > pos && (token_end[-1] == ' ' || token_end[-1] == '\t')) {
+            --token_end;
+        }
+        if (static_cast<size_t>(token_end - pos) == cls_len && !strncmp(pos, cls, cls_len)) {
+            return true;
+        }
+        pos = end;
+    }
+    return false;
+}
+
+static bool qore_trace_object_ref_should_backtrace(int before, int after) {
+    static const bool always_backtrace = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE") != nullptr;
+    if (always_backtrace) {
+        return true;
+    }
+
+    static const int threshold = [] {
+        const char* low_refs = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
+        if (!low_refs || !*low_refs) {
+            return 0;
+        }
+        return atoi(low_refs);
+    }();
+    if (threshold <= 0) {
+        return false;
+    }
+    return before <= threshold || after <= threshold;
+}
+
+static void qore_trace_object_ref(const char* op, const qore_object_private* priv, const QoreObject* obj,
+        const char* cls, int before, int after, bool real) {
+    if (!qore_trace_object_refs_for_class(cls)) {
+        return;
+    }
+    const QoreProgramLocation* loc = get_runtime_location();
+    if (loc) {
+        fprintf(stderr, "[QORE-OBJ-REF] tid=%d op=%s obj=%p priv=%p class=%s refs=%d->%d rrefs=%d real=%d "
+            "loc=%s:%d\n", q_gettid(), op, obj, priv, cls, before, after, priv->rrefs.load(), real ? 1 : 0,
+            loc->getFileValue(), loc->start_line);
+    } else {
+        fprintf(stderr, "[QORE-OBJ-REF] tid=%d op=%s obj=%p priv=%p class=%s refs=%d->%d rrefs=%d real=%d\n",
+            q_gettid(), op, obj, priv, cls, before, after, priv->rrefs.load(), real ? 1 : 0);
+    }
+    if (qore_trace_object_ref_should_backtrace(before, after)) {
+        qore_machine_backtrace();
+    }
+}
+
+qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p,
+        QoreHashNode* n_data, const QoreTypeInfo* n_instantiated_type) :
         RObject(n_obj->references, true),
-        theclass(oc), data(n_data), pgm(p), system_object(!p),
+        theclass(oc), instantiated_type(n_instantiated_type), data(n_data), pgm(p), system_object(!p),
         in_destructor(false),
         recursive_ref_found(false),
         obj(n_obj) {
@@ -64,6 +145,7 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
         "references 0->1\n", this, obj, p, oc->getName());
 #endif
+    qore_trace_object_ref("new", this, obj, oc->getName(), 0, 1, false);
     /* instead of referencing the class, we reference the program, because the
         program contains the namespace that contains the class, and the class's
         methods may call functions in the program as well that could otherwise
@@ -161,6 +243,7 @@ void qore_object_private::decScanPrivateData() {
 int qore_object_private::copyData(ExceptionSink* xsink, const qore_object_private& old) {
     // copy public data from source object
     assert(!data);
+    instantiated_type = old.instantiated_type;
     data = old.copyData(xsink);
     if (*xsink) {
         return -1;
@@ -222,14 +305,29 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
         int rc = checkMemberAccessIntern(key->c_str(), has_public_members, class_ctx, member_class_ctx);
         if (!rc) {
             if (member_class_ctx) {
-                SliceKeyMap::iterator i = int_km.find(member_class_ctx);
-                if (i == int_km.end()) {
-                    i = int_km.insert(SliceKeyMap::value_type(member_class_ctx,
-                        new QoreListNode(autoTypeInfo))).first;
+                const QoreHashNode* odata = getInternalData(member_class_ctx);
+                bool exists = false;
+                if (odata)
+                    odata->getKeyValueExistence(key->c_str(), exists);
+                if (exists) {
+                    SliceKeyMap::iterator i = int_km.find(member_class_ctx);
+                    if (i == int_km.end()) {
+                        i = int_km.insert(SliceKeyMap::value_type(member_class_ctx,
+                            new QoreListNode(autoTypeInfo))).first;
+                    }
+                    i->second->push(new QoreStringNode(*key), nullptr);
+                } else if (mgl) {
+                    mgl->push(new QoreStringNode(*key), nullptr);
                 }
-                i->second->push(new QoreStringNode(*key), nullptr);
             } else {
-                nl->push(new QoreStringNode(*key), nullptr);
+                bool exists = false;
+                data->getKeyValueExistence(key->c_str(), exists, xsink);
+                if (*xsink)
+                    return nullptr;
+                if (exists)
+                    nl->push(new QoreStringNode(*key), nullptr);
+                else if (mgl)
+                    mgl->push(new QoreStringNode(*key), nullptr);
             }
         } else {
             if (mgl) {
@@ -256,7 +354,8 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
 
         ConstListIterator li(i.second);
         while (li.next()) {
-            const char* k = li.getValue().get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper key(li.getValue());
+            const char* k = key->c_str();
             bool exists;
             QoreValue v = odata->getKeyValueExistence(k, exists);
             if (!exists) {
@@ -275,7 +374,7 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
 
         ConstListIterator mgli(*mgl);
         while (mgli.next()) {
-            const QoreStringNode* k = mgli.getValue().get<const QoreStringNode>();
+            QoreStringValueHelper k(mgli.getValue());
             ValueHolder n(qore_class_private::get(*theclass)->evalMemberGate(obj, k->c_str(), xsink), xsink);
             if (*xsink) {
                 return nullptr;
@@ -1009,8 +1108,18 @@ void qore_object_private::addVirtualPrivateData(qore_classid_t key, AbstractPriv
     // first get parent class corresponding to "key"
     const QoreClass* qc = theclass->getClass(key);
 
-    //printd(5, "qore_object_private::addVirtualPrivateData() this: %p privateData: %p key: %d apd: %p qc: %p '%s'\n",
-    //  this, privateData, key, apd, qc, qc->getName());
+    printd(5, "qore_object_private::addVirtualPrivateData() this: %p theclass: %p '%s' (id: %d) privateData: %p key: %d apd: %p qc: %p\n",
+        this, theclass, theclass ? theclass->getName() : "n/a", theclass ? theclass->getID() : -1, privateData, key, apd, qc);
+    if (!qc) {
+        printd(0, "qore_object_private::addVirtualPrivateData() ERROR: getClass(%d) returned null for theclass '%s' (id: %d)\n",
+            key, theclass->getName(), theclass->getID());
+        // dump class hierarchy
+        if (theclass->getClass(theclass->getID())) {
+            printd(0, " + theclass itself found by its own ID %d\n", theclass->getID());
+        }
+        assert(false);
+        return;
+    }
     assert(qc);
     BCSMList* sml = qore_class_private::get(*qc)->getBCSMList();
     //printd(5, "qore_object_private::addVirtualPrivateData() this: %p qc: %p '%s' sml: %p\n", this, qc,
@@ -1050,6 +1159,10 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customDeref() this: %p '%s': references %d->%d "
             "rrefs %d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(),
             references.load() - 1, rrefs.load(), rrefs.load() - (real ? 1 : 0));
+        if (qore_trace_object_refs_enabled) {
+            qore_trace_object_ref("deref", this, obj, status == OS_OK ? getClassName() : "<deleted>",
+                references.load(), references.load() - 1, real);
+        }
 
         robject_dereference_helper qodh(this, real);
         int ref_copy = qodh.getRefs();
@@ -1264,6 +1377,14 @@ QoreObject::~QoreObject() {
 
 const QoreClass* QoreObject::getClass() const {
     return priv->theclass;
+}
+
+const QoreTypeInfo* QoreObject::getInstantiatedTypeInfo() const {
+    return priv->instantiated_type;
+}
+
+void QoreObject::setInstantiatedTypeInfo(const QoreTypeInfo* typeInfo) {
+    priv->instantiated_type = typeInfo;
 }
 
 const char *QoreObject::getClassName() const {
@@ -1543,6 +1664,9 @@ void qore_object_private::customRefIntern(bool real) {
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customRefIntern() this: %p obj: %p '%s' references %d->%d " \
         "rrefs: %d->%d\n", this, obj, getClassName(), references.load(), references.load() + 1, rrefs.load(),
         rrefs.load() + (real ? 1 : 0));
+    if (qore_trace_object_refs_enabled) {
+        qore_trace_object_ref("ref", this, obj, getClassName(), references.load(), references.load() + 1, real);
+    }
     ++references;
     if (real)
         ++rrefs;

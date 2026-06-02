@@ -1,0 +1,344 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTExprSerializationTest
+
+class AOTExprSerializationTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTExprSerializationTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("AOT module serializes native expression nodes",
+            \testAOTModuleNativeExprSerialization());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTExprSerializationMod {
+    version = \"1.0\";
+    desc = \"AOT expression serialization regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public class AOTIssueProgram inherits Program {
+    constructor(*int po) : Program(PO_NEW_STYLE | PO_REQUIRE_TYPES | (po & 7) | (po ^ 1) | (po << 0)
+            | (po >> 0)) {
+    }
+}
+
+public class AOTIssueRestrictedProgram inherits Program {
+    constructor(*int po) : Program(PO_NO_INHERIT_GLOBAL_VARS
+            | PO_NO_THREAD_CONTROL
+            | PO_NO_PROCESS_CONTROL
+            | PO_NO_INHERIT_USER_FUNC_VARIANTS
+            | PO_NO_INHERIT_USER_CLASSES
+            | PO_NO_INHERIT_USER_HASHDECLS
+            | PO_NO_INHERIT_PROGRAM_DATA
+            | po) {
+    }
+}
+
+public namespace AOTExprSerializationMod {
+    public class VariantTarget {
+        private {
+            string text;
+        }
+
+        constructor() {
+            text = \"zero\";
+        }
+
+        constructor(string text) {
+            self.text = text;
+        }
+
+        public string value() {
+            return text;
+        }
+    }
+
+    public class Holder {
+        private {
+            static Holder singleton = new Holder();
+        }
+
+        constructor() {
+        }
+
+        public string value() {
+            return \"holder\";
+        }
+
+        public static string getValue() {
+            return singleton.value();
+        }
+    }
+
+    public class RowSource {
+        public hash<auto> rows() {
+            return (\"domain\": (\"omq\", \"user\"), \"keyname\": (\"a\", \"b\"),
+                \"value\": (\"one\", \"two\"));
+        }
+    }
+
+    public class AOTPseudoBase {
+    }
+
+    public class AOTPseudoWrapper inherits AOTPseudoBase {
+        public string className() {
+            return \"wrapped\";
+        }
+    }
+
+    public list<string> sub head(list<string> xs, int n) {
+        return xs[0..n - 1];
+    }
+
+    public string sub tail(string s, int i) {
+        return s[i..];
+    }
+
+    public *string sub token(string arg, int i) {
+        *string template = (arg[i..] =~ x/^([a-z-]+):/)[0];
+        return template;
+    }
+
+    public string sub constructorFromAuto(auto arg) {
+        VariantTarget target(arg);
+        return target.value();
+    }
+
+    public string sub unshiftListAndHash() {
+        list<string> xs = (\"b\", \"c\");
+        try {
+            unshift xs, \"a\";
+        } catch (hash<ExceptionInfo> ex) {
+            return \"bad unshift try\";
+        }
+        if (xs != (\"a\", \"b\", \"c\")) {
+            return \"bad unshift list\";
+        }
+
+        hash<string, list<int>> h = (\"k\": (2, 3));
+        string k = \"k\";
+        unshift h{k}, 1;
+        if (h{k} != (1, 2, 3)) {
+            return \"bad unshift hash\";
+        }
+        return \"unshift ok\";
+    }
+
+    public string sub contextDynamicKeys() {
+        hash<auto> props;
+        RowSource src();
+        context (src.rows()) {
+            props.%domain.%keyname = %value;
+            auto v = props.%domain.%keyname;
+            if (v != %value) {
+                return \"bad context dynamic read\";
+            }
+        }
+        if (props.omq.a != \"one\" || props.user.b != \"two\") {
+            return \"bad context dynamic write\";
+        }
+        return \"context ok\";
+    }
+
+    public string sub consumeList(list<string> xs) {
+        return sprintf(\"%d\", elements(xs));
+    }
+
+    public string sub invokeNewComplexList() {
+        try {
+            return consumeList(new list<string>());
+        } catch (hash<ExceptionInfo> ex) {
+            return \"bad typed list invoke\";
+        }
+    }
+
+    public string sub strictCompare(any lhs, any rhs) {
+        if (lhs === rhs) {
+            return \"same\";
+        }
+        if (lhs !== rhs) {
+            return \"different\";
+        }
+        return \"bad strict compare\";
+    }
+
+    public bool sub strictNotNull(any arg) {
+        return arg !== NULL;
+    }
+
+    public string sub pseudoDotEvalDispatch() {
+        AOTPseudoBase obj = new AOTPseudoWrapper();
+        if (obj.className() != \"wrapped\") {
+            return \"bad object pseudo dispatch\";
+        }
+
+        hash<auto> h = {\"size\": string sub () { return \"callref\"; }};
+        if (h.size() != \"callref\") {
+            return \"bad hash pseudo dispatch\";
+        }
+        return \"pseudo dispatch ok\";
+    }
+
+    public string sub typedBufferFactories() {
+        buffer<float64> sized = buffer<float64>::sized(size: 3);
+        if (sized.lsize() != 3 || sized.fullType() != \"buffer<float64>\") {
+            return \"bad sized buffer metadata\";
+        }
+        sized[0] = 1.25;
+        sized[2] = 3.75;
+        if (sized[0] != 1.25 || sized[1] != 0.0 || sized[2] != 3.75) {
+            return \"bad sized buffer values\";
+        }
+
+        buffer<int64> filled = buffer<int64>::filled(size: 2, value: 7);
+        if (filled.lsize() != 2 || filled[0] != 7 || filled[1] != 7
+                || filled.fullType() != \"buffer<int64>\") {
+            return \"bad filled buffer values\";
+        }
+        return \"buffer ok\";
+    }
+
+    public string sub verify() {
+        AOTIssueProgram p(0);
+        AOTIssueRestrictedProgram p2(0);
+        list<string> h = head((\"a\", \"b\", \"c\"), 2);
+        if (h != (\"a\", \"b\")) {
+            return \"bad list range\";
+        }
+        if (tail(\"abcdef\", 2) != \"cdef\") {
+            return \"bad string range\";
+        }
+        *string t = token(\"abc-def:rest\", 0);
+        if (t != \"abc-def\") {
+            return \"bad regex operand range\";
+        }
+        if (Holder::getValue() != \"holder\") {
+            return \"bad static singleton constructor\";
+        }
+        if (constructorFromAuto(\"runtime\") != \"runtime\") {
+            return \"bad runtime constructor variant resolution\";
+        }
+        string unshift_result = unshiftListAndHash();
+        if (unshift_result != \"unshift ok\") {
+            return unshift_result;
+        }
+        string context_result = contextDynamicKeys();
+        if (context_result != \"context ok\") {
+            return context_result;
+        }
+        if (invokeNewComplexList() != \"0\") {
+            return \"bad typed list invoke\";
+        }
+        if (strictCompare(NULL, NULL) != \"same\" || strictCompare(NULL, False) != \"different\"
+                || strictNotNull(NULL)) {
+            return \"bad strict compare\";
+        }
+        string pseudo_result = pseudoDotEvalDispatch();
+        if (pseudo_result != \"pseudo dispatch ok\") {
+            return pseudo_result;
+        }
+        string buffer_result = typedBufferFactories();
+        if (buffer_result != \"buffer ok\") {
+            return buffer_result;
+        }
+        return \"ok\";
+    }
+}
+";
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    testAOTModuleNativeExprSerialization() {
+        TmpDir tmp("qore-aot-expr-serialization-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTExprSerializationMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern\n%requires AOTExprSerializationMod\n"
+            "any v = NULL;\n"
+            "if (!(NULL === NULL) || (v !== NULL) || !(NULL !== False)) {\n"
+            "    throw \"BAD-STRICT-COMPARE\";\n"
+            "}\n"
+            "printf(\"%s\\n\", AOTExprSerializationMod::verify());\n");
+        script.close();
+
+        string pending_static_path = tmp_dir + "/pending-static.qr";
+        File pending_static();
+        pending_static.open2(pending_static_path, O_WRONLY | O_CREAT | O_TRUNC);
+        pending_static.write("%modern\n"
+            "class PendingStatic {\n"
+            "    private {\n"
+            "        static PendingStatic singleton = new PendingStatic();\n"
+            "    }\n"
+            "\n"
+            "    constructor() {\n"
+            "    }\n"
+            "}\n"
+            "%requires AOTExprSerializationMod\n"
+            "printf(\"loaded\\n\");\n");
+        pending_static.close();
+
+        string qmod_path = qmod_dir + "/AOTExprSerializationMod.qmod";
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -m --strip-source -o %s %s 2>&1",
+            libqore_dir, qcc_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled expression-serialization module: " + compile_out);
+
+        assertEq("ok\n", runModule(qmod_dir, script_path),
+            "AOT qmod preserves serialized native expression nodes");
+        assertEq("ok\n", runModule(src_dir, script_path),
+            "source module preserves serialized native expression semantics");
+
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(qo_dir);
+        string qcc_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -c --output-dir=%s %s 2>&1",
+            libqore_dir, qmod_dir, qcc_bin, qo_dir, script_path));
+        assertTrue(is_file(qo_dir + "/run.qo"),
+            "qcc compile-only consumer loads AOT qmod without static-var init crash: " + qcc_out);
+
+        string pending_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -c --output-dir=%s %s 2>&1",
+            libqore_dir, qmod_dir, qcc_bin, qo_dir, pending_static_path));
+        assertTrue(is_file(qo_dir + "/pending-static.qo"),
+            "qcc dependency load does not pre-evaluate source static initializers: " + pending_out);
+    }
+}

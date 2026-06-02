@@ -102,12 +102,12 @@ public class BitlyGroupsDataProvider inherits BitlyDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If group_guid provided, get single record
         if (search_options.group_guid) {
             hash<auto> result = doGet("groups/" + search_options.group_guid);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
@@ -118,7 +118,7 @@ public class BitlyGroupsDataProvider inherits BitlyDataProviderBase {
 
         hash<auto> response = doGet("groups", params);
         list<hash<auto>> records = response.groups ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options);
     }
 

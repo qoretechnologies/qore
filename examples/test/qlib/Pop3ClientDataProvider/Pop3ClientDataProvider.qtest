@@ -4,14 +4,15 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/Pop3Client.qm
-%requires ../../../../qlib/Pop3ClientDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires Pop3Client
+%requires Pop3ClientDataProvider
 
 %exec-class Pop3ClientDataProviderTest
 

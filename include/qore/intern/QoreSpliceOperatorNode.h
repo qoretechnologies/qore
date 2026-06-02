@@ -79,6 +79,22 @@ public:
             n_nw.release());
     }
 
+    DLLLOCAL QoreValue getLValue() const {
+        return lvalue_exp;
+    }
+
+    DLLLOCAL QoreValue getOffset() const {
+        return offset_exp;
+    }
+
+    DLLLOCAL QoreValue getLength() const {
+        return length_exp;
+    }
+
+    DLLLOCAL QoreValue getNewValue() const {
+        return new_exp;
+    }
+
 protected:
     QoreValue lvalue_exp, offset_exp, length_exp, new_exp;
     const QoreTypeInfo* returnTypeInfo = nullptr;

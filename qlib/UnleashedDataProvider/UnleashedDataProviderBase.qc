@@ -98,7 +98,7 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
             if (copts.apikey) {
                 client_opts.apikey = copts.apikey;
             }
-            rest = new UnleashedRestClient::UnleashedRestClient(client_opts);
+            rest = new UnleashedRestClient::UnleashedRestClient(client_opts, True);
         }
     }
 

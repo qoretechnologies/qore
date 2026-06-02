@@ -227,7 +227,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making a REST call as well
     */
     private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
-        return new BinaryInputStream(getBinaryFileImpl(scheme, location, opts));
+        return new BinaryInputStream(source: getBinaryFileImpl(scheme, location, opts));
     }
 
     #! Writes data to a file at the given location
@@ -310,7 +310,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
 }
 
 #! Wraps an HTTP poller so that the response body is always returned as the output
-public class HttpPollWrapper inherits AbstractPollOperation {
+public class HttpPollWrapper inherits AbstractPollOperation<auto> {
     private {
         #! The HTTP poller to execute
         AbstractPollOperation op;

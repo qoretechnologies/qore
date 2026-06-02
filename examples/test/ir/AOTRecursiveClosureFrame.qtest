@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTRecursiveClosureFrameTest
+
+class AOTRecursiveClosureFrameTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTRecursiveClosureFrameTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT self-recursive closures use per-call closure frames",
+            \testAOTQmodRecursiveClosureFrame());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTRecursiveClosureFrameMod {
+    version = \"1.0\";
+    desc = \"AOT recursive closure-frame regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTRecursiveClosureFrameMod {
+    public auto sub parseLike(string arg) {
+        auto v;
+
+        code do_val = sub (auto val) {
+            switch (v.typeCode()) {
+                case NT_NOTHING:
+                    v = val;
+                    break;
+                case NT_LIST:
+                    v += val;
+                    break;
+                default:
+                    v = (v, val);
+                    break;
+            }
+        };
+
+        code do_key = sub (string key) {
+            auto val = parseLike(\"x,\");
+            if (!exists v) {
+                v{key} = val;
+            } else switch (v.typeCode()) {
+                case NT_LIST:
+                    v += {key: val};
+                    break;
+                case NT_HASH:
+                    v{key} = val;
+                    break;
+                default:
+                    v = (v, {key: val});
+                    break;
+            }
+        };
+
+        if (arg == \"x,\") {
+            do_val(\"x\");
+            if (v.typeCode() != NT_LIST) {
+                list<auto> tmp;
+                tmp += v;
+                v = tmp;
+            }
+            return auto_cast(v);
+        }
+
+        do_key(\"a\");
+        return auto_cast(v);
+    }
+
+    public string sub verify() {
+        auto v = parseLike(\"a=(x,)\");
+        if (v instanceof hash && v.size() == 1 && v.a instanceof list
+                && v.a.size() == 1 && v.a[0] == \"x\") {
+            return \"ok\\n\";
+        }
+        return sprintf(\"bad:%y\\n\", v);
+    }
+}
+";
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    testAOTQmodRecursiveClosureFrame() {
+        TmpDir tmp("qore-aot-recursive-closure-frame-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTRecursiveClosureFrameMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern
+%requires AOTRecursiveClosureFrameMod
+printf(\"%s\", AOTRecursiveClosureFrameMod::verify());
+");
+        script.close();
+
+        string qmod_path = qmod_dir + "/AOTRecursiveClosureFrameMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled recursive closure frame module: " + compile_out);
+
+        assertEq("ok\n", runModule(src_dir, script_path),
+            "source module recursive closure frame baseline");
+        assertEq("ok\n", runModule(qmod_dir, script_path),
+            "AOT qmod recursive closure frames remain isolated");
+    }
+}

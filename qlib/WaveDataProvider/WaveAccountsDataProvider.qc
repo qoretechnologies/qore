@@ -89,7 +89,7 @@ public class WaveAccountsDataProvider inherits WaveDataProviderBase {
     }
 
     #! Searches for accounts
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> vars = {"businessId": search_options.businessId};
         int pageSize = search_options.limit ?? DefaultPageSize;

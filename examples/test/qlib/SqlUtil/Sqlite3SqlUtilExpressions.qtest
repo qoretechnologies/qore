@@ -3,12 +3,13 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/Sqlite3SqlUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires QUnit
 
 %try-module sqlite3
 %define NoSqlite3

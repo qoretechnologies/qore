@@ -52,6 +52,117 @@ public:
     //! returns the type info object for the hashdecl
     DLLEXPORT const QoreTypeInfo* getTypeInfo(bool or_nothing = false) const;
 
+    //! returns the type info object for a parameterized form of this hashdecl
+    /** @param type_args the concrete type arguments for the hashdecl
+        @param or_nothing if true, the type also accepts NOTHING
+
+        @return the type info object for the parameterized hashdecl, or nullptr if the type arguments are invalid
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT const QoreTypeInfo* getTypeInfo(const type_vec_t& type_args, bool or_nothing = false) const;
+
+    //! returns the parameterized form of this hashdecl
+    /** @param type_args the concrete type arguments for the hashdecl
+
+        @return the parameterized hashdecl, or nullptr if the type arguments are invalid
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT const TypedHashDecl* getParameterizedHashDecl(const type_vec_t& type_args) const;
+
+    //! adds a type parameter to a built-in hashdecl
+    /** @param param the type parameter name
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void addTypeParameter(const char* param);
+
+    //! adds a type parameter with a default type to a built-in hashdecl
+    /** @param param the type parameter name
+        @param default_type the default type argument used when the type argument is omitted
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addTypeParameter(const char* param, const char* default_type);
+
+    //! adds a type parameter with an optional default type and bound
+    /** @param param the type parameter name
+        @param default_type the default type argument used when the type argument is omitted, or nullptr
+        @param bound_type the upper bound type that type arguments must satisfy, or nullptr
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addTypeParameter(const char* param, const char* default_type, const char* bound_type);
+
+    //! returns the default type for a built-in hashdecl type parameter, if any
+    /** @param index the type parameter index
+
+        @return the default type argument string or nullptr if the parameter has no default or the index is invalid
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterDefaultType(size_t index) const;
+
+    //! returns the bound type for a built-in hashdecl type parameter, if any
+    /** @param index the type parameter index
+
+        @return the bound type string or nullptr if the parameter has no bound or the index is invalid
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterBoundType(size_t index) const;
+
+    //! returns true if this hashdecl declares formal type parameters
+    /** @since %Qore 2.4
+    */
+    DLLEXPORT bool hasTypeParameters() const;
+
+    //! returns the number of formal type parameters declared by this hashdecl
+    /** @since %Qore 2.4
+    */
+    DLLEXPORT size_t getTypeParameterCount() const;
+
+    //! returns the name of the formal type parameter at the given index, or nullptr if the index is invalid
+    /** @param index the zero-based type parameter index
+
+        @return the formal type parameter name, or nullptr if the index is invalid
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterName(size_t index) const;
+
+    //! returns the number of built-in hashdecl type parameters that do not have defaults
+    /** @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT size_t getTypeParameterRequiredCount() const;
+
+    //! returns symbolic type information for a built-in hashdecl type parameter
+    /** @param index the type parameter index
+        @param name the type parameter name
+        @param or_nothing if true, the type also accepts NOTHING
+
+        @return symbolic type information for the type parameter
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT const QoreTypeInfo* getTypeParameterType(size_t index, const char* name,
+        bool or_nothing = false) const;
+
     //! adds an element to a built-in hashdecl
     DLLEXPORT void addMember(const char* name, const QoreTypeInfo* memberTypeInfo, QoreValue init_val);
 
@@ -214,11 +325,26 @@ DLLEXPORT extern const TypedHashDecl* hashdeclIsoWeekInfo;
 //! CallStackInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclCallStackInfo;
 
+//! QueueTryResult hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclQueueTryResult;
+
+//! ChannelTryResult hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclChannelTryResult;
+
 //! ExceptionInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclExceptionInfo;
 
 //! StatementInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclStatementInfo;
+
+//! KeyValueInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclKeyValueInfo;
 
 //! NetIfInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclNetIfInfo;

@@ -1,0 +1,563 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class BufferTest
+
+class BufferTest inherits QUnit::Test {
+    constructor() : QUnit::Test("buffer value type", "1.0", \ARGV) {
+        addTestCase("int buffer", \intBuffer());
+        addTestCase("nullable int buffer", \nullableIntBuffer());
+        addTestCase("bool buffer", \boolBuffer());
+        addTestCase("typed list construction", \typedListConstruction());
+        addTestCase("float buffer", \floatBuffer());
+        addTestCase("decimal128 buffer", \decimalBuffer());
+        addTestCase("string buffer", \stringBuffer());
+        addTestCase("pseudo methods", \pseudoMethods());
+        addTestCase("iteration and slicing", \iterationAndSlicing());
+        addTestCase("views", \views());
+        addTestCase("reductions", \reductions());
+        addTestCase("operators", \operators());
+        addTestCase("factories", \factories());
+        addTestCase("writable elements", \writableElements());
+        addTestCase("construction errors", \constructionErrors());
+        set_return_value(main());
+    }
+
+    intBuffer() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3));
+
+        assertEq("buffer<int64>", b.fullType());
+        assertEq(3, elements b);
+        assertEq(1, b[0]);
+        assertEq(2, b[1]);
+        assertEq(3, b[2]);
+        assertNothing(b[3]);
+        assertNothing(b[-1]);
+
+        *buffer<int64> ob;
+        assertNothing(ob);
+        ob = b;
+        assertEq("buffer<int64>", ob.fullType());
+        assertEq(3, elements ob);
+        assertEq(2, ob[1]);
+    }
+
+    nullableIntBuffer() {
+        buffer<*int64> b = new buffer<*int64>((1, NOTHING, 3));
+
+        assertEq("buffer<*int64>", b.fullType());
+        assertEq(3, elements b);
+        assertEq(1, b[0]);
+        assertNothing(b[1]);
+        assertEq(3, b[2]);
+
+        buffer<*int64> n = new buffer<*int64>((1, NULL, 3));
+        assertEq("buffer<*int64>", n.fullType());
+        assertEq((1, NOTHING, 3), n.toList());
+
+        assertThrows("BUFFER-TYPE-ERROR", sub () { buffer<int64> invalid = new buffer<int64>((1, NULL)); });
+    }
+
+    boolBuffer() {
+        buffer<bool> b = new buffer<bool>((True, False, True));
+
+        assertEq("buffer<bool>", b.fullType());
+        assertEq(3, elements b);
+        assertEq(True, b[0]);
+        assertEq(False, b[1]);
+        assertEq(True, b[2]);
+    }
+
+    typedListConstruction() {
+        list<bool> mask = (True, False, True);
+        buffer<bool> bools = new buffer<bool>(mask);
+        assertEq("buffer<bool>", bools.fullType());
+        assertEq(mask, bools.toList());
+
+        list<int> ints = (1, 2, 3);
+        buffer<int64> dense_ints = new buffer<int64>(ints);
+        assertEq("buffer<int64>", dense_ints.fullType());
+        assertEq((1, 2, 3), dense_ints.toList());
+
+        list<*int> nullable_ints = (1, NOTHING, 3);
+        buffer<*int64> dense_nullable_ints = new buffer<*int64>(nullable_ints);
+        assertEq("buffer<*int64>", dense_nullable_ints.fullType());
+        assertEq((1, NOTHING, 3), dense_nullable_ints.toList());
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "incompatible value type", \p.parse(),
+                ("sub t() { list<string> values = (\"x\",); buffer<bool> b = new buffer<bool>(values); }", ""));
+        }
+    }
+
+    floatBuffer() {
+        buffer<float32> f32 = new buffer<float32>((1.25, 2));
+        buffer<float64> f64 = new buffer<float64>((1.25, 2.5));
+
+        assertEq("buffer<float32>", f32.fullType());
+        assertEq("buffer<float64>", f64.fullType());
+        assertEq(2, elements f32);
+        assertEq(2, elements f64);
+        assertEq(1.25, f32[0]);
+        assertEq(2.0, f32[1]);
+        assertEq(1.25, f64[0]);
+        assertEq(2.5, f64[1]);
+    }
+
+    decimalBuffer() {
+        buffer<decimal128> d = new buffer<decimal128>((1.25n, -2.50n, 3n));
+
+        assertEq("buffer<decimal128>", d.fullType());
+        assertEq(3, elements d);
+        assertEq(1.25n, d[0]);
+        assertEq(-2.5n, d[1]);
+        assertEq(3n, d[2]);
+        assertEq((1.25n, -2.5n, 3n), d.toList());
+
+        buffer<*decimal128> nullable = new buffer<*decimal128>((1.20n, NOTHING, 3.40n));
+        assertEq("buffer<*decimal128>", nullable.fullType());
+        assertEq((1.2n, NOTHING, 3.4n), nullable.toList());
+        assertEq(2, nullable.count());
+
+        assertEq(1.75n, d.sum());
+        assertEq(-2.5n, d.min());
+        assertEq(3n, d.max());
+
+        buffer<decimal128> filled = buffer<decimal128>::filled(2, 7.50n);
+        assertEq((7.5n, 7.5n), filled.toList());
+
+        buffer<decimal128> shifted = d + 1.25n;
+        assertEq("buffer<decimal128>", shifted.fullType());
+        assertEq((2.5n, -1.25n, 4.25n), shifted.toList());
+
+        buffer<bool> positive = d > 0n;
+        assertEq((True, False, True), positive.toList());
+
+        buffer<*bool> nullable_cmp = nullable == 1.2n;
+        assertEq((True, NOTHING, False), nullable_cmp.toList());
+    }
+
+    stringBuffer() {
+        buffer<string> b = new buffer<string>(("alpha", "", "z"));
+
+        assertEq("buffer<string>", b.fullType());
+        assertEq(3, elements b);
+        assertEq("alpha", b[0]);
+        assertEq("", b[1]);
+        assertEq("z", b[2]);
+        assertEq(("alpha", "", "z"), b.toList());
+
+        b[1] = "beta";
+        b[0] = "";
+        assertEq(("", "beta", "z"), b.toList());
+
+        buffer<string> view = b.view(start: 0, count: 2);
+        assertEq(("", "beta"), view.toList());
+        view[0] = "aardvark";
+        assertEq(("aardvark", "beta", "z"), b.toList());
+
+        buffer<string> reversed = b[2..0];
+        assertEq(("z", "beta", "aardvark"), reversed.toList());
+
+        buffer<*string> nullable = new buffer<*string>(("x", NOTHING, ""));
+        assertEq("buffer<*string>", nullable.fullType());
+        assertEq(("x", NOTHING, ""), nullable.toList());
+        nullable[1] = "y";
+        nullable[2] = NOTHING;
+        assertEq(("x", "y", NOTHING), nullable.toList());
+
+        buffer<bool> equal = b == "beta";
+        assertEq((False, True, False), equal.toList());
+
+        buffer<bool> less = b < "c";
+        assertEq((True, True, False), less.toList());
+
+        buffer<*bool> nullableEqual = nullable == "x";
+        assertEq((True, False, NOTHING), nullableEqual.toList());
+
+        buffer<string> empty_filled = buffer<string>::filled(2, "");
+        assertEq(("", ""), empty_filled.toList());
+
+        buffer<string> empty_sized = buffer<string>::sized(2);
+        assertEq(("", ""), empty_sized.toList());
+
+        buffer<*string> nullable_filled = buffer<*string>::filled(2, NOTHING);
+        assertEq((NOTHING, NOTHING), nullable_filled.toList());
+        assertEq(0, nullable_filled.count());
+
+        assertThrows("BUFFER-OPERATION-ERROR", sub () { auto result = b.sum(); });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () { auto result = b.mean(); });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () { auto result = b.min(); });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () { auto result = b.max(); });
+    }
+
+    pseudoMethods() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3));
+
+        assertEq(NT_BUFFER, b.typeCode());
+        assertEq(True, b.complexType());
+        assertEq(3, b.size());
+        assertEq(3, b.lsize());
+        assertEq(False, b.empty());
+        assertEq(True, b.val());
+        assertEq(True, b.sizep());
+        assertEq(False, b.externalStorage());
+        assertEq(False, b.deviceStorage());
+        assertEq(True, b.hostStorage());
+        assertEq((1, 2, 3), b.materialize().toList());
+        assertEq((1, 2, 3), b.toList());
+
+        auto clone = b.clone();
+        assertEq("buffer<int64>", clone.fullType());
+        assertEq((1, 2, 3), clone.toList());
+
+        AbstractIterator i = b.iterator();
+        assertEq(True, i.next());
+        assertEq(1, i.getValue());
+        assertEq(True, i.next());
+        assertEq(2, i.getValue());
+        assertEq(True, i.next());
+        assertEq(3, i.getValue());
+        assertEq(False, i.next());
+    }
+
+    iterationAndSlicing() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3, 4));
+
+        int sum = 0;
+        foreach int v in (b) {
+            sum += v;
+        }
+        assertEq(10, sum);
+
+        list<int> selected = ();
+        foreach int v in (b[1..2]) {
+            push selected, v;
+        }
+        assertEq((2, 3), selected);
+
+        buffer<int64> middle = b[1..2];
+        assertEq("buffer<int64>", middle.fullType());
+        assertEq((2, 3), middle.toList());
+
+        buffer<int64> reversed = b[3..1];
+        assertEq("buffer<int64>", reversed.fullType());
+        assertEq((4, 3, 2), reversed.toList());
+
+        buffer<int64> empty = b[5..6];
+        assertEq("buffer<int64>", empty.fullType());
+        assertEq(0, empty.size());
+
+        buffer<*int64> nullable = new buffer<*int64>((1, NOTHING, 3));
+        buffer<*int64> nullableSlice = nullable[0..2];
+        assertEq("buffer<*int64>", nullableSlice.fullType());
+        assertEq((1, NOTHING, 3), nullableSlice.toList());
+    }
+
+    views() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3, 4));
+        buffer<int64> v = b.view(start: 1, count: 2);
+        assertEq("buffer<int64>", v.fullType());
+        assertEq((2, 3), v.toList());
+
+        v[0] = 20;
+        assertEq((1, 20, 3, 4), b.toList());
+
+        b[2] = 30;
+        assertEq((20, 30), v.toList());
+
+        buffer<int64> nested = v.view(1, 1);
+        nested[0] = 300;
+        assertEq((1, 20, 300, 4), b.toList());
+
+        buffer<int64> copy = b[1..2];
+        copy[0] = 2000;
+        assertEq((1, 20, 300, 4), b.toList());
+        assertEq((2000, 300), copy.toList());
+
+        buffer<int64> empty = b.view(2, 0);
+        assertEq((), empty.toList());
+
+        buffer<*int64> nullable = new buffer<*int64>((1, NOTHING, 3, 4));
+        buffer<*int64> nullable_view = nullable.view(1, 2);
+        assertEq((NOTHING, 3), nullable_view.toList());
+        nullable_view[0] = 10;
+        nullable_view[1] = NOTHING;
+        assertEq((1, 10, NOTHING, 4), nullable.toList());
+        assertEq((10, NOTHING), nullable_view.toList());
+        assertEq(3, nullable.count());
+        assertEq(1, nullable_view.count());
+
+        buffer<bool> flags = new buffer<bool>((True, False, True, False));
+        buffer<bool> flags_view = flags.view(1, 2);
+        assertEq((False, True), flags_view.toList());
+        flags_view[0] = True;
+        flags[2] = False;
+        assertEq((True, True, False, False), flags.toList());
+        assertEq((True, False), flags_view.toList());
+
+        assertThrows("BUFFER-RANGE-ERROR", sub () { auto invalid = b.view(-1, 1); });
+        assertThrows("BUFFER-RANGE-ERROR", sub () { auto invalid = b.view(1, -1); });
+        assertThrows("BUFFER-RANGE-ERROR", sub () { auto invalid = b.view(3, 2); });
+    }
+
+    reductions() {
+        buffer<int64> ints = new buffer<int64>((4, 2, 6));
+        assertEq(3, ints.count());
+        assertEq(12, ints.sum());
+        assertEq(4.0, ints.mean());
+        assertEq(2, ints.min());
+        assertEq(6, ints.max());
+
+        buffer<*int64> nullable = new buffer<*int64>((10, NOTHING, 30));
+        assertEq(2, nullable.count());
+        assertEq(40, nullable.sum());
+        assertEq(20.0, nullable.mean());
+        assertEq(10, nullable.min());
+        assertEq(30, nullable.max());
+
+        buffer<*int64> allNull = new buffer<*int64>((NOTHING, NOTHING));
+        assertEq(0, allNull.count());
+        assertEq(0, allNull.sum());
+        assertNothing(allNull.mean());
+        assertNothing(allNull.min());
+        assertNothing(allNull.max());
+
+        buffer<bool> bools = new buffer<bool>((True, False));
+        assertEq(2, bools.count());
+        assertEq(1, bools.sum());
+        assertEq(0.5, bools.mean());
+        assertEq(False, bools.min());
+        assertEq(True, bools.max());
+
+        buffer<float64> floats = new buffer<float64>((1.5, 2.5));
+        assertEq(2, floats.count());
+        assertEq(4.0, floats.sum());
+        assertEq(2.0, floats.mean());
+        assertEq(1.5, floats.min());
+        assertEq(2.5, floats.max());
+    }
+
+    operators() {
+        buffer<int64> a = new buffer<int64>((1, 2, 3));
+        buffer<int64> b = new buffer<int64>((10, 20, 30));
+
+        buffer<int64> sum = a + b;
+        assertEq("buffer<int64>", sum.fullType());
+        assertEq((11, 22, 33), sum.toList());
+
+        buffer<int64> diff = b - a;
+        assertEq((9, 18, 27), diff.toList());
+
+        buffer<int64> scaledRight = a * 2;
+        assertEq((2, 4, 6), scaledRight.toList());
+
+        buffer<int64> scaledLeft = 2 * a;
+        assertEq((2, 4, 6), scaledLeft.toList());
+
+        buffer<int64> divided = b / 10;
+        assertEq((1, 2, 3), divided.toList());
+
+        buffer<float64> floats = new buffer<float64>((1.5, 2.5));
+        buffer<float64> shifted = floats + 0.5;
+        assertEq("buffer<float64>", shifted.fullType());
+        assertEq((2.0, 3.0), shifted.toList());
+
+        buffer<*int64> nullable = new buffer<*int64>((1, NOTHING, 3));
+        buffer<*int64> nullableSum = nullable + 10;
+        assertEq("buffer<*int64>", nullableSum.fullType());
+        assertEq((11, NOTHING, 13), nullableSum.toList());
+
+        *int optionalOffset = 1;
+        buffer<*int64> optionalScalarSum = a + optionalOffset;
+        assertEq("buffer<*int64>", optionalScalarSum.fullType());
+        assertEq((2, 3, 4), optionalScalarSum.toList());
+
+        buffer<*int64> widened = new buffer<int64>((1, 2));
+        assertEq("buffer<*int64>", widened.fullType());
+        assertEq((1, 2), widened.toList());
+
+        buffer<*int64> nullBroadcast = a + NOTHING;
+        assertEq("buffer<*int64>", nullBroadcast.fullType());
+        assertEq((NOTHING, NOTHING, NOTHING), nullBroadcast.toList());
+
+        buffer<bool> greater = a > 1;
+        assertEq("buffer<bool>", greater.fullType());
+        assertEq((False, True, True), greater.toList());
+
+        buffer<bool> lessEqual = a <= b;
+        assertEq((True, True, True), lessEqual.toList());
+
+        buffer<bool> equal = a == new buffer<int64>((1, 0, 3));
+        assertEq((True, False, True), equal.toList());
+
+        buffer<bool> notEqual = a != 2;
+        assertEq((True, False, True), notEqual.toList());
+
+        buffer<*bool> nullableGreater = nullable > 1;
+        assertEq("buffer<*bool>", nullableGreater.fullType());
+        assertEq((False, NOTHING, True), nullableGreater.toList());
+
+        buffer<*bool> nullCompare = a == NULL;
+        assertEq("buffer<*bool>", nullCompare.fullType());
+        assertEq((NOTHING, NOTHING, NOTHING), nullCompare.toList());
+
+        buffer<bool> bools = new buffer<bool>((True, False));
+        buffer<bool> boolEqual = bools == True;
+        assertEq((True, False), boolEqual.toList());
+
+        buffer<bool> boolLess = bools < True;
+        assertEq((False, True), boolLess.toList());
+
+        assertThrows("BUFFER-SIZE-ERROR", sub () {
+            auto result = a + new buffer<int64>((1, 2));
+        });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () {
+            auto result = bools + 1;
+        });
+        assertThrows("BUFFER-OPERATION-ERROR", sub () {
+            auto result = bools + NOTHING;
+        });
+        assertThrows("DIVISION-BY-ZERO", sub () {
+            int zero = 0;
+            auto result = a / zero;
+        });
+    }
+
+    factories() {
+        buffer<int64> sized = buffer<int64>::sized(3);
+        assertEq("buffer<int64>", sized.fullType());
+        assertEq((0, 0, 0), sized.toList());
+
+        buffer<int64> filled = buffer<int64>::filled(3, 7);
+        assertEq("buffer<int64>", filled.fullType());
+        assertEq((7, 7, 7), filled.toList());
+
+        buffer<int64> named_sized = buffer<int64>::sized(size: 3);
+        assertEq((0, 0, 0), named_sized.toList());
+
+        buffer<int64> named_filled = buffer<int64>::filled(value: 7, size: 3);
+        assertEq((7, 7, 7), named_filled.toList());
+
+        list<string> factory_eval_order = ();
+        code<int()> get_factory_size = int sub () { factory_eval_order += "size"; return 3; };
+        code<int()> get_factory_value = int sub () { factory_eval_order += "value"; return 7; };
+        buffer<int64> named_eval_order = buffer<int64>::filled(value: get_factory_value(), size: get_factory_size());
+        assertEq((7, 7, 7), named_eval_order.toList());
+        assertEq(("value", "size"), factory_eval_order);
+
+        buffer<float64> floats = buffer<float64>::filled(2, 1.25);
+        assertEq("buffer<float64>", floats.fullType());
+        assertEq((1.25, 1.25), floats.toList());
+
+        buffer<bool> bools = buffer<bool>::filled(3, True);
+        assertEq("buffer<bool>", bools.fullType());
+        assertEq((True, True, True), bools.toList());
+
+        bool flag = True;
+        buffer<bool> typed_bool_fill = buffer<bool>::filled(2, flag);
+        assertEq((True, True), typed_bool_fill.toList());
+
+        buffer<*int64> nullable = buffer<*int64>::filled(3, NOTHING);
+        assertEq("buffer<*int64>", nullable.fullType());
+        assertEq((NOTHING, NOTHING, NOTHING), nullable.toList());
+        assertEq(0, nullable.count());
+
+        assertThrows("BUFFER-SIZE-ERROR", sub () { auto result = buffer<int64>::sized(-1); });
+        assertThrows("BUFFER-RANGE-ERROR", sub () { auto result = buffer<int8>::filled(1, 1000); });
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "argument 'size' expects int", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::sized(\"3\"); }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "argument 'value' expects", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::filled(1, NOTHING); }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "supported factories", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::unknown(1); }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "unknown named argument 'length'", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::sized(length: 3); }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("NAMED-ARG-POSITIONAL-AFTER-NAMED", "positional argument cannot follow", \p.parse(),
+                ("sub t() { auto result = buffer<int64>::filled(size: 3, 7); }", ""));
+        }
+    }
+
+    writableElements() {
+        buffer<int64> b = new buffer<int64>((1, 2, 3));
+        b[0] = 7;
+        assertEq((7, 2, 3), b.toList());
+
+        b[1] += 5;
+        assertEq(7, b[1]);
+        assertEq(8, ++b[1]);
+        assertEq(8, b[1]++);
+        assertEq(9, b[1]);
+        assertEq(9, b[1]--);
+        assertEq(8, b[1]);
+
+        buffer<*int64> nullable = new buffer<*int64>((1, 2));
+        nullable[1] = NOTHING;
+        assertEq((1, NOTHING), nullable.toList());
+        nullable[1] = 9;
+        assertEq((1, 9), nullable.toList());
+
+        buffer<float64> floats = new buffer<float64>((1.5, 2.5));
+        floats[0] = 3;
+        floats[1] += 0.5;
+        assertEq((3.0, 3.0), floats.toList());
+
+        buffer<bool> bools = new buffer<bool>((False, False));
+        bools[0] = True;
+        assertEq((True, False), bools.toList());
+
+        assertThrows("BUFFER-INDEX-ERROR", sub () { b[4] = 1; });
+        assertThrows("NEGATIVE-LIST-INDEX", sub () { b[-1] = 1; });
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "lvalue for assignment", \p.parse(),
+                ("sub t() { buffer<int64> b = new buffer<int64>((1,)); b[0] = \"x\"; }", ""));
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "lvalue for assignment", \p.parse(),
+                ("sub t() { buffer<int64> b = new buffer<int64>((1,)); b[0] = NOTHING; }", ""));
+        }
+        assertThrows("BUFFER-RANGE-ERROR", sub () {
+            buffer<int8> small = new buffer<int8>((1,));
+            small[0] = 128;
+        });
+    }
+
+    constructionErrors() {
+        assertThrows("BUFFER-RANGE-ERROR", sub () {
+            buffer<int8> b = new buffer<int8>((128,));
+        });
+        assertThrows("BUFFER-RANGE-ERROR", sub () {
+            buffer<int16> b = new buffer<int16>((32768,));
+        });
+        assertThrows("BUFFER-TYPE-ERROR", sub () {
+            buffer<int64> b = new buffer<int64>((NOTHING,));
+        });
+        assertThrows("BUFFER-TYPE-ERROR", sub () {
+            buffer<bool> b = new buffer<bool>((1,));
+        });
+    }
+}

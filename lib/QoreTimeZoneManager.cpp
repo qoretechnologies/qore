@@ -60,9 +60,15 @@ QoreZoneInfo::QoreZoneInfo(QoreString& root, std::string& n_name, ExceptionSink*
         : AbstractQoreZoneInfo(n_name), first_pos(-1), valid(false), std_abbr(nullptr) {
     printd(5, "QoreZoneInfo::QoreZoneInfo() this: %p root: %s name: %s\n", this, root.c_str(), name.c_str());
 
+    // Skip if name is empty — cannot open the zoneinfo root directory as a file
+    if (name.empty()) {
+        return;
+    }
+
     std::string fn = root.c_str();
-    if (!fn.empty())
+    if (!fn.empty()) {
         fn += "/";
+    }
     fn += name;
 
     QoreFile f;

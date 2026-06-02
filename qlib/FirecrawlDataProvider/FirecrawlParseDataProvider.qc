@@ -110,9 +110,13 @@ public class FirecrawlParseDataProvider inherits FirecrawlDataProviderBase {
             boundary, filename, mime_type));
         body += content;
         if (options) {
+%ifndef NoJson
             body += binary(sprintf("\r\n--%s\r\nContent-Disposition: form-data; "
                 "name=\"options\"\r\nContent-Type: %s\r\n\r\n%s",
                 boundary, MimeTypeJson, make_json(options)));
+%else
+            throw "JSON-MODULE-MISSING", "json module is required for Firecrawl parse options";
+%endif
         }
         body += binary(sprintf("\r\n--%s--\r\n", boundary));
 
@@ -141,6 +145,7 @@ public class FirecrawlParseDataProvider inherits FirecrawlDataProviderBase {
                     "POST", full_path, hdr, body);
                 int status = raw.status_code;
                 *hash<auto> parsed;
+%ifndef NoJson
                 if (raw.body.typeCode() == NT_STRING && raw.body.val()) {
                     try {
                         parsed = parse_json(raw.body);
@@ -148,6 +153,7 @@ public class FirecrawlParseDataProvider inherits FirecrawlDataProviderBase {
                         # leave parsed as NOTHING; fall through to error or raw return
                     }
                 }
+%endif
                 if (status >= 400) {
                     *string formatted = formatFirecrawlBody(parsed);
                     string desc = sprintf("HTTP %d from POST %s", status, full_path);

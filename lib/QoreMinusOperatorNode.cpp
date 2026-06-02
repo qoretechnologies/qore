@@ -33,6 +33,23 @@
 
 QoreString QoreMinusOperatorNode::minus_str("- operator expression");
 
+static void set_binary_analysis_minus(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder lh(left, xsink);
     if (*xsink) {
@@ -45,6 +62,10 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
 
     qore_type_t lt = lh->getType();
     qore_type_t rt = rh->getType();
+
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::Subtract, xsink);
+    }
 
     if (rt == NT_NOTHING) {
         return lh.takeReferencedValue();
@@ -101,7 +122,8 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
         }
         if (rt == NT_STRING) {
             ReferenceHolder<QoreHashNode> nh(lh->get<const QoreHashNode>()->copy(), xsink);
-            nh->removeKey(rh->get<const QoreStringNode>(), xsink);
+            QoreStringValueHelper key(*rh);
+            nh->removeKey(*key, xsink);
             if (*xsink)
                 return QoreValue();
             return nh.release();
@@ -119,11 +141,22 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     assert(!parse_context.typeInfo);
 
     parse_context.typeInfo = nullptr;
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* leftTypeInfo = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
@@ -138,14 +171,19 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         if (!result.isNothing() || **xsink) {
             val = result;
             parse_context.typeInfo = val.getFullTypeInfo();
+            set_binary_analysis_minus(parse_context, left_analysis, right_analysis);
             return **xsink ? -1 : 0;
         }
         // constants not resolved - skip parse-time folding, let runtime handle it
         del.release();
     }
 
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(leftTypeInfo, rightTypeInfo,
+        QoreBufferBinaryOperation::Subtract);
+    if (bufferResultTypeInfo) {
+        returnTypeInfo = bufferResultTypeInfo;
     // issue #4834: if the rhs is NOTHING, then return the type of the lhs and raise a warning
-    if (QoreTypeInfo::isType(rightTypeInfo, NT_NOTHING)) {
+    } else if (QoreTypeInfo::isType(rightTypeInfo, NT_NOTHING)) {
         returnTypeInfo = leftTypeInfo;
         QoreStringNode* edesc = new QoreStringNode("subtracting NOTHING from ");
         QoreTypeInfo::getThisType(leftTypeInfo, *edesc);
@@ -201,5 +239,6 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     }
 
     parse_context.typeInfo = returnTypeInfo;
+    set_binary_analysis_minus(parse_context, left_analysis, right_analysis);
     return err;
 }

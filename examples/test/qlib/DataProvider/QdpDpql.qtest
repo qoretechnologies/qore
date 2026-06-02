@@ -3,8 +3,9 @@
 
 %modern
 
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
 
 %try-module yaml
 %define NoYaml
@@ -67,11 +68,16 @@ public class QdpDpqlTest inherits QUnit::Test {
         return get_script_dir() + "/../../../.."+ "/bin/qdp";
     }
 
+    private string getQoreBinary() {
+        return getenv("QORE_BINARY") ?? "qore";
+    }
+
     private hash<auto> runQdp(string args) {
         TmpDir tmp_dir("qdp-dpql-");
         string out_path = tmp_dir.path + "/out.json";
         string err_path = tmp_dir.path + "/err.txt";
-        string cmd = sprintf("qore --enable-debug %s %s > %s 2> %s",
+        string cmd = sprintf("%s --enable-debug %s %s > %s 2> %s",
+            shellQuote(getQoreBinary()),
             shellQuote(getQdpPath()),
             args,
             shellQuote(out_path),

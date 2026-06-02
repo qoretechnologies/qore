@@ -38,11 +38,15 @@ DLLEXPORT extern qore_classid_t CID_CHANNELITERATOR;
 DLLLOCAL extern QoreClass* QC_CHANNELITERATOR;
 
 DLLLOCAL QoreClass* initChannelIteratorClass(QoreNamespace& ns);
+DLLLOCAL QoreObject* qore_new_channel_iterator_object(QoreProgram* pgm, QoreChannel* ch);
+DLLLOCAL QoreObject* qore_new_channel_iterator_object(QoreProgram* pgm, QoreChannel* ch, const type_vec_t& type_args);
 
 class QoreChannelIterator : public QoreIteratorBase {
 public:
     // if own_ref is true, takes ownership of an existing ref; if false, adds a new ref
-    DLLLOCAL QoreChannelIterator(QoreChannel* ch, bool own_ref = false) : channel(ch), validp(false) {
+    DLLLOCAL QoreChannelIterator(QoreChannel* ch, bool own_ref = false,
+            const QoreTypeInfo* element_type = autoTypeInfo)
+            : channel(ch), current_value(), element_type(element_type ? element_type : autoTypeInfo), validp(false) {
         if (!own_ref) {
             channel->ref();
         }
@@ -100,7 +104,7 @@ public:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getElementType() const override {
-        return autoTypeInfo;
+        return element_type;
     }
 
     // No native fast path is wired here on purpose:
@@ -123,6 +127,7 @@ protected:
 private:
     QoreChannel* channel;
     QoreValue current_value;
+    const QoreTypeInfo* element_type;
     bool validp;
 };
 

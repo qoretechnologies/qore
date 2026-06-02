@@ -48,7 +48,7 @@ QoreEmbedTextProcessor proc({
     @endcode
 
 */
-public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider {
+public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -85,7 +85,6 @@ public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider 
                     "- `http` — call an OpenAI-compatible `/v1/embeddings` HTTP endpoint\n"
                     "- `onnx` — run a local ONNX embedding model (requires the ml module)",
                 "type": AbstractDataProviderTypeMap."string",
-                "required": True,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "http",
@@ -124,7 +123,116 @@ public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider 
                 "type": AbstractDataProviderTypeMap."*string",
                 "sensitive": True,
             },
-        };
+            "embedding_model_path": <DataProviderOptionInfo>{
+                "display_name": "ONNX Model Path",
+                "short_desc": "Path to a local ONNX embedding model",
+                "desc": "Filesystem path to a local ONNX embedding model. Required for "
+                    "`onnx` mode unless `registry_model_name` is provided.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "tokenizer_config_path": <DataProviderOptionInfo>{
+                "display_name": "Tokenizer Config Path",
+                "short_desc": "Path to tokenizer.json for ONNX mode",
+                "desc": "Filesystem path to a HuggingFace `tokenizer.json` file. Required "
+                    "for `onnx` mode unless the tokenizer is loaded from QoreModelRegistry.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "onnx_session_config": <DataProviderOptionInfo>{
+                "display_name": "ONNX Session Config",
+                "short_desc": "Provider and threading config for ONNX Runtime",
+                "desc": "Optional `ML::OnnxSessionConfig` hash passed to the local ONNX "
+                    "embedding model. Use this to select execution providers, disable "
+                    "GPU auto-detection with `{\"providers\": ()}`, or tune "
+                    "`intra_op_threads`, `inter_op_threads`, and graph optimization. "
+                    "Registry package execution config is used by default when present; "
+                    "this option overrides it.",
+                "type": AbstractDataProviderTypeMap."*hash",
+                "example_value": {"providers": ()},
+            },
+            "max_tokens": <DataProviderOptionInfo>{
+                "display_name": "Max Tokens",
+                "short_desc": "Maximum tokens for ONNX embedding inputs",
+                "desc": "Maximum number of tokens per text in ONNX mode. Longer inputs are "
+                    "truncated before inference.",
+                "type": AbstractDataProviderTypeMap."int",
+                "default_value": 512,
+            },
+            "pooling_strategy": <DataProviderOptionInfo>{
+                "display_name": "Pooling Strategy",
+                "short_desc": "How token embeddings are pooled",
+                "desc": "Pooling strategy for ONNX embedding outputs: `mean`, `cls`, or `max`.",
+                "type": AbstractDataProviderTypeMap."string",
+                "default_value": "mean",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "mean", "display_name": "Mean"},
+                    <AllowedValueInfo>{"value": "cls", "display_name": "CLS Token"},
+                    <AllowedValueInfo>{"value": "max", "display_name": "Max"},
+                ),
+            },
+            "output_names": <DataProviderOptionInfo>{
+                "display_name": "Output Tensor Names",
+                "short_desc": "Only materialize selected ONNX outputs",
+                "desc": "Optional output tensor names to request from ONNX Runtime before "
+                    "embedding pooling. Use this for multi-output embedding models when "
+                    "only the hidden-state tensor is needed, for example "
+                    "`(\"last_hidden_state\",)`. Omit this option to request all model outputs.",
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
+                "example_value": ("last_hidden_state",),
+            },
+            "output_mode": <DataProviderOptionInfo>{
+                "display_name": "Output Mode",
+                "short_desc": "How embeddings are added to shaped output",
+                "desc": "Controls how embedding vectors are represented in shaped bulk output:\n\n"
+                    "- `vector` — keep the existing `embedding` field containing one vector per row\n"
+                    "- `columns` — split dimensions into flat dense `embedding_0`, `embedding_1`, "
+                    "... columns for analytical pipelines and DataFrame processing\n\n"
+                    "`columns` mode avoids nested vector-list materialization for local ONNX embeddings "
+                    "when the input shape is `DataFrameBlock` or `BufferColumns`.",
+                "type": AbstractDataProviderTypeMap."string",
+                "default_value": "vector",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "vector",
+                        "display_name": "Vector Field",
+                        "desc": "Store each embedding as a vector in the `embedding` field",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "columns",
+                        "display_name": "Dense Columns",
+                        "desc": "Split embedding dimensions into flat dense columns",
+                    },
+                ),
+            },
+            "registry_model_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Name",
+                "short_desc": "Registry package containing ONNX and tokenizer artifacts",
+                "desc": "QoreModelRegistry model/package name to load in ONNX mode. The "
+                    "package must contain an ONNX model artifact and a `tokenizer.json` "
+                    "artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_version": <DataProviderOptionInfo>{
+                "display_name": "Registry Model Version",
+                "short_desc": "Registry model version or latest",
+                "desc": "Optional registry model version ID. Omit or use `latest` to load "
+                    "the most recent package version.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_model_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry ONNX Artifact",
+                "short_desc": "Named ONNX artifact in the package",
+                "desc": "Optional named ONNX artifact. Defaults to the package execution "
+                    "entry artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "registry_tokenizer_artifact_name": <DataProviderOptionInfo>{
+                "display_name": "Registry Tokenizer Artifact",
+                "short_desc": "Named tokenizer.json artifact in the package",
+                "desc": "Optional tokenizer artifact name. Defaults to the package manifest's "
+                    "`tokenizer.json` artifact.",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+        } + AbstractDataProviderMLProcessor::ModelRegistryConstructorOptions;
     }
 
     private {
@@ -145,6 +253,45 @@ public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider 
 
         #! API key (for HTTP mode)
         *string embedding_api_key;
+
+        #! ONNX model path
+        *string embedding_model_path;
+
+        #! ONNX tokenizer path
+        *string tokenizer_config_path;
+
+        #! Optional ONNX Runtime session configuration
+        *hash<ML::OnnxSessionConfig> onnx_session_config;
+
+        #! ONNX maximum input tokens
+        int max_tokens = 512;
+
+        #! ONNX pooling strategy
+        string pooling_strategy = "mean";
+
+        #! Optional ONNX output tensor names
+        *list<string> output_names;
+
+        #! Embedding output mode ("vector" or "columns")
+        string output_mode = "vector";
+
+        #! Registry model/package name for ONNX mode
+        *string registry_model_name;
+
+        #! Registry model version
+        *string registry_model_version;
+
+        #! Registry ONNX artifact name
+        *string registry_model_artifact_name;
+
+        #! Registry tokenizer artifact name
+        *string registry_tokenizer_artifact_name;
+
+        #! True when ONNX mode was inferred from registry execution metadata
+        bool embedding_mode_inferred = False;
+
+        #! Registry backend options
+        hash<auto> registry_options;
 
         #! Lazy-initialized EmbeddingModel
         *QoreTokenizerUtils::EmbeddingModel emb_model;
@@ -172,7 +319,24 @@ public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider 
             throw "CONSTRUCTOR-ERROR",
                 sprintf("window_size must be >= 1; got %d", window_size);
         }
-        embedding_mode = copts.embedding_mode;
+        registry_model_name = copts.registry_model_name;
+        registry_model_version = copts.registry_model_version;
+        registry_model_artifact_name = copts.registry_model_artifact_name;
+        registry_tokenizer_artifact_name = copts.registry_tokenizer_artifact_name;
+        registry_options = AbstractDataProviderMLProcessor::buildModelRegistryOptions(copts);
+        *string requested_embedding_mode = copts.embedding_mode;
+        if (requested_embedding_mode.val()) {
+            embedding_mode = requested_embedding_mode;
+        }
+        if (!embedding_mode.val() && registry_model_name.val()) {
+            embedding_mode = "onnx";
+            embedding_mode_inferred = True;
+        }
+        if (!embedding_mode.val()) {
+            throw "CONSTRUCTOR-ERROR",
+                "embedding_mode is required unless registry_model_name identifies a "
+                "registry package with an onnx/embedding execution plan";
+        }
         if (embedding_mode != "http" && embedding_mode != "onnx") {
             throw "CONSTRUCTOR-ERROR",
                 sprintf("embedding_mode must be \"http\" or \"onnx\"; got %y", embedding_mode);
@@ -184,6 +348,43 @@ public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider 
         embedding_url = copts.embedding_url;
         embedding_model = copts.embedding_model;
         embedding_api_key = copts.embedding_api_key;
+        embedding_model_path = copts.embedding_model_path;
+        tokenizer_config_path = copts.tokenizer_config_path;
+        if (exists copts.onnx_session_config) {
+            onnx_session_config = cast<hash<ML::OnnxSessionConfig>>(copts.onnx_session_config);
+        }
+        max_tokens = copts.max_tokens ?? 512;
+        pooling_strategy = copts.pooling_strategy ?? "mean";
+        if (exists copts.output_names) {
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            if (!output_names) {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names must contain at least one ONNX output tensor name; "
+                    "omit output_names to request all model outputs";
+            }
+            if (embedding_mode != "onnx") {
+                throw "CONSTRUCTOR-ERROR",
+                    "output_names is only supported when embedding_mode is \"onnx\"; "
+                    "omit output_names for HTTP embedding endpoints";
+            }
+        }
+        output_mode = copts.output_mode ?? "vector";
+        if (output_mode != "vector" && output_mode != "columns") {
+            throw "CONSTRUCTOR-ERROR",
+                sprintf("output_mode must be \"vector\" or \"columns\"; got %y", output_mode);
+        }
+        if (embedding_mode == "onnx" && !registry_model_name.val()) {
+            if (!embedding_model_path.val()) {
+                throw "CONSTRUCTOR-ERROR",
+                    "embedding_model_path is required for ONNX mode unless "
+                    "registry_model_name is provided";
+            }
+            if (!tokenizer_config_path.val()) {
+                throw "CONSTRUCTOR-ERROR",
+                    "tokenizer_config_path is required for ONNX mode unless "
+                    "registry_model_name is provided";
+            }
+        }
         buffer = ();
         configured = True;
     }
@@ -243,6 +444,14 @@ public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider 
         }
 
         # batch embed
+        if (output_mode == "columns") {
+            *ML::Tensor embedding_tensor = emb_model.embedBatchTensor(texts);
+            if (!embedding_tensor) {
+                return ();
+            }
+            return addEmbeddingColumnsToRows(records, cast<ML::Tensor>(embedding_tensor));
+        }
+
         list<list<float>> embeddings = emb_model.embedBatch(texts);
 
         # emit one enriched record per input record
@@ -255,21 +464,318 @@ public class QoreEmbedTextProcessor inherits DataProvider::AbstractDataProvider 
         return results;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash<auto>>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreEmbedTextProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (buffer || text_field.find(".") >= 0) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *list<string> texts = textColumnFromShape(records, shape, count);
+        if (!exists texts) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        ensureEmbeddingModel();
+        if (output_mode == "columns") {
+            *ML::Tensor embedding_tensor = embedTextsInWindowsTensor(texts);
+            if (!embedding_tensor) {
+                return;
+            }
+            return addEmbeddingColumns(records, shape, count, cast<ML::Tensor>(embedding_tensor));
+        }
+
+        list<list<float>> embeddings = embedTextsInWindows(texts);
+        if (embeddings.lsize() != count) {
+            throw "PROCESSOR-ERROR",
+                sprintf("embedding model returned %d vectors for %d input rows",
+                    embeddings.lsize(), count);
+        }
+
+        return addEmbeddingColumn(records, shape, embeddings);
+    }
+
+    #! Embeds a text column in configured batch windows
+    private list<list<float>> embedTextsInWindows(list<string> texts) {
+        int count = texts.lsize();
+        list<list<float>> embeddings;
+        for (int start = 0; start < count; start += window_size) {
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            list<string> window = start == 0 && end == count
+                ? texts
+                : texts[start..(end - 1)];
+            embeddings += emb_model.embedBatch(window);
+        }
+        return embeddings;
+    }
+
+    #! Embeds a text column in configured batch windows and keeps dense tensor output
+    private *ML::Tensor embedTextsInWindowsTensor(list<string> texts) {
+        int count = texts.lsize();
+        list<ML::Tensor> tensors;
+        for (int start = 0; start < count; start += window_size) {
+            int end = start + window_size;
+            if (end > count) {
+                end = count;
+            }
+            list<string> window = start == 0 && end == count
+                ? texts
+                : texts[start..(end - 1)];
+            *ML::Tensor tensor = emb_model.embedBatchTensor(window);
+            if (tensor) {
+                push tensors, cast<ML::Tensor>(tensor);
+            }
+        }
+        if (!tensors) {
+            return;
+        }
+        return tensors.lsize() == 1 ? tensors[0] : ML::Tensor::concatRows(tensors);
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
+    #! Reads the configured text field directly from a shaped column block
+    private *list<string> textColumnFromShape(auto records, DataProvider::DataProviderShape shape, int count) {
+        *auto column;
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                if (records.columnNames().contains(text_field)) {
+                    column = records.getColumn(text_field);
+                }
+                break;
+            case DataProvider::DataProviderShape::BufferColumns:
+                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
+                    if (records.columnNames().contains(text_field)) {
+                        column = records.getColumn(text_field);
+                    }
+                } else if (records.hasKey(text_field)) {
+                    column = records{text_field};
+                }
+                break;
+            case DataProvider::DataProviderShape::HashOfLists:
+                if (records.hasKey(text_field)) {
+                    column = records{text_field};
+                }
+                break;
+        }
+        if (!exists column) {
+            return;
+        }
+        return QoreEmbedTextProcessor::columnToStrings(column, count, text_field);
+    }
+
+    #! Converts a shaped text column to string values using row-mode value semantics
+    private static list<string> columnToStrings(auto column, int count, string field) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        if (values.lsize() != count) {
+            throw "PROCESSOR-SHAPE-ERROR",
+                sprintf("text field %y has %d values but the shaped block has %d rows",
+                    field, values.lsize(), count);
+        }
+
+        list<string> texts;
+        foreach auto value in (values) {
+            push texts, value.toString();
+        }
+        return texts;
+    }
+
+    #! Appends the embedding vectors to a shaped block while preserving the input shape
+    private auto addEmbeddingColumn(auto records, DataProvider::DataProviderShape shape,
+            list<list<float>> embeddings) {
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock:
+                return records.withColumn("embedding", embeddings);
+            case DataProvider::DataProviderShape::BufferColumns: {
+                hash<auto> columns = DataProvider::AbstractDataProcessor::isColumnarResult(records)
+                    ? records.toColumnHash()
+                    : records + {};
+                columns.embedding = embeddings;
+                return ColumnarResult::fromColumnHash(columns);
+            }
+            case DataProvider::DataProviderShape::HashOfLists: {
+                hash<auto> columns = records + {};
+                columns.embedding = embeddings;
+                return columns;
+            }
+        }
+        return records;
+    }
+
+    #! Appends embedding dimensions as scalar fields to row records
+    private list<auto> addEmbeddingColumnsToRows(list<hash<auto>> records, ML::Tensor embeddings) {
+        list<int> shape = embeddings.getShape();
+        if (shape.lsize() != 2 || shape[0] != records.lsize()) {
+            throw "PROCESSOR-ERROR",
+                sprintf("embedding tensor shape %y does not match %d input rows", shape, records.lsize());
+        }
+
+        list<auto> buffers = embeddings.toColumnBuffers();
+        list<list<auto>> values;
+        foreach auto buffer in (buffers) {
+            push values, buffer.toList();
+        }
+
+        list<auto> results = ();
+        for (int i = 0; i < records.lsize(); ++i) {
+            hash<auto> result = {} + records[i];
+            for (int j = 0; j < shape[1]; ++j) {
+                result{sprintf("embedding_%d", j)} = values[j][i];
+            }
+            push results, result;
+        }
+        return results;
+    }
+
+    #! Appends embedding dimensions as dense columns while preserving the negotiated shape
+    private auto addEmbeddingColumns(auto records, DataProvider::DataProviderShape shape, int count,
+            ML::Tensor embeddings) {
+        list<int> tensor_shape = embeddings.getShape();
+        if (tensor_shape.lsize() != 2 || tensor_shape[0] != count) {
+            throw "PROCESSOR-ERROR",
+                sprintf("embedding tensor shape %y does not match %d input rows", tensor_shape, count);
+        }
+
+        list<auto> columns = embeddings.toColumnBuffers();
+        switch (shape) {
+            case DataProvider::DataProviderShape::DataFrameBlock: {
+                hash<auto> data = records.toColumnHash();
+                for (int j = 0; j < tensor_shape[1]; ++j) {
+                    data{sprintf("embedding_%d", j)} = columns[j];
+                }
+                return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(data);
+            }
+            case DataProvider::DataProviderShape::BufferColumns: {
+                hash<auto> data = DataProvider::AbstractDataProcessor::isColumnarResult(records)
+                    ? records.toColumnHash()
+                    : records + {};
+                for (int j = 0; j < tensor_shape[1]; ++j) {
+                    data{sprintf("embedding_%d", j)} = columns[j];
+                }
+                return ColumnarResult::fromColumnHash(data);
+            }
+            case DataProvider::DataProviderShape::HashOfLists: {
+                hash<auto> data = records + {};
+                for (int j = 0; j < tensor_shape[1]; ++j) {
+                    data{sprintf("embedding_%d", j)} = columns[j].toList();
+                }
+                return data;
+            }
+        }
+        return records;
+    }
+
     #! Ensures the EmbeddingModel is initialized (lazy creation to avoid connecting in constructor)
     private ensureEmbeddingModel() {
         if (!emb_model) {
-            emb_model = new QoreTokenizerUtils::EmbeddingModel(<QoreTokenizerUtils::EmbeddingConfig>{
+            hash<QoreTokenizerUtils::EmbeddingConfig> config(<QoreTokenizerUtils::EmbeddingConfig>{
                 "mode": embedding_mode,
                 "url": embedding_url,
                 "model": embedding_model,
                 "api_key": embedding_api_key,
+                "model_path": embedding_model_path,
+                "max_tokens": max_tokens,
+                "pooling_strategy": pooling_strategy,
             });
+            if (output_names) {
+                config.output_names = output_names;
+            }
+            if (embedding_mode == "onnx") {
+%ifndef NoJson
+                if (registry_model_name.val()) {
+                    QoreModelRegistry::ModelRegistry registry(registry_options);
+                    hash<QoreModelRegistry::ModelVersionInfo> manifest =
+                        registry.getVersionManifest(registry_model_name, registry_model_version);
+                    AbstractDataProviderMLProcessor::validateRegistryExecutionTask(
+                        manifest, "embedding", "embed-text", embedding_mode_inferred);
+                    if (!output_names) {
+                        *list<string> plan_output_names =
+                            AbstractDataProviderMLProcessor::getRegistryExecutionPlanOutputNames(
+                                manifest, ("hidden_state_output_name", "hidden_state_output",
+                                    "last_hidden_state_output_name", "last_hidden_state_output",
+                                    "embedding_output_name", "embedding_output"));
+                        if (plan_output_names) {
+                            config.output_names = plan_output_names;
+                        }
+                    }
+                    string artifact_name = registry_model_artifact_name
+                        ?? AbstractDataProviderMLProcessor::getRegistryExecutionPlanArtifactName(
+                            manifest)
+                        ?? (manifest.execution ? manifest.execution.entry_artifact : NOTHING)
+                        ?? "model";
+                    if (manifest.execution && manifest.execution.config) {
+                        config.session_config =
+                            cast<hash<ML::OnnxSessionConfig>>(manifest.execution.config);
+                    }
+                    config.model_data = registry.loadNamedArtifact(registry_model_name,
+                        manifest.version_id, artifact_name);
+                    hash<auto> tokenizer_package = registry.loadTokenizerPackageConfig(
+                        registry_model_name, manifest.version_id,
+                        registry_tokenizer_artifact_name);
+                    config.tokenizer_config = tokenizer_package.tokenizer_json;
+                    config.tokenizer_runtime_config = tokenizer_package.tokenizer_config;
+                } else {
+                    config.tokenizer_config =
+                        parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
+                }
+                if (onnx_session_config) {
+                    config.session_config = onnx_session_config;
+                }
+%else
+                throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
+%endif
+            }
+            emb_model = new QoreTokenizerUtils::EmbeddingModel(config);
         }
     }
 
-    #! Does not support bulk API
+    #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
-        return False;
+        return True;
     }
 
     #! Returns the processor capability bitfield

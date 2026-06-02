@@ -60,25 +60,44 @@ foreach int i in (r) {
     - %Qore 0.8.6
     - %Qore 0.9.5 does not include the upper limit in the range unless @ref broken-range "%broken-range" is set
  */
-qclass RangeIterator [arg=RangeIterator* i; ns=Qore; vparent=AbstractIterator];
+qclass RangeIterator [arg=RangeIterator* i; ns=Qore; vparent=AbstractIterator<auto>];
 
 //! creates the numerical sequence iterator with the initial arguments
 /** @param start an initial value
     @param stop a final value
     @param step is the interval. Default = 1
-    @param val an optional value to be returned instead of the default integer value
 
     @par Example:
     @code{.py}
-RangeIterator i(5, 10, 2);
+RangeIterator i(start: 5, stop: 10, step: 2);
+    @endcode
+
+    @see xrange()
+ */
+RangeIterator::constructor(int start, int stop, int step = 1) [flags=NAMED_ARGS] {
+    ReferenceHolder<RangeIterator> r(new RangeIterator(start, stop, step, QoreValue(), xsink), xsink);
+    if (*xsink)
+        return;
+    self->setPrivate(CID_RANGEITERATOR, r.release());
+}
+
+//! creates the numerical sequence iterator with the initial arguments
+/** @param start an initial value
+    @param stop a final value
+    @param step is the interval. Default = 1
+    @param value an optional value to be returned instead of the default integer value
+
+    @par Example:
+    @code{.py}
+RangeIterator i(5, 10, 2, "tick");
     @endcode
 
     @see xrange()
 
-    @since %Qore 0.8.11.1 this method takes the optional \a val argument
+    @since %Qore 0.8.11.1 this method takes the optional \a value argument
  */
-RangeIterator::constructor(int start, int stop, int step = 1, auto val) {
-    ReferenceHolder<RangeIterator> r(new RangeIterator(start, stop, step, val, xsink), xsink);
+RangeIterator::constructor(int start, int stop, int step = 1, auto value) {
+    ReferenceHolder<RangeIterator> r(new RangeIterator(start, stop, step, value, xsink), xsink);
     if (*xsink)
         return;
     self->setPrivate(CID_RANGEITERATOR, r.release());
@@ -96,7 +115,7 @@ RangeIterator i(5);
 
     @since %Qore 0.8.11.1
  */
-RangeIterator::constructor(int stop) {
+RangeIterator::constructor(int stop) [flags=NAMED_ARGS] {
     ReferenceHolder<RangeIterator> r(new RangeIterator(0, stop, 1, QoreValue(), xsink), xsink);
     if (*xsink)
         return;
@@ -234,7 +253,6 @@ xrange(10, -10, 5); # 10, 5, 0, -5
     @param start the initial value
     @param stop the final value
     @param step the step; the default is 1; must be greater than 0; the function throws a \c RANGE-ERROR exception when this argument is < 1
-    @param val an optional value to be returned instead of the default integer value
 
     @retval Returns a RangeIterator containing an arithmetic progression of integers.
 
@@ -246,11 +264,43 @@ xrange(10, -10, 5); # 10, 5, 0, -5
 
     @since
     - %Qore 0.8.6
-    - %Qore 0.8.11.1 this function takes the optional \a val argument
     - %Qore 0.9.5 does not include the upper limit in the range unless @ref broken-range "%broken-range" is set
 */
-RangeIterator xrange(int start, int stop, int step = 1, auto val) [flags=RET_VALUE_ONLY] {
-    ReferenceHolder<RangeIterator> r(new RangeIterator(start, stop, step, val, xsink), xsink);
+RangeIterator xrange(int start, int stop, int step = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    ReferenceHolder<RangeIterator> r(new RangeIterator(start, stop, step, QoreValue(), xsink), xsink);
+    if (*xsink)
+        return QoreValue();
+
+    return new QoreObject(QC_RANGEITERATOR, 0, r.release());
+}
+
+//! Returns a RangeIterator containing an arithmetic progression of integers.
+/**
+    @par Example:
+    @code{.py}
+xrange(2, 5, 1, "row"); # "row", "row", "row"
+    @endcode
+
+    @param start the initial value
+    @param stop the final value
+    @param step the step; the default is 1; must be greater than 0; the function throws a \c RANGE-ERROR exception when this argument is < 1
+    @param value an optional value to be returned instead of the default integer value
+
+    @retval Returns a RangeIterator containing an arithmetic progression of integers.
+
+    @throw RANGEITERATOR-ERROR this exception is thrown if \c step < 1
+
+    @see range
+
+    @note the main difference between range() and xrange() is that range returns a real list and xrange() returns a RangeIterator
+
+    @since
+    - %Qore 0.8.6
+    - %Qore 0.8.11.1 this function takes the optional \a value argument
+    - %Qore 0.9.5 does not include the upper limit in the range unless @ref broken-range "%broken-range" is set
+*/
+RangeIterator xrange(int start, int stop, int step = 1, auto value) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<RangeIterator> r(new RangeIterator(start, stop, step, value, xsink), xsink);
     if (*xsink)
         return QoreValue();
 
@@ -279,7 +329,7 @@ xrange(-3); # 0, -1, -2
     - %Qore 0.8.6
     - %Qore 0.9.5 does not include the upper limit in the range unless @ref broken-range "%broken-range" is set
  */
-RangeIterator xrange(int stop) [flags=CONSTANT] {
+RangeIterator xrange(int stop) [flags=CONSTANT,NAMED_ARGS] {
     ReferenceHolder<RangeIterator> r(new RangeIterator(0, stop, 1, QoreValue(), xsink), xsink);
     if (*xsink)
         return QoreValue();

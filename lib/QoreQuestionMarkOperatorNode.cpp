@@ -29,29 +29,78 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
 
 QoreString QoreQuestionMarkOperatorNode::question_mark_str("question mark (?:) operator expression");
 
+static void set_ternary_analysis(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
-    int err = parse_init_value(e[0], parse_context);
+    QoreParseAnalysis cond_analysis;
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(e[0], parse_context);
+        cond_analysis = parse_context.analysis;
+    }
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)
         && parse_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
         parse_context.typeInfo->doNonBooleanWarning(loc, "the initial expression with the '?:' operator is ");
     }
 
-    parse_context.typeInfo = nullptr;
-    if (parse_init_value(e[1], parse_context) && !err) {
-        err = -1;
-    }
-    const QoreTypeInfo* leftTypeInfo = parse_context.typeInfo;
+    // Track narrowed types across the two branches.  The condition
+    // may narrow auto-typed locals (e.g. `x.foo` narrowing `x` to
+    // hash via QoreHashObjectDereferenceOperatorNode); that
+    // narrowing is legitimate in the true branch but must NOT leak
+    // into the false branch, where the condition was falsy and the
+    // narrowing predicate did not hold.  Mirrors
+    // IfStatement::parseInitImpl's use of NarrowedTypeHelper.
+    NarrowedTypeHelper nth;
+    nth.saveState();
 
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(e[2], parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(e[1], parse_context) && !err) {
+            err = -1;
+        }
+        left_analysis = parse_context.analysis;
+    }
+    const QoreTypeInfo* leftTypeInfo = parse_context.typeInfo;
+    // Snapshot true-branch narrowing and reset for the false branch
+    nth.recordBranchAndRestore();
+
+    parse_context.typeInfo = nullptr;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(e[2], parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
+    // Snapshot false-branch narrowing and merge with the true branch
+    nth.recordBranchAndRestore();
+    nth.mergeAndApply();
 
     // see if all arguments are constant values, then eval immediately and substitute this node with the result
     if (!err && e[0].isValue() && e[1].isValue() && e[2].isValue()) {
@@ -65,6 +114,8 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         if (!result.isNothing()) {
             val = result;
             typeInfo = val.getTypeInfo();
+            parse_context.typeInfo = typeInfo;
+            set_ternary_analysis(parse_context, left_analysis, right_analysis);
             return 0;
         }
         // constants not resolved - skip parse-time folding, let runtime handle it
@@ -73,6 +124,7 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
 
     // FIXME: find common type if l != r type
     parse_context.typeInfo = QoreTypeInfo::isOutputIdentical(leftTypeInfo, rightTypeInfo) ? leftTypeInfo : nullptr;
+    set_ternary_analysis(parse_context, left_analysis, right_analysis);
     return err;
 }
 

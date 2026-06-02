@@ -109,7 +109,7 @@ public class CustomerIoPeopleDataProvider inherits CustomerIoDataProviderBase {
     }
 
     #! Searches for people
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -134,7 +134,7 @@ public class CustomerIoPeopleDataProvider inherits CustomerIoDataProviderBase {
         # If no filter is provided, return empty results (API requires at least one filter)
         if (!params) {
             list<hash<auto>> empty_list = ();
-            return new DefaultRecordIterator(new ListHashIterator(empty_list), where_cond,
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(empty_list), where_cond,
                 search_options, recordType.getFields());
         }
 
@@ -143,7 +143,7 @@ public class CustomerIoPeopleDataProvider inherits CustomerIoDataProviderBase {
         auto response = doGet("/customers", params);
         list<hash<auto>> records = response.results ?? response.customers ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

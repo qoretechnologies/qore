@@ -32,6 +32,23 @@
 
 QoreString QoreDivisionOperatorNode::op_str("/ operator expression");
 
+static void set_binary_analysis_div(QoreParseContext& parse_context,
+        const QoreParseAnalysis& left,
+        const QoreParseAnalysis& right) {
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (left.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
+}
+
 QoreValue QoreDivisionOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
    if (pfunc)
       return (this->*pfunc)(xsink);
@@ -53,11 +70,22 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
 
     assert(!parse_context.typeInfo);
 
-    int err = parse_init_value(left, parse_context);
+    QoreParseAnalysis left_analysis;
+    QoreParseAnalysis right_analysis;
+    int err = 0;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        err = parse_init_value(left, parse_context);
+        left_analysis = parse_context.analysis;
+    }
     const QoreTypeInfo* lti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        QoreParseContextAnalysisHelper ah(parse_context);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
+        right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
 
@@ -67,6 +95,10 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
             SimpleRefHolder<QoreDivisionOperatorNode> del(this);
             ParseExceptionSink xsink;
             val = doDivision(left, right, *xsink);
+            if (!**xsink) {
+                parse_context.typeInfo = val.getFullTypeInfo();
+                set_binary_analysis_div(parse_context, left_analysis, right_analysis);
+            }
             return **xsink ? -1 : 0;
         }
         // check for division by zero here
@@ -74,6 +106,15 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
             parse_error(*loc, "division by zero found in parse expression");
             return -1;
         }
+    }
+
+    const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(lti, rti,
+        QoreBufferBinaryOperation::Divide);
+    if (bufferResultTypeInfo) {
+        parse_context.typeInfo = bufferResultTypeInfo;
+        typeInfo = bufferResultTypeInfo;
+        set_binary_analysis_div(parse_context, left_analysis, right_analysis);
+        return err;
     }
 
     // check for optimizations based on type; but only if types are known on both sides, although the highest
@@ -92,6 +133,7 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
         }
     }
 
+    set_binary_analysis_div(parse_context, left_analysis, right_analysis);
     return err;
 }
 
@@ -130,6 +172,10 @@ QoreValue QoreDivisionOperatorNode::bigIntDivision(ExceptionSink* xsink) const {
 QoreValue QoreDivisionOperatorNode::doDivision(QoreValue lh, QoreValue rh, ExceptionSink* xsink) {
     qore_type_t lt = lh.getType();
     qore_type_t rt = rh.getType();
+
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return qore_buffer_binary_op(lh, rh, QoreBufferBinaryOperation::Divide, xsink);
+    }
 
     if (lt == NT_NUMBER) {
         switch (rt) {

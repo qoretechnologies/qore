@@ -4,10 +4,11 @@
 %modern
 %allow-weak-references
 
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Mime.qm
-%requires ../../../../../qlib/SqlUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires SqlUtil
 
 %exec-class SerializableTest
 
@@ -182,6 +183,20 @@ class S1 inherits S0 {
     }
 }
 
+class GenericSerializable<T> inherits Serializable {
+    public {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return value;
+    }
+}
+
 class SerializableTest inherits QUnit::Test {
     public {
         const Data = (
@@ -268,6 +283,7 @@ class SerializableTest inherits QUnit::Test {
         addTestCase("private key test", \privateKeyTest());
         addTestCase("certificate test", \certificateTest());
         addTestCase("hashdecl test", \hashdeclTest());
+        addTestCase("generic object type test", \genericObjectTypeTest());
         addTestCase("call stack test", \callStackTest());
 
         set_return_value(main());
@@ -644,6 +660,30 @@ class SerializableTest inherits QUnit::Test {
         hash<MyTest> h0 = Serializable::deserialize(sih).rv;
         assertEq(h, h0);
         assertEq(rv, Serializable::deserialize(Serializable::serialize(rv)));
+    }
+
+    genericObjectTypeTest() {
+        GenericSerializable<int> gi(11);
+        hash<SerializationInfo> h = gi.serializeToData();
+        assertTrue(h._index."0"._object_type =~ /GenericSerializable<int>/);
+
+        GenericSerializable<int> gi0 = Serializable::deserialize(h);
+        assertTrue(gi0 instanceof GenericSerializable<int>);
+        assertFalse(gi0 instanceof GenericSerializable<string>);
+        assertEq(11, gi0.get());
+
+        GenericSerializable<int> gi1 = Serializable::deserialize(gi.serialize());
+        assertTrue(gi1 instanceof GenericSerializable<int>);
+        assertEq(11, gi1.get());
+
+        GenericSerializable<list<int>> gl((1, 2));
+        GenericSerializable<list<int>> gl0 = Serializable::deserialize(Serializable::serialize(gl));
+        assertTrue(gl0 instanceof GenericSerializable<list<int>>);
+        assertEq((1, 2), gl0.get());
+
+        hash<SerializationInfo> bad = h;
+        bad._index."0"._object_type = "object<Test>";
+        assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), bad);
     }
 
     callStackTest() {

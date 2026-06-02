@@ -103,7 +103,7 @@ public class UnbounceLeadDeletionRequestsDataProvider inherits UnbounceDataProvi
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (!search_options.page_id) {
             throw "UNBOUNCE-ERROR", "page_id is required for querying lead deletion requests";
@@ -115,7 +115,7 @@ public class UnbounceLeadDeletionRequestsDataProvider inherits UnbounceDataProvi
 
         hash<auto> result = doGet("pages/" + search_options.page_id
             + "/lead_deletion_request/" + search_options.deletion_request_id);
-        return new DefaultRecordIterator(new ListHashIterator((result,)),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
             where_cond, search_options);
     }
 

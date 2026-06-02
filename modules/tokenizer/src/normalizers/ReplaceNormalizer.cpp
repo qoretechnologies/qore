@@ -23,7 +23,6 @@ ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* 
     }
 
     // Read the "pattern" key: expected format is {"String": "..."} or {"Regex": "..."}
-    // For now, only String patterns are supported
     const QoreHashNode* pattern_hash = safeGetHashKey(config, "pattern");
     if (pattern_hash) {
         // Try to get "String" key from the pattern hash
@@ -31,12 +30,17 @@ ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* 
         if (!str_val.empty()) {
             pattern = str_val;
         } else {
-            // Check if it's a Regex type (not yet supported)
+            // Check if it's a Regex type
             std::string regex_val = safeGetStringKey(pattern_hash, "Regex");
             if (!regex_val.empty()) {
-                xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
-                    "ReplaceNormalizer: Regex patterns are not yet supported");
-                return;
+                try {
+                    regex_pattern = std::regex(regex_val);
+                    regex_mode = true;
+                } catch (const std::regex_error& e) {
+                    xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
+                        "ReplaceNormalizer: invalid Regex pattern: %s", e.what());
+                    return;
+                }
             } else {
                 xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
                     "ReplaceNormalizer: pattern hash has no 'String' or 'Regex' key");
@@ -45,9 +49,9 @@ ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* 
         }
     } else {
         // Maybe it's a plain string
-        const QoreStringNode* str_node = safeGetString(config->getKeyValue("pattern"));
-        if (str_node) {
-            pattern = str_node->c_str();
+        std::string str = safeGetStdString(config->getKeyValue("pattern"));
+        if (!str.empty()) {
+            pattern = std::move(str);
         } else {
             xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
                 "ReplaceNormalizer: missing or invalid 'pattern' field");
@@ -64,6 +68,10 @@ ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* 
 }
 
 std::string ReplaceNormalizer::normalize(const std::string& input) const {
+    if (regex_mode) {
+        return std::regex_replace(input, regex_pattern, replacement);
+    }
+
     if (pattern.empty()) {
         return input;
     }

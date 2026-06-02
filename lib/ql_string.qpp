@@ -278,7 +278,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
 
                         // get ostr offset so we can recalculate after concatenating
                         size_t offset = ststr - ostr;
-                        const QoreStringNode* new_line = v->get<const QoreStringNode>();
+                        QoreStringNodeValueHelper new_line(*v);
                         // add line separator
                         size_t eol_len;
                         if (!eol) {
@@ -292,7 +292,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                             buf->concat(teol->c_str());
                             eol_len = teol->size();
                         }
-                        buf->concat(new_line, xsink);
+                        buf->concat(*new_line, xsink);
                         if (*xsink) {
                             return nullptr;
                         }
@@ -637,7 +637,7 @@ int len = length(str);
     - <string>::strlen()
     - <string>::size()
  */
-int length(softstring str) [flags=CONSTANT] {
+int length(softstring str) [flags=CONSTANT,NAMED_ARGS] {
    return str->length();
 }
 
@@ -653,7 +653,7 @@ int length(softstring str) [flags=CONSTANT] {
 int nbytes = length(bin);
     @endcode
  */
-int length(binary bin) [flags=CONSTANT] {
+int length(binary bin) [flags=CONSTANT,NAMED_ARGS] {
    return bin->size();
 }
 
@@ -688,7 +688,7 @@ int size = strlen(str);
     - length()
     - <string>::length()
  */
-int strlen(softstring str) [flags=CONSTANT] {
+int strlen(softstring str) [flags=CONSTANT,NAMED_ARGS] {
    return str->strlen();
 }
 
@@ -727,7 +727,7 @@ int width = char_width(str);
 
     @since %Qore 0.9.4
 */
-int char_width(softstring str) [flags=RET_VALUE_ONLY] {
+int char_width(softstring str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return str->getCharWidth(xsink);
 }
 
@@ -753,7 +753,7 @@ string lwr = tolower(str);
 
     @since %Qore 0.8.8 this function operates on a wide range of characters and is no longer limited to ASCII characters
  */
-string tolower(string str) [flags=CONSTANT] {
+string tolower(string str) [flags=CONSTANT,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
    if (do_tolower(*(*rv), *str, xsink))
       return QoreValue();
@@ -789,7 +789,7 @@ string upr = toupper(str);
 
     @since %Qore 0.8.8 this function operates on a wide range of characters and is no longer limited to ASCII characters
  */
-string toupper(string str) [flags=CONSTANT] {
+string toupper(string str) [flags=CONSTANT,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
    if (do_toupper(*(*rv), *str, xsink))
       return QoreValue();
@@ -821,7 +821,7 @@ string substr = substr(str, -10);
 
     @note equivalent to <string>::substr(softint)
  */
-string substr(softstring str, softint start) [flags=RET_VALUE_ONLY] {
+string substr(softstring str, softint start) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    QoreStringNode* rv = str->substr(start, xsink);
    if (!rv)
       rv = new QoreStringNode(str->getEncoding());
@@ -847,7 +847,7 @@ string substr = substr(str, 10, -2);
 
     @note equivalent to <string>::substr(softint, softint)
  */
-string substr(softstring str, softint start, softint len) [flags=RET_VALUE_ONLY] {
+string substr(softstring str, softint start, softint len) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    QoreStringNode* rv = str->substr(start, len, xsink);
    if (!rv)
       rv = new QoreStringNode(str->getEncoding());
@@ -857,7 +857,7 @@ string substr(softstring str, softint start, softint len) [flags=RET_VALUE_ONLY]
 //! Returns a portion of a binary object starting from an integer offset
 /** Arguments can be negative, giving offsets from the end of the data.
 
-    @param b The binary object to process
+    @param bin The binary object to process
     @param start The starting byte for the portion of the binary object where the first byte is at offset 0; if the offset is negative, it designates the number of bytes from the end of the data
 
     @return the portion of the binary data argument starting from an integer byte offset; the rest of the data is returned after this offset
@@ -872,16 +872,16 @@ binary b1 = substr(b, -10);
 
     @since %Qore 0.8.8
  */
-binary substr(binary b, softint start) [flags=CONSTANT] {
+binary substr(binary bin, softint start) [flags=CONSTANT,NAMED_ARGS] {
    BinaryNode* b1 = new BinaryNode;
-   b->substr(*b1, start);
+   bin->substr(*b1, start);
    return b1;
 }
 
 //! Returns a portion of a binary object starting from an integer offset, with a length parameter
 /** Arguments can be negative, giving offsets from the end of the data.
 
-    @param b The binary object to process
+    @param bin The binary object to process
     @param start The starting byte for the portion of the binary object where the first byte is at offset 0; if the offset is negative, it designates the number of bytes from the end of the data
     @param len The maximum number of bytes to copy; if this value is negative, the rest of the data from \a start will be copied to the return value, except without - \a len bytes from the end of the data
 
@@ -897,9 +897,9 @@ binary b1 = substr(b, 10, -2);
 
     @since %Qore 0.8.8
  */
-binary substr(binary b, softint start, softint len) [flags=CONSTANT] {
+binary substr(binary bin, softint start, softint len) [flags=CONSTANT,NAMED_ARGS] {
    BinaryNode* b1 = new BinaryNode;
-   b->substr(*b1, start, len);
+   bin->substr(*b1, start, len);
    return b1;
 }
 
@@ -936,7 +936,7 @@ if (i == -1)
     - bindex(softstring, softstring, softint)
     - brindex(softstring, softstring, softint)
  */
-int index(softstring str, softstring substr, softint pos = 0) [flags=RET_VALUE_ONLY] {
+int index(softstring str, softstring substr, softint pos = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return str->index(*substr, pos, xsink);
 }
 
@@ -972,7 +972,7 @@ if (i == -1)
     - rindex(softstring, softstring, softint)
     - brindex(softstring, softstring, softint)
  */
-int bindex(softstring str, softstring substr, softint pos = 0) [flags=CONSTANT] {
+int bindex(softstring str, softstring substr, softint pos = 0) [flags=CONSTANT,NAMED_ARGS] {
    return str->bindex(*substr, (qore_offset_t)pos);
 }
 
@@ -1010,7 +1010,7 @@ if (i == -1)
     - bindex(softstring, softstring, softint)
     - brindex(softstring, softstring, softint)
  */
-int rindex(softstring str, softstring substr, softint pos = -1) [flags=RET_VALUE_ONLY] {
+int rindex(softstring str, softstring substr, softint pos = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return str->rindex(*substr, (qore_offset_t)pos, xsink);
 }
 
@@ -1046,7 +1046,7 @@ if (i == -1)
     - bindex(softstring, softstring, softint)
     - rindex(softstring, softstring, softint)
  */
-int brindex(softstring str, softstring substr, softint pos = -1) [flags=CONSTANT] {
+int brindex(softstring str, softstring substr, softint pos = -1) [flags=CONSTANT,NAMED_ARGS] {
    return str->brindex(*substr, (qore_offset_t)pos);
 }
 
@@ -1071,7 +1071,7 @@ int i = ord(str);
 
     @note ord() only works on byte offsets and returns byte values
  */
-int ord(softstring str, softint offset = 0) [flags=CONSTANT] {
+int ord(softstring str, softint offset = 0) [flags=CONSTANT,NAMED_ARGS] {
    if (offset < 0 || (size_t)offset >= str->strlen())
       return -1;
 
@@ -1086,7 +1086,7 @@ int ord() [flags=RUNTIME_NOOP] {
 }
 
 //! Returns a string containing a single ASCII character represented by the numeric value passed
-/** @param val the byte value of the character; only the least-significant byte is used
+/** @param value the byte value of the character; only the least-significant byte is used
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed
 
     @return a string containing a single ASCII character represented by the numeric value passed
@@ -1098,10 +1098,10 @@ string char = chr(13);
 
     @since %Qore 0.8.5 the encoding argument is supported
  */
-string chr(softint val, *string encoding) [flags=CONSTANT] {
+string chr(softint value, *string encoding) [flags=CONSTANT,NAMED_ARGS] {
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
    QoreStringNode* rv = new QoreStringNode(qe);
-   rv->concat((char)val);
+   rv->concat((char)value);
    return rv;
 }
 
@@ -1120,7 +1120,7 @@ nothing chr() [flags=RUNTIME_NOOP] {
 
 //! Splits a string into a list of components based on a separator string
 /**
-    @param sep the separator string; if the separator string is not found in the string to split, then a list with
+    @param separator the separator string; if the separator string is not found in the string to split, then a list with
     only one element containing the entire string argument is returned'; if this string has a different
     @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s
     @ref character_encoding "character encoding"
@@ -1141,9 +1141,9 @@ list<string> l = split(":", "some:text:here"); # returns ("some", "text", "here"
 
     @note equivalent to <string>::split(string, bool)
  */
-list<string> split(string sep, string str, bool with_separator = False) [flags=RET_VALUE_ONLY] {
+list<string> split(string separator, string str, bool with_separator = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
-    TempEncodingHelper temp(sep, str->getEncoding(), xsink);
+    TempEncodingHelper temp(separator, str->getEncoding(), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1158,7 +1158,7 @@ list<string> split(string sep, string str, bool with_separator = False) [flags=R
     (<tt>\\</tt>), then these quote characters are included as part of the field's text and not treated as quote
     characters (in quoted fields only).
 
-    @param sep the separator string; if the separator string is not found in the string to split, then a list with
+    @param separator the separator string; if the separator string is not found in the string to split, then a list with
     only one element containing the entire string argument is returned'; if this string has a different
     @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s
     @ref character_encoding "character encoding"
@@ -1185,14 +1185,14 @@ list<string> l = split(",", "some,'text with spaces',here", "'"); # returns ("so
     - %Qore 0.8.6 the \c trim_unquoted parameter was added
     - %Qore 0.9.4 processes doubled quote characters as an escaped quote within a quoted field
  */
-list<string> split(string sep, string str, string quote, bool trim_unquoted = False) [flags=RET_VALUE_ONLY] {
-    return split_with_quote(xsink, sep, str, quote, trim_unquoted);
+list<string> split(string separator, string str, string quote, bool trim_unquoted = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return split_with_quote(xsink, separator, str, quote, trim_unquoted);
 }
 
 //! Returns a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed
 /**
     @param data the binary object to separate
-    @param sep the bytes that separate the fields
+    @param separator the bytes that separate the fields
 
     @return a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed
 
@@ -1203,10 +1203,10 @@ list<binary> l = split(sep, bin);
 
     @note equivalent to <binary>::split(data)
  */
-list<binary> split(data sep, binary data) [flags=CONSTANT] {
+list<binary> split(data separator, binary data) [flags=CONSTANT,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
-    q_get_data(sep, bin_ptr, bin_len);
+    q_get_data(separator, bin_ptr, bin_len);
     return split_intern(bin_ptr, bin_len, (const char*)data->getPtr(), data->size(), nullptr);
 }
 
@@ -1230,7 +1230,7 @@ string enc = get_encoding(str);
 
     @note equivalent to <string>::encoding()
  */
-string get_encoding(string str) [flags=CONSTANT] {
+string get_encoding(string str) [flags=CONSTANT,NAMED_ARGS] {
    return new QoreStringNode(str->getEncoding()->getCode());
 }
 
@@ -1254,7 +1254,7 @@ string enc = convert_encoding(str, "iso-8859-1");
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different @ref character_encoding "character encodings" and an error occurs during encoding conversion
  */
-string convert_encoding(string str, string encoding) [flags=RET_VALUE_ONLY] {
+string convert_encoding(string str, string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return str->convertEncoding(QEM.findCreate(encoding), xsink);
 }
 
@@ -1277,7 +1277,7 @@ nothing convert_encoding() [flags=RUNTIME_NOOP] {
 string nstr = force_encoding(str, "iso-8859-1");
     @endcode
  */
-string force_encoding(string str, string encoding) [flags=CONSTANT] {
+string force_encoding(string str, string encoding) [flags=CONSTANT,NAMED_ARGS] {
    return new QoreStringNode(str->c_str(), str->strlen(), QEM.findCreate(encoding));
 }
 
@@ -1291,7 +1291,7 @@ nothing force_encoding() [flags=RUNTIME_NOOP] {
 /** Strings are converted to UTF-8 for pattern-matching; if any invalid encodings are encountered, an ENCODING-CONVERSION-ERROR is raised
 
     @param str the string to test
-    @param regex the regular expression pattern
+    @param pattern the regular expression pattern
     @param options regular expression options; see @ref regex_constants for possible values
 
     @return @ref True if the regular expression matches the string passed, otherwise returns @ref False
@@ -1309,8 +1309,8 @@ bool b = regex("hello", "^hel"); # returns True
 
     @see @ref qore_regex for more information about regular expression support in Qore
  */
-bool regex(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-   QoreRegex qr(*regex, options, xsink);
+bool regex(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   QoreRegex qr(*pattern, options, xsink);
    if (*xsink)
       return QoreValue();
 
@@ -1327,8 +1327,8 @@ nothing regex() [flags=RUNTIME_NOOP] {
 /** Strings are converted to UTF-8 for pattern-matching; if any invalid encodings are encountered, an ENCODING-CONVERSION-ERROR is raised
 
     @param str the source string for substitution
-    @param regex the regular expression pattern string
-    @param subst the pattern for substitution; use \c $1, \c $2, etc for patterns in parentheses in the \a regex argument
+    @param pattern the regular expression pattern string
+    @param replacement the pattern for substitution; use \c $1, \c $2, etc for patterns in parentheses in the \a pattern argument
     @param options regular expression options; see @ref regex_constants for possible values
 
     @return a string with patterns substituted according to the arguments passed
@@ -1360,7 +1360,7 @@ resulting in:
     - replace()
     - @ref qore_regex for more information about regular expression support in Qore
  */
-string regex_subst(string str, string regex, string subst, int options = 0) [flags=RET_VALUE_ONLY] {
+string regex_subst(string str, string pattern, string replacement, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    bool global;
    if (options & QRE_GLOBAL) {
       global = true;
@@ -1369,13 +1369,13 @@ string regex_subst(string str, string regex, string subst, int options = 0) [fla
    else
       global = false;
 
-   QoreRegexSubst qrs(regex, (int)options, xsink);
+   QoreRegexSubst qrs(pattern, (int)options, xsink);
    if (*xsink)
       return QoreValue();
 
    if (global)
       qrs.setGlobal();
-   return qrs.exec(str, subst, xsink);
+   return qrs.exec(str, replacement, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1389,7 +1389,7 @@ nothing regex_subst() [flags=RUNTIME_NOOP] {
     a string to use as the replacement.
 
     @param str the string to process
-    @param regex the regular expression pattern to match
+    @param pattern the regular expression pattern to match
     @param callback a callback that takes a @ref Qore::RegexMatchInfo "RegexMatchInfo" hash and returns the
     replacement string
     @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to replace all matches
@@ -1412,7 +1412,7 @@ string result = regex_subst("abc 123 def 456", "\\d+", string sub (hash<RegexMat
 
     @since %Qore 2.3
 */
-string regex_subst(string str, string regex, code<string(hash<RegexMatchInfo>)> callback, int options = 0) [flags=RET_VALUE_ONLY] {
+string regex_subst(string str, string pattern, code<string(hash<RegexMatchInfo>)> callback, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     bool do_global;
     if (options & QRE_GLOBAL) {
         do_global = true;
@@ -1421,7 +1421,7 @@ string regex_subst(string str, string regex, code<string(hash<RegexMatchInfo>)> 
         do_global = false;
     }
 
-    QoreRegexSubst qrs(regex, (int)options, xsink);
+    QoreRegexSubst qrs(pattern, (int)options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1436,7 +1436,7 @@ string regex_subst(string str, string regex, code<string(hash<RegexMatchInfo>)> 
 /** Strings are converted to UTF-8 for pattern-matching; if any invalid encodings are encountered, an ENCODING-CONVERSION-ERROR is raised
 
     @param str the string to process
-    @param regex the regular expression to use for matching, elements should be given in parentheses
+    @param pattern the regular expression to use for matching, elements should be given in parentheses
     @param options regular expression options; see @ref regex_constants for possible values
 
     @return a list of substrings in a string based on matching patterns defined by a regular expression or @ref nothing if no match was made
@@ -1456,8 +1456,8 @@ string regex_subst(string str, string regex, code<string(hash<RegexMatchInfo>)> 
 
     @since %Qore 0.8.8 this function accepts the @ref Qore::RE_Global option to extract all occurrences of the pattern(s) in a string
  */
-*list<*string> regex_extract(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-   QoreRegex qr(*regex, options, xsink);
+*list<*string> regex_extract(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   QoreRegex qr(*pattern, options, xsink);
    if (*xsink)
       return QoreValue();
 
@@ -1472,7 +1472,7 @@ nothing regex_extract() [flags=RUNTIME_NOOP] {
 
 //! Returns the number of non-overlapping matches of a regular expression pattern in a string
 /** @param str the string to search
-    @param regex the regular expression pattern to count
+    @param pattern the regular expression pattern to count
     @param options optional @ref regex_constants "regex option constants"
 
     @return the number of non-overlapping matches found; 0 if no match
@@ -1489,8 +1489,8 @@ int n = regex_count("abc 123 def 456", "\\d+"); # returns 2
 
     @since %Qore 2.3
 */
-int regex_count(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex, options, xsink);
+int regex_count(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1501,7 +1501,7 @@ int regex_count(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY
 /** Named groups are defined with \c (?<name>...) or \c (?P<name>...) syntax.
 
     @param str the string to match against
-    @param regex the regular expression pattern containing named groups
+    @param pattern the regular expression pattern containing named groups
     @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to extract all matches
 
     @return for non-global: \c *hash<string, *string> where keys are group names and values are matched text
@@ -1521,8 +1521,8 @@ auto h = regex_extract_named("2026-04-08", "(?<year>\\d{4})-(?<month>\\d{2})-(?<
 
     @since %Qore 2.3
 */
-auto regex_extract_named(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex, options, xsink);
+auto regex_extract_named(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1534,7 +1534,7 @@ auto regex_extract_named(string str, string regex, int options = 0) [flags=RET_V
     offsets, captured groups, and named groups.
 
     @param str the string to match against
-    @param regex the regular expression pattern
+    @param pattern the regular expression pattern
     @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to find all matches
 
     @return a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes; @ref nothing if no match
@@ -1553,8 +1553,8 @@ auto regex_extract_named(string str, string regex, int options = 0) [flags=RET_V
 
     @since %Qore 2.3
 */
-*list<hash<RegexMatchInfo>> regex_extract_detailed(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex, options, xsink);
+*list<hash<RegexMatchInfo>> regex_extract_detailed(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1573,7 +1573,7 @@ string escaped = regex_escape("price: $100 (USD)"); # returns "price\\:\\ \\$100
 
     @since %Qore 2.3
 */
-string regex_escape(string str) [flags=CONSTANT] {
+string regex_escape(string str) [flags=CONSTANT,NAMED_ARGS] {
     SimpleRefHolder<QoreStringNode> result(new QoreStringNode);
     const char* p = str->c_str();
     while (*p) {
@@ -1613,7 +1613,7 @@ string str = replace("hello there", "there", "you"); # returns "hello you"
 
     @see regex_subst()
  */
-string replace(string str, string source, string target, int start = 0, int end = -1) [flags=RET_VALUE_ONLY] {
+string replace(string str, string source, string target, int start = 0, int end = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     const QoreEncoding* ccs = str->getEncoding();
 
     TempEncodingHelper t1(source, ccs, xsink);
@@ -1731,10 +1731,10 @@ string join(string str, ...) [flags=RET_VALUE_ONLY] {
 
 //! Creates a string from separator string and a list of arguments
 /**
-    @param str the separator string
-    @param l the list of arguments to join; each argument will be converted to a string if necessary to be concatenated to the return value string; additionally if any string argument has a different @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before concatentation to the return value string
+    @param separator the separator string
+    @param values the list of arguments to join; each argument will be converted to a string if necessary to be concatenated to the return value string; additionally if any string argument has a different @ref character_encoding "character encoding" than \a separator, then it will be converted to <em>separator</em>'s @ref character_encoding "character encoding" before concatentation to the return value string
 
-    @return a string created from a list and a separator string, each element in the list will be present in the return value separated by the separator string; the string returned with have the same @ref character_encoding "character encoding" as \a str
+    @return a string created from a list and a separator string, each element in the list will be present in the return value separated by the separator string; the string returned with have the same @ref character_encoding "character encoding" as \a separator
 
     @par Example:
     @code{.py}
@@ -1745,8 +1745,8 @@ string str = join(":", ("a", "b", "c")); # returns "a:b:c"
 
     @note equivalent to <list>::join(string)
  */
-string join(string str, list<auto> l) [flags=RET_VALUE_ONLY] {
-   return join_intern(str, l, 0, xsink);
+string join(string separator, list<auto> values) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return join_intern(separator, values, 0, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1769,7 +1769,7 @@ string line = chomp("hello\n"); # returns "hello"
 
     @see the @ref chomp "chomp operator"
  */
-string chomp(string str) [flags=CONSTANT] {
+string chomp(string str) [flags=CONSTANT,NAMED_ARGS] {
    QoreStringNode* rv = str->copy();
    rv->chomp();
    return rv;
@@ -1787,7 +1787,7 @@ string chomp(string str) [flags=CONSTANT] {
 chomp(\str);
     @endcode
  */
-*string chomp(reference<string> str) {
+*string chomp(reference<string> str) [flags=NAMED_ARGS] {
    QoreTypeSafeReferenceHelper ref(str, xsink);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
@@ -1819,7 +1819,7 @@ nothing chomp() [flags=RUNTIME_NOOP] {
 string tstr = trim(str);
     @endcode
  */
-string trim(string str, *string chars) [flags=CONSTANT] {
+string trim(string str, *string chars) [flags=CONSTANT,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(str->copy());
    return rv->trim(xsink, chars) ? QoreValue() : rv.release();
 }
@@ -1839,7 +1839,7 @@ string trim(string str, *string chars) [flags=CONSTANT] {
 trim(\str);
     @endcode
  */
-*string trim(reference<string> str, *string chars) {
+*string trim(reference<string> str, *string chars) [flags=NAMED_ARGS] {
    QoreTypeSafeReferenceHelper ref(str, xsink);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
@@ -1871,7 +1871,7 @@ string tstr = ltrim(" ABC ");
 # returns string "ABC "
     @endcode
  */
-string ltrim(string str, *string chars) [flags=CONSTANT] {
+string ltrim(string str, *string chars) [flags=CONSTANT,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(str->copy());
    return rv->trimLeading(xsink, chars) ? QoreValue() : rv.release();
 }
@@ -1891,7 +1891,7 @@ string ltrim(string str, *string chars) [flags=CONSTANT] {
 ltrim(\str);
     @endcode
  */
-*string ltrim(reference<string> str, *string chars) {
+*string ltrim(reference<string> str, *string chars) [flags=NAMED_ARGS] {
    QoreTypeSafeReferenceHelper ref(str, xsink);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
@@ -1919,7 +1919,7 @@ string tstr = rtrim(str);
 
     @bug it is not possible to trim multi-byte characters from strings using this function; each byte is treated as a character.  No encoding conversions are done even if the \a chars argument has a different @ref character_encoding "character encoding" than the \a str argument.
  */
-string rtrim(string str, *string chars) [flags=CONSTANT] {
+string rtrim(string str, *string chars) [flags=CONSTANT,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(str->copy());
    return rv->trimTrailing(xsink, chars) ? QoreValue() : rv.release();
 }
@@ -1941,7 +1941,7 @@ rtrim(\str);
 
     @bug it is not possible to trim multi-byte characters from strings using this function; each byte is treated as a character.  No encoding conversions are done even if the \a chars argument has a different @ref character_encoding "character encoding" than the \a str argument.
  */
-*string rtrim(reference<string> str, *string chars) {
+*string rtrim(reference<string> str, *string chars) [flags=NAMED_ARGS] {
    QoreTypeSafeReferenceHelper ref(str, xsink);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
@@ -1956,7 +1956,7 @@ rtrim(\str);
 //! Returns a truncated string with no more than the given number of bytes and optionally converted to a specific @ref character_encoding "character encoding"
 /**
     @param str the string to truncate
-    @param len the maximum byte length of the string
+    @param length the maximum byte length of the string
     @param encoding if given, the string returned will be returned in the given encoding, otherwise the encoding of \ str is used for the return value
 
     @return the string truncated to be no longer than the given byte length in the @ref character_encoding "character encoding" given (or in the original string's @ref character_encoding "character encoding" if no \a encoding argument was passed to the function); if the string has a multi-byte @ref character_encoding "character encoding", this function will guarantee that the returned string ends on a valid character (in this case the byte length of the string could be less than the limit given)
@@ -1968,32 +1968,37 @@ string column = trunc_str(str, 80, dsp.getOSEncoding());
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if an explicit @ref character_encoding "character encoding" was given and an error occurs during encoding conversion
  */
-string trunc_str(softstring str, softint len, *string encoding) [flags=RET_VALUE_ONLY] {
+string trunc_str(softstring str, softint length, *string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    const QoreEncoding* enc = encoding ? QEM.findCreate(encoding) : str->getEncoding();
-   if (len <= 0)
+   if (length <= 0)
       return new QoreStringNode(enc);
 
    TempEncodingHelper tmp(str, enc, xsink);
    if (!tmp)
       return QoreValue();
 
-   if (tmp->strlen() < (size_t)len) {
-      len = tmp->strlen();
-      return new QoreStringNode(tmp.giveBuffer(), len, len + 1, enc);
+   if (tmp->strlen() < (size_t)length) {
+      length = tmp->strlen();
+      return new QoreStringNode(tmp.giveBuffer(), length, length + 1, enc);
    }
 
    if (!enc->isMultiByte())
-      return new QoreStringNode(tmp->c_str(), len, enc);
+      return new QoreStringNode(tmp->c_str(), length, enc);
 
-   // find position of last character fitting in len bytes
+   // find position of last character fitting in length bytes
    const char* p = tmp->c_str();
    int64 sl = 0;
+   int64 i = 0;
    while (true) {
-      qore_offset_t size = enc->getCharLen(p, len - sl);
-      if (size <= 0 || ((sl + size) > len))
+      if (i && !(i % 100) && qore_check_cancel(xsink, "truncating string")) {
+         return QoreValue();
+      }
+      qore_offset_t size = enc->getCharLen(p, length - sl);
+      if (size <= 0 || ((sl + size) > length))
          break;
       sl += size;
       p += size;
+      ++i;
    }
 
    return new QoreStringNode(tmp->c_str(), sl, enc);
@@ -2002,7 +2007,7 @@ string trunc_str(softstring str, softint len, *string encoding) [flags=RET_VALUE
 //! Returns a new string with a repeated string element and optionally removing trailing characters
 /**
     @param str the string element to repeat in the return value string
-    @param smul the number of times the element should repeat
+    @param count the number of times the element should repeat
     @param offset the number of characters that should be removed from the end of the string after processing
 
     @par Example:
@@ -2010,19 +2015,24 @@ string trunc_str(softstring str, softint len, *string encoding) [flags=RET_VALUE
 string ret = strmul("%s,", 3, 1); # returns "%s,%s,%s"
     @endcode
 
-    @throw STRMUL-ERROR \a offset is < 0 or \a smul < 0
+    @throw STRMUL-ERROR \a offset is < 0 or \a count < 0
  */
-string strmul(softstring str, softint smul, *softint offset) [flags=RET_VALUE_ONLY] {
+string strmul(softstring str, softint count, *softint offset) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    if (offset < 0)
       return xsink->raiseException("STRMUL-ERROR", "Offset argument has to be >= 0; value: " QLLD, offset);
 
-   if (smul < 0)
-      return xsink->raiseException("STRMUL-ERROR", "Multiple argument has to be >= 0; value: " QLLD, smul);
+   if (count < 0)
+      return xsink->raiseException("STRMUL-ERROR", "Multiple argument has to be >= 0; value: " QLLD, count);
 
    QoreStringNodeHolder ret(new QoreStringNode);
-   while (smul > 0) {
+   int64 i = 0;
+   while (count > 0) {
+      if (i && !(i % 100) && qore_check_cancel(xsink, "multiplying string")) {
+         return QoreValue();
+      }
       qore_string_private::get(*ret)->concat(str);
-      --smul;
+      --count;
+      ++i;
    }
 
    if (offset) {
@@ -2037,14 +2047,14 @@ string strmul(softstring str, softint smul, *softint offset) [flags=RET_VALUE_ON
 }
 
 //! Returns a string of a formatted number according to a number argument and a format string
-/** @param fmt the format string has the following format:\n
+/** @param format the format string has the following format:\n
     <em>\<thousands_separator\></em><tt>[</tt><em>\<decimal_separator\>[\<decimals\>]</em><tt>]</tt>\n
     where:\n
     - \a thousands_separator and \a decimal_separator are single characters defining the thousands and decimal
       separator characters respectively, and
     - \a decimals is one or more digits defining how may decimals should appear after the decimal point
     - if \a thousands_separator is the special character \c ?, then no thousands separator character will be output
-    @param num the number to format
+    @param value the number to format
 
     @return a string of a formatted number according to a number argument and a format string; if the format string
     does not follow the given format, then the number without formatting is returned
@@ -2059,8 +2069,8 @@ string nstr = format_number(".,3", -48392093894.2349); # returns "-48.392.093.89
     @since
     - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
  */
-string format_number(string fmt, softfloat num) [flags=CONSTANT] {
-   return format_float_intern(*fmt, num, xsink);
+string format_number(string format, softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return format_float_intern(*format, value, xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -2083,7 +2093,7 @@ string ns = reverse(str);
 
     @see reverse(list)
 */
-string reverse(softstring str) [flags=CONSTANT] {
+string reverse(softstring str) [flags=CONSTANT,NAMED_ARGS] {
    return str->reverse();
 }
 
@@ -2168,8 +2178,8 @@ string sprintf() [flags=NOOP] {
 /**
     This function will truncate output longer than any field width given in the @ref string_formatting "format string"
 
-    @param fmt the @ref string_formatting "format string"
-    @param varg the argument(s) corresponding to format specifiers in the format string
+    @param format the @ref string_formatting "format string"
+    @param values the argument(s) corresponding to format specifiers in the format string
 
     @return a formatted string corresponding to the arguments given
 
@@ -2184,7 +2194,7 @@ string str = f_vsprintf("%5s %3d\n", ("a lon", 500)); # will return "a lon 500"
 
     @since %Qore 0.8.4
  */
-string f_vsprintf(string[doc] fmt, auto[doc] varg) [flags=CONSTANT] {
+string f_vsprintf(string[doc] format, auto[doc] values) [flags=CONSTANT,NAMED_ARGS] {
    return q_vsprintf(args, 1, 0, xsink);
 }
 
@@ -2192,8 +2202,8 @@ string f_vsprintf(string[doc] fmt, auto[doc] varg) [flags=CONSTANT] {
 /**
     This function will not truncate output longer than any field width given in the @ref string_formatting "format string"
 
-    @param fmt the @ref string_formatting "format string"
-    @param varg the argument(s) corresponding to format specifiers in the format string
+    @param format the @ref string_formatting "format string"
+    @param values the argument(s) corresponding to format specifiers in the format string
 
     @return a formatted string corresponding to the arguments given
 
@@ -2206,7 +2216,7 @@ string str = vsprintf("%5s %3d\n", ("a long string", 5000)); # will return "a lo
     - @ref string_formatting for information on the formatting string
     - f_vsprintf() for a similar function that enforces field widths
  */
-string vsprintf(string[doc] fmt, auto[doc] varg) [flags=CONSTANT] {
+string vsprintf(string[doc] format, auto[doc] values) [flags=CONSTANT,NAMED_ARGS] {
    return q_vsprintf(args, 0, 0, xsink);
 }
 
@@ -2283,8 +2293,8 @@ string printf() [flags=NOOP;dom=TERMINAL_IO] {
 /**
     This function will truncate output longer than any field width given in the @ref string_formatting "format string"
 
-    @param fmt the @ref string_formatting "format string"
-    @param varg the argument(s) corresponding to format specifiers in the format string
+    @param format the @ref string_formatting "format string"
+    @param values the argument(s) corresponding to format specifiers in the format string
 
     @return the formatted string output corresponding to the arguments given
 
@@ -2299,7 +2309,7 @@ f_vprintf("%5s %3d", ("a long string", 5000)); # will print out "a lon 500"
 
     @since %Qore 0.8.4
  */
-string f_vprintf(string[doc] fmt, auto[doc] varg) [dom=TERMINAL_IO] {
+string f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TERMINAL_IO] {
    AbstractQoreNode* node;
    print_node(stdout, node = q_vsprintf(args, 1, 0, xsink));
    return node;
@@ -2309,8 +2319,8 @@ string f_vprintf(string[doc] fmt, auto[doc] varg) [dom=TERMINAL_IO] {
 /**
     This function will not truncate output longer than any field width given in the @ref string_formatting "format string"
 
-    @param fmt the @ref string_formatting "format string"
-    @param varg the argument(s) corresponding to format specifiers in the format string
+    @param format the @ref string_formatting "format string"
+    @param values the argument(s) corresponding to format specifiers in the format string
 
     @return the formatted string output corresponding to the arguments given
 
@@ -2323,7 +2333,7 @@ vprintf("%5s %3d", ("a long string", 5000)); # will print out "a long string 500
     - @ref string_formatting for information on the formatting string
     - f_vprintf() for a similar function that enforces field widths
  */
-string vprintf(string[doc] fmt, auto[doc] varg) [dom=TERMINAL_IO] {
+string vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TERMINAL_IO] {
    AbstractQoreNode* node;
    print_node(stdout, node = q_vsprintf(args, 0, 0, xsink));
    return node;
@@ -2359,7 +2369,7 @@ bool b = parse_boolean(str);
 
     @since Qore 0.8.12 \c "y" is also parsed as @ref True "True"
  */
-bool parse_boolean(string str) [flags=CONSTANT] {
+bool parse_boolean(string str) [flags=CONSTANT,NAMED_ARGS] {
    return q_parse_bool(str->c_str());
 }
 
@@ -2369,12 +2379,12 @@ bool parse_boolean(string str) [flags=CONSTANT] {
 bool b = parse_boolean(i);
     @endcode
 
-    @param val the value to convert to a boolean
+    @param value the value to convert to a boolean
 
     @return the first value passed as a boolean
  */
-bool parse_boolean(any val) [flags=CONSTANT] {
-   return val.getAsBool();
+bool parse_boolean(any value) [flags=CONSTANT,NAMED_ARGS] {
+   return value.getAsBool();
 }
 
 //! returns a number corresponding to the string and the argument, giving the format
@@ -2384,7 +2394,7 @@ number n = parse_number("1.150.200,55", ".,");
     @endcode
 
     @param str the string to parse
-    @param fmt the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
+    @param format the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
 
     @return the number value represented by the string
 
@@ -2394,8 +2404,8 @@ number n = parse_number("1.150.200,55", ".,");
 
     @since %Qore 0.8.11.1
 */
-number parse_number(string str, string fmt) [flags=RET_VALUE_ONLY] {
-   TempEncodingHelper tfmt(fmt, str->getEncoding(), xsink);
+number parse_number(string str, string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   TempEncodingHelper tfmt(format, str->getEncoding(), xsink);
    if (*xsink)
       return QoreValue();
 
@@ -2413,7 +2423,7 @@ float f = parse_float("1.150.200,55", ".,");
     @endcode
 
     @param str the string to parse
-    @param fmt the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
+    @param format the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
 
     @return the floating-point value represented by the string
 
@@ -2423,8 +2433,8 @@ float f = parse_float("1.150.200,55", ".,");
 
     @since %Qore 0.8.11.1
 */
-float parse_float(string str, string fmt) [flags=RET_VALUE_ONLY] {
-   TempEncodingHelper tfmt(fmt, str->getEncoding(), xsink);
+float parse_float(string str, string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   TempEncodingHelper tfmt(format, str->getEncoding(), xsink);
    if (*xsink)
       return QoreValue();
 
@@ -2442,7 +2452,7 @@ int i = parse_int("1.150.200,55", ".,");
     @endcode
 
     @param str the string to parse
-    @param fmt the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
+    @param format the format of the number in the string, consisting of two characters, the first for the thousands separator, the second for the decimal point (ex: \c ".," for many European locales)
 
     @return the number value represented by the string
 
@@ -2452,8 +2462,8 @@ int i = parse_int("1.150.200,55", ".,");
 
     @since %Qore 0.8.13
 */
-int parse_int(string str, string fmt) [flags=RET_VALUE_ONLY] {
-   TempEncodingHelper tfmt(fmt, str->getEncoding(), xsink);
+int parse_int(string str, string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   TempEncodingHelper tfmt(format, str->getEncoding(), xsink);
    if (*xsink)
       return QoreValue();
 

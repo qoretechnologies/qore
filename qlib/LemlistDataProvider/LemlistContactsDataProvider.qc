@@ -87,7 +87,7 @@ public class LemlistContactsDataProvider inherits LemlistDataProviderBase {
     }
 
     #! Searches for contacts
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (!search_options.email) {
             throw "LEMLIST-ERROR", "search option 'email' is required for listing contacts "
@@ -103,7 +103,7 @@ public class LemlistContactsDataProvider inherits LemlistDataProviderBase {
             records = (response,);
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, NOTHING,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, NOTHING,
             recordType.getFields());
     }
 

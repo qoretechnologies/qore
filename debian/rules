@@ -1,16 +1,44 @@
 #!/usr/bin/make -f
 
+include /usr/share/dpkg/architecture.mk
+
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export PKG_CONFIG_LIBDIR = /usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig:/usr/share/pkgconfig
+unexport QORE_AOT_BIG_FN_THRESHOLD
+unexport QORE_AOT_NO_DEBUG_INFO
+unexport QORE_DOC_DEFINES
+unexport QORE_INCLUDE_DIR
+unexport QORE_INCLUDE_DIRS
+unexport QORE_LIBDIR
+unexport QORE_MODULE_DIR
 
 %:
 	dh $@ --buildsystem=cmake
 
 override_dh_auto_configure:
+	# Qore requires nghttp2 >= 1.68.1; allow the CMake fallback on
+	# Ubuntu/Debian releases where libnghttp2-dev is older.
 	dh_auto_configure --buildsystem=cmake -- \
 		-DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
+		'-DCMAKE_IGNORE_PATH=/usr/local/include;/usr/local/lib;/usr/local/lib64' \
+		-DCMAKE_IGNORE_PREFIX_PATH=/usr/local \
+		-DOPENSSL_ROOT_DIR=/usr \
+		-DOPENSSL_INCLUDE_DIR=/usr/include \
+		-DOPENSSL_SSL_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libssl.so \
+		-DOPENSSL_CRYPTO_LIBRARY=/usr/lib/$(DEB_HOST_MULTIARCH)/libcrypto.so \
+		-DFETCHCONTENT_FULLY_DISCONNECTED=OFF \
+		-DQORE_WITH_ONNXRUNTIME=OFF \
 		-DSINGLE_COMPILATION_UNIT=1
 
 override_dh_auto_install:
 	dh_auto_install --buildsystem=cmake
 	# ensure module directories exist
 	mkdir -p debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/qore-modules
+
+override_dh_dwz:
+	# AOT-compiled .qmod files contain LLVM DWARF sections that dwz on
+	# current Debian/Ubuntu releases does not understand.
+	dh_dwz -Nqore-stdlib
+
+override_dh_shlibdeps:
+	dh_shlibdeps -- -l/usr/lib/$(DEB_HOST_MULTIARCH)

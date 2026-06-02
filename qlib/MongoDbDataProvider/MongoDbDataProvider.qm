@@ -213,10 +213,29 @@ module MongoDbDataProvider {
     @verbatim qdp 'mongodb{url=mongodb://localhost:27017}/databases/mydb/collections/mycoll' name=test
     @endverbatim
 
+    @par Typed Iterator Example
+    @code{.py}
+%requires MongoDbDataProvider
+%requires mongodb
+
+MongoClient client("mongodb://localhost:27017");
+MongoDatabase db = client.getDatabase("mydb");
+MongoDbDataProvider::MongoDbCollectionDataProvider collection_provider(
+    client, db, "mycoll");
+AbstractDataProviderRecordIterator<hash<auto>> iter = collection_provider.searchRecords();
+while (iter.next()) {
+    hash<auto> doc = iter.getValue();
+    printf("Document: %y\n", doc);
+}
+    @endcode
+
     @section mongodbdataprovider_relnotes Release Notes
 
     @subsection mongodbdataprovider_v1_0 MongoDbDataProvider v1.0
     - Initial release of the module
+    - MongoDB collection record iterators declare
+      <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt> and internal
+      cursor references use <tt>MongoCursor&lt;hash&lt;auto&gt;&gt;</tt>
 */
 
 public namespace MongoDbDataProvider {

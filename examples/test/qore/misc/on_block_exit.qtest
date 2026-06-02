@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+%requires QUnit
+
+%exec-class OnBlockExitTest
+
+class OnBlockExitTest inherits QUnit::Test {
+    constructor() : QUnit::Test("OnBlockExit", "1.0") {
+        addTestCase("basic on_exit", \testBasicOnExit());
+        addTestCase("on_error", \testOnError());
+        addTestCase("on_success", \testOnSuccess());
+        addTestCase("multiple handlers", \testMultipleHandlers());
+        addTestCase("nested scopes", \testNestedScopes());
+        addTestCase("on_exit in loop", \testOnExitInLoop());
+        addTestCase("on_error exception info", \testOnErrorExceptionInfo());
+        addTestCase("on_exit with local vars", \testOnExitWithLocalVars());
+        addTestCase("mixed handlers", \testMixedHandlers());
+        addTestCase("on_exit with function calls", \testOnExitWithFunctionCalls());
+        addTestCase("on_exit ordering", \testOnExitOrdering());
+        addTestCase("on_error rethrow", \testOnErrorRethrow());
+        set_return_value(main());
+    }
+
+    testBasicOnExit() {
+        int x = 0;
+        {
+            on_exit ++x;
+            assertEq(0, x);
+        }
+        assertEq(1, x);
+    }
+
+    testOnError() {
+        int x = 0;
+        try {
+            on_error ++x;
+            throw "TEST-ERROR", "test";
+        } catch () {
+            # ignore
+        }
+        assertEq(1, x);
+    }
+
+    testOnSuccess() {
+        int x = 0;
+        {
+            on_success ++x;
+            # no exception — on_success should fire
+        }
+        assertEq(1, x);
+
+        int y = 0;
+        try {
+            on_success ++y;
+            throw "TEST-ERROR", "test";
+        } catch () {
+            # ignore
+        }
+        # on_success should NOT fire when exception occurred
+        assertEq(0, y);
+    }
+
+    testMultipleHandlers() {
+        list<string> order = ();
+        {
+            on_exit order += "first";
+            on_exit order += "second";
+            on_exit order += "third";
+        }
+        # Handlers fire in LIFO order
+        assertEq(("third", "second", "first"), order);
+    }
+
+    testNestedScopes() {
+        list<string> order = ();
+        {
+            on_exit order += "outer";
+            {
+                on_exit order += "inner";
+            }
+        }
+        # Inner fires first (inner scope exits first), then outer
+        assertEq(("inner", "outer"), order);
+    }
+
+    testOnExitInLoop() {
+        int count = 0;
+        for (int i = 0; i < 5; ++i) {
+            on_exit ++count;
+        }
+        assertEq(5, count);
+    }
+
+    testOnErrorExceptionInfo() {
+        string err_msg;
+        try {
+            on_error err_msg = $1.err;
+            throw "MY-ERROR", "detail";
+        } catch () {
+            # ignore
+        }
+        assertEq("MY-ERROR", err_msg);
+    }
+
+    testOnExitWithLocalVars() {
+        int result = 0;
+        {
+            int a = 10;
+            int b = 20;
+            on_exit result = a + b;
+        }
+        assertEq(30, result);
+    }
+
+    testMixedHandlers() {
+        list<string> log = ();
+        {
+            on_exit log += "exit";
+            on_success log += "success";
+            on_error log += "error";
+        }
+        # No exception: on_exit and on_success fire (LIFO), on_error doesn't
+        # Order: error (skipped), success, exit
+        assertEq(("success", "exit"), log);
+
+        list<string> log2 = ();
+        try {
+            on_exit log2 += "exit";
+            on_success log2 += "success";
+            on_error log2 += "error";
+            throw "TEST", "test";
+        } catch () {
+            # ignore
+        }
+        # Exception: on_exit and on_error fire, on_success doesn't
+        # Order: error, exit
+        assertEq(("error", "exit"), log2);
+    }
+
+    testOnExitWithFunctionCalls() {
+        list<int> results = ();
+        {
+            on_exit results += compute(3, 4);
+            on_exit results += compute(1, 2);
+        }
+        # LIFO: compute(1,2) then compute(3,4)
+        assertEq((3, 7), results);
+    }
+
+    private int compute(int a, int b) {
+        return a + b;
+    }
+
+    testOnExitOrdering() {
+        # Test that on_exit fires after the block's code but before subsequent code
+        string s = "start";
+        {
+            on_exit s += "_exit";
+            s += "_body";
+        }
+        s += "_after";
+        assertEq("start_body_exit_after", s);
+    }
+
+    testOnErrorRethrow() {
+        # Test that on_error with rethrow clears the original exception
+        bool caught_rethrow = False;
+        try {
+            {
+                on_error rethrow;
+                throw "ORIGINAL-ERROR", "original";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            caught_rethrow = True;
+            assertEq("ORIGINAL-ERROR", ex.err);
+        }
+        assertEq(True, caught_rethrow);
+    }
+}

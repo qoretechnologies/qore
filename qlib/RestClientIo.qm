@@ -699,6 +699,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         public {
             #! Accept header list
+            const SupportsCbor =
+%ifdef NoCbor
+                False
+%else
+                exists_function("make_cbor") && exists_function("parse_cbor")
+%endif
+            ;
+
             const AcceptList = (
 %ifndef NoYaml
                 MimeTypeYamlApp, MimeTypeYaml, MimeTypeYamlRpc,
@@ -709,13 +717,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 %ifndef NoJson
                 MimeTypeJsonRpc,
 %endif
-%ifndef NoCbor
-                MimeTypeCbor,
-%endif
                 MimeTypeFormUrlEncoded,
                 MimeTypeText,
                 MimeTypeOctetStream,
-            );
+            ) + (SupportsCbor ? (MimeTypeCbor,) : ());
 
             #! Accept header value
             const Accept = AcceptList.join(",");
@@ -3356,6 +3361,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 if (resp_body.typeCode() == NT_BINARY) {
                     resp_body = resp_body.toString();
                 }
+%ifndef NoJson
                 if (resp_body.typeCode() == NT_STRING && raw.headers."content-type" =~ /json/i) {
                     try {
                         resp_body = parse_json(resp_body);
@@ -3363,6 +3369,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         # keep as string
                     }
                 }
+%endif
                 throw "OAUTH2-ERROR",
                     sprintf("OAuth2 token request failed with HTTP %d", raw.status_code),
                     {"status_code": raw.status_code, "body": resp_body, "headers": raw.headers};
@@ -3374,18 +3381,22 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 resp_body = resp_body.toString();
             }
             if (resp_body.typeCode() == NT_STRING) {
+%ifndef NoJson
                 if (raw.headers."content-type" =~ /json/i) {
                     return parse_json(resp_body);
                 }
+%endif
                 if (raw.headers."content-type" =~ /form-urlencoded/i) {
                     return parse_uri_query("?" + resp_body).params;
                 }
+%ifndef NoJson
                 # Default: try JSON
                 try {
                     return parse_json(resp_body);
                 } catch () {
                     # fall through
                 }
+%endif
             }
             throw "OAUTH2-ERROR", sprintf("Cannot parse OAuth2 token response with content-type %y",
                 raw.headers."content-type");
@@ -3627,7 +3638,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     "accept": MimeTypeText,
                 };
             } else if (c_location == "body-direct") {
+%ifndef NoJson
                 body_str = make_json(body);
+%endif
                 req_hdr = {
                     "content-type": MimeTypeJson,
                     "accept": MimeTypeJson,
@@ -3659,6 +3672,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             } else {
                 # body-direct: deserialize JSON and expect a raw string token
                 auto parsed;
+%ifndef NoJson
                 try {
                     parsed = parse_json(raw.body.toString());
                 } catch (hash<ExceptionInfo> ex) {
@@ -3666,6 +3680,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         sprintf("failed to parse custom token response body: %s: %s",
                             ex.err, ex.desc);
                 }
+%endif
                 if (parsed.typeCode() != NT_STRING) {
                     throw "REST-TOKEN-ERROR",
                         sprintf("custom token response body type expected to be \"string\"; "
@@ -4013,7 +4028,7 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
                 *hash<Qore::Thread::ConnectionPoolOptions> pool_opts,
                 *HttpClientIo::HttpClientConnectionManager shared_mgr)
                 : RestClientIo(client_opts, shared_mgr),
-                  AbstractConnectionPool(pool_opts) {
+                  AbstractConnectionPool(options: pool_opts) {
             saved_client_opts = client_opts;
         }
 
@@ -4061,7 +4076,7 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
     response hash.  Higher layers can then deserialize the response using the
     final request context exposed by the getter methods below.
 */
-public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperation {
+public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Waiting for the underlying connection to become ready
         const SPS_CONNECTING = "connecting";
@@ -4242,7 +4257,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         if (pending_stream) {
             cancelPendingStream();
         }
-        promise.setError("HTTPCLIENT-CANCELLED", "async request was canceled", NOTHING);
+        promise.setError(error: "HTTPCLIENT-CANCELLED", description: "async request was canceled", argument: NOTHING);
         if (completion_notifier) {
             completion_notifier.notify();
         }
@@ -4410,7 +4425,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     EventNotifier, performs at most one Kerberos/SPNEGO Negotiate retry on
     401, then installs the C++ SSE parser on the surviving stream.
 */
-public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPollOperation {
+public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         const SPS_CONNECTING = "connecting";
         const SPS_STREAM_WAITING = "stream-waiting";
@@ -4824,7 +4839,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
 */
 public namespace RestClientIo {
 
-public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
+public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Waiting for the OAuth2 token endpoint connection to become ready
         const SPS_OAUTH2_CONNECTING = "oauth2-connecting";

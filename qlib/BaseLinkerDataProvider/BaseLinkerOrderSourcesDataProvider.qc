@@ -43,7 +43,7 @@ public class BaseLinkerOrderSourcesDataProvider inherits BaseLinkerDataProviderB
         return (new BaseLinkerOrderSourceDataType()).getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> response = callMethod("getOrderSources", NOTHING);
         list<auto> records = ();
@@ -61,7 +61,7 @@ public class BaseLinkerOrderSourcesDataProvider inherits BaseLinkerDataProviderB
                 };
             }
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerOrderSourceDataType()).getFields());
     }
 

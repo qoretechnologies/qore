@@ -165,7 +165,7 @@ int QoreCondition::wait2(pthread_mutex_t* m, int64 timeout_ms) {
 #ifndef DEBUG
     return pthread_cond_timedwait(&c, m, &tmout);
 #else // !DEBUG
-    //printd(5, "QoreCondition::wait(%p, " QLLD ") this=%p now=%d.%09d trigger=%d.%09d\n", m, timeout_ms, this, now.tv_sec, now.tv_usec * 1000, tmout.tv_sec, tmout.tv_nsec);
+    //printd(5, "QoreCondition::wait(%p, " QLLD ") this=%p now=%d.%09d trigger=%d.%09d\n", m, timeout_ms, this, now.tv_sec, now.tv_nsec, tmout.tv_sec, tmout.tv_nsec);
     int rc = pthread_cond_timedwait(&c, m, &tmout);
     if (rc && rc != ETIMEDOUT) {
         printd(0, "QoreCondition::wait(m=%p, timeout_ms=%d) pthread_cond_timedwait() returned %d %s\n", m, timeout_ms_orig, rc, strerror(rc));

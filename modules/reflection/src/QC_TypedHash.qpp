@@ -275,6 +275,128 @@ Type TypedHash::getType() [flags=RET_VALUE_ONLY] {
     return rv;
 }
 
+//! Returns the formal type parameter names for this typed hash, or @ref nothing if the typed hash is not generic
+/** @par Example:
+    @code{.py}
+*list<string> params = TypedHash::forName("KeyValueInfo").getTypeParameters();
+# returns ("V",)
+    @endcode
+
+    @return the formal type parameter names for this typed hash, or @ref nothing if the typed hash is not generic
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the @ref hashdecl "typed hash (hashdecl)" has been destroyed
+
+    @since %Qore 2.4
+*/
+*list<string> TypedHash::getTypeParameters() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    size_t param_count = thd->th->getTypeParameterCount();
+    if (!param_count) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; i < param_count; ++i) {
+        rv->push(new QoreStringNode(thd->th->getTypeParameterName(i)), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns generic type parameter default types keyed by parameter name, or @ref nothing if no defaults are declared
+/** @par Example:
+    @code{.py}
+*hash<string, string> defaults = TypedHash::forName("Result").getTypeParameterDefaults();
+    @endcode
+
+    @return hash of formal type parameter names to default type strings, or @ref nothing if the typed hash is not
+        generic or no defaults are declared
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the @ref hashdecl "typed hash (hashdecl)" has been destroyed
+
+    @since %Qore 2.4
+*/
+*hash<string, string> TypedHash::getTypeParameterDefaults() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    size_t param_count = thd->th->getTypeParameterCount();
+    if (!param_count) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(stringTypeInfo), xsink);
+    bool found = false;
+    for (size_t i = 0; i < param_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink,
+                "typed hash generic type parameter default reflection")) {
+            return QoreValue();
+        }
+        const char* def = thd->th->getTypeParameterDefaultType(i);
+        if (!def) {
+            continue;
+        }
+        found = true;
+        rv->setKeyValue(thd->th->getTypeParameterName(i), new QoreStringNode(def), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return found ? rv.release() : QoreValue();
+}
+
+//! Returns generic type parameter upper-bound types keyed by parameter name, or @ref nothing if no bounds are declared
+/** @par Example:
+    @code{.py}
+*hash<string, string> bounds = TypedHash::forName("Result").getTypeParameterBounds();
+    @endcode
+
+    @return hash of formal type parameter names to upper-bound type strings, or @ref nothing if the typed hash is not
+        generic or no bounds are declared
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the @ref hashdecl "typed hash (hashdecl)" has been destroyed
+
+    @since %Qore 2.4
+*/
+*hash<string, string> TypedHash::getTypeParameterBounds() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    size_t param_count = thd->th->getTypeParameterCount();
+    if (!param_count) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(stringTypeInfo), xsink);
+    bool found = false;
+    for (size_t i = 0; i < param_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink,
+                "typed hash generic type parameter bound reflection")) {
+            return QoreValue();
+        }
+        const char* bound = thd->th->getTypeParameterBoundType(i);
+        if (!bound) {
+            continue;
+        }
+        found = true;
+        rv->setKeyValue(thd->th->getTypeParameterName(i), new QoreStringNode(bound), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return found ? rv.release() : QoreValue();
+}
+
 //! Returns the "or nothing" type object for this typed hash
 /** @par Example:
     @code{.py}

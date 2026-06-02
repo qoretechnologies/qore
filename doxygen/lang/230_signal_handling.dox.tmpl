@@ -8,6 +8,12 @@
 
     Internally, %Qore masks (blocks) all signals in every thread except the signal handling thread. In the signal handling thread, all signals are unmasked, except those with %Qore-language handlers, then an internal call to <tt>sigwait() (3)</tt> is made to receive and process signals raised one at a time.
 
+    When a process embeds a JVM through the \c jni module, and especially when it also loads other native runtimes that use synchronous signals such as \c SIGSEGV (for example JavaScript or Python runtimes), ensure that the JVM's signal-chaining library is active before the process starts. On Linux JVMs that provide \c libjsig.so, set \c LD_PRELOAD to the full path of \c libjsig.so in the process environment, for example:
+    @code{.sh}
+    export LD_PRELOAD=/path/to/libjvm/server/libjsig.so${LD_PRELOAD:+:$LD_PRELOAD}
+    @endcode
+    This lets the JVM chain handlers installed by other native code instead of replacing them. Test and CI environments that load the \c jni module should provide this environment setup outside %Qore before invoking \c qore or any embedded process.
+
     %Qore-language signal handlers are installed by passing a signal constant and a @ref closure "closure" or @ref call_reference "call reference" to the code to execute when the signal is raised to the set_signal_handler() function. Signal handlers are removed by passing a signal constant to the remove_signal_handler() function.
 
     When a signal has been raised and the signal handler is called, the signal number is passed as the sole argument to the signal handler code.

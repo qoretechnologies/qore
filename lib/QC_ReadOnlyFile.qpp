@@ -209,7 +209,7 @@ ReadOnlyFile f("/tmp/my-file.txt", "iso-8859-1");
 
     @see ReadOnlyFile::open()
  */
-ReadOnlyFile::constructor(string path, *string encoding) {
+ReadOnlyFile::constructor(string path, *string encoding) [flags=NAMED_ARGS] {
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
 
     SimpleRefHolder<File> f(new File(qe));
@@ -278,7 +278,7 @@ try {
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
     @ref stdout, @ref stderr) when @ref no-terminal-io is set
 */
-nothing ReadOnlyFile::open(string path, *string encoding) {
+nothing ReadOnlyFile::open(string path, *string encoding) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::open", xsink))
         return QoreValue();
 
@@ -352,7 +352,7 @@ int ReadOnlyFile::close() {
 
     @since %Qore 0.8.13 this method uses character semantics instead of byte semantics
  */
-*string ReadOnlyFile::read(softint size, timeout timeout_ms = -1) {
+*string ReadOnlyFile::read(softint size, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::read", xsink))
         return QoreValue();
 
@@ -386,7 +386,7 @@ binary b = f.readShortBinary(4096);
 
     @since %Qore 2.3
  */
-*binary ReadOnlyFile::readShortBinary(softint size, timeout timeout_ms = -1) {
+*binary ReadOnlyFile::readShortBinary(softint size, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::readShortBinary", xsink)) {
         return QoreValue();
     }
@@ -725,7 +725,7 @@ binary b = f.readShortBinary(4096);
 
     @see ReadOnlyFile::read()
  */
-*binary ReadOnlyFile::readBinary(softint size, timeout timeout_ms = -1) {
+*binary ReadOnlyFile::readBinary(softint size, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "ReadOnlyFile::readBinary", xsink))
       return QoreValue();
 
@@ -750,7 +750,7 @@ while (exists (*string line = f.readLine(False))) {
     @par Events:
     @ref EVENT_DATA_READ
 
-    @param incl_eol if this argument is @ref True "True", then the end of line characters read are included in the string returned
+    @param include_eol if this argument is @ref True "True", then the end of line characters read are included in the string returned
     @param eol the end of line character(s); if not given, then the end of line character(s) are detected automatically, and can be either \c "\n", \c "\r", or \c "\r\n" (the last one is only automatically detected when not connected to a terminal device in order to keep the I/O from stalling); if this string is passed and has a different @ref character_encoding "character encoding" from the File's, then it will be converted to the File's @ref character_encoding "character encoding"
 
     @return The line read from the file. @ref nothing is returned if end-of-file is encountered, however, if data has been read before EOF, the data read will be returned and @ref nothing (signifying EOF) will be returned on the next call to this method.  Any string returned will be tagged with the %ReadOnlyFile's @ref character_encoding "character encoding".
@@ -761,14 +761,14 @@ while (exists (*string line = f.readLine(False))) {
     @see
     - @ref Qore::FileLineIterator
  */
-*string ReadOnlyFile::readLine(bool incl_eol = True, *string eol) {
+*string ReadOnlyFile::readLine(bool include_eol = True, *string eol) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::readLine", xsink))
         return QoreValue();
 
     if (eol && eol->empty())
         eol = 0;
 
-    return eol ? f->readUntil(eol->c_str(), incl_eol, xsink) : f->readLine(incl_eol, xsink);
+    return eol ? f->readUntil(eol->c_str(), include_eol, xsink) : f->readLine(include_eol, xsink);
 }
 
 //! Sets the @ref character_encoding "character encoding" for the %ReadOnlyFile; if called with no argument, the @ref default_encoding "default encoding" is set
@@ -783,7 +783,7 @@ f.setEncoding("ISO-8859-1");
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
     @ref stdout, @ref stderr) when @ref no-terminal-io is set
  */
-nothing ReadOnlyFile::setEncoding(*string encoding) {
+nothing ReadOnlyFile::setEncoding(*string encoding) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setEncoding", xsink))
         return QoreValue();
 
@@ -809,7 +809,7 @@ string ReadOnlyFile::getEncoding() [flags=CONSTANT] {
 f.setPos(0); # go to the beginning of the file
     @endcode
 
-    @param pos the position in the file as offset from position 0
+    @param position the position in the file as offset from position 0
 
     @return the new offset in the file, -1 for error
 
@@ -817,11 +817,11 @@ f.setPos(0); # go to the beginning of the file
 
     @see ReadOnlyFile::getPos()
  */
-int ReadOnlyFile::setPos(int pos = 0) {
+int ReadOnlyFile::setPos(int position = 0) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setPos", xsink))
         return QoreValue();
 
-    return f->setPos(pos, xsink);
+    return f->setPos(position, xsink);
 }
 
 //! Returns the current file position as an integer giving the offset in bytes from the beginning of the file (starting from zero)
@@ -879,7 +879,7 @@ if (!isDataAvailable(30s))
 
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
  */
-bool ReadOnlyFile::isDataAvailable(timeout timeout_ms = 0) [flags=RET_VALUE_ONLY] {
+bool ReadOnlyFile::isDataAvailable(timeout timeout_ms = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::isDataAvailable", xsink))
         return QoreValue();
 
@@ -893,7 +893,7 @@ f.setEventQueue(queue);
     @endcode
 
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive @ref file_events "file events"; note that the @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a QUEUE-ERROR will be thrown
-    @param arg an argument that will be included in each event hash in the \a arg key
+    @param argument an argument that will be included in each event hash in the \c arg key
     @param with_data if @ref True, then the actual raw data transferred / received is also included in the events
 
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
@@ -901,9 +901,9 @@ f.setEventQueue(queue);
 
     @see @ref event_handling for more information
 
-    @since %Qore 0.9.4 added the \a arg and \a with_data options
+    @since %Qore 0.9.4 added the \a argument and \a with_data options
 */
-nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto arg, *bool with_data) {
+nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto argument, *bool with_data) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::setEventQueue", xsink))
         return QoreValue();
 
@@ -913,7 +913,7 @@ nothing ReadOnlyFile::setEventQueue(Queue[Queue] queue, auto arg, *bool with_dat
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
+    f->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Removes any @ref Qore::Thread::Queue "Queue" object from the %ReadOnlyFile object so that @ref file_events "file events" are no longer added to the @ref Qore::Thread::Queue "Queue"
@@ -1051,23 +1051,23 @@ bool ReadOnlyFile::isTty() [flags=CONSTANT] {
 
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read a file from the filesystem
 /** @param path the path of the file to read
-    @param to_string return the file's data as a string, if @ref False, it will be returned as binary data, if
+    @param as_string return the file's data as a string, if @ref False, it will be returned as binary data, if
     @ref True, the encoding of the output string will be the same as the file's character encoding
-    @param to_read maximum number of bytes to read, negative values mean read until end of file
+    @param max_bytes maximum number of bytes to read, negative values mean read until end of file
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read a file from the filesystem; the
     @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns
     a hash with the following keys after a successful read operation:
-    - \c data: the file's data as a string or binary data according to the \c to_string parameter
+    - \c data: the file's data as a string or binary data according to the \c as_string parameter
 
     @throw ENCODING-CONVERSION-ERROR the path could not be converted to the
     @ref default_encoding "default character encoding"
 
     @since %Qore 1.19
 */
-AbstractPollOperation ReadOnlyFile::startPollRead(string path, bool to_string = True, int to_read = -1) [dom=FILESYSTEM] {
+AbstractPollOperation<auto> ReadOnlyFile::startPollRead(string path, bool as_string = True, int max_bytes = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
-    return f->startPollRead(xsink, self, npath->c_str(), to_read, to_string);
+    return f->startPollRead(xsink, self, npath->c_str(), max_bytes, as_string);
 }
 
 //! returns the contents of a text file as a string optionally tagged with the given @ref character_encoding "character encoding"
@@ -1093,7 +1093,7 @@ string data = File::readTextFile(path);
       will be returned, or an exception will be raised
     - %Qore 0.9.3 added the \a max_file_len parameter
 */
-static string ReadOnlyFile::readTextFile(string path, *string encoding, int max_file_len = -1) [dom=FILESYSTEM] {
+static string ReadOnlyFile::readTextFile(string path, *string encoding, int max_file_len = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
 
     QoreFile qf;
@@ -1126,7 +1126,7 @@ binary data = File::readBinaryFile(path);
       empty file) will be returned, or an exception will be raised
     - %Qore 0.9.3 added the \a max_file_len parameter
 */
-static binary ReadOnlyFile::readBinaryFile(string path, int max_file_len = -1) [dom=FILESYSTEM] {
+static binary ReadOnlyFile::readBinaryFile(string path, int max_file_len = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     QoreFile qf;
 
     if (qf.open2(xsink, path->c_str())) {
@@ -1156,7 +1156,7 @@ int mode = ReadOnlyFile::stat(path)[2];
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
-static list<auto> ReadOnlyFile::stat(string path) [dom=FILESYSTEM] {
+static list<auto> ReadOnlyFile::stat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    struct stat sbuf;
    if (stat(path->c_str(), &sbuf))
       return xsink->raiseErrnoException("FILE-STAT-ERROR", errno, "stat() command failed");
@@ -1184,7 +1184,7 @@ int mode = ReadOnlyFile::lstat(path)[2];
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
-static list<auto> ReadOnlyFile::lstat(string path) [dom=FILESYSTEM] {
+static list<auto> ReadOnlyFile::lstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    struct stat sbuf;
 #ifdef HAVE_LSTAT
    if (lstat(path->c_str(), &sbuf))
@@ -1215,7 +1215,7 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
-static hash<StatInfo> ReadOnlyFile::hstat(string path) [dom=FILESYSTEM] {
+static hash<StatInfo> ReadOnlyFile::hstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    struct stat sbuf;
    if (stat(path->c_str(), &sbuf))
       return xsink->raiseErrnoException("FILE-HSTAT-ERROR", errno, "stat() command failed");
@@ -1243,7 +1243,7 @@ hash<StatInfo> h = ReadOnlyFile::hstat(path);
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
-static hash<StatInfo> ReadOnlyFile::hlstat(string path) [dom=FILESYSTEM] {
+static hash<StatInfo> ReadOnlyFile::hlstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    struct stat sbuf;
 #ifdef HAVE_LSTAT
    if (lstat(path->c_str(), &sbuf))
@@ -1274,7 +1274,7 @@ hash<FilesystemInfo> h = ReadOnlyFile::statvfs(path);
 
     @since %Qore 0.8.13 this method was moved from the @ref Qore::File "File" class (where it is still available due to public inheritance)
  */
-static hash<FilesystemInfo> ReadOnlyFile::statvfs(string path) [dom=FILESYSTEM] {
+static hash<FilesystemInfo> ReadOnlyFile::statvfs(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef Q_HAVE_STATVFS
    struct statvfs vfs;
    if (statvfs(path->c_str(), &vfs))

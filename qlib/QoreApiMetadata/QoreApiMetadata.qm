@@ -39,7 +39,7 @@
 %endtry
 
 module QoreApiMetadata {
-    version = "1.1";
+    version = "1.3";
     desc = "structured API metadata extraction for Qore";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -88,6 +88,19 @@ module QoreApiMetadata {
 
     @section qoreapimetadata_relnotes Release Notes
 
+    @subsection qoreapimetadata_v1_3 v1.3
+    - added generic class and hashdecl metadata:
+      \c type_parameters, \c type_parameter_defaults, \c type_parameter_bounds,
+      \c raw_accepts_parameterized, and \c raw_construction_defaults_to_auto
+    - added structured type-use metadata for parameters, members, constants,
+      return types, parent classes, and parent hashdecls, including flattened
+      wildcard argument metadata with \c unbounded, \c extends, and \c super
+      wildcard kinds
+
+    @subsection qoreapimetadata_v1_2 v1.2
+    - added named-argument metadata on function and method variants:
+      \c named_callable and \c named_parameters
+
     @subsection qoreapimetadata_v1_1 v1.1
     - added @ref QoreApiMetadata::DoxygenToMarkdown "DoxygenToMarkdown" converter class
     - all doc comment text fields are now automatically converted from doxygen to Markdown
@@ -110,7 +123,55 @@ module QoreApiMetadata {
 #! Main namespace for the QoreApiMetadata module
 public namespace QoreApiMetadata {
     #! Schema version for serialized metadata
-    public const SCHEMA_VERSION = "1.0";
+    public const SCHEMA_VERSION = "1.3";
+
+    #! Structured metadata for one wildcard type argument
+    public hashdecl WildcardTypeArgumentInfo {
+        #! Dot-separated argument path within the containing type expression
+        string path;
+        #! Generic type receiving the wildcard argument
+        string owner_type;
+        #! Zero-based argument index within the owning generic type
+        int argument_index;
+        #! Source text for the wildcard argument
+        string text;
+        #! Wildcard kind: "unbounded", "extends", or "super"
+        string kind;
+        #! Bound type for extends/super wildcards, if any
+        *string bound_type;
+        #! Structured bound type metadata, if any
+        *hash<auto> bound_type_info;
+    }
+
+    #! Structured metadata for one type argument
+    public hashdecl TypeArgumentInfo {
+        #! Source text for the argument
+        string text;
+        #! True when this argument is a wildcard
+        bool is_wildcard = False;
+        #! Wildcard kind: "unbounded", "extends", or "super"
+        *string wildcard_kind;
+        #! Bound type for extends/super wildcards, if any
+        *string bound_type;
+        #! Structured bound type metadata, if any
+        *hash<auto> bound_type_info;
+        #! Structured nested type metadata for non-wildcard arguments
+        *hash<auto> type_info;
+    }
+
+    #! Structured metadata for a type use string
+    public hashdecl TypeUseInfo {
+        #! Original type text
+        string text;
+        #! Base type without optional marker or type arguments
+        string base_type;
+        #! True when the type has a leading optional marker
+        bool is_optional = False;
+        #! Generic type arguments in declaration order
+        list<hash<TypeArgumentInfo>> type_arguments = ();
+        #! Flattened wildcard arguments found anywhere in the type expression
+        list<hash<WildcardTypeArgumentInfo>> wildcard_arguments = ();
+    }
 
     #! Function/method parameter metadata
     public hashdecl ParameterInfo {
@@ -118,6 +179,10 @@ public namespace QoreApiMetadata {
         string name;
         #! Type name (e.g., "string", "*int", "hash<auto>")
         string type_name;
+        #! Structured type metadata
+        *hash<TypeUseInfo> type_info;
+        #! Flattened wildcard arguments found in the type expression
+        *list<hash<WildcardTypeArgumentInfo>> wildcard_type_arguments;
         #! Default value expression as string, if any
         *string default_value;
         #! Parameter description from documentation
@@ -138,6 +203,10 @@ public namespace QoreApiMetadata {
         string name;
         #! Type name
         string type_name;
+        #! Structured type metadata
+        *hash<TypeUseInfo> type_info;
+        #! Flattened wildcard arguments found in the type expression
+        *list<hash<WildcardTypeArgumentInfo>> wildcard_type_arguments;
         #! Member description from documentation
         *string description;
         #! Access level: "public", "private", "private:internal"
@@ -154,6 +223,10 @@ public namespace QoreApiMetadata {
         string full_name;
         #! Type name, if known
         *string type_name;
+        #! Structured type metadata, if known
+        *hash<TypeUseInfo> type_info;
+        #! Flattened wildcard arguments found in the type expression
+        *list<hash<WildcardTypeArgumentInfo>> wildcard_type_arguments;
         #! Value as string, if known
         *string value;
         #! Constant description from documentation
@@ -174,12 +247,20 @@ public namespace QoreApiMetadata {
         string signature;
         #! Return type name, if known
         *string return_type;
+        #! Structured return type metadata, if known
+        *hash<TypeUseInfo> return_type_info;
+        #! Flattened wildcard arguments found in the return type expression
+        *list<hash<WildcardTypeArgumentInfo>> return_wildcard_type_arguments;
         #! Method description from documentation
         *string description;
         #! Return value description from documentation
         *string return_description;
         #! Method parameters
         list<hash<ParameterInfo>> params = ();
+        #! Whether this method variant accepts named-argument calls
+        bool named_callable = False;
+        #! Parameter names accepted in named-argument calls
+        list<string> named_parameters = ();
         #! Exceptions this method can throw
         *list<hash<ThrowInfo>> throws;
         #! Access level: "public", "private", "private:internal"
@@ -220,6 +301,16 @@ public namespace QoreApiMetadata {
         list<hash<MemberInfo>> members = ();
         #! Parent hashdecl name (for inheritance)
         *string parent_name;
+        #! Structured parent hashdecl type metadata, if known
+        *hash<TypeUseInfo> parent_type_info;
+        #! Flattened wildcard arguments found in the parent type expression
+        *list<hash<WildcardTypeArgumentInfo>> parent_wildcard_type_arguments;
+        #! Formal generic type parameter names in declaration order
+        list<string> type_parameters = ();
+        #! Generic type parameter defaults keyed by parameter name
+        hash<string, string> type_parameter_defaults = {};
+        #! Generic type parameter upper bounds keyed by parameter name
+        hash<string, string> type_parameter_bounds = {};
         #! Source file path, if known
         *string source_file;
         #! Module that provides this hashdecl
@@ -268,12 +359,20 @@ public namespace QoreApiMetadata {
         string signature;
         #! Return type name, if known
         *string return_type;
+        #! Structured return type metadata, if known
+        *hash<TypeUseInfo> return_type_info;
+        #! Flattened wildcard arguments found in the return type expression
+        *list<hash<WildcardTypeArgumentInfo>> return_wildcard_type_arguments;
         #! Function description from documentation
         *string description;
         #! Return value description from documentation
         *string return_description;
         #! Function parameters
         list<hash<ParameterInfo>> params = ();
+        #! Whether this function variant accepts named-argument calls
+        bool named_callable = False;
+        #! Parameter names accepted in named-argument calls
+        list<string> named_parameters = ();
         #! Exceptions this function can throw
         *list<hash<ThrowInfo>> throws;
         #! Whether this function is deprecated
@@ -304,6 +403,10 @@ public namespace QoreApiMetadata {
         *string description;
         #! Parent class names
         *list<string> parents;
+        #! Structured parent class type metadata, if known
+        *list<hash<TypeUseInfo>> parent_type_info;
+        #! Flattened wildcard arguments found in parent type expressions
+        *list<hash<WildcardTypeArgumentInfo>> parent_wildcard_type_arguments;
         #! Static methods (one entry per variant)
         list<hash<MethodInfo>> static_methods = ();
         #! Instance methods (one entry per variant)
@@ -322,6 +425,16 @@ public namespace QoreApiMetadata {
         bool is_abstract = False;
         #! Whether this class is final
         bool is_final = False;
+        #! Formal generic type parameter names in declaration order
+        list<string> type_parameters = ();
+        #! Generic type parameter defaults keyed by parameter name
+        hash<string, string> type_parameter_defaults = {};
+        #! Generic type parameter upper bounds keyed by parameter name
+        hash<string, string> type_parameter_bounds = {};
+        #! Raw annotations accept parameterized instances for legacy compatibility
+        bool raw_accepts_parameterized = False;
+        #! Raw construction creates the explicit all-auto instantiation
+        bool raw_construction_defaults_to_auto = False;
     }
 
     #! Namespace metadata (recursive)
@@ -344,5 +457,313 @@ public namespace QoreApiMetadata {
         list<hash<EnumInfo>> enums = ();
         #! Child namespaces (recursive)
         list<hash<NamespaceInfo>> namespaces = ();
+    }
+
+    #! Parses Qore type strings into structured metadata for API consumers
+    public class TypeMetadata {
+        #! Parse a type-use string into structured metadata
+        /** @param type_name type string, such as \c hash<Result<int>> or \c Queue<? extends int>
+            @return structured type metadata preserving the original text
+        */
+        static hash<TypeUseInfo> parseTypeUse(string type_name) {
+            string original = trim(type_name);
+            string text = original;
+            bool is_optional = False;
+            while (text.length() && text[0] == "*") {
+                is_optional = True;
+                text = trim(text.substr(1));
+            }
+
+            int open_pos = TypeMetadata::findGenericOpen(text);
+            if (open_pos < 0) {
+                return <TypeUseInfo>{
+                    "text": original,
+                    "base_type": text,
+                    "is_optional": is_optional,
+                };
+            }
+
+            int close_pos = TypeMetadata::findMatchingClose(text, open_pos);
+            if (close_pos < 0) {
+                return <TypeUseInfo>{
+                    "text": original,
+                    "base_type": text,
+                    "is_optional": is_optional,
+                };
+            }
+
+            string base_type = trim(text.substr(0, open_pos));
+            string args_text = text.substr(open_pos + 1,
+                close_pos - open_pos - 1);
+
+            list<hash<TypeArgumentInfo>> args = ();
+            list<string> arg_texts =
+                TypeMetadata::splitTypeArguments(args_text);
+            for (int i = 0; i < arg_texts.size(); ++i) {
+                args += TypeMetadata::parseTypeArgument(arg_texts[i]);
+            }
+
+            hash<TypeUseInfo> info({
+                "text": original,
+                "base_type": base_type,
+                "is_optional": is_optional,
+                "type_arguments": args,
+            });
+            info.wildcard_arguments =
+                TypeMetadata::collectWildcardArguments(info, "");
+            return info;
+        }
+
+        #! Return all wildcard arguments found in a type-use string
+        /** @param type_name type string
+            @return flattened wildcard argument metadata
+        */
+        static list<hash<WildcardTypeArgumentInfo>> getWildcardTypeArguments(
+                string type_name) {
+            return TypeMetadata::parseTypeUse(type_name).wildcard_arguments;
+        }
+
+        #! Add structured type fields to parameter metadata
+        static hash<ParameterInfo> enrichParameter(hash<ParameterInfo> info) {
+            info.type_info = TypeMetadata::parseTypeUse(info.type_name);
+            list<hash<WildcardTypeArgumentInfo>> wildcards =
+                info.type_info.wildcard_arguments;
+            if (wildcards.size()) {
+                info.wildcard_type_arguments = wildcards;
+            }
+            return info;
+        }
+
+        #! Add structured type fields to member metadata
+        static hash<MemberInfo> enrichMember(hash<MemberInfo> info) {
+            info.type_info = TypeMetadata::parseTypeUse(info.type_name);
+            list<hash<WildcardTypeArgumentInfo>> wildcards =
+                info.type_info.wildcard_arguments;
+            if (wildcards.size()) {
+                info.wildcard_type_arguments = wildcards;
+            }
+            return info;
+        }
+
+        #! Add structured type fields to constant metadata
+        static hash<ConstantInfo> enrichConstant(hash<ConstantInfo> info) {
+            if (exists info.type_name) {
+                info.type_info = TypeMetadata::parseTypeUse(info.type_name);
+                list<hash<WildcardTypeArgumentInfo>> wildcards =
+                    info.type_info.wildcard_arguments;
+                if (wildcards.size()) {
+                    info.wildcard_type_arguments = wildcards;
+                }
+            }
+            return info;
+        }
+
+        #! Add structured return type fields to method metadata
+        static hash<MethodInfo> enrichMethod(hash<MethodInfo> info) {
+            if (exists info.return_type) {
+                info.return_type_info =
+                    TypeMetadata::parseTypeUse(info.return_type);
+                list<hash<WildcardTypeArgumentInfo>> wildcards =
+                    info.return_type_info.wildcard_arguments;
+                if (wildcards.size()) {
+                    info.return_wildcard_type_arguments = wildcards;
+                }
+            }
+            return info;
+        }
+
+        #! Add structured return type fields to function metadata
+        static hash<FunctionInfo> enrichFunction(hash<FunctionInfo> info) {
+            if (exists info.return_type) {
+                info.return_type_info =
+                    TypeMetadata::parseTypeUse(info.return_type);
+                list<hash<WildcardTypeArgumentInfo>> wildcards =
+                    info.return_type_info.wildcard_arguments;
+                if (wildcards.size()) {
+                    info.return_wildcard_type_arguments = wildcards;
+                }
+            }
+            return info;
+        }
+
+        #! Add structured parent type fields to hashdecl metadata
+        static hash<HashdeclInfo> enrichHashdecl(hash<HashdeclInfo> info) {
+            if (exists info.parent_name) {
+                info.parent_type_info =
+                    TypeMetadata::parseTypeUse(info.parent_name);
+                list<hash<WildcardTypeArgumentInfo>> wildcards =
+                    info.parent_type_info.wildcard_arguments;
+                if (wildcards.size()) {
+                    info.parent_wildcard_type_arguments = wildcards;
+                }
+            }
+            return info;
+        }
+
+        #! Add structured parent type fields to class metadata
+        static hash<ClassInfo> enrichClass(hash<ClassInfo> info) {
+            if (exists info.parents) {
+                list<hash<TypeUseInfo>> parent_info = ();
+                list<hash<WildcardTypeArgumentInfo>> wildcards = ();
+                foreach string parent in (info.parents) {
+                    hash<TypeUseInfo> ti = TypeMetadata::parseTypeUse(parent);
+                    parent_info += ti;
+                    wildcards += ti.wildcard_arguments;
+                }
+                if (parent_info.size()) {
+                    info.parent_type_info = parent_info;
+                }
+                if (wildcards.size()) {
+                    info.parent_wildcard_type_arguments = wildcards;
+                }
+            }
+            return info;
+        }
+
+        private static hash<TypeArgumentInfo> parseTypeArgument(
+                string arg_text) {
+            string text = trim(arg_text);
+            if (text.length() && text[0] == "?") {
+                string tail = trim(text.substr(1));
+                hash<TypeArgumentInfo> info({
+                    "text": text,
+                    "is_wildcard": True,
+                });
+                if (!tail.length()) {
+                    info.wildcard_kind = "unbounded";
+                    return info;
+                }
+                if (TypeMetadata::startsWithKeyword(tail, "extends")) {
+                    string bound = trim(tail.substr(7));
+                    info.wildcard_kind = "extends";
+                    info.bound_type = bound;
+                    info.bound_type_info = TypeMetadata::parseTypeUse(bound);
+                    return info;
+                }
+                if (TypeMetadata::startsWithKeyword(tail, "super")) {
+                    string bound = trim(tail.substr(5));
+                    info.wildcard_kind = "super";
+                    info.bound_type = bound;
+                    info.bound_type_info = TypeMetadata::parseTypeUse(bound);
+                    return info;
+                }
+
+                info.wildcard_kind = "unbounded";
+                return info;
+            }
+
+            return <TypeArgumentInfo>{
+                "text": text,
+                "type_info": TypeMetadata::parseTypeUse(text),
+            };
+        }
+
+        private static list<hash<WildcardTypeArgumentInfo>> collectWildcardArguments(
+                hash<TypeUseInfo> info, string path_prefix) {
+            list<hash<WildcardTypeArgumentInfo>> result = ();
+            for (int i = 0; i < info.type_arguments.size(); ++i) {
+                hash<TypeArgumentInfo> arg = info.type_arguments[i];
+                string path = path_prefix.length()
+                    ? path_prefix + "." + string(i) : string(i);
+                if (arg.is_wildcard) {
+                    hash<WildcardTypeArgumentInfo> wildcard({
+                        "path": path,
+                        "owner_type": info.base_type,
+                        "argument_index": i,
+                        "text": arg.text,
+                        "kind": arg.wildcard_kind ?? "unbounded",
+                        "bound_type": arg.bound_type,
+                        "bound_type_info": arg.bound_type_info,
+                    });
+                    result += wildcard;
+                }
+                if (exists arg.type_info) {
+                    result += TypeMetadata::collectWildcardArguments(
+                        cast<hash<TypeUseInfo>>(arg.type_info), path);
+                }
+                if (exists arg.bound_type_info) {
+                    result += TypeMetadata::collectWildcardArguments(
+                        cast<hash<TypeUseInfo>>(arg.bound_type_info),
+                        path + ".bound");
+                }
+            }
+            return result;
+        }
+
+        private static list<string> splitTypeArguments(string args_text) {
+            list<string> result = ();
+            string current = "";
+            int depth = 0;
+            for (int i = 0; i < args_text.length(); ++i) {
+                string ch = args_text[i];
+                switch (ch) {
+                    case "<":
+                        ++depth;
+                        current += ch;
+                        break;
+                    case ">":
+                        --depth;
+                        current += ch;
+                        break;
+                    case ",":
+                        if (depth == 0) {
+                            string arg = trim(current);
+                            if (arg.length()) {
+                                result += arg;
+                            }
+                            current = "";
+                        } else {
+                            current += ch;
+                        }
+                        break;
+                    default:
+                        current += ch;
+                        break;
+                }
+            }
+            string last = trim(current);
+            if (last.length()) {
+                result += last;
+            }
+            return result;
+        }
+
+        private static int findGenericOpen(string text) {
+            for (int i = 0; i < text.length(); ++i) {
+                if (text[i] == "<") {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private static int findMatchingClose(string text, int open_pos) {
+            int depth = 0;
+            for (int i = open_pos; i < text.length(); ++i) {
+                switch (text[i]) {
+                    case "<":
+                        ++depth;
+                        break;
+                    case ">":
+                        --depth;
+                        if (!depth) {
+                            return i;
+                        }
+                        break;
+                }
+            }
+            return -1;
+        }
+
+        private static bool startsWithKeyword(string text, string keyword) {
+            if (text.length() < keyword.length()) {
+                return False;
+            }
+            if (text.substr(0, keyword.length()) != keyword) {
+                return False;
+            }
+            return text.length() == keyword.length()
+                || text[keyword.length()] == " ";
+        }
     }
 }

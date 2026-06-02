@@ -3,12 +3,13 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/OracleSqlUtilBase.qm
-%requires ../../../../qlib/JdbcOracleSqlUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires SqlUtil
+%requires OracleSqlUtilBase
+%requires JdbcOracleSqlUtil
 
 %requires ./SqlUtilTestBase.qm
 

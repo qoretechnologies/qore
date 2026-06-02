@@ -24,18 +24,19 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
 
 %try-module json
 %define NoJson
 %endtry
 
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/WebSocketClient.qm
-%requires ../../../../qlib/QoreRepl
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketClient
+%requires QoreRepl
 
 %exec-class QoreReplWebSocketTest
 

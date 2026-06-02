@@ -36,6 +36,7 @@
 #include <cstdarg>
 #include <memory>
 #include <string>
+#include <vector>
 
 // all qore class IDs
 DLLEXPORT extern qore_classid_t CID_AUTOGATE;
@@ -626,6 +627,19 @@ public:
     */
     DLLEXPORT QoreObject* execConstructor(const QoreListNode* args, ExceptionSink* xsink) const;
 
+    //! creates a new object with explicit object type information and executes the constructor on it
+    /** if a Qore-language exception occurs, 0 is returned.
+        @param args the arguments for the method
+        @param object_type_info the parameterized object type info to apply to the new object
+        @param xsink Qore-language exception information is added here
+
+        @return the object created
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT QoreObject* execConstructor(const QoreListNode* args, const QoreTypeInfo* object_type_info,
+        ExceptionSink* xsink) const;
+
     //! Creates a new object and executes the constructor and returns the new object
     /** The object created will be an instance of the first argument, which may be a different class than the current
         class.
@@ -890,6 +904,13 @@ public:
     */
     DLLEXPORT void addBuiltinVirtualBaseClass(QoreClass* qc);
 
+    //! sets a parameterized virtual base class mapping for a generic builtin class
+    /** @param typeInfo a parameterized class type info whose base class is the virtual base class to add
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addParameterizedBuiltinVirtualBaseClass(const QoreTypeInfo* typeInfo);
+
     //! Adds a base class to the current class
     /** @param qc the class to add
         @param virt if the base class is "virtual", meaning that the current class's binary object is also compatible
@@ -897,6 +918,17 @@ public:
         class's private data object)
     */
     DLLEXPORT void addBaseClass(QoreClass* qc, bool virt = false);
+
+    //! Adds a base class to the current class with an explicit access level
+    /** @param qc the class to add
+        @param access the access level for the base class (Public, Private, or Internal)
+        @param virt if the base class is "virtual", meaning that the current class's binary object is also compatible
+        with this base class's data (meaning that the base class's private data object is also a base class of this
+        class's private data object)
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void addBaseClass(QoreClass* qc, ClassAccess access, bool virt = false);
 
     //! initializes a builtin class after all base classes have been added
     /** Call this after all base classes are set up but before any operation that may trigger recursive
@@ -959,6 +991,81 @@ public:
 
     //! returns the type information structure for this class
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
+
+    //! returns the parameterized type information structure for this class and the given type arguments
+    DLLEXPORT const QoreTypeInfo* getTypeInfo(const std::vector<const QoreTypeInfo*>& args,
+            bool or_nothing = false) const;
+
+    //! adds a formal type parameter to this class
+    /** @param name the formal type parameter name
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addTypeParameter(const char* name);
+
+    //! adds a formal type parameter to this class with a default type
+    /** @param name the formal type parameter name
+        @param default_type the default type argument used when the type argument is omitted
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addTypeParameter(const char* name, const char* default_type);
+
+    //! adds a formal type parameter to this class with an optional default type and bound
+    /** @param name the formal type parameter name
+        @param default_type the default type argument used when the type argument is omitted, or nullptr
+        @param bound_type the upper bound type that type arguments must satisfy, or nullptr
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addTypeParameter(const char* name, const char* default_type, const char* bound_type);
+
+    //! enables legacy raw generic compatibility behavior for migrated builtin classes
+    /** @param raw_accepts_parameterized when true, raw annotations accept parameterized instances
+        @param raw_construction_defaults_to_auto when true, raw construction creates the explicit auto instantiation
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void setLegacyRawGenericCompatibility(bool raw_accepts_parameterized = true,
+            bool raw_construction_defaults_to_auto = true);
+
+    //! returns true if this class declares formal type parameters
+    DLLEXPORT bool hasTypeParameters() const;
+
+    //! returns the number of formal type parameters declared by this class
+    DLLEXPORT size_t getTypeParameterCount() const;
+
+    //! returns the number of formal type parameters that do not have defaults
+    /** @since %Qore 2.4
+    */
+    DLLEXPORT size_t getTypeParameterRequiredCount() const;
+
+    //! returns the name of the formal type parameter at the given index or nullptr if the index is invalid
+    /** @param index the zero-based type parameter index
+
+        @return the formal type parameter name or nullptr if the index is invalid
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterName(size_t index) const;
+
+    //! returns the default type for the formal type parameter at the given index, if any
+    /** @param index the zero-based type parameter index
+
+        @return the default type argument string or nullptr if the parameter has no default or the index is invalid
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterDefaultType(size_t index) const;
+
+    //! returns the bound type for the formal type parameter at the given index, if any
+    /** @param index the zero-based type parameter index
+
+        @return the bound type string or nullptr if the parameter has no bound or the index is invalid
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterBoundType(size_t index) const;
 
     //! returns the "or nothing" type information structure for this class
     DLLEXPORT const QoreTypeInfo* getOrNothingTypeInfo() const;
@@ -1327,6 +1434,13 @@ public:
 
     //! returns the parent class
     DLLEXPORT const QoreClass& getParentClass() const;
+
+    //! returns the type info for the parent class declaration
+    /** This can differ from getParentClass().getTypeInfo() when the parent is declared as a parameterized class type.
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 
     //! returns the access of the parent class
     DLLEXPORT ClassAccess getAccess() const;

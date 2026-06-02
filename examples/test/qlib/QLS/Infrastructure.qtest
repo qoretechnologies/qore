@@ -26,9 +26,10 @@
 
 %disable-warning unreferenced-variable
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 %requires json
-%requires ../../../../qlib/QLS
+%requires QLS
 
 %exec-class InfrastructureTest
 

@@ -607,7 +607,7 @@ qclass FtpDataPollOperation [
     private_members=object sock,string goal;
     ns=Qore;
     arg=FtpDataPollOperationPriv* priv;
-    vparent=SocketPollOperationBase;
+    vparent=SocketPollOperationBase<*binary>;
     dom=NETWORK
 ];
 
@@ -616,10 +616,10 @@ qclass FtpDataPollOperation [
     @param port the data channel port (from PASV/EPSV response)
     @param secure_data if True, upgrade data socket to TLS after connect
 */
-FtpDataPollOperation::constructor(string host, int port, bool secure_data = False) {
-    // Create data socket — extra ref for QoreObject (setPrivate stores raw pointer, derefAll releases)
+FtpDataPollOperation::constructor(string host, int port, bool secure_data = False) [flags=NAMED_ARGS] {
+    // Create data socket; the QoreObject owns the initial ref and the connect
+    // op owns the only extra ref. The FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
-    sock_priv->ref();
     QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
     self->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, sock_obj, xsink);
     if (*xsink) {
@@ -657,10 +657,10 @@ FtpDataPollOperation::constructor(string host, int port, bool secure_data = Fals
     @param data the data to send
     @param secure_data if True, upgrade data socket to TLS after connect
 */
-FtpDataPollOperation::constructor(string host, int port, binary data, bool secure_data = False) {
-    // Create data socket — extra ref for QoreObject (setPrivate stores raw pointer, derefAll releases)
+FtpDataPollOperation::constructor(string host, int port, binary data, bool secure_data = False) [flags=NAMED_ARGS] {
+    // Create data socket; the QoreObject owns the initial ref and the connect
+    // op owns the only extra ref. The FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
-    sock_priv->ref();
     QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
     self->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, sock_obj, xsink);
     if (*xsink) {
@@ -723,7 +723,7 @@ bool FtpDataPollOperation::goalReached() {
 //! Returns the received data (for RETR/LIST) or NOTHING (for STOR)
 /** @return binary data received from the data channel, or NOTHING for send operations
 */
-auto FtpDataPollOperation::getOutput() {
+*binary FtpDataPollOperation::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

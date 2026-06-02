@@ -1,10 +1,10 @@
 #!/usr/bin/env qore
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class AbsolutePathTest
 

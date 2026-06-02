@@ -77,42 +77,42 @@ if (i == -1) {
 }
     @endcode
 
-    @param bin the byte sequence to find in the binary object
-    @param byte_pos the starting byte position for the search; if negative, then specifies an offset from the end of
+    @param pattern the byte sequence to find in the binary object
+    @param byte_offset the starting byte position for the search; if negative, then specifies an offset from the end of
     the current binary object
 
     @return the byte position of a sequence of bytes within a binary object, -1 is returned if the byte sequence is
-    not found or if \a byte_pos specifies a position beyond the end of the string
+    not found or if \a byte_offset specifies a position beyond the end of the string
 
-    @note an empty \a bin argument always matches
+    @note an empty \a pattern argument always matches
 
     @see
     - <binary>::rfind(data, softint)
 
     @since %Qore 0.9.1
 */
-int <binary>::find(data bin, softint byte_pos = 0) [flags=RET_VALUE_ONLY] {
+int <binary>::find(data pattern, softint byte_offset = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
-    q_get_data(bin, bin_ptr, bin_len);
+    q_get_data(pattern, bin_ptr, bin_len);
 
-    if (byte_pos < 0) {
-        byte_pos = b->size() + byte_pos;
-        if (byte_pos < 0) {
+    if (byte_offset < 0) {
+        byte_offset = b->size() + byte_offset;
+        if (byte_offset < 0) {
             return -1;
         }
-    } else if ((size_t)byte_pos >= b->size()) {
+    } else if ((size_t)byte_offset >= b->size()) {
         return -1;
     }
 
-    size_t len = b->size() - byte_pos;
+    size_t len = b->size() - byte_offset;
     if (!len) {
         return bin_len ? -1 : 0;
     } else if (len < 0) {
         return -1;
     }
 
-    void* ptr = q_memmem(static_cast<const char*>(b->getPtr()) + byte_pos, len, bin_ptr, bin_len);
+    void* ptr = q_memmem(static_cast<const char*>(b->getPtr()) + byte_offset, len, bin_ptr, bin_len);
     if (!ptr) {
         return -1;
     }
@@ -128,37 +128,37 @@ if (i == -1) {
 }
     @endcode
 
-    @param bin the byte sequence to find in the binary object
-    @param byte_pos the starting byte position for the search; if negative, then specifies an offset from the end of
-    the current binary object; if \a byte_pos specifies a position beyond the end of the string, then the search
+    @param pattern the byte sequence to find in the binary object
+    @param byte_offset the starting byte position for the search; if negative, then specifies an offset from the end of
+    the current binary object; if \a byte_offset specifies a position beyond the end of the string, then the search
     starts from the end of the string
 
     @return the byte position of a sequence of bytes within a binary object, -1 is returned if the byte sequence is
     not found
 
-    @note an empty \a bin argument always matches
+    @note an empty \a pattern argument always matches
 
     @see
     - <binary>::find(data, softint)
 
     @since %Qore 0.9.1
 */
-int <binary>::rfind(data bin, softint byte_pos = -1) [flags=RET_VALUE_ONLY] {
+int <binary>::rfind(data pattern, softint byte_offset = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
-    q_get_data(bin, bin_ptr, bin_len);
+    q_get_data(pattern, bin_ptr, bin_len);
 
-    if (byte_pos < 0) {
-        byte_pos = b->size() + byte_pos;
-        if (byte_pos < 0) {
+    if (byte_offset < 0) {
+        byte_offset = b->size() + byte_offset;
+        if (byte_offset < 0) {
             return -1;
         }
-    } else if ((size_t)byte_pos >= b->size()) {
-        byte_pos = b->size() - 1;
+    } else if ((size_t)byte_offset >= b->size()) {
+        byte_offset = b->size() - 1;
     }
 
-    assert((size_t)byte_pos < b->size());
-    void* ptr = q_memrmem(b->getPtr(), byte_pos + 1, bin_ptr, bin_len);
+    assert((size_t)byte_offset < b->size());
+    void* ptr = q_memrmem(b->getPtr(), byte_offset + 1, bin_ptr, bin_len);
     if (!ptr) {
         return -1;
     }
@@ -199,7 +199,7 @@ bool <binary>::val() [flags=CONSTANT] {
 
 //! Returns a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed
 /**
-    @param sep the bytes that separate the fields
+    @param separator the bytes that separate the fields
 
     @return a list of binary objects representing each component of the binary object separated by the bytes identified by the separator argument, with the separator removed
 
@@ -212,10 +212,10 @@ list<binary> l = bin.split(sep);
 
     @since %Qore 0.8.5
  */
-list<binary> <binary>::split(data sep) [flags=CONSTANT] {
+list<binary> <binary>::split(data separator) [flags=CONSTANT,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
-    q_get_data(sep, bin_ptr, bin_len);
+    q_get_data(separator, bin_ptr, bin_len);
 
     return split_intern(bin_ptr, bin_len, (const char*)b->getPtr(), b->size(), nullptr);
 }
@@ -491,7 +491,7 @@ string dump = b.toHexArray(NOTHING, NOTHING, 16, "\n");
     @since %Qore 2.3
  */
 string <binary>::toHexArray(*string byte_prefix, *string byte_suffix, int bytes_per_line = 0,
-        *string line_separator) [flags=CONSTANT] {
+        *string line_separator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     static const char hexdig[] = "0123456789abcdef";
 
     const size_t size = b->size();
@@ -518,6 +518,9 @@ string <binary>::toHexArray(*string byte_prefix, *string byte_suffix, int bytes_
     const int bpl = bytes_per_line;
     int col = 0;
     for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "formatting binary hex array")) {
+            return QoreValue();
+        }
         if (bpl > 0 && col == bpl) {
             rv->concat(ls, ls_len);
             col = 0;
@@ -545,7 +548,7 @@ string base64 = bin.toBase64(64);
     Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and
     <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param maxlinelen the maximum length of a line in the resulting output string in bytes; if this value is > 0 then
+    @param max_line_length the maximum length of a line in the resulting output string in bytes; if this value is > 0 then
     output lines will be separated by CRLF characters
 
     @return the base64-encoded string of the data passed
@@ -556,8 +559,8 @@ string base64 = bin.toBase64(64);
     - <string>::toBase64()
     - make_base64_string(binary, softint)
 */
-string <binary>::toBase64(softint maxlinelen = -1) [flags=CONSTANT] {
-    return new QoreStringNode(b, maxlinelen);
+string <binary>::toBase64(softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
+    return new QoreStringNode(b, max_line_length);
 }
 
 //! Returns the base64-url-encoded representation of the binary object
@@ -568,6 +571,8 @@ string <binary>::toBase64(softint maxlinelen = -1) [flags=CONSTANT] {
 string base64 = bin.toBase64Url();
     @endcode
 
+    @param max_line_length ignored for Base64-URL output; accepted for compatibility with <binary>::toBase64()
+
     @return the base64-url-encoded string of the data passed
 
     @since %Qore 1.19.0
@@ -576,7 +581,7 @@ string base64 = bin.toBase64Url();
     - <string>::toBase64Url()
     - make_base64_url_string(binary)
 */
-string <binary>::toBase64Url(softint maxlinelen = -1) [flags=CONSTANT] {
+string <binary>::toBase64Url(softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* rv = new QoreStringNode;
     rv->concatBase64Url(*b);
     return rv;
@@ -599,7 +604,7 @@ binary b1 = b0.substr(-10);
 
     @since %Qore 0.8.8
  */
-binary <binary>::substr(softint start) [flags=CONSTANT] {
+binary <binary>::substr(softint start) [flags=CONSTANT,NAMED_ARGS] {
    BinaryNode* b1 = new BinaryNode;
    b->substr(*b1, start);
    return b1;
@@ -609,7 +614,7 @@ binary <binary>::substr(softint start) [flags=CONSTANT] {
 /** Arguments can be negative, giving offsets from the end of the data.
 
     @param start The starting byte for the portion of the data where the first byte is at offset 0; if the offset is negative, it designates the number of bytes from the end of the data
-    @param len The maximum number of characters to copy; if this value is negative, the rest of the string from \a start will be copied to the substring, except without - \a len characters from the end of the string
+    @param length The maximum number of characters to copy; if this value is negative, the rest of the string from \a start will be copied to the substring, except without - \a length characters from the end of the string
 
     @return the portion of the data starting from an integer bte offset; the rest of the data is returned after this offset
 
@@ -623,9 +628,9 @@ binary b1 = b0.substr(-10, 5);
 
     @since %Qore 0.8.8
  */
-binary <binary>::substr(softint start, softint len) [flags=CONSTANT] {
+binary <binary>::substr(softint start, softint length) [flags=CONSTANT,NAMED_ARGS] {
    BinaryNode* b1 = new BinaryNode;
-   b->substr(*b1, start, len);
+   b->substr(*b1, start, length);
    return b1;
 }
 
@@ -642,7 +647,7 @@ string str = b.toString("iso-8859-1");
 
     @since %Qore 0.8.8
 */
-string <binary>::toString(*string encoding) [flags=CONSTANT] {
+string <binary>::toString(*string encoding) [flags=CONSTANT,NAMED_ARGS] {
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
    if (!b->size())
       return new QoreStringNode(qe);

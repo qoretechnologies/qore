@@ -55,7 +55,7 @@ public:
 
     DLLLOCAL virtual ~CaseNode();
 
-    DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink);
+    DLLLOCAL virtual bool matches(QoreValue lhs_value, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual bool isDefault() const {
         return def;
@@ -73,6 +73,14 @@ public:
     DLLLOCAL virtual ~SwitchStatement();
     DLLLOCAL void setSwitch(QoreValue s);
     DLLLOCAL void addCase(CaseNode* c);
+
+    DLLLOCAL QoreValue getSwitchExp() const {
+        return sexp;
+    }
+
+    DLLLOCAL const CaseNode* getCases() const {
+        return head;
+    }
 
     // fake it here and let it be checked at runtime
     DLLLOCAL virtual bool hasFinalReturn() const {

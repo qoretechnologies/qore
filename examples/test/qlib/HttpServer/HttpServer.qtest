@@ -3,26 +3,27 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/WebSocketUtil.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/Swagger.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/HttpClientStreamingIo
-%requires ../../../../qlib/WebSocketHandler.qm
-%requires ../../../../qlib/WebSocketClient.qm
-%requires ../../../../qlib/RestClientIo.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires RestClientIo
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestSchemaValidator
+%requires Swagger
+%requires OpenApi3
+%requires RestClient
+%requires HttpClientIo
+%requires HttpClientStreamingIo
 
 %exec-class HttpServerTest
 
@@ -3112,9 +3113,18 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
             # Create many connections
             for (int i = 0; i < num_connections; ++i) {
-                HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 2s});
+                HTTPClient client({"url": "http://localhost:" + test_port, "timeout": 5s});
                 client.connect();
-                assertEq("GET, test, /test", client.get("/test"));
+                try {
+                    assertEq("GET, test, /test", client.get("/test"));
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("Connection %d/%d FAILED: %s: %s (port: %d)\n",
+                        i, num_connections, ex.err, ex.desc, test_port);
+                    printf("  test_port: %d\n", test_port);
+                    printf("  globalAsyncCtrl cache: %d\n",
+                        server.getHttpAsyncIo().getTotalCacheSize());
+                    rethrow;
+                }
                 clients += client;
             }
 

@@ -38,6 +38,7 @@
 
 // forward declarations
 class qore_enum_decl_private;
+class QoreExternalProgramLocation;
 class QoreNamespace;
 class QoreTypeInfo;
 class QoreValue;
@@ -140,6 +141,7 @@ private:
 // system enum declarations
 DLLEXPORT extern const QoreEnumDecl* enumHTTP2Mode;
 DLLEXPORT extern const QoreEnumDecl* enumHTTP3Mode;
+DLLEXPORT extern const QoreEnumDecl* enumExecMode;
 
 //! allows for temporary storage of a QoreEnumDecl pointer
 /** @since %Qore 2.1

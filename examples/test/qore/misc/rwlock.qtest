@@ -5,7 +5,8 @@
 %require-our
 %disable-warning non-existent-method-call
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 class MyRWLock inherits RWLock {
     int methodGate(any m) {

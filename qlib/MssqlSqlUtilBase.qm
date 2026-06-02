@@ -313,8 +313,9 @@ public class MssqlColumn inherits SqlUtil::AbstractColumn {
     }
 
     #! creates the column from the supplied arguments
-    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs, *int scale)
+    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs, *int scale)
             : AbstractColumn(n, nt, qt, sz, nul, dv, cm, scale) {
+        if (!exists bs) { bs = 0; }
         byte_size = bs;
     }
 
@@ -407,8 +408,8 @@ string str = col.getRenameSql(t, "new_name");
 #! represents a Mssql-specific numeric column
 public class MssqlNumericColumn inherits MssqlColumn {
     #! creates the column from the supplied arguments
-    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, softint bs,
-            softint scale) : MssqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
+    constructor(string n, string nt, *string qt, int sz, bool nul, *string dv, *string cm, *softint bs,
+            *softint scale) : MssqlColumn(n, nt, qt, sz, nul, dv, cm, bs, scale) {
     }
 }
 
@@ -1097,7 +1098,7 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         if (!exists dbname) {
             return GET_PHYSICAL_DB_SIZE_NOVAL;
         }
-        return ds.selectRow("select f.size * 8 as val -- to bytes
+        return ds.selectRow("select sum(cast(f.size as bigint)) * 8192 as val
                                 from sys.master_files f
                                 inner join sys.databases d on d.database_id = f.database_id
                                 where d.name = %v", dbname).val ?? GET_PHYSICAL_DB_SIZE_NOVAL;
@@ -2017,7 +2018,10 @@ so.name = %v", name);
         foreach hash<auto> row in (qh.contextIterator()) {
             row.column_name = row.column_name.lwr();
             *hash th = MssqlTypeMap.(row.data_type);
-            softint size = row.length;
+            *softint size = row.length;
+            if (!exists size) {
+                size = 0;
+            }
             switch (th.qore) {
                 case Type::Int:
                 case Type::Float: {
@@ -2055,7 +2059,10 @@ so.name = %v", name);
         foreach hash<auto> row in (qh.contextIterator()) {
             row.column_name = row.column_name.lwr();
             *hash th = MssqlTypeMap.(row.data_type);
-            softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
+            *softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
+            if (!exists size) {
+                size = 0;
+            }
             switch (th.qore) {
                 case Type::Int:
                 case Type::Float: {
@@ -2197,10 +2204,10 @@ and s.name = %v and t.name = %v order by i.name, ic.key_ordinal", schema, name);
 
             foreach hash<auto> i in (ih.pairIterator()) {
                 # check primary key index and add filegroup to primary key definition
-                if (i.primary && !primaryKey.empty()) {
+                if (i.value.primary && !primaryKey.empty()) {
                     MssqlPrimaryKey pk = cast<MssqlPrimaryKey>(primaryKey);
-                    if (i.value.filegroup && !pk.filegroup)
-                        pk.filegroup = i.value.filegroup;
+                    if (i.value.filegroup && !pk.getTablespace())
+                        pk.setTablespace(i.value.filegroup);
                     continue;
                 }
                 # check unique indexes to make sure they are not matched with a unique constraint

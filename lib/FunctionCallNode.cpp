@@ -33,20 +33,300 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreParseTypeInfo.h"
+#include "qore/intern/NewComplexTypeNode.h"
 
+#include <string>
 #include <vector>
+
+static bool static_scope_has_parameterized_receiver(const NamedScope& scope) {
+    if (scope.size() < 2) {
+        return false;
+    }
+    for (unsigned i = 0, e = scope.size() - 1; i < e; ++i) {
+        if (strchr(scope[i], '<')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static std::string get_static_scope_receiver_type_path(const NamedScope& scope) {
+    std::string rv;
+    for (unsigned i = 0, e = scope.size() - 1; i < e; ++i) {
+        if (i) {
+            rv += "::";
+        }
+        rv += scope[i];
+    }
+    return rv;
+}
+
+static const QoreTypeInfo* resolve_static_scope_receiver_type(const QoreProgramLocation* loc, const NamedScope& scope,
+        int& err) {
+    std::string type_path = get_static_scope_receiver_type_path(scope);
+    QoreParseTypeInfo* pti = qore_parse_type_string_to_pti(type_path.c_str());
+    if (!pti) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve static method receiver type '%s'",
+            type_path.c_str());
+        err = -1;
+        return autoTypeInfo;
+    }
+    const QoreTypeInfo* rv = QoreParseTypeInfo::resolveAny(pti, loc, err);
+    delete pti;
+    if (err) {
+        return autoTypeInfo;
+    }
+    if (!QoreTypeInfo::getParameterizedClassType(rv) && !QoreTypeInfo::getComplexBufferType(rv)) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "static generic method call target '%s' must resolve to a "
+            "parameterized class type or a built-in buffer<T> factory type; use 'Class<...>::method()' for generic "
+            "static methods, 'Class::method()' for non-generic static methods, or "
+            "'buffer<T>::sized()/filled()' for dense buffer factories", type_path.c_str());
+        err = -1;
+        return autoTypeInfo;
+    }
+    return rv;
+}
+
+static size_t qore_buffer_factory_arg_count(const QoreValue& args) {
+    switch (args.getType()) {
+        case NT_PARSE_LIST:
+            return args.get<const QoreParseListNode>()->size();
+        case NT_LIST:
+            return args.get<const QoreListNode>()->size();
+        case NT_NOTHING:
+            return 0;
+        default:
+            return 1;
+    }
+}
+
+static const QoreTypeInfo* qore_buffer_factory_arg_type(const QoreValue& args, size_t index,
+        const type_vec_t* arg_types = nullptr) {
+    if (arg_types) {
+        assert(index < arg_types->size());
+        return (*arg_types)[index];
+    }
+
+    switch (args.getType()) {
+        case NT_PARSE_LIST: {
+            const QoreParseListNode* pln = args.get<const QoreParseListNode>();
+            assert(index < pln->getValueTypes().size());
+            return pln->getValueTypes()[index];
+        }
+        case NT_LIST: {
+            const QoreListNode* list = args.get<const QoreListNode>();
+            assert(index < list->size());
+            return list->retrieveEntry(index).getFullTypeInfo();
+        }
+        default:
+            return args.getFullTypeInfo();
+    }
+}
+
+static const char* qore_buffer_factory_find_expected_arg(const char* name, const char* const* expected_names,
+        size_t expected_args, size_t& target) {
+    assert(name && *name);
+    for (size_t i = 0; i < expected_args; ++i) {
+        if (!strcmp(name, expected_names[i])) {
+            target = i;
+            return nullptr;
+        }
+    }
+    return expected_args == 1 ? expected_names[0] : "size, value";
+}
+
+struct QoreBufferFactoryArgBinding {
+    bool named = false;
+    std::vector<size_t> source_to_param;
+    size_t result_size = 0;
+};
+
+static int qore_buffer_factory_bind_named_args(const QoreProgramLocation* loc, const QoreTypeInfo* buffer_type_info,
+        const char* factory, const QoreParseListNode* parse_args, const char* const* expected_names,
+        size_t expected_args, QoreBufferFactoryArgBinding& binding) {
+    if (!parse_args || !parse_args->hasNamedArgs()) {
+        return 0;
+    }
+
+    binding.named = true;
+    binding.source_to_param.assign(parse_args->size(), 0);
+    binding.result_size = expected_args;
+    std::vector<bool> supplied(expected_args, false);
+    bool seen_named = false;
+    size_t positional = 0;
+
+    for (size_t i = 0, e = parse_args->size(); i < e; ++i) {
+        const char* name = parse_args->getArgName(i);
+        size_t target;
+        if (!name) {
+            if (seen_named) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot call '%s::%s()' with a positional argument after "
+                    "a named argument", QoreTypeInfo::getName(buffer_type_info), factory);
+                return -1;
+            }
+            target = positional++;
+        } else {
+            seen_named = true;
+            const char* expected = qore_buffer_factory_find_expected_arg(name, expected_names, expected_args, target);
+            if (expected) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "unknown named argument '%s' in call to '%s::%s()'; "
+                    "expected %s", name, QoreTypeInfo::getName(buffer_type_info), factory, expected);
+                return -1;
+            }
+            if (target < positional) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "named argument '%s' in call to '%s::%s()' would overwrite "
+                    "a positional argument", name, QoreTypeInfo::getName(buffer_type_info), factory);
+                return -1;
+            }
+            if (supplied[target]) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "duplicate named argument '%s' in call to '%s::%s()'",
+                    name, QoreTypeInfo::getName(buffer_type_info), factory);
+                return -1;
+            }
+        }
+
+        if (target >= expected_args) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "'%s::%s()' expects %d argument%s; got %d",
+                QoreTypeInfo::getName(buffer_type_info), factory, (int)expected_args, expected_args == 1 ? "" : "s",
+                (int)parse_args->size());
+            return -1;
+        }
+
+        binding.source_to_param[i] = target;
+        supplied[target] = true;
+    }
+
+    for (size_t i = 0; i < expected_args; ++i) {
+        if (!supplied[i]) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "missing required argument '%s' in call to '%s::%s()'",
+                expected_names[i], QoreTypeInfo::getName(buffer_type_info), factory);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int parse_init_complex_buffer_factory(const QoreProgramLocation* loc, const QoreTypeInfo* buffer_type_info,
+        const char* factory, QoreParseListNode* parse_args, QoreValue& val, QoreParseContext& parse_context) {
+    QoreComplexBufferInitKind init_kind;
+    size_t expected_args;
+    const char* sized_args[] = { "size" };
+    const char* filled_args[] = { "size", "value" };
+    const char* const* expected_names;
+    if (!strcmp(factory, "sized")) {
+        init_kind = QoreComplexBufferInitKind::Sized;
+        expected_args = 1;
+        expected_names = sized_args;
+    } else if (!strcmp(factory, "filled")) {
+        init_kind = QoreComplexBufferInitKind::Filled;
+        expected_args = 2;
+        expected_names = filled_args;
+    } else {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve buffer factory '%s::%s()'; supported factories are "
+            "'%s::sized(int size)' and '%s::filled(int size, %s value)'",
+            QoreTypeInfo::getName(buffer_type_info), factory, QoreTypeInfo::getName(buffer_type_info),
+            QoreTypeInfo::getName(buffer_type_info),
+            QoreTypeInfo::getName(QoreTypeInfo::getComplexBufferType(buffer_type_info)->getElementTypeInfo()));
+        delete parse_args;
+        return -1;
+    }
+
+    QoreBufferFactoryArgBinding named_binding;
+    if (qore_buffer_factory_bind_named_args(loc, buffer_type_info, factory, parse_args, expected_names,
+            expected_args, named_binding)) {
+        delete parse_args;
+        return -1;
+    }
+
+    QoreValue new_args{};
+    type_vec_t ordered_arg_types;
+    int err = 0;
+    const QoreTypeInfo* return_type_info = parse_context.typeInfo;
+    parse_context.typeInfo = nullptr;
+    if (named_binding.named) {
+        type_vec_t source_arg_types;
+        QoreListNode* arg_list = nullptr;
+        err = parse_args->initArgs(parse_context, source_arg_types, arg_list);
+        parse_args = nullptr;
+        if (!err) {
+            assert(source_arg_types.size() == named_binding.source_to_param.size());
+            ordered_arg_types.resize(expected_args, nullptr);
+            for (size_t i = 0, e = source_arg_types.size(); i < e; ++i) {
+                size_t target = named_binding.source_to_param[i];
+                assert(target < expected_args);
+                ordered_arg_types[target] = source_arg_types[i];
+            }
+            qore_list_private::get(arg_list)->setCallArgEvalMap(std::move(named_binding.source_to_param),
+                named_binding.result_size);
+            new_args = arg_list;
+        } else if (arg_list) {
+            arg_list->deref(nullptr);
+        }
+    } else {
+        QoreListNode* arg_list = nullptr;
+        err = parse_args->initArgs(parse_context, ordered_arg_types, arg_list);
+        parse_args = nullptr;
+        if (!err) {
+            new_args = arg_list;
+        } else if (arg_list) {
+            arg_list->deref(nullptr);
+        }
+    }
+    parse_context.typeInfo = return_type_info;
+    if (err) {
+        new_args.discard(nullptr);
+        return -1;
+    }
+
+    size_t arg_count = qore_buffer_factory_arg_count(new_args);
+    if (arg_count != expected_args) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "'%s::%s()' expects %d argument%s; got %d",
+            QoreTypeInfo::getName(buffer_type_info), factory, (int)expected_args, expected_args == 1 ? "" : "s",
+            (int)arg_count);
+        new_args.discard(nullptr);
+        return -1;
+    }
+
+    const type_vec_t* named_arg_types = ordered_arg_types.empty() ? nullptr : &ordered_arg_types;
+    const QoreTypeInfo* size_arg_type = qore_buffer_factory_arg_type(new_args, 0, named_arg_types);
+    if (QoreTypeInfo::parseReturns(size_arg_type, NT_INT) == QTI_NOT_EQUAL) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "'%s::%s()' argument 'size' expects int; got '%s'",
+            QoreTypeInfo::getName(buffer_type_info), factory, QoreTypeInfo::getName(size_arg_type));
+        new_args.discard(nullptr);
+        return -1;
+    }
+
+    if (init_kind == QoreComplexBufferInitKind::Filled) {
+        const QoreComplexBufferTypeInfo* bti = QoreTypeInfo::getComplexBufferType(buffer_type_info);
+        assert(bti);
+        const QoreTypeInfo* value_type_info = qore_buffer_factory_arg_type(new_args, 1, named_arg_types);
+        bool may_not_match = false;
+        qore_type_result_e res = QoreTypeInfo::parseAccepts(bti->getElementTypeInfo(), value_type_info,
+            may_not_match);
+        if (!res || (res != QTI_IDENT && may_not_match)) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "'%s::filled()' argument 'value' expects '%s'; got '%s'",
+                QoreTypeInfo::getName(buffer_type_info), QoreTypeInfo::getName(bti->getElementTypeInfo()),
+                QoreTypeInfo::getName(value_type_info));
+            new_args.discard(nullptr);
+            return -1;
+        }
+    }
+
+    val = new NewComplexBufferNode(loc, buffer_type_info, new_args, init_kind);
+    return parse_init_value(val, parse_context);
+}
 
 // eval method against an object where the assumed qoreclass and method were saved at parse time
 QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const qore_class_private* ctx,
         ExceptionSink* xsink) const {
+    // Assert: if parse_args is set but args is null, resolveParseArgs() was not called.
+    // This catches AOT deserialization bugs where parse_init was skipped.
+    assert(!parse_args || args || tmp_args
+        || !"AbstractMethodCallNode::exec(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
     //QORE_TRACE("AbstractMethodCallNode::exec()");
-
-    // Hold a strong reference to the target object for the duration of the method call.
-    // Without this, if the caller's reference is the last strong reference (e.g. a temporary
-    // from evaluating a weak reference), the object can be destroyed mid-call when another
-    // thread drops its reference.  For builtin methods, the private data reference provides
-    // this guarantee; for user methods, there was no equivalent protection.
-    QoreObjectRealRefHelper ref_holder(o, xsink);
 
     /* the class and method saved at parse time are used here for this run-time
         optimization: the method pointer saved at parse time is used to execute the
@@ -73,23 +353,46 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         }
 
         RuntimeConfig& rc = rc_get_current_ref();
+        const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+        // When tmp_args is true (clone from IR interpreter), use evalTmpArgs to preserve
+        // ReferenceNode values in the arg list. The eval() path goes through
+        // CodeEvaluationHelper with const args, which calls evalList() and dereferences
+        // ReferenceNodes.
+        if (tmp_args) {
+            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, args, ctx, variant, nullptr,
+                explicit_inst);
+        }
         return variant
             ? qore_method_private::evalNormalVariant(*method, xsink, rc, o,
-                reinterpret_cast<const QoreExternalMethodVariant*>(variant), args)
-            : qore_method_private::eval(*method, xsink, rc, o, args, ctx);
+                reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst)
+            : qore_method_private::eval(*method, xsink, rc, o, args, ctx, nullptr, nullptr, explicit_inst);
     }
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_class_private::get(*o->getClass())->evalMethod(o, c_str, args, ctx, rc, xsink);
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    if (tmp_args) {
+        // Dynamic dispatch with pre-evaluated args: look up the method on the actual class
+        // and use evalTmpArgs to preserve ReferenceNode values
+        const qore_class_private* priv = qore_class_private::get(*o->getClass());
+        const QoreMethod* w = priv->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (w) {
+            return qore_method_private::evalTmpArgs(*w, xsink, rc, o, args, ctx, nullptr, nullptr, explicit_inst);
+        }
+    }
+    return qore_class_private::get(*o->getClass())->evalMethod(o, c_str, args, ctx, rc, xsink, explicit_inst);
 }
 
 const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
-    return variant
+    const QoreTypeInfo* rv = variant
         ? variant->parseGetReturnTypeInfo()
         : (method
             ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
             : nullptr);
+    return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
 }
 
 static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func) {
@@ -153,12 +456,65 @@ static void check_flags(const QoreProgramLocation* loc, QoreFunction* func, int6
     }
 }
 
-int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
-        QoreFunction* func, qore_ns_private* ns) {
+void FunctionCallBase::resolveParseArgs() {
+    if (!parse_args || args) {
+        return;
+    }
+    // Check if any parse_args entry contains an AST node that needs evaluation.
+    // AOT EXPR_TREE deserialization may produce sub-expression nodes (e.g.,
+    // StaticMethodCallNode for TypedHash::forName("StatInfo")) as argument values.
+    // When such nodes exist, create the args list with needs_eval_flag=true so that
+    // CodeEvaluationHelper::evalList() properly evaluates each entry at runtime.
+    // This matches the pattern used by read_node_EN_SELF_CALL.
+    bool has_eval_entries = false;
+    for (size_t i = 0; i < parse_args->size(); ++i) {
+        if (parse_args->get(i).needsEval()) {
+            has_eval_entries = true;
+            break;
+        }
+    }
+    args = has_eval_entries
+        ? qore_list_private::newList(true)
+        : new QoreListNode(autoTypeInfo);
+    for (size_t i = 0; i < parse_args->size(); ++i) {
+        QoreValue v = parse_args->get(i);
+        v.refSelf();
+        args->push(v, nullptr);
+    }
+}
+
+int FunctionCallBase::resolveExplicitTypeArgs(const QoreProgramLocation* loc) {
+    if (!has_explicit_type_args || explicit_parse_type_args.empty()) {
+        return 0;
+    }
+
     int err = 0;
+    explicit_type_args.clear();
+    explicit_type_args.reserve(explicit_parse_type_args.size());
+    for (QoreParseTypeInfo* pti : explicit_parse_type_args) {
+        explicit_type_args.push_back(QoreParseTypeInfo::resolveAny(pti, loc, err));
+        delete pti;
+    }
+    explicit_parse_type_args.clear();
+    explicit_runtime_type_param_instantiation.owner = nullptr;
+    explicit_runtime_type_param_instantiation.type_args = explicit_type_args;
+    return err;
+}
+
+int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
+        QoreFunction* func, qore_ns_private* ns, bool infer_class_receiver_from_args,
+        const char* receiver_inference_call_desc) {
+    int err = 0;
+    QoreParseAnalysis arg_analysis;
 
     // number of arguments in call
     unsigned num_args = parse_args ? parse_args->size() : 0;
+    bool named_args = parse_args && parse_args->hasNamedArgs();
+    name_vec_t arg_names;
+    if (named_args) {
+        const QoreParseListNode::arg_name_vec_t& names = parse_args->getArgNamesVector();
+        arg_names.assign(names.begin(), names.end());
+    }
 
     // argument type list
     type_vec_t argTypeInfo;
@@ -168,10 +524,19 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         // issue #2993: do not initialize args with the "return value ignored" parse flag set
         QoreParseContextFlagHelper fh(parse_context);
         fh.unsetFlags(PF_RETURN_VALUE_IGNORED | PF_BACKGROUND);
-        err = parse_args->initArgs(parse_context, argTypeInfo, args);
+        {
+            QoreParseContextAnalysisHelper ah(parse_context);
+            err = parse_args->initArgs(parse_context, argTypeInfo, args);
+            arg_analysis = parse_context.analysis;
+        }
         parse_args = nullptr;
+
     }
     parse_context.typeInfo = nullptr;
+
+    if (resolveExplicitTypeArgs(loc) && !err) {
+        err = -1;
+    }
 
     //printd(5, "FunctionCallBase::parseArgsVariant() this: %p args: %p '%s' func: %p\n", this, args,
     //    args ? get_full_type_name(args) : "n/a", func);
@@ -202,8 +567,44 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             class_ctx = nullptr;
         }
 
+        if (!receiver_type_info && qc && qc->hasTypeParameters()) {
+            bool constructor_call = !strcmp(func->getName(), "constructor");
+            const QoreTypeInfo* inferred_receiver = func->parseInferClassReceiverTypeInfo(loc, argTypeInfo,
+                named_args ? &arg_names : nullptr, class_ctx, err, parse_context.expected_type_info,
+                constructor_call || infer_class_receiver_from_args,
+                has_explicit_type_args ? &explicit_type_args : nullptr,
+                receiver_inference_call_desc
+                    ? receiver_inference_call_desc
+                    : (constructor_call ? "constructor call" : "generic class call"));
+            if (inferred_receiver) {
+                receiver_type_info = inferred_receiver;
+            }
+        }
+
         // find variant
-        variant = func->parseFindVariant(loc, argTypeInfo, class_ctx, err);
+        QoreNamedArgBinding named_binding;
+        type_param_instantiation.clear();
+        variant = named_args
+            ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
+                receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr)
+            : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info,
+                &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr);
+
+        if (named_args) {
+            if (!variant) {
+                if (!err) {
+                    qore_program_private::makeParseException(parse_context.pgm, *loc, "NAMED-CALL-NOT-SUPPORTED",
+                        new QoreStringNode("named arguments require a parse-time-resolved signature in this version; "
+                            "this call is ambiguous or depends on runtime argument types, so use positional arguments "
+                            "or make the target type explicit"));
+                    err = -1;
+                }
+            } else if (args) {
+                qore_list_private::setNeedsEval(*args);
+                qore_list_private::get(args)->setCallArgEvalMap(std::move(named_binding.source_to_param),
+                    named_binding.result_size);
+            }
+        }
 
         /*
         printd(5, "FunctionCallBase::parseArgsVariant() this: %p (%s::)%s ign: %d func: %p variant: %p rt: %s\n",
@@ -224,7 +625,8 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                     //printd(5, "FunctionCallBase::parseArgsVariant() found abstract %s::%s\n", qc->getName(),
                     //    func->getName());
                     // issue #3387: set return type before clearing variant
-                    parse_context.typeInfo = mv->parseGetReturnTypeInfo();
+                    parse_context.typeInfo = qore_substitute_type_params_if_needed(mv->parseGetReturnTypeInfo(),
+                        receiver_type_info, &type_param_instantiation);
                     variant = nullptr;
                     func = nullptr;
                     return err;
@@ -266,7 +668,9 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             check_flags(loc, func, func->parseGetUniqueFlags(), parse_context.pflag);
         }
 
-        parse_context.typeInfo = variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo();
+        parse_context.typeInfo = qore_substitute_type_params_if_needed(
+            variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo(),
+            receiver_type_info, &type_param_instantiation);
 
         //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p pflag: %d pe: %d\n", this,
         //    func ? func->getName() : "n/a", variant, pflag, func ? func->empty() : -1);
@@ -276,6 +680,18 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p args: %p (%zd)\n", this,
     //    func ? func->getName() : "n/a", variant, args, args ? args->size() : 0);
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (arg_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            && QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 
@@ -295,6 +711,77 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     }
 
     if (ns.size() == 1) {
+        // When the method pointer is resolved to a non-abstract multi-variant method AND the
+        // runtime class differs from the declaring class (a derived class overrides some
+        // variants), name-based dispatch via exec() finds only the overriding class's
+        // variants, hiding inherited overloads.  In that case fall back to the parse-time
+        // method pointer so cross-hierarchy overload resolution still works.
+        // Only applies when the declaring method has multiple variants (no hiding possible
+        // with a single variant) and is not abstract (abstract methods must use virtual
+        // dispatch to reach the concrete implementation).
+        if (method && !is_abstract && self->getClass() != method->getClass()
+                && qore_method_private::get(*method)->getFunction()->numVariants() > 1) {
+            // First try virtual dispatch: if self's class (or any ancestor between it and
+            // method's class) overrides this method, prefer the override.  Without this,
+            // calls to a base-class method from another base-class method statically bind to
+            // the base implementation even when the derived class has overridden it.
+            //
+            // Use parse-time variant signature when available to verify the override has
+            // a matching variant (covers the case where the derived class only overrides
+            // some variants of a multi-variant method).  When no parse-time variant was
+            // resolved (e.g. the call-site argument types couldn't disambiguate at parse),
+            // fall back to runtime name-based dispatch via exec(), which finds and calls
+            // the most-derived QoreMethod by name.
+            const qore_class_private* obj_priv = qore_class_private::get(*self->getClass());
+            const QoreMethod* derived = obj_priv->getMethodForEval(ns.ostr, self->getProgram(),
+                class_ctx ? class_ctx : runtime_cls, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (derived && derived != method) {
+                if (variant) {
+                    const AbstractFunctionSignature* sig = variant->getSignature();
+                    if (sig) {
+                        unsigned np = sig->numParams();
+                        const QoreFunction* dfunc = qore_method_private::get(*derived)->getFunction();
+                        QoreFunctionIterator it(*dfunc);
+                        while (it.next()) {
+                            const AbstractQoreFunctionVariant* dv = it.getVariant();
+                            const AbstractFunctionSignature* dsig = dv->getSignature();
+                            if (!dsig || dsig->numParams() != np) {
+                                continue;
+                            }
+                            bool match = true;
+                            for (unsigned i = 0; i < np; ++i) {
+                                if (!QoreTypeInfo::isInputIdentical(sig->getParamTypeInfo(i),
+                                        dsig->getParamTypeInfo(i))) {
+                                    match = false;
+                                    break;
+                                }
+                            }
+                            if (match) {
+                                return tmp_args
+                                    ? qore_method_private::evalTmpArgs(*derived, xsink, rc, self, args)
+                                    : qore_method_private::eval(*derived, xsink, rc, self, args);
+                            }
+                        }
+                    }
+                } else {
+                    // No parse-time variant — let runtime virtual dispatch resolve via the
+                    // derived QoreMethod.  If the derived QoreMethod has no variant matching
+                    // the runtime args, an exception will be raised — that's the same as
+                    // calling the method by name from outside the class.
+                    return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
+                }
+            }
+            // No matching override on self's class — use the parse-time method pointer
+            // so the caller can reach inherited overloads.  Do NOT pass an explicit class
+            // context — let CodeEvaluationHelper use runtime_get_class() for correct access
+            // control (same as ns.size() > 1 path).
+            return tmp_args
+                ? qore_method_private::evalTmpArgs(*method, xsink, rc, self, args)
+                : qore_method_private::eval(*method, xsink, rc, self, args);
+        }
         // must have a class context here
         assert(class_ctx || runtime_cls);
         return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
@@ -463,16 +950,17 @@ QoreValue FunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) co
 }
 
 QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    assert(!parse_args || args || tmp_args
+        || !"FunctionCallNode::evalImpl(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
     QoreFunction* func = fe->getFunction();
     QoreProgram* call_pgm = pgm ? pgm : rc.getProgram();
     if (!call_pgm) {
         call_pgm = getProgram();
     }
-    printd(5, "FunctionCallNode::evalImpl(rc) this: %p '%s' tmp_args: %d args: %p '%s' (%zd)\n", this,
-        func->getName(), tmp_args, args, args ? get_full_type_name(args) : "n/a", args ? args->size() : 0);
     return tmp_args
-        ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink)
-        : func->evalFunction(variant, args, call_pgm, rc, xsink);
+        ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation())
+        : func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation());
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -625,7 +1113,8 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
 int FunctionCallNode::parseInitFinalizedCall(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
     assert(fe);
-    return parseArgs(parse_context, fe->getFunction(), fe->getNamespace());
+    QoreFunction* func = fe->getFunction();
+    return parseArgs(parse_context, func, fe->getNamespace());
 }
 
 AbstractQoreNode* FunctionCallNode::makeReferenceNodeAndDerefImpl() {
@@ -638,9 +1127,18 @@ AbstractQoreNode* ProgramFunctionCallNode::makeReferenceNodeAndDerefImpl() {
 
 //DLLEXPORT AbstractQoreNode(qore_type_t t, bool n_value, bool n_needs_eval, bool n_there_can_be_only_one = false, bool n_custom_reference_handlers = false);
 
-NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args)
+NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args,
+        const QoreTypeInfo* object_type_info)
         : AbstractQoreNode(NT_NEW_OBJECT, false, true),
-        FunctionCallBase(nullptr, args), qc(qc) {
+        FunctionCallBase(nullptr, args), qc(qc), object_type_info(object_type_info) {
+    if (!qc) {
+        return;
+    }
+    // Skip variant resolution when there is no program context (e.g. during AOT registration)
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        return;
+    }
     const QoreMethod* constructor = qc->getConstructor();
     if (!constructor) {
         if (args && !args->empty()) {
@@ -648,10 +1146,17 @@ NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args)
         }
         return;
     }
+    // Skip variant resolution when args contain unevaluated expressions (AOT deserialization).
+    // runtimeFindVariant inspects arg types, but unevaluated AST nodes (e.g., cast expressions)
+    // have node types, not result types. Variant resolution happens at eval time via CodeEvaluationHelper.
+    if (args && args->needs_eval()) {
+        return;
+    }
     ExceptionSink xsink;
-    variant = qore_method_private::get(*constructor)->getFunction()->runtimeFindVariant(&xsink, args, false, nullptr);
+    variant = qore_method_private::get(*constructor)->getFunction()->runtimeFindVariant(&xsink, args, false, nullptr,
+        object_type_info);
 
-    ExceptionSink* pxs = getProgram()->getParseExceptionSink();
+    ExceptionSink* pxs = pgm->getParseExceptionSink();
     if (pxs) {
         pxs->assimilate(xsink);
     } else {
@@ -665,7 +1170,8 @@ QoreValue NewObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 }
 
 QoreValue NewObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_class_private::execConstructor(*qc, rc, variant, args, xsink);
+    const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
+    return qore_class_private::execConstructor(*qc, rc, variant, args, xsink, oti);
 }
 
 int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -691,6 +1197,7 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 #endif
 
     const QoreMethod* constructor = oc ? qore_class_private::get(*oc)->parseGetConstructor() : nullptr;
+    setReceiverTypeInfo(object_type_info);
     if (parseArgs(parse_context,
         constructor
             ? qore_method_private::get(*constructor)->getFunction()
@@ -700,6 +1207,13 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     }
 
     if (oc) {
+        if (!object_type_info && receiver_type_info) {
+            const QoreParameterizedClassTypeInfo* pcti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
+            if (pcti && pcti->getBaseClass() == oc) {
+                object_type_info = receiver_type_info;
+            }
+        }
+
         // parse init the class and check if we're trying to instantiate an abstract class
         qore_class_private::get(*const_cast<QoreClass*>(oc))->parseCheckAbstractNew(loc);
 
@@ -707,10 +1221,13 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         // to be assigned to a constant
         //qore_class_private::parseInit(*const_cast<QoreClass*>(oc));
 
-        parse_context.typeInfo = oc->getTypeInfo();
+        parse_context.typeInfo = object_type_info ? object_type_info : oc->getTypeInfo();
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
         desc.sprintf("new %s", oc->getName());
     } else {
         parse_context.typeInfo = nullptr;
+        parse_context.analysis.clear();
     }
 
     //printd(5, "ScopedObjectCallNode::parseInitImpl() this: %p constructor: %p variant: %p\n", this, constructor,
@@ -745,7 +1262,11 @@ QoreValue ScopedObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 }
 
 QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_class_private::execConstructor(*oc, rc, variant, args, xsink);
+    assert(!parse_args || args || tmp_args
+        || !"ScopedObjectCallNode::evalImpl(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
+    const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
+    return qore_class_private::execConstructor(*oc, rc, variant, args, xsink, oti);
 }
 
 QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
@@ -784,7 +1305,31 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         assert(!parse_context.typeInfo);
         bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
 
-        QoreClass* qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+        bool parameterized_receiver = static_scope_has_parameterized_receiver(*scope);
+        QoreClass* qc = nullptr;
+        if (parameterized_receiver) {
+            receiver_type_info = resolve_static_scope_receiver_type(loc, *scope, err);
+            if (err) {
+                return -1;
+            }
+            if (QoreTypeInfo::getComplexBufferType(receiver_type_info)) {
+                AbstractQoreNode* original = val.getInternalNode();
+                QoreParseListNode* factory_args = takeParseArgs();
+                int factory_err = parse_init_complex_buffer_factory(loc, receiver_type_info, scope->getIdentifier(),
+                    factory_args, val, parse_context);
+                delete scope;
+                scope = nullptr;
+                if (val.hasNode() && val.getInternalNode() != original) {
+                    deref();
+                }
+                return factory_err;
+            }
+            const QoreParameterizedClassTypeInfo* pcti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
+            assert(pcti);
+            qc = const_cast<QoreClass*>(pcti->getBaseClass());
+        } else {
+            qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+        }
 
         const QoreClass* pc = parse_context.oflag
             && abr ? QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()) : nullptr;
@@ -803,7 +1348,20 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         if (qc) {
             if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*qc, class_ctx))
                 class_ctx = nullptr;
-            if (pc && class_ctx) {
+            if (parameterized_receiver) {
+                method = qore_class_private::get(*qc)->parseFindStaticMethod(scope->getIdentifier(), class_ctx);
+                if (!method) {
+                    const QoreMethod* any = qore_class_private::get(*qc)->parseFindAnyMethodStaticFirst(
+                        scope->getIdentifier(), class_ctx);
+                    if (any && !any->isStatic()) {
+                        parseException(*loc, "INVALID-METHOD", "cannot call instance method %s::%s() through "
+                            "parameterized static target '%s'; call the method on an object instance instead",
+                            qc->getName(), scope->getIdentifier(),
+                            get_static_scope_receiver_type_path(*scope).c_str());
+                        return -1;
+                    }
+                }
+            } else if (pc && class_ctx) {
                 // checks access already
                 method = qore_class_private::get(*qc)->parseFindAnyMethodStaticFirst(scope->getIdentifier(),
                     class_ctx);
@@ -823,6 +1381,11 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
         // see if a constant can be resolved
         if (!method) {
+            if (parameterized_receiver) {
+                parse_error(*loc, "cannot resolve static method call '%s()'; class '%s' has no reachable static "
+                    "method named '%s'", scope->ostr, qc ? qc->getName() : "(unknown)", scope->getIdentifier());
+                return -1;
+            }
             {
                 // see if this is a function call to a function defined in a namespace
                 const FunctionEntry* f = qore_root_ns_private::parseResolveFunctionEntry(*scope);
@@ -873,6 +1436,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         }
 
         if (!method->isStatic()) {
+            assert(!parameterized_receiver);
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(loc, scope->takeName(), takeParseArgs(), method, qc,
                 class_ctx);
             val = sfcn;
@@ -894,7 +1458,13 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
     assert(method->isStatic());
 
-    if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr) && !err) {
+    std::string receiver_inference_call_desc = "static method call '";
+    receiver_inference_call_desc += method->getClass()->getNamespacePath(false);
+    receiver_inference_call_desc += "::";
+    receiver_inference_call_desc += method->getName();
+    receiver_inference_call_desc += "()'";
+    if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr, true,
+            receiver_inference_call_desc.c_str()) && !err) {
         err = -1;
     }
     // issue #2380 make sure to set the method correctly if resolved from a hierarchy
@@ -911,15 +1481,23 @@ QoreValue StaticMethodCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 }
 
 QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    assert(!parse_args || args || tmp_args
+        || !"StaticMethodCallNode::evalImpl(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
+    // Pass the class context so that private static methods called from within the same class are visible
+    const qore_class_private* cctx = method ? qore_class_private::get(*qore_method_private::get(*method)->parent_class) : nullptr;
     return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args)
-        : qore_method_private::eval(*method, xsink, rc, nullptr, args);
+        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info,
+            getExplicitTypeParamInstantiation())
+        : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx, nullptr, receiver_type_info,
+            getExplicitTypeParamInstantiation());
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
-    return variant
+    const QoreTypeInfo* rv = variant
         ? variant->parseGetReturnTypeInfo()
         : (method
             ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
             : 0);
+    return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
 }

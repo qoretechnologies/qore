@@ -1,0 +1,47 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameParquetRoundTrip
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameParquetRoundTrip {
+    constructor() {
+        Bench::BenchRunner r("dataframe_parquet_roundtrip");
+        r.iterations = 5;
+        r.warmup = 1;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+        string path = (ENV.TMPDIR ?? "/tmp") + "/qore_df_parquet_bench_" + string(getpid()) + ".parquet";
+
+        on_exit {
+            try {
+                unlink(path);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        r.setup = sub () {
+            df = DataFrameBench::makeBufferFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows) * 2;
+        };
+
+        r.measure = sub () {
+            df.writeParquet(path);
+            DataFrame::DataFrame copy = DataFrame::DataFrame::readParquet(path);
+            DataFrameBench::verifyRows("dataframe_parquet_roundtrip", copy, rows);
+            if (copy.getColumnBuffer("id").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "dataframe_parquet_roundtrip lost dense id storage";
+            }
+        };
+
+        exit(r.run());
+    }
+}

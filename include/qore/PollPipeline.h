@@ -36,6 +36,7 @@
 #include <qore/SocketPollOperationBase.h>
 #include <qore/AsyncCompletionAction.h>
 #include <qore/QoreQueue.h>
+#include <qore/QoreSocketObject.h>
 
 #include <string>
 #include <vector>

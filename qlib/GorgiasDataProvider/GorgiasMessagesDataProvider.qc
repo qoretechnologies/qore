@@ -100,7 +100,7 @@ public class GorgiasMessagesDataProvider inherits GorgiasDataProviderBase {
         return new GorgiasMessageDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         int ticket_id = search_options.ticket_id;
 
@@ -108,14 +108,14 @@ public class GorgiasMessagesDataProvider inherits GorgiasDataProviderBase {
         if (search_options.message_id) {
             hash<auto> result = doGet("tickets/" + ticket_id + "/messages/"
                 + search_options.message_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
         # List all messages for the ticket
         list<hash<auto>> all_records = fetchAllPages(
             "tickets/" + ticket_id + "/messages", NOTHING, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

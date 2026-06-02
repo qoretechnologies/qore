@@ -112,6 +112,9 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
             concatenation
     */
     private string formatNDJSON() {
+%ifdef NoJson
+        throw "ELASTICSEARCH-BULK-ERROR", "the json module >= 1.11 is required for bulk operations";
+%else
         if (!buf) {
             return "";
         }
@@ -156,12 +159,13 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
         }
 
         return writer.getString();
+%endif
     }
 
     #! Handles errors from a bulk response
     /** @param response the bulk API response body
     */
-    private handleBulkErrors(hash<auto> response) {
+    private handleBulkErrors(*hash<auto> response) {
         list<hash<auto>> failures = ();
         int i = 0;
         foreach hash<auto> item in (response.items) {

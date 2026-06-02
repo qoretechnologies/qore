@@ -12,15 +12,19 @@
 
 static QoreNamespace TokNS("Qore::Tokenizer");
 
+const TypedHashDecl* hashdeclTokenizerModelInputBatch;
+
 // Forward declarations for QPP-generated init functions
 DLLLOCAL void preinitHFTokenizerClass();
 DLLLOCAL QoreClass* initHFTokenizerClass(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_TokenizerEncoding(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_TokenizerModelInputBatch(QoreNamespace& ns);
 
 static void tokenizer_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitHFTokenizerClass();
 
     init_hashdecl_TokenizerEncoding(TokNS);
+    hashdeclTokenizerModelInputBatch = init_hashdecl_TokenizerModelInputBatch(TokNS);
 
     TokNS.addSystemClass(initHFTokenizerClass(TokNS));
 }

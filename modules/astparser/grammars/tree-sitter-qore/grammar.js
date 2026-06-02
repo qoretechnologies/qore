@@ -50,6 +50,7 @@ module.exports = grammar({
     [$.function_declaration, $.closure_expression],
     [$.function_declaration, $.simple_type],
     [$.function_declaration, $.simple_type, $.scoped_identifier],
+    [$.function_declaration, $.primary_expression, $.generic_type],
     [$.argument_list, $.parameter_list],
     [$.parameter, $.primary_expression],
     [$._statement, $._top_level_item],
@@ -68,11 +69,17 @@ module.exports = grammar({
     [$._type_keyword, $.complex_type],
     [$._type_keyword, $.simple_type],
     [$.simple_type, $.complex_type],
+    [$.simple_type, $.generic_type],
     [$.simple_type, $.scoped_identifier],
+    [$.type_parameter, $.simple_type],
     [$.scoped_identifier],
     [$._type_keyword, $.simple_type, $.complex_type],
     // case < identifier could be comparison value or start of <Type> cast
     [$.primary_expression, $.simple_type],
+    [$.primary_expression, $.generic_type],
+    [$.generic_type, $.generic_scoped_identifier],
+    [$.generic_scoped_identifier, $.scoped_identifier],
+    [$.primary_expression, $.simple_type, $.generic_type],
     // conditional_declaration in if/while vs as primary_expression
     [$.if_statement, $.primary_expression],
     [$.while_statement, $.primary_expression],
@@ -268,11 +275,33 @@ module.exports = grammar({
       optional($.modifiers),
       'class',
       field('name', choice($.identifier, $.scoped_identifier)),
+      optional(field('type_parameters', $.type_parameter_list)),
+      optional($.class_compatibility_attributes),
       optional($.superclass_list),
       choice(
         seq('{', repeat($._class_item), '}'),
         ';',  // forward declaration
       ),
+    ),
+
+    class_compatibility_attributes: $ => repeat1($.class_compatibility_attribute),
+
+    class_compatibility_attribute: $ => seq(
+      '[',
+      field('name', $.identifier),
+      ']',
+    ),
+
+    type_parameter_list: $ => seq(
+      '<',
+      commaSep1($.type_parameter),
+      '>',
+    ),
+
+    type_parameter: $ => seq(
+      field('name', $.identifier),
+      optional(seq(':', field('bound', $.type))),
+      optional(seq('=', field('default', $.type))),
     ),
 
     superclass_list: $ => seq(
@@ -282,7 +311,7 @@ module.exports = grammar({
 
     superclass: $ => seq(
       optional($.access_modifier),
-      choice($.scoped_identifier, $.identifier),
+      choice($.generic_type, $.scoped_identifier, $.identifier),
     ),
 
     _class_item: $ => choice(
@@ -318,6 +347,7 @@ module.exports = grammar({
       optional($.modifiers),
       optional(field('return_type', $.type)),
       field('name', $.identifier),
+      optional(field('type_parameters', $.type_parameter_list)),
       $.parameter_list,
       optional(seq('returns', field('returns', $.type))),
       choice(
@@ -380,6 +410,7 @@ module.exports = grammar({
       optional(field('return_type', $.type)),
       choice('sub', $.identifier, $.scoped_identifier),
       field('name', optional(choice($.identifier, $.scoped_identifier))),
+      optional(field('type_parameters', $.type_parameter_list)),
       $.parameter_list,
       optional(seq('returns', field('returns', $.type))),
       choice(
@@ -447,6 +478,7 @@ module.exports = grammar({
       optional($.modifiers),
       'hashdecl',
       field('name', choice($.identifier, $.scoped_identifier)),
+      optional(field('type_parameters', $.type_parameter_list)),
       optional($.superclass_list),
       '{',
       repeat(choice($.hashdecl_member, $.parse_directive)),
@@ -838,6 +870,7 @@ module.exports = grammar({
     primary_expression: $ => choice(
       $.identifier,
       $.variable_name,
+      $.generic_scoped_identifier,
       $.scoped_identifier,
       $._type_keyword,  // type keywords used as variable names (data, hash, etc.)
       $.literal,
@@ -881,6 +914,7 @@ module.exports = grammar({
     call_expression: $ => prec(PREC.CALL, seq(
       field('function', choice(
         $.identifier,
+        $.generic_scoped_identifier,
         $.scoped_identifier,
         $.member_expression,
         $.index_expression,     // factories{name}(), DataSerializationSupport{ct}(body)
@@ -907,8 +941,22 @@ module.exports = grammar({
 
     argument_list: $ => seq(
       '(',
-      optional(seq(commaSep1($._expression), optional(','))),
+      optional($._argument_list_body),
       ')',
+    ),
+
+    _argument_list_body: $ => seq(
+      choice(
+        commaSep1($.named_argument),
+        seq(commaSep1($._expression), optional(seq(',', commaSep1($.named_argument)))),
+      ),
+      optional(','),
+    ),
+
+    named_argument: $ => seq(
+      field('name', choice($.identifier, $._type_keyword)),
+      ':',
+      field('value', $._expression),
     ),
 
     member_expression: $ => prec.left(PREC.MEMBER, seq(
@@ -1297,9 +1345,11 @@ module.exports = grammar({
     // ==================== Types ====================
     type: $ => prec.right(seq(
       choice(
+        $.generic_type,
         $.simple_type,
         $.complex_type,
         $.nullable_type,
+        $.wildcard_type,
       ),
       optional('!'),  // non-null type modifier: hash<auto!> etc.
     )),
@@ -1349,6 +1399,13 @@ module.exports = grammar({
         $.type,
         '>',
       ),
+      // object<ClassType>
+      seq(
+        'object',
+        '<',
+        $.type,
+        '>',
+      ),
       // date<absolute> or date<relative>
       seq(
         'date',
@@ -1373,6 +1430,26 @@ module.exports = grammar({
         ')',
         '>',
       ),
+    ),
+
+    generic_type: $ => seq(
+      field('base', choice($.identifier, $.scoped_identifier)),
+      '<',
+      commaSep1($.type),
+      '>',
+    ),
+
+    generic_scoped_identifier: $ => prec.left(seq(
+      $.generic_type,
+      repeat1(seq('::', choice($.identifier, $.generic_type))),
+    )),
+
+    wildcard_type: $ => seq(
+      '?',
+      optional(choice(
+        seq('extends', field('bound', $.type)),
+        seq('super', field('bound', $.type)),
+      )),
     ),
 
     // Parameter types for code<> signature, supporting varargs

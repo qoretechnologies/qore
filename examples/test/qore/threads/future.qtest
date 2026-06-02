@@ -4,9 +4,18 @@
 %modern
 %no-child-restrictions
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class FutureTest
+
+class GenericDiagnosticTest<T> {
+    f(T v) {
+    }
+
+    f(string s, T v) {
+    }
+}
 
 class FutureTest inherits QUnit::Test {
     constructor() : QUnit::Test("Future/Promise/WaitGroup", "1.0", \ARGV) {
@@ -40,6 +49,13 @@ class FutureTest inherits QUnit::Test {
         addTestCase("FutureImpl cancel rejected is no-op", \testCancelRejected());
         addTestCase("FutureImpl cancel wakes blocked getter", \testCancelWakesGetter());
         addTestCase("Custom Future subclass must implement cancel", \testCustomFutureCancel());
+        addTestCase("generic Queue<T>", \testGenericQueue());
+        addTestCase("generic Channel<T>", \testGenericChannel());
+        addTestCase("generic ChannelIterator<T>", \testGenericChannelIterator());
+        addTestCase("generic Promise<T>/Future<T>", \testGenericPromiseFuture());
+        addTestCase("generic runtime type identity", \testGenericRuntimeTypeIdentity());
+        addTestCase("generic synchronization serialization policy", \testGenericSerializationPolicy());
+        addTestCase("generic thread class type errors", \testGenericThreadClassTypeErrors());
         set_return_value(main());
     }
 
@@ -196,6 +212,10 @@ class FutureTest inherits QUnit::Test {
         Future f = call_async(int sub() { return 42; });
         auto result = f.get();
         assertEq(42, result);
+
+        Future<auto> typed_f = call_async(int sub() { return 7; });
+        int typed_result = typed_f.get(timeout_ms: 0);
+        assertEq(7, typed_result);
     }
 
     testCallAsyncException() {
@@ -401,9 +421,155 @@ class FutureTest inherits QUnit::Test {
         assertTrue(w.cancel_called);
         assertThrows("FUTURE-CANCELLED", sub() { w.get(); });
     }
+
+    testGenericQueue() {
+        Queue<int> q();
+        q.push(value: 1);
+        q.insert(value: 2);
+        assertEq(2, q.get(timeout_ms: 0));
+        assertEq(1, q.pop(timeout_ms: 0));
+    }
+
+    testGenericChannel() {
+        Channel<string> ch(1);
+        ch.send(value: "hello");
+        *string s = ch.recv(timeout_ms: 0);
+        assertEq("hello", s);
+
+        Channel<int> ch2(1);
+        assertTrue(ch2.trySend(value: 7));
+        int i = ch2.recv(timeout_ms: 0);
+        assertEq(7, i);
+    }
+
+    testGenericChannelIterator() {
+        Channel<int> ch(1);
+        ch.send(value: 7);
+        ch.close();
+
+        ChannelIterator<int> it = ch.iterator();
+        assertTrue(it instanceof ChannelIterator<int>);
+        assertTrue(it instanceof AbstractIterator<int>);
+        assertFalse(it instanceof AbstractIterator<auto>);
+        assertTrue(it.next());
+
+        int i = it.getValue();
+        assertEq(7, i);
+        assertFalse(it.next());
+    }
+
+    testGenericPromiseFuture() {
+        Promise<int> p();
+        Future<int> f = p.getFuture();
+        p.set(value: 42);
+        int i = f.get(timeout_ms: 0);
+        assertEq(42, i);
+        assertTrue(f.isDone());
+        assertFalse(f.isError());
+    }
+
+    testGenericRuntimeTypeIdentity() {
+        Queue<int> qi();
+        Queue<auto> qa();
+        Queue raw_q();
+
+        assertTrue(qi instanceof Queue<int>);
+        assertFalse(qi instanceof Queue<auto>);
+        assertTrue(qi instanceof Queue);
+
+        assertFalse(qa instanceof Queue<int>);
+        assertTrue(qa instanceof Queue<auto>);
+        assertTrue(qa instanceof Queue);
+
+        assertTrue(raw_q instanceof Queue<auto>);
+
+        Queue raw_from_int = qi;
+        assertTrue(raw_from_int instanceof Queue<int>);
+        assertFalse(raw_from_int instanceof Queue<auto>);
+
+        Queue<int> cast_int = cast<Queue<int>>(qi);
+        assertTrue(cast_int instanceof Queue<int>);
+        assertThrows("RUNTIME-TYPE-ERROR", sub() {
+            Queue<int> bad_int = cast<Queue<int>>(qa);
+        });
+        assertThrows("RUNTIME-TYPE-ERROR", sub() {
+            Queue<auto> bad_auto = cast<Queue<auto>>(qi);
+        });
+
+        Promise<int> p();
+        Future<int> f = p.getFuture();
+        assertTrue(f instanceof Future<int>);
+        assertFalse(f instanceof Future<auto>);
+        assertTrue(f instanceof Future);
+    }
+
+    testGenericSerializationPolicy() {
+        Queue<int> q();
+        assertThrows("SERIALIZATION-ERROR", sub() { Serializable::serialize(q); });
+
+        Channel<int> ch();
+        assertThrows("SERIALIZATION-ERROR", sub() { Serializable::serialize(ch); });
+
+        Promise<int> p();
+        assertThrows("SERIALIZATION-ERROR", sub() { Serializable::serialize(p); });
+
+        Future<int> f = p.getFuture();
+        assertThrows("SERIALIZATION-ERROR", sub() { Serializable::serialize(f); });
+    }
+
+    testGenericThreadClassTypeErrors() {
+        Program p();
+        assertThrows("PARSE-TYPE-ERROR", "Queue<int>::push\\(int value", \p.parse(),
+            ("%new-style\nQueue<int> q(); q.push(value: \"wrong\");", "generic-queue-type-error"));
+
+        Program p2();
+        assertThrows("PARSE-TYPE-ERROR", \p2.parse(),
+            ("%new-style\nPromise<int> p(); p.set(value: \"wrong\");", "generic-promise-type-error"));
+
+        Program p3();
+        assertThrows("PARSE-TYPE-ERROR", \p3.parse(),
+            ("%new-style\nChannel<int> ch(1); ChannelIterator<auto> it = ch.iterator();",
+                "generic-channel-iterator-type-error"));
+
+        Program p4();
+        assertThrows("NAMED-ARG-UNKNOWN", "Queue<int>::push\\(int value", \p4.parse(),
+            ("%new-style\nQueue<int> q(); q.push(wrong: 1);", "generic-queue-named-arg-error"));
+
+        Program p5();
+        assertThrows("PARSE-TYPE-ERROR", "G<int>::f\\(int v", \p5.parse(),
+            ("%new-style\nclass G<T> { f(T v) {} f(string s, T v) {} } G<int> g(); g.f(\"x\");",
+                "generic-multi-variant-type-error"));
+
+        Program p6();
+        assertThrows("NAMED-ARG-UNKNOWN", "G<int>::f\\(int v", \p6.parse(),
+            ("%new-style\nclass G<T> { f(T v) {} f(string s, T v) {} } G<int> g(); g.f(wrong: 1);",
+                "generic-multi-variant-named-arg-error"));
+
+        Program p7();
+        assertThrows("PARSE-TYPE-ERROR", "G<int>::f\\(int v", \p7.parse(),
+            ("%new-style\nclass G<T> { static f(T v) {} static f(string s, T v) {} } G<int>::f(\"x\");",
+                "generic-static-multi-variant-type-error"));
+
+        Program p8();
+        assertThrows("PARSE-TYPE-ERROR", "C::echo\\(int value", \p8.parse(),
+            ("%new-style\nclass C { T echo<T>(T value) { return value; } } C c(); c.echo<int>(\"x\");",
+                "generic-method-explicit-type-error"));
+
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "Queue<int>::push\\(int value", sub() {
+            auto q = new Queue<int>();
+            any x = "x";
+            q.push(x);
+        });
+
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "GenericDiagnosticTest<int>::f\\(int v", sub() {
+            auto g = new GenericDiagnosticTest<int>();
+            any x = "x";
+            g.f(x);
+        });
+    }
 }
 
-class CancellableWrapper inherits Future {
+class CancellableWrapper inherits Future<auto> {
     private {
         Future real;
     }

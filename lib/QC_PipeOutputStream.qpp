@@ -70,14 +70,14 @@ nothing PipeOutputStream::close() {
     @throw OUTPUT-STREAM-CLOSED-ERROR the output stream has already been closed
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-nothing PipeOutputStream::write(binary data) {
+nothing PipeOutputStream::write(binary data) [flags=NAMED_ARGS] {
    os->write(data->getPtr(), data->size(), xsink);
 }
 
 //! Causes all operations on both pipe streams to wake up and throw an exception.
 /** Normally used from the background thread to report an error to the main thread.
-    @param ex the exception, must contain strings 'err' and 'desc'
+    @param exception_info the exception, must contain strings 'err' and 'desc'
  */
-nothing PipeOutputStream::reportError(hash ex) {
-   os->reportError(ex);
+nothing PipeOutputStream::reportError(hash exception_info) [flags=NAMED_ARGS] {
+   os->reportError(exception_info);
 }

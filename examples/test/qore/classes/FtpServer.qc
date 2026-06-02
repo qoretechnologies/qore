@@ -103,6 +103,8 @@ class FtpServer {
                 return "";
             try {
                 string c = ns.recv(1, PollInterval);
+                if (c == "")
+                    return "";
                 str += c;
                 if (c == "\n")
                     break;
@@ -128,7 +130,7 @@ class FtpServer {
         # wait for user
         while (True) {
             string cmd = ftpGetCommand(ns);
-            if (quit)
+            if (quit || cmd == "")
                 return;
             if (cmd !~ /^USER \w+/i) {
                 ftpSend(ns, 530, "Please login with USER and PASS.");
@@ -140,7 +142,7 @@ class FtpServer {
         # wait for pass
         while (True) {
             string cmd = ftpGetCommand(ns);
-            if (quit)
+            if (quit || cmd == "")
                 return;
             if (cmd !~ /^PASS \w+/i) {
                 ftpSend(ns, 530, "Please login with USER and PASS.");
@@ -319,7 +321,7 @@ class FtpServer {
                 } else if (pwd) {
                     Dir dir();
                     dir.chdir(pwd);
-                    auto files = dir.list(".*", 0, True);
+                    list<hash<DirStatInfo>> files = dir.listInfo(regex: ".*");
                     string result;
                     map result += $1.name + "\r\n", files;
                     data.send(result);

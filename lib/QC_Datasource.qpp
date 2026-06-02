@@ -29,6 +29,8 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreColumnarResult.h>
+#include "qore/intern/QC_ColumnarResult.h"
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QC_Serializable.h"
@@ -56,42 +58,44 @@ static void ds_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queu
         ExceptionSink* xsink) {
     ReferenceHolder<Queue> q(queue, xsink);
 
-    const char* str = check_hash_key(opts, "type", DSC_ERR, xsink);
+    std::string str;
+    bool has_type = check_hash_key(opts, "type", DSC_ERR, str, xsink);
     if (*xsink) return;
 
-    if (!str) {
+    if (!has_type) {
         xsink->raiseException(DSC_ERR, "expecting a string value with the 'type' key giving the driver name");
         return;
     }
 
-    DBIDriver* db_driver = DBI.find(str, xsink);
+    DBIDriver* db_driver = DBI.find(str.c_str(), xsink);
     if (!db_driver) {
         if (!*xsink)
-            xsink->raiseException("DATASOURCE-UNSUPPORTED-DATABASE", "DBI driver '%s' cannot be loaded", str);
+            xsink->raiseException("DATASOURCE-UNSUPPORTED-DATABASE", "DBI driver '%s' cannot be loaded",
+                str.c_str());
         return;
     }
 
     ReferenceHolder<ManagedDatasource> ds(new ManagedDatasource(db_driver), xsink);
 
-    str = check_hash_key(opts, "user", DSC_ERR, xsink);
+    bool found = check_hash_key(opts, "user", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingUsername(str);
+    if (found) ds->setPendingUsername(str.c_str());
 
-    str = check_hash_key(opts, "pass", DSC_ERR, xsink);
+    found = check_hash_key(opts, "pass", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingPassword(str);
+    if (found) ds->setPendingPassword(str.c_str());
 
-    str = check_hash_key(opts, "db", DSC_ERR, xsink);
+    found = check_hash_key(opts, "db", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingDBName(str);
+    if (found) ds->setPendingDBName(str.c_str());
 
-    str = check_hash_key(opts, "charset", DSC_ERR, xsink);
+    found = check_hash_key(opts, "charset", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingDBEncoding(str);
+    if (found) ds->setPendingDBEncoding(str.c_str());
 
-    str = check_hash_key(opts, "host", DSC_ERR, xsink);
+    found = check_hash_key(opts, "host", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingHostName(str);
+    if (found) ds->setPendingHostName(str.c_str());
 
     int port = (int)opts->getKeyValue("port").getAsBigInt();
     if (port) {
@@ -167,7 +171,8 @@ static void Datasource_deserializer(QoreObject& self, const QoreHashNode* sdata,
                     "expecting 'string'", val.getTypeName());
                 return;
             }
-            create_datasource_from_conf(*val.get<QoreStringNode>(), self, nullptr, QoreValue(), xsink);
+            QoreStringNodeValueHelper conf(val);
+            create_datasource_from_conf(**conf, self, nullptr, QoreValue(), xsink);
             return;
         }
     }
@@ -267,6 +272,22 @@ const DBI_CAP_HAS_ARRAY_BIND = DBI_CAP_HAS_ARRAY_BIND;
 /** @since %Qore 0.8.13
 */
 const DBI_CAP_HAS_RESULTSET_OUTPUT = DBI_CAP_HAS_RESULTSET_OUTPUT;
+
+//! Indicates that the DBI driver provides native typed select APIs
+/** Drivers without this capability still support Datasource::selectTyped() and Datasource::selectRowsTyped() through
+    libqore's compatibility fallback.
+
+    @since %Qore 2.3
+ */
+const DBI_CAP_HAS_TYPED_SELECT = DBI_CAP_HAS_TYPED_SELECT;
+
+//! Indicates that the DBI driver provides native columnar select/fetch APIs
+/** Drivers without this capability still support Datasource::selectColumnar(), DatasourcePool::selectColumnar(), and
+    SQLStatement::fetchColumnar() through libqore's compatibility fallback.
+
+    @since %Qore 2.3
+ */
+const DBI_CAP_HAS_COLUMNAR_SELECT = DBI_CAP_HAS_COLUMNAR_SELECT;
 ///@}
 
 //! This class provides the %Qore interface to databases
@@ -358,11 +379,11 @@ qclass Datasource [dom=DATABASE; arg=ManagedDatasource* ds; ns=Qore::SQL; vparen
 /** @param driver The name of the DBI driver for the Datasource. See @ref sql_constants for builtin constants for DBI
     drivers shipped with %Qore, or see the DBI driver documentation to use an add-on driver (this string should be the
     name of the driver to be loaded)
-    @param user The user name for the new connection. Also see Datasource::setUserName() for a method that allows this
+    @param username The user name for the new connection. Also see Datasource::setUserName() for a method that allows this
     parameter to be set after the constructor.
-    @param pass The password for the new connection. Also see Datasource::setPassword() for a method that allows this
+    @param password The password for the new connection. Also see Datasource::setPassword() for a method that allows this
     parameter to be set after the constructor.
-    @param db The database name for the new connection. Also see Datasource::setDBName() for a method that allows this
+    @param database The database name for the new connection. Also see Datasource::setDBName() for a method that allows this
     parameter to be set after the constructor.
     @param encoding The database-specific name of the @ref character_encoding "character encoding" to use for the new
     connection. Also see Datasource::setDBCharset() for a method that allows this parameter to be set after the
@@ -376,7 +397,7 @@ qclass Datasource [dom=DATABASE; arg=ManagedDatasource* ds; ns=Qore::SQL; vparen
     @param queue An optional @ref Qore::Thread::Queue "Queue" object to receive datasource events; note that the
     @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a \c QUEUE-ERROR will be thrown;
     passing @ref nothing will clear any event queue
-    @param arg an optional argument to be included in the \c arg key of datasource events
+    @param argument an optional argument to be included in the \c arg key of datasource events
 
     @par Example:
     @code{.py}
@@ -387,7 +408,8 @@ Datasource db(DSPGSQL, "user", "pass", "database", "utf8", "localhost", 5432);
     @throw DATASOURCE-CONSTRUCTOR-ERROR port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
 */
-Datasource::constructor(string driver, *string user, *string pass, *string db, *string encoding, *string host, *softint port, *hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto arg) {
+Datasource::constructor(string driver, *string username, *string password, *string database, *string encoding,
+        *string host, *softint port, *hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
     if (!port && driver->find('@') != -1) {
         qore_offset_t colon = driver->find(':');
         qore_offset_t atsign = driver->find('@');
@@ -401,7 +423,7 @@ Datasource::constructor(string driver, *string user, *string pass, *string db, *
             assert(*xsink);
             return;
         }
-        ds_constructor_hash(*h, self, queue.release(), arg, xsink);
+        ds_constructor_hash(*h, self, queue.release(), argument, xsink);
         return;
     }
 
@@ -414,14 +436,14 @@ Datasource::constructor(string driver, *string user, *string pass, *string db, *
 
     ReferenceHolder<ManagedDatasource> ds(new ManagedDatasource(db_driver), xsink);
 
-    if (user && !user->empty())
-        ds->setPendingUsername(user->c_str());
+    if (username && !username->empty())
+        ds->setPendingUsername(username->c_str());
 
-    if (pass && !pass->empty())
-        ds->setPendingPassword(pass->c_str());
+    if (password && !password->empty())
+        ds->setPendingPassword(password->c_str());
 
-    if (db && !db->empty())
-        ds->setPendingDBName(db->c_str());
+    if (database && !database->empty())
+        ds->setPendingDBName(database->c_str());
 
     if (encoding && !encoding->empty())
         ds->setPendingDBEncoding(encoding->c_str());
@@ -442,17 +464,17 @@ Datasource::constructor(string driver, *string user, *string pass, *string db, *
         ds_set_options(*ds, options, xsink);
 
     if (queue)
-        ds->setEventQueue(queue.release(), arg.refSelf(), xsink);
+        ds->setEventQueue(queue.release(), argument.refSelf(), xsink);
 
     self->setPrivate(CID_DATASOURCE, ds.release());
 }
 
 //! Creates a Datasource object from a single string giving all parameters that can be parsed by parse_datasource()
-/** @param desc a datasource description string in the format that can be parsed by parse_datasource()
+/** @param description a datasource description string in the format that can be parsed by parse_datasource()
     @param queue An optional @ref Qore::Thread::Queue "Queue" object to receive datasource events; note that the
     @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a \c QUEUE-ERROR will be thrown;
     passing @ref nothing will clear any event queue
-    @param arg an optional argument to be included in the \c arg key of datasource events
+    @param argument an optional argument to be included in the \c arg key of datasource events
 
     @par Example:
     @code{.py}
@@ -465,17 +487,17 @@ Datasource ds("pgsql:user/pass@db01(utf8)%localhost:5432");
 
     @since %Qore 0.8.6
 */
-Datasource::constructor(string desc, *Qore::Thread::Queue[Queue] queue, auto arg) {
-    TempEncodingHelper tstr(desc, QCS_UTF8, xsink);
+Datasource::constructor(string description, *Qore::Thread::Queue[Queue] queue, auto argument) {
+    TempEncodingHelper tstr(description, QCS_UTF8, xsink);
     if (*xsink) {
         return;
     }
 
-    create_datasource_from_conf(**tstr, *self, queue.release(), arg, xsink);
+    create_datasource_from_conf(**tstr, *self, queue.release(), argument, xsink);
 }
 
 //! Creates a Datasource object from a hash argument giving parameters for the constructor
-/** @param opts a hash giving parameters for the new datasource with the following possible keys (the \c "type" key is
+/** @param options a hash giving parameters for the new datasource with the following possible keys (the \c "type" key is
     mandatory, also usable with the output of the parse_datasource() function):
     - \c type: (@ref string_or_nothing_type "*string") The name of the database driver to use; this key is mandatory;
       if not present, an exception will be raised. See @ref sql_constants for builtin constants for DBI drivers
@@ -500,7 +522,7 @@ Datasource::constructor(string desc, *Qore::Thread::Queue[Queue] queue, auto arg
     @param queue An optional @ref Qore::Thread::Queue "Queue" object to receive datasource events; note that the
     @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a \c QUEUE-ERROR will be thrown;
     passing @ref nothing will clear any event queue
-    @param arg an optional argument to be included in the \c arg key of datasource events
+    @param argument an optional argument to be included in the \c arg key of datasource events
 
     @par Example:
     @code{.py}
@@ -512,8 +534,8 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
     port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
 */
-Datasource::constructor(hash<auto> opts, *Qore::Thread::Queue[Queue] queue, auto arg) {
-    ds_constructor_hash(opts, self, queue.release(), arg, xsink);
+Datasource::constructor(hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
+    ds_constructor_hash(options, self, queue.release(), argument, xsink);
 }
 
 //! Closes the datasource if it's open (if any operations are in progress, will block until the operations complete) and destroys the object
@@ -604,15 +626,15 @@ nothing Datasource::rollback() {
 }
 
 //! Turns autocommit on or off for this object
-/** @param ac @ref True to turn on autocommit (a commit will be executed after every %SQL call to the server),
+/** @param auto_commit @ref True to turn on autocommit (a commit will be executed after every %SQL call to the server),
     @ref False to turn off autocommit (commits must be manually triggered)
     @par Example:
     @code{.py}
 db.setAutoCommit(False);
     @endcode
 */
-nothing Datasource::setAutoCommit(bool ac = True) {
-    ds->setAutoCommit(ac, xsink);
+nothing Datasource::setAutoCommit(bool auto_commit = True) [flags=NAMED_ARGS] {
+    ds->setAutoCommit(auto_commit, xsink);
 }
 
 //! Returns the autocommit status for the object
@@ -661,7 +683,7 @@ auto Datasource::exec(string sql, ...) {
     @ref sql_binding "Binding by Value and Placeholder"
 
     @param sql The %SQL command to execute on the server
-    @param vargs Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
     specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
 
     @return The return value depends on the DBI driver; normally, for commands with placeholders, a hash is returned
@@ -678,8 +700,8 @@ int rows = db.vexec("insert into example_table value (%v, %v, %v)", arg_list);
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 */
-auto Datasource::vexec(string sql, *softlist<auto> vargs) {
-    return ds->exec(sql, vargs, xsink);
+auto Datasource::vexec(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return ds->exec(sql, arguments, xsink);
 }
 
 //! Grabs the transaction lock (if autocommit is disabled) and executes an %SQL command on the server and returns either the row count (for example, for updates and inserts) or the data retrieved (for example, if a stored procedure is executed that returns values)
@@ -708,7 +730,7 @@ db.execRaw("create table my_tab (id number, some_text varchar2(30))");
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 */
-auto Datasource::execRaw(string sql) {
+auto Datasource::execRaw(string sql) [flags=NAMED_ARGS] {
     return ds->execRaw(sql, xsink);
 }
 
@@ -749,6 +771,85 @@ if (query.firstValue())
 auto Datasource::select(string sql, ...) {
     ReferenceHolder<QoreListNode> argl((args->size() > 1 ? args->copyListFrom(1) : 0), xsink);
     return ds->select(sql, *argl, xsink);
+}
+
+//! Executes an %SQL select statement on the server and returns a typed column-oriented result
+/** This method has the same execution semantics as Datasource::select(), but when the statement returns a normal
+    column-oriented result, libqore returns a hashdecl-backed hash whose members have typed column containers.
+    Primitive numeric and boolean columns are returned as \c buffer<T> values when possible; string, date, binary,
+    numeric, JSON, and mixed columns use typed lists.
+
+    Drivers with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT can build the typed result directly from native column
+    metadata. Other drivers use libqore's compatibility fallback, which preserves the existing query behavior and
+    infers result types from the values returned by Datasource::select().
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a hashdecl-backed hash whose keys are column names and whose values are typed column
+    containers such as \c buffer<int64>, \c buffer<*float64>, \c list<*string>, or \c list<date>. If the driver returns
+    a non-column result for the statement, that value is returned unchanged.
+
+    @par Example:
+    @code{.py}
+hash<auto> result = db.selectTyped("select id, balance, name from customer where status = %v", "active");
+buffer<int64> ids = result.id;
+list<*string> names = result.name;
+    @endcode
+
+    @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+
+    @note
+    - Ad hoc typed results use anonymous runtime hashdecls; bind the value to \c hash<auto> unless assigning to a
+      source-visible compatible hashdecl.
+    - The compatibility fallback cannot recover SQL width metadata that the driver did not provide; for example an
+      unannotated integer column is inferred as \c buffer<int64>.
+
+    @see
+    - Datasource::vselectTyped()
+    - Datasource::select()
+
+    @since %Qore 2.3
+ */
+auto Datasource::selectTyped(string sql, ...) {
+    ReferenceHolder<QoreListNode> argl((args->size() > 1 ? args->copyListFrom(1) : 0), xsink);
+    return ds->selectTyped(sql, *argl, xsink);
+}
+
+//! Executes an %SQL select statement on the server and returns a columnar result
+/** This method has the same execution semantics as Datasource::select(), but returns a
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" object optimized for column-oriented consumers such as
+    DataFrame. Drivers with @ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT can fill the columnar result directly.
+    Other drivers use libqore's compatibility fallback, which translates the existing column hash returned by
+    Datasource::select() into the same columnar structure.
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return a ColumnarResult object
+
+    @par Example:
+    @code{.py}
+ColumnarResult result = db.selectColumnar("select id, name from customer where status = %v", "active");
+buffer<int64> ids = result.getColumn("id");
+list<*string> names = result.getColumn("name");
+    @endcode
+
+    @see
+    - Datasource::vselectColumnar()
+    - Datasource::select()
+    - Datasource::selectTyped()
+
+    @since %Qore 2.3
+ */
+ColumnarResult Datasource::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> argl((args->size() > 1 ? args->copyListFrom(1) : 0), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_columnar_result_to_object(ds->selectColumnar(sql, *argl, xsink), xsink);
 }
 
 //! Executes an %SQL select statement on the server and returns the first row as a hash (the column values)
@@ -810,6 +911,42 @@ auto Datasource::selectRows(string sql, ...) {
     return ds->selectRows(sql, *argl, xsink);
 }
 
+//! Executes an %SQL select statement on the server and returns typed row hashes
+/** This method has the same execution semantics as Datasource::selectRows(), but normal row results are returned as a
+    list whose entries are hashdecl-backed row hashes. Each row member has a scalar type inferred from driver metadata
+    or from the returned values.
+
+    @param sql The %SQL command to execute on the server
+    @param ... Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications
+    (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a list of typed row hashes. If the driver returns a non-row-list value for the statement,
+    that value is returned unchanged.
+
+    @par Example:
+    @code{.py}
+list<auto> rows = db.selectRowsTyped("select id, name from customer where status = %v", "active");
+foreach hash<auto> row in (rows) {
+    printf("%d: %s\n", row.id, row.name);
+}
+    @endcode
+
+    @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+
+    @note The compatibility fallback cannot recover SQL width metadata that the driver did not provide; scalar integer
+    row members are inferred as Qore \c int values.
+
+    @see
+    - Datasource::vselectRowsTyped()
+    - Datasource::selectRows()
+
+    @since %Qore 2.3
+ */
+auto Datasource::selectRowsTyped(string sql, ...) {
+    ReferenceHolder<QoreListNode> argl((args->size() > 1 ? args->copyListFrom(1) : 0), xsink);
+    return ds->selectRowsTyped(sql, *argl, xsink);
+}
+
 //! Executes a select statement on the server and returns the results in a hash (column names) of lists (column values per row), taking a list for all bind arguments
 /** The return format of this method is suitable for use with @ref context "context statements", for easy iteration and processing of query results.
     Alternatively, the HashListIterator class can be used to iterate the return value of this method.
@@ -819,7 +956,7 @@ auto Datasource::selectRows(string sql, ...) {
     This method does not retain the transaction lock if it was not already acquired before this method is called, so to execute select statements that begin a transaction (such as \c "select for update"), execute Datasource::beginTransaction() first to ensure that the transaction lock is dedicated to the calling thread.
 
     @param sql The %SQL command to execute on the server
-    @param vargs Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
 
     @return Normally returns a hash (the keys are the column names) of list (each hash key's value is a list giving the row data), however some DBI drivers allow any %SQL statement to be executed through this method (not only select statements), in this case other data types can be returned.  If no rows are found, a hash of column names assigned to empty lists is returned.
 
@@ -841,8 +978,52 @@ if (query.firstValue())
     - <hash>::contextIterator()
     - @ref context
 */
-auto Datasource::vselect(string sql, *softlist<auto> vargs) {
-    return ds->select(sql, vargs, xsink);
+auto Datasource::vselect(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return ds->select(sql, arguments, xsink);
+}
+
+//! Executes a select statement on the server and returns a typed column-oriented result, taking a list for all bind arguments
+/** This method is the same as Datasource::selectTyped(), except this method takes a single list argument after the
+    %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a hashdecl-backed hash whose keys are column names and whose values are typed column
+    containers such as \c buffer<int64>, \c buffer<*float64>, \c list<*string>, or \c list<date>. If the driver returns
+    a non-column result for the statement, that value is returned unchanged.
+
+    @par Example:
+    @code{.py}
+hash<auto> result = db.vselectTyped("select id, name from customer where status = %v", ("active",));
+buffer<int64> ids = result.id;
+    @endcode
+
+    @see Datasource::selectTyped()
+
+    @since %Qore 2.3
+ */
+auto Datasource::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return ds->selectTyped(sql, arguments, xsink);
+}
+
+//! Executes a select statement on the server and returns a columnar result, taking a list for all bind arguments
+/** This method is the same as Datasource::selectColumnar(), except this method takes a single list argument after the
+    %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return a ColumnarResult object
+
+    @see Datasource::selectColumnar()
+
+    @since %Qore 2.3
+ */
+ColumnarResult Datasource::vselectColumnar(string sql, *softlist<auto> arguments) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_columnar_result_to_object(ds->selectColumnar(sql, arguments, xsink), xsink);
 }
 
 //! Executes a select statement on the server and returns the first row as a hash (column names and values), taking a list for all bind arguments
@@ -853,7 +1034,7 @@ auto Datasource::vselect(string sql, *softlist<auto> vargs) {
     This method does not retain the transaction lock if it was not already acquired before this method is called, so to execute select statements that begin a transaction (such as \c "select for update"), execute Datasource::beginTransaction() first to ensure that the transaction lock is dedicated to the calling thread.
 
     @param sql The %SQL command to execute on the server
-    @param vargs Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
 
     @return This method returns a hash (the keys are the column names) of row data or @ref nothing if no row is found for the query when executed with an %SQL select statement
 
@@ -868,8 +1049,8 @@ auto Datasource::vselect(string sql, *softlist<auto> vargs) {
 
     @see Datasource::selectRow()
 */
-*hash<auto> Datasource::vselectRow(string sql, *softlist<auto> vargs) {
-    return ds->selectRow(sql, vargs, xsink);
+*hash<auto> Datasource::vselectRow(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return ds->selectRow(sql, arguments, xsink);
 }
 
 //! Executes a select statement on the server and returns the results in a list (rows) of hashes (column names and values), taking a list for all bind arguments
@@ -884,7 +1065,7 @@ auto Datasource::vselect(string sql, *softlist<auto> vargs) {
     This method does not retain the transaction lock if it was not already acquired before this method is called, so to execute select statements that begin a transaction (such as \c "select for update"), execute Datasource::beginTransaction() first to ensure that the transaction lock is dedicated to the calling thread.
 
     @param sql The %SQL command to execute on the server
-    @param vargs Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
 
     @return Normally returns a list (rows) of hash (where the keys are the column names of each row) or @ref nothing if no rows are found for the query, however some DBI drivers allow any %SQL statement to be executed through this method (not only select statements), in this case other data types can be returned
 
@@ -901,8 +1082,33 @@ auto Datasource::vselect(string sql, *softlist<auto> vargs) {
 
     @see Datasource::selectRows()
  */
-auto Datasource::vselectRows(string sql, *softlist<auto> vargs) {
-    return ds->selectRows(sql, vargs, xsink);
+auto Datasource::vselectRows(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return ds->selectRows(sql, arguments, xsink);
+}
+
+//! Executes a select statement on the server and returns typed row hashes, taking a list for all bind arguments
+/** This method is the same as Datasource::selectRowsTyped(), except this method takes a single list argument after the
+    %SQL command giving the list of bind value parameters.
+
+    @param sql The %SQL command to execute on the server
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder
+    specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+
+    @return Normally returns a list of typed row hashes. If the driver returns a non-row-list value for the statement,
+    that value is returned unchanged.
+
+    @par Example:
+    @code{.py}
+list<auto> rows = db.vselectRowsTyped("select id, name from customer where status = %v", ("active",));
+printf("%d\n", rows[0].id);
+    @endcode
+
+    @see Datasource::selectRowsTyped()
+
+    @since %Qore 2.3
+ */
+auto Datasource::vselectRowsTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return ds->selectRowsTyped(sql, arguments, xsink);
 }
 
 //! Executes an %SQL select statement on the server and returns a description of the result set as a hash
@@ -1001,43 +1207,43 @@ list<auto> Datasource::getCapabilityList() [flags=CONSTANT] {
 //! Sets the username parameter for the time a connection to the server is established
 /** Invalid usernames will cause an exception to be thrown when the connection is opened
 
-    @param user the username parameter for the time a connection to the server is established
+    @param username the username parameter for the time a connection to the server is established
 
     @par Example:
     @code{.py}
 db.setUserName(user);
     @endcode
 */
-nothing Datasource::setUserName(string user) {
-    ds->setPendingUsername(user->c_str());
+nothing Datasource::setUserName(string username) [flags=NAMED_ARGS] {
+    ds->setPendingUsername(username->c_str());
 }
 
 //! Sets the password parameter for the time a connection to the server is established
 /** Invalid passwords will cause an exception to be thrown when the connection is opened
 
-    @param pass the password parameter for the time a connection to the server is established
+    @param password the password parameter for the time a connection to the server is established
 
     @par Example:
     @code{.py}
 db.setPassword(pass);
     @endcode
 */
-nothing Datasource::setPassword(string pass) {
-    ds->setPendingPassword(pass->c_str());
+nothing Datasource::setPassword(string password) [flags=NAMED_ARGS] {
+    ds->setPendingPassword(password->c_str());
 }
 
 //! Sets the database name parameter for the time a connection to the server is established
 /** Invalid database names will cause an exception to be thrown when the connection is opened
 
-    @param db the database name parameter for the time a connection to the server is established
+    @param database the database name parameter for the time a connection to the server is established
 
     @par Example:
     @code{.py}
 db.setDBName(db);
     @endcode
 */
-nothing Datasource::setDBName(string db) {
-    ds->setPendingDBName(db->c_str());
+nothing Datasource::setDBName(string database) [flags=NAMED_ARGS] {
+    ds->setPendingDBName(database->c_str());
 }
 
 //! Sets the database-specific character encoding name for the next connection to the server
@@ -1052,7 +1258,7 @@ nothing Datasource::setDBName(string db) {
 db.setDBCharset(encoding);
     @endcode
 */
-nothing Datasource::setDBCharset(string encoding) {
+nothing Datasource::setDBCharset(string encoding) [flags=NAMED_ARGS] {
     ds->setPendingDBEncoding(encoding->c_str());
 }
 
@@ -1066,7 +1272,7 @@ nothing Datasource::setDBCharset(string encoding) {
 db.setDBEncoding(encoding);
     @endcode
 */
-nothing Datasource::setDBEncoding(string encoding) {
+nothing Datasource::setDBEncoding(string encoding) [flags=NAMED_ARGS] {
     ds->setPendingDBEncoding(encoding->c_str());
 }
 
@@ -1080,7 +1286,7 @@ nothing Datasource::setDBEncoding(string encoding) {
 db.setHostName(host);
     @endcode
 */
-nothing Datasource::setHostName(string host) {
+nothing Datasource::setHostName(string host) [flags=NAMED_ARGS] {
     ds->setPendingHostName(host->c_str());
 }
 
@@ -1094,7 +1300,7 @@ nothing Datasource::setHostName(string host) {
 db.setPort(port);
     @endcode
 */
-nothing Datasource::setPort(softint port = 0) {
+nothing Datasource::setPort(softint port = 0) [flags=NAMED_ARGS] {
     ds->setPendingPort((int)port);
 }
 
@@ -1223,7 +1429,7 @@ string Datasource::getOSCharset() [flags=CONSTANT] {
 db.setTransactionLockTimeout(4s);
     @endcode
 */
-nothing Datasource::setTransactionLockTimeout(timeout timeout_ms = 0) {
+nothing Datasource::setTransactionLockTimeout(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     ds->setTransactionLockTimeout((int)timeout_ms);
 }
 
@@ -1366,8 +1572,8 @@ hash<auto> Datasource::getOptionHash() [flags=RET_VALUE_ONLY] {
 }
 
 //! sets an option for the datasource
-/** @param opt the option to set
-    @param val the value to set
+/** @param option the option to set
+    @param value the value to set
 
     @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread
 
@@ -1377,12 +1583,12 @@ hash<auto> Datasource::getOptionHash() [flags=RET_VALUE_ONLY] {
 
     @since %Qore 0.8.6
 */
-Datasource::setOption(string opt, auto val) {
-    ds->setOption(opt->c_str(), val, xsink);
+Datasource::setOption(string option, auto value) [flags=NAMED_ARGS] {
+    ds->setOption(option->c_str(), value, xsink);
 }
 
 //! Returns the current value for the given option
-/** @param opt the option to get
+/** @param option the option to get
 
     @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread
 
@@ -1391,8 +1597,8 @@ Datasource::setOption(string opt, auto val) {
 
     @since %Qore 0.8.6
 */
-auto Datasource::getOption(string opt) [flags=RET_VALUE_ONLY] {
-    return ds->getOption(opt->c_str(), xsink);
+auto Datasource::getOption(string option) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return ds->getOption(option->c_str(), xsink);
 }
 
 //! Returns a @ref datasource_hash "datasource hash" describing the configuration of the current object
@@ -1432,17 +1638,17 @@ string Datasource::getConfigString() [flags=CONSTANT] {
 //! Sets a queue object for DBI events on the datasource
 /**
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive datasource events; note that the @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a \c QUEUE-ERROR will be thrown; passing @ref nothing will clear any event queue
-    @param arg an argument to be included in the \c arg key of datasource events
+    @param argument an argument to be included in the \c arg key of datasource events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 
     @since %Qore 0.8.9
 */
-nothing Datasource::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg) {
+nothing Datasource::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which could cause internal I/O to freeze in the Datasource object if used; use a Queue object with no maximum size for datasource event monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
-    ds->setEventQueue(queue.release(), arg.refSelf(), xsink);
+    ds->setEventQueue(queue.release(), argument.refSelf(), xsink);
 }
 
 //! Clears the queue object for DBI events on the datasource
@@ -1514,6 +1720,6 @@ string str = Datasource::makeConfigString({
 
     @since %Qore 2.3
 */
-static string Datasource::makeConfigString(hash<auto> config) [flags=RET_VALUE_ONLY] {
+static string Datasource::makeConfigString(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return makeConfigString(config, xsink);
 }

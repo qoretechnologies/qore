@@ -29,7 +29,7 @@ public namespace SmartSheetDataProvider {
 /** Fetches rows from a sheet and maps cell values to column names using the record info's
     column ID-to-name mapping.
 */
-public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private:internal {
         #! The REST client
         RestClientIo::RestClientIo rest;

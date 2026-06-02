@@ -1211,8 +1211,19 @@ public namespace RestHandler {
             @param validator a REST API schema validator object; if none is present, then the default REST
             de/serialization support is provided as documented in @ref RestSchemaValidator::NullRestSchemaValidator
         */
+        constructor(*HttpServer::AbstractAuthenticator auth)
+                : HttpServer::AbstractHttpRequestHandler(auth, True) {
+            self.validator = new NullRestSchemaValidator();
+        }
+
+        #! create the object optionally with the given HttpServer::AbstractAuthenticator and schema validator
+        /** @param auth the authentication object to use to authenticate connections (see
+            HttpServer::AbstractAuthenticator); if no HttpServer::AbstractAuthenticator object is passed, then by
+            default no authentication will be required
+            @param validator a REST API schema validator object
+        */
         constructor(*HttpServer::AbstractAuthenticator auth,
-                RestSchemaValidator::AbstractRestSchemaValidator validator = new NullRestSchemaValidator())
+                RestSchemaValidator::AbstractRestSchemaValidator validator)
                 : HttpServer::AbstractHttpRequestHandler(auth, True) {
             self.validator = validator;
         }
@@ -1225,8 +1236,21 @@ public namespace RestHandler {
             @param validator a REST API schema validator object; if none is present, then the default REST
             de/serialization support is provided as documented in @ref RestSchemaValidator::NullRestSchemaValidator
         */
+        constructor(Logger::LoggerInterface logger, *HttpServer::AbstractAuthenticator auth)
+                : HttpServer::AbstractHttpRequestHandler(auth, True), LoggerWrapper(logger) {
+            self.validator = new NullRestSchemaValidator(logger);
+            self.validator.setLogger(logger);
+        }
+
+        #! create the object with the given Logger, authenticator, and schema validator
+        /** @param logger the logger interface to use for the handler
+            @param auth the authentication object to use to authenticate connections (see
+            HttpServer::AbstractAuthenticator); if no HttpServer::AbstractAuthenticator object is passed, then by
+            default no authentication will be required
+            @param validator a REST API schema validator object
+        */
         constructor(Logger::LoggerInterface logger, *HttpServer::AbstractAuthenticator auth,
-                RestSchemaValidator::AbstractRestSchemaValidator validator = new NullRestSchemaValidator(logger))
+                RestSchemaValidator::AbstractRestSchemaValidator validator)
                 : HttpServer::AbstractHttpRequestHandler(auth, True), LoggerWrapper(logger) {
             self.validator = validator;
             validator.setLogger(logger);

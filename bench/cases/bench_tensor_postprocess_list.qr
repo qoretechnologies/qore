@@ -1,0 +1,78 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchTensorPostprocessList
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchTensorPostprocessList {
+    constructor() {
+        Bench::BenchRunner r("tensor_postprocess_list");
+        r.iterations = 4;
+        r.warmup = 1;
+
+        int rows = OnnxBench::tensorPostprocessRows();
+        int tokens = OnnxBench::tensorPostprocessTokens();
+        int dim = OnnxBench::tensorPostprocessDim();
+
+        ML::Tensor hidden_states;
+        ML::Tensor attention_mask;
+
+        r.setup = sub () {
+            hidden_states = new ML::Tensor(OnnxBench::makeTokenHiddenStateBuffer(rows, tokens, dim),
+                (rows, tokens, dim));
+            attention_mask = new ML::Tensor(OnnxBench::makeTokenMaskBuffer(rows, tokens), (rows, tokens));
+            r.bytes_processed = OnnxBench::approxTensorPostprocessBytes(rows, tokens, dim);
+        };
+
+        r.measure = sub () {
+            list<list<float>> embeddings = poolWithLists(hidden_states.toList(), attention_mask.toList(),
+                rows, tokens, dim);
+            if (embeddings.size() != rows || embeddings[0].size() != dim) {
+                throw "BENCH-ERROR", sprintf("unexpected tensor_postprocess_list shape: %y",
+                    (embeddings.size(), embeddings ? embeddings[0].size() : 0));
+            }
+        };
+
+        exit(r.run());
+    }
+
+    private list<list<float>> poolWithLists(auto hidden_states, auto attention_mask, int rows, int tokens, int dim) {
+        list<list<float>> embeddings = ();
+        for (int row = 0; row < rows; ++row) {
+            auto token_rows = hidden_states[row];
+            auto mask_row = attention_mask[row];
+            list<float> embedding = ();
+            for (int d = 0; d < dim; ++d) {
+                float sum = 0.0;
+                int count = 0;
+                for (int token = 0; token < tokens; ++token) {
+                    if (mask_row[token].toInt()) {
+                        sum += token_rows[token][d].toFloat();
+                        ++count;
+                    }
+                }
+                push embedding, count ? sum / count : 0.0;
+            }
+
+            float norm = 0.0;
+            foreach float value in (embedding) {
+                norm += value * value;
+            }
+            norm = sqrt(norm);
+            if (norm > 0.0) {
+                for (int d = 0; d < dim; ++d) {
+                    embedding[d] = embedding[d] / norm;
+                }
+            }
+            push embeddings, embedding;
+        }
+        return embeddings;
+    }
+}

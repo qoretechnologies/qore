@@ -32,7 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/intern/RSection.h>
 
-// does not block if there is an rsection conflict, returns -1 if the lock cannot be acquired and sets a notification
+// does not block if the rsection cannot be acquired, returns -1 if the lock cannot be acquired and sets a notification
 int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
     assert(has_notify);
 
@@ -45,22 +45,13 @@ int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
     if (rs_tid == tid)
         return 0;
 
-    while (true) {
-        // if the write lock is acquired, then wait
-        if (write_tid != -1) {
-            ++read_waiting;
-            read_cond.wait(l);
-            --read_waiting;
-            continue;
-        }
-
-        // if another thread is holding the rsection lock, then we have to abort & rollback
-        if (rs_tid != -1) {
-            setNotificationIntern(rn);
-            return -1;
-        }
-
-        break;
+    // If another thread owns the write lock or rsection, abort this scan and
+    // retry after that owner releases it.  RSet scanning calls this while
+    // holding RSet read locks; blocking here can deadlock with a writer that
+    // needs to invalidate the same RSet.
+    if (write_tid != -1 || rs_tid != -1) {
+        setNotificationIntern(rn);
+        return -1;
     }
 
     // grab the read lock

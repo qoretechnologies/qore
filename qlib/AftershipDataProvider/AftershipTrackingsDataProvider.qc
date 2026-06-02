@@ -157,7 +157,7 @@ public class AftershipTrackingsDataProvider inherits AftershipDataProviderBase {
     string getName() { return ProviderInfo.name; }
 
     #! Returns the record type
-    private *AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params = {};
         if (search_options.keyword) params.keyword = search_options.keyword;
@@ -185,7 +185,7 @@ public class AftershipTrackingsDataProvider inherits AftershipDataProviderBase {
         }
         hash<auto> response = doTrackingCommand("GET", path);
         list<hash<auto>> trackings = response.body.data.trackings ?? ();
-        return new DefaultRecordIterator(new ListIterator(trackings));
+        return new DefaultRecordIterator<hash<auto>>(new ListIterator<hash<auto>>(trackings));
     }
 
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {

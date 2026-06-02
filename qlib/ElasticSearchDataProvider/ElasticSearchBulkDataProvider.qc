@@ -125,6 +125,9 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
             concatenation
     */
     private string formatOperations(list<hash<auto>> operations) {
+%ifdef NoJson
+        throw "ELASTICSEARCH-BULK-ERROR", "the json module >= 1.11 is required for bulk operations";
+%else
         NdjsonDataProvider::NdjsonStringWriter writer();
 
         foreach hash<auto> op in (operations) {
@@ -189,6 +192,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
         }
 
         return writer.getString();
+%endif
     }
 
     #! Returns the description of a successful request message, if any

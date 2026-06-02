@@ -1,0 +1,39 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameArrowIpcRoundTrip
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameArrowIpcRoundTrip {
+    constructor() {
+        Bench::BenchRunner r("dataframe_arrow_ipc_roundtrip");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        DataFrame::DataFrame df;
+
+        r.setup = sub () {
+            df = DataFrameBench::makeBufferFrame(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows) * 2;
+        };
+
+        r.measure = sub () {
+            binary payload = df.toArrowIpc();
+            DataFrame::DataFrame copy = DataFrame::DataFrame::fromArrowIpc(payload);
+            DataFrameBench::verifyRows("dataframe_arrow_ipc_roundtrip", copy, rows);
+            if (copy.getColumnBuffer("id").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "dataframe_arrow_ipc_roundtrip lost dense id storage";
+            }
+        };
+
+        exit(r.run());
+    }
+}

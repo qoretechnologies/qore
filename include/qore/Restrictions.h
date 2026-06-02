@@ -106,6 +106,10 @@
 #define PO_BROKEN_LIST_RANGE                (1LL << 62)  //!< allow for old pre-%Qore 2.0 list range behavior
 #define PO_ENABLE_DEBUG                     (1LL << 63)  //!< enable \@assert and \@debug statements (otherwise ignored at parse time)
 
+// Backward compatibility alias for extended option
+//! @deprecated use QoreParseOptions::BROKEN_SOFT_TYPES instead
+#define PO_BROKEN_SOFT_TYPES                0  //!< allow old behavior where soft types accept NULL (use QoreParseOptions::BROKEN_SOFT_TYPES)
+
 // aliases for old defines
 #define PO_NO_SYSTEM_FUNC_VARIANTS          PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS
 #define PO_NO_SYSTEM_CLASSES                PO_NO_INHERIT_SYSTEM_CLASSES
@@ -118,6 +122,9 @@
 #define PO_NO_CONSTANT_DEFS                 0  //!< disallow constant definitions; use QoreParseOptions::NO_CONSTANT_DEFS in C++
 #define PO_NO_NAMESPACE_DEFS                0  //!< disallow namespace definitions; use QoreParseOptions::NO_NAMESPACE_DEFS in C++
 #define PO_NO_NEW                           0  //!< disallow the 'new' keyword; use QoreParseOptions::NO_NEW in C++
+#define PO_NO_SUMMARIZE                     0  //!< disallow the 'summarize' statement; use QoreParseOptions::NO_SUMMARIZE in C++
+#define PO_NO_MODULE_PATH_DIRECTIVES        0  //!< disallow %prepend-module-path / %append-module-path; use QoreParseOptions::NO_MODULE_PATH_DIRECTIVES in C++
+#define PO_FP_FAST_MATH                     0  //!< allow IEEE-unsafe FP optimizer rewrites; use QoreParseOptions::FP_FAST_MATH in C++
 
 #define PO_DEFAULT 0            //!< no parse options set by default
 
@@ -145,17 +152,25 @@
 //! new Qore style: no more '$' and with assumed variable scope
 #define PO_NEW_STYLE                  (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL)
 
-//! modern Qore style: new style + require types + strict args
-/** @note all warnings are also enabled with %modern; use the %modern parse directive
+//! modern Qore style: new style + require types + strict args + strong encapsulation + no summarize
+/** @note all warnings are also enabled with %modern; use the %modern parse directive.
+    \c PO_NO_SUMMARIZE is an extended parse option (bit 69); its macro value is \c 0 here
+    for qpp/int64 compatibility, so the bit is also applied implicitly wherever \c PO_MODERN
+    is materialised (parse-option application, \c \%modern directive, CLI \c -M).
     @since %Qore 2.3
 */
-#define PO_MODERN                     (PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS)
+#define PO_MODERN                     (PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS|PO_STRONG_ENCAPSULATION \
+    |PO_NO_SUMMARIZE)
 
 //! mask of all options allowing for more freedom (instead of less)
 #define PO_POSITIVE_OPTIONS           (PO_NO_CHILD_PO_RESTRICTIONS|PO_ALLOW_INJECTION|PO_ALLOW_WEAK_REFERENCES \
     |PO_ALLOW_DEBUGGER|PO_ENABLE_DEBUG|PO_ALLOW_REPARSE)
 
 //! mask of options that have no effect on code access or code safety
+/** @note This macro includes only the 64-bit options; the extended option
+    QoreParseOptions::BROKEN_SOFT_TYPES is also considered a "free option" but
+    is not included in this macro due to its extended-bit nature
+*/
 #define PO_FREE_OPTIONS               (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL|PO_STRICT_BOOLEAN_EVAL \
     |PO_BROKEN_LIST_PARSING|PO_BROKEN_LOGIC_PRECEDENCE|PO_BROKEN_INT_ASSIGNMENTS|PO_BROKEN_OPERATORS \
     |PO_BROKEN_LOOP_STATEMENT|PO_BROKEN_REFERENCES|PO_BROKEN_SPRINTF|PO_BROKEN_RANGE|PO_BROKEN_VARARGS \

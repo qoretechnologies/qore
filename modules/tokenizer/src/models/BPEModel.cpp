@@ -72,8 +72,7 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
 
             if (entry.getType() == NT_STRING) {
                 // "a b" format
-                const QoreStringNode* merge_str = safeGetString(entry);
-                std::string s = merge_str->c_str();
+                std::string s = safeGetStdString(entry);
                 size_t space_pos = s.find(' ');
                 if (space_pos != std::string::npos) {
                     a = s.substr(0, space_pos);
@@ -83,12 +82,8 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
                 // ["a", "b"] tuple format
                 const QoreListNode* tuple = safeGetList(entry);
                 if (tuple->size() >= 2) {
-                    const QoreStringNode* a_node = safeGetString(tuple->retrieveEntry(0));
-                    const QoreStringNode* b_node = safeGetString(tuple->retrieveEntry(1));
-                    if (a_node && b_node) {
-                        a = a_node->c_str();
-                        b = b_node->c_str();
-                    }
+                    a = safeGetStdString(tuple->retrieveEntry(0));
+                    b = safeGetStdString(tuple->retrieveEntry(1));
                 }
             }
 
@@ -104,9 +99,9 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
     // Read unk_token - can be a string or an object with "content"
     QoreValue unk_val = config->getKeyValue("unk_token");
     if (unk_val.getType() == NT_STRING) {
-        const QoreStringNode* unk_str = safeGetString(unk_val);
-        if (unk_str) {
-            unk_token = unk_str->c_str();
+        std::string unk_str = safeGetStdString(unk_val);
+        if (!unk_str.empty()) {
+            unk_token = std::move(unk_str);
         }
     } else if (unk_val.getType() == NT_HASH) {
         const QoreHashNode* unk_hash = safeGetHash(unk_val);

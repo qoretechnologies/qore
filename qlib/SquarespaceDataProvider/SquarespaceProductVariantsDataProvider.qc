@@ -113,7 +113,7 @@ public class SquarespaceProductVariantsDataProvider inherits SquarespaceDataProv
         within the product response. This provider fetches the product by product_id
         and returns its variants array, optionally filtering by variant_id.
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (!search_options.product_id) {
             throw "SEARCH-OPTION-ERROR", "product_id is required to list product variants";
@@ -142,7 +142,7 @@ public class SquarespaceProductVariantsDataProvider inherits SquarespaceDataProv
             variants = variants[0..search_options.limit - 1];
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(variants), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(variants), where_cond,
             search_options);
     }
 

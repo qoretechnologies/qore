@@ -34,8 +34,34 @@
 #define _QORE_QORECLOSURENODE_H
 
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/LocalVar.h"
 
 #include <map>
+
+//! Ensures the calling thread has a ThreadLocalProgramData before CVecInstantiator runs.
+/** Closures may be invoked on threads that have no program context — for example,
+    AsyncIoController's ioThread or a ThreadPool worker that has not yet entered any
+    Qore program. CVecInstantiator pushes captured vars onto the cvstack via
+    thread_instantiate_closure_var(), which dereferences td->tlpd; if td->tlpd is null
+    the dispatch crashes (lib/thread.cpp:1218 NULL deref).
+
+    This helper conditionally installs a ProgramThreadCountContextHelper only when the
+    current thread has no tlpd. When a tlpd already exists the helper is a no-op so the
+    caller's existing TLPD/lvstack semantics remain intact — unconditional installation
+    breaks DataProvider's child-program module-init flow because switching tlpd changes
+    the active lvstack.
+*/
+class ClosureTlpdEnsureHelper {
+protected:
+    ProgramThreadCountContextHelper ptcch;
+
+public:
+    DLLLOCAL ClosureTlpdEnsureHelper(ExceptionSink* xsink, QoreProgram* pgm) {
+        if (pgm && !get_thread_local_program_data()) {
+            ptcch.set(xsink, pgm, true);
+        }
+    }
+};
 
 class QoreClosureSelfContextHelper {
 private:
@@ -52,23 +78,42 @@ class CVecInstantiator {
 protected:
     cvv_vec_t* cvec;
     ExceptionSink* xsink;
+    // count of CVVs actually pushed onto cvstack (CVVs already present on cvstack are skipped
+    // to avoid aliasing with lexical-scope entries — see ctor comment)
+    unsigned pushed = 0;
 
 public:
     DLLLOCAL CVecInstantiator(cvv_vec_t* cv, ExceptionSink* xs) : cvec(cv), xsink(xs) {
         if (!cvec) {
             return;
         }
-        for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i) {
-            thread_instantiate_closure_var((*i)->refSelf());
+        // cvec was captured via thread_get_all_closure_vars() when the closure was created; it
+        // holds every CVV that was on cvstack at that moment (top→bottom). For BACKGROUND-thread
+        // invocations the worker cvstack is empty and we must push every captured CVV to restore
+        // the lexical environment. For SAME-thread invocations the captured CVVs are already on
+        // cvstack and re-pushing them causes aliasing in name-based lookup: a caller-frame CVV
+        // can shadow the current frame's own CVV with the same name (e.g. a recursive function
+        // whose local is captured via `\var` into a closure — the nested call's own local is
+        // lexically correct but gets masked by the re-push). To fix both cases uniformly we skip
+        // any CVV that's already on cvstack; the lexical binding already reachable by name/id
+        // lookup is the correct one, and we only push CVVs that are genuinely missing.
+        //
+        // Push in reverse iteration order (bottom→top from the capture) so that if the closure
+        // is actually invoked on a worker thread with an empty cvstack, the original topology
+        // is preserved (what was topmost at capture time stays topmost here).
+        for (cvv_vec_t::reverse_iterator i = cvec->rbegin(), e = cvec->rend(); i != e; ++i) {
+            ClosureVarValue* cvv = *i;
+            if (thread_closure_var_on_stack(cvv)) {
+                continue;
+            }
+            thread_instantiate_closure_var(cvv->refSelf());
+            ++pushed;
         }
     }
 
     DLLLOCAL ~CVecInstantiator() {
-        if (!cvec) {
-            return;
-        }
-        // elements are dereferenced when uninstantiated
-        for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i) {
+        // elements are dereferenced when uninstantiated — only pop what we actually pushed
+        for (unsigned i = 0; i < pushed; ++i) {
             thread_uninstantiate_closure_var(xsink);
         }
     }
@@ -156,6 +201,21 @@ public:
 
     DLLLOCAL virtual QoreFunction* getFunction() const {
         return closure->getFunction();
+    }
+
+    //! Returns the captured variable vector for fast closure dispatch
+    DLLLOCAL cvv_vec_t* getCvec() const {
+        return cvec;
+    }
+
+    //! Returns the parsed closure expression backing this runtime closure
+    DLLLOCAL const QoreClosureParseNode* getClosureParseNode() const {
+        return closure;
+    }
+
+    //! Returns the class context for fast closure dispatch
+    DLLLOCAL const qore_class_private* getClassCtx() const {
+        return class_ctx;
     }
 
     DLLLOCAL virtual QoreObject* getObject() const {

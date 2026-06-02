@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/qore_debug_narrowing.h"
 
 #include <cassert>
 #include <cerrno>
@@ -52,11 +53,75 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreClosureNode.h"
 
 typedef std::set<int64, std::greater<int64>> ind_set_t;
 
 // global environment hash
 QoreHashNode* ENV;
+
+// Debug flag for type narrowing - controlled by --debug-show-narrowing command-line flag
+bool qore_debug_narrowing = false;
+
+static bool split_static_lvalue_path(const std::string& full_name, std::string& class_path,
+        std::string& var_name) {
+    size_t sep = full_name.rfind("::");
+    if (sep == std::string::npos) {
+        return false;
+    }
+
+    class_path = full_name.substr(0, sep);
+    var_name = full_name.substr(sep + 2);
+    if (class_path.size() >= 2 && class_path[0] == ':' && class_path[1] == ':') {
+        class_path.erase(0, 2);
+    }
+
+    return !class_path.empty() && !var_name.empty();
+}
+
+static QoreVarInfo* resolve_runtime_static_lvalue_path(const std::string& full_name, std::string& error) {
+    std::string class_path;
+    std::string var_name;
+    if (!split_static_lvalue_path(full_name, class_path, var_name)) {
+        error = "invalid static variable lvalue path root '" + full_name + "'";
+        return nullptr;
+    }
+
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        error = "cannot resolve static variable lvalue path root '" + full_name + "': no program context";
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
+    if (!qc) {
+        error = "cannot resolve class '" + class_path + "' for static variable lvalue path root '"
+            + full_name + "'";
+        return nullptr;
+    }
+
+    QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
+    if (!vi) {
+        QoreClassHierarchyIterator hi(*qc);
+        while (hi.next()) {
+            vi = qore_class_private::get(hi.get())->vars.find(var_name.c_str());
+            if (vi) {
+                break;
+            }
+        }
+    }
+
+    if (!vi) {
+        error = "cannot resolve static variable '" + var_name + "' in class '" + class_path
+            + "' for static variable lvalue path root '" + full_name + "'";
+        return nullptr;
+    }
+
+    return vi;
+}
 
 void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
     if (in && in->getType() == NT_OBJECT) {
@@ -65,6 +130,11 @@ void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
     if (out && out->getType() == NT_OBJECT) {
         qore_object_private::get(*static_cast<QoreObject*>(out))->unsetRealReference();
     }
+}
+
+static bool is_no_narrow_container_type(const QoreTypeInfo* ti) {
+    return ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo
+        || ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo;
 }
 
 int qore_gvar_ref_u::write(ExceptionSink* xsink) const {
@@ -259,8 +329,14 @@ QoreValue Var::eval() const {
         return val.v.getPtr()->eval();
     if (is_thread_local) {
         switch (val.getType()) {
-            case NT_WEAKREF:
-                return static_cast<WeakReferenceNode*>(val.v.n)->get()->refSelf();
+            case NT_WEAKREF: {
+                QoreObject* o = static_cast<WeakReferenceNode*>(val.v.n)->get();
+                // Return NOTHING if the target object has been deleted
+                if (!o->isValid()) {
+                    return QoreValue();
+                }
+                return o->refSelf();
+            }
             case NT_WEAKREF_HASH:
                 return static_cast<WeakHashReferenceNode*>(val.v.n)->get()->refSelf();
             case NT_WEAKREF_LIST:
@@ -270,8 +346,14 @@ QoreValue Var::eval() const {
     }
     QoreAutoVarRWReadLocker al(rwl);
     switch (val.getType()) {
-        case NT_WEAKREF:
-            return static_cast<WeakReferenceNode*>(val.v.n)->get()->refSelf();
+        case NT_WEAKREF: {
+            QoreObject* o = static_cast<WeakReferenceNode*>(val.v.n)->get();
+            // Return NOTHING if the target object has been deleted
+            if (!o->isValid()) {
+                return QoreValue();
+            }
+            return o->refSelf();
+        }
         case NT_WEAKREF_HASH:
             return static_cast<WeakHashReferenceNode*>(val.v.n)->get()->refSelf();
         case NT_WEAKREF_LIST:
@@ -285,6 +367,13 @@ void Var::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         del(xsink);
         delete this;
+    }
+}
+
+void Var::assignModule() {
+    const char* mod_name = get_module_context_name();
+    if (mod_name) {
+        from_module = mod_name;
     }
 }
 
@@ -349,10 +438,25 @@ LValueHelper::LValueHelper(ExceptionSink* xsink) : vl(xsink) {
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ocvec(std::move(o.ocvec)), before(o.before), rdt(o.rdt), robj(o.robj), val(o.val), typeInfo(o.typeInfo) {
+        ocvec(std::move(o.ocvec)), before(o.before), rdt(o.rdt), robj(o.robj),
+        buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
+        buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), typeInfo(o.typeInfo) {
+    o.buffer_lvalue = nullptr;
+    o.buffer_lvalue_index = 0;
+    o.buffer_lvalue_value = QoreValue();
 }
 
 LValueHelper::~LValueHelper() {
+    if (buffer_lvalue) {
+        if (!*vl.xsink) {
+            buffer_lvalue->setEntry(buffer_lvalue_index, buffer_lvalue_value, vl.xsink);
+        }
+        buffer_lvalue_value.discard(vl.xsink);
+        buffer_lvalue = nullptr;
+        qv = nullptr;
+        val = nullptr;
+    }
+
     // FIXME: technically if we have only removed robjects from the lvalue and the lvalue did not have any recursive
     // references before, then we don't need to scan this time either
     bool obj_chg = before;
@@ -464,6 +568,19 @@ static int var_type_err(const QoreTypeInfo* typeInfo, const char* type, Exceptio
     return -1;
 }
 
+static int raise_negative_list_or_buffer_index(const QoreSquareBracketsOperatorNode* op, int64 ind,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* lti = op->getLeft().getTypeInfo();
+    if (QoreTypeInfo::isType(lti, NT_BUFFER) || QoreTypeInfo::getReturnComplexBufferOrNothing(lti)) {
+        xsink->raiseException("NEGATIVE-BUFFER-INDEX", "buffer index " QLLD " is invalid (index must evaluate to a "
+            "non-negative integer)", ind);
+    } else {
+        xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
+            "non-negative integer)", ind);
+    }
+    return -1;
+}
+
 int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove) {
     // first get index
     ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
@@ -477,9 +594,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
 
     int64 ind = rh->getAsBigInt();
     if (ind < 0) {
-        vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-            "non-negative integer)", ind);
-        return -1;
+        return raise_negative_list_or_buffer_index(op, ind, vl.xsink);
     }
 
     // now get left hand side
@@ -494,6 +609,28 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
         l = getValue().get<WeakListReferenceNode>()->get();
+    } else if (getType() == NT_HASH) {
+        ensureUnique();
+        QoreHashNode* h = getValue().get<QoreHashNode>();
+        // Convert the index to a string for hash member access
+        QoreStringValueHelper key(*rh);
+        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+    } else if (getType() == NT_WEAKREF_HASH) {
+        ensureUnique();
+        QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
+        // Convert the index to a string for hash member access
+        QoreStringValueHelper key(*rh);
+        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+    } else if (getType() == NT_BUFFER) {
+        if (for_remove) {
+            return -1;
+        }
+        QoreBufferNode* b = getValue().get<QoreBufferNode>();
+        if (!b->isUniqueForMutation()) {
+            ensureUnique();
+            b = getValue().get<QoreBufferNode>();
+        }
+        return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
         if (for_remove)
             return -1;
@@ -556,9 +693,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
 
     int64 ind = rh->getAsBigInt();
     if (ind < 0) {
-        vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-            "non-negative integer)", ind);
-        return -1;
+        return raise_negative_list_or_buffer_index(op, ind, vl.xsink);
     }
 
     // now get left hand side
@@ -573,6 +708,25 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
         l = getValue().get<WeakListReferenceNode>()->get();
+    } else if (getType() == NT_HASH) {
+        ensureUnique();
+        QoreHashNode* h = getValue().get<QoreHashNode>();
+        // Convert the index to a string for hash member access
+        QoreStringValueHelper key(*rh);
+        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+    } else if (getType() == NT_WEAKREF_HASH) {
+        ensureUnique();
+        QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
+        // Convert the index to a string for hash member access
+        QoreStringValueHelper key(*rh);
+        return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
+    } else if (getType() == NT_BUFFER) {
+        if (for_remove) {
+            return -1;
+        }
+        ensureUnique();
+        QoreBufferNode* b = getValue().get<QoreBufferNode>();
+        return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
         if (for_remove)
             return -1;
@@ -618,6 +772,26 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     ocvec.push_back(ObjCountRec(l));
 
     return qore_list_private::get(*l)->getLValue((size_t)ind, *this, for_remove, vl.xsink);
+}
+
+int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
+    assert(b);
+    if (index >= b->size()) {
+        vl.xsink->raiseException("BUFFER-INDEX-ERROR", "buffer<%s> index " QSD " is out of range for buffer "
+            "length " QSD, qore_buffer_element_type_name(b->getElementType()), index, b->size());
+        clearPtr();
+        return -1;
+    }
+
+    buffer_lvalue = b;
+    buffer_lvalue_index = index;
+    buffer_lvalue_value = b->getReferencedEntry(index, vl.xsink);
+    if (*vl.xsink) {
+        clearPtr();
+        return -1;
+    }
+    resetValue(buffer_lvalue_value, b->getElementTypeInfo());
+    return 0;
 }
 
 int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) {
@@ -1060,6 +1234,266 @@ double LValueHelper::getAsFloat() const {
     return qv->getAsFloat();
 }
 
+int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove) {
+    assert(num_steps > 0);
+
+    // Step 0: resolve root variable
+    const LVPathStep& root = steps[0];
+    switch (root.kind) {
+        case LVPathStepKind::LocalVar: {
+            auto* lv = reinterpret_cast<const LocalVar*>(root.ref_ptr);
+            if (!lv) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "cannot resolve local lvalue root '%s'", root.name.c_str());
+                return -1;
+            }
+            if (lv->getLValue(*this, for_remove, false)) {
+                clearPtr();
+                return -1;
+            }
+            break;
+        }
+        case LVPathStepKind::ClosureVar: {
+            auto* lv = reinterpret_cast<const LocalVar*>(root.ref_ptr);
+            if (!lv) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "cannot resolve closure lvalue root '%s'", root.name.c_str());
+                return -1;
+            }
+            ClosureVarValue* cvv = thread_get_runtime_closure_var(lv);
+            if (!cvv) {
+                cvv = thread_find_closure_var(root.name.c_str());
+            }
+            if (!cvv) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "cannot find closure variable '%s'", root.name.c_str());
+                return -1;
+            }
+            if (cvv->getLValue(*this, for_remove)) {
+                clearPtr();
+                return -1;
+            }
+            break;
+        }
+        case LVPathStepKind::GlobalVar:
+        case LVPathStepKind::ThreadLocalVar: {
+            auto* var = reinterpret_cast<const Var*>(root.ref_ptr);
+            if (!var) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "cannot resolve %s lvalue root '%s'",
+                    root.kind == LVPathStepKind::GlobalVar ? "global" : "thread-local",
+                    root.name.c_str());
+                return -1;
+            }
+            if (const_cast<Var*>(var)->getLValue(*this, for_remove)) {
+                clearPtr();
+                return -1;
+            }
+            break;
+        }
+        case LVPathStepKind::SelfMember: {
+            QoreObject* obj = runtime_get_stack_object();
+            if (!obj) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "no object context for self member access");
+                return -1;
+            }
+            if (qore_closure_self_context(obj)
+                    && qore_object_private::get(*obj)->checkClosureSelfValid(vl.xsink)) {
+                return -1;
+            }
+            ocvec.clear();
+            clearPtr();
+            if (qore_object_private::getLValue(*obj, root.name.c_str(), *this,
+                    runtime_get_class(), for_remove, vl.xsink)) {
+                // object already cleared above
+                return -1;
+            }
+            robj = qore_object_private::get(*obj);
+            ocvec.push_back(ObjCountRec(obj));
+            break;
+        }
+        case LVPathStepKind::StaticVar: {
+            auto* svar = reinterpret_cast<const StaticClassVarRefNode*>(root.ref_ptr);
+            if (svar) {
+                if (svar->getLValue(*this)) {
+                    clearPtr();
+                    return -1;
+                }
+                break;
+            }
+
+            std::string error;
+            QoreVarInfo* vi = resolve_runtime_static_lvalue_path(root.name, error);
+            if (!vi) {
+                vl.xsink->raiseException("LVALUE-ERROR", "%s", error.c_str());
+                return -1;
+            }
+            if (vi->getLValue(*this, root.name.c_str())) {
+                clearPtr();
+                return -1;
+            }
+            break;
+        }
+        default:
+            vl.xsink->raiseException("LVALUE-ERROR",
+                "invalid root step kind %d in lvalue path", (int)root.kind);
+            return -1;
+    }
+
+    if (*vl.xsink) {
+        return -1;
+    }
+
+    // Check if root resolved to a reference — if so, follow it via AST path
+    {
+        const ReferenceNode* ref = getReference();
+        if (ref) {
+            if (val) {
+                val = nullptr;
+            } else if (qv) {
+                qv = nullptr;
+            }
+            if (typeInfo) {
+                typeInfo = nullptr;
+            }
+            if (doLValue(ref, for_remove)) {
+                return -1;
+            }
+        }
+    }
+
+    // Steps 1..N: navigate hash/list members
+    for (uint32_t i = 1; i < num_steps; ++i) {
+        const LVPathStep& step = steps[i];
+        qore_type_t t = val ? val->getType() : qv->getType();
+        switch (step.kind) {
+            case LVPathStepKind::HashKeyConst:
+            case LVPathStepKind::HashKey: {
+                // Check if the target is an object — use doObjLValue instead of doHashLValue
+                QoreObject* o = nullptr;
+                if (t == NT_WEAKREF) {
+                    o = getValue().get<const WeakReferenceNode>()->get();
+                } else if (t == NT_OBJECT) {
+                    o = getValue().get<QoreObject>();
+                }
+                if (o) {
+                    if (doObjLValue(o, step.name.c_str(), for_remove)) {
+                        return -1;
+                    }
+                } else {
+                    if (doHashLValue(t, step.name.c_str(), for_remove)) {
+                        return -1;
+                    }
+                }
+                break;
+            }
+            case LVPathStepKind::ListIndex: {
+                int64_t idx = step.slot_id;
+                if (t == NT_BUFFER) {
+                    if (for_remove) {
+                        return -1;
+                    }
+                    if (idx < 0) {
+                        vl.xsink->raiseException("NEGATIVE-BUFFER-INDEX", "buffer index " QLLD " is invalid "
+                            "(index must evaluate to a non-negative integer)", idx);
+                        return -1;
+                    }
+                    QoreBufferNode* b = getValue().get<QoreBufferNode>();
+                    if (!b->isUniqueForMutation()) {
+                        ensureUnique();
+                        b = getValue().get<QoreBufferNode>();
+                    }
+                    if (setBufferElementLValue(b, static_cast<size_t>(idx))) {
+                        return -1;
+                    }
+                    break;
+                }
+
+                // For list index, we need to ensure unique and access the element
+                QoreListNode* l = nullptr;
+                if (t == NT_LIST) {
+                    ensureUnique();
+                    l = getValue().get<QoreListNode>();
+                } else {
+                    if (for_remove) {
+                        return -1;
+                    }
+                    // if the lvalue is not already a list, then make it one
+                    // but first make sure the lvalue can be converted to a list
+                    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_LIST)) {
+                        vl.xsink->raiseException("LVALUE-ERROR",
+                            "cannot convert to list for index access");
+                        return -1;
+                    }
+                    // auto-vivify: create list with appropriate type
+                    if (!getValue()) {
+                        if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
+                            || typeInfo == listOrNothingTypeInfo) {
+                            assignNodeIntern((l = new QoreListNode));
+                        } else {
+                            const QoreTypeInfo* sti = typeInfo == autoTypeInfo
+                                ? autoTypeInfo
+                                : QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
+                            if (sti) {
+                                assignNodeIntern((l = new QoreListNode(sti)));
+                            }
+                        }
+                    }
+                    if (!l) {
+                        // save the old value for dereferencing outside locks
+                        saveTemp(getValue().getInternalNode());
+                        const QoreTypeInfo* valueTypeInfo;
+                        if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
+                            || typeInfo == listOrNothingTypeInfo) {
+                            valueTypeInfo = nullptr;
+                        } else {
+                            valueTypeInfo = autoTypeInfo;
+                        }
+                        assignNodeIntern((l = new QoreListNode(valueTypeInfo)));
+                    }
+                }
+                // step.slot_id holds the index value (set by caller from operand)
+                if (idx < 0) {
+                    idx = 0;
+                }
+                ocvec.push_back(ObjCountRec(l));
+                if (qore_list_private::get(*l)->getLValue(
+                        static_cast<size_t>(idx), *this, for_remove, vl.xsink)) {
+                    return -1;
+                }
+                break;
+            }
+            default:
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "invalid navigation step kind %d in lvalue path", (int)step.kind);
+                return -1;
+        }
+
+        if (*vl.xsink) {
+            return -1;
+        }
+
+        // Check for reference at this level too
+        const ReferenceNode* ref = getReference();
+        if (ref) {
+            if (val) {
+                val = nullptr;
+            } else if (qv) {
+                qv = nullptr;
+            }
+            if (typeInfo) {
+                typeInfo = nullptr;
+            }
+            if (doLValue(ref, for_remove)) {
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool weak_assignment) {
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
@@ -1121,13 +1555,17 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
         // list<auto!> / *list<auto!> - always strip to autoListTypeInfo
         if (n.getType() == NT_LIST) {
             QoreListNode* l = n.get<QoreListNode>();
-            if (!l->is_unique()) {
+            qore_list_private* lp = qore_list_private::get(*l);
+            if (lp->complexTypeInfo == autoListTypeInfo) {
+                // Already no-narrow; no copy is needed just to preserve the
+                // same container type.
+            } else if (!l->is_unique()) {
                 QoreListNode* copy = l->copy();
                 qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
                 n = copy;
                 saveTemp(l);
             } else {
-                qore_list_private::get(*l)->complexTypeInfo = autoListTypeInfo;
+                lp->complexTypeInfo = autoListTypeInfo;
             }
         }
     }
@@ -2384,6 +2822,87 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
 #endif
 }
 
+bool LocalVarValue::TypeSubstitutionCache::matches(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
+        const QoreTypeInfo* receiverTypeInfo, const QoreTypeParamInstantiation* typeParamInst) const {
+    if (inputTypeInfo != typeInfo || inputRefTypeInfo != refTypeInfo || this->receiverTypeInfo != receiverTypeInfo) {
+        return false;
+    }
+
+    const UserSignature* owner = nullptr;
+    const type_vec_t* args = nullptr;
+    if (typeParamInst && !typeParamInst->empty()) {
+        owner = typeParamInst->owner;
+        args = &typeParamInst->type_args;
+    }
+
+    if (typeParamOwner != owner) {
+        return false;
+    }
+
+    if (!args) {
+        return typeParamArgs.empty();
+    }
+
+    if (typeParamArgs.size() != args->size()) {
+        return false;
+    }
+
+    for (size_t i = 0, e = typeParamArgs.size(); i < e; ++i) {
+        if (typeParamArgs[i] != (*args)[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void LocalVarValue::TypeSubstitutionCache::set(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
+        const QoreTypeInfo* receiverTypeInfo, const QoreTypeParamInstantiation* typeParamInst,
+        const QoreTypeInfo* resolvedTypeInfo, const QoreTypeInfo* resolvedRefTypeInfo) {
+    inputTypeInfo = typeInfo;
+    inputRefTypeInfo = refTypeInfo;
+    this->receiverTypeInfo = receiverTypeInfo;
+    typeParamOwner = nullptr;
+    typeParamArgs.clear();
+
+    if (typeParamInst && !typeParamInst->empty()) {
+        typeParamOwner = typeParamInst->owner;
+        typeParamArgs = typeParamInst->type_args;
+    }
+
+    this->resolvedTypeInfo = resolvedTypeInfo;
+    this->resolvedRefTypeInfo = resolvedRefTypeInfo;
+}
+
+void LocalVarValue::resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const QoreTypeInfo*& refTypeInfo,
+        bool typeInfoNeedsSubstitution, bool refTypeInfoNeedsSubstitution) const {
+    const QoreTypeInfo* receiverTypeInfo = qore_get_current_receiver_type_info();
+    const QoreTypeParamInstantiation* typeParamInst = runtime_get_type_param_instantiation();
+
+    if (type_substitution_cache
+            && type_substitution_cache->matches(typeInfo, refTypeInfo, receiverTypeInfo, typeParamInst)) {
+        typeInfo = type_substitution_cache->resolvedTypeInfo;
+        refTypeInfo = type_substitution_cache->resolvedRefTypeInfo;
+        return;
+    }
+
+    const QoreTypeInfo* resolvedTypeInfo = typeInfoNeedsSubstitution
+        ? qore_substitute_type_params(typeInfo, receiverTypeInfo, typeParamInst)
+        : typeInfo;
+    const QoreTypeInfo* resolvedRefTypeInfo = refTypeInfoNeedsSubstitution
+        ? qore_substitute_type_params(refTypeInfo, receiverTypeInfo, typeParamInst)
+        : refTypeInfo;
+
+    if (!type_substitution_cache) {
+        type_substitution_cache.reset(new TypeSubstitutionCache);
+    }
+    type_substitution_cache->set(typeInfo, refTypeInfo, receiverTypeInfo, typeParamInst, resolvedTypeInfo,
+        resolvedRefTypeInfo);
+
+    typeInfo = resolvedTypeInfo;
+    refTypeInfo = resolvedRefTypeInfo;
+}
+
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
         const QoreTypeInfo* refTypeInfo) const {
     //printd(5, "LocalVarValue::getLValue() this: %p type: '%s' %d assigned: %d ti: '%s' rti: '%s' (%p)\n", this,
@@ -2392,7 +2911,14 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
         LocalRefHelper<LocalVarValue> helper(this, *ref, lvh.vl.xsink);
-        return helper ? lvh.doLValue(ref, for_remove) : -1;
+        if (!helper || lvh.doLValue(ref, for_remove)) {
+            return -1;
+        }
+        // Preserve no-narrow marker types; broad references must keep the resolved lvalue type.
+        if (val.assigned && is_no_narrow_container_type(refTypeInfo)) {
+            lvh.setTypeInfo(refTypeInfo);
+        }
+        return 0;
     }
 
     // note: type info is not stored at runtime for local variables
@@ -2420,8 +2946,6 @@ const void* ClosureVarValue::getLValueId() const {
 }
 
 int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove) const {
-    //printd(5, "ClosureVarValue::getLValue() this: %p type: '%s' %d\n", this, val.getTypeName(), val.getType());
-
     if (QoreTypeInfo::needsScan(typeInfo)) {
         lvh.setClosure(const_cast<ClosureVarValue*>(this));
     }
@@ -2433,9 +2957,18 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove) const {
             return -1;
         }
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvh.vl.xsink);
+        const QoreTypeInfo* effectiveRefTypeInfo = val.assigned && is_no_narrow_container_type(refTypeInfo)
+            ? refTypeInfo : nullptr;
         sl.unlock();
         LocalRefHelper<ClosureVarValue> helper(this, **ref, lvh.vl.xsink);
-        return helper ? lvh.doLValue(*ref, for_remove) : -1;
+        if (!helper || lvh.doLValue(*ref, for_remove)) {
+            return -1;
+        }
+        // Preserve no-narrow marker types; broad references must keep the resolved lvalue type.
+        if (effectiveRefTypeInfo) {
+            lvh.setTypeInfo(effectiveRefTypeInfo);
+        }
+        return 0;
     }
 
     lvh.set(rml);
@@ -2552,7 +3085,11 @@ AbstractQoreNode* ClosureVarValue::getReference(const QoreProgramLocation* loc, 
 // LocalVar type narrowing methods
 
 bool LocalVar::isAutoTypeInfo(const QoreTypeInfo* ti) {
-    // Check for direct auto types (but NOT pure auto - it's meant to hold any type)
+    // Check for plain auto types
+    if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
+        return true;
+    }
+    // Check for container auto types (but NOT pure auto - it's meant to hold any type)
     // Note: softlist<auto> is excluded because it accepts scalar values that get
     // automatically converted to lists, making straightforward type narrowing incorrect
     if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
@@ -2596,26 +3133,27 @@ bool LocalVar::isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*&
 }
 
 const QoreTypeInfo* LocalVar::getTypeInfoForLValue() const {
+    const QoreTypeInfo* ti;
     if (!no_narrowing) {
-        return typeInfo;
+        ti = typeInfo;
+    } else {
+        // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
+        if (typeInfo == autoHashTypeInfo) {
+            ti = autoNoNarrowHashTypeInfo;
+        } else if (typeInfo == autoHashOrNothingTypeInfo) {
+            ti = autoNoNarrowHashOrNothingTypeInfo;
+        } else if (typeInfo == autoListTypeInfo) {
+            ti = autoNoNarrowListTypeInfo;
+        } else if (typeInfo == autoListOrNothingTypeInfo) {
+            ti = autoNoNarrowListOrNothingTypeInfo;
+        } else if (typeInfo == autoTypeInfo) {
+            ti = autoNoNarrowTypeInfo;
+        } else {
+            ti = typeInfo;
+        }
     }
-    // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
-    if (typeInfo == autoHashTypeInfo) {
-        return autoNoNarrowHashTypeInfo;
-    }
-    if (typeInfo == autoHashOrNothingTypeInfo) {
-        return autoNoNarrowHashOrNothingTypeInfo;
-    }
-    if (typeInfo == autoListTypeInfo) {
-        return autoNoNarrowListTypeInfo;
-    }
-    if (typeInfo == autoListOrNothingTypeInfo) {
-        return autoNoNarrowListOrNothingTypeInfo;
-    }
-    if (typeInfo == autoTypeInfo) {
-        return autoNoNarrowTypeInfo;
-    }
-    return typeInfo;
+
+    return ti;
 }
 
 void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {
@@ -2626,12 +3164,32 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLoc
     if (no_narrowing) {
         return;
     }
-    // Don't narrow if the new type is also auto or unspecified
-    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
+
+    // Handle assignment of untyped values by resetting narrowing
+    if (!QoreTypeInfo::hasType(ti)) {
+        narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
+        QORE_DEBUG_NARROW_RESET(name.c_str(), "untyped assignment");
+        return;
+    }
+    // For NOTHING/NULL assignments, set narrowed type to nothingTypeInfo so branch
+    // merging can produce proper nullable types (e.g., int | nothing = *int)
+    if (ti == nothingTypeInfo || ti == nullTypeInfo) {
+        narrowedTypeInfo = nothingTypeInfo;
+        narrowedLoc = loc;
+        return;
+    }
+    // A direct assignment replaces the previous narrowed type.  If the new
+    // value is only known as auto, keeping a previous concrete type is stale.
+    if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
+        narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
+        QORE_DEBUG_NARROW_RESET(name.c_str(), "auto assignment");
         return;
     }
     narrowedTypeInfo = ti;
     narrowedLoc = loc;
+    QORE_DEBUG_NARROW_SET(name.c_str(), typeInfo, ti);
 }
 
 void LocalVar::parseMergeNarrowedType(const QoreTypeInfo* ti) {
@@ -2664,7 +3222,11 @@ void LocalVar::parseMergeNarrowedType(const QoreTypeInfo* ti) {
 // Var (global variable) narrowed type methods
 
 bool Var::isAutoTypeInfo(const QoreTypeInfo* ti) {
-    // Check for direct auto types (but NOT pure auto - it's meant to hold any type)
+    // Check for plain auto types
+    if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
+        return true;
+    }
+    // Check for container auto types (but NOT pure auto - it's meant to hold any type)
     // Note: softlist<auto> is excluded because it accepts scalar values that get
     // automatically converted to lists, making straightforward type narrowing incorrect
     if (ti == autoHashTypeInfo || ti == autoHashOrNothingTypeInfo
@@ -2715,12 +3277,31 @@ void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation
     if (no_narrowing) {
         return;
     }
-    // Don't narrow if the new type is also auto or unspecified
-    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
+    // Handle assignment of untyped values by resetting narrowing
+    if (!QoreTypeInfo::hasType(ti)) {
+        narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
+        QORE_DEBUG_NARROW_RESET(getName(), "untyped assignment");
+        return;
+    }
+    // For NOTHING/NULL assignments, set narrowed type to nothingTypeInfo so branch
+    // merging can produce proper nullable types (e.g., int | nothing = *int)
+    if (ti == nothingTypeInfo || ti == nullTypeInfo) {
+        narrowedTypeInfo = nothingTypeInfo;
+        narrowedLoc = loc;
+        return;
+    }
+    // A direct assignment replaces the previous narrowed type.  If the new
+    // value is only known as auto, keeping a previous concrete type is stale.
+    if (ti == autoTypeInfo || ti == autoNoNarrowTypeInfo) {
+        narrowedTypeInfo = nullptr;
+        narrowedLoc = nullptr;
+        QORE_DEBUG_NARROW_RESET(getName(), "auto assignment");
         return;
     }
     narrowedTypeInfo = ti;
     narrowedLoc = loc;
+    QORE_DEBUG_NARROW_SET(getName(), typeInfo, ti);
 }
 
 void Var::parseMergeNarrowedType(const QoreTypeInfo* ti) {

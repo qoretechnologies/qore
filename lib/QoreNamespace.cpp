@@ -116,12 +116,14 @@ DLLLOCAL QoreClass* initReadOnlyFileClass(QoreNamespace& ns);
 
 DLLLOCAL QoreClass* initAbstractDatasourceClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractSQLStatementClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initColumnarResultClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractQuantifiedIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractBidirectionalIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractQuantifiedBidirectionalIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initListIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initListReverseIteratorClass(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_KeyValueInfo(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHashIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHashReverseIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHashKeyIteratorClass(QoreNamespace& ns);
@@ -226,6 +228,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclDateTimeInfo,
     * hashdeclIsoWeekInfo,
     * hashdeclCallStackInfo,
+    * hashdeclKeyValueInfo,
     * hashdeclExceptionInfo,
     * hashdeclStatementInfo,
     * hashdeclNetIfInfo,
@@ -256,11 +259,13 @@ const TypedHashDecl* hashdeclStatInfo,
 
 const QoreEnumDecl* enumHTTP2Mode;
 const QoreEnumDecl* enumHTTP3Mode;
+const QoreEnumDecl* enumExecMode;
 
 DLLLOCAL void init_context_functions(QoreNamespace& ns);
 DLLLOCAL void init_RangeIterator_functions(QoreNamespace& ns);
 DLLLOCAL QoreEnumDecl* init_enum_HTTP2Mode(QoreNamespace& ns);
 DLLLOCAL QoreEnumDecl* init_enum_HTTP3Mode(QoreNamespace& ns);
+DLLLOCAL QoreEnumDecl* init_enum_ExecMode(QoreNamespace& ns);
 
 GVEntryBase::GVEntryBase(const QoreProgramLocation* loc, char* n, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, qore_var_t type) :
@@ -269,6 +274,7 @@ GVEntryBase::GVEntryBase(const QoreProgramLocation* loc, char* n, const QoreType
         ? new Var(loc, name->getIdentifier(), typeInfo, false, type == VT_THREAD_LOCAL)
         : new Var(loc, name->getIdentifier(), parseTypeInfo, type == VT_THREAD_LOCAL)
     ) {
+    var->assignModule();
 }
 
 void GVEntryBase::clear() {
@@ -493,18 +499,27 @@ void qore_ns_private::runtimeImportSystemClasses(const qore_ns_private& source, 
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
         QoreNamespace* nns = nsl.find(i->first);
+        bool created = false;
         if (!nns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            created = true;
         }
 
         nns->priv->runtimeImportSystemClasses(*i->second->priv, rns, xsink);
         //printd(5, "qore_ns_private::runtimeImportSystemClasses() this: %p '%s::' imported %p '%s::'\n", this,
         //    name.c_str(), ns, ns->getName());
-        if (*xsink)
+        if (*xsink) {
             break;
+        }
+        if (created && nns->priv->isEmpty()) {
+            nsmap_t::iterator ni = nsl.nsmap.find(i->first);
+            assert(ni != nsl.nsmap.end() && ni->second == nns);
+            nsl.nsmap.erase(ni);
+            delete nns;
+        }
     }
 }
 
@@ -520,18 +535,27 @@ void qore_ns_private::runtimeImportSystemHashDecls(const qore_ns_private& source
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
         QoreNamespace* nns = nsl.find(i->first);
+        bool created = false;
         if (!nns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            created = true;
         }
 
         nns->priv->runtimeImportSystemHashDecls(*i->second->priv, rns, xsink);
         //printd(5, "qore_ns_private::runtimeImportSystemHashDecls() this: %p '%s::' imported %p '%s::'\n", this,
         //    name.c_str(), ns, ns->getName());
-        if (*xsink)
+        if (*xsink) {
             break;
+        }
+        if (created && nns->priv->isEmpty()) {
+            nsmap_t::iterator ni = nsl.nsmap.find(i->first);
+            assert(ni != nsl.nsmap.end() && ni->second == nns);
+            nsl.nsmap.erase(ni);
+            delete nns;
+        }
     }
 }
 
@@ -547,18 +571,27 @@ void qore_ns_private::runtimeImportSystemConstants(const qore_ns_private& source
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
         QoreNamespace* nns = nsl.find(i->first);
+        bool created = false;
         if (!nns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            created = true;
         }
 
         nns->priv->runtimeImportSystemConstants(*i->second->priv, rns, xsink);
         //printd(5, "qore_ns_private::runtimeImportSystemConstants() this: %p '%s::' imported %p '%s::'\n", this,
         //   name.c_str(), ns, ns->getName());
-        if (*xsink)
+        if (*xsink) {
             break;
+        }
+        if (created && nns->priv->isEmpty()) {
+            nsmap_t::iterator ni = nsl.nsmap.find(i->first);
+            assert(ni != nsl.nsmap.end() && ni->second == nns);
+            nsl.nsmap.erase(ni);
+            delete nns;
+        }
     }
 }
 
@@ -574,18 +607,27 @@ void qore_ns_private::runtimeImportSystemFunctions(const qore_ns_private& source
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
         QoreNamespace* nns = nsl.find(i->first);
+        bool created = false;
         if (!nns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            created = true;
         }
 
         nns->priv->runtimeImportSystemFunctions(*i->second->priv, rns, xsink);
         //printd(5, "qore_ns_private::runtimeImportSystemFunctions() this: %p '%s::' imported %p '%s::'\n", this,
         //    name.c_str(), ns, ns->getName());
-        if (*xsink)
+        if (*xsink) {
             break;
+        }
+        if (created && nns->priv->isEmpty()) {
+            nsmap_t::iterator ni = nsl.nsmap.find(i->first);
+            assert(ni != nsl.nsmap.end() && ni->second == nns);
+            nsl.nsmap.erase(ni);
+            delete nns;
+        }
     }
 }
 
@@ -829,6 +871,10 @@ void QoreNamespace::clear(ExceptionSink* xsink) {
 QoreNamespace* QoreNamespace::copy(const QoreParseOptions& po) const {
     //printd(5, "QoreNamespace::copy() this: %p po: %lld %s\n", this, po, priv->name.c_str());
     return new QoreNamespace(*this, po);
+}
+
+QoreNamespace* QoreNamespace::copy(int64 po) const {
+    return copy(QoreParseOptions(po));
 }
 
 QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, const QoreParseOptions& po, const qore_ns_private& parent) {
@@ -1318,6 +1364,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
 
     enumHTTP2Mode = init_enum_HTTP2Mode(qns);
     enumHTTP3Mode = init_enum_HTTP3Mode(qns);
+    enumExecMode = init_enum_ExecMode(qns);
 
     // pre-init serializable class before Thread namespace so that classes
     // with vparent=Serializable (e.g. AbstractPoolableResource) can resolve it
@@ -1375,11 +1422,12 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // TimerEventInfo has no special dependencies
     hashdeclTimerEventInfo = init_hashdecl_TimerEventInfo(qns);
     qns.addSystemClass(initEventLoopClass(qns));
-    // Init hashdecls that reference Socket, AbstractPollOperation, and Queue classes
-    // Must be after initSocketClass, initAbstractPollOperationClass, and get_thread_ns (Queue)
-    // Must be before initAsyncIoControllerClass which references these hashdecls
-    hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
+    // Init hashdecls that reference Socket, AbstractPollOperation, and Queue classes.
+    // SocketPollOperationInfo references SocketPollResultInfo through resultQueue.
+    // Must be after initSocketClass, preinitAbstractPollOperationClass, and get_thread_ns (Queue).
+    // Must be before initAsyncIoControllerClass which references these hashdecls.
     hashdeclSocketPollResultInfo = init_hashdecl_SocketPollResultInfo(qns);
+    hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
     // Now that SocketPollResultInfo is available, finish AbstractPollOperation init
     // (adds onComplete(hash<SocketPollResultInfo>) which references the hashdecl)
     qns.addSystemClass(initAbstractPollOperationClass(qns));
@@ -1461,6 +1509,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initAbstractQuantifiedBidirectionalIteratorClass(qns));
     qns.addSystemClass(initListIteratorClass(qns));
     qns.addSystemClass(initListReverseIteratorClass(qns));
+    hashdeclKeyValueInfo = init_hashdecl_KeyValueInfo(qns);
     qns.addSystemClass(initHashIteratorClass(qns));
     qns.addSystemClass(initHashReverseIteratorClass(qns));
     qns.addSystemClass(initHashKeyIteratorClass(qns));
@@ -1492,6 +1541,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
 
     // add ChannelIterator + Channel to Thread namespace now that AbstractIterator is available
     // preinit Channel first so QC_CHANNEL is available for ChannelIterator's constructor parameter
+    hashdeclChannelTryResult = init_hashdecl_ChannelTryResult(*thread_ns);
     preinitChannelClass();
     thread_ns->addSystemClass(initChannelIteratorClass(*thread_ns));
     thread_ns->addSystemClass(initChannelClass(*thread_ns));
@@ -1506,6 +1556,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // create Qore::SQL namespace
     QoreNamespace* sqlns = new QoreNamespace("Qore::SQL");
 
+    sqlns->addSystemClass(initColumnarResultClass(*sqlns));
     sqlns->addSystemClass(initAbstractSQLStatementClass(*sqlns));
     sqlns->addSystemClass(initAbstractDatasourceClass(*sqlns));
     sqlns->addSystemClass(initDatasourceClass(*sqlns));
@@ -2537,7 +2588,8 @@ static void get_params(const QoreListNode* params, QoreString& desc) {
             desc.concat("<unknown>");
         }
         else {
-            desc.concat(v.get<QoreStringNode>()->c_str());
+            QoreStringValueHelper str(v);
+            desc.concat(str->c_str());
         }
         if (!li.last())
             desc.concat(", ");
@@ -2617,18 +2669,18 @@ const AbstractQoreFunctionVariant* qore_root_ns_private::runtimeFindCall(const c
                 return nullptr;
             }
             // get string value for type
-            const QoreString& tname = *v.get<const QoreStringNode>();
+            QoreStringValueHelper tname(v);
             // issue #2601: ensure that the string is not empty (client error)
-            if (tname.empty()) {
+            if (tname->empty()) {
                 xsink->raiseException("FIND-CALL-ERROR", "call \"%s()\" parameter %lu is an empty string", name,
                     li.index() + 1);
                 return nullptr;
             }
             // look up type from string
-            const QoreTypeInfo* ti = qore_get_type_from_string_intern(tname.c_str());
+            const QoreTypeInfo* ti = qore_get_type_from_string_intern(tname->c_str());
             if (!ti) {
                 xsink->raiseException("FIND-CALL-ERROR", "call \"%s()\" parameter %lu \"%s\" cannot be " \
-                    "resolved to a known type", name, li.index() + 1, tname.c_str());
+                    "resolved to a known type", name, li.index() + 1, tname->c_str());
                 return nullptr;
             }
             tvec.push_back(ti);
@@ -2855,6 +2907,7 @@ bool qore_root_ns_private::parseResolveGlobalVarsAndClassHierarchiesIntern() {
 Var* qore_root_ns_private::parseAddResolvedGlobalVarDefIntern(const QoreProgramLocation* loc, const NamedScope& vname,
         const QoreTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, false, type == VT_THREAD_LOCAL);
+    v->assignModule();
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);
@@ -2864,6 +2917,7 @@ Var* qore_root_ns_private::parseAddResolvedGlobalVarDefIntern(const QoreProgramL
 Var* qore_root_ns_private::parseAddGlobalVarDefIntern(const QoreProgramLocation* loc, const NamedScope& vname,
         QoreParseTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, type == VT_THREAD_LOCAL);
+    v->assignModule();
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);
@@ -3021,6 +3075,11 @@ void qore_ns_private::parseCommit() {
 }
 
 void qore_ns_private::parseCommitRuntimeInit(ExceptionSink* xsink) {
+    if (parseCommitRuntimeInitDone) {
+        return;
+    }
+    parseCommitRuntimeInitDone = true;
+
     classList.parseCommitRuntimeInit(xsink);
     constant.parseCommitRuntimeInit();
     nsl.parseCommitRuntimeInit(xsink);
@@ -3067,6 +3126,12 @@ void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) 
             hashDeclList.parseRemove(name.c_str());
         }
         pending_hashdecl_names.clear();
+
+        // remove only enums added in this pending transaction
+        for (const auto& name : pending_enum_names) {
+            enumList.parseRemove(name.c_str());
+        }
+        pending_enum_names.clear();
 
         // remove only typedefs added in this pending transaction
         for (const auto& name : pending_typedef_names) {
@@ -3504,14 +3569,29 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
     //  &mns, mns.name.c_str());
 
     // check user constants
-    {
+    // NOTE: skip constant validation for imported namespaces - they are from other modules
+    // and will be validated when those modules are loaded
+    if (!mns.imported) {
         ConstConstantListIterator cli(mns.constant);
         while (cli.next()) {
             if (!cli.isUserPublic()) {
                 continue;
             }
-            if (constant.inList(cli.getName())) {
-                qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+            const ConstantEntry* existing = constant.findEntry(cli.getName().c_str());
+            if (existing) {
+                // Identity check: same bits means same refSelf'd node (same module re-imported
+                // via different dependency paths, e.g. QUnit -> Util and FsUtil -> Util)
+                if (!existing->val.isEqualValue(cli.getValue())) {
+                    // For AOT binary modules, constant values may differ from the source module's
+                    // values (e.g., pre-init vs post-init values) even though they originate from
+                    // the same module. If both constants share the same from_module origin, treat
+                    // as a benign duplicate from an already-merged dependency.
+                    const char* existing_mod = existing->getModuleName();
+                    const char* new_mod = cli.getEntry()->getModuleName();
+                    if (!existing_mod || !new_mod || strcmp(existing_mod, new_mod) != 0) {
+                        qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+                    }
+                }
             }
         }
     }
@@ -3548,6 +3628,23 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 
         FunctionEntry* fe = func_list.findNode(i->first);
         if (fe && !fe->getFunction()->injected()) {
+            // Same-origin identity check (mirrors the class / constant / hashdecl checks):
+            // if both sides resolve to the same QoreFunction pointer, they originate from
+            // the same module reached via two different import paths (e.g. the caller
+            // already has module M loaded, then loads module X which `%requires(reexport) M`
+            // — M's functions appear in X's mod_pgm by reference as well as in the caller,
+            // and a self-load re-traverses both). Treat as benign.
+            if (i->second->getFunction() == fe->getFunction()) {
+                continue;
+            }
+            // Fallback: match by module-of-origin name when the pointers differ but both
+            // functions originate from the same module (parallel to ConstantEntry's
+            // same-module benign-duplicate handling above).
+            const char* src_mod = i->second->getFunction()->getModuleName();
+            const char* dst_mod = fe->getFunction()->getModuleName();
+            if (src_mod && dst_mod && !strcmp(src_mod, dst_mod)) {
+                continue;
+            }
             qmc.error("duplicate function %s::%s()", name.c_str(), i->first);
         }
         //printd(5, "qore_ns_private::scanMergeCommittedNamespace() this: %p '%s::' looking for function '%s' (%d)\n",
@@ -3824,6 +3921,20 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
 
     // assimilate pending functions
     func_list.assimilate(pns->func_list, this, &pending_func_names);
+
+    // Drop enum value namespaces for imported duplicate public enums before
+    // namespace assimilation.  EnumList::assimilate() discards the redundant
+    // enum declaration, and the generated EnumName::Member constants must be
+    // discarded with it.
+    if (imported) {
+        EnumListIterator eli(pns->enumList);
+        while (eli.next()) {
+            QoreEnumDecl* existing = enumList.find(eli.getName());
+            if (existing && qore_enum_decl_private::get(*existing)->isPublic() && eli.isPublic()) {
+                pns->nsl.parseRemove(eli.getName(), nullptr);
+            }
+        }
+    }
 
     // assimilate enums
     enumList.assimilate(pns->enumList, *this, &pending_enum_names);

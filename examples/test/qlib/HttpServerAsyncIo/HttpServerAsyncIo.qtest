@@ -3,9 +3,10 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpServerAsyncIo
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
 
 %exec-class HttpServerAsyncIoTest
 
@@ -208,6 +209,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("HttpKeepAlivePollOperation header timeout test", \keepAliveHeaderTimeoutTest());
         addTestCase("Controller start/stop test", \controllerStartStopTest());
         addTestCase("HttpAcceptPollOperation HTTP/2 mode test", \acceptPollHttp2ModeTest());
+        # Binary search: comment out tests to find the hanging one
         addTestCase("concurrent addListener/removeListener", \concurrentListenerTest());
         addTestCase("stop during active accepts", \stopDuringAcceptsTest());
         addTestCase("accept replenish contention", \acceptReplenishContentionTest());
@@ -1017,6 +1019,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         c.connect("127.0.0.1:" + port, 2s);
         c.send(sprintf("POST /echo HTTP/1.0\r\nHost: localhost\r\nContent-Length: %d\r\n\r\n",
             body.size()));
+        # Force the body-read operation to wait for socket readiness instead
+        # of finding the whole request body already buffered.
+        usleep(50ms);
         c.send(body);
         # Drain the response so the handler can finish cleanly
         c.recv(0, 2s);

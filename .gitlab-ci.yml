@@ -125,6 +125,7 @@ test-ubuntu-amd64:
     - amd64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    TEST_TIMEOUT: "600"
   script:
     - |
         if test/docker_test/test-ubuntu.sh; then
@@ -155,6 +156,7 @@ test-ubuntu-arm64:
     - arm64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    TEST_TIMEOUT: "600"
   script:
     - |
         if test/docker_test/test-ubuntu.sh; then
@@ -185,6 +187,7 @@ test-alpine-amd64:
     - amd64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    TEST_TIMEOUT: "600"
   script:
     - |
         if test/docker_test/test-alpine.sh; then
@@ -215,6 +218,7 @@ test-alpine-arm64:
     - arm64
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    TEST_TIMEOUT: "600"
   script:
     - |
         if test/docker_test/test-alpine.sh; then
@@ -226,6 +230,117 @@ test-alpine-arm64:
           curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
             -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
+
+test-ir-ubuntu-amd64:
+  stage: test
+  parallel: 2
+  needs: [build-ubuntu-amd64]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  variables:
+    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    QORE_TEST_OPTS: '-penable-debug --exec-mode=ir --ir-fallback-warn'
+    TEST_TIMEOUT: "600"
+  before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-ir\", \"description\": \"Gitlab CI IR Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+    - set +e
+  script:
+    - |
+        if test/docker_test/test-ubuntu.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-ir\", \"description\": \"Gitlab CI IR Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-ir\", \"description\": \"Gitlab CI IR Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
+
+test-jit-ubuntu-amd64:
+  stage: test
+  parallel: 2
+  needs: [build-ubuntu-amd64]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  variables:
+    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    QORE_TEST_OPTS: '-penable-debug --exec-mode=jit'
+    TEST_TIMEOUT: "600"
+  before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-jit\", \"description\": \"Gitlab CI JIT Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+    - set +e
+  script:
+    - |
+        if test/docker_test/test-ubuntu.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-jit\", \"description\": \"Gitlab CI JIT Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-jit\", \"description\": \"Gitlab CI JIT Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 1
+        fi
+  artifacts:
+    when: on_failure
+    paths:
+      - crash-dumps/
+    expire_in: 7 days
+
+test-tiered-ubuntu-amd64:
+  stage: test
+  parallel: 2
+  needs: [build-ubuntu-amd64]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  variables:
+    QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
+    QORE_TEST_OPTS: '-penable-debug --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10'
+    TEST_TIMEOUT: "600"
+  before_script:
+    - |
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}-tiered\", \"description\": \"Gitlab CI Tiered Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+    - set +e
+  script:
+    - |
+        if test/docker_test/test-ubuntu.sh; then
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}-tiered\", \"description\": \"Gitlab CI Tiered Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
+          exit 0
+        else
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
+            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}-tiered\", \"description\": \"Gitlab CI Tiered Mode\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
         fi
   artifacts:

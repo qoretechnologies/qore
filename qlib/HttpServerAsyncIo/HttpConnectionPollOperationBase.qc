@@ -32,7 +32,7 @@ public namespace HttpServerAsyncIo {
 
     @since Qore 2.3
 */
-public class HttpConnectionPollOperationBase inherits AbstractPollOperation {
+public class HttpConnectionPollOperationBase inherits AbstractPollOperation<auto> {
     private {
         #! Controller for completion dispatch
         *HttpAsyncSocketIoController completion_controller;

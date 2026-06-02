@@ -84,7 +84,7 @@ public class InsightlyLeadsDataProvider inherits InsightlyDataProviderBase {
         return new InsightlyLeadDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return runListSearch("Leads", where_cond, search_options);
     }

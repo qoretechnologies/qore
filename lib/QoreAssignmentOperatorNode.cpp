@@ -66,9 +66,24 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     }
 
     parse_context.typeInfo = nullptr;
+    // Forward the lvalue's declared type as an inference hint to the
+    // rvalue.  Consumers (map operator, hash literal) use it to narrow
+    // when their own inference would otherwise land on `auto` — see
+    // QoreParseContext::expected_type_info documentation.  The hint
+    // never overrides concrete types; the authoritative compatibility
+    // check is parseAccepts() below.
+    //
+    // Restore `expected_type_info` to its prior value so the hint
+    // doesn't leak to sibling expressions when we unwind from nested
+    // assignments (e.g., `a = b = map ...`).
+    const QoreTypeInfo* prev_expected = parse_context.expected_type_info;
+    parse_context.expected_type_info = ti;
+    QoreParseAnalysis right_analysis;
     if (parse_init_value(right, parse_context) && !err) {
         err = -1;
     }
+    parse_context.expected_type_info = prev_expected;
+    right_analysis = parse_context.analysis;
 
     // check for illegal assignment to $self
     if (parse_context.oflag && check_self_assignment(loc, left, parse_context.oflag) && !err) {
@@ -97,21 +112,87 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         }
         res = QTI_IDENT;
     } else if (QoreTypeInfo::hasType(ti)) {
+        // For reference-typed lvalues, dereference before type-checking.
+        // Assignment through a reference targets the referenced location, not the reference itself.
+        // - Write-through (ref = val): LHS reference<T> → T; RHS is plain T — compare T vs T
+        // - Initial binding (ref = \var): LHS reference<T> → T; RHS reference<T> → T — compare T vs T
+        const QoreTypeInfo* check_ti = ti;
+        const QoreTypeInfo* check_rhs_ti = parse_context.typeInfo;
+
+        // Dereference LHS if it's a reference type
+        // Assignment through a reference targets the referenced location, not the reference itself
+        if (QoreTypeInfo::isReference(ti)) {
+            const QoreTypeInfo* deref_ti = QoreTypeInfo::getReferenceTarget(ti);
+            if (deref_ti) {
+                check_ti = deref_ti;
+            }
+        }
+        // Dereference RHS if it's a reference — for transparent reference variable access
+        // and for initial binding (reference<T> r = \var).
+        // Exception: do NOT dereference a reference-creation expression (\expr) when LHS is
+        // not a reference type — this catches invalid assignments like:
+        //   softint i = \i;  (self-reference to uninitialized variable)
+        //   softint x = \n;  (assigning reference creation to a non-reference variable)
+        if (QoreTypeInfo::isReference(check_rhs_ti)) {
+            // Only dereference ParseReferenceNode (\expr) when LHS is also a reference type
+            if (right.getType() != NT_PARSEREFERENCE || QoreTypeInfo::isReference(ti)) {
+                const QoreTypeInfo* deref_rhs_ti = QoreTypeInfo::getReferenceTarget(check_rhs_ti);
+                if (deref_rhs_ti) {
+                    check_rhs_ti = deref_rhs_ti;
+                }
+            }
+        }
+
         bool may_not_match = false;
         bool may_need_filter = false;
         qore_type_result_e max_result = QTI_NOT_EQUAL;
         // only set the initial assignment flag if the lvalue is a declaration
         bool initial_assignment = (left.getType() == NT_VARREF && left.get<VarRefNode>()->parseIsDecl());
-        res = QoreTypeInfo::parseAccepts(ti, parse_context.typeInfo, may_not_match, may_need_filter, max_result,
+        res = QoreTypeInfo::parseAccepts(check_ti, check_rhs_ti, may_not_match, may_need_filter, max_result,
             initial_assignment);
         // issue #2106 do not set the ident flag for any other type in case runtime types are more specific (complex)
         // than parse types and require filtering
-        //printd(5, "QoreAssignmentOperatorNode::parseInitImpl() '%s' <- '%s' res: %d may_not_match: %d "
-        //    "may_need_filter: %d ident: %d\n", QoreTypeInfo::getName(ti),
-        //    QoreTypeInfo::getName(parse_context.typeInfo), res, may_not_match, may_need_filter, ident);
+
+        // Special handling for hash type mismatches that parseAccepts treats as ambiguous
+        // When assigning untyped/auto hash to a specific typed hash, enforce strict checking
+        if (res == QTI_AMBIGUOUS && check_rhs_ti && check_ti != check_rhs_ti) {
+            // Check LHS type name for element types (looks like "hash<key, value>")
+            const char* lhs_name = QoreTypeInfo::getName(check_ti);
+            // Check RHS type name
+            const char* rhs_name = QoreTypeInfo::getName(check_rhs_ti);
+
+            // LHS is a specific typed hash if it contains "<" but not "<auto>"
+            bool lhs_is_typed_hash = false;
+            if (lhs_name) {
+                const char* bracket = strchr(lhs_name, '<');
+                if (bracket && bracket[1] != 'a') {  // Not "hash<auto>" or "*hash<auto>"
+                    lhs_is_typed_hash = true;
+                }
+            }
+
+            // RHS is an untyped hash if it's exactly "hash" (not "hash<auto>" or any specific type)
+            bool rhs_is_untyped_hash = false;
+            if (rhs_name) {
+                if (!strcmp(rhs_name, "hash")) {
+                    rhs_is_untyped_hash = true;
+                }
+            }
+
+            // Check if the RHS is a reference-creation expression (\expr)
+            bool rhs_is_ref_expr = (right.getType() == NT_PARSEREFERENCE);
+
+            // Only apply special check if:
+            // - LHS is a specific typed hash (has element types like hash<string, int>)
+            // - RHS is an untyped/auto hash (plain "hash" or "hash<auto>")
+            // - RHS is not a reference expression
+            if (lhs_is_typed_hash && rhs_is_untyped_hash && !rhs_is_ref_expr) {
+                // LHS is typed hash, RHS is untyped/auto hash
+                res = QTI_NOT_EQUAL;
+            }
+        }
 
         // Additional check for typed callable signature compatibility
-        if (res && !QoreTypeInfo::checkComplexCodeCompatibility(ti, parse_context.typeInfo)) {
+        if (res && !QoreTypeInfo::checkComplexCodeCompatibility(check_ti, check_rhs_ti)) {
             res = QTI_NOT_EQUAL;
         }
     } else {
@@ -151,6 +232,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     // - Otherwise only raise if parse exception sink is enabled
     bool raise_exception = false;
     const QoreTypeInfo* error_ti = ti;  // Type info to use in error message
+    const QoreTypeInfo* error_rhs_ti = parse_context.typeInfo;
 
     if (type_mismatch) {
         if (is_direct_auto_assignment) {
@@ -173,23 +255,49 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
             }
 
             if (declared_ti) {
+                // Dereference for type checking if it's a reference type
+                const QoreTypeInfo* check_declared_ti = declared_ti;
+                const QoreTypeInfo* check_declared_rhs_ti = parse_context.typeInfo;
+                if (QoreTypeInfo::isReference(declared_ti)) {
+                    const QoreTypeInfo* deref_declared = QoreTypeInfo::getReferenceTarget(declared_ti);
+                    if (deref_declared) {
+                        check_declared_ti = deref_declared;
+                    }
+                }
+                if (QoreTypeInfo::isReference(check_declared_rhs_ti)) {
+                    const QoreTypeInfo* deref_declared_rhs = QoreTypeInfo::getReferenceTarget(check_declared_rhs_ti);
+                    if (deref_declared_rhs) {
+                        check_declared_rhs_ti = deref_declared_rhs;
+                    }
+                }
+
                 // Re-check compatibility against declared type
                 bool may_not_match = false;
                 bool may_need_filter = false;
                 qore_type_result_e max_result = QTI_NOT_EQUAL;
-                qore_type_result_e declared_res = QoreTypeInfo::parseAccepts(declared_ti,
-                    parse_context.typeInfo, may_not_match, may_need_filter, max_result);
+                qore_type_result_e declared_res = QoreTypeInfo::parseAccepts(check_declared_ti,
+                    check_declared_rhs_ti, may_not_match, may_need_filter, max_result);
                 // Only raise error if incompatible with declared type and parse exception sink is enabled
                 if (!declared_res && parse_context.pgm->getParseExceptionSink()) {
                     raise_exception = true;
                     error_ti = declared_ti;
+                    error_rhs_ti = parse_context.typeInfo;
                 }
             }
         } else {
             // Not a direct auto assignment - use normal logic
-            raise_exception = parse_context.pgm->getParseExceptionSink() ||
-                (has_narrowed_type &&
-                 !(parse_context.pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES));
+            if (has_narrowed_type && !(parse_context.pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES)) {
+                // For narrowed types assigned to soft types, defer to runtime
+                // because soft types perform runtime conversion and the auto variable's
+                // actual runtime type may be different from the narrowed parse type
+                const char* lhs_name = QoreTypeInfo::getName(ti);
+                bool lhs_is_soft = lhs_name && !strncmp(lhs_name, "soft", 4);
+                if (!lhs_is_soft) {
+                    raise_exception = true;
+                }
+            } else {
+                raise_exception = (bool)parse_context.pgm->getParseExceptionSink();
+            }
         }
     }
 
@@ -198,7 +306,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
             weak_assignment ? "weak " : "", weak_assignment ? ":=" : "=");
         QoreTypeInfo::getThisType(error_ti, *edesc);
         edesc->concat(", but right-hand side is ");
-        QoreTypeInfo::getThisType(parse_context.typeInfo, *edesc);
+        QoreTypeInfo::getThisType(error_rhs_ti, *edesc);
 
         // Add context about type narrowing if applicable
         if (has_narrowed_type && !is_direct_auto_assignment) {
@@ -220,22 +328,66 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     if (!err && left.getType() == NT_VARREF) {
         VarRefNode* vrn = left.get<VarRefNode>();
         qore_var_t vtype = vrn->getType();
+        // Get the type to narrow to: use inferred type if available, otherwise use declared type
+        const QoreTypeInfo* narrow_type = parse_context.typeInfo;
+        if (!narrow_type && right.getType() == NT_VARREF) {
+            // If assigning from a variable reference with no inferred type (e.g., unassigned),
+            // use the declared type of the variable
+            VarRefNode* right_vrn = right.get<VarRefNode>();
+            qore_var_t right_vtype = right_vrn->getType();
+            if (right_vtype == VT_LOCAL || right_vtype == VT_CLOSURE || right_vtype == VT_LOCAL_TS) {
+                LocalVar* right_lvar = right_vrn->ref.id;
+                if (right_lvar) {
+                    narrow_type = right_lvar->getTypeInfo();
+                }
+            } else if (right_vtype == VT_GLOBAL || right_vtype == VT_THREAD_LOCAL) {
+                Var* right_gvar = right_vrn->ref.var;
+                if (right_gvar) {
+                    narrow_type = right_gvar->getTypeInfo();
+                }
+            }
+        }
         if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
             LocalVar* lvar = vrn->ref.id;
-            if (lvar && lvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
+            if (lvar && lvar->isAutoType()) {
                 // Direct assignment replaces the narrowed type, store location for error messages
-                lvar->parseSetNarrowedType(parse_context.typeInfo, loc);
+                lvar->parseSetNarrowedType(narrow_type, loc);
             }
         } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
             Var* gvar = vrn->ref.var;
-            if (gvar && gvar->isAutoType() && QoreTypeInfo::hasType(parse_context.typeInfo)) {
+            if (gvar && gvar->isAutoType()) {
                 // Direct assignment replaces the narrowed type, store location for error messages
-                gvar->parseSetNarrowedType(parse_context.typeInfo, loc);
+                gvar->parseSetNarrowedType(narrow_type, loc);
             }
         }
     }
 
-    parse_context.typeInfo = ti;
+    // For auto-typed variables, use the declared type (auto) as the expression result
+    // type, not the narrowed type. This prevents map/select/etc. from creating typed
+    // lists (e.g., list<hash<auto>>) when the actual values may be of different types.
+    if (is_direct_auto_assignment) {
+        parse_context.typeInfo = autoTypeInfo;
+    } else {
+        parse_context.typeInfo = ti;
+    }
+    parse_context.analysis.clear();
+    if (parse_context.typeInfo) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = parse_context.typeInfo;
+        if (right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            && QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    } else if (right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+        parse_context.analysis.known_type = right_analysis.known_type;
+        if (right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+        }
+    }
+    if (right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
+        parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
+    }
     return err;
 }
 

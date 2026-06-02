@@ -102,7 +102,7 @@ bool <int>::strp() [flags=CONSTANT] {
 }
 
 //! Returns a formatted string of the integer according to the format argument
-/** @param fmt the format string has the following format:\n
+/** @param format the format string has the following format:\n
     <em>\<thousands_separator\></em><tt>[</tt><em>\<decimal_separator\>[\<decimals\>]</em><tt>]</tt>\n
     where:\n
     - \a thousands_separator and \a decimal_separator are single characters defining the thousands and decimal
@@ -132,19 +132,19 @@ string nstr = i.format(".,3"); # returns "-48.392.093.894,000"
     - %Qore 0.8.6
     - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
  */
-string <int>::format(string fmt) [flags=CONSTANT] {
-   SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(fmt->getEncoding()));
+string <int>::format(string format) [flags=CONSTANT,NAMED_ARGS] {
+   SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(format->getEncoding()));
    rv->sprintf(QLLD, i);
-   return qore_number_private::formatNumberString(**rv, *fmt, xsink) ? 0 : rv.release();
+   return qore_number_private::formatNumberString(**rv, *format, xsink) ? 0 : rv.release();
 }
 
 //! Returns a formatted string of the integer according to format arguments
-/** @param prec the number of digits after the decimal point; a negative value means to round that number of digits
+/** @param precision the number of digits after the decimal point; a negative value means to round that number of digits
     before the decimal place, note that a positive value here will result in the given number of zeros appearing after
     the decimal place
-    @param decimal_sep a single character that defines the decimal separator; an empty string means no decimal
+    @param decimal_separator a single character that defines the decimal separator; an empty string means no decimal
     separator
-    @param thousands_sep a single character that defines the thousands and further separators every three digits
+    @param thousands_separator a single character that defines the thousands and further separators every three digits
     before the decimal point; an empty string means no thousands separator
 
     @return a string representing the integer according to the format arguments as described above
@@ -164,10 +164,10 @@ string nstr = i.format(3, ",", "."); # returns "-48.392.093.894,000"
 
     @since %Qore 0.8.13
  */
-string <int>::format(int prec = 2, string decimal_sep = ".", string thousands_sep = "") [flags=RET_VALUE_ONLY] {
+string <int>::format(int precision = 2, string decimal_separator = ".", string thousands_separator = "") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode);
    rv->sprintf(QLLD, i);
-   if (qore_number_private::formatNumberString(**rv, prec, decimal_sep, thousands_sep, xsink))
+   if (qore_number_private::formatNumberString(**rv, precision, decimal_separator, thousands_separator, xsink))
       return 0;
    return rv.release();
 }
@@ -202,7 +202,7 @@ b += i.encodeMsb(8);
 
     @since %Qore 0.8.8
  */
-binary <int>::encodeMsb(int size = 4) [flags=RET_VALUE_ONLY] {
+binary <int>::encodeMsb(int size = 4) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<BinaryNode> b(new BinaryNode);
    switch (size) {
       case 1: {
@@ -257,7 +257,7 @@ b += i.encodeLsb(8);
 
     @since %Qore 0.8.8
  */
-binary <int>::encodeLsb(int size = 4) [flags=RET_VALUE_ONLY] {
+binary <int>::encodeLsb(int size = 4) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<BinaryNode> b(new BinaryNode);
    switch (size) {
       case 1: {
@@ -365,7 +365,7 @@ string <int>::toUnicode() [flags=RET_VALUE_ONLY] {
 
     @since %Qore 0.8.13
 */
-string <int>::toBase(int base = 10) [flags=RET_VALUE_ONLY] {
+string <int>::toBase(int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (base < 2 || base > 36)
         return xsink->raiseException("INVALID-BASE", "base " QLLD " is invalid; base must be 2 - 36 inclusive", base);
 

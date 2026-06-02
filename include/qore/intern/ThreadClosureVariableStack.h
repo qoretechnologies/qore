@@ -109,7 +109,11 @@ public:
     // deletes everything on the stack
     DLLLOCAL void del(ExceptionSink* xsink) {
         while (curr->prev || curr->pos) {
-            uninstantiate(xsink);
+            uninstantiateIntern();
+            ClosureVarValue* cvv = curr->var[curr->pos].cvv;
+            if (cvv) {
+                cvv->deref(xsink);
+            }
         }
     }
 
@@ -151,6 +155,72 @@ public:
         uninstantiateIntern();
         assert(curr->var[curr->pos].cvv);
         curr->var[curr->pos].cvv->deref(xsink);
+    }
+
+    //! Returns the ClosureVarValue for the given id on the cvstack, or nullptr if not found.
+    /** Unlike find(), this method does not assert if the entry is not found.
+        Used when the cvstack search should be attempted first but may not have the entry
+        (e.g., when a closure outlives its enclosing function and the cvstack entries have been popped).
+    */
+    DLLLOCAL ClosureVarValue* try_find(const char* id) {
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                ClosureVarValue* rv = w->var[p].cvv;
+                if (rv && rv->id == id) {
+                    return rv;
+                }
+            }
+            w = w->prev;
+        }
+        return nullptr;
+    }
+
+    //! Frame-aware variant: only searches CVVs pushed AFTER the topmost frame
+    //! boundary (i.e., within the current function frame). Returns nullptr if
+    //! the id was only pushed in an outer frame.
+    /** Needed by qore_rt_instantiate_local to detect same-frame idempotent
+        re-instantiation while still pushing a fresh CVV for recursive calls
+        that share the same LocalVar name pointer across frames. A plain
+        try_find() walks ALL frames, which makes recursive calls reuse the
+        outer frame's CVV — causing pop-order confusion on inner-frame exit.
+    */
+    DLLLOCAL ClosureVarValue* try_find_in_current_frame(const char* id) {
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                ClosureVarValue* rv = w->var[p].cvv;
+                if (!rv) {
+                    // frame boundary — stop searching
+                    return nullptr;
+                }
+                if (rv->id == id) {
+                    return rv;
+                }
+            }
+            w = w->prev;
+        }
+        return nullptr;
+    }
+
+    //! Returns true if the given ClosureVarValue is already on the cvstack (pointer equality)
+    DLLLOCAL bool hasCvv(const ClosureVarValue* target) const {
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                if (w->var[p].cvv == target) {
+                    return true;
+                }
+            }
+            w = w->prev;
+        }
+        return false;
     }
 
     DLLLOCAL ClosureVarValue* find(const char* id) {
@@ -222,8 +292,15 @@ public:
         assert(frame_count >= 0);
         --frame_count;
         //printd(5, "ThreadClosureVariableStack::popFrameBoundary(): fc:%d\n", frame_count);
-        uninstantiateIntern();
-        assert(!curr->var[curr->pos].cvv);
+        while (curr->prev || curr->pos) {
+            uninstantiateIntern();
+            ClosureVarValue* cvv = curr->var[curr->pos].cvv;
+            if (!cvv) {
+                return;
+            }
+            cvv->deref(nullptr);
+        }
+        assert(false);
     }
 
     DLLLOCAL int getFrame(int frame, Block*& w, int& p);

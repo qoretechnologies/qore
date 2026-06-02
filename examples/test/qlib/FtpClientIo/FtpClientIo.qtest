@@ -4,9 +4,10 @@
 %modern
 %enable-all-warnings
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/FsUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
 %requires ../../../../qlib/FtpClientIo/FtpClientIo.qm
 
 %include ../../qore/classes/FtpServer.qc
@@ -51,7 +52,7 @@ class FtpClientIoTest inherits QUnit::Test {
 
     testControlPollOperationBasic() {
         # Test basic construction and state
-        FtpControlPollOperation op("localhost", port);
+        FtpControlPollOperation op(host: "localhost", port: port);
         assertEq("FtpControlPollOperation", op.className());
         assertEq("connecting", op.getState());
         assertEq("ftp-login", op.getGoal());
@@ -71,7 +72,7 @@ class FtpClientIoTest inherits QUnit::Test {
 
     testControlPollOperationLogin() {
         # Test login via poll driver
-        FtpControlPollOperation op("localhost", port);
+        FtpControlPollOperation op(host: "localhost", port: port);
 
         # Drive to login completion
         drivePollOp(op);
@@ -87,14 +88,14 @@ class FtpClientIoTest inherits QUnit::Test {
 
     testControlPollOperationCommand() {
         # Test command execution after login
-        FtpControlPollOperation op("localhost", port);
+        FtpControlPollOperation op(host: "localhost", port: port);
 
         # Login first
         drivePollOp(op);
         assertTrue(op.isReady(), "should be ready after login");
 
         # Submit PWD command
-        op.submitCommand("PWD");
+        op.submitCommand(command: "PWD");
         assertEq("ftp-command", op.getGoal());
 
         # Drive command to completion
@@ -109,7 +110,7 @@ class FtpClientIoTest inherits QUnit::Test {
         }
 
         # Submit TYPE I command
-        op.submitCommand("TYPE", "I");
+        op.submitCommand(command: "TYPE", argument: "I");
         drivePollOp(op);
         assertEq(200, op.getLastResponseCode(), "TYPE I should return 200");
     }
@@ -136,7 +137,7 @@ class FtpClientIoTest inherits QUnit::Test {
         }();
 
         int data_port = q.get(5s);
-        FtpDataPollOperation data_op("127.0.0.1", data_port);
+        FtpDataPollOperation data_op(host: "127.0.0.1", port: data_port);
         assertEq("FtpDataPollOperation", data_op.className());
         assertEq("data-connecting", data_op.getState());
         assertEq("ftp-data-recv", data_op.getGoal());

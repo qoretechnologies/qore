@@ -569,7 +569,7 @@ QoreHashNode* init_digest_map_hash() {
 
 // returns hash<string, hash<auto>>
 QoreHashNode* init_cipher_map_hash() {
-    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(qore_get_complex_hash_type(autoHashTypeInfo)), nullptr);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoHashTypeInfo), nullptr);
     qore_hash_private* priv = qore_hash_private::get(**rv);
 
 #ifdef OPENSSL_3_PLUS

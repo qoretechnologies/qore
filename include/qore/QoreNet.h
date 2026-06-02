@@ -140,6 +140,9 @@ DLLEXPORT QoreListNode* q_getaddrinfo_to_list(ExceptionSink* xsink, const char* 
 //! adds the address family as "type" and a descriptive name as "typename" to the hash; writes "unknown" if the address family is unknown
 DLLEXPORT void q_af_to_hash(int af, QoreHashNode& h, ExceptionSink* xsink);
 
+//! returns a descriptive name for the given address family ("ipv4", "ipv6", "unix", "mac", or "unknown")
+DLLLOCAL const char* q_af_to_str(int af);
+
 //! provides a getaddrinfo-compatible interface backed by the async I/O controller address resolver
 class QoreAddrInfo {
 protected:

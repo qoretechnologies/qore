@@ -2,11 +2,11 @@
 
 %include common.q
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
-%requires ../../../../qlib/Util.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
 %exec-class IndentTest
 
 #! Test TextWrap::indent()

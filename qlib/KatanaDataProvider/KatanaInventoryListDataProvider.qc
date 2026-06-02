@@ -46,7 +46,7 @@ public class KatanaInventoryListDataProvider inherits KatanaDataProviderBase {
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return new KatanaInventoryDataType().getFields();
     }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return runListSearch("inventory", where_cond, search_options);
     }

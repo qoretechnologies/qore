@@ -155,7 +155,7 @@ public namespace DebugUtil {
     **/
     public class WrapperGetOpt inherits GetOpt {
         #! create the object with the given @ref Qore::GetOpt "GetOpt" option hash
-        public constructor(hash<auto> options) : GetOpt(options) {
+        public constructor(hash<auto> options) : GetOpt(options: options) {
         }
 
         #! Parses input arguments until a standalone argument is found.
@@ -172,14 +172,14 @@ public namespace DebugUtil {
                 'verbose': 'v,verbose',
                 'listen': 'l,listen=s@',
             );
-            WrapperGetOpt g(opts);
+            WrapperGetOpt g(options: opts);
             list dargs;
             hash opt;
             *string fileName;
             g.split(ARGV, \dargs, \fileName, \ARGV);
 
             try {
-                opt = g.parse2(\dargs);
+                opt = g.parse2(arguments: \dargs);
             } catch (hash<ExceptionInfo> ex) {
                 stderr.printf("%s: %s\n", ex.err, ex.desc);
                 help(-1);

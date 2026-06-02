@@ -1,0 +1,46 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchTensorPostprocessNative
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires ml
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchTensorPostprocessNative {
+    constructor() {
+        Bench::BenchRunner r("tensor_postprocess_native");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = OnnxBench::tensorPostprocessRows();
+        int tokens = OnnxBench::tensorPostprocessTokens();
+        int dim = OnnxBench::tensorPostprocessDim();
+
+        ML::Tensor hidden_states;
+        ML::Tensor attention_mask;
+
+        r.setup = sub () {
+            hidden_states = new ML::Tensor(OnnxBench::makeTokenHiddenStateBuffer(rows, tokens, dim),
+                (rows, tokens, dim));
+            attention_mask = new ML::Tensor(OnnxBench::makeTokenMaskBuffer(rows, tokens), (rows, tokens));
+            r.bytes_processed = OnnxBench::approxTensorPostprocessBytes(rows, tokens, dim);
+        };
+
+        r.measure = sub () {
+            ML::Tensor embeddings = hidden_states
+                .poolTokenEmbeddings(attention_mask: attention_mask, strategy: "mean")
+                .l2NormalizeRows();
+            if (embeddings.getShape() != (rows, dim)) {
+                throw "BENCH-ERROR", sprintf("unexpected tensor_postprocess_native shape: %y",
+                    embeddings.getShape());
+            }
+        };
+
+        exit(r.run());
+    }
+}

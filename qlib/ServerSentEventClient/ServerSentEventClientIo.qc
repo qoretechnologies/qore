@@ -370,7 +370,11 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         *data send_body;
         if (exists request_body) {
             if (serialization == "json" && request_body.typeCode() != NT_STRING) {
+%ifndef NoJson
                 send_body = make_json(request_body);
+%else
+                throw "SSE-CLIENT-ERROR", "the json module is required to serialize JSON request bodies";
+%endif
             } else {
                 send_body = request_body;
             }

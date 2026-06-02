@@ -74,9 +74,17 @@ ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment(const
     //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment() this: %p vlist: %p "
     //    "size: %d\n", this, vlist, vlist->size());
     for (lvar_set_t::const_iterator i = vlist->begin(), e = vlist->end(); i != e; ++i) {
-        ClosureVarValue* cvar = thread_find_closure_var((*i)->getName());
-        //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::ThreadSafeLocalVarRuntimeEnvironment() this: %p '%s' "
-        //    "i: %p cvar: %p val: %s\n", this, (*i)->getName(), *i, cvar, cvar->val.getTypeName());
+        LocalVar* lv = *i;
+        ClosureVarValue* frame_cvv = thread_try_find_closure_var_in_current_frame(lv->getName());
+        ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(lv);
+        ClosureVarValue* cvar = frame_cvv ? frame_cvv : env_cvv;
+        if (!cvar) {
+            cvar = thread_try_find_closure_var(lv->getName());
+        }
+        assert(cvar);
+        if (!cvar) {
+            continue;
+        }
         cmap[*i] = cvar;
         cvvset.insert(cvar);
         cvar->ref();
@@ -92,8 +100,11 @@ ThreadSafeLocalVarRuntimeEnvironment::~ThreadSafeLocalVarRuntimeEnvironment() {
 ClosureVarValue* ThreadSafeLocalVarRuntimeEnvironment::find(const LocalVar* id) const {
     //printd(5, "ThreadSafeLocalVarRuntimeEnvironment::find(%p '%s') this: %p\n", id, id->getName(), this);
     cvar_map_t::const_iterator i = cmap.find(id);
-    assert(i != cmap.end());
-    return i->second;
+    // Return nullptr if not found — the caller (LocalVar::eval(), isRef(), getLValue(), remove())
+    // falls back to thread_find_closure_var(name) which searches the cvstack by name.
+    // This happens when a function with closure_use locals is called from within a
+    // different closure's execution context (closure_rt_env points to the calling closure).
+    return i != cmap.end() ? i->second : nullptr;
 }
 
 bool ThreadSafeLocalVarRuntimeEnvironment::hasVar(ClosureVarValue* cvv) const {
@@ -118,7 +129,11 @@ bool QoreClosureNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue QoreClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    CVecInstantiator cvi(cvec, xsink);
+    // Closures can be invoked on threads with no program context (e.g., AsyncIoController's
+    // ioThread, ThreadPool workers). Ensure a tlpd exists before dispatch; capture CVVs are
+    // pushed after CodeEvaluationHelper selects the closure program's tlpd in
+    // UserClosureFunction::evalClosure().
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
     return closure->exec(*this, pgm, args, 0, class_ctx, xsink);
 }
 
@@ -141,8 +156,11 @@ bool QoreObjectClosureNode::derefImpl(ExceptionSink* xsink) {
 
 QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreClosureSelfContextHelper csch(obj);
-    CVecInstantiator cvi(cvec, xsink);
-    return closure->exec(*this, 0, args, obj, class_ctx, xsink);
+    // See QoreClosureNode::execValue above — capture CVVs are pushed after program-context
+    // selection in UserClosureFunction::evalClosure().
+    QoreProgram* pgm = obj->getProgram();
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->exec(*this, pgm, args, obj, class_ctx, xsink);
 }
 
 QoreObject* QoreObjectClosureNode::refSelfForBackground(ExceptionSink* xsink) const {

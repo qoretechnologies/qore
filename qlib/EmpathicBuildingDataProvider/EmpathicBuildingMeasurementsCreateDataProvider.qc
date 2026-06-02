@@ -102,7 +102,9 @@ public class EmpathicBuildingMeasurementsCreateDataProvider inherits EmpathicBui
                 e.start = e.start.getEpochSeconds() * 1000 + e.start.milliseconds();
                 e.end = e.end.getEpochSeconds() * 1000 + e.end.milliseconds();
                 if (!e.booking_ref.val()) {
+%ifndef NoUuid
                     e.booking_ref = UUID::get();
+%endif
                 }
                 ++events;
             }

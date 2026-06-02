@@ -99,9 +99,9 @@ module DataProvider {
             "path": "/",
             "action": "filter-records",
             "display_name": "Filter Records",
-            "short_desc": "Filter records by where_cond expression",
-            "desc": "Filter pipeline records using a `where_cond` expression; "
-                "matching records pass through, non-matching records are dropped",
+            "short_desc": "Filter records by expression or DPQL string",
+            "desc": "Filter pipeline records using either a structured `where_cond` expression or a `dpql_where` "
+                "string; matching records pass through, non-matching records are dropped",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_FILTER,
             "output_data_type": DPAD_PASS_THROUGH,
@@ -121,8 +121,15 @@ module DataProvider {
                         "desc": "A boolean expression to filter records; matching records pass "
                             "through, non-matching records are dropped",
                         "type": AbstractDataProviderTypeMap."*bool",
-                        "required": True,
                         "server_expression_handling": True,
+                    },
+                    "dpql_where": <DataProviderOptionInfo>{
+                        "display_name": "DPQL Filter",
+                        "short_desc": "A DPQL string filter expression",
+                        "desc": "A DPQL string expression to filter records; use this option when writing the "
+                            "predicate directly as text instead of using the expression builder",
+                        "type": AbstractDataProviderTypeMap."*string",
+                        "example_value": "@status == \"active\" && @score >= 90",
                     },
                 }, {
                     "loc": "constructor",
@@ -727,6 +734,140 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     iterated, and each record will be passed separately to the processor with a significant performance penalty when
     processing large volumes of data.
 
+    Native bulk readers can return their most efficient runtime representation with
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue()
+    "AbstractDataProviderBulkRecordInterface::getShapedValue()".  This preserves
+    \c BufferColumns and \c DataFrameBlock values for shape-aware pipelines.  The older
+    @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue()
+    "getValue()" method remains the compatibility API and materializes a hash-of-lists view
+    when the native block is columnar.
+
+    @subsection dataprovider_pipeline_shapes Data Provider Pipeline Shape Negotiation
+
+    Pipelines can also negotiate explicit data shapes between processor stages with
+    @ref DataProvider::DataProviderShape "DataProviderShape".  This extends the older
+    \c supportsBulkApi() boolean with enough information to keep columnar data in its
+    most useful representation for as long as possible.
+
+    Supported shapes are:
+    - @ref DataProvider::DataProviderShape::RowRecords "RowRecords": one logical row at a time
+    - @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists": bulk record blocks in hash-of-lists form
+    - @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns": dense column blocks represented by
+      @ref Qore::SQL::ColumnarResult "ColumnarResult" objects or hashes whose values are typed \c buffer<T>
+      columns
+    - @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock": a \c DataFrame object block from the
+      \c dataframe module
+
+    Processor classes advertise shapes with
+    @ref DataProvider::AbstractDataProcessor::getSupportedInputShapes()
+    "AbstractDataProcessor::getSupportedInputShapes()" and
+    @ref DataProvider::AbstractDataProcessor::getSupportedOutputShapes()
+    "AbstractDataProcessor::getSupportedOutputShapes()".  Pipelines keep the current shape when the next processor
+    supports it; otherwise they convert with
+    @ref DataProvider::AbstractDataProcessor::convertShape() "AbstractDataProcessor::convertShape()".
+    Shape-aware built-in processors preserve \c DataFrameBlock and \c BufferColumns bulk blocks for filter,
+    projection, update, search/replace, grouping, and analytics results when they can represent the output columns
+    without row materialization.
+    \c DataFrameBlock values convert to \c HashOfLists with \c df.toColumnHash() and to row records with
+    \c df.toRecords().  \c DataFrameBlock values convert to \c BufferColumns with \c df.toColumnarResult().
+    \c BufferColumns values convert back to rows or hash-of-lists for processors that do not yet support dense
+    columns directly.
+
+    Data providers advertise native bulk read and write shapes with \c bulk_read_shapes, \c bulk_create_shapes, and
+    \c bulk_upsert_shapes in @ref DataProvider::DataProviderInfo "DataProviderInfo".  Callers can inspect these with
+    @ref DataProvider::AbstractDataProvider::getBulkReadShapes() "getBulkReadShapes()",
+    @ref DataProvider::AbstractDataProvider::getBulkCreateShapes() "getBulkCreateShapes()", and
+    @ref DataProvider::AbstractDataProvider::getBulkUpsertShapes() "getBulkUpsertShapes()".  The shaped
+    @ref DataProvider::AbstractDataProvider::createRecordsShape() "createRecordsShape()" and
+    @ref DataProvider::AbstractDataProvider::upsertRecordsShape() "upsertRecordsShape()" APIs preserve native
+    blocks for providers that support them and fall back to hash-of-lists compatibility otherwise.
+
+    @par DataFrame Pipeline Example
+    @code{.py}
+%requires DataProviderDataFrame
+
+DataFrame::DataFrame orders(
+    ({"customer": "Acme", "status": "open", "amount": 150.0},
+     {"customer": "Beta", "status": "closed", "amount": 80.0},
+     {"customer": "Core", "status": "open", "amount": 220.0}));
+
+hash<DataProviderExpression> filter_expr = <DataProviderExpression>{
+    "exp": "&&",
+    "args": (
+        <DataProviderExpression>{
+            "exp": "==",
+            "args": (<DataProviderFieldReference>{"field": "status"}, "open"),
+        },
+        <DataProviderExpression>{
+            "exp": ">",
+            "args": (<DataProviderFieldReference>{"field": "amount"}, 100.0),
+        },
+    ),
+};
+
+list<hash<auto>> rows;
+DataProviderPipeline pipeline(<PipelineOptionInfo>{
+    "name": "open-large-orders",
+    "output_callback": sub (auto row) {
+        push rows, row;
+    },
+});
+
+pipeline.append(new QoreFilterRecordsProcessor({"where_cond": filter_expr}));
+pipeline.submit(orders);
+pipeline.waitDone();
+# rows now contains the matching DataFrame rows as record hashes.
+    @endcode
+
+    The same filter can also be written directly as DPQL:
+    @code{.py}
+pipeline.append(new QoreFilterRecordsProcessor({
+    "dpql_where": '@status == "open" && @amount > 100.0',
+}));
+
+# The where_cond option also accepts a DPQL string for simple programmatic setup.
+pipeline.append(new QoreFilterRecordsProcessor({
+    "where_cond": '@status == "open" && @amount > 100.0',
+}));
+    @endcode
+
+    @note
+    The built-in @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" supports
+    \c DataFrameBlock and \c BufferColumns directly when configured with either a structured \c where_cond
+    expression, a DPQL \c where_cond string, or a DPQL \c dpql_where string.  Supported scalar comparisons,
+    expression-to-expression comparisons, computed arithmetic, numeric function, trim/concat/null-handling,
+    case-folding, date-part, and row-independent date arithmetic expressions, \c between, \c inRange,
+    \c in, \c notIn, null checks, string predicates including \c containsAny, list membership predicates,
+    list/hash accessors, ternary computed values, boolean combinations, and structured strict
+    equality/inequality compile to DataFrame row masks or dense ColumnarResult \c buffer<bool> masks;
+    BufferColumns temporal comparisons
+    against Qore/DPQL date literals compare the dense microsecond values without materializing rows.
+    String predicates support the legacy
+    bool ignore-case argument and, when the \c i18n module is available, a locale options hash such as
+    <tt>{"locale": "tr-TR"}</tt> or <tt>{"locale": "en-US", "strength": "primary"}</tt> for ICU-backed
+    locale-sensitive comparison.  BufferColumns input also lowers
+    SQL-like \c like and regular expression predicates to dense masks.  More complex expressions fall back
+    to row-record evaluation while preserving the negotiated shape when possible.
+    @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
+    @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
+    @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" preserve \c DataFrameBlock and
+    \c BufferColumns values for simple top-level field projection/removal and contiguous limiting.
+    @ref DataProvider::QoreSetFieldsProcessor "QoreSetFieldsProcessor" and
+    @ref DataProvider::QoreSearchReplaceProcessor "QoreSearchReplaceProcessor" also preserve these shapes for
+    top-level constant-field and string-column updates.  For \c ColumnarResult input, these projection and
+    simple-update processors rebuild the output columnar block from referenced column containers instead of
+    constructing an intermediate DataFrame.
+    @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" supports \c DataFrameBlock and
+    \c BufferColumns input as well; it accumulates logical rows from the block and, when used through pipeline
+    \c flush(), preserves a DataFrame, ColumnarResult, or hash-of-lists aggregate block for downstream
+    shape-aware processors.
+    Analytics processors, including @ref DataProvider::QoreCorrelationProcessor "QoreCorrelationProcessor" and
+    @ref DataProvider::QoreCrossCorrelationProcessor "QoreCrossCorrelationProcessor", accept
+    \c DataFrameBlock and \c BufferColumns input directly and emit analytics event records as hash-of-lists blocks.
+    For top-level configured fields, these processors read only the selected DataFrame or dense ColumnarResult
+    columns instead of materializing the full input block as hash-of-lists data.
+    Direct calls to \c flushRecords() still return ordinary row records for compatibility.
+
     @section dataprovider_debugging Debugging Data Providers
 
     Data providers support an opt-in debug info collection mechanism that allows capturing technical details about
@@ -861,6 +1002,16 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
 
     @par Function Calls
     Custom functions can be used: <tt>calculate(\@score, 100)</tt> \c > \c 50
+    Built-in DataProvider functions such as <tt>containsAny(\@name, "li", "av")</tt>,
+    <tt>listContains(\@tags, "vip")</tt>, and
+    <tt>listContainsAny(\@tags, "trial", "standard")</tt> are available when the target provider exposes them.
+    The varargs form is the clearest DPQL syntax for list/string "any" predicates.
+
+    @par Accessors
+    DPQL can access nested values without changing the source record shape:
+    - <tt>\@scores[0] &gt;= 90</tt> - list or string index accessor
+    - <tt>\@scores[0..1]</tt> - list slice accessor
+    - <tt>\@payload{region} == "EU"</tt> - hash key accessor
 
     @par Expression Operators
     Operators that evaluate subexpressions in an operator-controlled context use Qore-style operator syntax
@@ -899,6 +1050,35 @@ hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
     '@status in ("pending", "active", "review")');
     @endcode
 
+    @par Nested Values And Lists
+    @code{.py}
+# Find high-scoring EU records tagged as VIP or trial
+hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+    '@payload{region} == "EU" && @scores[0] >= 90 && listContainsAny(@tags, "vip", "trial")');
+    @endcode
+
+    @par Structured Ternary Expression
+    @code{.py}
+# Ternary expressions are represented directly as DataProviderExpression hashes
+hash<DataProviderExpression> size_bucket = <DataProviderExpression>{
+    "exp": DP_SEARCH_OP_EQ,
+    "args": (
+        <DataProviderExpression>{
+            "exp": DP_OP_TERNARY,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_GE,
+                    "args": (<DataProviderFieldReference>{"field": "amount"}, 150.0),
+                },
+                "large",
+                "small"
+            ),
+        },
+        "large"
+    ),
+};
+    @endcode
+
     @par Regex Matching
     @code{.py}
 # Find email addresses from a specific domain (case-insensitive)
@@ -925,10 +1105,14 @@ hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('!(@deleted
 
     @par Using with Data Providers
     @code{.py}
-# Search a data provider using DPQL
+# Search a data provider using parsed DPQL
 hash<DataProviderExpression> where = DataProvider::parseDpqlExpression(
     '@created > 2024-01-01 && @type == "order"');
-AbstractDataProviderRecordIterator i = provider.searchRecords({"where": where});
+AbstractDataProviderRecordIterator i = provider.searchRecords(where);
+
+# Providers that support search expressions can also accept a DPQL string directly
+AbstractDataProviderRecordIterator i2 = provider.searchRecords(
+    '@created > 2024-01-01 && @type == "order"');
     @endcode
 
     @subsection dpql_round_trip Round-Trip Conversion
@@ -1036,6 +1220,50 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_5 DataProvider v3.5
+    - added @ref DataProvider::DataProviderShape "DataProviderShape" and shape-aware pipeline APIs on
+      @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor" for row records, hash-of-lists bulk blocks,
+      dense buffer-column blocks, and DataFrame blocks
+    - added @ref DataProvider::AbstractDataProviderBulkRecordInterface::getShapedValue()
+      "AbstractDataProviderBulkRecordInterface::getShapedValue()" and
+      @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValueShape()
+      "getValueShape()" so native bulk readers can preserve \c BufferColumns and \c DataFrameBlock values while
+      keeping @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue() "getValue()" as a
+      hash-of-lists compatibility API
+    - added automatic DataProvider pipeline shape routing and conversion with row-record boundary preservation for
+      legacy \c submitImpl() processors
+    - added DataProvider bulk read/create/upsert shape metadata and shaped create/upsert entry points so providers
+      can accept \c BufferColumns or \c DataFrameBlock input without row materialization
+    - updated @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" to process
+      \c DataFrameBlock and \c BufferColumns input directly for supported scalar, expression-to-expression,
+      and computed \c between / \c in comparisons, numeric function calls, trim/concat/null-handling functions,
+      date-part functions, row-independent date arithmetic, structured strict equality/inequality,
+      \c containsAny and other string predicates, list membership predicates, list/hash accessors, ternary computed values,
+      boolean combinations, and null checks; BufferColumns filters also lower temporal date comparisons, \c like,
+      and regular expression predicates to dense masks
+    - added DPQL string support to @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor"
+      through \c dpql_where and string-valued \c where_cond options so pipeline filters can be configured directly
+      with DPQL while retaining the DataFrame and dense BufferColumns fast paths
+    - added @ref DataProvider::ColumnarExpressionFilter "ColumnarExpressionFilter" as the shared DataFrame and
+      ColumnarResult expression engine used by shape-aware processors and DataFrame-backed providers
+    - updated @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to process hash-of-lists,
+      \c BufferColumns, and DataFrame blocks directly and preserve shaped aggregate blocks on pipeline flush
+    - optimized @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to lower \c avg(field)
+      to the native DataFrame \c mean aggregate when the aggregate block can stay columnar
+    - updated @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
+      @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
+      @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" to preserve shaped
+      \c DataFrameBlock and \c BufferColumns values for simple projection/removal and limiting
+    - updated @ref DataProvider::QoreSetFieldsProcessor "QoreSetFieldsProcessor" and
+      @ref DataProvider::QoreSearchReplaceProcessor "QoreSearchReplaceProcessor" to preserve shaped
+      \c DataFrameBlock and \c BufferColumns values for top-level constant-field and string-column updates
+    - optimized \c ColumnarResult projection and simple-update processors to rebuild output blocks from referenced
+      column containers directly, avoiding intermediate DataFrame construction
+    - updated analytics processors, including @ref DataProvider::QoreCorrelationProcessor
+      "QoreCorrelationProcessor" and @ref DataProvider::QoreCrossCorrelationProcessor
+      "QoreCrossCorrelationProcessor", to accept \c DataFrameBlock and \c BufferColumns input and preserve
+      shaped rectangular event blocks, including flush-time output from partial windows; this covers the full
+      @ref DataProvider::AbstractAnalyticsProcessor "AbstractAnalyticsProcessor" family, and top-level configured
+      fields are read directly from selected columns to avoid full-block hash-of-lists materialization
     - added framework-level auto-injection of a generic "Make an API call" action for every
       REST-capable @ref DataProvider::DataProviderActionCatalog "data provider app":
       - apps that declare a connection \c scheme automatically receive an auto-registered
@@ -1251,6 +1479,8 @@ if (errors) {
       internally via
       @ref DataProvider::AbstractDataProcessor::submitAndCollect() "submitAndCollect()" and
       @ref DataProvider::AbstractDataProcessor::flushAndCollect() "flushAndCollect()"
+    - added the \c synchronous option to @ref DataProvider::PipelineOptionInfo "PipelineOptionInfo" for
+      low-latency single-queue processor pipelines that submit data and wait for results on the caller's thread
     - added methods to return data provider types in the context of option dataprovider_message_support
     - @ref DataProvider::BaseOptionInfo "BaseOptionInfo": added @c required, @c readonly, @c disabled,
       @c preselected, @c has_dependents, @c depends_on, and @c on_change fields; these fields were previously

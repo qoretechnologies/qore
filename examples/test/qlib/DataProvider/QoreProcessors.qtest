@@ -22,16 +22,15 @@
 # DEALINGS IN THE SOFTWARE.
 
 %modern
-%strict-args
-%require-types
 %enable-all-warnings
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ProviderIndex
-%requires ../../../../qlib/ProviderIndexUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires DataProvider
+%requires ProviderIndex
+%requires ProviderIndexUtil
 
 %exec-class QoreProcessorsTest
 
@@ -77,6 +76,7 @@ class QoreProcessorsTest inherits QUnit::Test {
         addTestCase("select-fields - keep fields", \selectFieldsKeep());
         addTestCase("select-fields - rename fields", \selectFieldsRename());
         addTestCase("select-fields - combined keep and rename", \selectFieldsCombined());
+        addTestCase("select-fields - missing bulk field preserves row count", \selectFieldsMissingBulkField());
         addTestCase("select-fields - empty fields error", \selectFieldsEmpty());
 
         addTestCase("set-fields - add new fields", \setFieldsAddNew());
@@ -210,6 +210,21 @@ class QoreProcessorsTest inherits QUnit::Test {
         hash<auto> record = {"name": "Alice", "email": "a@b.com", "age": 30};
         hash<auto> expected = {"name": "Alice", "customer_email": "a@b.com"};
         assertEq(expected, proc.processRecord(record));
+    }
+
+    selectFieldsMissingBulkField() {
+        QoreSelectFieldsProcessor proc({"fields": "missing"});
+        hash<auto> records = {
+            "id": (1, 2, 3),
+            "name": ("one", "two", "three"),
+        };
+        hash<auto> expected = {
+            "missing": (NOTHING, NOTHING, NOTHING),
+        };
+        auto result = proc.processRecordsShape(records, DataProviderShape::HashOfLists);
+        assertEq(expected, result);
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result),
+            "missing projected column must preserve bulk row count");
     }
 
     selectFieldsEmpty() {
@@ -995,8 +1010,14 @@ class QoreProcessorsTest inherits QUnit::Test {
             rmdir(dir);
         }
 
-        # Use ProviderIndex to create the data provider index (serializes to YAML)
-        ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{}, dir);
+        # Use ProviderIndex to create a scoped data provider index (serializes to YAML).  This test validates Qore
+        # expression serialization only; external provider discovery is intentionally disabled for deterministic runs.
+        ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{}, dir, <ProviderIndexCreateOptions>{
+            "load_known_factories": False,
+            "load_environment": False,
+            "load_typescript_actions": False,
+            "apps": ("Qore",),
+        });
 
         # Read back using ProviderIndexUtil (deserializes from YAML)
         *hash<DataProviderIndexInfo> result = ProviderIndexUtil::readDataProviderIndex();

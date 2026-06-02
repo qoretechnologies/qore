@@ -102,7 +102,7 @@ public class MongoDbAggregateDataProvider inherits DataProvider::AbstractDataPro
             throw "MONGODB-AGGREGATE-ERROR", "pipeline is required";
         }
 
-        MongoCursor cursor = coll.aggregate(req.pipeline);
+        MongoCursor<hash<auto>> cursor = coll.aggregate(req.pipeline);
         list<hash<auto>> docs = cursor.toList();
 
         return {

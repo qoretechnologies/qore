@@ -1,0 +1,17 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+
+module SeparatedFallback {
+    version = "1.0";
+    desc = "separated module fallback test";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+public namespace SeparatedFallbackTest {
+    public int sub value() {
+        return 5164;
+    }
+}

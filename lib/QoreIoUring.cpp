@@ -42,6 +42,7 @@
 #ifdef DEBUG
 std::atomic<unsigned> QoreIoUring::debug_submit_count{0};
 std::atomic<unsigned> QoreIoUring::debug_completion_count{0};
+std::atomic<unsigned> QoreIoUring::debug_active_count{0};
 #endif
 
 QoreIoUring::QoreIoUring(unsigned queue_depth, ExceptionSink* xsink) {
@@ -76,12 +77,18 @@ QoreIoUring::QoreIoUring(unsigned queue_depth, ExceptionSink* xsink) {
     }
 
     valid = true;
+#ifdef DEBUG
+    debug_active_count.fetch_add(1, std::memory_order_relaxed);
+#endif
     printd(2, "QoreIoUring: initialized with queue depth %u, eventfd=%d\n",
         queue_depth, event_fd);
 }
 
 QoreIoUring::~QoreIoUring() {
     if (valid) {
+#ifdef DEBUG
+        debug_active_count.fetch_sub(1, std::memory_order_relaxed);
+#endif
         io_uring_queue_exit(&ring);
     }
     if (event_fd >= 0) {

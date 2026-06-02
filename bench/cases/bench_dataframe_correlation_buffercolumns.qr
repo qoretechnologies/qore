@@ -1,0 +1,49 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchDataFrameCorrelationBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires dataframe
+%requires DataProvider
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataFrameCorrelationBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataframe_correlation_buffercolumns");
+        r.iterations = 8;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+        r.setup = sub () {
+            hash<auto> data = DataFrameBench::makeBufferColumns(rows);
+            for (int c = 0; c < 32; ++c) {
+                buffer<float64> extra = buffer<float64>::sized(rows);
+                for (int i = 0; i < rows; ++i) {
+                    extra[i] = float((i * (c + 3)) % 10000) / 100.0;
+                }
+                data{sprintf("extra_%d", c)} = extra;
+            }
+            columns = new DataFrame::DataFrame(data).toColumnarResult();
+            r.bytes_processed = rows * 16;
+        };
+
+        r.measure = sub () {
+            QoreCorrelationProcessor corr({"fields": "amount,score", "window_size": rows});
+            ColumnarResult result = corr.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            if (result.numRows() != 1) {
+                throw "BENCHMARK-ERROR", sprintf("expected 1 correlation row, got %d", result.numRows());
+            }
+            if (result.getColumn("count")[0] != rows) {
+                throw "BENCHMARK-ERROR", "correlation output count mismatch";
+            }
+        };
+
+        exit(r.run());
+    }
+}

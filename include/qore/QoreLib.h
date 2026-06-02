@@ -33,6 +33,8 @@
 
 #define _QORE_QORELIB_H
 
+#include <string>
+
 #include <qore/common.h>
 #include <qore/QoreThreadLock.h>
 #include <qore/qore_bitopts.h>
@@ -138,6 +140,7 @@ typedef std::vector<int> sig_vec_t;
 #define QCF_RET_VALUE_ONLY         (1 << 4)  //! code only returns a value and has no other side effects
 #define QCF_RUNTIME_NOOP           (1 << 5)  //! this variant is a noop like QCF_NOOP, but additionally is not available to programs executing with %require-types (PO_REQUIRE_TYPES)
 #define QCF_ABSTRACT_OVERRIDE_ALL  (1 << 6)  //! this variant overrides all abstract base class variants in the same method
+#define QCF_NAMED_ARGS             (1 << 7)  //! builtin variant opts in to named-argument calls
 
 // composite flags
 #define QCF_CONSTANT (QCF_CONSTANT_INTERN | QCF_RET_VALUE_ONLY) //! code is safe to use in a constant expression (i.e. has no side effects, does not change internal state, cannot throw an exception under any circumstances, just returns a calculation based on its arguments)
@@ -169,6 +172,14 @@ DLLEXPORT int64 q_epoch_us(int &us);
 
 //! returns the seconds and nanoseconds from the epoch
 DLLEXPORT int64 q_epoch_ns(int &us);
+
+//! returns a monotonic-clock timestamp in microseconds (immune to realtime clock adjustments)
+/** Use for deadline arithmetic and elapsed-time measurements where wall-clock semantics
+    are not required.  On Linux/BSD this uses CLOCK_MONOTONIC; on Darwin it uses
+    CLOCK_UPTIME_RAW.  Falls back to CLOCK_REALTIME-based gettimeofday() only on systems
+    that lack a monotonic clock (extremely rare).
+*/
+DLLEXPORT int64 q_get_monotonic_us();
 
 //! returns a monotonic clock value in microseconds
 /** Unlike q_epoch_us() and the other epoch/wall-clock functions, this value comes from a monotonic
@@ -759,6 +770,9 @@ DLLEXPORT int q_set_thread_var_value(int frame, const char* name, const QoreValu
 
 //! returns the pointer and size for string or binary data (return 0); no change for other data (return -1)
 DLLEXPORT int q_get_data(const QoreValue& data, const char*& ptr, size_t& len);
+
+//! returns the pointer and size for string or binary data; string_storage backs inline short-string data
+DLLEXPORT int q_get_data(const QoreValue& data, const char*& ptr, size_t& len, std::string& string_storage);
 
 //! returns a list<string> of parse option strings for the given bitfield; a Qore-language exception is raised for invalid values
 /** @since %Qore 0.9

@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTReferenceBoolTest
+
+class AOTReferenceBoolTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTReferenceBoolTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT qmod reference variable truthiness matches source",
+            \testAOTQmodReferenceBool());
+        addTestCase("IR closure-use reference variable truthiness matches AST",
+            \testIRClosureReferenceBool());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTReferenceBoolMod {
+    version = \"1.0\";
+    desc = \"AOT reference boolean conversion regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTReferenceBoolMod {
+    public string sub verifyLocalReference() {
+        hash<auto> h = {\"70\": {\"schedule\": \"x\"}};
+        reference jhr;
+        jhr = \\h{\"70\"};
+        return jhr ? \"local-ok\" : \"local-missing\";
+    }
+
+    public string sub verifyDirectReference() {
+        hash<auto> h = {\"70\": {\"schedule\": \"x\"}};
+        return \\h{\"70\"} ? \"direct-ok\" : \"direct-missing\";
+    }
+}
+";
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    testAOTQmodReferenceBool() {
+        TmpDir tmp("qore-aot-reference-bool-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTReferenceBoolMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern
+%requires AOTReferenceBoolMod
+printf(\"%s\\n%s\\n\", AOTReferenceBoolMod::verifyLocalReference(),
+    AOTReferenceBoolMod::verifyDirectReference());
+");
+        script.close();
+
+        string qmod_path = qmod_dir + "/AOTReferenceBoolMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled reference bool module: " + compile_out);
+
+        string expected = "local-ok\ndirect-missing\n";
+        assertEq(expected, runModule(src_dir, script_path),
+            "source reference variable and direct reference truthiness");
+        assertEq(expected, runModule(qmod_dir, script_path),
+            "AOT qmod reference variable and direct reference truthiness");
+    }
+
+    testIRClosureReferenceBool() {
+        TmpFile script("qore-ir-reference-bool-", ".q");
+        script.file.write("%modern
+hash<auto> h = {\"70\": {\"schedule\": \"x\"}};
+reference jhr;
+code<auto()> c = auto sub () { return jhr; };
+jhr = \\h{\"70\"};
+printf(\"%s\\n%s\\n\", jhr ? \"local-ok\" : \"local-missing\", c().schedule);
+");
+        script.file.close();
+
+        string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+            libqore_dir, qore_bin, script.path));
+        string ir = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+            libqore_dir, qore_bin, script.path));
+        assertEq("local-ok\nx\n", ast, "AST closure-use reference variable truthiness");
+        assertEq(ast, ir, "IR closure-use reference variable truthiness");
+    }
+}

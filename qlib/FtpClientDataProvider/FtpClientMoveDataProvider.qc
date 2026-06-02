@@ -77,7 +77,7 @@ public class FtpClientMoveDataProvider inherits AbstractDataProvider {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string source = FtpClientDataProvider::getPath(ftp, req.source);
         string target = FtpClientDataProvider::getPath(ftp, req.target);
-        ftp.rename(source, target);
+        ftp.rename(source_path: source, target_path: target);
         return {
             "path": target,
         };
