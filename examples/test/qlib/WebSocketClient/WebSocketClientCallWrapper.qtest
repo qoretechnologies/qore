@@ -62,6 +62,7 @@ public class WebSocketClientCallWrapperTest inherits QUnit::Test {
         addTestCase("call_wrapper option validation", \optionValidationTest());
         addTestCase("call_wrapper wraps delivery", \deliveryWrapTest());
         addTestCase("call_wrapper survives reconnect", \reconnectWrapTest());
+        addTestCase("data provider removes (not deletes) its client", \removeNotDeleteClientTest());
 
         logger = new Logger("test", LoggerLevel::getLevel(ENV.QORE_LOGLEVEL ?? "FATAL"));
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
@@ -187,5 +188,29 @@ public class WebSocketClientCallWrapperTest inherits QUnit::Test {
         wsc.send("ECHO post");
         assertEq("EMBEDDER-CTX", delivered.get(5s),
             "context STILL present on delivery after a reconnect (deaf-on-reconnect fix)");
+    }
+
+    #! a data provider must `remove` (not force-`delete`) its client, so another reference to the
+    #! same client object stays valid through the provider's destruction — this is the fix for the
+    #! OBJECT-ALREADY-DELETED thrown by background (heartbeat/reconnect/delivery) log calls when the
+    #! client was force-deleted out from under in-flight async I/O callbacks
+    removeNotDeleteClientTest() {
+        # build a client and keep our OWN strong reference to it
+        WebSocketClientWithSerialization ws({
+            "url": "ws://localhost:" + port,
+            "logger": logger,
+        });
+        on_exit ws.disconnect();
+        # hand the SAME client object to a data provider (held via its `client` member), then
+        # destroy the provider
+        {
+            WebSocketClientDataProvider dp({"wsclient": ws, "url": "ws://localhost:" + port});
+            assertEq("wsclient", dp.getName(), "data provider holds the injected client");
+        }   # dp leaves scope here: its destructor must disconnect + `remove` (not delete) the client
+
+        # our reference must still be valid: had the provider used `delete`, this call would throw
+        # OBJECT-ALREADY-DELETED
+        assertEq("ws://localhost:" + port, ws.getUrl(),
+            "injected client survives data-provider destruction (remove, not delete)");
     }
 }

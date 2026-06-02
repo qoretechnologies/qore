@@ -4593,7 +4593,16 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
     }
 
     destructor() {
-        delete client;
+        if (client) {
+            # Shut down the connection and its async I/O explicitly while we still hold the
+            # reference, then drop it.  `remove` (not `delete`) destroys the client by reference
+            # count — running its async-shutdown drain while the object is still valid — instead of
+            # marking it deleted out from under in-flight async I/O callbacks that log through it
+            # (which would throw OBJECT-ALREADY-DELETED).  Doing the I/O shutdown here rather than
+            # leaving it to the implicit destructor keeps teardown deterministic.
+            client.disconnect();
+            remove client;
+        }
     }
 
     string getName() {
@@ -4680,7 +4689,11 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
         info("WebSocketClientDataProvider: replacing WebSocket client object %y (%s) with %y (%s)",
             client.uniqueHash(), client.getUrl(), new_client.uniqueHash(), new_client.getUrl());
         client.handoverObservers(new_client);
-        delete client;
+        # shut down the old client's I/O explicitly, then destroy it by reference count (clean
+        # async-shutdown drain while valid) rather than force-deleting it while in-flight async I/O
+        # callbacks still log through it
+        client.disconnect();
+        remove client;
         client = new_client;
         if (!client.isOpen()) {
             client.connect();

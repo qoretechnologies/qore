@@ -103,7 +103,18 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
 
     #! Deletes the object
     destructor() {
-        delete ws;
+        if (ws) {
+            # Stop the connection and its async I/O deterministically while we still hold a strong
+            # reference (so the gateway cannot linger connected if anything else keeps the object
+            # alive), then drop our reference.  `remove` (not `delete`) lets the client be destroyed
+            # by reference count — running its async-shutdown drain while the object is still valid —
+            # rather than marking it destroyed out from under in-flight async I/O controller callbacks
+            # that still log through it (which would throw OBJECT-ALREADY-DELETED on a background
+            # thread).  The ws -> self observer reference is released when the ws object's own
+            # destructor tears down its observer map, so there is no reference cycle or leak.
+            ws.disconnect();
+            remove ws;
+        }
     }
 
     #! Disconnects from the gateway and stops all background threads
