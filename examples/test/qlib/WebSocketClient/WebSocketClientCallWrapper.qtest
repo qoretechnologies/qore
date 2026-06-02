@@ -1,0 +1,191 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class WebSocketClientCallWrapperTest
+
+#! Shared, by-reference store mimicking thread-local embedding-application context (e.g. tld.svc)
+class Ctx {
+    private {
+        hash<string, string> m;
+        Mutex lck();
+    }
+    set(string tid, string v) { AutoLock al(lck); m{tid} = v; }
+    del(string tid) { AutoLock al(lck); remove m{tid}; }
+    *string get(string tid) { AutoLock al(lck); return m{tid}; }
+}
+
+#! Echo server connection
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        if (msg =~ /^ECHO/) {
+            send(msg.substr(4), WSOP_Text, True);
+        } else {
+            send("RESPONSE:" + msg);
+        }
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+}
+
+public class WebSocketClientCallWrapperTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        EchoHandler wsHandler;
+        int port;
+        Logger logger;
+    }
+
+    constructor() : Test("WebSocketClientCallWrapperTest", "1.0") {
+        addTestCase("call_wrapper option validation", \optionValidationTest());
+        addTestCase("call_wrapper wraps delivery", \deliveryWrapTest());
+        addTestCase("call_wrapper survives reconnect", \reconnectWrapTest());
+
+        logger = new Logger("test", LoggerLevel::getLevel(ENV.QORE_LOGLEVEL ?? "FATAL"));
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        mServer = new HttpServer(http_opts);
+        wsHandler = new EchoHandler({"logger": logger});
+        mServer.setHandler("ws-handler", "", NOTHING, wsHandler);
+        mServer.setDefaultHandler("ws-handler", wsHandler);
+        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        set_return_value(main());
+
+        mServer.stop();
+        # stop the global async I/O controller's ThreadPool to allow a clean exit
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
+    }
+
+    #! a non-callable call_wrapper must be rejected by the constructor
+    optionValidationTest() {
+        assertThrows("WEBSOCKET-ERROR", "call_wrapper", sub () {
+            new WebSocketClient(sub (*data msg) {}, {
+                "url": "ws://localhost:" + port,
+                "call_wrapper": "not-callable",
+            });
+        });
+    }
+
+    #! the call_wrapper must run around the message-delivery callback (context visible to the callback)
+    deliveryWrapTest() {
+        Ctx ctx();
+        Queue delivered();
+
+        # the embedder's context wrapper: establishes context for the duration of the callback
+        code<auto(code<auto()>)> wrapper = auto sub (code<auto()> call) {
+            ctx.set(gettid().toString(), "EMBEDDER-CTX");
+            on_exit ctx.del(gettid().toString());
+            return call();
+        };
+        # the message callback records the context it observed when it ran
+        code callback = sub (*data msg) {
+            delivered.push({"msg": msg, "ctx": ctx.get(gettid().toString()) ?? "NO-CONTEXT"});
+        };
+
+        WebSocketClient wsc(callback, {
+            "url": "ws://localhost:" + port,
+            "logger": logger,
+            "call_wrapper": wrapper,
+        });
+        on_exit wsc.disconnect();
+        wsc.connect();
+        assertTrue(wsc.isOpen());
+
+        wsc.send("ECHO hello");
+        *hash<auto> d = delivered.get(5s);
+        assertEq(" hello", d.msg, "message delivered");
+        assertEq("EMBEDDER-CTX", d.ctx, "delivery callback ran inside the call_wrapper context");
+
+        # negative control: a client WITHOUT a call_wrapper sees no context
+        Ctx ctx2();
+        Queue delivered2();
+        code callback2 = sub (*data msg) {
+            delivered2.push(ctx2.get(gettid().toString()) ?? "NO-CONTEXT");
+        };
+        WebSocketClient wsc2(callback2, {
+            "url": "ws://localhost:" + port,
+            "logger": logger,
+        });
+        on_exit wsc2.disconnect();
+        wsc2.connect();
+        wsc2.send("ECHO x");
+        assertEq("NO-CONTEXT", delivered2.get(5s),
+            "without a call_wrapper the delivery callback runs with no embedder context");
+    }
+
+    #! the call_wrapper must still wrap delivery AFTER a reconnect (the deaf-on-reconnect fix)
+    reconnectWrapTest() {
+        Ctx ctx();
+        Queue delivered();
+
+        code<auto(code<auto()>)> wrapper = auto sub (code<auto()> call) {
+            ctx.set(gettid().toString(), "EMBEDDER-CTX");
+            on_exit ctx.del(gettid().toString());
+            return call();
+        };
+        # NOTE: the client also invokes the message callback with no argument as a connection-close
+        # notification (WebSocketConnection::closingConnection()); on a reconnect the old connection's
+        # teardown fires one on the calling thread (which carries no embedder context).  This test
+        # verifies the context of actual *message* deliveries, so ignore the data-less close events.
+        code callback = sub (*data msg) {
+            if (!exists msg) {
+                return;
+            }
+            delivered.push(ctx.get(gettid().toString()) ?? "NO-CONTEXT");
+        };
+
+        WebSocketClient wsc(callback, {
+            "url": "ws://localhost:" + port,
+            "logger": logger,
+            "call_wrapper": wrapper,
+            "reconnect": True,
+        });
+        on_exit wsc.disconnect();
+        wsc.connect();
+        assertTrue(wsc.isOpen());
+
+        wsc.send("ECHO pre");
+        assertEq("EMBEDDER-CTX", delivered.get(5s), "context present on first connection's delivery");
+
+        # force a reconnect: this is the path that previously bound the delivery closure to a
+        # non-embedder Program and lost context (the Discord gateway deafness)
+        assertTrue(wsc.reconnect(), "reconnect started");
+        # wait for the connection to come back up
+        int wait_us = 0;
+        while (!wsc.isOpen() && wait_us < 10000000) {
+            usleep(50ms);
+            wait_us += 50000;
+        }
+        assertTrue(wsc.isOpen(), "reconnected");
+
+        wsc.send("ECHO post");
+        assertEq("EMBEDDER-CTX", delivered.get(5s),
+            "context STILL present on delivery after a reconnect (deaf-on-reconnect fix)");
+    }
+}

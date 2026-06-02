@@ -697,7 +697,7 @@ hash<auto> h = ws.getInfo();
             hello_watchdog_timer = 0;
         }
         hello_watchdog_timer = controller.addTimer(now_us() + milliseconds(HelloWatchdogTimeoutMs),
-            \helloWatchdogFired(), watchdog_owner);
+            wrapAsyncCallback(\helloWatchdogFired()), watchdog_owner);
     }
 
     #! Cancels the HELLO watchdog (HELLO received, or connection closing / shutting down)
@@ -775,7 +775,7 @@ hash<auto> h = ws.getInfo();
             resume_watchdog_timer = 0;
         }
         resume_watchdog_timer = controller.addTimer(now_us() + milliseconds(ResumeWatchdogTimeoutMs),
-            \resumeWatchdogFired(), watchdog_owner);
+            wrapAsyncCallback(\resumeWatchdogFired()), watchdog_owner);
     }
 
     #! Cancels the RESUME watchdog (RESUMED/DISPATCH or INVALID_SESSION received, or teardown)

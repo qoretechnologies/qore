@@ -634,6 +634,21 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! callable value to start a new thread; must take a callable object as a parameter and return an integer TID
         *code<int(code<nothing()>)> start_thread;
 
+        #! optional wrapper to establish and restore thread context around each async callback
+        /** The async I/O controller runs message-delivery tasks and timer callbacks on
+            shared pool threads that carry no embedding-application thread context (the
+            callbacks are bound to whichever @ref Qore::Program "Program" was current when
+            they were created, which on a reconnect is not necessarily the embedder's).
+            An embedder (for example a Qorus service) can supply a \c call_wrapper to
+            establish — and reliably restore — thread-local context (service context,
+            logging context, etc.) around every such callback.  The wrapper receives the
+            callback body as its single argument and \b must execute it (typically
+            \c return call(); with context set up beforehand and torn down on exit).
+
+            @since WebSocketClient 2.5
+        */
+        *code<auto(code<auto()>)> call_wrapper;
+
         #! Total number of connections made
         int num_connects;
 
@@ -1923,6 +1938,15 @@ ws.setEventQueue();
             pong_callback = http_opts.pong_callback;
         }
 
+        if (http_opts.hasKey("call_wrapper")) {
+            if (!http_opts.call_wrapper.callp()) {
+                raiseError("option hash to WebSocketClient::constructor() has an invalid 'call_wrapper' key with "
+                    "type %y; must be a callable value", opts.call_wrapper.type());
+            }
+            # not an HTTPClient option; remove so it is not forwarded to the HTTP layer
+            call_wrapper = remove http_opts.call_wrapper;
+        }
+
         hash<UrlInfo> uh = parse_url(http_opts.url);
         if (uh.protocol) {
             hash<auto> sh = getSchemes();
@@ -2319,6 +2343,32 @@ ws.setEventQueue();
         }
     }
 
+    #! Wraps a callback that will run on an async I/O controller pool thread with the embedder's context
+    /** Returns a closure that runs \a body through the configured @ref call_wrapper (which is
+        responsible for setting up and tearing down any embedding-application thread-local
+        context); if no \c call_wrapper was configured, returns \a body unchanged.
+
+        Used for every callback the client hands to the async I/O controller to run on a shared
+        pool thread (message delivery and timer callbacks).  Such threads otherwise execute with
+        no embedding-application thread context, because the callback is bound to whichever
+        @ref Qore::Program "Program" was current when it was created — which, on an async
+        reconnect, is not necessarily the embedder's Program.
+
+        @param body the callback to run on the controller pool thread
+
+        @return \a body wrapped by @ref call_wrapper, or \a body unchanged if none is configured
+
+        @since WebSocketClient 2.5
+    */
+    private code<auto()> wrapAsyncCallback(code<auto()> body) {
+        if (!call_wrapper) {
+            return body;
+        }
+        # capture in a local so the returned closure does not depend on object lifetime
+        code<auto(code<auto()>)> cw = call_wrapper;
+        return sub () { cw(body); };
+    }
+
     #! Schedules delivery of received messages via a background thread
     /** Called from the I/O callback. Only submits a task if no delivery task is currently active,
         ensuring message ordering is preserved (only one delivery task runs at a time per client).
@@ -2354,9 +2404,9 @@ ws.setEventQueue();
         try {
             AsyncSocketIo::AsyncSocketIoController controller =
                 AsyncSocketIo::getGlobalAsyncIoController();
-            controller.submitTask(sub () {
+            controller.submitTask(wrapAsyncCallback(sub () {
                 WebSocketClientWithSerialization::deliverInBackground(deliver, cnt);
-            });
+            }));
         } catch (hash<ExceptionInfo> ex) {
             # Controller may be stopped during shutdown
             delivery_thread_counter.dec();
