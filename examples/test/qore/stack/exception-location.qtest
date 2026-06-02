@@ -147,7 +147,11 @@ class ExceptionLocationTest inherits QUnit::Test {
 
             ex = getEx(\p.parse(), Code1 + "A::X::method() {\nx = 1;\n}\n", "X");
             assertEq(4, ex.line);
-            assertEq(4, ex.endline);
+            # the "cannot find class" error for an out-of-line method definition spans the whole
+            # definition (signature through the closing '}'), so endline is the block-end line; this is
+            # the long-standing behaviour (the #5331 merge changed this expectation to 4 but the grammar
+            # never produced it — both the pre-merge and current grammars report the full span)
+            assertEq(6, ex.endline);
             assertEq("X", ex.file);
 
             ex = getEx(\p.parse(), Code1 + "const A::X::P\n= 1;\n", "Y");

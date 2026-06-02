@@ -1338,6 +1338,23 @@ bison_target(qoreparser lib/parser.ypp ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
 flex_target(qorescanner lib/scanner.lpp ${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp COMPILE_FLAGS --nowarn)
 add_flex_bison_dependency(qorescanner qoreparser)
 
+# Enforce the parser grammar conflict budget (0 shift/reduce, 1 reduce/reduce).  Re-runs whenever
+# parser.ypp changes and fails the build if ambiguity is (re)introduced — see
+# cmake/check-grammar-conflicts.sh and the conflict comment in lib/parser.ypp.
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/.grammar-conflicts-ok
+    COMMAND ${CMAKE_COMMAND} -E env sh
+            ${CMAKE_SOURCE_DIR}/cmake/check-grammar-conflicts.sh
+            ${CMAKE_SOURCE_DIR}/lib/parser.ypp
+    COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/.grammar-conflicts-ok
+    DEPENDS ${CMAKE_SOURCE_DIR}/lib/parser.ypp
+            ${CMAKE_SOURCE_DIR}/cmake/check-grammar-conflicts.sh
+    COMMENT "Checking parser grammar conflict budget"
+    VERBATIM
+)
+add_custom_target(CHECK_GRAMMAR_CONFLICTS
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/.grammar-conflicts-ok)
+
 # qpp
 if(NOT HAVE_GETOPT_H)
 set(QPP_GETOPT_LONG_SRC lib/getopt_long.cpp)
@@ -2237,7 +2254,7 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 
 add_dependencies(QPP_GENERATED_FILES qpp)
-add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision)
+add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision CHECK_GRAMMAR_CONFLICTS)
 
 target_compile_definitions(libqore PUBLIC _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
 if (APPLE)
