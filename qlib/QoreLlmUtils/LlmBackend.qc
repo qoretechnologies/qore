@@ -1516,10 +1516,10 @@ llm.chatStream(
         if (response.choices.typeCode() != NT_LIST || !response.choices) {
             return False;
         }
-        hash<auto> choice = cast<hash<auto>>(
-            cast<list<auto>>(response.choices)[0]);
+        hash<auto> choice = cast<hash>(
+            cast<list>(response.choices)[0]);
         hash<auto> message = choice.message.typeCode() == NT_HASH
-            ? cast<hash<auto>>(choice.message) : {};
+            ? cast<hash>(choice.message) : {};
         return message.content.val();
     }
 
@@ -1532,7 +1532,7 @@ llm.chatStream(
 
         hash<auto!> diagnostics = {};
         if (rv.provider_diagnostics.typeCode() == NT_HASH) {
-            diagnostics += cast<hash<auto>>(rv.provider_diagnostics);
+            diagnostics += cast<hash>(rv.provider_diagnostics);
         }
 
         hash<auto!> retry_diagnostics = {
@@ -1571,8 +1571,8 @@ llm.chatStream(
         if (response.choices.typeCode() != NT_LIST || !response.choices) {
             return NOTHING;
         }
-        hash<auto> choice = cast<hash<auto>>(
-            cast<list<auto>>(response.choices)[0]);
+        hash<auto> choice = cast<hash>(
+            cast<list>(response.choices)[0]);
         string finish_reason = (choice.finish_reason ?? "").toString();
         return finish_reason.val() ? finish_reason : NOTHING;
     }
