@@ -2,6 +2,46 @@
 
     @tableofcontents
 
+    @section qore_2_4_0 Qore 2.4.0
+
+    @par Language and Runtime
+    @parblock
+    - Added the @ref char "char" value type for single Unicode codepoints, including
+      \c c'...' and \c c"..." literals, the @ref char_type "char" and
+      @ref softchar_type "softchar" type restrictions, and the
+      @ref Qore::NT_CHAR "NT_CHAR" type code
+    - Added \c \\u{...} Unicode codepoint escapes in string and char literals
+    - Single-index string access now returns \c *char: \c "abc"[1] returns \c c'b'.
+      String ranges and list indexes still return strings.  Use
+      @ref no-string-index-char "%no-string-index-char" to preserve the historical
+      \c *string single-index behavior
+    - @ref <string>::iterator() "<string>::iterator()" and
+      @ref Qore::StringIterator "StringIterator" now provide lazy char iteration over strings;
+      <tt>iterate string</tt> uses this iterator and yields @ref char values
+    - Added @ref negative-offsets "%negative-offsets" for Python-style from-end list, string,
+      binary, and buffer indexes and slice endpoints; this option is implied by @ref modern "%modern",
+      and @ref no-negative-offsets "%no-negative-offsets" restores legacy negative-index behavior
+    - Added @ref no-char-type "%no-char-type" for code that needs \c char available as a
+      legacy identifier or user-defined type name
+    - \c cast<hash<auto>>(...), \c cast<hash<string,\ auto>>(...), and
+      \c cast<list<auto>>(...) are now parse-time errors because they do not coerce
+      values and are misleading no-op casts; use \c cast<hash>(...) or
+      \c cast<list>(...) for hard container assertions, and
+      \c cast<softlist<auto>>(...) for scalar-to-list coercion
+    - Added \c ?: as an alias for the @ref value_coalescing_operator "\c ?*"
+      value-coalescing operator; the conditional operator remains
+      <tt>condition ? if_true : if_false</tt>
+    - Added typed constant declarations and read-only runtime bindings:
+      constants can now be declared as \c "const Type NAME = expr", and
+      local variables and parameters can be declared with \c const to reject
+      reassignment, removal, mutable references, and lvalue writes rooted at the
+      binding
+    - Added @ref const_methods "const-qualified instance methods" with trailing
+      \c const syntax. Read-only receivers can call only const methods when
+      method resolution is static, and const-method metadata is available through
+      reflection, QoreApiMetadata, qpp metadata, astparser, and QoreCodeFormat
+    @endparblock
+
     @section qore_2_3_0 Qore 2.3.0
 
     @par Release Summary
@@ -72,6 +112,16 @@
       metadata keeps generic type paths and resolves them at runtime
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH string-literal escapes
+    - new streaming operators @ref streaming_first "first", @ref streaming_any "any",
+      @ref streaming_all "all", @ref streaming_count "count", @ref streaming_take "take",
+      @ref streaming_drop "drop", @ref streaming_takewhile "takewhile", and
+      @ref streaming_takeuntil "takeuntil", plus the <tt>iterate</tt>
+      operator, provide short-circuit and prefix/boundary processing over lists, hashes,
+      strings, binaries, integer ranges, and iterators; IR/JIT/AOT execution lowers streaming
+      operators to native iterator loops and fuses nested streaming stages; string
+      iteration yields @ref char "char" values
+    - the @ref find "find" operator now supports \c first, \c last, and \c one modifiers
+      for consistent first-match, last-match, and exactly-one-match context queries
     - new \c %%Y printf format specifier for multi-line pseudo-YAML output
     - zero-cost \c \@\@assert / \c \@\@debug statements and the
       @ref Qore::PO_ENABLE_DEBUG "PO_ENABLE_DEBUG" parse option
@@ -174,8 +224,10 @@
     <i>Fast text processing:</i> see @ref fast_text_processing for the full overview
     - @ref Qore::Scanner "Scanner" cursor-based byte/codepoint reader for tokenisers and parsers
     - @ref <string>::getByte() "<string>::getByte()" for O(1) allocation-free byte access
+    - @ref <string>::iterator() "<string>::iterator()" +
+      @ref Qore::StringIterator "StringIterator" for lazy char iteration
     - @ref <string>::codePointIterator() "<string>::codePointIterator()" +
-      @ref Qore::StringCharIterator "StringCharIterator" for lazy codepoint iteration
+      @ref Qore::StringCharIterator "StringCharIterator" for lazy integer codepoint iteration
     - @ref <string>::splitString() "<string>::splitString()",
       @ref <string>::splitChars() "<string>::splitChars()",
       @ref <string>::splitLines() "<string>::splitLines()", and

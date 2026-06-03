@@ -28,6 +28,31 @@
     declared. The same function can be declared multiple times if each declaration has different parameter types; this
     is called @ref overloading "overloading" the function.
 
+    @subsubsection readonly_function_parameters Read-Only Function Parameters
+    A parameter can be prefixed with \c const to make the parameter binding read-only inside the function, method, constructor, closure, or catch block where it is declared:
+    @code{.py}
+%modern
+
+int sub clamp(const int value, const int min_value, const int max_value) {
+    if (value < min_value) {
+        return min_value;
+    }
+    if (value > max_value) {
+        return max_value;
+    }
+    # value = 0;  # READONLY-VARIABLE-ASSIGNMENT-ERROR
+    return value;
+}
+
+sub handle(const auto payload, const *string request_id = NOTHING) {
+    # request_id = "new";  # READONLY-VARIABLE-ASSIGNMENT-ERROR
+}
+    @endcode
+
+    Read-only parameters are still passed by value or by reference according to the normal call rules; \c const only prevents writes through the parameter name in the function body. It is not part of overload resolution, so \c "sub f(int x)" and \c "sub f(const int x)" have the same parameter type signature.
+
+    As with @ref readonly_local_variables "read-only local variables", the restriction is shallow: it protects the binding and lvalue paths rooted at that parameter, but it does not make an object or container globally immutable.
+
     Variables passed as function arguments are passed by value by default, unless the caller places a
     <tt>&quot;\\&quot;</tt> character before an lvalue in the argument list in the function call. In this case the
     function must have a parameter defined to accept the variable passed by reference. Any changes to the local

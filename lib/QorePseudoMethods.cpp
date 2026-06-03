@@ -35,6 +35,7 @@
 #include "Pseudo_QC_All.cpp"
 #include "Pseudo_QC_Nothing.cpp"
 #include "Pseudo_QC_Bool.cpp"
+#include "Pseudo_QC_Char.cpp"
 #include "Pseudo_QC_Int.cpp"
 #include "Pseudo_QC_Float.cpp"
 #include "Pseudo_QC_Number.cpp"
@@ -54,6 +55,7 @@
 // list of pseudo-classes for basic types + 2 entries for closures and call references
 static QoreClass* po_list[NODE_ARRAY_LEN + 2];
 static QoreClass* pseudo_buffer;
+static QoreClass* pseudo_char;
 
 // int <x>.typeCode()
 static QoreValue PSEUDONULL_typeCode(QoreObject *ignored, AbstractQoreNode *node, const QoreListNode *args, ExceptionSink *xsink) {
@@ -65,7 +67,7 @@ static QoreClass* do_type_code(const char* name, q_method_t f) {
     QoreStringMaker path("::Qore::%s", name);
     QoreClass* qc = new QoreClass(name, path.c_str());
     qc->addBuiltinVirtualBaseClass(QC_PSEUDOVALUE);
-    qc->addMethod("typeCode", f, Public, QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo);
+    qc->addConstMethod("typeCode", f, Public, QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo);
     return qc;
 }
 
@@ -89,6 +91,7 @@ void pseudo_classes_init() {
     po_list[NT_OBJECT] = initPseudoObjectClass();
     po_list[NT_NUMBER] = initPseudoNumberClass();
     pseudo_buffer = initPseudoBufferClass();
+    pseudo_char = initPseudoCharClass();
 
     // + 2 pseudo classes with runtime type values outside the value type range
     po_list[NODE_ARRAY_LEN] = initPseudoCallrefClass();
@@ -100,6 +103,7 @@ void pseudo_classes_del() {
     for (unsigned i = 0; i < NODE_ARRAY_LEN + 2; ++i)
         qore_class_private::get(*po_list[i])->deref(true, true);
     qore_class_private::get(*pseudo_buffer)->deref(true, true);
+    qore_class_private::get(*pseudo_char)->deref(true, true);
 
     qore_class_private::get(*QC_PSEUDOVALUE)->deref(true, true);
 }
@@ -118,6 +122,9 @@ static QoreClass* pseudo_get_class(qore_type_t t) {
         }
         if (t == NT_BUFFER) {
             return pseudo_buffer;
+        }
+        if (t == NT_CHAR) {
+            return pseudo_char;
         }
         if (t == NT_WEAKREF) {
             return po_list[NT_OBJECT];

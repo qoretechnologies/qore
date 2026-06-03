@@ -452,6 +452,25 @@ public:
     */
     DLLEXPORT void addMethod(const char* n_name, q_method_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
 
+    //! adds a const builtin method variant to a class with extended information
+    /** Const method metadata is separate from code flags such as QCF_CONSTANT and
+        controls whether a method may be called through a statically readonly
+        receiver.
+
+        @param n_name the name of the method, must be unique in the class
+        @param meth the method to be added
+        @param access the access modifier for the method variant
+        @param n_flags code flags
+        @param n_domain functional domain
+        @param returnTypeInfo the return type of the method
+        @param num_params the number of parameters
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT void addConstMethod(const char* n_name, q_method_t meth, ClassAccess access = Public,
+        int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0,
+        unsigned num_params = 0, ...);
+
     //! adds a builtin method variant to a class with the calling convention for external modules
     /** @par Example:
         @code
@@ -490,6 +509,29 @@ public:
     */
     DLLEXPORT void addMethod(const void* ptr, const char* n_name, q_external_method_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, const type_vec_t& n_typeList = type_vec_t(), const arg_vec_t& defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t());
 
+    //! adds a const builtin method variant to a class with the calling convention for external modules
+    /** Const method metadata is separate from code flags such as QCF_CONSTANT and
+        controls whether a method may be called through a statically readonly
+        receiver.
+
+        @param ptr user-defined data that will be included in the call to \a meth
+        @param n_name the name of the method, must be unique in the class
+        @param meth the method to be added
+        @param access the access modifier for the method variant
+        @param n_flags code flags
+        @param n_domain functional domain
+        @param returnTypeInfo the return type of the method
+        @param n_typeList a list of type information for parameters to the variant
+        @param defaultArgList a list of default arguments to each parameter
+        @param n_names a list of parameter names
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT void addConstMethod(const void* ptr, const char* n_name, q_external_method_t meth,
+        ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT,
+        const QoreTypeInfo* returnTypeInfo = 0, const type_vec_t& n_typeList = type_vec_t(),
+        const arg_vec_t& defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t());
+
     //! adds a builtin static method with extended information; additional functional domain info, return and parameter type info
     DLLEXPORT void addStaticMethod(const char* n_name, q_func_t meth, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, int64 n_domain = QDOM_DEFAULT, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
 
@@ -501,8 +543,39 @@ public:
     //! adds an unimplemented abstract method variant to the class with extended information; with return and parameter type info
     DLLEXPORT void addAbstractMethod(const char* n_name, ClassAccess access = Public, int64 n_flags = QCF_NO_FLAGS, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
 
+    //! adds an unimplemented const abstract method variant to the class with return and parameter type info
+    /** Const method metadata is separate from code flags such as QCF_CONSTANT and
+        controls whether a derived implementation may satisfy the abstract
+        method for readonly receivers.
+
+        @param n_name the name of the method, must be unique in the class
+        @param access the access modifier for the method variant
+        @param n_flags code flags
+        @param returnTypeInfo the return type of the method
+        @param num_params the number of parameters
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT void addConstAbstractMethod(const char* n_name, ClassAccess access = Public,
+        int64 n_flags = QCF_NO_FLAGS, const QoreTypeInfo* returnTypeInfo = 0, unsigned num_params = 0, ...);
+
     //! adds an unimplemented abstract method variant to the class with return and parameter type info
     DLLEXPORT void addAbstractMethod(const char* n_name, ClassAccess access, int64 n_flags, const QoreTypeInfo* returnTypeInfo, const type_vec_t& n_typeList, const arg_vec_t& defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t());
+
+    //! adds an unimplemented const abstract method variant to the class with return and parameter type info
+    /** @param n_name the name of the method, must be unique in the class
+        @param access the access modifier for the method variant
+        @param n_flags code flags
+        @param returnTypeInfo the return type of the method
+        @param n_typeList a list of type information for parameters to the variant
+        @param defaultArgList a list of default arguments to each parameter
+        @param n_names a list of parameter names
+
+        @since %Qore 2.0
+    */
+    DLLEXPORT void addConstAbstractMethod(const char* n_name, ClassAccess access, int64 n_flags,
+        const QoreTypeInfo* returnTypeInfo, const type_vec_t& n_typeList,
+        const arg_vec_t& defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t());
 
     //! sets the builtin destructor method for the class
     /** you only need to implement destructor methods if the destructor should destroy the object

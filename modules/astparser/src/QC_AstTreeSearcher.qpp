@@ -566,7 +566,7 @@ AstTreeSearcher::constructor() {
     @param line on what line lies the position (0-indexed)
     @param col on what column lies the position (0-indexed)
 
-    @return list of detailed symbols with returnType, typeName, access, isStatic, params, or NOTHING
+    @return list of detailed symbols with returnType, typeName, access, isStatic, isConstMethod, params, or NOTHING
 
     @since %Qore 2.2
  */
@@ -639,6 +639,7 @@ AstTreeSearcher::constructor() {
             symbolInfo->setKeyValue("access", new QoreStringNode(sd.access), xsink);
         }
         symbolInfo->setKeyValue("isStatic", sd.isStatic, xsink);
+        symbolInfo->setKeyValue("isConstMethod", sd.isConstMethod, xsink);
         if (*xsink) {
             return QoreValue();
         }
@@ -779,6 +780,7 @@ AstTreeSearcher::constructor() {
             symbolInfo->setKeyValue("access", new QoreStringNode(sd.access), xsink);
         }
         symbolInfo->setKeyValue("isStatic", sd.isStatic, xsink);
+        symbolInfo->setKeyValue("isConstMethod", sd.isConstMethod, xsink);
         if (*xsink) {
             return QoreValue();
         }

@@ -47,7 +47,7 @@ public class LlmTelemetry {
         if (raw.typeCode() != NT_HASH) {
             return <LlmTokenUsage>{};
         }
-        hash<auto> usage = cast<hash<auto>>(raw);
+        hash<auto> usage = cast<hash>(raw);
         int input_tokens = firstInt(usage, (
             "input_tokens", "prompt_tokens", "inputTokens",
             "promptTokenCount", "prompt_token_count", "tokens_in"));
@@ -73,13 +73,13 @@ public class LlmTelemetry {
             "rerankTokens"));
 
         if (usage.prompt_tokens_details.typeCode() == NT_HASH) {
-            hash<auto> details = cast<hash<auto>>(usage.prompt_tokens_details);
+            hash<auto> details = cast<hash>(usage.prompt_tokens_details);
             cached_input_tokens = max(cached_input_tokens,
                 firstInt(details, ("cached_tokens", "cachedTokens")));
         }
         if (usage.input_token_details.typeCode() == NT_HASH) {
             hash<auto> details =
-                cast<hash<auto>>(usage.input_token_details);
+                cast<hash>(usage.input_token_details);
             cached_input_tokens = max(cached_input_tokens,
                 firstInt(details, ("cache_read", "cache_read_input_tokens",
                     "cached_tokens")));
@@ -89,7 +89,7 @@ public class LlmTelemetry {
         }
         if (usage.completion_tokens_details.typeCode() == NT_HASH) {
             hash<auto> details =
-                cast<hash<auto>>(usage.completion_tokens_details);
+                cast<hash>(usage.completion_tokens_details);
             reasoning_tokens = max(reasoning_tokens,
                 firstInt(details, ("reasoning_tokens", "thinking_tokens")));
         }
@@ -302,7 +302,7 @@ public class LlmTelemetry {
             "desc": ex.desc,
         };
         if (ex.arg.typeCode() == NT_HASH) {
-            hash<auto> arg = cast<hash<auto>>(ex.arg);
+            hash<auto> arg = cast<hash>(ex.arg);
             list<string> arg_keys = keys arg;
             foreach string key in (("status_code", "code", "type",
                     "retryable", "provider", "backend", "model")) {
@@ -369,7 +369,7 @@ public class LlmTelemetry {
         if (raw.choices.typeCode() == NT_LIST && raw.choices.size()) {
             auto choice = raw.choices[0];
             if (choice.typeCode() == NT_HASH) {
-                hash<auto> choice_h = cast<hash<auto>>(choice);
+                hash<auto> choice_h = cast<hash>(choice);
                 if (choice_h.finish_reason.val()) {
                     return choice_h.finish_reason;
                 }

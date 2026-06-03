@@ -53,6 +53,7 @@ QoreValue QoreUnaryPlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *
 
     switch (v->getType()) {
         case NT_INT:
+        case NT_CHAR:
         case NT_FLOAT:
         case NT_DATE:
         case NT_NUMBER: {
@@ -102,7 +103,8 @@ int QoreUnaryPlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
     if (QoreTypeInfo::hasType(parse_context.typeInfo)) {
         int tcnt = 0;
-        if (QoreTypeInfo::parseAccepts(bigIntTypeInfo, parse_context.typeInfo)) {
+        if (QoreTypeInfo::parseAccepts(bigIntTypeInfo, parse_context.typeInfo)
+                || QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_CHAR)) {
             returnTypeInfo = bigIntTypeInfo;
             ++tcnt;
         }

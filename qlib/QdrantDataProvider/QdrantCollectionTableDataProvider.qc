@@ -337,7 +337,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
             throw "QDRANT-" + operation.upr() + "-ERROR", sprintf("where_cond must be a hash identifying "
                 "point(s) to %s in collection %y; got type %y", operation, collection_name, where_cond.fullType());
         }
-        hash<auto> id_cond = cast<hash<auto>>(where_cond);
+        hash<auto> id_cond = cast<hash>(where_cond);
         if (!exists id_cond.id) {
             throw "QDRANT-" + operation.upr() + "-ERROR", sprintf("missing 'id' field in where_cond to identify "
                 "point(s) to %s in collection %y", operation, collection_name);

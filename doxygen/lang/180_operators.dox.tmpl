@@ -60,7 +60,7 @@
     |@ref range_operator ".. (range)"|\c 20|@ref range_operator "range operator"|@code{.py} 3..7@endcode
     |@ref conditional_operator "? :"|\c 21|@ref conditional_operator "conditional operator"|@code{.py} a == 2 ? "yes" : "no"@endcode
     |@ref null_coalescing_operator "??"|\c 21|@ref null_coalescing_operator "null coalescing operator"|@code{.py} any var = a ?? b@endcode
-    |@ref value_coalescing_operator "?*"|\c 21|@ref value_coalescing_operator "value coalescing operator"|@code{.py} any var = a ?* b@endcode
+    |@ref value_coalescing_operator "?*, ?:"|\c 21|@ref value_coalescing_operator "value coalescing operator"|@code{.py} any var = a ?* b@endcode @code{.py} any var = a ?: b@endcode
     |@ref comma_operator ","|\c 22|@ref comma_operator "comma operator"|@code{.py} 1, 2, 3, 4, 5@endcode
     |@ref unshift "unshift"|\c 23|@ref unshift "unshift list element operator"|@code{.py} unshift list, val@endcode
     |@ref push "push"|\c 23|@ref push "push list element operator"|@code{.py} push list, val@endcode
@@ -71,6 +71,15 @@
     |@ref foldl "foldl"|\c 23|@ref foldl "fold left to right operator"|@code{.py} foldl closure($1 - $2), list@endcode
     |@ref foldr "foldr"|\c 23|@ref foldr "fold right to left operator"|@code{.py} foldr closure($1 - $2), list@endcode
     |@ref select "select"|\c 23|@ref select "select elements from list operator"|@code{.py} select list, $1 > 1@endcode
+    |@ref streaming_iterate_operator "iterate"|\c 23|@ref streaming_iterate_operator "iterate operator"|@code{.py} iterate value@endcode
+    |@ref streaming_first "first"|\c 23|@ref streaming_first "first streaming operator"|@code{.py} first $1 > 1, list@endcode
+    |@ref streaming_any "any"|\c 23|@ref streaming_any "any streaming operator"|@code{.py} any $1 > 1, list@endcode
+    |@ref streaming_all "all"|\c 23|@ref streaming_all "all streaming operator"|@code{.py} all $1 > 1, list@endcode
+    |@ref streaming_count "count"|\c 23|@ref streaming_count "count streaming operator"|@code{.py} count $1 > 1, list@endcode
+    |@ref streaming_take "take"|\c 23|@ref streaming_take "take streaming operator"|@code{.py} take 10, list@endcode
+    |@ref streaming_drop "drop"|\c 23|@ref streaming_drop "drop streaming operator"|@code{.py} drop 1, list@endcode
+    |@ref streaming_takewhile "takewhile"|\c 23|@ref streaming_takewhile "takewhile streaming operator"|@code{.py} takewhile $1 != "", lines@endcode
+    |@ref streaming_takeuntil "takeuntil"|\c 23|@ref streaming_takeuntil "takeuntil streaming operator"|@code{.py} takeuntil $1 == "", lines@endcode
     |@ref assignment_operator "="|\c 24|@ref assignment_operator "assignment operator"|@code{.py} var = 1@endcode
     |@ref weak_assignment_operator ":="|\c 24|@ref weak_assignment_operator "weak assignment operator"|@code{.py} var := obj@endcode
     |@ref plus_equals_operator "+="|\c 24|@ref plus_equals_operator "plus-equals (add-to) operator"|@code{.py} var += 5@endcode
@@ -94,7 +103,7 @@
 
     When an operator taking more than one argument is used with arguments of different data types, %Qore automatically converts one or both data types to a data type supported by the operator in order to evaluate the result, according to the precedence lists given for each operator. That is; when an operator operates on mixed types, the types listed first in the following sections have precedence over types listed farther down in the lists. The result type will always be equal to the final operation type after any conversions due to type precedence per operator. If no type of either argument matches a supported data type for the operator, both types will be converted to the highest precedence data type for the operator and then the operator will evaluate the result. For explicit type conversion, please see the boolean(), string(), date(), int(), float(), etc functions.
 
-    @section op_functional Lazy Evalution of Functional Operators
+    @section op_functional Lazy Evaluation of Functional Operators
 
     %Qore supports lazy evaluation of functional operators where possible in order to provide an efficient solution for processing large lists or nested functional operators.
 
@@ -103,13 +112,18 @@
     - @ref select "select": allows the filtered result list to be created and iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list
     - @ref keys "keys": allows the @ref hash "hash" or @ref object "object" to be iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list of hash keys or accessible object members
     - @ref range_operator ".. (range operator)" and @ref list_element_operator "[]" with a range or multiple values: allow the operand to be iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list/string/binary object
+    - @ref streaming_take "take", @ref streaming_drop "drop", @ref streaming_takewhile "takewhile", and @ref streaming_takeuntil "takeuntil": allow a streaming prefix, skip, or boundary stage to be iterated in place when nested with another functional or streaming consumer
 
     The following operators and statements support lazy evaluation for iteration:
     - @ref map "map" (non-hash version): supports lazy evaluation in the @ref expressions "iterator expression" (and therefore nested lazy evaluation)
     - @ref select "select": supports lazy evaluation in the @ref expressions "iterator expression" (and therefore nested lazy evaluation)
     - @ref foldl "foldl": supports lazy evaluation in the @ref expressions "iterator expression"
     - @ref foldr "foldr": supports lazy evaluation in the @ref expressions "iterator expression"
+    - @ref streaming_first "first", @ref streaming_any "any", @ref streaming_all "all", and @ref streaming_count "count": support lazy evaluation in the @ref expressions "iterator expression" and short-circuit where possible
+    - @ref streaming_take "take", @ref streaming_drop "drop", @ref streaming_takewhile "takewhile", and @ref streaming_takeuntil "takeuntil": support lazy evaluation in the @ref expressions "iterator expression" when feeding another consumer
     - @ref foreach "foreach": supports lazy evaluation in the @ref expressions "iterator expression"
+
+    @note IR, JIT, and AOT execution lower streaming operators to native iterator loops. Nested streaming stages are fused so terminal consumers such as @ref streaming_first "first" and @ref streaming_count "count" do not materialize intermediate lists. The @ref no-stream-fusion "%no-stream-fusion" parse directive disables this optimization while leaving the operators available.
 
     @par Example
     With lazy functional evaluation, the following code does not create a potentially long itermediate list with the @ref map "map" expression, but rather the @ref foldl "foldl" expression will operate directly on the expressions generated when iterating the value returned by <tt>get_iterator()</tt>:
@@ -206,18 +220,21 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     @throw OBJECT-METHOD-EVAL-ON-NON-OBJECT Attempt to execute a method on a non-object
 
     <hr>
-    @subsection list_element_operator List, String, and Binary Dereference Operator ([])
+    @anchor list_element_operator
+    @subsection list_element_operator_section List, String, Binary, and Buffer Dereference Operator ([])
 
     @par Synopsis
-    Retrieves given list element(s), given character(s) of a string, or the integer value of given byte for a binary object or the binary object composed of given bytes of a binary object.
+    Retrieves given list element(s), given character(s) of a string, the integer value of a byte for a binary object or a binary object composed of given bytes, or a typed element from a buffer.
     If the index value is neither a list nor an integer it is converted to an integer. If the index is an integer and out of range, @ref nothing is returned.
-    If the index is a list and completely out of range, empty list/string/binary is returned.
+    If the index is a list and completely out of range, empty list/string/binary is returned. A single integer index on a string returns a @ref char value; string ranges and list indexes return strings.
+    With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative list, string, binary, and buffer indexes and range endpoints are interpreted from the end of the value, so \c value[-1] is the last element and \c value[-2..] is the last two elements.
     Note that this operator is not supported with multiple values and/or ranges between the square brackets on the left-hand side of an assignment expression.
 
     @par Syntax
     <em>@ref expressions "list_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt>\n
     <em>@ref expressions "string_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt>\n
     <em>@ref expressions "binary_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt>\n
+    <em>@ref expressions "buffer_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt>\n
 
     @par Return Type
     @ref any_type "any"
@@ -227,24 +244,33 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
         int n = (6,2,7,4)[2];
         list l = (6,2,7,4)[3,1];
         list l = (6,2,7,4)[2..0];
-        string s = "asdf"[2];
+        int last = (6,2,7,4)[-1];
+        list tail = (6,2,7,4)[-2..];
+        char c = "asdf"[2];
         string s = "asdf"[3,1];
         string s = "asdf"[1..];
+        string suffix = "asdf"[-2..-1];
         int hex = <4e8a23fe>[2];
         binary b = <4e8a23fe>[3,1];
         binary b = <4e8a23fe>[..2];
+        binary last_bytes = <4e8a23fe>[-2..];
     @endcode
 
     <b>Arguments Processed by []</b>
     |!Argument|!Processing
     |<em>@ref expressions "list_expression"</em>|If the expression evaluates to a list, then the <em>@ref expressions "index_expression"</em> will be used to return the given element(s) from the list.
-    |<em>@ref expressions "string_expression"</em>|If the expression evaluates to a string, then the <em>@ref expressions "index_expression"</em> will be used to return the given character(s) from the string; note that multi-byte characters with UTF-8 are properly respected with this operator.
+    |<em>@ref expressions "string_expression"</em>|If the expression evaluates to a string, then the <em>@ref expressions "index_expression"</em> will be used to return the given character(s) from the string; a single integer index returns a @ref char value or @ref nothing, and ranges or list indexes return strings. Multi-byte characters with UTF-8 and other supported encodings are respected with this operator.
     |<em>@ref expressions "binary_expression"</em>|If the expression evaluates to a binary, then the <em>@ref expressions "index_expression"</em> will be used to return the integer value of the given byte from the binary object or the binary object composed of the given bytes.
-    |<em>@ref expressions "index_expression"</em>|If the expression does not evaluate to a list or to an integer it is converted to an integer. Then the value(s) of the given element(s) are returned according to the type of the first expression (as listed above; elements start at position 0). If the expression is in the range form (e.g. [1..3], [2..]) then the dereference operator supports @ref op_functional "lazy functional evaluation".
+    |<em>@ref expressions "buffer_expression"</em>|If the expression evaluates to a buffer, then the <em>@ref expressions "index_expression"</em> will be used to return the given typed element(s) from the buffer.
+    |<em>@ref expressions "index_expression"</em>|If the expression does not evaluate to a list or to an integer it is converted to an integer. Then the value(s) of the given element(s) are returned according to the type of the first expression (as listed above; elements start at position 0). If @ref negative-offsets "%negative-offsets" is enabled, negative integer indexes and explicit negative range endpoints are first resolved against the container size. If the expression is in the range form (e.g. [1..3], [2..], [-2..]) then the dereference operator supports @ref op_functional "lazy functional evaluation".
 
-    This operator does not throw any exceptions; if the first expression does not evaluate to either a list, string, or binary, then no value (@ref nothing) is returned.
+    This operator does not throw any exceptions; if the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
 
     @note this operator cannot be used on the left-hand side of an assignment expression with multiple values between square brackets
+
+    @note The @ref no-string-index-char "%no-string-index-char" parse directive preserves the historical single-index string behavior where \c string[i] returns \c *string instead of \c *char.
+
+    @note Use @ref no-negative-offsets "%no-negative-offsets" after @ref modern "%modern" when maintaining legacy code that depends on negative list, binary, or buffer indexes not addressing from the end.
 
     @since %Qore 0.8.13 this operator accepts list expressions inside the square brackets
 
@@ -516,6 +542,8 @@ list nlist = remove l[2,5..7,8];
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&lt;</tt><em>@ref hashdecl "hashdecl_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: performs initialization of @ref hashdecl "hashdecl" keys with initializer expressions for keys not present in the output evaluated hash expression
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: removes any type-safe information from the output evaluated hash expression
     - <tt><b>cast</b>&lt;@ref list_type "list"&gt;(</tt><em>list_elements, ...</em><tt>)</tt>: removes any type-safe information from the output evaluated list expression
+
+    @note \c cast<hash<auto>>(...), \c cast<hash<string,\ auto>>(...), and \c cast<list<auto>>(...) are parse-time errors.  These target types do not coerce values to hashes or lists; the \c auto subtype accepts all values of an already-valid container unchanged, making these casts misleading no-ops.  Use \c cast<hash>(...) or \c cast<list>(...) to assert the hard container type and strip container type metadata.  Use \c cast<softlist<auto>>(...) when scalar-to-list coercion is required; \c cast<softlist<auto>>(NOTHING) returns an empty list.  There is no \c softhash type.
 
     @par Examples
     @code{.py}
@@ -914,6 +942,270 @@ select (1, 2, 3, 4, 5, 6), !($1 % 2);
     @since %Qore 0.8.6.2 the map operator when used with an @ref Qore::AbstractIterator "AbstractIterator" object instantiates the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()" instead of the iterator itself
 
     @note the <b><tt>select</tt></b> operator supports @ref op_functional "lazy functional evaluation" of itself and also of the \a iterator_expression
+
+    <hr>
+    @anchor streaming_iterate_operator
+    @subsection streaming_iterate_operator_section Iterate Operator (iterate)
+
+    @par Synopsis
+    Creates an iterator over the natural element type of an expression. This is a uniform entry point for values that can be processed by functional and streaming operators.\n\n
+    The <b><tt>iterate</tt></b> operator supports lists, hashes, strings, binaries, integers, ranges, and @ref Qore::AbstractIterator "AbstractIterator" objects. String sources yield @ref char values decoded according to the string's encoding.
+
+    @par Syntax
+    <tt><b>iterate</b></tt> \a iterable_expression
+
+    @par Return Type
+    @ref Qore::AbstractIterator "AbstractIterator"
+
+    @par Examples
+    @code{.py}
+list<int> values = map $1, (iterate 3);        # (0, 1, 2)
+int first_byte = first iterate binary("AZ");   # 65
+list<int> cps = map $1.ord(), iterate "café";  # (99, 97, 102, 233)
+    @endcode
+
+    <b>Arguments Processed by iterate</b>
+    |!Argument Type|!Element Values
+    |@ref list_type "list<T>"|list elements of type \c T
+    |@ref hash_type "hash<K,V>"|hashes with \c key and \c value members
+    |@ref string_type "string"|@ref char values, one per Unicode codepoint
+    |@ref binary_type "binary"|integer byte values in the range 0..255
+    |@ref int_type "int" \c N|integers from 0 to \c N - 1 for positive \c N
+    |@ref range_operator "range<int>"|integers in the range
+    |@ref Qore::AbstractIterator "AbstractIterator<T>"|delegates to the iterator and yields values of type \c T
+
+    @since %Qore 2.3
+
+    <hr>
+    @anchor streaming_first
+    @subsection streaming_first_section First Streaming Operator (first)
+
+    @par Synopsis
+    Returns the first element from an iterable source, or the first element whose predicate evaluates to @ref True "True". The operator stops iterating as soon as the result is known.
+
+    @par Syntax
+    <tt><b>first</b></tt> \a iterable_expression\n
+    <tt><b>first</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
+
+    @par Return Type
+    the source element type or @ref nothing
+
+    @par Example
+    @code{.py}
+*string err = first $1 =~ /ERROR/, log.splitLines();
+*int n = first (drop 10, xrange(100));
+    @endcode
+
+    The predicate expression uses <tt>$1</tt> for the current element and <tt>$#</tt> for the zero-based element index after any previous streaming stages.
+
+    @since %Qore 2.3
+
+    <hr>
+    @anchor streaming_any
+    @subsection streaming_any_section Any Streaming Operator (any)
+
+    @par Synopsis
+    Returns @ref True "True" if the iterable yields at least one element, or if at least one element matches the predicate. The operator short-circuits on the first matching element.
+
+    @par Syntax
+    <tt><b>any</b></tt> \a iterable_expression\n
+    <tt><b>any</b> (</tt>\a iterable_expression<tt>)</tt>\n
+    <tt><b>any</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
+
+    @par Return Type
+    @ref bool_type "bool"
+
+    @par Example
+    @code{.py}
+bool has_errors = any $1 =~ /ERROR/, log.splitLines();
+bool non_empty = any values;          # requires %modern or %streaming-any
+bool non_empty_legacy = any (values); # works without %streaming-any
+    @endcode
+
+    In @ref modern "%modern" mode, or when @ref streaming-any "%streaming-any" is enabled, \c any followed by a bare identifier-starting expression is treated as the streaming operator in expression contexts. This allows direct source checks such as \c "return any values;" and \c "bool has_values = any values;". The @ref any_type "any" type name remains available in declaration contexts for compatibility, but modern unrestricted declarations should use @ref auto_type "auto" instead.
+
+    The parser keeps declaration-like positions compatible with the \c any type. In syntactic positions that can also be declaration or parameter lists, such as direct function-call arguments, use an explicit source expression to avoid the compatibility rule:
+    @code{.py}
+handle(any (values));
+    @endcode
+
+    The parenthesized source form, \c "any (expr)", is the most explicit spelling and is accepted when the \c any operator is enabled. Predicate forms that start with an implicit argument, a negation, or a callable expression, such as \c "any $1 > 0, values" and \c "any isValid($1), values", are parsed as the streaming operator when it is enabled.
+
+    @note The @ref any_type "any" type is not recommended in modern code because assignment to \c any strips runtime type information for backward compatibility, which can be expensive for large structured values. Prefer @ref auto_type "auto" when no type restriction is needed.
+
+    @since %Qore 2.3
+
+    <hr>
+    @anchor streaming_all
+    @subsection streaming_all_section All Streaming Operator (all)
+
+    @par Synopsis
+    Returns @ref True "True" if every element in the iterable matches the predicate. The operator short-circuits on the first non-matching element; an empty source returns @ref True "True".
+
+    @par Syntax
+    <tt><b>all</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
+
+    @par Return Type
+    @ref bool_type "bool"
+
+    @par Example
+    @code{.py}
+bool all_positive = all $1 > 0, scores;
+    @endcode
+
+    @since %Qore 2.3
+
+    <hr>
+    @anchor streaming_count
+    @subsection streaming_count_section Count Streaming Operator (count)
+
+    @par Synopsis
+    Counts all elements in an iterable source, or all elements whose predicate evaluates to @ref True "True".
+
+    @par Syntax
+    <tt><b>count</b></tt> \a iterable_expression\n
+    <tt><b>count</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
+
+    @par Return Type
+    @ref int_type "int"
+
+    @par Example
+    @code{.py}
+int total = count log.splitLines();
+int errors = count $1 =~ /ERROR/, log.splitLines();
+    @endcode
+
+    @since %Qore 2.3
+
+    <hr>
+    @anchor streaming_take
+    @subsection streaming_take_section Take Streaming Operator (take)
+
+    @par Synopsis
+    Returns the first \a count elements from an iterable source. When used as the root expression it materializes a list; when used as the source for another functional or streaming consumer it is evaluated lazily and stops the source after the requested number of elements.
+
+    @par Syntax
+    <tt><b>take</b></tt> \a count<tt>,</tt> \a iterable_expression
+
+    @par Return Type
+    @ref list_type "list" of the source element type, or a lazy streaming stage when consumed by another lazy operator
+
+    @par Example
+    @code{.py}
+list<string> first_10 = take 10, log.splitLines();
+*string first_error = first $1 =~ /ERROR/, (take 100, log.splitLines());
+    @endcode
+
+    @throw STREAMING-OPERATOR-ERROR the count is negative
+
+    @since %Qore 2.3
+
+    <hr>
+    @anchor streaming_drop
+    @subsection streaming_drop_section Drop Streaming Operator (drop)
+
+    @par Synopsis
+    Skips the first \a count elements from an iterable source and returns the remaining elements. When used as the root expression it materializes a list; when used as the source for another functional or streaming consumer it is evaluated lazily.
+
+    @par Syntax
+    <tt><b>drop</b></tt> \a count<tt>,</tt> \a iterable_expression
+
+    @par Return Type
+    @ref list_type "list" of the source element type, or a lazy streaming stage when consumed by another lazy operator
+
+    @par Example
+    @code{.py}
+list<string> body = drop 1, csv.splitLines();
+*string first_body_line = first (drop 1, csv.splitLines());
+    @endcode
+
+    @throw STREAMING-OPERATOR-ERROR the count is negative
+
+    @since %Qore 2.3
+
+    <hr>
+    @anchor streaming_takewhile
+    @subsection streaming_takewhile_section Takewhile Streaming Operator (takewhile)
+
+    @par Synopsis
+    Returns elements from the source while the predicate evaluates to @ref True "True". The first element for which the predicate is @ref False "False" is not included, and source iteration stops at that point.
+
+    @par Syntax
+    <tt><b>takewhile</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
+
+    @par Return Type
+    @ref list_type "list" of the source element type, or a lazy streaming stage when consumed by another lazy operator
+
+    @par Example
+    @code{.py}
+list<string> headers = takewhile $1 != "", request.splitLines();
+    @endcode
+
+    @since %Qore 2.3
+
+    <hr>
+    @anchor streaming_takeuntil
+    @subsection streaming_takeuntil_section Takeuntil Streaming Operator (takeuntil)
+
+    @par Synopsis
+    Returns elements from the source until the predicate evaluates to @ref True "True". The first element for which the predicate is @ref True "True" is not included, and source iteration stops at that point.
+
+    @par Syntax
+    <tt><b>takeuntil</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
+
+    @par Return Type
+    @ref list_type "list" of the source element type, or a lazy streaming stage when consumed by another lazy operator
+
+    @par Example
+    @code{.py}
+list<string> body = takeuntil $1 == "<<END>>", source.splitLines();
+    @endcode
+
+    @since %Qore 2.3
+
+    <hr>
+    @subsection streaming_composed_examples Streaming Operator Examples
+
+    The streaming operators can be composed by parenthesizing an inner streaming
+    stage and using it as the source for another streaming or functional
+    operator. IR, JIT, and AOT execution fuse such chains into a single iterator
+    loop where possible.
+
+    @par Prefix processing without intermediate lists
+    @code{.py}
+list<string> first_page = take 100, log.splitLines();
+*string first_error = first $1 =~ /ERROR/, (take 100, log.splitLines());
+int error_count = count $1 =~ /ERROR/, (take 100, log.splitLines());
+    @endcode
+
+    @par Skipping headers and reading until a boundary
+    @code{.py}
+list<string> body = takeuntil $1 == "--END--", (drop 1, message.splitLines());
+bool has_payload = any $1 != "", body;
+    @endcode
+
+    @par Iterating non-string sources
+    @code{.py}
+list<int> first_bytes = take 4, (iterate binary("QORE"));
+int range_total = count iterate 10;        # 0 through 9
+auto first_pair = first $1.key == "id", (iterate ("id": 42, "name": "qore"));
+    @endcode
+
+    @par Compatibility options
+    @code{.py}
+%no-streaming-operators
+
+sub legacy() {
+    int count = 0;
+    int take = 1;
+    count += take;
+}
+    @endcode
+
+    Use @ref no-streaming-operators "%no-streaming-operators" to disable all
+    streaming keywords for legacy source compatibility, or the narrower
+    per-keyword options such as @ref no-count "%no-count" and
+    @ref no-take "%no-take" when only one identifier conflicts.
 
     <hr>
     @subsection elements Elements Operator (elements)
@@ -1750,7 +2042,7 @@ if (x || y)
 
 
     <hr>
-    @subsection value_coalescing_operator Value Coalescing Operator (?*)
+    @subsection value_coalescing_operator Value Coalescing Operator (?*, ?:)
 
     @par Synopsis
     Evaluates the first operand and checks for a value (@ref True "True" or @ref False "False"). If it evaluates to @ref True "True", then the value of the first operand is returned, otherwise the second operand is evaluated and returned.  When chained, the first argument with a value is returned.
@@ -1758,13 +2050,20 @@ if (x || y)
     @par Syntax
     \a expression1 ?* \a expression2
 
+    \a expression1 ?: \a expression2
+
     @par Return Type
     @ref any_type "any"
 
     @par Example
     @code{.py} x = a ?* b ?* c;@endcode
+    @code{.py} x = a ?: b ?: c;@endcode
 
-    <b>Arguments Processed by ?*</b>
+    @note \c ?: is an alias for \c ?*.  The two characters must be adjacent.  The \c ?:
+    value-coalescing alias is different from the conditional operator written as
+    <tt>\a condition ? \a if_true_expression : \a if_false_expression</tt>.
+
+    <b>Arguments Processed by ?* and ?:</b>
     |!Argument|!Processing
     |All|If \a expression1 is evaluated to be @ref False "False" then the \a expession2 is evaluated and returned. Otherwise the value of \a expression1 is returned.
 

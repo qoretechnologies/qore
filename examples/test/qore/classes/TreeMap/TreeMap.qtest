@@ -161,7 +161,7 @@ public class TreeMapTest inherits QUnit::Test {
 
     testUnmatched() {
         *string unmatched;
-        any val;
+        auto val;
         hash h;
         val = tm.get("def/g/hi", \unmatched);
         testAssertion("unmatched-1", \equals(), (("5", ""), (val, unmatched)));

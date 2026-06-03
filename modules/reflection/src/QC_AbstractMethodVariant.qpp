@@ -95,6 +95,28 @@ bool AbstractMethodVariant::isFinal() [flags=RET_VALUE_ONLY] {
     return mv->isFinal();
 }
 
+//! returns @ref True if the variant is a const method variant
+/** @par Example:
+    @code{.py}
+bool b = v.isConstMethod();
+    @endcode
+
+    @return @ref True if the variant is const-qualified and may be called through a readonly receiver
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
+*/
+bool AbstractMethodVariant::isConstMethod() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, v->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the variant ptr must be valid
+    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
+    return mv->isConstMethod();
+}
+
 //! Returns the method for the method variant
 /**
     @return the method for the method variant
@@ -148,4 +170,3 @@ string AbstractMethodVariant::getAccessModifierString() [flags=RET_VALUE_ONLY] {
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
     return new QoreStringNode(mv->getAccessString());
 }
-

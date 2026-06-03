@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+const int TypedConstInt = 42;
+const string TypedConstString = "typed";
+
+int sub readonly_local_value(int value) {
+    const int result = value + 1;
+    return result;
+}
+
+int sub readonly_param_value(const int value) {
+    return value;
+}
+
+%exec-class ReadOnlyConstBindingsTest
+
+class ReadOnlyConstBindingsTest inherits QUnit::Test {
+    public {
+        const int ClassLimit = 7;
+    }
+
+    constructor() : QUnit::Test("Read-only const bindings", "1.0") {
+        addTestCase("Typed constants", \testTypedConstants());
+        addTestCase("Read-only local variables", \testReadOnlyLocals());
+        addTestCase("Read-only parameters", \testReadOnlyParameters());
+        addTestCase("Parse option interactions", \testParseOptions());
+        set_return_value(main());
+    }
+
+    testTypedConstants() {
+        assertEq(42, TypedConstInt, "typed int constant");
+        assertEq("typed", TypedConstString, "typed string constant");
+        assertEq(7, ReadOnlyConstBindingsTest::ClassLimit, "typed class constant");
+
+        Program p();
+        assertThrows("PARSE-TYPE-ERROR", "constant 'Bad'", \p.parse(),
+            ("%modern\nconst int Bad = \"x\";\n", "typed-const-mismatch"));
+    }
+
+    testReadOnlyLocals() {
+        assertEq(4, readonly_local_value(3), "read-only local initializer");
+
+        Program p();
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
+            \p.parse(), ("%modern\nsub f() { const int x = 1; x = 2; }\n", "readonly-assign"));
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
+            \p.parse(), ("%modern\nsub f() { const int x = 1; x += 2; }\n", "readonly-add-assign"));
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
+            \p.parse(), ("%modern\nsub f() { const int x = 1; ++x; }\n", "readonly-increment"));
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
+            \p.parse(), ("%modern\nsub f() { const int x = 1; remove x; }\n", "readonly-remove"));
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
+            \p.parse(), ("%modern\nsub f() { const list<int> x = (1,); x[0] = 2; }\n", "readonly-index"));
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot create a mutable reference",
+            \p.parse(), ("%modern\nsub f() { const int x = 1; reference<int> r = \\x; }\n", "readonly-ref"));
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "requires an initializer",
+            \p.parse(), ("%modern\nsub f() { const int x; }\n", "readonly-missing-init"));
+        assertThrows("PARSE-EXCEPTION", "declared without type information",
+            \p.parse(), ("%modern\nsub f() { const x = 1; }\n", "readonly-require-types"));
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
+            \p.parse(), ("%modern\nsub f() { const int x = 1; code c = sub() { x = 2; }; }\n",
+                "readonly-closure"));
+    }
+
+    testReadOnlyParameters() {
+        assertEq(5, readonly_param_value(5), "read-only parameter value");
+
+        Program p();
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'value'",
+            \p.parse(), ("%modern\nsub f(const int value) { value = 2; }\n", "readonly-param-assign"));
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'value'",
+            \p.parse(), ("%modern\nsub f(const list<int> value) { value[0] = 2; }\n",
+                "readonly-param-index"));
+        assertThrows("DUPLICATE-SIGNATURE", "f\\(int x\\) has already been declared",
+            \p.parse(), ("%modern\nsub f(const int x) {}\nsub f(int x) {}\n", "readonly-param-overload"));
+    }
+
+    testParseOptions() {
+        Program p1();
+        p1.parse("%new-style\n%no-constant-defs\nsub f() { const auto value = 1; }\n",
+            "no-constant-defs-readonly-local");
+        Program p2();
+        assertThrows("PARSE-EXCEPTION", "NO_CONSTANT_DEFS", \p2.parse(),
+            ("%new-style\n%no-constant-defs\nconst int Blocked = 1;\n", "no-constant-defs-constant"));
+    }
+}

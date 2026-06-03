@@ -641,8 +641,9 @@ class NanBoxingTest inherits QUnit::Test {
         auto val = l[100];  # Returns NOTHING, doesn't throw
         assertEq(NOTHING, val, "out of bounds returns NOTHING");
 
-        # Negative index returns NOTHING in Qore (unlike Python)
-        assertEq(NOTHING, l[-1], "negative index returns NOTHING");
+        # Modern negative offsets address from the end
+        assertEq(3, l[-1], "negative index returns the last element");
+        assertEq(NOTHING, l[-4], "negative index before start returns NOTHING");
 
         # Use .last() method to get last element
         assertEq(3, l.last(), "last() method works");

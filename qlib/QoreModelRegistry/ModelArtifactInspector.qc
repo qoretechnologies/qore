@@ -126,7 +126,7 @@ public class ModelArtifactInspector {
         string safety = manifest_safety ?? inferPackageSafety(artifacts);
         *hash<auto> option_plan;
         if (exists options.execution_plan) {
-            option_plan = cast<hash<auto>>(options.execution_plan);
+            option_plan = cast<hash>(options.execution_plan);
         }
         *string plan_task = taskFromExecutionPlan(option_plan);
         if (plan_task.val() && options.task.val()) {
@@ -168,19 +168,19 @@ public class ModelArtifactInspector {
             ?? (package_manifest ? package_manifest.device_binding : NOTHING);
         *hash<auto> source_preprocess;
         if (exists options.preprocess) {
-            source_preprocess = cast<hash<auto>>(options.preprocess);
+            source_preprocess = cast<hash>(options.preprocess);
         } else if (option_plan && exists option_plan.preprocess) {
-            source_preprocess = cast<hash<auto>>(option_plan.preprocess);
+            source_preprocess = cast<hash>(option_plan.preprocess);
         } else if (package_manifest && package_manifest.preprocess) {
-            source_preprocess = cast<hash<auto>>(package_manifest.preprocess);
+            source_preprocess = cast<hash>(package_manifest.preprocess);
         }
         *hash<auto> source_postprocess;
         if (exists options.postprocess) {
-            source_postprocess = cast<hash<auto>>(options.postprocess);
+            source_postprocess = cast<hash>(options.postprocess);
         } else if (option_plan && exists option_plan.postprocess) {
-            source_postprocess = cast<hash<auto>>(option_plan.postprocess);
+            source_postprocess = cast<hash>(option_plan.postprocess);
         } else if (package_manifest && package_manifest.postprocess) {
-            source_postprocess = cast<hash<auto>>(package_manifest.postprocess);
+            source_postprocess = cast<hash>(package_manifest.postprocess);
         }
         *hash<auto> preprocess = source_preprocess;
         *hash<auto> postprocess = source_postprocess;
@@ -200,15 +200,15 @@ public class ModelArtifactInspector {
             ?? (primary.metadata ? primary.metadata.validation : NOTHING);
         *hash<auto> diagnostics;
         if (exists options.diagnostics) {
-            diagnostics = cast<hash<auto>>(options.diagnostics);
+            diagnostics = cast<hash>(options.diagnostics);
         } else if (package_manifest && package_manifest.diagnostics) {
-            diagnostics = cast<hash<auto>>(package_manifest.diagnostics);
+            diagnostics = cast<hash>(package_manifest.diagnostics);
         }
         *hash<auto> benchmarks;
         if (exists options.benchmarks) {
-            benchmarks = cast<hash<auto>>(options.benchmarks);
+            benchmarks = cast<hash>(options.benchmarks);
         } else if (package_manifest && package_manifest.benchmarks) {
-            benchmarks = cast<hash<auto>>(package_manifest.benchmarks);
+            benchmarks = cast<hash>(package_manifest.benchmarks);
         }
         *list<hash<auto>> golden_vectors;
         if (exists options.golden_vectors) {
@@ -593,7 +593,7 @@ public class ModelArtifactInspector {
     private static *hash<auto> buildProviderInfo(hash<ModelArtifactInfo> primary,
             *hash<auto> package_manifest) {
         if (package_manifest && package_manifest.providers) {
-            return cast<hash<auto>>(package_manifest.providers);
+            return cast<hash>(package_manifest.providers);
         }
         if (!primary.metadata) {
             return NOTHING;
@@ -719,7 +719,7 @@ public class ModelArtifactInspector {
             list<hash<ModelArtifactInfo>> artifacts, *hash<auto> package_manifest) {
         hash<TokenizerArtifactInfo> info = <TokenizerArtifactInfo>{};
         if (package_manifest && package_manifest.tokenizer) {
-            hash<auto> manifest_tokenizer = cast<hash<auto>>(package_manifest.tokenizer);
+            hash<auto> manifest_tokenizer = cast<hash>(package_manifest.tokenizer);
             if (manifest_tokenizer.tokenizer_json.val()) {
                 info.tokenizer_json = manifest_tokenizer.tokenizer_json;
             } else if (manifest_tokenizer.artifact_name.val()) {

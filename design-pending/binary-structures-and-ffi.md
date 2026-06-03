@@ -765,76 +765,53 @@ The wire-format and on-disk concerns of AOT/IR are split into §6
 
 ### 5.7 AST parser module mirror
 
-Per the project guideline ("When editing the core parser
-(`lib/parser.ypp`, `lib/scanner.lpp`), mirror changes in
-`modules/astparser/src/`"), the astparser module needs a parallel set
-of changes so that QLS, qore-doc, and other tooling can parse, search,
-and document `bindecl` declarations.
+The astparser module now uses the tree-sitter grammar and `CSTSearcher`
+for the active public API. The old Bison-based astparser implementation
+and AST node hierarchy have been removed, so `bindecl` tooling support
+belongs in the tree-sitter grammar, generated artifacts, CST metadata,
+and downstream search/formatting consumers.
 
-**Scanner — `modules/astparser/src/ast_scanner.lpp`:**
+**Grammar — `modules/astparser/grammars/tree-sitter-qore/grammar.js`:**
 
-- Recognise the `bindecl` keyword (mirror of `TOK_BINDECL`).
+- Recognise the `bindecl` keyword and the declaration/member structure.
 - Recognise the context-sensitive primitive type keywords (`uint8`,
   `int8`, `uint16`, `int16`, `uint32`, `int32`, `uint64`, `int64`,
   `float32`, `float64`, `bool8`, `byte`, `zstring`) inside
   `bindecl { ... }` blocks; outside, they remain identifiers. The
   existing global `string` keyword is reused unchanged inside bindecl
-  member position; no new lexer state is needed for it.
-- Doc-comment claim/attach handling for `bindecl` (mirror of the
-  `ATTACH_HASHDECL_DOC_COMMENT` macro at `ast_parser.ypp:204`).
+  member position.
+- Add tree-sitter rules for `bindecl_declaration`, `bindecl_member`,
+  layout/member attributes, fixed array counts, and bitfield widths.
+- Regenerate committed artifacts under
+  `modules/astparser/grammars/tree-sitter-qore/src/`.
 
-**Grammar — `modules/astparser/src/ast_parser.ypp`:**
+**CST search and metadata:**
 
-- New tokens: `TOK_BINDECL`, `BINDECL_IDENTIFIER` (and any
-  `BINDECL_IDENTIFIER_OPENCURLY` form if literal-construction syntax is
-  added in v2).
-- New non-terminals: `bindecl_def`, `bindecl_attributes`,
-  `bindecl_member`, `bindecl_attribute_list`, `bindecl_layout_attr`,
-  `bindecl_member_attr_list`, `fixed_array_count`, `bitfield_width`.
-- Production placement: `bindecl_def` slots into the same grammar
-  positions as `hashdecl_def` (top-level decl, namespace decl,
-  member-list-of-namespace) — see `ast_parser.ypp:573`, `:921`,
-  `:1359` for the existing template.
-- Destructor declarations for new non-terminals follow the
-  `hashdecl_*` pattern at `:533–:535`.
-
-**AST nodes — `modules/astparser/src/ast/declarations/`:**
-
-- `ASTBindeclDeclaration.h` — mirror of `ASTHashDeclaration.h`. Holds
-  the decl name, attribute list, member list, and source location.
-  Inherits from `ASTDeclaration`.
-- `ASTBindeclMemberDeclaration.h` — mirror of
-  `ASTHashMemberDeclaration.h`. Holds member name, type, optional
-  bitfield width, optional per-field attribute list, and doc comment.
-- `ASTDeclarationKind.h` — new enum value `ADK_Bindecl`.
-- `ASTNodeType.h` — new enum value `ANT_BindeclDeclaration` (and
-  `ANT_BindeclMemberDeclaration` if separate visitor support is
-  needed).
-
-**Visitors / printers / searchers:**
-
-- `AstPrinter.cpp` / `.h` — new `printBindeclDeclaration` and
-  `printBindeclMemberDeclaration` mirroring the hashdecl printers.
-- `AstTreeSearcher.cpp` / `.h` — visit hooks for the new node kinds so
-  symbol search / hover / go-to-definition work.
 - `CSTSearcher.cpp` / `.h` — concrete-syntax-tree searcher updates for
-  the new tokens and node types.
-- `AstTreePrinter.cpp` / `.h` — pretty-printer for the new nodes.
+  the new node types so symbol search, hover, go-to-definition, and
+  member listing work.
+- `GetNodesInfoQuery.cpp` / `.h` — no special AST-node layer is needed,
+  but tests must verify the CST shape and field names for `bindecl`.
+- `ASTDeclarationKind.h` / `ASTNodeType.h` — add public enum constants
+  only if the ql_ast compatibility constants require them.
 
 **Module exports — `modules/astparser/src/ql_ast.qpp`:**
 
 - New constants for the bindecl kind (`ADK_Bindecl`) so Qore-side
-  consumers (QLS) can dispatch on declaration kind.
+  consumers (QLS) can dispatch on declaration kind, if the existing
+  compatibility constants are not expressive enough.
 - The `AstParser`/`AstTree`/`AstTreeSearcher` qclass APIs already
-  accept abstract declaration nodes; no surface-API change.
+  expose tree-sitter CST nodes and abstract symbol metadata; no
+  surface-API change should be needed unless bindecl-specific metadata
+  has to be published.
 
 **Test coverage:**
 
-- `examples/test/qore/astparser/` (or wherever the astparser tests
-  live) gets bindecl-specific cases: parse a simple bindecl, verify
-  the AST structure, verify the printer roundtrip, verify symbol
-  search finds the decl name and member names, verify hover info
-  reports the resolved offset/width.
+- `modules/astparser/test/` gets bindecl-specific cases: parse a
+  simple bindecl, verify the CST structure and field names, verify
+  QoreCodeFormat roundtrip output, verify symbol search finds the decl
+  name and member names, and verify hover/member metadata reports the
+  resolved offset/width.
 
 The astparser work is **not** optional — QLS and qore-doc are the user-
 facing surfaces for new language constructs, and shipping `bindecl`
@@ -1140,22 +1117,25 @@ incompatibility behaviour). New runtimes loading old blobs: the new
 unset; no behaviour change. The QORD blob version number does *not*
 change; only the feature flag mask widens.
 
-### 6.3 AST persistence — astparser tree serialization
+### 6.3 Astparser CST serialization and roundtrip
 
-The astparser module produces an in-memory AST that QLS, qore-doc, and
-diagnostic tools traverse. There's no on-disk AST persistence today
-beyond the source itself, so "AST persistence" is really "the AST node
-classes round-trip through the printer and re-parse cleanly":
+The astparser module now produces a tree-sitter concrete syntax tree
+that QLS, qore-doc, QoreCodeFormat, and diagnostic tools traverse.
+There's no on-disk astparser persistence today beyond the source
+itself, so this work is really CST shape stability and formatter
+roundtrip support:
 
-- `AstPrinter::printBindeclDeclaration` (added per §5.7) must emit
-  source that re-parses to a structurally-identical AST.
-- `AstTreePrinter` (the node-shape printer used for diagnostics) must
-  cover the new node types so issue reports are not silent.
-- The CST (concrete-syntax-tree) printer used by reformatting tooling
-  must preserve attribute ordering — `[endian=big, align=packed]` and
+- `modules/astparser/src/queries/GetNodesInfoQuery.*` and
+  `AstTreePrinter` must cover the new node types and fields so
+  diagnostic output and tests expose the bindecl structure.
+- `CSTSearcher` must publish the bindecl symbols and member metadata
+  needed by QLS, qore-doc, and QoreApiMetadata.
+- QoreCodeFormat translation/printing must emit source that re-parses
+  to an equivalent CST.
+- Reformatting must preserve or intentionally normalize attribute
+  ordering — `[endian=big, align=packed]` and
   `[align=packed, endian=big]` are semantically identical but produce
-  different bytes; the reformatter should normalise to attribute
-  alphabetical order.
+  different bytes; the formatter should define the canonical order.
 
 No new persistent AST file format and no serialized AST ID assignment.
 The in-memory astparser enums still gain ordinary source-level values
@@ -1226,8 +1206,8 @@ cross-module dependency tracking works the same way as for
 
 Every new keyword and lexer construct introduced by this proposal gets
 a matching parse option that disables it for older sources. This
-follows the same pattern documented in the `char` design
-(`char-type.md` §7.2) and is required because user code may have
+follows the same compatibility pattern documented in the `char` design
+(`../design/char-type.md`) and is required because user code may have
 identifiers named `bindecl` or any of the primitive type keywords.
 
 | Parse directive | Parse option flag (C++) | Disables                                        |

@@ -169,6 +169,7 @@ int i = v.getModifiers();
     - @ref Qore::Reflection::MC_PUBLIC "MC_PUBLIC": for functions, the variant has the @ref mod_public "module public" flag set on the class or the function (not related to any inheritance properties in a class hierarchy), for method variants, this gives the accessibility of the variant
     - @ref Qore::Reflection::MC_STATIC "MC_STATIC": the variant is a static method variant
     - @ref Qore::Reflection::MC_SYNCHRONIZED "MC_SYNCHRONIZED": the variant is synchronized
+    - @ref Qore::Reflection::MC_CONST "MC_CONST": the variant is a const method variant
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
@@ -194,6 +195,9 @@ int AbstractVariant::getModifiers() [flags=RET_VALUE_ONLY] {
         rc |= get_access(mv->getAccess());
         if (mv->isStatic()) {
             rc |= MC_STATIC;
+        }
+        if (mv->isConstMethod()) {
+            rc |= MC_CONST;
         }
     } else {
         if (v->variant->isModulePublic()) {
@@ -222,6 +226,7 @@ list<string> l = v.getModifierList();
     - \c "public": for function variants, the variant has the @ref mod_public "module public" flag set on the function, for method variants, this gives the accessibility of the variant
     - \c "static": (only returned for method variants) the variant is a static method variant
     - \c "synchronized": the variant is synchronized
+    - \c "const": (only returned for method variants) the variant is a const method variant
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
@@ -247,6 +252,9 @@ list<string> AbstractVariant::getModifierList() [flags=RET_VALUE_ONLY] {
         rv->push(new QoreStringNode(mv->getAccessString()), xsink);
         if (mv->isStatic()) {
             rv->push(new QoreStringNode("static"), xsink);
+        }
+        if (mv->isConstMethod()) {
+            rv->push(new QoreStringNode("const"), xsink);
         }
     } else {
         if (v->variant->isModulePublic()) {
@@ -667,6 +675,12 @@ string AbstractVariant::toString() [flags=RET_VALUE_ONLY] {
     rv->concat('(');
     rv->concat(v->variant->getSignatureText());
     rv->concat(')');
+    if (cls) {
+        const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
+        if (mv->isConstMethod()) {
+            rv->concat(" const");
+        }
+    }
 
     return rv.release();
 }

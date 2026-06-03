@@ -11,6 +11,10 @@
     @section CONSTANT
     This flag indicates that the function or method has no side effects and does not throw any exceptions (see also @ref RET_VALUE_ONLY).
 
+    @note This flag is not the same as a @ref const_methods "const method". Code flags describe side effects and
+    exception behavior; const-method metadata describes whether an instance method can be called through a read-only
+    receiver.
+
     @section RET_VALUE_ONLY
     This flag indicates that the function or method has no side effects but could throw an exception (see also @ref CONSTANT).
 

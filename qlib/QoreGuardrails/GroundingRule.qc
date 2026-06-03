@@ -215,7 +215,7 @@ public class GroundingRule inherits AbstractGuardrailRule {
             return ();
         }
         return QoreLlmUtils::GroundedAnswerVerifier::buildSourceBundle(
-            cast<list<auto>>(raw));
+            cast<list>(raw));
     }
 
     private static hash<auto> makeMetadata(

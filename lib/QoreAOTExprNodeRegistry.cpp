@@ -33,6 +33,8 @@
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QoreIterateOperatorNode.h"
+#include "qore/intern/QoreStreamingOperatorNode.h"
 #include "QoreAOTExprNodeHandlers.cpp"
 
 #include <string>
@@ -257,9 +259,10 @@ const QoreAOTExprNodeKindInfo AOT_EXPR_NODE_KIND_REGISTRY[256] = {
     {"EN_HASH_MAP_SELECT", 163, true, read_node_EN_HASH_MAP_SELECT, "Hash map-select operator"},
     {"EN_FOLDL", 164, true, read_node_EN_FOLDL, "Fold-left operator"},
     {"EN_FOLDR", 165, true, read_node_EN_FOLDR, "Fold-right operator"},
+    {"EN_ITERATE", 166, true, read_node_EN_ITERATE, "Iterate operator"},
+    {"EN_STREAMING", 167, true, read_node_EN_STREAMING, "Streaming operator"},
 
-    // [166-255] Undefined (all remaining entries)
-    {nullptr, 166, false, nullptr, nullptr}, {nullptr, 167, false, nullptr, nullptr},
+    // [168-255] Undefined (all remaining entries)
     {nullptr, 168, false, nullptr, nullptr}, {nullptr, 169, false, nullptr, nullptr},
     {nullptr, 170, false, nullptr, nullptr}, {nullptr, 171, false, nullptr, nullptr},
     {nullptr, 172, false, nullptr, nullptr}, {nullptr, 173, false, nullptr, nullptr},

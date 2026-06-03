@@ -1,0 +1,200 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ConstMethodsParserTest
+
+class ConstMethodsParserTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Const method parser test", "1.0") {
+        addTestCase("Accepted const method syntax", \testAcceptedSyntax());
+        addTestCase("Rejected const method declarations", \testRejectedDeclarations());
+        addTestCase("Const method body mutation checks", \testConstMethodBodyMutationChecks());
+        addTestCase("Readonly receiver call checks", \testReadonlyReceiverCallChecks());
+        addTestCase("Const method override checks", \testConstMethodOverrideChecks());
+        set_return_value(main());
+    }
+
+    assertParseThrows(string err, string msg, string code, string label) {
+        Program p(PO_NEW_STYLE | PO_ALLOW_RETURNS);
+        assertThrows(err, msg, \p.parse(), (code, label));
+    }
+
+    assertParses(string code, string label) {
+        Program p(PO_NEW_STYLE | PO_ALLOW_RETURNS);
+        p.parse(code, label);
+    }
+
+    testAcceptedSyntax() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_RETURNS);
+        p.parse("
+            class ConstMethodSyntaxBase {
+                abstract int value() const;
+            }
+
+            class ConstMethodSyntaxChild inherits ConstMethodSyntaxBase {
+                private {
+                    int v = 9;
+                }
+
+                int value() const {
+                    return v;
+                }
+
+                getValue() const returns int {
+                    return v;
+                }
+
+                methodGate(string name) const {
+                    return name;
+                }
+
+                memberGate(string name) const {
+                    return name;
+                }
+            }
+
+            class ConstMethodOutOfLine {
+            }
+
+            int ConstMethodOutOfLine::value() const {
+                return 11;
+            }
+
+            int sub test() {
+                ConstMethodSyntaxChild c();
+                ConstMethodOutOfLine o();
+                return c.value() + c.getValue() + o.value();
+            }
+        ", "const-method-accepted-syntax");
+        p.run();
+        assertEq(29, p.callFunction("test"));
+    }
+
+    testRejectedDeclarations() {
+        Program p1(PO_NEW_STYLE);
+        assertThrows("CONST-METHOD-ERROR", "constructor\\(\\) methods cannot be declared const",
+            \p1.parse(), ("class C { constructor() const {} }", "const-constructor"));
+
+        Program p2(PO_NEW_STYLE);
+        assertThrows("CONST-METHOD-ERROR", "destructor\\(\\) methods cannot be declared const",
+            \p2.parse(), ("class C { destructor() const {} }", "const-destructor"));
+
+        Program p3(PO_NEW_STYLE);
+        assertThrows("CONST-METHOD-ERROR", "static method 'f\\(\\)' cannot be declared const",
+            \p3.parse(), ("class C { static int f() const { return 1; } }", "const-static"));
+
+        Program p4(PO_NEW_STYLE);
+        assertThrows("CONST-METHOD-ERROR", "copy\\(\\) methods cannot be declared const",
+            \p4.parse(), ("class C { copy() const {} }", "const-copy"));
+
+        Program p5(PO_NEW_STYLE);
+        assertThrows("CONST-METHOD-ERROR", "memberNotification\\(\\) methods cannot be declared const",
+            \p5.parse(), ("class C { memberNotification(string name) const {} }", "const-member-notification"));
+
+        Program p6(PO_NEW_STYLE);
+        assertThrows("DUPLICATE-SIGNATURE", "f\\(\\) has already been declared",
+            \p6.parse(), ("class C { int f() const { return 1; } int f() { return 2; } }",
+                "const-not-overload-key"));
+
+        Program p7(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", \p7.parse(),
+            ("class C { const int f() { return 1; } }", "leading-const-not-method-qualifier"));
+    }
+
+    testConstMethodBodyMutationChecks() {
+        assertParseThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "self-rooted lvalue",
+            "class C { private { int value = 0; } int bad() const { self.value = 1; return value; } }",
+            "const-self-member-assign");
+
+        assertParseThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "self-rooted lvalue",
+            "class C { private { int value = 0; } int bad() const { ++self.value; return value; } }",
+            "const-self-member-increment");
+
+        assertParseThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "self-rooted lvalue",
+            "class C { private { list<int> values = (0,); } int bad() const { self.values[0] = 1; return values[0]; } }",
+            "const-self-member-index-assign");
+
+        assertParseThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "self-rooted lvalue",
+            "class C { private { int value = 0; } int bad() const { code c = sub() { self.value = 1; }; return value; } }",
+            "const-closure-self-member-assign");
+
+        assertParses(
+            "class C { int mutate() { return 1; } int ok() const { C c = new C(); return c.mutate(); } }",
+            "const-method-local-mutable-receiver");
+    }
+
+    testReadonlyReceiverCallChecks() {
+        assertParses(
+            "class C { int mutate() { return 1; } int read() const { return 2; } int ok() const { return self.read(); } }",
+            "const-self-call-const-method");
+
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'mutate",
+            "class C { int mutate() { return 1; } int bad() const { return self.mutate(); } }",
+            "const-self-call-non-const");
+
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'mutate",
+            "class C { int mutate() { return 1; } int bad() const { return mutate(); } }",
+            "const-implicit-self-call-non-const");
+
+        assertParseThrows("READONLY-RECEIVER-ERROR", "copy",
+            "class C { auto bad() const { return self.copy(); } }",
+            "const-self-copy-call");
+
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'mutate",
+            "class C { int mutate() { return 1; } } int sub bad() { const C c = new C(); return c.mutate(); }",
+            "readonly-local-call-non-const");
+
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'mutate",
+            "class C { int mutate() { return 1; } } int sub bad() { const C c(); return c.mutate(); }",
+            "readonly-local-constructor-syntax-call-non-const");
+
+        assertParses(
+            "class C { int mutate() { return 1; } int read() const { return 2; } } "
+                "int sub ok() { const C c = new C(); return c.read(); }",
+            "readonly-local-call-const");
+
+        Program builtin(PO_NEW_STYLE | PO_ALLOW_RETURNS);
+        builtin.parse("
+            int sub ok() {
+                const string text = \"abc\";
+                const hash<auto> data = {\"a\": 1, \"b\": 2};
+                const list<int> nums = (1, 2, 3);
+                const int value = -3;
+                return text.size() + data.keys().size() + nums.size() + value.abs();
+            }
+        ", "readonly-builtin-receiver-call-const-methods");
+        builtin.run();
+        assertEq(11, builtin.callFunction("ok"));
+
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'mutate",
+            "class Child { int mutate() { return 1; } } "
+                "class Holder { private { Child child = new Child(); } int bad() const { return self.child.mutate(); } }",
+            "const-self-member-receiver-non-const");
+
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'pick",
+            "class C { int pick(int i) const { return i; } int pick(string s) { return s.size(); } } "
+                "int sub bad(auto a) { const C c = new C(); return c.pick(a); }",
+            "readonly-receiver-unresolved-overload-with-non-const-candidate");
+    }
+
+    testConstMethodOverrideChecks() {
+        assertParseThrows("CONST-METHOD-ERROR", "cannot override const parent class method",
+            "class B { int value() const { return 1; } } class C inherits B { int value() { return 2; } }",
+            "non-const-override-const-method");
+
+        assertParses(
+            "class B { int value() { return 1; } } class C inherits B { int value() const { return 2; } }",
+            "const-override-non-const-method");
+
+        assertParseThrows("ABSTRACT-CLASS-ERROR", "value\\(\\) const",
+            "class B { abstract int value() const; } class C inherits B {} "
+                "int sub test() { C c = new C(); return c.value(); }",
+            "const-abstract-reported-with-const-qualifier");
+    }
+
+}

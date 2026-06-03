@@ -82,7 +82,7 @@ class ModelRegistryDataProviderHelper {
     }
 
     static hash<auto> makeVersionRecord(hash<ModelVersionInfo> version) {
-        hash<auto> rec = cast<hash<auto>>(version);
+        hash<auto> rec = cast<hash>(version);
         rec.artifact_count = version.artifacts ? version.artifacts.size() : 0;
         if (version.providers) {
             rec.active_provider = version.providers.active_provider;
@@ -111,7 +111,7 @@ class ModelRegistryDataProviderHelper {
     }
 
     static hash<auto> makeArtifactRecord(hash<ModelArtifactInfo> artifact) {
-        return cast<hash<auto>>(artifact);
+        return cast<hash>(artifact);
     }
 
     static hash<string, AbstractDataField> getVersionRecordType() {

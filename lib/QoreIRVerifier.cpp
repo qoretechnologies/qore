@@ -84,6 +84,30 @@ static const std::string& getOpcodeRegistryValidationError() {
     return registry_error;
 }
 
+// Defined in QoreIRInterpreter.cpp
+extern const VarRefNode* extractLValueBaseVarRef(const QoreValue&);
+
+static const LocalVar* getLocalVarFromVarRef(const VarRefNode* var) {
+    if (!var) {
+        return nullptr;
+    }
+    qore_var_t vtype = var->getType();
+    return (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS)
+        ? reinterpret_cast<const LocalVar*>(var->ref.id) : nullptr;
+}
+
+static bool rejectReadOnlyLocalWrite(const LocalVar* lv, const char* op, std::string& error) {
+    if (lv && lv->isReadOnly()) {
+        error = std::string("readonly local '") + lv->getName() + "' used as write target by " + op;
+        return true;
+    }
+    return false;
+}
+
+static bool rejectReadOnlyVarRefWrite(const VarRefNode* var, const char* op, std::string& error) {
+    return rejectReadOnlyLocalWrite(getLocalVarFromVarRef(var), op, error);
+}
+
 // Collect all branch targets (blocks that can be reached)
 static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const QoreIRFunction& func) {
     std::unordered_set<const QoreIRBasicBlock*> targets;
@@ -334,7 +358,8 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                         return false;
                     }
                 }
-            } else if (inst->opcode == QoreIROpcode::IteratorCreate) {
+            } else if (inst->opcode == QoreIROpcode::IteratorCreate
+                    || inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (!iter || !iter->iterable.isValid()) {
                     error = "iterator.create missing iterable";
@@ -400,6 +425,12 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     error = "local instruction missing local";
                     return false;
                 }
+                if ((inst->opcode == QoreIROpcode::StoreLocal || inst->opcode == QoreIROpcode::StoreClosure)
+                        && !local_inst->initial_assignment
+                        && rejectReadOnlyLocalWrite(local_inst->local,
+                            inst->opcode == QoreIROpcode::StoreLocal ? "StoreLocal" : "StoreClosure", error)) {
+                    return false;
+                }
             } else if (inst->opcode == QoreIROpcode::LoadGlobal
                     || inst->opcode == QoreIROpcode::StoreGlobal
                     || inst->opcode == QoreIROpcode::LoadThreadLocal
@@ -429,6 +460,75 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 if (!lv_inst || !lv_inst->lvalue.hasNode()) {
                     error = "lvalue instruction missing lvalue";
                     return false;
+                }
+                if (inst->opcode != QoreIROpcode::LoadLValue
+                        && rejectReadOnlyVarRefWrite(extractLValueBaseVarRef(lv_inst->lvalue), "lvalue op", error)) {
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* fused = dynamic_cast<const QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                if (!fused || !fused->target || !fused->source) {
+                    error = "AddAssignLocalInt instruction malformed";
+                    return false;
+                }
+                if (rejectReadOnlyLocalWrite(fused->target, "AddAssignLocalInt", error)) {
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                auto* fused = dynamic_cast<const QoreIRIncrementLocalIntInstruction*>(inst.get());
+                if (!fused || !fused->local) {
+                    error = "IncrementLocalInt instruction malformed";
+                    return false;
+                }
+                if (rejectReadOnlyLocalWrite(fused->local, "IncrementLocalInt", error)) {
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStore) {
+                auto* hks = dynamic_cast<const QoreIRHashKeyStoreInstruction*>(inst.get());
+                if (!hks) {
+                    error = "HashKeyStore instruction malformed";
+                    return false;
+                }
+                const LocalVar* lv = hks->container_lv ? hks->container_lv : getLocalVarFromVarRef(hks->container);
+                if (rejectReadOnlyLocalWrite(lv, "HashKeyStore", error)) {
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                auto* hksd = dynamic_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
+                if (!hksd) {
+                    error = "HashKeyStoreDynamic instruction malformed";
+                    return false;
+                }
+                const LocalVar* lv = hksd->container_lv ? hksd->container_lv : getLocalVarFromVarRef(hksd->container);
+                if (rejectReadOnlyLocalWrite(lv, "HashKeyStoreDynamic", error)) {
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
+                auto* lis = dynamic_cast<const QoreIRListIndexStoreInstruction*>(inst.get());
+                if (!lis) {
+                    error = "ListIndexStore instruction malformed";
+                    return false;
+                }
+                if (rejectReadOnlyVarRefWrite(lis->container, "ListIndexStore", error)) {
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                auto* path_inst = dynamic_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                if (!path_inst) {
+                    error = "LValuePath instruction malformed";
+                    return false;
+                }
+                if (!path_inst->path.empty()) {
+                    const LVPathStep& root = path_inst->path[0];
+                    if ((root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar)
+                            && rejectReadOnlyLocalWrite(reinterpret_cast<const LocalVar*>(root.ref_ptr),
+                                "LValuePath op", error)) {
+                        return false;
+                    }
                 }
             } else if (inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallIndirect
@@ -619,7 +719,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     }
 
     // Constants and literals — leaf nodes
-    if (ntype == NT_STRING || ntype == NT_INT || ntype == NT_FLOAT || ntype == NT_BOOLEAN
+    if (ntype == NT_STRING || ntype == NT_INT || ntype == NT_FLOAT || ntype == NT_BOOLEAN || ntype == NT_CHAR
             || ntype == NT_NOTHING || ntype == NT_NULL || ntype == NT_NUMBER
             || ntype == NT_DATE || ntype == NT_BINARY || ntype == NT_HASH
             || ntype == NT_LIST || ntype == NT_BACKQUOTE) {
@@ -1568,9 +1668,6 @@ void QoreIRFunction::computeIROnlyLocals() {
     }
 
 }
-
-// Defined in QoreIRInterpreter.cpp
-extern const VarRefNode* extractLValueBaseVarRef(const QoreValue&);
 
 void QoreIRFunction::computeSlotIdsAndEmbed() {
     // Pass 1: Compute max value ID for right-sizing interpreter value vector

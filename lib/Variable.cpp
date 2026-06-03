@@ -593,9 +593,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     }
 
     int64 ind = rh->getAsBigInt();
-    if (ind < 0) {
-        return raise_negative_list_or_buffer_index(op, ind, vl.xsink);
-    }
+    int64 original_ind = ind;
+    bool negative_offsets = op->hasNegativeOffsets();
 
     // now get left hand side
     if (doLValue(op->getLeft(), for_remove)) {
@@ -606,16 +605,34 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     if (getType() == NT_LIST) {
         ensureUnique();
         l = getValue().get<QoreListNode>();
+        if (negative_offsets && ind < 0) {
+            ind += static_cast<int64>(l->size());
+        }
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
         l = getValue().get<WeakListReferenceNode>()->get();
+        if (negative_offsets && ind < 0) {
+            ind += static_cast<int64>(l->size());
+        }
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
     } else if (getType() == NT_HASH) {
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
         ensureUnique();
         QoreHashNode* h = getValue().get<QoreHashNode>();
         // Convert the index to a string for hash member access
         QoreStringValueHelper key(*rh);
         return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
     } else if (getType() == NT_WEAKREF_HASH) {
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
         ensureUnique();
         QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
         // Convert the index to a string for hash member access
@@ -630,10 +647,20 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             ensureUnique();
             b = getValue().get<QoreBufferNode>();
         }
+        if (negative_offsets && ind < 0) {
+            ind += static_cast<int64>(b->size());
+        }
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
         return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
         if (for_remove)
             return -1;
+
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
 
         // if the lvalue is not already a list, then make it one
         // but first make sure the lvalue can be converted to a list
@@ -692,9 +719,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     }
 
     int64 ind = rh->getAsBigInt();
-    if (ind < 0) {
-        return raise_negative_list_or_buffer_index(op, ind, vl.xsink);
-    }
+    int64 original_ind = ind;
+    bool negative_offsets = op->hasNegativeOffsets();
 
     // now get left hand side
     if (doLValue(op->getLeft(), rc, for_remove)) {
@@ -705,16 +731,34 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     if (getType() == NT_LIST) {
         ensureUnique();
         l = getValue().get<QoreListNode>();
+        if (negative_offsets && ind < 0) {
+            ind += static_cast<int64>(l->size());
+        }
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
         l = getValue().get<WeakListReferenceNode>()->get();
+        if (negative_offsets && ind < 0) {
+            ind += static_cast<int64>(l->size());
+        }
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
     } else if (getType() == NT_HASH) {
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
         ensureUnique();
         QoreHashNode* h = getValue().get<QoreHashNode>();
         // Convert the index to a string for hash member access
         QoreStringValueHelper key(*rh);
         return qore_hash_private::get(*h)->getLValue(key->c_str(), *this, for_remove, vl.xsink);
     } else if (getType() == NT_WEAKREF_HASH) {
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
         ensureUnique();
         QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
         // Convert the index to a string for hash member access
@@ -726,10 +770,20 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         }
         ensureUnique();
         QoreBufferNode* b = getValue().get<QoreBufferNode>();
+        if (negative_offsets && ind < 0) {
+            ind += static_cast<int64>(b->size());
+        }
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
         return setBufferElementLValue(b, static_cast<size_t>(ind));
     } else {
         if (for_remove)
             return -1;
+
+        if (ind < 0) {
+            return raise_negative_list_or_buffer_index(op, original_ind, vl.xsink);
+        }
 
         // if the lvalue is not already a list, then make it one
         // but first make sure the lvalue can be converted to a list
@@ -1390,16 +1444,21 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             }
             case LVPathStepKind::ListIndex: {
                 int64_t idx = step.slot_id;
+                int64_t original_idx = idx;
+                bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
                 if (t == NT_BUFFER) {
                     if (for_remove) {
                         return -1;
                     }
+                    QoreBufferNode* b = getValue().get<QoreBufferNode>();
+                    if (negative_offsets && idx < 0) {
+                        idx += static_cast<int64_t>(b->size());
+                    }
                     if (idx < 0) {
                         vl.xsink->raiseException("NEGATIVE-BUFFER-INDEX", "buffer index " QLLD " is invalid "
-                            "(index must evaluate to a non-negative integer)", idx);
+                            "(index must evaluate to a non-negative integer)", original_idx);
                         return -1;
                     }
-                    QoreBufferNode* b = getValue().get<QoreBufferNode>();
                     if (!b->isUniqueForMutation()) {
                         ensureUnique();
                         b = getValue().get<QoreBufferNode>();
@@ -1415,8 +1474,21 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 if (t == NT_LIST) {
                     ensureUnique();
                     l = getValue().get<QoreListNode>();
+                    if (negative_offsets && idx < 0) {
+                        idx += static_cast<int64_t>(l->size());
+                    }
+                    if (idx < 0) {
+                        vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
+                            "(index must evaluate to a non-negative integer)", original_idx);
+                        return -1;
+                    }
                 } else {
                     if (for_remove) {
+                        return -1;
+                    }
+                    if (idx < 0) {
+                        vl.xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid "
+                            "(index must evaluate to a non-negative integer)", original_idx);
                         return -1;
                     }
                     // if the lvalue is not already a list, then make it one
@@ -1452,10 +1524,6 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         }
                         assignNodeIntern((l = new QoreListNode(valueTypeInfo)));
                     }
-                }
-                // step.slot_id holds the index value (set by caller from operand)
-                if (idx < 0) {
-                    idx = 0;
                 }
                 ocvec.push_back(ObjCountRec(l));
                 if (qore_list_private::get(*l)->getLValue(
@@ -2304,9 +2372,12 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 }
 
 static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const QoreTypeInfo*& vtype, bool& vcommon,
-        ind_set_t& iset, unsigned i, bool is_range = false) {
+        ind_set_t& iset, unsigned i, bool negative_offsets, bool is_range = false) {
     QoreValue p{};
     bool push;
+    if (negative_offsets && ind < 0) {
+        ind += static_cast<int64>(l.size());
+    }
     if (ind >= 0 && ind < (int64)l.size()) {
         iset.insert(ind);
         p = l.getReferencedEntry(ind);
@@ -2328,7 +2399,11 @@ static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const Qor
     }
 }
 
-static int do_string_value(QoreStringNode& v, QoreStringNode& str, int64 ind, ind_set_t& iset, size_t len, ExceptionSink* xsink) {
+static int do_string_value(QoreStringNode& v, QoreStringNode& str, int64 ind, ind_set_t& iset, size_t len,
+        bool negative_offsets, ExceptionSink* xsink) {
+    if (negative_offsets && ind < 0) {
+        ind += static_cast<int64>(len);
+    }
     if (ind >= 0 && ind < (int64)len) {
         iset.insert(ind);
         int cp = str.getUnicodePoint(ind, xsink);
@@ -2340,7 +2415,10 @@ static int do_string_value(QoreStringNode& v, QoreStringNode& str, int64 ind, in
     return 0;
 }
 
-static void do_binary_value(BinaryNode& v, BinaryNode& bin, int64 ind, ind_set_t& iset) {
+static void do_binary_value(BinaryNode& v, BinaryNode& bin, int64 ind, ind_set_t& iset, bool negative_offsets) {
+    if (negative_offsets && ind < 0) {
+        ind += static_cast<int64>(bin.size());
+    }
     if (ind >= 0 && ind < (int64)bin.size()) {
         iset.insert(ind);
         bin.substr(v, ind, 1);
@@ -2359,16 +2437,14 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
         return;
 
     int64 ind = 0;
+    int64 original_ind = 0;
     const QoreListNode* rl = nullptr;
+    bool negative_offsets = op->hasNegativeOffsets();
     if (rh->getType() == NT_LIST) {
         rl = rh->get<const QoreListNode>();
     } else {
         ind = rh->getAsBigInt();
-        if (ind < 0) {
-            xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
-                "non-negative integer)", ind);
-            return;
-        }
+        original_ind = ind;
     }
 
     // dereference any list elements removed outside the lock
@@ -2384,6 +2460,13 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
             QoreListNode* l = lvh.getValue().get<QoreListNode>();
             ValueHolder v(xsink);
             if (!rl) {
+                if (negative_offsets && ind < 0) {
+                    ind += static_cast<int64>(l->size());
+                }
+                if (ind < 0) {
+                    raise_negative_list_or_buffer_index(op, original_ind, xsink);
+                    return;
+                }
                 if (ind < (int64)l->size())
                     v = qore_list_private::get(*l)->takeExists(ind);
             } else {
@@ -2398,7 +2481,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 v = new QoreListNode(autoTypeInfo);
                 while (li.next()) {
                     do_list_value(*v->get<QoreListNode>(), *l, li.getValue().getAsBigInt(), vtype, vcommon, iset,
-                        li.index());
+                        li.index(), negative_offsets);
                 }
 
                 // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
@@ -2437,6 +2520,13 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
             SimpleRefHolder<QoreStringNode> v;
             size_t len = str->length();
             if (!rl) {
+                if (negative_offsets && ind < 0) {
+                    ind += static_cast<int64>(len);
+                }
+                if (ind < 0) {
+                    raise_negative_list_or_buffer_index(op, original_ind, xsink);
+                    return;
+                }
                 if (ind < (int64)len)
                     v = str->substr(ind, 1, xsink);
                 else
@@ -2447,7 +2537,8 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 ind_set_t iset;
                 ConstListIterator li(rl);
                 while (li.next()) {
-                    if (do_string_value(**v, *str, li.getValue().getAsBigInt(), iset, len, xsink))
+                    if (do_string_value(**v, *str, li.getValue().getAsBigInt(), iset, len, negative_offsets,
+                            xsink))
                         break;
                 }
 
@@ -2478,6 +2569,13 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
             BinaryNode* bin = lvh.getValue().get<BinaryNode>();
             SimpleRefHolder<BinaryNode> v(new BinaryNode);
             if (!rl) {
+                if (negative_offsets && ind < 0) {
+                    ind += static_cast<int64>(bin->size());
+                }
+                if (ind < 0) {
+                    raise_negative_list_or_buffer_index(op, original_ind, xsink);
+                    return;
+                }
                 if (ind < (int64)bin->size())
                     bin->substr(**v, ind, 1);
             }
@@ -2486,7 +2584,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 ind_set_t iset;
                 ConstListIterator li(rl);
                 while (li.next()) {
-                    do_binary_value(**v, *bin, li.getValue().getAsBigInt(), iset);
+                    do_binary_value(**v, *bin, li.getValue().getAsBigInt(), iset, negative_offsets);
                 }
                 // now collapse the binary object by rewriting it without the bytes removed
                 for (auto& i : iset) {
@@ -2517,6 +2615,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
 void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, const QoreParseListNode* pln) {
     // dereference any list elements removed outside the lock
     ReferenceHolder<QoreListNode> holder(xsink);
+    bool negative_offsets = op->hasNegativeOffsets();
 
     LValueHelper lvh(op->getLeft(), xsink, true);
     if (!lvh)
@@ -2550,10 +2649,10 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     ConstListIterator li(rh->get<const QoreListNode>());
                     while (li.next()) {
                         do_list_value(**v, *l, li.getValue().getAsBigInt(), vtype, vcommon, iset, i + li.index(),
-                            true);
+                            negative_offsets, true);
                     }
                 } else {
-                    do_list_value(**v, *l, rh->getAsBigInt(), vtype, vcommon, iset, i);
+                    do_list_value(**v, *l, rh->getAsBigInt(), vtype, vcommon, iset, i, negative_offsets);
                 }
             }
 
@@ -2606,13 +2705,14 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     assert(rh->getType() == NT_LIST);
                     ConstListIterator li(rh->get<const QoreListNode>());
                     while (li.next()) {
-                        if (do_string_value(**v, *str, li.getValue().getAsBigInt(), iset, len, xsink))
+                        if (do_string_value(**v, *str, li.getValue().getAsBigInt(), iset, len, negative_offsets,
+                                xsink))
                             break;
                     }
                     if (*xsink)
                         break;
                 } else {
-                    if (do_string_value(**v, *str, rh->getAsBigInt(), iset, len, xsink))
+                    if (do_string_value(**v, *str, rh->getAsBigInt(), iset, len, negative_offsets, xsink))
                         break;
                 }
             }
@@ -2657,11 +2757,11 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     assert(rh->getType() == NT_LIST);
                     ConstListIterator li(rh->get<const QoreListNode>());
                     while (li.next()) {
-                        do_binary_value(**v, *bin, li.getValue().getAsBigInt(), iset);
+                        do_binary_value(**v, *bin, li.getValue().getAsBigInt(), iset, negative_offsets);
                     }
                 }
                 else
-                    do_binary_value(**v, *bin, rh->getAsBigInt(), iset);
+                    do_binary_value(**v, *bin, rh->getAsBigInt(), iset, negative_offsets);
             }
 
             // now collapse the binary object by rewriting it without the bytes removed
@@ -2704,11 +2804,13 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
         return;
 
     bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
 
     int64 start, stop, seq_size;
     {
         QoreValue tmp = lvh.getValue();
-        if (!op->getEffectiveRange(tmp, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink)) {
+        if (!op->getEffectiveRange(tmp, start, stop, seq_size, *start_index, *stop_index, broken_list_range,
+                negative_offsets, xsink)) {
             if (!*xsink) {
                 AbstractQoreNode* v;
                 switch (lvh.getType()) {
@@ -2945,7 +3047,13 @@ const void* ClosureVarValue::getLValueId() const {
     return this;
 }
 
-int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove) const {
+int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
+    if (read_only && !initial_assignment) {
+        lvh.vl.xsink->raiseException("RUNTIME-READONLY-VIOLATION",
+            "cannot modify read-only closure variable '%s'", id);
+        return -1;
+    }
+
     if (QoreTypeInfo::needsScan(typeInfo)) {
         lvh.setClosure(const_cast<ClosureVarValue*>(this));
     }
@@ -2978,6 +3086,12 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove) const {
 }
 
 void ClosureVarValue::remove(LValueRemoveHelper& lvrh) {
+    if (read_only) {
+        lvrh.getExceptionSink()->raiseException("RUNTIME-READONLY-VIOLATION",
+            "cannot remove read-only closure variable '%s'", id);
+        return;
+    }
+
     QoreSafeVarRWWriteLocker sl(rml);
     if (val.getType() == NT_REFERENCE) {
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvrh.getExceptionSink());

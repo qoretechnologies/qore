@@ -2,28 +2,28 @@
 
 **Status:** Design. **Recommendation: defer to a release after 2.3.**
 This document captures the proposal so we have it on file; the
-substantive wins are delivered by [`streaming-operators.md`](streaming-operators.md),
-and pipe syntax is pure surface sugar that can be added later additively
-without breaking compatibility.
+substantive wins are delivered by the streaming operators now documented
+in `doxygen/lang/180_operators.dox.tmpl`, and pipe syntax is pure surface
+sugar that can be added later additively without breaking compatibility.
 
 **Target if accepted:** post-2.3. Pipe lowers at parse time to the same
-fused IR that streaming-operators.md already targets.
+streaming-operator AST and IR lowering used by the keyword forms.
 
 **Companions:**
-- [`char-type.md`](char-type.md) — recommended for 2.3 (`char` value type)
-- [`streaming-operators.md`](streaming-operators.md) — recommended for 2.3
-  (the `iterate` keyword + the operators + fusion this sugar would chain)
+- [`char-type.md`](../design/char-type.md) — implemented `char` value type
+- streaming operators — implemented for 2.3; see
+  `doxygen/lang/180_operators.dox.tmpl` for the `iterate` keyword,
+  keyword operators, and fusion behavior this sugar would chain
 
 ---
 
 ## 1. What this proposal adds
 
-Once [`streaming-operators.md`](streaming-operators.md) ships, every chain
-of new keyword operators (`first`, `any`, `all`, `take`, `drop`,
-`takewhile`, `takeuntil`, `count`) plus the existing ones (`select`,
-`map`, `foldl`, `foreach`) auto-fuses into a single loop. The
-functionality is fully present; the `iterate` keyword is the uniform
-iterator entry point.
+With the streaming operators in Qore 2.3, chains of streaming keyword
+operators (`first`, `any`, `all`, `take`, `drop`, `takewhile`,
+`takeuntil`, `count`) can already execute through native streaming IR.
+The functionality is present in nested keyword form; the `iterate`
+keyword is the uniform iterator entry point for non-string sources.
 
 What pipe syntax adds is a **left-to-right, source-first chain syntax**
 that desugars at parse time into the same nested AST:
@@ -111,9 +111,8 @@ int n = iterate text.splitLinesRegex("\\s+")
 Pipe is ~30 % clearer because the reader doesn't have to mentally
 invert order. **Slight win for pipe.**
 
-The equivalent using new keyword operators from
-[`streaming-operators.md`](streaming-operators.md) is comparable in
-character count if a multi-line layout is allowed:
+The equivalent using the new keyword operators is comparable in character
+count if a multi-line layout is allowed:
 
 ```qore
 int n = count
@@ -165,8 +164,7 @@ rests on hypothetical future code.
 ## 3. Recommendation: defer
 
 The substantive wins (perf, find-first ergonomics, no-foreach-break
-patterns) are delivered by
-[`streaming-operators.md`](streaming-operators.md):
+patterns) are delivered by the streaming operators:
 
 - Fusion makes existing chains as fast as fused chains, **without
   source migration**.
@@ -243,10 +241,9 @@ or new domain stages such as `|> dedupe-by`. Callers write those operations
 in the source expression (`iterate text.splitLinesRegex("\\s+")`) or add a
 separate future proposal.
 
-The `iterate` keyword and the per-type element protocol come from
-[`streaming-operators.md`](streaming-operators.md) — pipe just consumes
-what `iterate` produces. (`iterate` is part of the recommended-2.3 proposal,
-not unique to pipe.)
+The `iterate` keyword and the per-type element protocol are part of the
+streaming-operator implementation — pipe just consumes what `iterate`
+produces.
 
 ### 4.2 Method-style alternative (rejected)
 
@@ -295,7 +292,7 @@ Programs that don't use pipe pay nothing whether or not the opt-out is
 set; programs that use the pipe operator break under the opt-out (by
 design — that's the back-compat case).
 
-### 4.5 Effort if accepted (in addition to streaming-operators.md)
+### 4.5 Effort if accepted (in addition to streaming operators)
 
 | Component | Estimate |
 |---|---|
@@ -306,19 +303,16 @@ design — that's the back-compat case).
 | Test coverage | 1-2 weeks |
 | **Total (sequential)** | **~4-6 weeks** |
 
-The fusion optimizer and the new keyword operators land first
-(streaming-operators.md) and stand alone; pipe sugar lowers at parse
-time to the same AST those proposals already define.
+The fusion optimizer and the new keyword operators stand alone; pipe
+sugar would lower at parse time to the same AST those operators define.
 
 ---
 
 ## 5. References
 
-- [`char-type.md`](char-type.md) — `char` value type (recommended for
-  2.3)
-- [`streaming-operators.md`](streaming-operators.md) — the operators,
-  fusion, and `iterate` keyword this sugar would chain (recommended for
-  2.3)
+- [`char-type.md`](../design/char-type.md) — implemented `char` value type
+- `doxygen/lang/180_operators.dox.tmpl` — implemented streaming
+  operators, fusion, and `iterate` keyword this sugar would chain
 - `bugfix/text_processing` commits `8165b217b`–`bb1ea2d96` — the
   text-processing optimizations that motivated all three proposals
 - `lib/parser.ypp`, `lib/scanner.lpp` — parser/lexer touch points

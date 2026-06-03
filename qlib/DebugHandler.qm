@@ -246,7 +246,7 @@ public namespace DebugHandler {
         public receiveData(hash<auto> cx, string msg) {
             *hash<auto> sd;
             try {
-                any rd = parse_yaml(msg);
+                auto rd = parse_yaml(msg);
                 sd = debugProgram.processCommand(cx, rd);
                 if (exists sd) {
                     sendData(cx, sd);

@@ -32,6 +32,12 @@
 %define NoJson
 %endtry
 
+%ifdef NoJson
+auto sub parse_json(string val) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+%endif
+
 module GcpAuth {
     version = "1.0";
     desc = "GCP service-account JWT-bearer and Application Default Credentials "

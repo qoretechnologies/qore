@@ -199,6 +199,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 include(CheckIncludeFiles)
 include(GNUInstallDirs)
 
+set(QORE_INSTALL_COMPONENT_BOOTSTRAP qore-bootstrap)
+set(QORE_INSTALL_COMPONENT_QLIB_AOT qore-qlib-aot)
+set(QORE_BINARY_MODULE_INSTALL_COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
+set(QORE_QM_SOURCE_INSTALL_COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
+set(QORE_QMOD_INSTALL_COMPONENT ${QORE_INSTALL_COMPONENT_QLIB_AOT})
+
 # issue #2994: ensure that the arch-specific libdir is used on Debian/Ubuntu
 check_libdir_arch()
 
@@ -392,6 +398,7 @@ set(PSEUDO_QPP_SRC
     lib/Pseudo_QC_List.qpp
     lib/Pseudo_QC_Buffer.qpp
     lib/Pseudo_QC_Bool.qpp
+    lib/Pseudo_QC_Char.qpp
     lib/Pseudo_QC_Int.qpp
     lib/Pseudo_QC_Float.qpp
     lib/Pseudo_QC_Number.qpp
@@ -1385,7 +1392,9 @@ qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC
 add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC})
 
 # install qpp metadata files into per-module subdirectory
-install(FILES ${QPP_META_SRC} DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata/core)
+install(FILES ${QPP_META_SRC}
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata/core
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 add_custom_target(BISON_GENERATED_FILES DEPENDS ${BISON_qoreparser_OUTPUTS})
 add_custom_target(FLEX_GENERATED_FILES DEPENDS ${FLEX_qorescanner_OUTPUTS})
 
@@ -1627,6 +1636,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreHashMapOperatorNode.cpp
     lib/QoreHashMapSelectOperatorNode.cpp
     lib/QoreFoldlOperatorNode.cpp
+    lib/QoreIterateOperatorNode.cpp
+    lib/QoreStreamingOperatorNode.cpp
     lib/QoreNullCoalescingOperatorNode.cpp
     lib/QoreValueCoalescingOperatorNode.cpp
     lib/QoreChompOperatorNode.cpp
@@ -1955,6 +1966,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHashMapSelectOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSelectOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFoldlOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIterateOperatorNode.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreStreamingOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNullCoalescingOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreValueCoalescingOperatorNode.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreChompOperatorNode.cpp\"
@@ -2441,14 +2454,14 @@ set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 # libqore.so / qcc binary mtime.  Without this, any libqore source
 # change relinks libqore → relinks qcc → all 238 qmods rebuild even
 # when the change has nothing to do with the AOT binary format
-# (e.g. a runtime-only fix in QoreAOTRuntime.cpp).
+# (e.g. unrelated runtime-only fixes).
 #
 # The stamp's mtime tracks only files that actually affect qmod output:
 # the wire-format headers, the writer, the compile pipeline, the IR
 # opcode/lowering headers, signature/local metadata construction, and
-# qcc itself.  Runtime-only files (QoreAOTRuntime.cpp, evalTiered hot
-# path changes, etc.) are excluded — they affect how qmods are executed,
-# not how they're generated.
+# qcc itself.  QoreAOTRuntime.cpp is included because it owns slot-map
+# metadata deserialization and registration; stale qmods can otherwise
+# survive a runtime rebuild and fail with unsupported AOT slot metadata.
 #
 # If a file affecting qmod output is missed here, it would cause
 # silently stale qmods.  The feature-flag machinery
@@ -2481,6 +2494,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprSlotHandlers.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprSlotRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTInstRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTRuntime.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreCastOperatorNode.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprHandlers.cpp
@@ -2517,6 +2531,19 @@ add_custom_command(
 )
 add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
 
+set(QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP ${CMAKE_BINARY_DIR}/qcc-format-source-qmod-clean.stamp)
+add_custom_command(
+    OUTPUT ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
+    COMMAND ${CMAKE_COMMAND}
+        -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+        -P ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
+    COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
+    DEPENDS ${QCC_FORMAT_STAMP} ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
+    COMMENT "Removing stale source qmod symlinks after qcc format changes"
+    VERBATIM
+)
+add_custom_target(qcc-format-source-qmod-clean DEPENDS ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP})
+
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
@@ -2543,20 +2570,28 @@ qore_dist(${VERSION})
 
 # prepare installation targets
 install(PROGRAMS ${QORE_BIN_FILES}
-        DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+        DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 
 install(TARGETS qore qcc qpp libqore
         RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
+            COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+            COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+            COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
 install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake
-        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore)
+        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${CMAKE_BINARY_DIR}/qore.pc
-        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig)
+        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(DIRECTORY include/qore
         DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
         PATTERN intern EXCLUDE
         PATTERN minitest.hpp EXCLUDE
         PATTERN macros-none.h EXCLUDE
@@ -2564,10 +2599,12 @@ install(DIRECTORY include/qore
         PATTERN slist_include.h EXCLUDE
         PATTERN qore-version.h EXCLUDE)
 install(FILES ${CMAKE_BINARY_DIR}/include/qore/qore-version.h
-        DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/qore)
+        DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/qore
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 file(GLOB QORE_MAN_PAGES man/*.1)
 install(FILES ${QORE_MAN_PAGES}
-        DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man1)
+        DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man1
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES
             doxygen/Doxyfile.in
             doxygen/qore-logo-55x200.png
@@ -2580,7 +2617,8 @@ install(FILES
             doxygen/Qore-Q.ico
             doxygen/header_template.html
             doxygen/footer_template.html
-        DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/qore)
+        DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/qore
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 
 # prepare documentation targets
 find_package(Doxygen)
@@ -2774,12 +2812,9 @@ list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
 string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
 set(QORE_BUILD_MODULE_DIRS_STR
     "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib:${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}")
-if(DEFINED ENV{QORE_MODULE_DIR} AND NOT "$ENV{QORE_MODULE_DIR}" STREQUAL "")
-    set(QORE_BUILD_MODULE_DIRS_STR
-        "${QORE_BUILD_MODULE_DIRS_STR}:$ENV{QORE_MODULE_DIR}")
-endif()
 set(QORE_QM_METADATA_ENV
     "QORE_MODULE_DIR=${QORE_BUILD_MODULE_DIRS_STR}"
+    "QORE_INCLUDE_DIR="
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 set(QORE_AOT_BINARY_MODULE_TARGETS)
 foreach(_qore_build_module astparser reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
@@ -3223,6 +3258,43 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
 qore_user_module("qlib/KatanaDataProvider" "KatanaRestClient;RestClient;RestClientIo;DataProvider" "katana-logo.svg")
 
 qore_finalize_user_module_dependencies()
+
+get_property(QORE_QM_METADATA_TARGETS GLOBAL PROPERTY QORE_QM_METADATA_TARGETS)
+add_custom_target(qore-bootstrap
+    DEPENDS
+        qore
+        qcc
+        qpp
+        libqore
+        ${QORE_AOT_BINARY_MODULE_TARGETS}
+        ${QORE_QM_METADATA_TARGETS})
+add_custom_target(install-qore-bootstrap
+    COMMAND ${CMAKE_COMMAND}
+        --install ${CMAKE_BINARY_DIR}
+        --component ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
+    DEPENDS qore-bootstrap
+    COMMENT "Installing Qore bootstrap component without qlib AOT qmods"
+    USES_TERMINAL
+    VERBATIM)
+
+add_custom_target(qore-qlib-aot)
+if (QORE_BUILD_AOT_MODULES)
+    get_property(_qore_user_modules GLOBAL PROPERTY QORE_USER_MODULE_TARGETS)
+    get_property(_qore_external_user_modules GLOBAL PROPERTY QORE_EXTERNAL_USER_MODULE_TARGETS)
+    foreach(_qore_qlib_aot_module ${_qore_user_modules} ${_qore_external_user_modules})
+        if (TARGET ${_qore_qlib_aot_module}-qmod)
+            add_dependencies(qore-qlib-aot ${_qore_qlib_aot_module}-qmod)
+        endif()
+    endforeach()
+endif()
+add_custom_target(install-qore-qlib-aot
+    COMMAND ${CMAKE_COMMAND}
+        --install ${CMAKE_BINARY_DIR}
+        --component ${QORE_INSTALL_COMPONENT_QLIB_AOT}
+    DEPENDS qore-qlib-aot
+    COMMENT "Installing Qore qlib AOT qmods"
+    USES_TERMINAL
+    VERBATIM)
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
     if (DOXYGEN_FOUND)

@@ -171,7 +171,7 @@ SewioWebSocketClient ws(\event(), ("url": "ws://example.com:8080/path"));
     constructor(code cb, hash opts) : WebSocketClient(SewioWebSocketClient::getCallback(cb), opts) {
         # check required options
         foreach string key in (RequiredOptions) {
-            any v = opts{key};
+            auto v = opts{key};
             if (!exists v || v == "")
                 throw "SEWIOWEBSOCKETCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
             if (v.typeCode() != NT_STRING)

@@ -456,6 +456,14 @@ void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const
     if (t == NT_BOOLEAN || t == NT_INT) {
         str = new QoreStringMaker(QLLD, n.getAsBigInt());
         del = true;
+    } else if (t == NT_CHAR) {
+        str = new QoreString("", enc ? enc : QCS_UTF8);
+        if (str->concatUnicode(n.getChar(), xsink)) {
+            delete str;
+            str = nullptr;
+        } else {
+            del = true;
+        }
     } else if (t == NT_FLOAT) {
         str = q_fix_decimal(new QoreStringMaker("%.9g", n.getAsFloat()), 0);
         del = true;
@@ -567,6 +575,9 @@ void QoreStringNodeValueHelper::setup(ExceptionSink* xsink, const QoreValue n, c
     if (t == NT_BOOLEAN || t == NT_INT) {
         str = new QoreStringNodeMaker(QLLD, n.getAsBigInt());
         del = true;
+    } else if (t == NT_CHAR) {
+        str = QoreValue::makeCharString(n.getChar(), enc ? enc : QCS_UTF8, xsink);
+        del = true;
     } else if (t == NT_FLOAT) {
         str = q_fix_decimal(new QoreStringNodeMaker("%.9g", n.getAsFloat()), 0);
         del = true;
@@ -620,7 +631,7 @@ QoreStringNodeValueHelper::QoreStringNodeValueHelper(const QoreValue n, const Qo
 }
 
 QoreStringNodeValueHelper::~QoreStringNodeValueHelper() {
-    if (del) {
+    if (del && str) {
         str->deref();
     }
 }

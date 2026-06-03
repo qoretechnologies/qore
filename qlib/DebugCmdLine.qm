@@ -190,7 +190,7 @@ public namespace DebugCmdLine {
                             hash<auto> data;
                             try {
                                 foreach string str in (args) {
-                                    any v = parse_to_qore_value(str);
+                                    auto v = parse_to_qore_value(str);
                                     if (v.typeCode() == NT_STRING && !data) {
                                         data.cmd = v;
                                         continue;
@@ -202,7 +202,7 @@ public namespace DebugCmdLine {
                                 if (!data) {
                                     printfImpl("syntax: cmd <hash>\n");
                                 } else {
-                                    any res = dcl.doCommand(data, False).result;
+                                    auto res = dcl.doCommand(data, False).result;
                                     printfImpl("Result: %y\n", res);
                                 }
                             }
@@ -1368,12 +1368,14 @@ public namespace DebugCmdLine {
             int q = 0;
             string s = '';
             int start = -1;
-            while (i < line.size()) {
-                if (start < 0 && s == '' && line[i] != ' ') {
+            StringIterator it = line.iterator();
+            while (it.next()) {
+                char c = it.getValue();
+                if (start < 0 && s == '' && c != c' ') {
                     start = i;
                 }
-                switch (line[i]) {
-                case ' ':
+                switch (c) {
+                case c' ':
                     if (q == 0) {
                         if (s != '') {
                             push ret.args, s;
@@ -1382,48 +1384,53 @@ public namespace DebugCmdLine {
                         }
                         start = -1;
                     } else {
-                        s += line[i];
+                        s += c;
                     }
                     break;
-                case "'":
+                case c"'":
                     if (q == 0) {
                         q = 1;
                     } else if (q == 1) {
                         q = 0;
                     } else {
-                        s += line[i];
+                        s += c;
                     }
                     break;
-                case '"':
+                case c"\"":
                     if (q == 0) {
                         q = 2;
                     } else if (q == 2) {
                         q = 0;
                     } else {
-                        s += line[i];
+                        s += c;
                     }
                     break;
-                case '\':
-                    i++;
-                    switch (line[i]) {
-                    case 'n':
-                        s += "\n";
-                        break;
-                    case 'r':
-                        s += "\r";
-                        break;
-                    case 't':
-                        s += "\t";
-                        break;
-                    case '0':
-                        s += "\0";
-                        break;
-                    default:
-                        s += line[i];
+                case c"\\":
+                    ++i;
+                    if (it.next()) {
+                        c = it.getValue();
+                        switch (c) {
+                        case c'n':
+                            s += "\n";
+                            break;
+                        case c'r':
+                            s += "\r";
+                            break;
+                        case c't':
+                            s += "\t";
+                            break;
+                        case c'0':
+                            s += "\0";
+                            break;
+                        default:
+                            s += c;
+                        }
+                    } else {
+                        s += c"\\";
                     }
                     break;
                 default:
-                    s += line[i];
+                    s += c;
                 }
                 i++;
             }
@@ -1438,37 +1445,33 @@ public namespace DebugCmdLine {
         }
 
         private string escapeArg(softstring s) {
-            int i = 0;
-            while (i < s.size()) {
-                bool addEsc = True;
-                switch (s[i]) {
-                    case "\n":
-                        splice s, i, 1, 'n';
+            string rv = "";
+            foreach char c in (iterate s) {
+                switch (c) {
+                    case c'\n':
+                        rv += "\\n";
                         break;
-                    case "\r":
-                        splice s, i, 1, 'r';
+                    case c'\r':
+                        rv += "\\r";
                         break;
-                    case "\t":
-                        splice s, i, 1, 't';
+                    case c'\t':
+                        rv += "\\t";
                         break;
-                    case "\0":
-                        splice s, i, 1, '0';
+                    case c'\0':
+                        rv += "\\0";
                         break;
-                    case '\':
-                    case " ":
-                    case '"':
-                    case "'":
+                    case c"\\":
+                    case c' ':
+                    case c"\"":
+                    case c"'":
+                        rv += c"\\";
+                        rv += c;
                         break;
                     default:
-                        addEsc = False;
+                        rv += c;
                 }
-                if (addEsc) {
-                    splice s, i, 0, '\';
-                    i++;
-                }
-                i++;
             }
-            return s;
+            return rv;
         }
 
         public string listVariantCmds(hash<auto> v) {
@@ -1707,7 +1710,7 @@ public namespace DebugCmdLine {
             return True;
         }
         private bool isOneLineArray(list<auto> x) {
-            foreach any i in (x) {
+            foreach auto i in (x) {
                 switch (i.typeCode()) {
                     case NT_NUMBER:
                     case NT_FLOAT:
@@ -1752,7 +1755,7 @@ public namespace DebugCmdLine {
         }
 
         public printHuman(list<auto> x, string indent = defaultIndent) {
-            foreach any i in (x) {
+            foreach auto i in (x) {
                 switch (i.typeCode()) {
                     case NT_HASH:
                         if (x.size() > 1) {
@@ -1785,7 +1788,7 @@ public namespace DebugCmdLine {
                 printfImpl("%s%y\n", indent, x);
             }
         }
-        public printHuman(any x, string indent = defaultIndent) {
+        public printHuman(auto x, string indent = defaultIndent) {
             printfImpl("%s%y\n", indent, x);
         }
 

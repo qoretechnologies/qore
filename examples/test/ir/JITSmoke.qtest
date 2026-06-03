@@ -5735,7 +5735,7 @@ printf(\"%s:%d\\n\", result.type(), result.size);
 
         # Map with single hash + cast expression
         code = "%modern
-auto result = (map $1, cast<hash<auto>>({\"value\": 42}));
+auto result = (map $1, cast<hash>({\"value\": 42}));
 printf(\"%s:%d\\n\", result.type(), result.value);
 ";
         foreach string mode in ("ast", "ir", "jit") {

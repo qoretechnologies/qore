@@ -172,7 +172,7 @@ public class CitationValidator {
         if (value.typeCode() != NT_LIST) {
             return rv;
         }
-        foreach auto item in (cast<list<auto>>(value)) {
+        foreach auto item in (cast<list>(value)) {
             if (item.typeCode() == NT_NOTHING || item.typeCode() == NT_NULL) {
                 continue;
             }
@@ -235,7 +235,7 @@ public class GroundedAnswerVerifier {
             *hash<auto> metadata;
 
             if (raw.typeCode() == NT_HASH) {
-                hash<auto> h = cast<hash<auto>>(raw);
+                hash<auto> h = cast<hash>(raw);
                 source_id = normalizeString(h.source_id ?? h.id, source_id);
                 title = normalizeString(h.title, source_id);
                 snippet = normalizeString(h.snippet ?? h.content ?? h.text, "");
@@ -243,7 +243,7 @@ public class GroundedAnswerVerifier {
                 scope = optionalString(h.scope);
                 content_hash = optionalString(h.content_hash);
                 if (h.metadata.typeCode() == NT_HASH) {
-                    metadata = cast<hash<auto>>(h.metadata);
+                    metadata = cast<hash>(h.metadata);
                 }
             } else if (raw.typeCode() != NT_NOTHING
                     && raw.typeCode() != NT_NULL) {
@@ -339,7 +339,7 @@ public class GroundedAnswerVerifier {
                 sprintf("grounding verifier response was not a JSON object: %s",
                     repaired.error_detail ?? repaired.error_code);
         }
-        hash<auto> parsed = cast<hash<auto>>(repaired.value);
+        hash<auto> parsed = cast<hash>(repaired.value);
 
         hash<GroundingVerificationResult> rv =
             normalizeVerification(parsed, citation, min_grounding_score,
@@ -445,7 +445,7 @@ public class GroundedAnswerVerifier {
         if (value.typeCode() != NT_LIST) {
             return rv;
         }
-        foreach auto item in (cast<list<auto>>(value)) {
+        foreach auto item in (cast<list>(value)) {
             if (item.typeCode() == NT_NOTHING || item.typeCode() == NT_NULL) {
                 continue;
             }

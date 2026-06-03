@@ -53,14 +53,15 @@ public:
     // takes over memory for "n"
     DLLLOCAL VarRefNode(const QoreProgramLocation* loc, char* n, qore_var_t t, bool n_has_effect = false)
             : ParseNode(loc, NT_VARREF, true, n_has_effect), name(n), type(t), new_decl(t == VT_LOCAL),
-            explicit_scope(false) {
+            explicit_scope(false), read_only_decl(false) {
         if (type == VT_LOCAL)
             ref.id = nullptr;
         assert(type != VT_GLOBAL);
     }
 
     DLLLOCAL VarRefNode(const QoreProgramLocation* loc, char* n, LocalVar* n_id, bool in_closure)
-            : ParseNode(loc, NT_VARREF, true, false), name(n), new_decl(false), explicit_scope(false) {
+            : ParseNode(loc, NT_VARREF, true, false), name(n), new_decl(false), explicit_scope(false),
+            read_only_decl(false) {
         ref.id = n_id;
         if (in_closure) {
             setClosureIntern();
@@ -70,7 +71,8 @@ public:
     }
 
     DLLLOCAL VarRefNode(const QoreProgramLocation* loc, const char* n, LocalVar* n_id, bool in_closure)
-            : ParseNode(loc, NT_VARREF, true, false), name(n), new_decl(false), explicit_scope(false) {
+            : ParseNode(loc, NT_VARREF, true, false), name(n), new_decl(false), explicit_scope(false),
+            read_only_decl(false) {
         ref.id = n_id;
         if (in_closure) {
             setClosureIntern();
@@ -106,6 +108,9 @@ public:
     DLLLOCAL virtual bool isDecl() const { return false; }
     DLLLOCAL bool explicitScope() const { return explicit_scope; }
     DLLLOCAL void setExplicitScope() { explicit_scope = true; }
+    DLLLOCAL void setReadOnlyDecl() { read_only_decl = true; }
+    DLLLOCAL bool isReadOnlyDecl() const { return read_only_decl; }
+    DLLLOCAL bool parseIsReadOnly() const;
 
     // will only be called on *VarRefNewObjectNode objects, but this is their common class
     DLLLOCAL virtual const char* parseGetTypeName() const {
@@ -204,6 +209,7 @@ protected:
     qore_var_t type : 4;
     bool new_decl : 1;       // is this a new variable declaration
     bool explicit_scope : 1; // scope was explicitly provided
+    bool read_only_decl : 1; // declaration uses const/read-only binding syntax
 
     DLLLOCAL ~VarRefNode() {
         //printd(5, "VarRefNode::~VarRefNode() deleting variable reference %p %s\n", this, name.ostr ? name.ostr : "<taken>");
@@ -267,7 +273,7 @@ protected:
 
     DLLLOCAL VarRefNode(const QoreProgramLocation* loc, char* n, ClosureVarValue* cvv)
             : ParseNode(loc, NT_VARREF, true, false), name(n), type(VT_IMMEDIATE), new_decl(false),
-            explicit_scope(false) {
+            explicit_scope(false), read_only_decl(false) {
         ref.cvv = cvv;
         cvv->ref();
     }
@@ -275,7 +281,7 @@ protected:
     DLLLOCAL VarRefNode(const QoreProgramLocation* loc, char* n, Var* n_var, bool n_has_effect = false,
             bool n_new_decl = true, qore_var_t type = VT_GLOBAL) : ParseNode(loc, NT_VARREF, true, n_has_effect),
                 name(n), type(type),
-            new_decl(n_new_decl), explicit_scope(false) {
+            new_decl(n_new_decl), explicit_scope(false), read_only_decl(false) {
         ref.var = n_var;
     }
 };

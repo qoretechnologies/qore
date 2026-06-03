@@ -152,12 +152,7 @@ public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProvide
 
     #! Checks if a record matches the where conditions
     private bool matchesWhereCond(hash<auto> record, hash<auto> cond) {
-        foreach hash<auto> c in (cond.pairIterator()) {
-            if (record{c.key} != c.value) {
-                return False;
-            }
-        }
-        return True;
+        return all record{$1.key} == $1.value, cond.pairIterator();
     }
 
     #! Builds a query string from params

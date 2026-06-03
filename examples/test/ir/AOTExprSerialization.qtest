@@ -93,6 +93,30 @@ public namespace AOTExprSerializationMod {
         }
     }
 
+    public final class MemberTarget {
+        private {
+            string name;
+        }
+
+        constructor(string name) {
+            self.name = name;
+        }
+
+        public string value() {
+            return name;
+        }
+    }
+
+    public class MemberReceiver {
+        private {
+            MemberTarget target = new MemberTarget(\"member-target\");
+        }
+
+        public string readMember() {
+            return target.value();
+        }
+    }
+
     public class RowSource {
         public hash<auto> rows() {
             return (\"domain\": (\"omq\", \"user\"), \"keyname\": (\"a\", \"b\"),
@@ -221,6 +245,68 @@ public namespace AOTExprSerializationMod {
         return \"buffer ok\";
     }
 
+    public string sub closureReferenceArgWriteThrough() {
+        code bump = sub(reference<int> i) {
+            i += 2;
+        };
+
+        for (int i = 0; i < 3; ++i) {
+            if (i == 0) {
+                bump(\\i);
+                if (i != 2) {
+                    return sprintf(\"bad closure ref after:%d\", i);
+                }
+                continue;
+            }
+            return sprintf(\"bad closure ref loop:%d\", i);
+        }
+        return \"closure ref ok\";
+    }
+
+    public string sub closureReferenceArgWriteThroughInvoke() {
+        code bump = sub(reference<int> i) {
+            i += 2;
+        };
+
+        for (int i = 0; i < 3; ++i) {
+            if (i == 0) {
+                try {
+                    bump(\\i);
+                } catch (hash<ExceptionInfo> ex) {
+                    return \"bad closure invoke catch\";
+                }
+                if (i != 2) {
+                    return sprintf(\"bad closure invoke ref after:%d\", i);
+                }
+                continue;
+            }
+            return sprintf(\"bad closure invoke ref loop:%d\", i);
+        }
+        return \"closure invoke ref ok\";
+    }
+
+    public sub directReferenceBump(reference<int> i) {
+        i += 2;
+    }
+
+    public string sub directReferenceArgWriteThroughInvoke() {
+        for (int i = 0; i < 3; ++i) {
+            if (i == 0) {
+                try {
+                    directReferenceBump(\\i);
+                } catch (hash<ExceptionInfo> ex) {
+                    return \"bad direct invoke catch\";
+                }
+                if (i != 2) {
+                    return sprintf(\"bad direct invoke ref after:%d\", i);
+                }
+                continue;
+            }
+            return sprintf(\"bad direct invoke ref loop:%d\", i);
+        }
+        return \"direct invoke ref ok\";
+    }
+
     public string sub verify() {
         AOTIssueProgram p(0);
         AOTIssueRestrictedProgram p2(0);
@@ -237,6 +323,10 @@ public namespace AOTExprSerializationMod {
         }
         if (Holder::getValue() != \"holder\") {
             return \"bad static singleton constructor\";
+        }
+        MemberReceiver receiver();
+        if (receiver.readMember() != \"member-target\") {
+            return \"bad member receiver dot-eval\";
         }
         if (constructorFromAuto(\"runtime\") != \"runtime\") {
             return \"bad runtime constructor variant resolution\";
@@ -263,6 +353,18 @@ public namespace AOTExprSerializationMod {
         string buffer_result = typedBufferFactories();
         if (buffer_result != \"buffer ok\") {
             return buffer_result;
+        }
+        string closure_ref_result = closureReferenceArgWriteThrough();
+        if (closure_ref_result != \"closure ref ok\") {
+            return closure_ref_result;
+        }
+        string closure_invoke_ref_result = closureReferenceArgWriteThroughInvoke();
+        if (closure_invoke_ref_result != \"closure invoke ref ok\") {
+            return closure_invoke_ref_result;
+        }
+        string direct_invoke_ref_result = directReferenceArgWriteThroughInvoke();
+        if (direct_invoke_ref_result != \"direct invoke ref ok\") {
+            return direct_invoke_ref_result;
         }
         return \"ok\";
     }

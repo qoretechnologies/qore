@@ -35,10 +35,21 @@
 
 class FindNode : public ParseNode {
 public:
+    enum Mode {
+        Legacy,
+        First,
+        Last,
+        One,
+    };
+
     QoreValue exp, where, find_exp;
 
-    DLLLOCAL FindNode(const QoreProgramLocation* loc, QoreValue expr, QoreValue FindNode_expr, QoreValue w);
+    DLLLOCAL FindNode(const QoreProgramLocation* loc, QoreValue expr, QoreValue FindNode_expr, QoreValue w,
+            Mode mode = Legacy);
     DLLLOCAL ~FindNode();
+
+    DLLLOCAL static Mode parseMode(const char* str);
+    DLLLOCAL static const char* modeName(Mode mode);
 
     // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
     // the ExceptionSink is only needed for QoreObject where a method may be executed
@@ -53,6 +64,8 @@ public:
     DLLLOCAL virtual const char *getTypeName() const;
 
 protected:
+    Mode mode;
+
     //! optionally evaluates the argument
     /** return value requires a deref(xsink) if needs_deref is true
         @see AbstractQoreNode::eval()

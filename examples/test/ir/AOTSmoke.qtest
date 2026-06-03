@@ -4,8 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class AOTSmokeTest
@@ -47,6 +47,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT control flow", \testControlFlow());
         addTestCase("AOT functions", \testFunctions());
         addTestCase("AOT inline NULL semantics", \testInlineNullSemantics());
+        addTestCase("AOT map lvalue-key short-circuit cleanup",
+            \testMapLValueKeyShortCircuitCleanup());
         addTestCase("AOT top-level locals visible to functions",
             \testTopLevelLocalsVisibleToFunctions());
         addTestCase("AOT top-level local controls function exception",
@@ -203,6 +205,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testAOTLinkedQoModuleCommands());
         addTestCase("AOT qmod dependency honors prepend module path",
             \testAOTModuleDependencyPrependPath());
+        addTestCase("AOT qmod try-module dependency metadata",
+            \testAOTModuleTryModuleDependencyMetadata());
         addTestCase("AOT ref foreach ParseNode pointer",
             \testRefForeachParseNode());
         addTestCase("AOT ref foreach narrowed element type",
@@ -742,6 +746,51 @@ check(NULL);
         assertEq(ast_out, runExecMode(code, "ir"), "IR inline NULL semantics match AST");
         assertEq(ast_out, runExecMode(code, "jit"), "JIT inline NULL semantics match AST");
         assertEq(ast_out, compileAndRun(code), "AOT inline NULL semantics match AST");
+    }
+
+    testMapLValueKeyShortCircuitCleanup() {
+        # Regression: a map element body that assigns to a dynamic lvalue key
+        # ($1) while the RHS uses a short-circuit operator (??, ?:, &&, ||)
+        # splits the map body into extra basic blocks.  The body's closing
+        # DiscardTemps then landed in a block laid out *after* the map's
+        # direct-final block, so the LLVM emitter (visiting blocks in layout
+        # order) paired each DiscardTemps with the wrong PushTempMark and
+        # dropped the map source list's reference once per iteration — freeing
+        # the source list mid-loop.  Symptom: INVALID-MEMBER '' or a crash on
+        # the second element under jit/ir-compiled/aot (the AST interpreter was
+        # unaffected).  Verify every mode agrees with the AST reference.
+        list<string> codes = (
+            # object member lvalue key + ?? on a hash member
+            "%modern
+class C { public { auto a; auto b; } }
+C c();
+hash<auto> h = {\"a\": \"X\", \"b\": \"Y\"};
+map c.$1 = h.$1 ?? NOTHING, (\"a\", \"b\");
+printf(\"%y %y\\n\", c.a, c.b);",
+            # hash member lvalue key + ?? with arithmetic over 3 elements
+            "%modern
+hash<auto> d = {};
+hash<auto> h = {\"a\": 1, \"c\": 3};
+map d.$1 = (h.$1 ?? 0) + 10, (\"a\", \"b\", \"c\");
+printf(\"%y\\n\", d);",
+            # ternary RHS
+            "%modern
+hash<auto> d = {};
+hash<auto> h = {\"a\": \"X\", \"b\": \"Y\"};
+map d.$1 = exists h.$1 ? h.$1 : NOTHING, (\"a\", \"b\");
+printf(\"%y\\n\", d);",
+            # logical-and/ternary short circuit
+            "%modern
+hash<auto> d = {};
+map d.$1 = ($1 == \"a\" && True) ? \"Y\" : \"N\", (\"a\", \"b\");
+printf(\"%y\\n\", d);",
+        );
+        foreach string code in (codes) {
+            string ast_out = runExecMode(code, "ast");
+            assertEq(ast_out, runExecMode(code, "ir"), "IR map lvalue-key short-circuit cleanup");
+            assertEq(ast_out, runExecMode(code, "jit"), "JIT map lvalue-key short-circuit cleanup");
+            assertEq(ast_out, compileAndRun(code), "AOT map lvalue-key short-circuit cleanup");
+        }
     }
 
     testTopLevelLocalsVisibleToFunctions() {
@@ -4518,7 +4567,7 @@ class Test1 {
 }
 class Runner {
     go() {
-        any t1 = new Test1();
+        auto t1 = new Test1();
         try {
             t1.a = 3;
             printf(\"direct no throw\\n\");
@@ -4907,11 +4956,21 @@ float f = 3.7;
 int truncated = int(f);
 printf(\"trunc: %d\\n\", truncated);
 
+# int to float
+float widened = float(parsed);
+printf(\"float: %.1f\\n\", widened);
+
+# unary minus after scalar float conversion
+printf(\"neg-float: %.1f\\n\", -float(parsed) / 2.0);
+
 # bool
 bool t = True;
 bool f2 = False;
 printf(\"true: %s\\n\", string(t));
 printf(\"false: %s\\n\", string(f2));
+
+# <value>::toBool() pseudo-method lowering
+printf(\"to-bool: %y %y %y\\n\", \"true\".toBool(), \"0\".toBool(), \"\".toBool());
 
 # int arithmetic chain
 int x = int(\"10\") + int(\"20\");
@@ -5824,6 +5883,74 @@ printf(\"dep=%%s\\n\", mh.%s.filename);
             libqore_dir, fallback_dir, qore_bin, paths.src));
         assertEq(sprintf("value=preferred\ndep=%s\n", preferred_dep_qmod), out,
             "AOT qmod dependency resolution honors importing Program prepends: " + out);
+    }
+
+    testAOTModuleTryModuleDependencyMetadata() {
+        string suffix = sprintf("%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("/tmp/aot_try_dep_%s", suffix);
+        string missing_dir = tmp_dir + "/MissingTry" + suffix;
+        string loaded_dir = tmp_dir + "/LoadedTry" + suffix;
+        string qlib_dir = get_script_dir() + "/../../../qlib";
+        mkdir(tmp_dir);
+        mkdir(missing_dir);
+        mkdir(loaded_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string missing_mod = "MissingTry" + suffix;
+        string missing_feature = "definitely_missing_qore_aot_dep_probe_" + suffix;
+        string missing_qm = missing_dir + "/" + missing_mod + ".qm";
+        string missing_qmod = tmp_dir + "/" + missing_mod + ".qmod";
+        {
+            File f();
+            f.open2(missing_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf("%modern
+module %s { version = \"1.0\"; desc = \"missing try probe\"; author = \"t\"; license = \"MIT\"; }
+%%try-module %s
+int sub hidden() {
+    return 1;
+}
+%%endtry
+public int sub ok() {
+    return 7;
+}
+", missing_mod, missing_feature));
+            f.close();
+        }
+
+        string missing_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s -m %s -o %s 2>&1; echo EXIT=$?",
+            libqore_dir, prependModulePath(qlib_dir), libqore_dir, qcc_bin, missing_dir, missing_qmod));
+        assertTrue(missing_out.regex("EXIT=0"), "missing try-module qmod compiled: " + missing_out);
+        string missing_dump = dumpQccInfo(missing_qmod, False);
+        assertTrue(!missing_dump.regex(missing_feature),
+            "failed %try-module dependency is not serialized as a hard qmod dependency: " + missing_dump);
+
+        string loaded_mod = "LoadedTry" + suffix;
+        string loaded_qm = loaded_dir + "/" + loaded_mod + ".qm";
+        string loaded_qmod = tmp_dir + "/" + loaded_mod + ".qmod";
+        {
+            File f();
+            f.open2(loaded_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf("%modern
+module %s { version = \"1.0\"; desc = \"loaded try probe\"; author = \"t\"; license = \"MIT\"; }
+%%try-module FsUtil
+public int sub ok() {
+    return 7;
+}
+%%endtry
+", loaded_mod));
+            f.close();
+        }
+
+        string loaded_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s -m %s -o %s 2>&1; echo EXIT=$?",
+            libqore_dir, prependModulePath(qlib_dir), libqore_dir, qcc_bin, loaded_dir, loaded_qmod));
+        assertTrue(loaded_out.regex("EXIT=0"), "loaded try-module qmod compiled: " + loaded_out);
+        string loaded_dump = dumpQccInfo(loaded_qmod, False);
+        assertTrue(loaded_dump.regex("\\bFsUtil\\b"),
+            "successful %try-module dependency is serialized as a hard qmod dependency: " + loaded_dump);
     }
 
     testAOTModuleCompile() {
@@ -6848,7 +6975,7 @@ module AOTRecursiveClosureFrame {
 
 public namespace AOTRecursiveClosureFrame {
     public auto sub parseLike(bool nested = True) {
-        any v;
+        auto v;
         bool in_hash;
         list<hash> l = (
             {\"type\": 1, \"val\": \"a\"},
@@ -10388,6 +10515,14 @@ public namespace CorruptQmodTest {
         hash<auto> compile_res = compileModuleFile(qm_path, qmod_path);
         assertTrue(compile_res.compiled,
             "corrupt-qmod-regression: baseline compile succeeded: " + compile_res.compile_out);
+
+        # Remove the .qm source that sits next to the compiled .qmod.  When AOT
+        # metadata fails to deserialize, the module loader gracefully falls back
+        # to compiling co-located source, which would mask the corruption and
+        # let the load succeed.  This test specifically exercises the corrupt
+        # *binary* path (no-deadlock + surfaced error), so the source must not
+        # be available as a fallback.
+        unlink(qm_path);
 
         # Corrupt the embedded AOT metadata without depending on ELF section
         # names.  qcc's dump-info uses LLVM object handling plus metadata

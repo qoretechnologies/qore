@@ -32,6 +32,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRPrinter.h>
 
+#include <iomanip>
 #include <ostream>
 
 #include <qore/intern/QoreIR.h>
@@ -47,6 +48,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ConstInt: return "const.int";
         case QoreIROpcode::ConstFloat: return "const.float";
         case QoreIROpcode::ConstBool: return "const.bool";
+        case QoreIROpcode::ConstChar: return "const.char";
         case QoreIROpcode::ConstNothing: return "const.nothing";
         case QoreIROpcode::ConstNull: return "const.null";
         case QoreIROpcode::ConstString: return "const.string";
@@ -185,6 +187,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::HashMap: return "hash.map";
         case QoreIROpcode::HashMapSelect: return "hash.map.select";
         case QoreIROpcode::IteratorCreate: return "iterator.create";
+        case QoreIROpcode::IteratorCreateIterate: return "iterator.create.iterate";
         case QoreIROpcode::IteratorNext: return "iterator.next";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
         case QoreIROpcode::ThreadExit: return "thread.exit";
@@ -228,6 +231,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CmpString: return "cmp.string";
         case QoreIROpcode::CmpAny: return "cmp.any";
         case QoreIROpcode::ToBool: return "to.bool";
+        case QoreIROpcode::ToInt: return "to.int";
+        case QoreIROpcode::ToFloat: return "to.float";
         case QoreIROpcode::Not: return "not";
         case QoreIROpcode::IsNullOrNothing: return "is.null-or-nothing";
         case QoreIROpcode::Phi: return "phi";
@@ -354,6 +359,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::NewHashDeclFromHash: return "new.hash.decl.from.hash";
         case QoreIROpcode::HashSetKeyValue: return "hash.set.key.value";
         case QoreIROpcode::IteratorCreateReverse: return "iterator.create.reverse";
+        case QoreIROpcode::IterateValue: return "iterate.value";
         case QoreIROpcode::Call: return "call";
         case QoreIROpcode::CallDirect: return "call.direct";
         case QoreIROpcode::CallIndirect: return "call.indirect";
@@ -436,6 +442,10 @@ static void printConstant(const QoreIRConstInstruction& inst, std::ostream& out)
             break;
         case QoreIRConstant::Kind::Bool:
             out << (inst.constant.bool_value ? "true" : "false");
+            break;
+        case QoreIRConstant::Kind::Char:
+            out << "c'\\u{" << std::hex << std::uppercase << inst.constant.char_value
+                << std::nouppercase << std::dec << "}'";
             break;
         case QoreIRConstant::Kind::Nothing:
             out << "nothing";
@@ -694,6 +704,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
             if (inst->opcode == QoreIROpcode::ConstInt
                     || inst->opcode == QoreIROpcode::ConstFloat
                     || inst->opcode == QoreIROpcode::ConstBool
+                    || inst->opcode == QoreIROpcode::ConstChar
                     || inst->opcode == QoreIROpcode::ConstNothing
                     || inst->opcode == QoreIROpcode::ConstNull
                     || inst->opcode == QoreIROpcode::ConstString
@@ -750,7 +761,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 if (ret && ret->has_value) {
                     out << " %" << ret->value.id;
                 }
-            } else if (inst->opcode == QoreIROpcode::IteratorCreate) {
+            } else if (inst->opcode == QoreIROpcode::IteratorCreate
+                    || inst->opcode == QoreIROpcode::IteratorCreateIterate) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterable.id;

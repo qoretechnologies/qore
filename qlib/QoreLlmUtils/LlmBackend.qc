@@ -474,9 +474,9 @@ public class LlmStructuredRepair {
             }
 
             hash<auto!> out;
-            out += cast<hash<auto>>(object_value);
+            out += cast<hash>(object_value);
             if (schema.properties.typeCode() == NT_HASH) {
-                hash<auto> properties = cast<hash<auto>>(schema.properties);
+                hash<auto> properties = cast<hash>(schema.properties);
                 foreach auto p in (properties.pairIterator()) {
                     if (!exists out{p.key}
                             || p.value.typeCode() != NT_HASH) {
@@ -484,7 +484,7 @@ public class LlmStructuredRepair {
                     }
                     hash<LlmStructuredRepairResult> child =
                         coerceBySchemaIntern(out{p.key},
-                            cast<hash<auto>>(p.value), path + "." + p.key);
+                            cast<hash>(p.value), path + "." + p.key);
                     if (!child.valid) {
                         return child;
                     }
@@ -517,9 +517,9 @@ public class LlmStructuredRepair {
                         path, array_value.type()));
             }
 
-            list<auto> out = cast<list<auto>>(array_value);
+            list<auto> out = cast<list>(array_value);
             if (schema.items.typeCode() == NT_HASH) {
-                hash<auto> item_schema = cast<hash<auto>>(schema.items);
+                hash<auto> item_schema = cast<hash>(schema.items);
                 for (int i = 0; i < out.size(); ++i) {
                     hash<LlmStructuredRepairResult> child =
                         coerceBySchemaIntern(out[i], item_schema,
@@ -796,9 +796,9 @@ llm.chatStream(
                     first_delta = now_us();
                 }
                 if (event.raw.typeCode() == NT_HASH) {
-                    hash<auto> raw = cast<hash<auto>>(event.raw);
+                    hash<auto> raw = cast<hash>(event.raw);
                     if (raw.usage.typeCode() == NT_HASH) {
-                        last_usage = cast<hash<auto>>(raw.usage);
+                        last_usage = cast<hash>(raw.usage);
                     }
                     if (raw.id.val()) {
                         response_id = raw.id;
@@ -807,7 +807,7 @@ llm.chatStream(
                         response_model = raw.model;
                     }
                     *string finish_reason =
-                        getStreamFinishReason(cast<hash<auto>>(raw));
+                        getStreamFinishReason(cast<hash>(raw));
                     if (finish_reason.val()) {
                         stop_reason = finish_reason;
                     }
@@ -1018,7 +1018,7 @@ llm.chatStream(
         if (raw.choices.typeCode() == NT_LIST && raw.choices.size()) {
             auto choice = raw.choices[0];
             if (choice.typeCode() == NT_HASH) {
-                hash<auto> choice_h = cast<hash<auto>>(choice);
+                hash<auto> choice_h = cast<hash>(choice);
                 if (choice_h.finish_reason.val()) {
                     return choice_h.finish_reason;
                 }
@@ -1106,7 +1106,7 @@ llm.chatStream(
             if (raw.typeCode() != NT_HASH) {
                 continue;
             }
-            hash<auto> msg = cast<hash<auto>>(raw);
+            hash<auto> msg = cast<hash>(raw);
             hash<ChatMessage> out_h = <ChatMessage>{
                 "role": msg.role ?? "user",
             };
@@ -1116,7 +1116,7 @@ llm.chatStream(
                     if (raw_part.typeCode() != NT_HASH) {
                         continue;
                     }
-                    hash<auto> part = cast<hash<auto>>(raw_part);
+                    hash<auto> part = cast<hash>(raw_part);
                     if (part.type == "text" && part.text.val()) {
                         hash<ContentPart> cp = <ContentPart>{
                             "type": "text",
@@ -1155,7 +1155,7 @@ llm.chatStream(
                     if (raw_tc.typeCode() != NT_HASH) {
                         continue;
                     }
-                    hash<auto> tc = cast<hash<auto>>(raw_tc);
+                    hash<auto> tc = cast<hash>(raw_tc);
                     hash<ChatToolCall> tool_call = <ChatToolCall>{
                         "id": tc.id ?? tc.function.name ?? "tool-call",
                         "name": tc.function.name,
@@ -1189,7 +1189,7 @@ llm.chatStream(
             if (raw_tool.typeCode() != NT_HASH) {
                 continue;
             }
-            hash<auto> tool = cast<hash<auto>>(raw_tool);
+            hash<auto> tool = cast<hash>(raw_tool);
             if (tool.type == "function" && tool.function.name.val()) {
                 push tools, <ToolDefinition>{
                     "name": tool.function.name,
@@ -1230,7 +1230,7 @@ llm.chatStream(
     private static *hash<auto> parseOpenAiToolArguments(auto raw) {
         hash<LlmStructuredRepairResult> result =
             LlmStructuredRepair::parseJsonObject(raw);
-        return result.valid ? cast<hash<auto>>(result.value) : {};
+        return result.valid ? cast<hash>(result.value) : {};
     }
 
     private static *hash<auto> getOpenAiResponseSchema(hash<auto> body) {
@@ -1316,15 +1316,15 @@ llm.chatStream(
                 || !response.choices) {
             return response;
         }
-        list<auto> choices = cast<list<auto>>(response.choices);
+        list<auto> choices = cast<list>(response.choices);
         if (choices[0].typeCode() != NT_HASH) {
             return response;
         }
-        hash<auto> choice = cast<hash<auto>>(choices[0]);
+        hash<auto> choice = cast<hash>(choices[0]);
         if (choice.message.typeCode() != NT_HASH) {
             return response;
         }
-        hash<auto> message = cast<hash<auto>>(choice.message);
+        hash<auto> message = cast<hash>(choice.message);
         if (message.tool_calls) {
             return response;
         }
@@ -1434,7 +1434,7 @@ llm.chatStream(
         }
         hash<LlmStructuredRepairResult> result =
             LlmStructuredRepair::coerceBySchema(args, tool.parameters);
-        return result.valid ? cast<hash<auto>>(result.value) : args;
+        return result.valid ? cast<hash>(result.value) : args;
     }
 
     private static *hash<auto> stripForcedToolBodyOptions(
@@ -1456,8 +1456,8 @@ llm.chatStream(
                 || !response.choices) {
             return False;
         }
-        hash<auto> choice = cast<hash<auto>>(
-            cast<list<auto>>(response.choices)[0]);
+        hash<auto> choice = cast<hash>(
+            cast<list>(response.choices)[0]);
         string finish_reason = choice.finish_reason ?? "";
         return finish_reason.upr() == "MALFORMED_FUNCTION_CALL";
     }
@@ -1471,10 +1471,10 @@ llm.chatStream(
                 || !response.choices) {
             return False;
         }
-        hash<auto> choice = cast<hash<auto>>(
-            cast<list<auto>>(response.choices)[0]);
+        hash<auto> choice = cast<hash>(
+            cast<list>(response.choices)[0]);
         hash<auto> message = choice.message.typeCode() == NT_HASH
-            ? cast<hash<auto>>(choice.message) : {};
+            ? cast<hash>(choice.message) : {};
         if (message.content.val()) {
             return False;
         }
@@ -1484,7 +1484,7 @@ llm.chatStream(
             return False;
         }
         hash<auto> usage = response.usage.typeCode() == NT_HASH
-            ? cast<hash<auto>>(response.usage) : {};
+            ? cast<hash>(response.usage) : {};
         int output_tokens = (usage.completion_tokens
             ?? usage.output_tokens ?? 0).toInt();
         return output_tokens == 0 || finish_reason == "stop"
@@ -1505,8 +1505,8 @@ llm.chatStream(
         if (response.choices.typeCode() != NT_LIST || !response.choices) {
             return False;
         }
-        hash<auto> choice = cast<hash<auto>>(
-            cast<list<auto>>(response.choices)[0]);
+        hash<auto> choice = cast<hash>(
+            cast<list>(response.choices)[0]);
         return choice.message.tool_calls.typeCode() == NT_LIST
             && choice.message.tool_calls.size() > 0;
     }
@@ -1583,7 +1583,7 @@ llm.chatStream(
         }
         hash<LlmStructuredRepairResult> result =
             LlmStructuredRepair::parseJsonObject(content);
-        return result.valid ? cast<hash<auto>>(result.value) : NOTHING;
+        return result.valid ? cast<hash>(result.value) : NOTHING;
     }
 
     private static string genericStopReasonToOpenAi(*string reason) {

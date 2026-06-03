@@ -1,0 +1,194 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StreamingOperatorsTest
+
+class CountingIterator inherits AbstractIterator<int> {
+    private {
+        int max;
+        int pos;
+        int value;
+        int calls;
+        bool valid_flag;
+    }
+
+    constructor(int max) {
+        self.max = max;
+    }
+
+    bool next() {
+        ++self.calls;
+        if (self.pos >= self.max) {
+            self.valid_flag = False;
+            return False;
+        }
+
+        self.value = self.pos++;
+        self.valid_flag = True;
+        return True;
+    }
+
+    int getValue() {
+        if (!self.valid_flag) {
+            throw "INVALID-ITERATOR", "iterator is not valid";
+        }
+        return self.value;
+    }
+
+    bool valid() {
+        return self.valid_flag;
+    }
+
+    int getCalls() {
+        return self.calls;
+    }
+}
+
+class StreamingOperatorsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Streaming operators test", "1.0") {
+        addTestCase("Terminal operators", \testTerminalOperators());
+        addTestCase("Lazy operators", \testLazyOperators());
+        addTestCase("Iterate sources", \testIterateSources());
+        addTestCase("Fused streaming chains", \testFusedStreamingChains());
+        addTestCase("Soft keyword identifiers", \testSoftKeywordIdentifiers());
+        set_return_value(main());
+    }
+
+    testTerminalOperators() {
+        list<int> values = (1, 2, 3, 4);
+
+        assertEq((first values), 1, "first source");
+        assertEq((first (1, 2, 3)), 1, "first source list literal");
+        assertEq((first ()), NOTHING, "first empty source");
+        assertEq((first $1 > 2, values), 3, "first predicate");
+        assertEq((first $1 > 9, values), NOTHING, "first predicate no match");
+
+        bool source_has_values = any values;
+        assertEq(source_has_values, True, "any source");
+        assertEq((any (values)), True, "any parenthesized source");
+        bool has_values = any values;
+        assertEq(has_values, True, "any bare source in modern mode");
+        assertEq((any ()), False, "any empty source");
+        assertEq((any $1 > 2, values), True, "any predicate");
+        assertEq((any greaterThanTwo($1), values), True, "any predicate call");
+        assertEq((any $1 > 9, values), False, "any predicate no match");
+
+        auto saved = values;
+        assertEq(echoAuto(saved), values, "auto is preferred for unrestricted modern declarations");
+
+        assertEq((all $1 > 0, values), True, "all predicate");
+        assertEq((all $1 > 1, values), False, "all predicate no match");
+        assertEq((all $1 > 0, ()), True, "all empty source");
+
+        assertEq((count values), 4, "count source");
+        assertEq((count (1, 2, 3)), 3, "count source list literal");
+        assertEq((count ()), 0, "count empty source");
+        assertEq((count $1 > 1, values), 3, "count predicate");
+        assertEq((count $1 > 9, values), 0, "count predicate no match");
+
+        Program p();
+        p.parse("%modern\nclass C { public { any value; *any maybe; } any get() { return 1; } abstract any getAbstract(); }\nany sub compat(any value) { return value; }\nauto sub closureCompat() { code c = any sub (any a) { return a; }; return c(1); }", "any-type-compat");
+        Program disabled_any();
+        assertThrows("PARSE-EXCEPTION", \disabled_any.parse(),
+            ("%modern\n%no-any-operator\nbool sub t(list<int> values) { return any $1 > 0, values; }",
+                "no-any-operator"));
+    }
+
+    auto echoAuto(auto value) {
+        return value;
+    }
+
+    bool greaterThanTwo(int value) {
+        return value > 2;
+    }
+
+    testLazyOperators() {
+        list<int> values = (1, 2, 3, 4);
+
+        assertEq((take 2, values), (1, 2), "take prefix");
+        assertEq((take 10, values), values, "take beyond end");
+        assertEq((take 0, values), (), "take zero");
+
+        assertEq((drop 2, values), (3, 4), "drop prefix");
+        assertEq((drop 10, values), (), "drop beyond end");
+        assertEq((drop 0, values), values, "drop zero");
+        assertThrows("STREAMING-OPERATOR-ERROR", sub () { auto x = take -1, values; });
+        assertThrows("STREAMING-OPERATOR-ERROR", sub () { auto x = drop -1, values; });
+
+        assertEq((takewhile $1 < 3, values), (1, 2), "takewhile prefix");
+        assertEq((takewhile $1 < 0, values), (), "takewhile none");
+        assertEq((takeuntil $1 == 3, values), (1, 2), "takeuntil prefix");
+        assertEq((takeuntil $1 == 9, values), values, "takeuntil no match");
+
+        assertEq((first (drop 2, values)), 3, "drop feeds first lazily");
+        assertEq((count (take 2, values)), 2, "take feeds count lazily");
+        assertEq((count $1 > 1, (takewhile $1 < 4, values)), 2, "takewhile feeds count predicate");
+    }
+
+    testIterateSources() {
+        assertEq((map $1, (iterate (1, 2, 3))), (1, 2, 3), "iterate list");
+        assertEq((map $1, (iterate 3)), (0, 1, 2), "iterate int range");
+        assertEq((map $1, (iterate xrange(3))), (0, 1, 2), "iterate AbstractIterator");
+
+        binary b = binary("AZ");
+        assertEq((map $1, (iterate b)), (65, 90), "iterate binary bytes");
+        assertEq((first b), 65, "streaming binary source bytes");
+
+        hash<string, int> h = {"a": 1, "b": 2};
+        assertEq((count h), 2, "streaming hash source pairs");
+        assertEq((first $1.key == "a", h).value, 1, "streaming hash source key predicate");
+        assertEq((first $1.value == 2, iterate h).key, "b", "iterate hash pairs");
+
+        assertEq((first 3), 0, "streaming int source range");
+
+        assertEq((map $1.ord(), (iterate "abc")), (97, 98, 99), "iterate string chars");
+
+        int map_count = 0;
+        (map ++map_count, (iterate "abc"));
+        assertEq(map_count, 3, "discarded map still drains string char source");
+
+        int map_select_count = 0;
+        (map ++map_select_count, (iterate "abc"), $1 != c'b');
+        assertEq(map_select_count, 2, "discarded map select still drains selected string char source");
+    }
+
+    testFusedStreamingChains() {
+        CountingIterator i(5);
+        assertEq((first (drop 2, i)), 2, "drop feeds first result");
+        assertEq(i.getCalls(), 3, "drop feeds first without draining source");
+
+        CountingIterator j(5);
+        assertEq((count (take 2, j)), 2, "take feeds count result");
+        assertEq(j.getCalls(), 2, "take feeds count without reading beyond limit");
+
+        CountingIterator k(5);
+        assertEq((take 2, (drop 1, k)), (1, 2), "drop feeds take result");
+        assertEq(k.getCalls(), 3, "drop feeds take without draining source");
+    }
+
+    testSoftKeywordIdentifiers() {
+        int iterate = 1;
+        int first = 2;
+        int any = 3;
+        int all = 4;
+        int count = 5;
+        int take = 6;
+        int drop = 7;
+        int takewhile = 8;
+        int takeuntil = 9;
+
+        assertEq((iterate, first, any, all, count, take, drop, takewhile, takeuntil),
+            (1, 2, 3, 4, 5, 6, 7, 8, 9), "streaming operator words remain valid local identifiers");
+
+        count++;
+        assertEq(count, 6, "streaming operator word local can be post-incremented");
+
+        count += 2;
+        assertEq(count + take, 14, "streaming operator word local can be used in binary expressions");
+    }
+}

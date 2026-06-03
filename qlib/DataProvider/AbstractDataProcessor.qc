@@ -593,12 +593,7 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         if (data.typeCode() != NT_LIST || !data) {
             return False;
         }
-        foreach auto record in (data) {
-            if (record.typeCode() != NT_HASH) {
-                return False;
-            }
-        }
-        return True;
+        return all $1.typeCode() == NT_HASH, data;
     }
 
     #! Detects the pipeline shape for a runtime value

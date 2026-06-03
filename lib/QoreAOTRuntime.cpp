@@ -35,6 +35,7 @@
 #include <time.h>
 #include <atomic>
 #include <cstdlib>
+#include <cstring>
 
 #include <qore/ModuleManager.h>
 #include <qore/QoreThreadLock.h>
@@ -174,6 +175,8 @@
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreFoldlOperatorNode.h"
+#include "qore/intern/QoreIterateOperatorNode.h"
+#include "qore/intern/QoreStreamingOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
@@ -1310,6 +1313,18 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         skipOneExpr(rdr, p, e);  // right operand
         return;
     }
+    if (ek == AOTExprKind::ITERATE) {
+        skipOneExpr(rdr, p, e);
+        return;
+    }
+    if (ek == AOTExprKind::STREAMING) {
+        if (p < e) {
+            ++p;  // streaming operator kind
+        }
+        skipOneExpr(rdr, p, e);
+        skipOneExpr(rdr, p, e);
+        return;
+    }
     if (ek == AOTExprKind::SQUARE_BRACKET_RANGE) {
         skipOneExpr(rdr, p, e);  // source expression
         skipOneExpr(rdr, p, e);  // start expression
@@ -2176,6 +2191,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 printd(2, "AOT v2: '%s' local[%d] = '%s' closure_use mismatch: flags=0x%x, propagating\n",
                     name, i, lname ? lname : "", lflags);
                 lv->setClosureUse();
+            }
+            if ((lflags & 0x10) && !lv->isReadOnly()) {
+                lv->setReadOnly();
             }
             ctx->locals[i] = lv;
             printd(3, "AOT v2: '%s' local[%d] = '%s' (flags=0x%x param_idx=%d) -> %p\n",
@@ -3515,6 +3533,38 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::ITERATE: {
+                std::string source_err;
+                QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!source_err.empty()) {
+                    source.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreIterateOperatorNode(&loc_builtin, source)));
+                }
+                continue;
+            }
+            case AOTExprKind::STREAMING: {
+                auto streaming_kind = static_cast<QoreStreamingOperatorNode::Kind>(
+                    QoreAOTBinaryReader::readU8(ptr));
+                std::string predicate_err;
+                QoreValue predicate = readOneExpr(reader, ptr, end, predicate_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string source_err;
+                QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!predicate_err.empty() || !source_err.empty()) {
+                    predicate.discard(nullptr);
+                    source.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreStreamingOperatorNode(&loc_builtin, streaming_kind, predicate, source)));
+                }
+                continue;
+            }
             case AOTExprKind::MAP_SELECT: {
                 std::string map_err;
                 QoreValue map_expr = readOneExpr(reader, ptr, end, map_err, pgm,
@@ -4312,7 +4362,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     for (int i = 0; i < num_body_locals; ++i) {
         const char* blname = reader.readStringRef(ptr);
         const char* bltype = reader.readStringRef(ptr);
-        uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t bl_flags = QoreAOTBinaryReader::readU8(ptr);
         uint32_t bl_slot_id = UINT32_MAX;
         if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BODY_LOCAL_SLOT) != 0) {
             bl_slot_id = QoreAOTBinaryReader::readU32(ptr);
@@ -4337,8 +4387,11 @@ static QoreAOTContext* buildContextFromSlotMap(
 
             lv = pp->createLocalVar(blname ? blname : "", ti);
         }
-        if (bl_closure && !lv->closureUse()) {
+        if ((bl_flags & 0x01) && !lv->closureUse()) {
             lv->setClosureUse();
+        }
+        if ((bl_flags & 0x02) && !lv->isReadOnly()) {
+            lv->setReadOnly();
         }
         ctx->all_body_locals.push_back(lv);
     }
@@ -5083,6 +5136,12 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             bool weak = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool is_closure = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool is_ref = QoreAOTBinaryReader::readU8(ptr) != 0;
+            bool read_only = false;
+            bool initial_assignment = false;
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+                read_only = QoreAOTBinaryReader::readU8(ptr) != 0;
+                initial_assignment = QoreAOTBinaryReader::readU8(ptr) != 0;
+            }
             LocalVar* lv = resolveLocal(lname);
             if (!lv && lname && *lname) {
                 // Create a new local variable for handler/closure locals
@@ -5093,8 +5152,12 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 lv = pp->createLocalVar(lname, ti);
             }
+            if (lv && read_only && !lv->isReadOnly()) {
+                lv->setReadOnly();
+            }
             auto* li = new QoreIRLocalInstruction(opcode, lv, auto_ref);
             li->weak = weak;
+            li->initial_assignment = initial_assignment;
             li->is_closure = is_closure;
             li->is_ref = is_ref;
             li->slot_id = slot_id;
@@ -11033,6 +11096,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     std::string runtime_module_path = std::move(aot_module_init_context_path);
     aot_module_init_context_path.clear();
     const char* module_context_path = runtime_module_path.empty() ? label : runtime_module_path.c_str();
+    std::string module_context_desc =
+        (module_context_path && *module_context_path) ? module_context_path : "<unknown module path>";
+    if (label && *label && (!module_context_path || strcmp(label, module_context_path))) {
+        module_context_desc += "; source label: ";
+        module_context_desc += label;
+    }
 
     // Phase 1.5 load-time profiling (temporary): QORE_AOT_LOAD_TRACE=1
     // emits per-phase wall-clock timing so we can see where module
@@ -11153,7 +11222,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // runTimeLoadModule will call addToProgram which imports the namespace.
     //
     // The dependency list is built from the parsed program's feature lists at compile time
-    // (see serializeDependencies()), so it lists exactly the modules that were loaded when the
+    // (see serializeProgramFeatureDependencies()), so it lists exactly the modules that were loaded when the
     // .qmod was compiled — including optional %try-module modules whose %ifndef-guarded code
     // (e.g. json's make_json) was baked into the binary.  Such a module is therefore a hard
     // runtime requirement: if it is genuinely unavailable the compiled function/type slots that
@@ -11177,7 +11246,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                     "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                     "and cannot be loaded without it",
                     mod_name ? mod_name : "<unknown>",
-                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                    module_context_desc.c_str(), dep.c_str(), dep.c_str());
                 local_pgm->waitForTerminationAndDeref(nullptr);
                 return err;
             }

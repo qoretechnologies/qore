@@ -20,5 +20,9 @@ public class RegexEscapeTest inherits QUnit::Test {
         assertEq ('Hungry\?', regex_escape ('Hungry?'));
         assertEq ('Always\!\!', regex_escape ('Always!!'));
         assertEq ('\[12\ 34\ 56\ 78\ 90\]', regex_escape ('[12 34 56 78 90]'));
+        assertEq ('caf\é', regex_escape ('café'));
+        assertTrue(regex('café', regex_escape('café')));
+        assertEq ('caf\é', Util::regex_escape ('café'));
+        assertTrue(regex('café', Util::regex_escape('café')));
     }
 }

@@ -49,7 +49,7 @@ const char* ClassNs::getName() const {
 ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue val, const QoreTypeInfo* ti,
         bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access)
         : loc(loc), name(n), typeInfo(ti), val(val), in_init(false), pub(n_pub),
-        init(n_init), builtin(n_builtin), delayed_eval(false), has_init_expr(false),
+        init(n_init), builtin(n_builtin), delayed_eval(false), explicit_type(ti), has_init_expr(false),
         saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
         access(n_access) {
     QoreProgram* pgm = getProgram();
@@ -69,6 +69,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         : loc(old.loc), pwo(old.pwo), name(old.name),
         typeInfo(old.typeInfo), val(old.val.refSelf()),
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
+        explicit_type(old.explicit_type),
         has_init_expr(old.has_init_expr),
         saved_val_set(old.saved_val_set),
         aot_shell_pending(old.aot_shell_pending),
@@ -229,7 +230,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     int err = 0;
     bool external_stub_constant_ref = false;
 
-    QoreProgram* pgm;
+    QoreProgram* pgm = getProgram();
     if (!builtin) {
         QoreParseContext parse_context;
         parse_context.setFlags(PF_CONST_EXPRESSION);
@@ -247,8 +248,24 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         //printd(5, "ConstantEntry::parseInit() this: %p '%s' about to init val: '%s' class: %p '%s'\n", this,
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
 
+        const QoreTypeInfo* declaredTypeInfo = explicit_type ? typeInfo : nullptr;
+        parse_context.expected_type_info = declaredTypeInfo;
         err = parse_init_value(val, parse_context);
-        typeInfo = parse_context.typeInfo;
+        if (declaredTypeInfo) {
+            const QoreTypeInfo* exprTypeInfo = parse_context.typeInfo;
+            qore_type_result_e res = QoreTypeInfo::parseAccepts(declaredTypeInfo, exprTypeInfo);
+            if (res == QTI_NOT_EQUAL && pgm->getParseExceptionSink()) {
+                QoreStringNode* edesc = new QoreStringNodeMaker("constant '%s' declared as ", name.c_str());
+                QoreTypeInfo::getThisType(declaredTypeInfo, *edesc);
+                edesc->concat(", but initializer expression is ");
+                QoreTypeInfo::getThisType(exprTypeInfo, *edesc);
+                qore_program_private::makeParseException(pgm, *loc, "PARSE-TYPE-ERROR", edesc);
+                err = -1;
+            }
+            typeInfo = declaredTypeInfo;
+        } else {
+            typeInfo = parse_context.typeInfo;
+        }
         external_stub_constant_ref = parse_context.external_stub_constant_ref;
 
         // Enrich exception with constant name for better debugging
@@ -261,8 +278,6 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         assert(!parse_context.lvids);
         pgm = parse_context.pgm;
         assert(pgm == getProgram());
-    } else {
-        pgm = getProgram();
     }
 
     //printd(5, "ConstantEntry::parseInit() this: %p %s initialized to node: %p (%s) value: %d type: '%s'\n", this,
@@ -276,6 +291,16 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     if (!val.hasNode() || !val.getInternalNode()->needs_eval() || pgm->parseExceptionRaised()) {
         if (!QoreTypeInfo::hasType(typeInfo)) {
             typeInfo = val.getTypeInfo();
+        } else if (explicit_type && val && !val.needsEval()) {
+            ExceptionSink type_xsink;
+            QoreTypeInfo::retypeValue(val, typeInfo, &type_xsink);
+            if (!type_xsink) {
+                QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", val, &type_xsink);
+            }
+            if (type_xsink) {
+                qore_program_private::addParseException(getProgram(), type_xsink, loc);
+                err = -1;
+            }
         }
         return err;
     }
@@ -322,7 +347,14 @@ int ConstantEntry::parseCommitRuntimeInit() {
             saved_val.discard(&xsink);
             saved_val = nv;
             saved_val_set = true;
-            typeInfo = saved_val.getTypeInfo();
+            if (explicit_type) {
+                QoreTypeInfo::retypeValue(saved_val, typeInfo, &xsink);
+                if (!xsink) {
+                    QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", saved_val, &xsink);
+                }
+            } else {
+                typeInfo = saved_val.getTypeInfo();
+            }
             assert(!saved_val.getInternalNode() || !saved_val.needsEval());
         } else {
             QoreValue ex_err = xsink.getExceptionErr();
@@ -731,14 +763,16 @@ void ConstantList::assimilate(ConstantList& n, const char* type, const char* nam
 }
 
 void ConstantList::parseAdd(const QoreProgramLocation* loc, const std::string& name, QoreValue val,
-        ClassAccess access, const char* cname) {
+        ClassAccess access, const char* cname, const QoreTypeInfo* typeInfo) {
     if (inList(name)) {
         parse_error(*loc, "constant \"%s\" has already been defined in class \"%s\"", name.c_str(), cname);
         val.discard(nullptr);
         return;
     }
 
-    ConstantEntry* ce = new ConstantEntry(loc, name.c_str(), val, val.getTypeInfo(), false, false, false, access);
+    ConstantEntry* ce = new ConstantEntry(loc, name.c_str(), val,
+        typeInfo || (val.hasNode() && val.getInternalNode()->needs_eval()) ? typeInfo : val.getTypeInfo(),
+        false, false, false, access);
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();
     }

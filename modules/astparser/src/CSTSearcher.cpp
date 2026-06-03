@@ -621,6 +621,12 @@ CSTSymbolInfo CSTSearcher::findSymbolInfo(
 // Find references
 // --------------------------------------------------------------------------
 
+static bool isIdentifierLikeNode(const char* type) {
+    return strcmp(type, "identifier") == 0
+        || strcmp(type, "scoped_identifier") == 0
+        || strcmp(type, "streaming_keyword_identifier") == 0;
+}
+
 void CSTSearcher::collectIdentifierRefs(
     TSNode node,
     const AstParseResult* result,
@@ -630,8 +636,7 @@ void CSTSearcher::collectIdentifierRefs(
     const char* type = ts_node_type(node);
 
     // Check identifier nodes
-    if (strcmp(type, "identifier") == 0 ||
-        strcmp(type, "scoped_identifier") == 0) {
+    if (isIdentifierLikeNode(type)) {
         std::string text = result->getNodeText(node);
         if (text == name) {
             vec->push_back(node);
@@ -1005,6 +1010,17 @@ bool CSTSearcher::hasStaticModifier(TSNode node, const AstParseResult* result) {
     return false;
 }
 
+bool CSTSearcher::hasConstMethodQualifier(TSNode node, const AstParseResult* result) {
+    uint32_t childCount = ts_node_named_child_count(node);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(node, i);
+        if (strcmp(ts_node_type(child), "method_qualifier") == 0) {
+            return result->getNodeText(child) == "const";
+        }
+    }
+    return false;
+}
+
 std::vector<CSTParamInfo> CSTSearcher::extractParameters(TSNode funcNode,
                                                           const AstParseResult* result) {
     std::vector<CSTParamInfo> params;
@@ -1089,6 +1105,7 @@ CSTSymbolDetail CSTSearcher::enrichSymbol(const CSTScopeSymbolInfo& ssi,
             detail.params = extractParameters(anc, result);
             detail.access = extractAccessModifier(anc, result);
             detail.isStatic = hasStaticModifier(anc, result);
+            detail.isConstMethod = hasConstMethodQualifier(anc, result);
             return detail;
         }
 
@@ -1315,6 +1332,7 @@ void CSTSearcher::collectClassMembers(TSNode classNode, const AstParseResult* re
                     if (kind == ASYK_Method || kind == ASYK_Function || kind == ASYK_Constructor) {
                         detail.returnType = extractReturnType(member, result);
                         detail.params = extractParameters(member, result);
+                        detail.isConstMethod = hasConstMethodQualifier(member, result);
                     } else if (kind == ASYK_Field) {
                         detail.typeName = extractTypeName(member, result);
                     }
@@ -1341,6 +1359,7 @@ void CSTSearcher::collectClassMembers(TSNode classNode, const AstParseResult* re
             detail.isStatic = hasStaticModifier(child, result);
             detail.returnType = extractReturnType(child, result);
             detail.params = extractParameters(child, result);
+            detail.isConstMethod = hasConstMethodQualifier(child, result);
             vec->push_back(std::move(detail));
         } else if (strcmp(type, "constant_declaration") == 0) {
             CSTSymbolDetail detail;
@@ -1412,6 +1431,7 @@ void CSTSearcher::collectNamespaceMembers(TSNode nsNode, const AstParseResult* r
             if (kind == ASYK_Function) {
                 detail.returnType = extractReturnType(child, result);
                 detail.params = extractParameters(child, result);
+                detail.isConstMethod = hasConstMethodQualifier(child, result);
             }
 
             vec->push_back(std::move(detail));
@@ -2368,6 +2388,10 @@ std::string CSTSearcher::buildFunctionSignature(TSNode node, const AstParseResul
         ss << "()";
     }
 
+    if (hasConstMethodQualifier(node, result)) {
+        ss << " const";
+    }
+
     // Returns clause
     TSNode returns = ts_node_child_by_field_name(node, "returns", 7);
     if (!ts_node_is_null(returns)) {
@@ -2539,7 +2563,7 @@ std::vector<DefinitionResult>* CSTSearcher::findReferencesCrossDoc(
     }
 
     const char* nodeType = ts_node_type(node);
-    if (strcmp(nodeType, "identifier") != 0 && strcmp(nodeType, "scoped_identifier") != 0) {
+    if (!isIdentifierLikeNode(nodeType)) {
         return nullptr;
     }
 
@@ -2869,6 +2893,7 @@ bool CSTSearcher::classifyNode(TSNode node, TSNode parent,
     if (strcmp(type, "string_literal") == 0
             || strcmp(type, "double_quoted_string") == 0
             || strcmp(type, "single_quoted_string") == 0
+            || strcmp(type, "char_literal") == 0
             || strcmp(type, "backquote_string") == 0) {
         tokenType = STT_String;
         tokenModifiers = 0;
@@ -2943,7 +2968,7 @@ bool CSTSearcher::classifyNode(TSNode node, TSNode parent,
     }
 
     // Identifiers — classify based on parent context
-    if (strcmp(type, "identifier") == 0 || strcmp(type, "scoped_identifier") == 0) {
+    if (isIdentifierLikeNode(type)) {
         const char* parentType = ts_node_type(parent);
 
         // Check if this identifier is the "name" field of its parent

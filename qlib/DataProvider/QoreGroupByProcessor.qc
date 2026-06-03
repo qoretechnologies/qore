@@ -292,17 +292,8 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
 
     #! Returns True if all configured group and aggregate fields can use column-block accumulation
     private bool canUseColumnBlockAccumulator() {
-        foreach string field in (group_by_fields) {
-            if (!isColumnBlockField(field)) {
-                return False;
-            }
-        }
-        foreach hash<GroupByAggSpec> spec in (agg_specs) {
-            if (spec.field && !isColumnBlockField(spec.field)) {
-                return False;
-            }
-        }
-        return True;
+        return (all isColumnBlockField($1), group_by_fields)
+            && (all !$1.field || isColumnBlockField($1.field), agg_specs);
     }
 
     #! Returns the value at a logical row from a list, buffer, or scalar column

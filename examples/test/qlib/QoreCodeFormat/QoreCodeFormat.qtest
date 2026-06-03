@@ -4,6 +4,7 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
 %requires QUnit
 %requires QoreCodeFormat
 
@@ -16,6 +17,8 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("class formatting", \testClassFormatting());
         addTestCase("generic declarations", \testGenericDeclarations());
         addTestCase("function formatting", \testFunctionFormatting());
+        addTestCase("read-only const bindings", \testReadOnlyConstBindings());
+        addTestCase("const method formatting", \testConstMethodFormatting());
         addTestCase("if-else chains", \testIfElseChains());
         addTestCase("loops", \testLoops());
         addTestCase("switch statement", \testSwitchStatement());
@@ -53,6 +56,8 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("nested hash indentation", \testNestedHashIndentation());
         addTestCase("regex escaped slashes", \testRegexEscapedSlashes());
         addTestCase("single-item list literals", \testSingleItemListLiterals());
+        addTestCase("streaming operators", \testStreamingOperators());
+        addTestCase("find modifiers", \testFindModifiers());
 
         set_return_value(main());
     }
@@ -177,6 +182,55 @@ sub noReturn() {
         assertRegex("three args flat", "int a, int b, int c", result);
         assertRegex("plus operators", "a \\+ b \\+ c", result);
         assertRegex("void function", "sub noReturn\\(\\)", result);
+    }
+
+    testReadOnlyConstBindings() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+const int Limit = 100;
+
+class Settings {
+    public {
+        const string Name = \"settings\";
+    }
+}
+
+int sub clamp(const int value, const int min_value, const int max_value) {
+    const int local_limit = Limit;
+    const auto adjusted = value;
+    return adjusted;
+}
+";
+        string result = fmt.format(src);
+        assertRegex("typed top-level constant", "^const int Limit = 100;", result);
+        assertRegex("typed class constant", "const string Name = \"settings\";", result);
+        assertRegex("const parameters", "int sub clamp\\(const int value, const int min_value, const int max_value\\)",
+            result);
+        assertRegex("typed readonly local", "const int local_limit = Limit;", result);
+        assertRegex("auto readonly local", "const auto adjusted = value;", result);
+        assertEq(result, fmt.format(result), "read-only const binding formatting is idempotent");
+    }
+
+    testConstMethodFormatting() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+class C {
+    int value() const { return 1; }
+    value2() const returns int { return 2; }
+    abstract string name() const;
+}
+
+int C::out() const returns int { return 3; }
+";
+        string result = fmt.format(src);
+        assertRegex("prefix return const method", "int value\\(\\) const \\{", result);
+        assertRegex("returns const method", "value2\\(\\) const returns int \\{", result);
+        assertRegex("abstract const method", "abstract string name\\(\\) const;", result);
+        assertRegex("out-of-line const method", "^int C::out\\(\\) const returns int \\{", result);
+        assertTrue(result !~ /sub C::out/, "out-of-line method should not gain sub keyword");
+        assertEq(result, fmt.format(result), "const method formatting is idempotent");
     }
 
     testIfElseChains() {
@@ -304,6 +358,7 @@ sub test() {
     bool w = x != y;
     bool a = x > y && x < 100;
     auto v = x ?? y;
+    auto vc = x ?: y;
 }
 ";
         string r1 = fmt.format(src1);
@@ -313,6 +368,7 @@ sub test() {
         assertRegex("not equals", "x != y", r1);
         assertRegex("logical and", "&&", r1);
         assertRegex("null coalesce", "\\?\\?", r1);
+        assertRegex("value coalesce alias canonicalized", "auto vc = x \\?\\* y;", r1);
 
         # Ternary
         string src2 = "%modern
@@ -1174,6 +1230,105 @@ path =~ s/\\\\/x/g;
         QoreCodeFormat::CodeFormatter fmt4();
         string pass2b = fmt4.format(result2);
         assertEq(result2, pass2b, "regex escaped backslash idempotency");
+    }
+
+    testStreamingOperators() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+%no-stream-fusion
+%streaming-any
+%negative-offsets
+%no-negative-offsets
+%negative-offsets
+sub test(list<int> values) {
+    auto iter = iterate values;
+    *int first_even = first $1 % 2 == 0, (drop 1, values);
+    bool has_large = any $1 > 10, (take 3, values);
+    bool has_values = any values;
+    bool has_small = any isSmall($1), values;
+    auto copied = values;
+    bool all_positive = all $1 > 0, values;
+    int total = count values;
+    list<int> prefix = take 2, values;
+    list<int> rest = drop 1, values;
+    list<int> before_zero = takewhile $1 != 0, values;
+    list<int> until_zero = takeuntil $1 == 0, values;
+    list<int> tail = values[-2..];
+}
+";
+        string result = fmt.format(src);
+        assertRegex("no-stream-fusion directive preserved", "^%no-stream-fusion$", result);
+        assertRegex("streaming-any directive preserved", "^%streaming-any$", result);
+        assertRegex("negative-offsets directive preserved", "^%negative-offsets$", result);
+        assertRegex("no-negative-offsets directive preserved", "^%no-negative-offsets$", result);
+        assertRegex("iterate expression", "auto iter = iterate values;", result);
+        assertRegex("first with nested drop", "\\*int first_even = first \\$1 % 2 == 0, \\(drop 1, values\\);",
+            result);
+        assertRegex("any with nested take", "bool has_large = any \\$1 > 10, \\(take 3, values\\);", result);
+        assertRegex("any bare source", "bool has_values = any values;", result);
+        assertRegex("any predicate call", "bool has_small = any isSmall\\(\\$1\\), values;", result);
+        assertRegex("auto declaration", "auto copied = values;", result);
+        assertRegex("all predicate", "bool all_positive = all \\$1 > 0, values;", result);
+        assertRegex("count source", "int total = count values;", result);
+        assertRegex("take source", "list<int> prefix = take 2, values;", result);
+        assertRegex("drop source", "list<int> rest = drop 1, values;", result);
+        assertRegex("takewhile source", "list<int> before_zero = takewhile \\$1 != 0, values;", result);
+        assertRegex("takeuntil source", "list<int> until_zero = takeuntil \\$1 == 0, values;", result);
+        assertRegex("negative slice source", "list<int> tail = values\\[-2\\.\\.\\];", result);
+
+        QoreCodeFormat::CodeFormatter fmt2();
+        string pass2 = fmt2.format(result);
+        assertEq(result, pass2, "streaming operators idempotency");
+
+        string legacy = "%modern
+%no-streaming-operators
+sub legacy() {
+    int count = 0;
+    int take = 1;
+    count += take;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt3();
+        string legacyResult = fmt3.format(legacy);
+        assertRegex("no-streaming-operators directive preserved", "^%no-streaming-operators$", legacyResult);
+        assertRegex("count identifier preserved", "int count = 0;", legacyResult);
+        assertRegex("take identifier preserved", "int take = 1;", legacyResult);
+    }
+
+    testFindModifiers() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test(hash<auto> data) {
+    auto first_match = find first %% in data where (%id == 1);
+    auto last_name = find last %name in data where (%active);
+    auto one_id = find one %id in data where (%name == \"root\");
+}
+";
+        string result = fmt.format(src);
+        assertRegex("find first modifier", "auto first_match = find first %% in data where \\(%id == 1\\);",
+            result);
+        assertRegex("find last modifier", "auto last_name = find last %name in data where \\(%active\\);",
+            result);
+        assertRegex("find one modifier", "auto one_id = find one %id in data where \\(%name == \"root\"\\);",
+            result);
+
+        QoreCodeFormat::CodeFormatter fmt2();
+        string pass2 = fmt2.format(result);
+        assertEq(result, pass2, "find modifiers idempotency");
+
+        string legacy = "%modern
+%no-find-modifiers
+sub legacy_find(hash<auto> data) {
+    auto id = find %id in data where (%name == \"root\");
+}
+";
+        QoreCodeFormat::CodeFormatter fmt3();
+        string legacyResult = fmt3.format(legacy);
+        assertRegex("no-find-modifiers directive preserved", "^%no-find-modifiers$", legacyResult);
+        assertRegex("legacy find preserved", "auto id = find %id in data where \\(%name == \"root\"\\);",
+            legacyResult);
     }
 
     private assertRegex(string label, string pattern, string text) {

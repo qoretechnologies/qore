@@ -19,7 +19,7 @@ public class ArgvTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    noParameterTest(any p) {
+    noParameterTest(auto p) {
         testAssertion("nonexistent parameter", \equals(), (p, NOTHING));
     }
 
@@ -27,13 +27,13 @@ public class ArgvTest inherits QUnit::Test {
         testAssertion("shift to additional parameter", \equals(), (shift argv, 1));
     }
 
-    parameterShiftTestTwo(any p) {
+    parameterShiftTestTwo(auto p) {
         testAssertion("parameter before shift", \equals(), (p, 1));
         testAssertion("shift to additional parameter", \equals(), (shift argv, 2));
     }
 
     shiftTest() {
-        foreach any v in (1, 2, 3, 4, "hello") {
+        foreach auto v in (1, 2, 3, 4, "hello") {
             testAssertion("shift " + string(v) + " parameter", \equals(), (v, shift argv));
         }
     }

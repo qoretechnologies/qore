@@ -4596,12 +4596,7 @@ string sql = table.getSelectSql(sh, \args);
         if (matchAnyUnique(cols)) {
             return True;
         }
-        foreach AbstractIndex ix in (indexes.iterator()) {
-            if (ix.unique && ix.columns.partialMatchKeys(cols)) {
-                return True;
-            }
-        }
-        return False;
+        return any $1.unique && $1.columns.partialMatchKeys(cols), indexes.iterator();
     }
 
     #! Returns True if this DB requires the orderby columns to match a unique
@@ -5368,7 +5363,7 @@ string sql = table.getSelectSql(sh, \args);
                     throw "WHERE-ERROR", sprintf("expected \"hash\" in \"where\" list; got type %y instead",
                         c.fullType());
                 }
-                owl = getWhereClauseListIntern(\info, cast<hash<auto>>(c), cprefix);
+                owl = getWhereClauseListIntern(\info, cast<hash>(c), cprefix);
                 if (owl) {
                     wl += "(" + (foldl $1 + " and " + $2, owl) + ")";
                 }
@@ -5381,7 +5376,7 @@ string sql = table.getSelectSql(sh, \args);
                 throw "WHERE-ERROR", sprintf("expected \"hash\" or \"list\" in \"where\" argument; got type %y "
                     "instead", cond.fullType());
             }
-            wl = getWhereClauseListIntern(\info, cast<hash<auto>>(cond), cprefix);
+            wl = getWhereClauseListIntern(\info, cast<hash>(cond), cprefix);
             if (wl) {
                 return " where " + (foldl $1 + " and " + $2, wl);
             }

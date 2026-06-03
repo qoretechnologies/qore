@@ -241,6 +241,9 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
 %else
         throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
         hash<auto> tok_config = {};
+        *hash<auto> tok_runtime_config;
+        *QoreModelRegistry::ModelRegistry registry;
+        hash<QoreModelRegistry::ModelVersionInfo> manifest;
 %endif
 
         # Build embedding model config

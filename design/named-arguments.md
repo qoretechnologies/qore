@@ -115,11 +115,9 @@ literals, map-operator key shorthand).
 - The same shape is used by function calls, method calls, static method
   calls, constructors, base-constructor calls, and call-reference calls.
 
-Mirrored in the astparser / tree-sitter grammar so IDE tooling and `qdx`
+Mirrored in the astparser tree-sitter grammar so IDE tooling and `qdx`
 agree with the core parser:
 
-- `modules/astparser/src/ast_parser.ypp` (~1452–1474): `named_call_args` /
-  `named_arg_list` productions, `make_ast_named_call_arg()`.
 - `modules/astparser/grammars/tree-sitter-qore/grammar.js`: a
   `named_argument` rule (`field('name', identifier) ':' field('value', expr)`)
   used inside call expressions.

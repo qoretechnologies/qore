@@ -574,7 +574,7 @@ public namespace Hl7v2Util {
                 return rv;
             }
             foreach auto element in (element_list) {
-                hash<auto> e = cast<hash<auto>>(element);
+                hash<auto> e = cast<hash>(element);
                 if (isFieldElement(resource.type, e)) {
                     push rv, e;
                 }
@@ -762,7 +762,7 @@ public namespace Hl7v2Util {
         private hash<auto> getSchemaNode(hash<auto> doc, string source) {
             foreach string key in (keys doc) {
                 if (localName(key) == "schema") {
-                    return cast<hash<auto>>(doc{key});
+                    return cast<hash>(doc{key});
                 }
             }
             throw "HL7V2-SCHEMA-GEN-ERROR", sprintf("XML schema root element not found in %y", source);
@@ -786,7 +786,7 @@ public namespace Hl7v2Util {
                 return NOTHING;
             }
 
-            list<hash<auto>> refs = getSequenceElementRefs(cast<hash<auto>>(complex_type));
+            list<hash<auto>> refs = getSequenceElementRefs(cast<hash>(complex_type));
             list<hash<Hl7v2FieldDef>> fields = ();
             foreach hash<auto> ref_node in (refs) {
                 *hash<Hl7v2FieldDef> field = convertFieldRef(tag, ref_node, element_map, simple_types);
@@ -809,7 +809,7 @@ public namespace Hl7v2Util {
         private *hash<auto> getElementComplexType(hash<auto> element, hash<string, hash<auto>> complex_types) {
             auto complex_type = getChild(element, "complexType");
             if (complex_type) {
-                return cast<hash<auto>>(complex_type);
+                return cast<hash>(complex_type);
             }
 
             string type = cleanTypeName(getAttr(element, "type"));
@@ -825,7 +825,7 @@ public namespace Hl7v2Util {
                 return ();
             }
             list<hash<auto>> rv = ();
-            foreach hash<auto> element in (getChildren(cast<hash<auto>>(sequence), "element")) {
+            foreach hash<auto> element in (getChildren(cast<hash>(sequence), "element")) {
                 if (getAttr(element, "ref")) {
                     push rv, element;
                 }
@@ -847,12 +847,12 @@ public namespace Hl7v2Util {
             string max_occurs = getAttr(ref_node, "maxOccurs");
             string max_repetitions = normalizeMaxOccurs(max_occurs ? max_occurs : "1");
             *hash<auto> field_element = element_map{ref};
-            string name = field_element ? getDocumentation(cast<hash<auto>>(field_element)) : NOTHING;
+            string name = field_element ? getDocumentation(cast<hash>(field_element)) : NOTHING;
             if (!name) {
                 name = sprintf("%s-%d", tag, position);
             }
-            string datatype = field_element ? getFieldType(cast<hash<auto>>(field_element), simple_types) : "-";
-            int max_length = field_element ? getMaxLength(cast<hash<auto>>(field_element), simple_types) : 0;
+            string datatype = field_element ? getFieldType(cast<hash>(field_element), simple_types) : "-";
+            int max_length = field_element ? getMaxLength(cast<hash>(field_element), simple_types) : 0;
 
             return <Hl7v2FieldDef>{
                 "position": position,
@@ -881,7 +881,7 @@ public namespace Hl7v2Util {
 
             auto simple_type = getChild(element, "simpleType");
             if (simple_type) {
-                string base = getRestrictionBase(cast<hash<auto>>(simple_type));
+                string base = getRestrictionBase(cast<hash>(simple_type));
                 if (base) {
                     return base;
                 }
@@ -892,7 +892,7 @@ public namespace Hl7v2Util {
         private int getMaxLength(hash<auto> element, hash<string, hash<auto>> simple_types) {
             auto simple_type = getChild(element, "simpleType");
             if (simple_type) {
-                int len = getSimpleTypeMaxLength(cast<hash<auto>>(simple_type));
+                int len = getSimpleTypeMaxLength(cast<hash>(simple_type));
                 if (len > 0) {
                     return len;
                 }
@@ -910,11 +910,11 @@ public namespace Hl7v2Util {
             if (!restriction) {
                 return 0;
             }
-            auto max_length = getChild(cast<hash<auto>>(restriction), "maxLength");
+            auto max_length = getChild(cast<hash>(restriction), "maxLength");
             if (!max_length) {
                 return 0;
             }
-            return hl7v2_schema_to_int(getAttr(cast<hash<auto>>(max_length), "value"));
+            return hl7v2_schema_to_int(getAttr(cast<hash>(max_length), "value"));
         }
 
         private string getRestrictionBase(hash<auto> simple_type) {
@@ -922,7 +922,7 @@ public namespace Hl7v2Util {
             if (!restriction) {
                 return "";
             }
-            return cleanTypeName(getAttr(cast<hash<auto>>(restriction), "base"));
+            return cleanTypeName(getAttr(cast<hash>(restriction), "base"));
         }
 
         private string normalizeMaxOccurs(string val) {
@@ -940,7 +940,7 @@ public namespace Hl7v2Util {
             if (!annotation) {
                 return NOTHING;
             }
-            auto documentation = getChild(cast<hash<auto>>(annotation), "documentation");
+            auto documentation = getChild(cast<hash>(annotation), "documentation");
             if (!documentation) {
                 return NOTHING;
             }
@@ -987,10 +987,10 @@ public namespace Hl7v2Util {
                 auto val = node{key};
                 if (val.typeCode() == NT_LIST) {
                     foreach auto item in (val) {
-                        push rv, cast<hash<auto>>(item);
+                        push rv, cast<hash>(item);
                     }
                 } else {
-                    push rv, cast<hash<auto>>(val);
+                    push rv, cast<hash>(val);
                 }
             }
             return rv;

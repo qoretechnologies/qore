@@ -59,6 +59,7 @@ class QoreFoldrOperatorNode;
 class QoreMapSelectOperatorNode;
 class QoreHashMapOperatorNode;
 class QoreHashMapSelectOperatorNode;
+class QoreStreamingOperatorNode;
 class QoreIROnBlockExitInstruction;
 
 class QoreIRLowering;
@@ -215,6 +216,8 @@ public:
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashMapSelect(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerIterate(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerStreaming(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalAnd(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalOr(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalNot(const QoreValue& expr, std::string& error);
@@ -257,6 +260,11 @@ private:
     QoreIRValue lowerHashMapNative(const QoreHashMapOperatorNode* hm, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map+select operator
     QoreIRValue lowerHashMapSelectNative(const QoreHashMapSelectOperatorNode* hms, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for streaming operators
+    QoreIRValue lowerStreamingNative(const QoreStreamingOperatorNode* op, const QoreValue& expr, std::string& error);
+    //! Fused native IR lowering for nested streaming-operator chains
+    QoreIRValue lowerStreamingFused(const QoreStreamingOperatorNode* op, const QoreValue& base_source,
+        const std::vector<const QoreStreamingOperatorNode*>& source_stages, std::string& error);
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
     bool guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
     bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
@@ -297,6 +305,8 @@ private:
     const QoreTypeInfo* getGuaranteedTypeForValue(const QoreValue* expr, const QoreTypeInfo* fallback) const;
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
+    bool callArgumentMayPassReference(const QoreValue& arg) const;
+    bool callArgsMayPassReferences(const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
@@ -304,7 +314,7 @@ private:
         const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
         const QoreListNode* args) const;
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
-        const QoreProgramLocation* loc, std::string& error);
+        const QoreProgramLocation* loc, std::string& error, bool has_ref_args = false);
     QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left, QoreIRValue right,

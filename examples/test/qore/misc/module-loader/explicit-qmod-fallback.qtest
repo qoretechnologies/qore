@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class ExplicitQmodFallbackTest
+
+class ExplicitQmodFallbackTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Explicit qmod fallback test", "1.0") {
+        addTestCase("explicit qmod path falls back to sibling source", \testExplicitQmodPathFallback());
+        set_return_value(main());
+    }
+
+    testExplicitQmodPathFallback() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/ExplicitFallback.qm";
+        string qmod_path = tmp_dir + "/ExplicitFallback.qmod";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module ExplicitFallback {
+    version = \"1.0\";
+    desc = \"explicit qmod fallback test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ExplicitFallbackTest {
+    public int sub value() {
+        return 5164;
+    }
+}
+");
+        f.close();
+
+        f.open2(qmod_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("not a qmod\n");
+        f.close();
+
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.parse(
+            "%requires " + qmod_path + "\n"
+            "int sub get_value() { return ExplicitFallbackTest::value(); }\n",
+            "explicit-qmod-fallback"
+        );
+
+        assertEq(5164, p.callFunction("get_value"));
+    }
+}

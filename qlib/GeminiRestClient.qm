@@ -109,6 +109,16 @@ stream.close();
 %define NoJson
 %endtry
 
+%ifdef NoJson
+auto sub make_json(auto val, *int flags) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+
+auto sub parse_json(string val) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+%endif
+
 #! the GeminiRestClient namespace contains all the objects in the GeminiRestClient module
 public namespace GeminiRestClient {
 #! Common base class for GeminiRestClient functionality

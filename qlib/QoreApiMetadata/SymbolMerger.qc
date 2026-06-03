@@ -253,6 +253,9 @@ public class SymbolMerger {
             if (!exists result.see_also && exists ast.see_also) {
                 result.see_also = cast<list<string>>(ast.see_also);
             }
+            if (!result.is_const_method && exists ast.is_const_method) {
+                result.is_const_method = ast.is_const_method ? True : False;
+            }
             # enrich param descriptions from AST
             SymbolMerger::enrichParamDescriptions(\result.params, ast);
         }
@@ -304,6 +307,9 @@ public class SymbolMerger {
                 SymbolMerger::enrichParamDescriptionsFromParsedDoc(
                     \result.params, parsed);
             }
+        }
+        if (!result.is_const_method && exists qpp.is_const_method) {
+            result.is_const_method = qpp.is_const_method ? True : False;
         }
     }
 

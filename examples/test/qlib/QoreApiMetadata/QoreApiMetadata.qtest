@@ -24,6 +24,8 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires QoreApiMetadata
@@ -55,6 +57,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doc comment: multiple see also", \testMultipleSeeAlso());
         addTestCase("doc comment: star-prefixed lines", \testStarPrefixedLines());
         addTestCase("ast: class extraction", \testAstClassExtraction());
+        addTestCase("ast: const method metadata", \testAstConstMethodMetadata());
         addTestCase("ast: function extraction", \testAstFunctionExtraction());
         addTestCase("ast: named argument metadata", \testAstNamedArgumentMetadata());
         addTestCase("ast: hashdecl extraction", \testAstHashdeclExtraction());
@@ -74,6 +77,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("reflection: no documentation", \testReflectionNoDocs());
         addTestCase("qpp doc index: build from meta files", \testQppBuildFromMetaFiles());
         addTestCase("qpp doc index: named argument metadata", \testQppNamedArgumentMetadata());
+        addTestCase("qpp doc index: const method metadata", \testQppConstMethodMetadata());
         addTestCase("qpp doc index: generic metadata", \testQppGenericMetadata());
         addTestCase("qpp doc index: build from directory", \testQppBuildFromDirectory());
         addTestCase("qpp doc index: class indexing", \testQppClassIndexing());
@@ -83,6 +87,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("qpp doc index: overloaded methods", \testQppOverloadedMethods());
         addTestCase("qpp doc index: empty and missing files", \testQppEmptyAndMissing());
         addTestCase("merger: reflection + ast docs", \testMergerReflectionAst());
+        addTestCase("merger: const method metadata", \testMergerConstMethodMetadata());
         addTestCase("merger: reflection + qpp docs", \testMergerReflectionQpp());
         addTestCase("merger: ast priority over qpp", \testMergerAstPriorityOverQpp());
         addTestCase("merger: param description enrichment", \testMergerParamEnrichment());
@@ -550,6 +555,40 @@ class QoreApiMetadataTest inherits QUnit::Test {
             }
         }
         assertTrue(found_static);
+    }
+
+    testAstConstMethodMetadata() {
+        string source = "%modern\n"
+            "\n"
+            "class SourceConstMethodSample {\n"
+            "    int value() const {\n"
+            "        return 1;\n"
+            "    }\n"
+            "\n"
+            "    int mutate() {\n"
+            "        return 2;\n"
+            "    }\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.classes.size());
+        bool found_value = False;
+        bool found_mutate = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (result.classes[0].instance_methods) {
+            if (m.name == "value") {
+                found_value = True;
+                assertTrue(m.is_const_method);
+                assertEq("int value() const", m.signature);
+            } else if (m.name == "mutate") {
+                found_mutate = True;
+                assertFalse(m.is_const_method);
+                assertEq("int mutate()", m.signature);
+            }
+        }
+        assertTrue(found_value);
+        assertTrue(found_mutate);
     }
 
     testAstFunctionExtraction() {
@@ -1100,6 +1139,22 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertEq(("timeout_ms",), acquire.named_parameters);
     }
 
+    testQppConstMethodMetadata() {
+        string meta_dir = getMetaDir();
+        string string_path = meta_dir + "/Pseudo_QC_String.meta.json";
+        if (!is_readable(string_path)) {
+            testSkip("build pseudo-class meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles((string_path,));
+
+        assertTrue(exists index."<string>::empty");
+        hash<auto> empty = index."<string>::empty";
+        assertTrue(empty.is_const_method);
+        assertRegex(" const", empty.signature);
+    }
+
     testQppGenericMetadata() {
         string meta_dir = getMetaDir();
         string queue_path = meta_dir + "/QC_Queue.meta.json";
@@ -1489,6 +1544,28 @@ class QoreApiMetadataTest inherits QUnit::Test {
         # structural info (types, params) should come from reflection
         assertEq("string", m.params[0].type_name);
         assertEq("int", m.return_type);
+    }
+
+    testMergerConstMethodMetadata() {
+        hash<QoreApiMetadata::NamespaceInfo> refl = buildMockReflection();
+        hash<QoreApiMetadata::NamespaceInfo> ast = buildMockAst();
+        ast.classes[0].instance_methods[0].is_const_method = True;
+
+        hash<QoreApiMetadata::NamespaceInfo> merged =
+            QoreApiMetadata::SymbolMerger::merge(refl, ast);
+        assertTrue(merged.classes[0].instance_methods[0].is_const_method);
+
+        hash<string, hash<auto>> doc_index = {
+            "Test::Foo::bar": {
+                "symbol_type": "method",
+                "name": "bar",
+                "class_name": "Foo",
+                "is_const_method": True,
+            },
+        };
+        refl = buildMockReflection();
+        merged = QoreApiMetadata::SymbolMerger::merge(refl, NOTHING, doc_index);
+        assertTrue(merged.classes[0].instance_methods[0].is_const_method);
     }
 
     testMergerReflectionQpp() {

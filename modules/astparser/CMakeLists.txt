@@ -111,12 +111,8 @@ set(ASTPARSER_DIRECT_CPP_SRC
     src/CSTSearcher.cpp
     src/queries/GetNodesInfoQuery.cpp
 )
-# NOTE: The following old Bison-based files are excluded from the build.
-# Their functionality has been replaced by CSTSearcher (tree-sitter CST):
-# Excluded: AstPrinter.cpp, AstTreeSearcher.cpp, FindMatchingSymbolsQuery.cpp, FindNodeQuery.cpp,
-#   FindNodeAndParentsQuery.cpp, FindReferencesQuery.cpp,
-#   FindScopeSymbolsQuery.cpp, FindSymbolInfoQuery.cpp,
-#   FindSymbolsQuery.cpp, SymbolInfoFixes.cpp
+# NOTE: The old Bison parser and AST-node searcher implementation has been
+# removed.  The module parses and searches the tree-sitter CST via CSTSearcher.
 
 # QPP sources (.qpp → .cpp via qore_wrap_qpp_value)
 set(ASTPARSER_QPP_SRC
@@ -206,14 +202,17 @@ install(FILES
     ${TS_QORE_SRC_DIR}/grammar.json
     ${TS_QORE_SRC_DIR}/node-types.json
     DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore/src
+    COMPONENT ${QORE_BINARY_MODULE_INSTALL_COMPONENT}
 )
 install(FILES
     ${TS_QORE_SRC_DIR}/tree_sitter/parser.h
     DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore/src/tree_sitter
+    COMPONENT ${QORE_BINARY_MODULE_INSTALL_COMPONENT}
 )
 install(FILES
     ${TS_QORE_GRAMMAR_DIR}/grammar.js
     DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore
+    COMPONENT ${QORE_BINARY_MODULE_INSTALL_COMPONENT}
 )
 
 if (DOXYGEN_FOUND)

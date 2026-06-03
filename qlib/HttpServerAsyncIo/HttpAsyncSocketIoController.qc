@@ -1257,7 +1257,7 @@ public class HttpAsyncSocketIoController {
 
     private hash<auto> getUnknownConnectionContext() {
         # Keep the outer hash wide enough to add non-hash values such as peer-info-future.
-        return cast<hash<auto>>({
+        return cast<hash>({
             "peer": {"address": "unknown", "address_desc": "unknown", "port": 0},
             "socket": {"address": "unknown", "address_desc": "unknown", "port": 0},
         });
@@ -1294,7 +1294,7 @@ public class HttpAsyncSocketIoController {
             return getUnknownConnectionContext();
         }
 
-        hash<auto> cx = cast<hash<auto>>({
+        hash<auto> cx = cast<hash>({
             "peer": peer_info,
             "socket": socket_info,
         });
@@ -1618,7 +1618,7 @@ public class HttpAsyncSocketIoController {
         # processNativeRequest().  Error paths in this controller use
         # submitQuicResponse() directly, bypassing cx entirely.
         # Keep the outer hash wide enough to add peer-info-future below.
-        hash<auto> cx = cast<hash<auto>>({
+        hash<auto> cx = cast<hash>({
             "peer": {
                 "address": request.peer_address ?? "quic",
                 "address_desc": request.peer_address ?? "quic",

@@ -600,7 +600,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
 
             # Error hash from SseAction (plain hash<auto> with "err"/"desc" keys)
             # vs parsed SseMessageInfo hash — distinguish by hasKey("err")
-            hash<auto> evt_hash = cast<hash<auto>>(evt);
+            hash<auto> evt_hash = cast<hash>(evt);
             if (evt_hash.hasKey("err")) {
                 notifyClosed({
                     "reason": "stream-error",

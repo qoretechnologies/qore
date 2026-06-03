@@ -401,6 +401,14 @@ static QoreIRValue handler_lowerHashMapSelect(QoreIRExprCtx& ctx) {
     return ctx.lowering.lowerHashMapSelect(ctx.expr, ctx.error);
 }
 
+static QoreIRValue handler_lowerIterate(QoreIRExprCtx& ctx) {
+    return ctx.lowering.lowerIterate(ctx.expr, ctx.error);
+}
+
+static QoreIRValue handler_lowerStreaming(QoreIRExprCtx& ctx) {
+    return ctx.lowering.lowerStreaming(ctx.expr, ctx.error);
+}
+
 // Handler for lowerLogicalAnd
 static QoreIRValue handler_lowerLogicalAnd(QoreIRExprCtx& ctx) {
     return ctx.lowering.lowerLogicalAnd(ctx.expr, ctx.error);

@@ -74,6 +74,11 @@ const NT_NUMBER = NT_NUMBER;
 //! type code for @ref string "string values"
 const NT_STRING = NT_STRING;
 
+//! type code for @ref char "char values"
+/** @since %Qore 2.4
+ */
+const NT_CHAR = NT_CHAR;
+
 //! type code for @ref date "date/time values"
 const NT_DATE = NT_DATE;
 
@@ -133,6 +138,7 @@ const TypeCodeMap = (
     "11": "number",
     "51": "buffer",
     "52": "plugin value",
+    "53": "char",
     "29": "call reference",
     "32": "closure",
 );
@@ -144,6 +150,7 @@ const TypeNameMap = (
     "float": NT_FLOAT,
     "number": NT_NUMBER,
     "string": NT_STRING,
+    "char": NT_CHAR,
     "date": NT_DATE,
     "bool": NT_BOOLEAN,
     "NULL": NT_NULL,

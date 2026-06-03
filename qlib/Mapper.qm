@@ -2205,7 +2205,7 @@ Mapper mapv(DataMap);
     }
 
     private:internal hash<auto> asOutputRecord(auto rec) {
-        return cast<hash<auto>>(rec);
+        return cast<hash>(rec);
     }
 
     #! Appends mapped output in any supported pipeline shape to a row list
@@ -2336,7 +2336,7 @@ Mapper mapv(DataMap);
     }
 
     hash<auto> mapData(auto rec) {
-        return mapData(cast<hash<auto>>(rec));
+        return mapData(cast<hash>(rec));
     }
 
     #! maps all input record(s) automatically and returns the mapped data
@@ -2602,7 +2602,7 @@ Mapper mapv(DataMap);
     }
 
     private *hash<auto> doCreateRecordIntern(auto rec) {
-        return doCreateRecordIntern(cast<hash<auto>>(rec));
+        return doCreateRecordIntern(cast<hash>(rec));
     }
 
     #! Swap the mapper thread context

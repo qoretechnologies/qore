@@ -43,25 +43,35 @@ public:
         return typeInfo;
     }
 
-    DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const {
-        return copyBackgroundExplicit<QoreSquareBracketsOperatorNode>(xsink);
-    }
+    DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const;
+
+    DLLLOCAL static bool normalizeIndex(int64& offset, int64 size, bool negative_offsets);
 
     DLLLOCAL static QoreValue doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
-            ExceptionSink* xsink);
+            bool string_index_char, bool negative_offsets, ExceptionSink* xsink);
 
     DLLLOCAL static QoreValue doSquareBrackets(const QoreValue l, const QoreValue r, bool list_ok,
-            ExceptionSink* xsink);
+            bool string_index_char, bool negative_offsets, ExceptionSink* xsink);
 
     //! Returns true if the RHS is a list with a range (e.g., list[1..3])
     DLLLOCAL bool hasRhsListRange() const {
         return rhs_list_range;
     }
 
+    DLLLOCAL bool hasStringIndexChar() const {
+        return string_index_char;
+    }
+
+    DLLLOCAL bool hasNegativeOffsets() const {
+        return negative_offsets;
+    }
+
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
     // is the RHS a list with a range?
     bool rhs_list_range = false;
+    bool string_index_char = true;
+    bool negative_offsets = false;
 
     DLLLOCAL int parseCheckValueTypes(const QoreParseListNode* pln);
     DLLLOCAL int parseCheckValueTypes(const QoreListNode* ln);
@@ -74,17 +84,19 @@ protected:
             ExceptionSink* xsink) const;
 
     DLLLOCAL static int doString(SimpleRefHolder<QoreStringNode>& ret, const QoreValue l, const QoreValue r,
-            bool list_ok, ExceptionSink* xsink);
+            bool list_ok, bool string_index_char, bool negative_offsets, ExceptionSink* xsink);
     DLLLOCAL static int doBinary(SimpleRefHolder<BinaryNode>& ret, const QoreValue l, const QoreValue r, bool list_ok,
-            ExceptionSink* xsink);
+            bool negative_offsets, ExceptionSink* xsink);
 };
 
 class QoreFunctionalSquareBracketsOperator : public FunctionalOperatorInterface {
 public:
     DLLLOCAL QoreFunctionalSquareBracketsOperator(ValueEvalRefHolder& lhs, ValueEvalRefHolder& rhs,
-            ExceptionSink* xsink)
+            bool string_index_char, bool negative_offsets, ExceptionSink* xsink)
             : leftValue(*lhs, lhs.isTemp(), xsink),
-              rightList(rhs->get<const QoreListNode>()) {
+              rightList(rhs->get<const QoreListNode>()),
+              string_index_char(string_index_char),
+              negative_offsets(negative_offsets) {
         lhs.clearTemp();
         rhs.clearTemp();
     }
@@ -99,14 +111,18 @@ protected:
     ValueOptionalRefHolder leftValue;
     const QoreListNode* rightList;
     qore_offset_t offset = -1;
+    bool string_index_char = true;
+    bool negative_offsets = false;
 };
 
 class QoreFunctionalSquareBracketsComplexOperator : public FunctionalOperatorInterface {
 public:
     DLLLOCAL QoreFunctionalSquareBracketsComplexOperator(ValueEvalRefHolder& lhs, const QoreParseListNode* rpl,
-            ExceptionSink* xsink)
+            bool string_index_char, bool negative_offsets, ExceptionSink* xsink)
             : leftValue(*lhs, lhs.isTemp(), xsink),
-            rightParseList(rpl) {
+            rightParseList(rpl),
+            string_index_char(string_index_char),
+            negative_offsets(negative_offsets) {
         lhs.clearTemp();
     }
 
@@ -121,6 +137,8 @@ protected:
     const QoreParseListNode* rightParseList;
     qore_offset_t offset = -1;
     std::unique_ptr<class QoreFunctionalRangeOperator> rangeIter;
+    bool string_index_char = true;
+    bool negative_offsets = false;
 };
 
 #endif

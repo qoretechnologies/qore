@@ -161,6 +161,7 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
                 }
                 return ln->equals(f) ? 0 : 1;
             }
+            case NT_CHAR:
             case NT_INT:
             case NT_BOOLEAN: {
                 int64 ri = r.getAsBigInt();
@@ -200,6 +201,7 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
                 }
                 return rn->equals(lf) ? 0 : 1;
             }
+            case NT_CHAR:
             case NT_INT:
             case NT_BOOLEAN: {
                 int64 li = l.getAsBigInt();
@@ -242,7 +244,7 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
         return lf == rf ? 0 : 1;
     }
 
-    if (lt == NT_INT || rt == NT_INT) {
+    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
         int64 li = l.getAsBigInt();
         int64 ri = r.getAsBigInt();
         if (li < ri) {

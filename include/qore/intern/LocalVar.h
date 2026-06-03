@@ -333,8 +333,11 @@ public:
     const QoreTypeInfo* refTypeInfo;
     // reference count; access serialized with rlck from RObject
     mutable std::atomic_int references;
+    bool read_only = false;
 
-    DLLLOCAL ClosureVarValue(const char* n_id, const QoreTypeInfo* varTypeInfo, QoreValue& nval, bool assign) : VarValueBase(n_id, varTypeInfo), RObject(references), typeInfo(varTypeInfo), refTypeInfo(QoreTypeInfo::getReferenceTarget(varTypeInfo)), references(1) {
+    DLLLOCAL ClosureVarValue(const char* n_id, const QoreTypeInfo* varTypeInfo, QoreValue& nval, bool assign,
+            bool n_read_only = false) : VarValueBase(n_id, varTypeInfo), RObject(references), typeInfo(varTypeInfo),
+            refTypeInfo(QoreTypeInfo::getReferenceTarget(varTypeInfo)), references(1), read_only(n_read_only) {
         //printd(5, "ClosureVarValue::ClosureVarValue() this: %p refs: 0 -> 1 val: %s\n", this, val.getTypeName());
         val.setClosure();
 
@@ -368,8 +371,12 @@ public:
 
     DLLLOCAL virtual bool scanMembers(RSetHelper& rsh);
 
-    DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove) const;
+    DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment = false) const;
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
+
+    DLLLOCAL bool isReadOnly() const {
+        return read_only;
+    }
 
     DLLLOCAL ClosureVarValue* refSelf() const {
         ref();
@@ -502,7 +509,7 @@ public:
 
     DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), closure_use(old.closure_use),
             parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
-            is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing),
+            is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing), read_only(old.read_only),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
             narrowedTypeInfo(old.narrowedTypeInfo), type_info_needs_substitution(old.type_info_needs_substitution),
             ref_type_info_needs_substitution(old.ref_type_info_needs_substitution) {
@@ -547,7 +554,7 @@ public:
             LocalVarValue* val = thread_instantiate_lvar();
             val->set(name.c_str(), this, ti, nval, assign, false);
         } else {
-            thread_instantiate_closure_var(name.c_str(), ti, nval, assign);
+            thread_instantiate_closure_var(name.c_str(), ti, nval, assign, read_only);
         }
     }
 
@@ -558,7 +565,7 @@ public:
             val->set(name.c_str(), this, typeInfo, value, true, true);
         } else {
             QoreValue val(value->refSelf());
-            thread_instantiate_closure_var(name.c_str(), typeInfo, val, true);
+            thread_instantiate_closure_var(name.c_str(), typeInfo, val, true, read_only);
         }
     }
 
@@ -709,6 +716,11 @@ public:
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
         //printd(5, "LocalVar::getLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
+        if (read_only && !initial_assignment) {
+            lvh.vl.xsink->raiseException("RUNTIME-READONLY-VIOLATION",
+                "cannot modify read-only local variable '%s'", name.c_str());
+            return -1;
+        }
         if (!closure_use) {
             LocalVarValue* val = get_var();
             if (!val) {
@@ -749,10 +761,15 @@ public:
         if (!val) {
             return -1;
         }
-        return val->getLValue(lvh, for_remove);
+        return val->getLValue(lvh, for_remove, initial_assignment);
     }
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh) {
+        if (read_only) {
+            lvrh.getExceptionSink()->raiseException("RUNTIME-READONLY-VIOLATION",
+                "cannot remove read-only local variable '%s'", name.c_str());
+            return;
+        }
         if (!closure_use) {
             LocalVarValue* val = get_var();
             if (!val) {
@@ -879,6 +896,14 @@ public:
         return no_narrowing;
     }
 
+    DLLLOCAL void setReadOnly() {
+        read_only = true;
+    }
+
+    DLLLOCAL bool isReadOnly() const {
+        return read_only;
+    }
+
     //! Sets the no_narrowing flag (called when variable is declared with auto!)
     DLLLOCAL void setNoNarrowing() {
         no_narrowing = true;
@@ -927,7 +952,8 @@ private:
         is_self = false,
         is_top_level = false,
         is_auto_type = false,       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
-        no_narrowing = false;       // true if declared with auto! to disable type narrowing
+        no_narrowing = false,       // true if declared with auto! to disable type narrowing
+        read_only = false;
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)

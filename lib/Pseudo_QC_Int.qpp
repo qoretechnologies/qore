@@ -52,7 +52,7 @@ switch (i.typeCode()) {
 }
     @endcode
 */
-int <int>::typeCode() [flags=CONSTANT] {
+int <int>::typeCode() [const;flags=CONSTANT] {
    return NT_INT;
 }
 
@@ -69,7 +69,7 @@ bool b = i.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
 */
-bool <int>::val() [flags=CONSTANT] {
+bool <int>::val() [const;flags=CONSTANT] {
    return (bool)i;
 }
 
@@ -83,7 +83,7 @@ if (n.intp())
     printf("%y: can be converted to an integer: %d\n", n, int(n));
     @endcode
 */
-bool <int>::intp() [flags=CONSTANT] {
+bool <int>::intp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -97,7 +97,7 @@ if (n.strp())
     printf("%y: can be converted to a string: '%s'\n", n, string(n));
     @endcode
 */
-bool <int>::strp() [flags=CONSTANT] {
+bool <int>::strp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -132,7 +132,7 @@ string nstr = i.format(".,3"); # returns "-48.392.093.894,000"
     - %Qore 0.8.6
     - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
  */
-string <int>::format(string format) [flags=CONSTANT,NAMED_ARGS] {
+string <int>::format(string format) [const;flags=CONSTANT,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(format->getEncoding()));
    rv->sprintf(QLLD, i);
    return qore_number_private::formatNumberString(**rv, *format, xsink) ? 0 : rv.release();
@@ -164,7 +164,7 @@ string nstr = i.format(3, ",", "."); # returns "-48.392.093.894,000"
 
     @since %Qore 0.8.13
  */
-string <int>::format(int precision = 2, string decimal_separator = ".", string thousands_separator = "") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <int>::format(int precision = 2, string decimal_separator = ".", string thousands_separator = "") [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode);
    rv->sprintf(QLLD, i);
    if (qore_number_private::formatNumberString(**rv, precision, decimal_separator, thousands_separator, xsink))
@@ -182,7 +182,7 @@ printf("sign: %d\n", i.sign());
 
     @since %Qore 0.8.6
 */
-int <int>::sign() [flags=CONSTANT] {
+int <int>::sign() [const;flags=CONSTANT] {
    if (!i)
       return 0;
    return i > 0 ? 1 : -1;
@@ -202,7 +202,7 @@ b += i.encodeMsb(8);
 
     @since %Qore 0.8.8
  */
-binary <int>::encodeMsb(int size = 4) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+binary <int>::encodeMsb(int size = 4) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<BinaryNode> b(new BinaryNode);
    switch (size) {
       case 1: {
@@ -257,7 +257,7 @@ b += i.encodeLsb(8);
 
     @since %Qore 0.8.8
  */
-binary <int>::encodeLsb(int size = 4) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+binary <int>::encodeLsb(int size = 4) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<BinaryNode> b(new BinaryNode);
    switch (size) {
       case 1: {
@@ -310,7 +310,7 @@ i = i.abs();
 
     @since %Qore 0.8.8
 */
-int <int>::abs() [flags=CONSTANT] {
+int <int>::abs() [const;flags=CONSTANT] {
    return i < 0 ? -i : i;
 }
 
@@ -326,7 +326,7 @@ string str = 0x00f8.toUnicode()
 
     @since %Qore 0.8.8
 */
-string <int>::toUnicode() [flags=RET_VALUE_ONLY] {
+string <int>::toUnicode() [const;flags=RET_VALUE_ONLY] {
    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(QCS_UTF8));
    str->concatUnicode(i);
    return *xsink ? 0 : str.release();
@@ -365,7 +365,7 @@ string <int>::toUnicode() [flags=RET_VALUE_ONLY] {
 
     @since %Qore 0.8.13
 */
-string <int>::toBase(int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <int>::toBase(int base = 10) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (base < 2 || base > 36)
         return xsink->raiseException("INVALID-BASE", "base " QLLD " is invalid; base must be 2 - 36 inclusive", base);
 

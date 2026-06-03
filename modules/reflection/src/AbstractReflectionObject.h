@@ -52,6 +52,7 @@ enum qore_modifier_t {
     MC_DEPRECATED = (1 << 6),
     MC_FINAL = (1 << 7),
     MC_TRANSIENT = (1 << 8),
+    MC_CONST = (1 << 9),
 };
 
 DLLLOCAL int get_access(ClassAccess access);

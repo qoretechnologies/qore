@@ -32,14 +32,20 @@
 #include "qore/intern/QC_StringCharIterator.h"
 
 StringCharIterator::StringCharIterator(const QoreStringNode* s)
-        : src(const_cast<QoreStringNode*>(s)) {
+        : src(const_cast<QoreStringNode*>(s)),
+          src_buf(s ? s->c_str() : nullptr),
+          src_size(s ? s->size() : 0),
+          ascii_compat(s && s->getEncoding()->isAsciiCompat()) {
     if (src) {
         src->ref();
     }
 }
 
 StringCharIterator::StringCharIterator(const StringCharIterator& old)
-        : src(old.src) {
+        : src(old.src),
+          src_buf(old.src_buf),
+          src_size(old.src_size),
+          ascii_compat(old.ascii_compat) {
     // Fresh iterator over same source; cursor / current_cp / m_valid /
     // exhausted default-initialise.
     if (src) {
@@ -61,11 +67,23 @@ bool StringCharIterator::next(ExceptionSink* xsink) {
         }
         return false;
     }
-    const size_t src_len = src->size();
-    if (cursor >= src_len) {
+    if (cursor >= src_size) {
         exhausted = true;
         m_valid = false;
         return false;
+    }
+
+    if (ascii_compat) {
+        unsigned char b = static_cast<unsigned char>(src_buf[cursor]);
+        if (b < 0x80) {
+            current_cp = b;
+            ++cursor;
+            if (cursor >= src_size) {
+                exhausted = true;
+            }
+            m_valid = true;
+            return true;
+        }
     }
 
     unsigned clen = 0;
@@ -81,7 +99,7 @@ bool StringCharIterator::next(ExceptionSink* xsink) {
         clen = 1;
     }
     cursor += clen;
-    if (cursor >= src_len) {
+    if (cursor >= src_size) {
         exhausted = true;
     }
     m_valid = true;
@@ -108,14 +126,103 @@ const QoreTypeInfo* StringCharIterator::getElementType() const {
     return bigIntTypeInfo;
 }
 
+StringIterator::StringIterator(const QoreStringNode* s)
+        : src(const_cast<QoreStringNode*>(s)),
+          src_buf(s ? s->c_str() : nullptr),
+          src_size(s ? s->size() : 0),
+          ascii_compat(s && s->getEncoding()->isAsciiCompat()) {
+    if (src) {
+        src->ref();
+    }
+}
+
+StringIterator::StringIterator(const StringIterator& old)
+        : src(old.src),
+          src_buf(old.src_buf),
+          src_size(old.src_size),
+          ascii_compat(old.ascii_compat) {
+    if (src) {
+        src->ref();
+    }
+}
+
+StringIterator::~StringIterator() {
+    if (src) {
+        src->deref();
+    }
+}
+
+bool StringIterator::next(ExceptionSink* xsink) {
+    if (exhausted || !src) {
+        m_valid = false;
+        exhausted = true;
+        return false;
+    }
+    if (cursor >= src_size) {
+        exhausted = true;
+        m_valid = false;
+        return false;
+    }
+
+    if (ascii_compat) {
+        unsigned char b = static_cast<unsigned char>(src_buf[cursor]);
+        if (b < 0x80) {
+            current_cp = b;
+            ++cursor;
+            if (cursor >= src_size) {
+                exhausted = true;
+            }
+            m_valid = true;
+            return true;
+        }
+    }
+
+    unsigned clen = 0;
+    current_cp = src->getUnicodePointFromBytePos(cursor, clen, xsink);
+    if (xsink && *xsink) {
+        exhausted = true;
+        m_valid = false;
+        return false;
+    }
+    if (clen == 0) {
+        clen = 1;
+    }
+    cursor += clen;
+    if (cursor >= src_size) {
+        exhausted = true;
+    }
+    m_valid = true;
+    return true;
+}
+
+QoreValue StringIterator::getValue(ExceptionSink* xsink) {
+    if (!m_valid) {
+        xsink->raiseException("INVALID-ITERATOR",
+            "the iterator is not pointing at a valid element");
+        return QoreValue();
+    }
+    return QoreValue::makeChar(current_cp);
+}
+
+void StringIterator::reset() {
+    cursor = 0;
+    current_cp = 0;
+    m_valid = false;
+    exhausted = false;
+}
+
+const QoreTypeInfo* StringIterator::getElementType() const {
+    return charTypeInfo;
+}
+
 //! Lazy iterator over a string's Unicode codepoints.
 /** Yields each codepoint as an integer, decoded from the source string's
     encoding.  Designed for character-aware tokenizers and parsers; works
     with UTF-8, UTF-16LE/BE, Latin-1, and any other encoding Qore supports.
 
-    For pure ASCII / byte-oriented parsing,
-    @ref Qore::zzz8stringzzz9::getByte() is faster — it skips codepoint
-    decoding entirely.
+    ASCII bytes in ASCII-compatible encodings are handled with a direct fast
+    path. For byte-oriented parsing, @ref Qore::zzz8stringzzz9::getByte()
+    still avoids iterator/value overhead entirely.
 
     @par Example
     @code{.py}
@@ -179,6 +286,74 @@ bool StringCharIterator::valid() [flags=CONSTANT] {
     @throw ITERATOR-THREAD-ERROR if called from another thread
  */
 StringCharIterator::reset() {
+    if (i->check(xsink))
+        return QoreValue();
+    i->reset();
+}
+
+//! Lazy iterator over a string's Unicode characters.
+/** Yields each codepoint as a @ref char value, decoded from the source
+    string's encoding.  This is the iterator returned by
+    @ref Qore::zzz8stringzzz9::iterator() and by `iterate string`.
+
+    @par Example
+    @code{.py}
+foreach char c in (text.iterator()) {
+    printf("%d\n", c.ord());
+}
+    @endcode
+
+    @since %Qore 2.4
+*/
+qclass StringIterator [arg=StringIterator* i; ns=Qore; vparent=AbstractIterator<char>];
+
+//! Creates the iterator from a source string.
+/** @param source the string to iterate over
+ */
+StringIterator::constructor(string source) [flags=NAMED_ARGS] {
+    self->setPrivate(CID_STRINGITERATOR, new StringIterator(source));
+}
+
+//! Creates a copy of the iterator, positioned at the start.
+/** Returns a fresh iterator over the same source string with cursor reset to
+    the beginning.
+ */
+StringIterator::copy() {
+    self->setPrivate(CID_STRINGITERATOR, new StringIterator(*i));
+}
+
+//! Advances to the next character; returns True if a character is available, False at end.
+/** @throw ITERATOR-THREAD-ERROR if called from another thread
+    @throw INVALID-ENCODING if the source string contains malformed bytes
+ */
+bool StringIterator::next() {
+    if (i->check(xsink))
+        return false;
+    return i->next(xsink);
+}
+
+//! Returns the current character.
+/** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
+    @throw ITERATOR-THREAD-ERROR if called from another thread
+ */
+char StringIterator::getValue() [flags=RET_VALUE_ONLY] {
+    if (i->check(xsink))
+        return QoreValue();
+    return i->getValue(xsink);
+}
+
+//! Returns True if the iterator is currently pointing at a valid character.
+/** @return True if a character is available via getValue(), False otherwise.
+ */
+bool StringIterator::valid() [flags=CONSTANT] {
+    return i->valid();
+}
+
+//! Resets the iterator to its initial state.
+/** A subsequent next() call will yield the first character again.
+    @throw ITERATOR-THREAD-ERROR if called from another thread
+ */
+StringIterator::reset() {
     if (i->check(xsink))
         return QoreValue();
     i->reset();

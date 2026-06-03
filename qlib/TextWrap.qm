@@ -85,7 +85,7 @@ const c_whitespace = "\t\n\013\014\r ";
 
 # -- Private helpers ---------------------------------------------------
 
-any sub sum (list la, *any start) {
+auto sub sum (list la, *auto start) {
     map start += $1, la;
     return start ?? 0;
 }

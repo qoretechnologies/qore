@@ -85,6 +85,34 @@ static int fix_num(QoreString& tmp, const QoreString& fmt, ExceptionSink* xsink)
     return 0;
 }
 
+static QoreStringNode* qore_regex_escape_string(const QoreStringNode* str, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> result(new QoreStringNode("", str->getEncoding()));
+    size_t pos = 0;
+    size_t count = 0;
+    while (pos < str->size()) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "escaping regex string")) {
+            return nullptr;
+        }
+
+        unsigned clen = 0;
+        unsigned cp = str->getUnicodePointFromBytePos(pos, clen, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        if (!(cp < 128 && isalnum(static_cast<unsigned char>(cp)))) {
+            (*result)->concat('\\');
+        }
+        if ((*result)->concatUnicode(cp, xsink)) {
+            return nullptr;
+        }
+
+        pos += clen;
+        ++count;
+    }
+    return result.release();
+}
+
 static const char* memstr(const char* str, const char* pattern, size_t pl, size_t len) {
     while (true) {
         const char* p = (const char*)memchr(str, pattern[0], len);
@@ -1566,6 +1594,9 @@ auto regex_extract_named(string str, string pattern, int options = 0) [flags=RET
 
     @return a new string where all non-alphanumeric characters are prefixed with a backslash
 
+    @note Escaping is character-aware; non-ASCII codepoints are escaped as whole characters, not as their
+    encoded bytes.
+
     @par Example:
     @code{.py}
 string escaped = regex_escape("price: $100 (USD)"); # returns "price\\:\\ \\$100\\ \\(USD\\)"
@@ -1573,17 +1604,8 @@ string escaped = regex_escape("price: $100 (USD)"); # returns "price\\:\\ \\$100
 
     @since %Qore 2.3
 */
-string regex_escape(string str) [flags=CONSTANT,NAMED_ARGS] {
-    SimpleRefHolder<QoreStringNode> result(new QoreStringNode);
-    const char* p = str->c_str();
-    while (*p) {
-        if (!isalnum((unsigned char)*p)) {
-            (*result)->concat('\\');
-        }
-        (*result)->concat(*p);
-        ++p;
-    }
-    return result.release();
+string regex_escape(string str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_regex_escape_string(str, xsink);
 }
 
 //! Replaces all occurrences of a substring in a string with another string

@@ -5814,6 +5814,7 @@ class Method : public CodeBase {
 protected:
     std::string pseudo_arg;
     std::string pseudo_var;
+    bool const_method;
 
     void serializeCppConstructor(FILE* fp, const char* cname) const {
         serializeQoreConstructorPrototypeComment(fp, cname);
@@ -5900,6 +5901,9 @@ protected:
         fprintf(fp, "%s %s::%s(", return_type.empty()? "nothing" : return_type.c_str(), cname, name.c_str());
         serializeQoreParams(fp);
         fputs(")", fp);
+        if (const_method) {
+            fputs(" const", fp);
+        }
         if (attr & QCA_ABSTRACT)
             fputc(';', fp);
         else
@@ -5964,7 +5968,8 @@ protected:
 
 public:
     Method(const std::string& fn, const std::string& n_name, attr_t n_attr, const paramlist_t& n_params, const std::string& n_docs, const std::string& n_return_type, const strlist_t& n_flags, const strlist_t& n_dom, const std::string& n_code, unsigned n_line, bool n_doconly, const char* n_pseudo_arg, bool n_stub_only = false) :
-               CodeBase(fn, n_name, n_attr, n_params, n_docs, n_return_type, n_flags, n_dom, n_code, n_line, n_doconly, n_stub_only) {
+               CodeBase(fn, n_name, n_attr, n_params, n_docs, n_return_type, n_flags, n_dom, n_code, n_line, n_doconly, n_stub_only),
+               const_method(false) {
         if (n_pseudo_arg && n_pseudo_arg[0]) {
             pseudo_arg = n_pseudo_arg;
             std::string::size_type i = pseudo_arg.find('=');
@@ -6000,6 +6005,15 @@ public:
             }
         }
         //log(LL_DEBUG, "Method::Method() %s:%d '%s'\n", fn.c_str(), line, name.c_str());
+    }
+
+    Method(const std::string& fn, const std::string& n_name, attr_t n_attr, const paramlist_t& n_params,
+            const std::string& n_docs, const std::string& n_return_type, const strlist_t& n_flags,
+            const strlist_t& n_dom, const std::string& n_code, unsigned n_line, bool n_doconly,
+            const char* n_pseudo_arg, bool n_stub_only, bool n_const_method)
+            : Method(fn, n_name, n_attr, n_params, n_docs, n_return_type, n_flags, n_dom, n_code, n_line,
+                n_doconly, n_pseudo_arg, n_stub_only) {
+        const_method = n_const_method;
     }
 
     virtual ~Method() {
@@ -6072,6 +6086,9 @@ public:
             return -1;
         }
         fputc(')', fp);
+        if (const_method) {
+            fputs(" const", fp);
+        }
 
         if ((attr & QCA_ABSTRACT) && !stub_only) {
             fputs(";\n", fp);
@@ -6093,6 +6110,9 @@ public:
 
         fprintf(fp, "{\"name\":\"%s\"", json_escape_string(name).c_str());
         std::string sig = buildMetadataSignature(class_name.c_str());
+        if (const_method) {
+            sig += " const";
+        }
         fprintf(fp, ",\"signature\":\"%s\"", json_escape_string(sig).c_str());
         fprintf(fp, ",\"return_type\":\"%s\"",
             json_escape_string(return_type.empty() ? "nothing" : return_type).c_str());
@@ -6110,6 +6130,7 @@ public:
         fprintf(fp, ",\"access\":\"%s\"", access_str);
         fprintf(fp, ",\"is_static\":%s", (attr & QCA_STATIC) ? "true" : "false");
         fprintf(fp, ",\"is_abstract\":%s", (attr & QCA_ABSTRACT) ? "true" : "false");
+        fprintf(fp, ",\"is_const_method\":%s", const_method ? "true" : "false");
         fputs(",\"flags\":", fp);
         serializeMetadataFlagsJson(fp);
         fputs(",\"domains\":", fp);
@@ -6254,9 +6275,10 @@ public:
             fileName.c_str(), line);
         fprintf(fp, "        QC_%s->", UC);
         if (attr & QCA_ABSTRACT)
-            fprintf(fp, "addAbstractMethod(\"%s\", %s, ", name.c_str(), get_access(attr));
+            fprintf(fp, "%s(\"%s\", %s, ", const_method ? "addConstAbstractMethod" : "addAbstractMethod",
+                    name.c_str(), get_access(attr));
         else
-            fprintf(fp, "%s(\"%s\", (%s)%s_%s, %s, ", "addMethod",
+            fprintf(fp, "%s(\"%s\", (%s)%s_%s, %s, ", const_method ? "addConstMethod" : "addMethod",
                     name.c_str(), getMethodType(), cname, vname.c_str(), get_access(attr));
 
         flags_output_cpp(fp, flags, attr & QCA_USES_EXTRA_ARGS);
@@ -6372,7 +6394,7 @@ public:
                 fputs(qv.c_str(), fp);
             }
         }
-        fputs(");\n", fp);
+        fputs(const_method ? ") const;\n" : ");\n", fp);
         return 0;
     }
 };
@@ -6710,6 +6732,7 @@ public:
         strlist_t dom;
 
         bool doconly = false;
+        bool const_method = false;
         // parse flags
         for (strmap_t::const_iterator i = flags.begin(), e = flags.end(); i != e; ++i) {
             //log(LL_DEBUG, "+ method %s::%s() flag '%s': '%s'\n", name.c_str(), mname.c_str(), i->first.c_str(), i->second.c_str());
@@ -6721,6 +6744,17 @@ public:
                     return -1;
             } else if (i->first == "doconly")
                 doconly = true;
+            else if (i->first == "const") {
+                if (i->second.empty() || i->second == "true" || i->second == "1") {
+                    const_method = true;
+                } else if (i->second == "false" || i->second == "0") {
+                    const_method = false;
+                } else {
+                    error("invalid const method property value '%s' defining method %s::%s(); use [const]\n",
+                        i->second.c_str(), name.c_str(), mname.c_str());
+                    return -1;
+                }
+            }
             else {
                 error("unknown flag '%s' = '%s' defining method %s::%s()\n", i->first.c_str(), i->second.c_str(), name.c_str(), mname.c_str());
                 return -1;
@@ -6734,10 +6768,22 @@ public:
             return -1;
         }
 
+        if (const_method) {
+            if (attr & QCA_STATIC) {
+                error("static method %s::%s() cannot be declared const\n", name.c_str(), mname.c_str());
+                return -1;
+            }
+            if (mname == "constructor" || mname == "destructor" || mname == "copy"
+                    || mname == "memberNotification") {
+                error("%s::%s() cannot be declared const\n", name.c_str(), mname.c_str());
+                return -1;
+            }
+        }
+
         mmap_t& mmap = (attr & QCA_STATIC) ? static_mmap : normal_mmap;
 
         Method* m = new Method(fileName, mname, attr, params, doc, return_type, cf, dom, code, line, doconly,
-                is_pseudo ? arg.c_str() : 0, stub_only);
+                is_pseudo ? arg.c_str() : 0, stub_only, const_method);
         mmap.insert(mmap_t::value_type(mname, m));
         return !*m;
     }
@@ -8121,6 +8167,18 @@ void init() {
 
     tmap["*softbool"] = "softBoolOrNothingTypeInfo";
     mtmap["*softbool"] = "nb";
+
+    tmap["char"] = "charTypeInfo";
+    mtmap["char"] = "Vc";
+
+    tmap["softchar"] = "softCharTypeInfo";
+    mtmap["softchar"] = "vc";
+
+    tmap["*char"] = "charOrNothingTypeInfo";
+    mtmap["*char"] = "Nc";
+
+    tmap["*softchar"] = "softCharOrNothingTypeInfo";
+    mtmap["*softchar"] = "nc";
 
     tmap["string"] = "stringTypeInfo";
     mtmap["string"] = "Vs";

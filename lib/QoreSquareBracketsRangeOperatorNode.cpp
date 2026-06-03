@@ -179,6 +179,7 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
 
     QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
     bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
+    bool negative_offsets = static_cast<bool>(po & PO_NEGATIVE_OFFSETS);
 
     qore_type_t seq_type = seq->getType();
     int64 start, stop, seq_size;
@@ -204,7 +205,8 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
         }
     }
 
-    bool empty = !getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink);
+    bool empty = !getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range,
+        negative_offsets, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -287,6 +289,7 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
     if (seq->getType() == NT_LIST || seq->getType() == NT_BUFFER) {
         QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
         bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
+        bool negative_offsets = static_cast<bool>(po & PO_NEGATIVE_OFFSETS);
         int64 start, stop, seq_size;
         ValueEvalRefHolder start_index(rc, e[1], xsink);
         if (*xsink)
@@ -294,7 +297,8 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
         ValueEvalRefHolder stop_index(rc, e[2], xsink);
         if (*xsink)
             return nullptr;
-        if (getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink)) {
+        if (getEffectiveRange(*seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range,
+                negative_offsets, xsink)) {
             if (!(po & PO_BROKEN_RANGE)) {
                 if (start <= stop) {
                     ++stop;
@@ -363,7 +367,7 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
 
 // returns true iff the range is nonempty
 bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq, int64& start, int64& stop,
-        int64& seq_size, bool broken_list_range, ExceptionSink* xsink) const {
+        int64& seq_size, bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder start_index(e[1], xsink);
     if (*xsink)
         return false;
@@ -371,12 +375,13 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
     if (*xsink)
         return false;
 
-    return getEffectiveRange(seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range, xsink);
+    return getEffectiveRange(seq, start, stop, seq_size, *start_index, *stop_index, broken_list_range,
+        negative_offsets, xsink);
 }
 
 bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq, int64& start, int64& stop,
         int64& seq_size, const QoreValue& start_index, const QoreValue& stop_index, bool broken_list_range,
-        ExceptionSink* xsink) {
+        bool negative_offsets, ExceptionSink* xsink) {
     qore_type_t seq_type = seq.getType();
     if (seq_type != NT_LIST && seq_type != NT_STRING && seq_type != NT_BINARY && seq_type != NT_BUFFER) {
         xsink->raiseException("ILLEGAL-EXPRESSION", "Index range can be applied only to lists, strings, binaries, "
@@ -399,6 +404,14 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
          no_stop = stop_index.isNothing();
     start = no_start ? 0 : start_index.getAsBigInt();
     stop = no_stop ? seq_size - 1 : stop_index.getAsBigInt();
+    if (negative_offsets) {
+        if (!no_start && start < 0) {
+            start += seq_size;
+        }
+        if (!no_stop && stop < 0) {
+            stop += seq_size;
+        }
+    }
 
     if ((no_start && stop < 0) || (no_stop && start >= seq_size)) {
         return false;

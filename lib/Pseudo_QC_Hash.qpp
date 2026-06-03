@@ -60,7 +60,7 @@ switch (h.typeCode()) {
 
     @note this pseudo-method is also implemented in Qore::zzz8valuezzz9, so it's safe to use on all data types
  */
-int <hash>::typeCode() [flags=CONSTANT] {
+int <hash>::typeCode() [const;flags=CONSTANT] {
    return NT_HASH;
 }
 
@@ -77,7 +77,7 @@ bool b = n.complexType();
 
     @since %Qore 0.8.13
 */
-bool <hash>::complexType() [flags=CONSTANT] {
+bool <hash>::complexType() [const;flags=CONSTANT] {
    const qore_hash_private* hp = qore_hash_private::get(*h);
    return hp->hashdecl || hp->complexTypeInfo ? true : false;
 }
@@ -95,7 +95,7 @@ list<string> l = h.keys();
 
     @see <hash>::values()
  */
-list<string> <hash>::keys() [flags=CONSTANT] {
+list<string> <hash>::keys() [const;flags=CONSTANT] {
    return h->getKeys();
 }
 
@@ -132,7 +132,7 @@ list<auto> <hash>::values() [flags=CONSTANT] {
 
     @see <hash>::lastKey()
  */
-*string <hash>::firstKey() [flags=CONSTANT] {
+*string <hash>::firstKey() [const;flags=CONSTANT] {
    const char *key = h->getFirstKey();
    return key ? new QoreStringNode(key) : 0;
 }
@@ -167,7 +167,7 @@ auto <hash>::firstValue() [flags=CONSTANT] {
 
     @see <hash>::firstKey()
  */
-*string <hash>::lastKey() [flags=CONSTANT] {
+*string <hash>::lastKey() [const;flags=CONSTANT] {
    const char *key = h->getLastKey();
    return key ? new QoreStringNode(key) : 0;
 }
@@ -204,7 +204,7 @@ bool b = h.hasKey(key);
 
     @see <hash>::hasKeyValue(softstring)
  */
-bool <hash>::hasKey(softstring key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <hash>::hasKey(softstring key) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    TempEncodingHelper str(key, QCS_DEFAULT, xsink);
    if (!str)
       return false;
@@ -227,7 +227,7 @@ bool b = h.hasKeyValue(key);
 
     @see <hash>::hasKey(softstring)
  */
-bool <hash>::hasKeyValue(softstring key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <hash>::hasKeyValue(softstring key) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    TempEncodingHelper str(key, QCS_DEFAULT, xsink);
    if (!str)
       return false;
@@ -246,7 +246,7 @@ bool b = h.empty();
 
     @note this pseudo-method is also implemented in Qore::zzz8valuezzz9, so it's safe to use on all data types
  */
-bool <hash>::empty() [flags=CONSTANT] {
+bool <hash>::empty() [const;flags=CONSTANT] {
    return h->empty();
 }
 
@@ -264,7 +264,7 @@ int num = h.size();
 
     @see <hash>::sizep()
  */
-int <hash>::size() [flags=CONSTANT] {
+int <hash>::size() [const;flags=CONSTANT] {
    return h->size();
 }
 
@@ -284,7 +284,7 @@ bool b = h.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
  */
-bool <hash>::val() [flags=CONSTANT] {
+bool <hash>::val() [const;flags=CONSTANT] {
    return !h->empty();
 }
 
@@ -374,7 +374,7 @@ bool b = h.compareKeys(other_hash);
 
     @since %Qore 0.8.8
  */
-bool <hash>::compareKeys(hash<auto> other_hash) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <hash>::compareKeys(hash<auto> other_hash) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    if (h->size() != other_hash->size())
       return false;
 
@@ -400,6 +400,6 @@ bool <hash>::compareKeys(hash<auto> other_hash) [flags=RET_VALUE_ONLY,NAMED_ARGS
 
     @since %Qore 0.8.9
 */
-bool <hash>::sizep() [flags=CONSTANT] {
+bool <hash>::sizep() [const;flags=CONSTANT] {
    return true;
 }

@@ -732,8 +732,10 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
         po_locked = true;
         // turn on all restrictions in the child that are set in the parent
         pwo.parse_options |= p_pgm->priv->pwo.parse_options;
-        // make sure all options that give more freedom and are off in the parent program are turned off in the child
-        pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~PO_POSITIVE_OPTIONS);
+        // make sure all options that give more freedom and are off in the parent program are turned off in the child;
+        // use the full 128-bit complement so extended (bits 64+) options explicitly set on the child are not masked
+        // out (PO_POSITIVE_OPTIONS is a legacy int64 whose ~ would zero-extend the high word and drop them)
+        pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~QoreParseOptions(PO_POSITIVE_OPTIONS));
     } else {
         pwo.parse_options = n_parse_options;
         po_locked = !(n_parse_options & PO_NO_CHILD_PO_RESTRICTIONS);

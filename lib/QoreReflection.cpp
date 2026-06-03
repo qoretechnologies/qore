@@ -301,6 +301,10 @@ bool QoreExternalMethodVariant::isStatic() const {
     return getMethod()->isStatic();
 }
 
+bool QoreExternalMethodVariant::isConstMethod() const {
+    return reinterpret_cast<const MethodVariantBase*>(this)->isConstMethod();
+}
+
 ClassAccess QoreExternalMethodVariant::getAccess() const {
     return reinterpret_cast<const MethodVariantBase*>(this)->getAccess();
 }

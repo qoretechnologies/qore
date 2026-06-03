@@ -212,7 +212,7 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
         int remaining = search_options.limit ? search_options.limit.toInt() : 1000000;
         int page = search_options.page ? search_options.page.toInt() : 1;
 
-        hash<auto> base_params = cast<hash<auto>>({"inventory_id": inventory_id});
+        hash<auto> base_params = cast<hash>({"inventory_id": inventory_id});
         if (exists search_options.filter_id) {
             base_params.filter_id = search_options.filter_id;
         }

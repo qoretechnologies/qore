@@ -553,9 +553,8 @@ string result = diff_words("the quick brown fox", "the slow brown dog");
         list<string> tokens = ();
         string current = "";
         bool in_space = False;
-        for (int i = 0; i < s.length(); ++i) {
-            string ch = s[i];
-            bool is_space = (ch == " " || ch == "\t");
+        foreach char ch in (iterate s) {
+            bool is_space = (ch == c' ' || ch == c'\t');
             if (tokens || current != "") {
                 if (is_space != in_space) {
                     push tokens, current;

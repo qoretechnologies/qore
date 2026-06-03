@@ -92,7 +92,7 @@ public class Main inherits QUnit::Test {
     methodGetTest() {
         checkModule();
         SewioRestClient rest(("url": "http://localhost:" + port, "apikey": "key"));
-        any ret;
+        auto ret;
 
         ret = rest.get("/api_json");
         testAssertionValue("/api_json", ret.body, VALUE_JSON.output);
@@ -101,7 +101,7 @@ public class Main inherits QUnit::Test {
     methodPutTest() {
         checkModule();
         SewioRestClient rest(("url": "http://localhost:" + port, "apikey": "key"));
-        any ret;
+        auto ret;
 
         rest.setSerialization("json");
         ret = rest.put("/api_json", VALUE_JSON.output);

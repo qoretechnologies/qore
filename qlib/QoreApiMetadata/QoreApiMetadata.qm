@@ -89,6 +89,8 @@ module QoreApiMetadata {
     @section qoreapimetadata_relnotes Release Notes
 
     @subsection qoreapimetadata_v1_3 v1.3
+    - added const-method metadata on method variants:
+      \c is_const_method
     - added generic class and hashdecl metadata:
       \c type_parameters, \c type_parameter_defaults, \c type_parameter_bounds,
       \c raw_accepts_parameterized, and \c raw_construction_defaults_to_auto
@@ -269,6 +271,8 @@ public namespace QoreApiMetadata {
         bool is_static = False;
         #! Whether this is an abstract method
         bool is_abstract = False;
+        #! Whether this method variant is const-qualified
+        bool is_const_method = False;
         #! Whether this method is deprecated
         bool is_deprecated = False;
         #! Deprecation reason or replacement

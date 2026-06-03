@@ -66,7 +66,7 @@ switch (v.typeCode()) {
     - <value>::fullType()
     - <value>::complexType()
  */
-int <value>::typeCode() [flags=CONSTANT] {
+int <value>::typeCode() [const;flags=CONSTANT] {
     return v.getType();
 }
 
@@ -85,7 +85,7 @@ string t = n.type();
     - <value>::fullType()
     - <value>::complexType()
 */
-string <value>::type() [flags=CONSTANT] {
+string <value>::type() [const;flags=CONSTANT] {
     return new QoreStringNode(v.getTypeName());
 }
 
@@ -110,7 +110,7 @@ bool b = n.complexType();
 
     @since %Qore 0.8.13
 */
-bool <value>::complexType() [flags=CONSTANT] {
+bool <value>::complexType() [const;flags=CONSTANT] {
     return false;
 }
 
@@ -142,7 +142,7 @@ str = m.fullType();
     - %Qore 0.8.13
     - %Qore 1.0 added the \a with_namespaces argument
 */
-string <value>::fullType(*bool with_namespaces) [flags=CONSTANT,NAMED_ARGS] {
+string <value>::fullType(*bool with_namespaces) [const;flags=CONSTANT,NAMED_ARGS] {
     return new QoreStringNode(v.getFullTypeName(with_namespaces));
 }
 
@@ -162,7 +162,7 @@ if (v.isEnum())
 
     @since %Qore 2.1
 */
-bool <value>::isEnum() [flags=CONSTANT] {
+bool <value>::isEnum() [const;flags=CONSTANT] {
     return v.isEnum();
 }
 
@@ -181,7 +181,7 @@ if (i.empty())
 
     @see <value>::val()
 */
-bool <value>::empty() [flags=CONSTANT] {
+bool <value>::empty() [const;flags=CONSTANT] {
     return true;
 }
 
@@ -202,7 +202,7 @@ if (!i.size())
     - <value>::size()
     - <value>::val()
 */
-int <value>::size() [flags=CONSTANT] {
+int <value>::size() [const;flags=CONSTANT] {
     return 0;
 }
 
@@ -254,7 +254,7 @@ if (n.val())
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
 */
-bool <value>::val() [flags=CONSTANT] {
+bool <value>::val() [const;flags=CONSTANT] {
     return false;
 }
 
@@ -270,7 +270,7 @@ if (n.intp())
 
     @see <string>::intp() for an example of an implementation of this method where the result depends on the value and not the type
 */
-bool <value>::intp() [flags=CONSTANT] {
+bool <value>::intp() [const;flags=CONSTANT] {
     return false;
 }
 
@@ -284,7 +284,7 @@ if (n.strp())
     printf("%y: can be converted to a string: '%s'\n", n, string(n));
     @endcode
 */
-bool <value>::strp() [flags=CONSTANT] {
+bool <value>::strp() [const;flags=CONSTANT] {
     return false;
 }
 
@@ -298,7 +298,7 @@ if (n.callp())
     printf("the reuslt of calling the value: %y\n", n());
     @endcode
 */
-bool <value>::callp() [flags=CONSTANT] {
+bool <value>::callp() [const;flags=CONSTANT] {
     return false;
 }
 
@@ -314,7 +314,7 @@ foreach any element in (val) {
 }
     @endcode
 */
-int <value>::lsize() [flags=CONSTANT] {
+int <value>::lsize() [const;flags=CONSTANT] {
     return 1;
 }
 
@@ -327,7 +327,7 @@ int <value>::lsize() [flags=CONSTANT] {
     return false;
     @since %Qore 0.8.6
 */
-string <value>::toString(*string encoding) [flags=CONSTANT,NAMED_ARGS] {
+string <value>::toString(*string encoding) [const;flags=CONSTANT,NAMED_ARGS] {
     QoreStringNodeValueHelper str(v, encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, xsink);
     return *xsink ? QoreValue() : str.getReferencedValue();
 }
@@ -339,7 +339,7 @@ string <value>::toString(*string encoding) [flags=CONSTANT,NAMED_ARGS] {
 
     @since %Qore 0.8.6
 */
-int <value>::toInt() [flags=CONSTANT] {
+int <value>::toInt() [const;flags=CONSTANT] {
     return v.getAsBigInt();
 }
 
@@ -350,7 +350,7 @@ int <value>::toInt() [flags=CONSTANT] {
 
     @since %Qore 0.8.6
 */
-float <value>::toFloat() [flags=CONSTANT] {
+float <value>::toFloat() [const;flags=CONSTANT] {
     return v.getAsFloat();
 }
 
@@ -361,7 +361,7 @@ float <value>::toFloat() [flags=CONSTANT] {
 
     @since %Qore 0.8.6
 */
-bool <value>::toBool() [flags=CONSTANT] {
+bool <value>::toBool() [const;flags=CONSTANT] {
     return v.getAsBool();
 }
 
@@ -372,7 +372,7 @@ bool <value>::toBool() [flags=CONSTANT] {
 
     @since %Qore 0.8.8
 */
-number <value>::toNumber() [flags=CONSTANT] {
+number <value>::toNumber() [const;flags=CONSTANT] {
     return QoreNumberNode::toNumber(v);
 }
 
@@ -397,6 +397,6 @@ AbstractIterator <value>::iterator() [flags=CONSTANT] {
 
     @since %Qore 0.8.9
 */
-bool <value>::sizep() [flags=CONSTANT] {
+bool <value>::sizep() [const;flags=CONSTANT] {
     return false;
 }

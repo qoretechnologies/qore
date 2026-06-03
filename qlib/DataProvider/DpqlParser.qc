@@ -421,11 +421,7 @@ public class DpqlParser {
             return True;
         }
         if (node instanceof hash<DataProviderExpression>) {
-            foreach auto arg in (node.args) {
-                if (expressionHasFieldRef(arg)) {
-                    return True;
-                }
-            }
+            return any expressionHasFieldRef($1), node.args;
         }
         return False;
     }

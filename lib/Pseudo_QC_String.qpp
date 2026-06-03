@@ -43,6 +43,34 @@ static const QoreStringNode* get_pseudo_string_arg(const QoreValue& v) {
     return reinterpret_cast<const QoreStringNode*>(v.getInternalNode());
 }
 
+static QoreStringNode* qore_pseudo_regex_escape_string(const QoreStringNode* str, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> result(new QoreStringNode("", str->getEncoding()));
+    size_t pos = 0;
+    size_t count = 0;
+    while (pos < str->size()) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "escaping regex string")) {
+            return nullptr;
+        }
+
+        unsigned clen = 0;
+        unsigned cp = str->getUnicodePointFromBytePos(pos, clen, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        if (!(cp < 128 && isalnum(static_cast<unsigned char>(cp)))) {
+            (*result)->concat('\\');
+        }
+        if ((*result)->concatUnicode(cp, xsink)) {
+            return nullptr;
+        }
+
+        pos += clen;
+        ++count;
+    }
+    return result.release();
+}
+
 //! Methods in this pseudo-class can be executed on @ref string "strings"
 /**
  */
@@ -61,7 +89,7 @@ switch (str.typeCode()) {
 }
     @endcode
 */
-int <string>::typeCode() [flags=CONSTANT] {
+int <string>::typeCode() [const;flags=CONSTANT] {
    return NT_STRING;
 }
 
@@ -83,7 +111,7 @@ int len = str.strlen();
     - <string>::length()
     - <string>::width()
 */
-int <string>::strlen() [flags=CONSTANT] {
+int <string>::strlen() [const;flags=CONSTANT] {
    return str->strlen();
 }
 
@@ -105,7 +133,7 @@ int len = str.size();
     - <string>::length()
     - <string>::width()
 */
-int <string>::size() [flags=CONSTANT] {
+int <string>::size() [const;flags=CONSTANT] {
     return str->size();
 }
 
@@ -127,7 +155,7 @@ int len = str.length();
     - <string>::size()
     - <string>::width()
 */
-int <string>::length() [flags=CONSTANT] {
+int <string>::length() [const;flags=CONSTANT] {
     return str->length();
 }
 
@@ -153,7 +181,7 @@ int width = str.width();
 
     @since %Qore 0.9.4
 */
-int <string>::width() [flags=RET_VALUE_ONLY] {
+int <string>::width() [const;flags=RET_VALUE_ONLY] {
     return str->getCharWidth(xsink);
 }
 
@@ -167,7 +195,7 @@ int <string>::width() [flags=RET_VALUE_ONLY] {
 bool b = str.empty();
     @endcode
 */
-bool <string>::empty() [flags=CONSTANT] {
+bool <string>::empty() [const;flags=CONSTANT] {
     return str->empty();
 }
 
@@ -182,7 +210,7 @@ string enc = str.encoding();
 
     @note equivalent to @ref Qore::get_encoding(string)
 */
-string <string>::encoding() [flags=CONSTANT] {
+string <string>::encoding() [const;flags=CONSTANT] {
     return new QoreStringNode(str->getEncoding()->getCode());
 }
 
@@ -207,7 +235,7 @@ printf("%y", "PŘÍLIŠ ŽLUŤOUČKÝ KŮŇ ÚPĚL ĎÁBELSKÉ ÓDY".lwr());
 
     @since %Qore 0.8.8 this pseudo-method operates on a wide range of characters and is no longer limited to ASCII characters
 */
-string <string>::lwr() [flags=CONSTANT] {
+string <string>::lwr() [const;flags=CONSTANT] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
    if (do_tolower(*(*rv), *str, xsink))
       return QoreValue();
@@ -236,7 +264,7 @@ printf("%y", "příliš žluťoučký kůň úpěl ďábelské ódy".upr());
 
     @since %Qore 0.8.8 this pseudo-method operates on a wide range of characters and is no longer limited to ASCII characters
 */
-string <string>::upr() [flags=CONSTANT] {
+string <string>::upr() [const;flags=CONSTANT] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
    if (do_toupper(*(*rv), *str, xsink))
       return QoreValue();
@@ -270,7 +298,7 @@ if (i == -1)
     - bindex(softstring, softstring, softint)
     - brindex(softstring, softstring, softint)
  */
-int <string>::find(softstring substring, softint offset = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+int <string>::find(softstring substring, softint offset = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return str->index(*substring, offset, xsink);
 }
 
@@ -300,7 +328,7 @@ if (i == -1)
     - bindex(softstring, softstring, softint)
     - brindex(softstring, softstring, softint)
  */
-int <string>::rfind(softstring substring, softint offset = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+int <string>::rfind(softstring substring, softint offset = -1) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return str->rindex(*substring, (qore_offset_t)offset, xsink);
 }
 
@@ -312,7 +340,7 @@ int <string>::rfind(softstring substring, softint offset = -1) [flags=RET_VALUE_
 bool b = str.val();
     @endcode
 */
-bool <string>::val() [flags=CONSTANT] {
+bool <string>::val() [const;flags=CONSTANT] {
    return !str->empty();
 }
 
@@ -326,7 +354,7 @@ if (n.intp())
     printf("%y: can be converted to an integer: %d\n", n, int(n));
     @endcode
 */
-bool <string>::intp() [flags=CONSTANT] {
+bool <string>::intp() [const;flags=CONSTANT] {
     if (str->empty()) {
         return false;
     }
@@ -369,7 +397,7 @@ bool <string>::intp() [flags=CONSTANT] {
     @since %Qore 0.8.13; in previous versions the \link <value>::toInt() \endlink function (without the <b>base</b>
     argument) applied also to strings
   */
-int <string>::toInt(int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+int <string>::toInt(int base = 10) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (base < 0 || base == 1 || base > 36) {
         return xsink -> raiseException("INVALID-BASE", "base " QLLD " is invalid; base must be 0 or 2 - 36 inclusive",
             base);
@@ -391,7 +419,7 @@ if (n.strp())
     printf("%y: can be converted to a string: '%s'\n", n, string(n));
     @endcode
 */
-bool <string>::strp() [flags=CONSTANT] {
+bool <string>::strp() [const;flags=CONSTANT] {
     return true;
 }
 
@@ -412,7 +440,7 @@ string substr = str.substr(-10);
 
     @note equivalent to @ref Qore::substr(softstring, softint)
  */
-string <string>::substr(softint start) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <string>::substr(softint start) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNode* rv = str->substr(start, xsink);
     if (!rv)
         rv = new QoreStringNode(str->getEncoding());
@@ -439,7 +467,7 @@ string substr = str.substr(10, -2);
 
     @since %Qore 0.8.5
  */
-string <string>::substr(softint start, softint length) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <string>::substr(softint start, softint length) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNode* rv = str->substr(start, length, xsink);
     if (!rv)
         rv = new QoreStringNode(str->getEncoding());
@@ -465,7 +493,7 @@ list<string> list = str.split(":"); # returns ("some", "text", "here")
 
     @since %Qore 0.8.5
  */
-list<string> <string>::split(string separator, bool with_separator = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+list<string> <string>::split(string separator, bool with_separator = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
     TempEncodingHelper temp(separator, str->getEncoding(), xsink);
     if (*xsink)
@@ -493,7 +521,7 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
 
     @since %Qore 2.3
  */
-AbstractIterator<string> <string>::splitString(string separator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+AbstractIterator<string> <string>::splitString(string separator) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // Convert separator encoding if needed; use c_str()/size() on the source
     // (the iterator holds its own ref and walks bytes — encoding matters only
     // for the separator search).
@@ -524,7 +552,7 @@ int digits = foldl $1 + ($2 =~ /[0-9]/ ? 1 : 0), 0, str.splitChars();
 
     @since %Qore 2.3
  */
-AbstractIterator<string> <string>::splitChars() [flags=CONSTANT] {
+AbstractIterator<string> <string>::splitChars() [const;flags=CONSTANT] {
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
         new StringSplitIterator(str, nullptr, StringSplitIterator::SPLIT_CHARS));
 }
@@ -555,8 +583,32 @@ foreach int cp in (text.codePointIterator()) {
 
     @since %Qore 2.3
  */
-AbstractIterator<int> <string>::codePointIterator() [flags=CONSTANT] {
+AbstractIterator<int> <string>::codePointIterator() [const;flags=CONSTANT] {
     return new QoreObject(QC_STRINGCHARITERATOR, 0, new StringCharIterator(str));
+}
+
+//! Returns a lazy iterator yielding each Unicode codepoint of the string as a char value.
+/** Each yielded value is a @ref char decoded from the source string's
+    encoding via @ref QoreString::getUnicodePointFromBytePos().  This is the
+    pseudo-method used by `iterate string`.
+
+    For integer codepoints, use
+    @ref Qore::zzz8stringzzz9::codePointIterator() instead.  For
+    single-character strings, use @ref Qore::zzz8stringzzz9::splitChars().
+
+    @return a @ref Qore::StringIterator "StringIterator" yielding char values
+
+    @par Example:
+    @code{.py}
+foreach char c in (text.iterator()) {
+    printf("%y\n", c.ord());
+}
+    @endcode
+
+    @since %Qore 2.4
+ */
+AbstractIterator<char> <string>::iterator() [const;flags=CONSTANT] {
+    return new QoreObject(QC_STRINGITERATOR, 0, new StringIterator(str));
 }
 
 //! Returns a lazy iterator yielding each line of the string, one per element.
@@ -575,7 +627,7 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitLines();
 
     @since %Qore 2.3
  */
-AbstractIterator<string> <string>::splitLines() [flags=CONSTANT] {
+AbstractIterator<string> <string>::splitLines() [const;flags=CONSTANT] {
     QoreString nl("\n");
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
         new StringSplitIterator(str, &nl, StringSplitIterator::STRIP_TRAILING_CR));
@@ -610,7 +662,7 @@ AbstractIterator<string> <string>::splitLines() [flags=CONSTANT] {
     @since %Qore 2.3
  */
 AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int options = 0,
-        bool with_separator = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+        bool with_separator = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     SimpleRefHolder<QoreRegex> re(new QoreRegex(*separator_pattern, options, xsink));
     if (*xsink) {
         return QoreValue();
@@ -657,7 +709,7 @@ list<string> list = "some,'text with spaces, and commas, here is another one! ,'
     - %Qore 0.8.5 added this pseudo-method
     - %Qore 0.8.6 added the \c trim_unquoted parameter
  */
-list<string> <string>::split(string separator, string quote, bool trim_unquoted = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+list<string> <string>::split(string separator, string quote, bool trim_unquoted = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return split_with_quote(xsink, separator, str, quote, trim_unquoted);
 }
 
@@ -688,7 +740,7 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     @since %Qore 1.0.7
     @since %Qore 2.3 added the \a limit parameter
  */
-list<string> <string>::splitRegex(string separator_pattern, int options = 0, bool with_separator = False, int limit = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+list<string> <string>::splitRegex(string separator_pattern, int options = 0, bool with_separator = False, int limit = -1) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*separator_pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
@@ -723,7 +775,7 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     @since %Qore 1.0.7
     @since %Qore 2.3 added the \a limit parameter
  */
-list<string> <string>::splitRegex(string separator_pattern, bool with_separator = False, int limit = -1) [flags=RET_VALUE_ONLY] {
+list<string> <string>::splitRegex(string separator_pattern, bool with_separator = False, int limit = -1) [const;flags=RET_VALUE_ONLY] {
     QoreRegex qr(*separator_pattern, 0, xsink);
     if (*xsink) {
         return QoreValue();
@@ -757,7 +809,7 @@ bool b = "hello".regex("^hel"); # returns True
 
     @since %Qore 0.8.5
  */
-bool <string>::regex(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <string>::regex(string pattern, int options = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
@@ -796,7 +848,7 @@ string str = "ns:element";
     @since %Qore 0.8.8 this function accepts the @ref Qore::RE_Global option to extract all occurrences of the
     pattern(s) in a string
  */
-*list<*string> <string>::regexExtract(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+*list<*string> <string>::regexExtract(string pattern, int options = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
     if (*xsink)
         return QoreValue();
@@ -824,7 +876,7 @@ int n = "abc 123 def 456".regexCount("\\d+"); # returns 2
 
     @see regex_count()
 */
-int <string>::regexCount(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+int <string>::regexCount(string pattern, int options = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
@@ -857,7 +909,7 @@ auto h = "2026-04-08".regexExtractNamed("(?<year>\\d{4})-(?<month>\\d{2})-(?<day
 
     @see regex_extract_named()
 */
-auto <string>::regexExtractNamed(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+auto <string>::regexExtractNamed(string pattern, int options = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
@@ -890,7 +942,7 @@ auto <string>::regexExtractNamed(string pattern, int options = 0) [flags=RET_VAL
 
     @see regex_extract_detailed()
 */
-*list<hash<RegexMatchInfo>> <string>::regexExtractDetailed(string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+*list<hash<RegexMatchInfo>> <string>::regexExtractDetailed(string pattern, int options = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
     if (*xsink) {
         return QoreValue();
@@ -901,6 +953,9 @@ auto <string>::regexExtractNamed(string pattern, int options = 0) [flags=RET_VAL
 //! Escapes all non-alphanumeric characters in the string with a backslash, making it safe for use as a literal pattern in regular expressions
 /** @return a new string where all non-alphanumeric characters are prefixed with a backslash
 
+    @note Escaping is character-aware; non-ASCII codepoints are escaped as whole characters, not as their
+    encoded bytes.
+
     @par Example:
     @code{.py}
 string escaped = "price: $100".regexEscape(); # returns "price\\:\\ \\$100"
@@ -910,22 +965,8 @@ string escaped = "price: $100".regexEscape(); # returns "price\\:\\ \\$100"
 
     @see regex_escape()
 */
-string <string>::regexEscape() [flags=RET_VALUE_ONLY] {
-    SimpleRefHolder<QoreStringNode> result(new QoreStringNode);
-    const char* p = str->c_str();
-    size_t i = 0;
-    while (*p) {
-        if (i && !(i % 100) && qore_check_cancel(xsink, "escaping regex string")) {
-            return QoreValue();
-        }
-        ++i;
-        if (!isalnum((unsigned char)*p)) {
-            (*result)->concat('\\');
-        }
-        (*result)->concat(*p);
-        ++p;
-    }
-    return result.release();
+string <string>::regexEscape() [const;flags=RET_VALUE_ONLY] {
+    return qore_pseudo_regex_escape_string(str, xsink);
 }
 
 //! Returns the <a href="http://en.wikipedia.org/wiki/MD5">MD5 message digest</a> of the string as a hex string
@@ -951,7 +992,7 @@ string str = "hello".toMD5(); # returns "5d41402abc4b2a76b9719d911017c592"
 
     @since %Qore 0.8.5
  */
-string <string>::toMD5() [flags=RET_VALUE_ONLY] {
+string <string>::toMD5() [const;flags=RET_VALUE_ONLY] {
     DigestHelper dh(*str);
     if (dh.doDigest(MD5_ERR, EVP_md5(), xsink))
         return QoreValue();
@@ -979,7 +1020,7 @@ string str = "hello".toSHA1(); # returns "aaf4c61ddcc5e8a2dabede0f3b482cd9aea943
 
     @since %Qore 0.8.5
  */
-string <string>::toSHA1() [flags=RET_VALUE_ONLY] {
+string <string>::toSHA1() [const;flags=RET_VALUE_ONLY] {
     DigestHelper dh(*str);
     if (dh.doDigest(SHA1_ERR, EVP_sha1(), xsink))
         return QoreValue();
@@ -1010,7 +1051,7 @@ string str = "hello".toSHA224("hello"); # returns "ea09ae9cc6768c50fcee903ed0545
 
     @since %Qore 0.8.5
  */
-string <string>::toSHA224() [flags=RET_VALUE_ONLY] {
+string <string>::toSHA224() [const;flags=RET_VALUE_ONLY] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(*str);
     if (dh.doDigest(SHA224_ERR, EVP_sha224(), xsink))
@@ -1046,7 +1087,7 @@ string str = "hello".toSHA256(); # returns "2cf24dba5fb0a30e26e83b2ac5b9e29e1b16
 
     @since %Qore 0.8.5
  */
-string <string>::toSHA256() [flags=RET_VALUE_ONLY] {
+string <string>::toSHA256() [const;flags=RET_VALUE_ONLY] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(*str);
     if (dh.doDigest(SHA256_ERR, EVP_sha256(), xsink))
@@ -1084,7 +1125,7 @@ string str = "hello".toSHA384();
 
     @since %Qore 0.8.5
  */
-string <string>::toSHA384() [flags=RET_VALUE_ONLY] {
+string <string>::toSHA384() [const;flags=RET_VALUE_ONLY] {
 #if !defined(OPENSSL_NO_SHA512) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(*str);
     if (dh.doDigest(SHA384_ERR, EVP_sha384(), xsink))
@@ -1122,7 +1163,7 @@ string str = "hello".toSHA512();
 
     @since %Qore 0.8.5
  */
-string <string>::toSHA512() [flags=RET_VALUE_ONLY] {
+string <string>::toSHA512() [const;flags=RET_VALUE_ONLY] {
 #if !defined(OPENSSL_NO_SHA512) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(*str);
     if (dh.doDigest(SHA512_ERR, EVP_sha512(), xsink))
@@ -1147,7 +1188,7 @@ binary bin = str.toBinary();
 
     @since %Qore 0.9.3
 */
-binary <string>::toBinary() [flags=CONSTANT] {
+binary <string>::toBinary() [const;flags=CONSTANT] {
     SimpleRefHolder<BinaryNode> b(new BinaryNode);
     b->append(str->c_str(), str->size());
     return b.release();
@@ -1163,7 +1204,7 @@ bool b = str.isDataAscii();
 
     @since %Qore 0.8.6
  */
-bool <string>::isDataAscii() [flags=CONSTANT] {
+bool <string>::isDataAscii() [const;flags=CONSTANT] {
     return str->isDataAscii();
 }
 
@@ -1178,7 +1219,7 @@ bool b = str.isDataPrintableAscii();
 
     @since %Qore 0.8.6
  */
-bool <string>::isDataPrintableAscii() [flags=CONSTANT] {
+bool <string>::isDataPrintableAscii() [const;flags=CONSTANT] {
     return str->isDataPrintableAscii();
 }
 
@@ -1196,7 +1237,7 @@ string str = str.toHex();
     - <binary>::toHex()
     - make_hex_string(string)
  */
-string <string>::toHex() [flags=CONSTANT] {
+string <string>::toHex() [const;flags=CONSTANT] {
     QoreStringNode *rv = new QoreStringNode;
     rv->concatHex(str);
     return rv;
@@ -1222,7 +1263,7 @@ string base64 = str.toBase64(64);
     - <binary>::toBase64()
     - make_base64_string(string, softint)
 */
-string <string>::toBase64(softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
+string <string>::toBase64(softint max_line_length = -1) [const;flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode *rv = new QoreStringNode;
     rv->concatBase64(str, max_line_length);
     return rv;
@@ -1246,7 +1287,7 @@ string base64 = str.toBase64Url();
     - <binary>::toBase64Url()
     - make_base64_url_string(string)
 */
-string <string>::toBase64Url(softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
+string <string>::toBase64Url(softint max_line_length = -1) [const;flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* rv = new QoreStringNode;
     rv->concatBase64Url(*str);
     return rv;
@@ -1266,7 +1307,7 @@ int i = str.comparePartial(other_string);
 
     @since %Qore 0.8.8
 */
-int <string>::comparePartial(string other_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+int <string>::comparePartial(string other_string) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
     TempEncodingHelper temp(other_string, str->getEncoding(), xsink);
     if (*xsink)
@@ -1291,7 +1332,7 @@ bool b = str.equalPartial(other_string);
 
     @since %Qore 0.8.8
 */
-bool <string>::equalPartial(string other_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <string>::equalPartial(string other_string) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return str->equalPartialSoft(other_string, xsink);
 }
 
@@ -1309,7 +1350,7 @@ bool b = str.equalPartialPath(other_string);
 
     @since %Qore 0.8.8
 */
-bool <string>::equalPartialPath(string other_string) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <string>::equalPartialPath(string other_string) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return str->equalPartialPath(other_string, xsink);
 }
 
@@ -1326,7 +1367,7 @@ printf("%y\n", s.unaccent()); # result: "prilis zlutoucky kun upel dabelske ody"
 
     @since %Qore 0.8.8
 */
-string <string>::unaccent() [flags=RET_VALUE_ONLY] {
+string <string>::unaccent() [const;flags=RET_VALUE_ONLY] {
     SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
     if (do_unaccent(*(*rv), *str, xsink))
         return QoreValue();
@@ -1346,7 +1387,7 @@ int uc = str.getUnicode(0);
 
     @since %Qore 0.8.8
 */
-int <string>::getUnicode(int offset = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+int <string>::getUnicode(int offset = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return str->getUnicodePoint(offset, xsink);
 }
 
@@ -1373,7 +1414,7 @@ if (b == ord("#")) { ... }
 
     @since %Qore 2.3
 */
-*int <string>::getByte(int byte_offset) [flags=CONSTANT,NAMED_ARGS] {
+*int <string>::getByte(int byte_offset) [const;flags=CONSTANT,NAMED_ARGS] {
     int64 sz = (int64)str->size();
     int64 off = byte_offset < 0 ? sz + byte_offset : byte_offset;
     if (off < 0 || off >= sz) {
@@ -1389,7 +1430,7 @@ if (b == ord("#")) { ... }
 
     @since %Qore 0.8.9
 */
-bool <string>::sizep() [flags=CONSTANT] {
+bool <string>::sizep() [const;flags=CONSTANT] {
     return true;
 }
 
@@ -1400,7 +1441,7 @@ bool <string>::sizep() [flags=CONSTANT] {
 
     @since %Qore 2.0
 */
-bool <string>::startsWith(string prefix) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <string>::startsWith(string prefix) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
     TempEncodingHelper temp(prefix, str->getEncoding(), xsink);
     if (*xsink) {
@@ -1416,7 +1457,7 @@ bool <string>::startsWith(string prefix) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 
     @since %Qore 2.0
 */
-bool <string>::endsWith(string suffix) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <string>::endsWith(string suffix) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
     TempEncodingHelper temp(suffix, str->getEncoding(), xsink);
     if (*xsink) {
@@ -1432,7 +1473,7 @@ bool <string>::endsWith(string suffix) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 
     @since %Qore 2.0
 */
-bool <string>::contains(string substring) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <string>::contains(string substring) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // convert pattern encoding to string if necessary
     TempEncodingHelper temp(substring, str->getEncoding(), xsink);
     if (*xsink) {
@@ -1464,7 +1505,7 @@ bool <string>::contains(string substring) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     @since %Qore 0.8.9
  */
 *string <string>::getLine(int offset = 0, *string line_separator, bool trim_line = True,
-        *reference<int> byte_count) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+        *reference<int> byte_count) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (str->empty())
         return QoreValue();
 
@@ -1557,7 +1598,7 @@ string ns = string.getEncoded(CE_XML);
 
     @since %Qore 0.8.12
  */
-string <string>::getEncoded(int encoding_flags = CE_XHTML) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <string>::getEncoded(int encoding_flags = CE_XHTML) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNodeHolder rv(new QoreStringNode(str->getEncoding()));
     return rv->concatEncode(xsink, *str, encoding_flags) ? nullptr : rv.release();
 }
@@ -1574,7 +1615,7 @@ string ns = string.getDecoded(CE_XML);
 
     @since %Qore 0.8.12
  */
-string <string>::getDecoded(int decoding_flags = CD_ALL) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <string>::getDecoded(int decoding_flags = CD_ALL) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNodeHolder rv(new QoreStringNode(str->getEncoding()));
     return rv->concatDecode(xsink, *str, decoding_flags) ? nullptr : rv.release();
 }

@@ -50,7 +50,7 @@ switch (n.typeCode()) {
 }
     @endcode
 */
-int <nothing>::typeCode() [flags=CONSTANT] {
+int <nothing>::typeCode() [const;flags=CONSTANT] {
    return NT_NOTHING;
 }
 
@@ -66,7 +66,7 @@ foreach any element in (val) {
 }
     @endcode
 */
-int <nothing>::lsize() [flags=CONSTANT] {
+int <nothing>::lsize() [const;flags=CONSTANT] {
    return 0;
 }
 
@@ -80,7 +80,7 @@ map printf("+ %y\n", $1), get_hash_or_nothing().pairIterator();
 
     @since %Qore 0.8.6.2
  */
-SingleValueIterator <nothing>::pairIterator() [flags=CONSTANT] {
+SingleValueIterator <nothing>::pairIterator() [const;flags=CONSTANT] {
    return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
 }
 
@@ -96,7 +96,7 @@ map printf("+ %y\n", $1), get_hash_or_nothing().keyIterator();
 
     @since %Qore 0.8.6.2
  */
-SingleValueIterator <nothing>::keyIterator() [flags=CONSTANT] {
+SingleValueIterator <nothing>::keyIterator() [const;flags=CONSTANT] {
    return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
 }
 
@@ -112,7 +112,7 @@ map printf("+ %y\n", $1), get_hash_or_nothing().contextIterator();
 
     @since %Qore 0.8.6.2
  */
-SingleValueIterator <nothing>::contextIterator() [flags=CONSTANT] {
+SingleValueIterator <nothing>::contextIterator() [const;flags=CONSTANT] {
    return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
 }
 
@@ -130,7 +130,7 @@ list<string> l = h.keys();
 
     @since %Qore 0.8.7
  */
-list<string> <nothing>::keys() [flags=CONSTANT] {
+list<string> <nothing>::keys() [const;flags=CONSTANT] {
    return new QoreListNode(stringTypeInfo);
 }
 
@@ -148,7 +148,7 @@ list<auto> l = h.values();
 
     @since %Qore 0.8.7
  */
-list<auto> <nothing>::values() [flags=CONSTANT] {
+list<auto> <nothing>::values() [const;flags=CONSTANT] {
    return new QoreListNode(autoTypeInfo);
 }
 
@@ -166,7 +166,7 @@ list<auto> <nothing>::values() [flags=CONSTANT] {
 
     @since %Qore 0.8.7
  */
-nothing <nothing>::firstKey() [flags=CONSTANT] {
+nothing <nothing>::firstKey() [const;flags=CONSTANT] {
 }
 
 //! Returns @ref nothing
@@ -183,7 +183,7 @@ auto n = h.firstValue();
 
     @since %Qore 0.8.7
  */
-nothing <nothing>::firstValue() [flags=CONSTANT] {
+nothing <nothing>::firstValue() [const;flags=CONSTANT] {
 }
 
 //! Returns @ref nothing
@@ -200,7 +200,7 @@ nothing <nothing>::firstValue() [flags=CONSTANT] {
 
     @since %Qore 0.8.7
  */
-nothing <nothing>::lastKey() [flags=CONSTANT] {
+nothing <nothing>::lastKey() [const;flags=CONSTANT] {
 }
 
 //! Returns @ref nothing
@@ -217,7 +217,7 @@ auto n = h.firstValue();
 
     @since %Qore 0.8.7
  */
-nothing <nothing>::lastValue() [flags=CONSTANT] {
+nothing <nothing>::lastValue() [const;flags=CONSTANT] {
 }
 
 //! Returns @ref True if the key exists in the hash (may or may not be assigned a value), @ref False if not
@@ -236,7 +236,7 @@ bool b = h.hasKey(key);
 
     @since %Qore 0.8.7
  */
-bool <nothing>::hasKey(softstring[doc] key) [flags=CONSTANT,NAMED_ARGS] {
+bool <nothing>::hasKey(softstring[doc] key) [const;flags=CONSTANT,NAMED_ARGS] {
    return false;
 }
 
@@ -256,7 +256,7 @@ bool b = h.hasKeyValue(key);
 
     @since %Qore 0.8.7
  */
-bool <nothing>::hasKeyValue(softstring[doc] key) [flags=CONSTANT,NAMED_ARGS] {
+bool <nothing>::hasKeyValue(softstring[doc] key) [const;flags=CONSTANT,NAMED_ARGS] {
    return false;
 }
 
@@ -272,6 +272,6 @@ map printf("+ %y\n", $1), get_list_or_nothing().rangeIterator();
 
     @since %Qore 0.8.8
  */
-SingleValueIterator <nothing>::rangeIterator() [flags=CONSTANT] {
+SingleValueIterator <nothing>::rangeIterator() [const;flags=CONSTANT] {
    return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
 }

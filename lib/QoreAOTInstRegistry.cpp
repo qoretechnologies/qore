@@ -425,6 +425,9 @@ static bool writeConst(AOTInstWriteCtx& ctx) {
         case QoreIRConstant::Kind::Bool:
             ctx.writer.writeU8(ci->constant.bool_value ? 1 : 0);
             break;
+        case QoreIRConstant::Kind::Char:
+            ctx.writer.writeU32(ci->constant.char_value);
+            break;
         case QoreIRConstant::Kind::Nothing:
         case QoreIRConstant::Kind::Null:
             break;
@@ -481,6 +484,13 @@ static std::unique_ptr<QoreIRInstruction> readConst(
             break;
         case QoreIRConstant::Kind::Bool:
             ci->constant.bool_value = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+            break;
+        case QoreIRConstant::Kind::Char:
+            ci->constant.char_value = QoreAOTBinaryReader::readU32(ctx.ptr);
+            if (!QoreValue::isValidCharCodepoint(ci->constant.char_value)) {
+                ctx.error = "invalid serialized char codepoint in IR constant";
+                return nullptr;
+            }
             break;
         case QoreIRConstant::Kind::Nothing:
         case QoreIRConstant::Kind::Null:
@@ -660,6 +670,10 @@ static bool writeLocal(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU8(li->weak ? 1 : 0);
     ctx.writer.writeU8(li->is_closure ? 1 : 0);
     ctx.writer.writeU8(li->is_ref ? 1 : 0);
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+        ctx.writer.writeU8(li->local && li->local->isReadOnly() ? 1 : 0);
+        ctx.writer.writeU8(li->initial_assignment ? 1 : 0);
+    }
     return true;
 }
 
@@ -674,6 +688,12 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
     bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     bool is_closure = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     bool is_ref = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    bool read_only = false;
+    bool initial_assignment = false;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+        read_only = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+        initial_assignment = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    }
 
     // Prefer slot-indexed resolution to avoid name collisions across scopes
     LocalVar* lv = ctx.resolveLocalBySlot(slot_id);
@@ -688,8 +708,12 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
         qore_program_private* pp = qore_program_private::get(*ctx.pgm);
         lv = pp->createLocalVar(lname, ti);
     }
+    if (lv && read_only && !lv->isReadOnly()) {
+        lv->setReadOnly();
+    }
     auto* li = new QoreIRLocalInstruction(static_cast<QoreIROpcode>(opcode_raw), lv, auto_ref);
     li->weak = weak;
+    li->initial_assignment = initial_assignment;
     li->is_closure = is_closure;
     li->is_ref = is_ref;
     li->slot_id = slot_id;
@@ -1011,7 +1035,10 @@ static bool writeCallClosureDirect(AOTInstWriteCtx& ctx) {
     // The callee and arguments are already represented by the instruction's
     // operands; serializing the original CallReferenceCallNode AST would force
     // an EXPR_TREE fallback.
-    (void)ctx;
+    auto* ei = static_cast<const QoreIRExprInstruction*>(ctx.inst);
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS) != 0) {
+        ctx.writer.writeU8(ei->has_ref_args ? 1 : 0);
+    }
     return true;
 }
 
@@ -1019,8 +1046,10 @@ static std::unique_ptr<QoreIRInstruction> readCallClosureDirect(
         uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
-    (void)ctx;
     auto* ei = new QoreIRExprInstruction(static_cast<QoreIROpcode>(opcode_raw), QoreValue());
+    ei->has_ref_args = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS) != 0
+        ? QoreAOTBinaryReader::readU8(ctx.ptr) != 0
+        : true;
     ei->result = QoreIRValue(result_id);
     ei->operands = operands;
     ei->exception_target = exc_target;
@@ -1471,6 +1500,9 @@ static bool writeInvoke(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU16(static_cast<uint16_t>(ii->invoke_opcode));
     ctx.writer.writeStringRef(ii->invoke_key_name.c_str());
     ctx.writer.writeU8(ii->weak ? 1 : 0);
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS) != 0) {
+        ctx.writer.writeU8(ii->has_ref_args ? 1 : 0);
+    }
     auto it_n = ctx.block_idx.find(ii->normal_target);
     ctx.writer.writeU16(it_n != ctx.block_idx.end() ? it_n->second : 0xFFFF);
     auto it_e = ctx.block_idx.find(ii->exception_target);
@@ -1491,6 +1523,9 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
     uint16_t invoke_opcode_raw = QoreAOTBinaryReader::readU16(ctx.ptr);
     const char* invoke_key_name = ctx.reader.readStringRef(ctx.ptr);
     bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    bool has_ref_args = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS) != 0
+        ? QoreAOTBinaryReader::readU8(ctx.ptr) != 0
+        : static_cast<QoreIROpcode>(invoke_opcode_raw) == QoreIROpcode::CallClosureDirect;
     uint16_t normal_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
     uint16_t exception_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
     auto* ii = new QoreIRInvokeInstruction(expr,
@@ -1498,6 +1533,7 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
     ii->invoke_opcode = static_cast<QoreIROpcode>(invoke_opcode_raw);
     ii->invoke_key_name = invoke_key_name ? invoke_key_name : "";
     ii->weak = weak;
+    ii->has_ref_args = has_ref_args;
     expr.discard(nullptr);
     ii->result = QoreIRValue(result_id);
     ii->operands = operands;

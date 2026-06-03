@@ -220,7 +220,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
             list<hash<ModelVersionInfo>> versions();
             foreach auto version in (result) {
                 push versions, AbstractModelRegistryBackend::normalizeVersionInfo(
-                    cast<hash<auto>>(version));
+                    cast<hash>(version));
             }
             return versions;
         }
@@ -263,7 +263,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
     hash<ModelVersionInfo> getVersionMetadata(string name, string version_id) {
         hash<auto> resp = doGet(getTenantPath() + "/" + encode_url_param(name)
             + "/versions/" + encode_url_param(version_id));
-        return AbstractModelRegistryBackend::normalizeVersionInfo(cast<hash<auto>>(resp.body));
+        return AbstractModelRegistryBackend::normalizeVersionInfo(cast<hash>(resp.body));
     }
 
     list<string> listTenants() {

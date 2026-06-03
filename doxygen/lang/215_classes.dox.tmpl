@@ -23,9 +23,9 @@
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>}]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>destructor</b>() {</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>}]</tt>\n
-    &nbsp;&nbsp;&nbsp;&nbsp;<tt>[[<b>@ref static_methods "static"</b>|<b>@ref final_methods "final"</b>] [<b>@ref synchronized "synchronized"</b>] [<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [<b>@ref deprecated "deprecated"</b>] [</tt><em>@ref data_type_declarations "return_type"</em><tt>]</tt> <em>method_name</em><tt>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]) {</tt>\n
+    &nbsp;&nbsp;&nbsp;&nbsp;<tt>[[<b>@ref static_methods "static"</b>|<b>@ref final_methods "final"</b>] [<b>@ref synchronized "synchronized"</b>] [<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [<b>@ref deprecated "deprecated"</b>] [</tt><em>@ref data_type_declarations "return_type"</em><tt>]</tt> <em>method_name</em><tt>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]) [<b>@ref const_methods "const"</b>] {</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>}]</tt>\n
-    &nbsp;&nbsp;&nbsp;&nbsp;<tt>[[<b>@ref abstract "abstract"</b>] [<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [</tt><em>@ref data_type_declarations "return_type"</em><tt>]</tt> <em>method_name</em><tt>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]);]</tt>\n
+    &nbsp;&nbsp;&nbsp;&nbsp;<tt>[[<b>@ref abstract "abstract"</b>] [<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [</tt><em>@ref data_type_declarations "return_type"</em><tt>]</tt> <em>method_name</em><tt>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]) [<b>@ref const_methods "const"</b>];]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>...</tt>\n
     <tt>}</tt>
 
@@ -318,9 +318,9 @@ ConstructsOnly<int> typed_constructs(1);
     <tt>[@ref mod_public "public"] \b class [</tt><em>@ref namespace_paths "namespace_path"</em><tt>::...]</tt><em>class_identifier</em><tt> [<b>inherits</b> [<b>@ref private_inheritance "private[:internal|hierarchy]"</b>|<b>@ref public_inheritance "public"</b>] [</tt><em>@ref namespace_paths "namespace_path"</em><tt>::...]</tt><em>parent_class_identifier</em><tt>[, ...]];</tt>\n\n
     <tt>[[<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [<b>@ref deprecated "deprecated"</b>] [</tt><em>@ref namespace_paths "namespace_path"</em><tt>::...]</tt><em>class_identifier</em><tt>::<b>constructor</b>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]) [: </tt><em>parent_class_name</em><tt>(</tt><em>args...</em><tt>), ...] {</tt>\n
     <tt>}]</tt>\n\n
-    <tt>[[<b>@ref static_methods "static"</b>|<b>@ref final_methods "final"</b>] [<b>@ref synchronized "synchronized"</b>] [<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [<b>@ref deprecated "deprecated"</b>] [</tt><em>@ref data_type_declarations "return_type"</em><tt>] [</tt><em>@ref namespace_paths "namespace_path"<tt>::...]</tt>class_identifier</em><tt>::</tt><em>method_name</em><tt>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]) {</tt>\n
+    <tt>[[<b>@ref static_methods "static"</b>|<b>@ref final_methods "final"</b>] [<b>@ref synchronized "synchronized"</b>] [<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [<b>@ref deprecated "deprecated"</b>] [</tt><em>@ref data_type_declarations "return_type"</em><tt>] [</tt><em>@ref namespace_paths "namespace_path"<tt>::...]</tt>class_identifier</em><tt>::</tt><em>method_name</em><tt>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]) [<b>@ref const_methods "const"</b>] {</tt>\n
     <tt>}]</tt>
-    <tt>[<b>@ref abstract "abstract"</b> [<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [</tt><em>@ref data_type_declarations "return_type"</em><tt>] [</tt><em>@ref namespace_paths "namespace_path"<tt>::...]</tt>class_identifier</em><tt>::</tt><em>method_name</em><tt>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]);</tt>\n
+    <tt>[<b>@ref abstract "abstract"</b> [<b>@ref private_methods "private[:internal|hierarchy]"</b>|<b>@ref public_methods "public"</b>] [</tt><em>@ref data_type_declarations "return_type"</em><tt>] [</tt><em>@ref namespace_paths "namespace_path"<tt>::...]</tt>class_identifier</em><tt>::</tt><em>method_name</em><tt>([</tt><em>@ref data_type_declarations "[param_type]"</em> <em>param_name</em> <tt>[=</tt> <em>@ref expressions "default_initialization_expression"</em><tt>], ...]) [<b>@ref const_methods "const"</b>];</tt>\n
 
     As with inline class definitions, when defining a @ref user_modules "user module", class declarations can be preceded by @ref mod_public "public", which means that the class will be available (imported) in the @ref Qore::Program "Program" object importing the module. When a class is declared @ref mod_public "public" outside of a @ref user_modules "user module", it means that the class can be inherited in any child @ref Qore::Program "Program" objects created in the same scope. See @ref mod_public "public" for more information. Note that classes can also be imported singly by using the @ref Qore::Program::importClass() "Program::importClass()" method.
 
@@ -360,6 +360,64 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     Methods declared with the <tt><b>synchronized</b></tt> keyword will only run in one thread at a time.\n\n
     <tt><b>synchronized</b></tt> normal class methods share a reentrant lock associated with the object, while <tt><b>synchronized</b></tt> static class methods share a reentrant lock associated with the class itself.\n\n
     For more information, see the @ref synchronized "synchronized keyword".
+
+    @subsection const_methods Const Methods
+    Instance methods can be declared with a trailing <tt><b>const</b></tt> qualifier after the parameter list:
+    @code{.py}
+class Document {
+    private {
+        int id;
+        string name;
+    }
+
+    int getId() const {
+        return id;
+    }
+
+    string getName() const {
+        return name;
+    }
+
+    nothing rename(string n) {
+        name = n;
+    }
+}
+
+const Document d = getDocument();
+int id = d.getId();          # OK
+# d.rename("x");            # READONLY-RECEIVER-ERROR
+    @endcode
+
+    A const method promises that its receiver will be treated as read-only while the method body is parsed. The special
+    \c self value and member paths rooted at \c self cannot be reassigned, removed, incremented, written through an
+    index or member lvalue, passed as a mutable @ref lvalue_references "reference", or used to call a non-const method
+    when the target method can be resolved at parse time.
+
+    The rule is shallow. It protects the receiver path and read-only local or closure bindings, but it does not make an
+    object or container globally immutable and does not prevent mutation through a separate mutable alias. Newly-created
+    local objects and ordinary non-const parameters inside a const method remain mutable.
+
+    Calls made through statically read-only receivers, such as @ref readonly_local_variables "read-only local variables",
+    @ref readonly_function_parameters "read-only parameters", read-only closure captures, and \c self inside a const
+    method, can only resolve to const methods. Calls through mutable receivers continue to use normal method resolution.
+
+    Const methods can be @ref synchronized_methods "synchronized" and can be @ref abstract "abstract". A concrete
+    implementation of a const abstract method must also be declared const. A const method may override a non-const
+    method, but a non-const method cannot satisfy or override a const abstract method.
+
+    Constructors, destructors, \c copy() methods, static methods, and
+    @ref memberNotification_methods "memberNotification()" cannot be declared const. To provide a mutable copy from a
+    read-only receiver, declare a normal method such as \c clone() \c const; the special \c copy() method keeps its
+    existing object-construction semantics.
+
+    Const-method metadata is exposed through the \c reflection module as
+    @ref Qore::Reflection::AbstractMethodVariant::isConstMethod() "AbstractMethodVariant::isConstMethod()",
+    @ref Qore::Reflection::MC_CONST "MC_CONST", and the \c "const" modifier string. The \c QoreApiMetadata module
+    exposes the same information as @ref QoreApiMetadata::MethodInfo::is_const_method
+    "MethodInfo::is_const_method".
+
+    @note A const method is not the same as a @ref CONSTANT "CONSTANT" code flag. Code flags describe side effects and
+    exception behavior; const-method metadata describes whether a method can be called through a read-only receiver.
 
     @subsection static_methods Static Methods
     Methods declared with the <tt><b>static</b></tt> keyword are like regular functions that are attached to the class. These methods are not associated with a particular object's state and therefore are not allowed to refer to object members or call non-static methods. Also, no reference to the special <tt>self</tt> variable is allowed within static methods.\n\n
@@ -417,11 +475,11 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     @code{.py}
 class Test {
     public {
-        const Version = "1.0";
+        const string Version = "1.0";
     }
 
     private {
-        const Limit = 100;
+        const int Limit = 100;
     }
 
     private:internal {
@@ -429,6 +487,8 @@ class Test {
     }
 }
     @endcode
+
+    Class constants can include an explicit type before the constant name, using the same syntax and initializer checks as @ref constants "namespace constants".
 
     @note Class constants cannot have the same names as @ref static_class_variables "static class variables".
 

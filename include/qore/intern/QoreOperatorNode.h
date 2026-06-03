@@ -131,9 +131,15 @@ public:
 
     DLLLOCAL int checkLValue(QoreValue exp, int pflag, bool assignment = true) {
         if (exp) {
-            if (check_lvalue(exp, assignment)) {
-                parse_error(*loc, "expecting lvalue for %s, got '%s' instead", getTypeName(), exp.getTypeName());
-                return -1;
+            int lvalue_err = check_lvalue(exp, assignment);
+            if (lvalue_err) {
+                if (lvalue_err == -1) {
+                    parse_error(*loc, "expecting lvalue for %s, got '%s' instead", getTypeName(),
+                        exp.getTypeName());
+                }
+                return lvalue_err;
+            } else if ((pflag & PF_CONST_METHOD) && check_const_method_lvalue(loc, exp)) {
+                return -2;
             } else if ((pflag & PF_BACKGROUND) && exp.getType() == NT_VARREF
                 && exp.get<const VarRefNode>()->getType() == VT_LOCAL) {
                 parse_error(*loc, "illegal local variable modification with the background operator in %s",
@@ -445,6 +451,8 @@ public:
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreFoldlOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
+#include "qore/intern/QoreIterateOperatorNode.h"
+#include "qore/intern/QoreStreamingOperatorNode.h"
 #include "qore/intern/QoreNullCoalescingOperatorNode.h"
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/QoreChompOperatorNode.h"

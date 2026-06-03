@@ -46,6 +46,7 @@
 const char* qoreBoolTypeName = "bool";
 const char* qoreIntTypeName = "integer";
 const char* qoreFloatTypeName = "float";
+const char* qoreCharTypeName = "char";
 
 // ============================================================================
 // Constructors
@@ -204,6 +205,72 @@ QoreValue QoreValue::makeUtf8StringValue(const char* str) {
     return makeStringValue(str, str ? strlen(str) : 0, QCS_UTF8);
 }
 
+QoreValue QoreValue::makeChar(unsigned codepoint) {
+    assert(isValidCharCodepoint(codepoint));
+    QoreValue v;
+    v.setChar(codepoint);
+    return v;
+}
+
+QoreValue QoreValue::makeCharFromString(const QoreString& str, ExceptionSink* xsink) {
+    if (!str.size()) {
+        if (xsink) {
+            xsink->raiseException("INVALID-CHAR-CONVERSION",
+                "cannot convert an empty string to char; exactly one Unicode codepoint is required");
+        }
+        return QoreValue();
+    }
+
+    unsigned clen = 0;
+    unsigned codepoint = str.getUnicodePointFromBytePos(0, clen, xsink);
+    if (xsink && *xsink) {
+        return QoreValue();
+    }
+    if (clen != str.size()) {
+        if (xsink) {
+            xsink->raiseException("INVALID-CHAR-CONVERSION",
+                "cannot convert a string with more than one Unicode codepoint to char");
+        }
+        return QoreValue();
+    }
+    if (!isValidCharCodepoint(codepoint)) {
+        if (xsink) {
+            xsink->raiseException("INVALID-CHAR-CONVERSION",
+                "Unicode codepoint U+%08X exceeds maximum U+10FFFF", codepoint);
+        }
+        return QoreValue();
+    }
+    return makeChar(codepoint);
+}
+
+QoreValue QoreValue::makeCharFromStringAt(const QoreString& str, qore_offset_t offset, ExceptionSink* xsink) {
+    TempString ch(str.substr(offset, 1, xsink));
+    if (xsink && *xsink) {
+        return QoreValue();
+    }
+    if (!ch) {
+        return QoreValue();
+    }
+    return makeCharFromString(**ch, xsink);
+}
+
+QoreStringNode* QoreValue::makeCharString(unsigned codepoint, const QoreEncoding* enc, ExceptionSink* xsink) {
+    if (!isValidCharCodepoint(codepoint)) {
+        if (xsink) {
+            xsink->raiseException("INVALID-CHAR-CONVERSION",
+                "Unicode codepoint U+%08X exceeds maximum U+10FFFF", codepoint);
+        }
+        return nullptr;
+    }
+
+    QoreStringNode* rv = new QoreStringNode("", enc ? enc : QCS_UTF8);
+    if (rv->concatUnicode(codepoint, xsink)) {
+        rv->deref();
+        return nullptr;
+    }
+    return rv;
+}
+
 void QoreValue::getShortString(char* buf) const {
     assert(isShortString());
     size_t len = shortStringLen();
@@ -226,6 +293,9 @@ int64 QoreValue::getAsBigInt() const {
     }
     if (isBool()) {
         return getBool() ? 1 : 0;
+    }
+    if (isChar()) {
+        return static_cast<int64>(getChar());
     }
     if (isEnum()) {
         return getEnumMember()->getValue().getAsBigInt();
@@ -253,6 +323,9 @@ double QoreValue::getAsFloat() const {
     if (isBool()) {
         return getBool() ? 1.0 : 0.0;
     }
+    if (isChar()) {
+        return static_cast<double>(getChar());
+    }
     if (isEnum()) {
         return getEnumMember()->getValue().getAsFloat();
     }
@@ -278,6 +351,9 @@ bool QoreValue::getAsBool() const {
     if (isFloat()) {
         return getDouble() != 0.0;
     }
+    if (isChar()) {
+        return true;
+    }
     if (isEnum()) {
         return getEnumMember()->getValue().getAsBool();
     }
@@ -287,6 +363,9 @@ bool QoreValue::getAsBool() const {
     }
     if (isShortString()) {
         return shortStringLen() > 0;
+    }
+    if (isChar()) {
+        return true;
     }
     if (isNothing() || isNull()) {
         return false;
@@ -307,6 +386,9 @@ qore_type_t QoreValue::getType() const {
     }
     if (isBool()) {
         return NT_BOOLEAN;
+    }
+    if (isChar()) {
+        return NT_CHAR;
     }
     if (isEnum()) {
         // Return the base type for C++ dispatch compatibility
@@ -337,6 +419,9 @@ const char* QoreValue::getTypeName() const {
     }
     if (isBool()) {
         return qoreBoolTypeName;
+    }
+    if (isChar()) {
+        return qoreCharTypeName;
     }
     if (isEnum()) {
         // Return base type name for internal use / backward compatibility
@@ -400,7 +485,7 @@ bool QoreValue::hasEffect() const {
 
 bool QoreValue::isScalar() const {
     if (!isPointer()) {
-        return true;  // int, float, bool, short string are all scalar
+        return true;  // int, float, bool, char, short string are all scalar
     }
     qore_type_t t = getType();
     return t == NT_STRING || t == NT_NUMBER;
@@ -408,7 +493,7 @@ bool QoreValue::isScalar() const {
 
 bool QoreValue::isConstant() const {
     qore_type_t t = getType();
-    return t >= NT_NOTHING && t <= NT_NUMBER;
+    return (t >= NT_NOTHING && t <= NT_NUMBER) || t == NT_CHAR;
 }
 
 bool QoreValue::hasNode() const {
@@ -481,6 +566,8 @@ bool QoreValue::isEqualHard(const QoreValue& other) const {
             double b = other.getAsFloat();
             return a == b;
         }
+        case NT_CHAR:
+            return getChar() == other.getChar();
         case NT_STRING: {
             // Short strings have identical bits when equal.  If only one side
             // is inline, compare string contents instead of falling through to
@@ -748,6 +835,17 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
         str.sprintf(QLLD, getInt());
     } else if (isBool()) {
         qore_string_private::get(str)->concat(getBool() ? &TrueString : &FalseString);
+    } else if (isChar()) {
+        str.concat("c'");
+        SimpleRefHolder<QoreStringNode> ch(makeCharString(getChar(), QCS_UTF8, xsink));
+        if (!ch) {
+            return -1;
+        }
+        str.concatEscape(*ch, '\'', '\\', xsink);
+        if (xsink && *xsink) {
+            return -1;
+        }
+        str.concat('\'');
     } else if (isFloat()) {
         size_t offset = str.size();
         str.sprintf("%.9g", getDouble());
@@ -792,6 +890,15 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
     if (isBool()) {
         del = false;
         return getBool() ? &TrueString : &FalseString;
+    }
+    if (isChar()) {
+        del = true;
+        QoreString* rv = new QoreString("", QCS_UTF8);
+        if (rv->concatUnicode(getChar(), xsink)) {
+            delete rv;
+            return nullptr;
+        }
+        return rv;
     }
     if (isFloat()) {
         del = true;
@@ -883,6 +990,9 @@ const QoreTypeInfo* QoreValue::getTypeInfo() const {
     if (isBool()) {
         return boolTypeInfo;
     }
+    if (isChar()) {
+        return charTypeInfo;
+    }
     if (isEnum()) {
         return getEnumMember()->getEnumDecl()->getTypeInfo();
     }
@@ -952,6 +1062,9 @@ const char* QoreValue::getFullTypeName() const {
     if (isBool()) {
         return qoreBoolTypeName;
     }
+    if (isChar()) {
+        return qoreCharTypeName;
+    }
     if (isShortString()) {
         return "string";
     }
@@ -978,6 +1091,9 @@ const char* QoreValue::getFullTypeName(bool with_namespaces) const {
     if (isBool()) {
         return qoreBoolTypeName;
     }
+    if (isChar()) {
+        return qoreCharTypeName;
+    }
     if (isShortString()) {
         return "string";
     }
@@ -1003,6 +1119,9 @@ const char* QoreValue::getFullTypeName(bool with_namespaces, QoreString& scratch
     }
     if (isBool()) {
         return qoreBoolTypeName;
+    }
+    if (isChar()) {
+        return qoreCharTypeName;
     }
     if (isShortString()) {
         return "string";

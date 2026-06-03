@@ -9,7 +9,7 @@
 
 const TH = ("a":1);
 
-string sub switch_test(any val) {
+string sub switch_test(auto val) {
     string rv;
 
     switch (val) {
@@ -29,7 +29,7 @@ string sub switch_test(any val) {
     return rv;
 }
 
-string sub regex_switch_test(any val) {
+string sub regex_switch_test(auto val) {
     string rv;
 
     switch (val) {
@@ -107,17 +107,17 @@ class StatementTest inherits QUnit::Test {
         assertEq(3, v, "foreach");
         assertEq(3, b, "foreach exec");
 
-        any list1 = list x;
+        auto list1 = list x;
         assertEq(NOTHING, x, "unassigned typed variable");
         foreach string y in (\list1) y = "test";
         assertEq(NOTHING, list1, "first foreach reference");
 
         list1 = (1, 2, 3);
-        foreach any y in (\list1) y = "test";
+        foreach auto y in (\list1) y = "test";
         assertEq(("test", "test", "test"), list1, "second foreach reference");
 
         list1 = 1;
-        foreach any y in (\list1) y = "test";
+        foreach auto y in (\list1) y = "test";
         assertEq("test", list1, "third foreach reference");
     }
 

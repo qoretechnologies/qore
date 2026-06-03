@@ -208,6 +208,7 @@ public class ReflectionMetadataExtractor {
         string access = "public";
         bool is_static = False;
         bool is_abstract = False;
+        bool is_const_method = False;
         foreach auto mod in (modifiers) {
             string mod_str = string(mod);
             switch (mod_str) {
@@ -223,7 +224,13 @@ public class ReflectionMetadataExtractor {
                 case "abstract":
                     is_abstract = True;
                     break;
+                case "const":
+                    is_const_method = True;
+                    break;
             }
+        }
+        if (variant.isConstMethod()) {
+            is_const_method = True;
         }
 
         # extract params
@@ -258,6 +265,7 @@ public class ReflectionMetadataExtractor {
             "access": access,
             "is_static": is_static,
             "is_abstract": is_abstract,
+            "is_const_method": is_const_method,
             "is_deprecated": is_deprecated,
             "functional_domain": domain,
         });

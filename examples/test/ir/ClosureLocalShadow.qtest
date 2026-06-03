@@ -25,7 +25,7 @@ class ClosureLocalShadowTest inherits QUnit::Test {
 
     testStringIntShadow() {
         string value = "outer";
-        any seen;
+        auto seen;
         code inner = sub () {
             int value = 42;
             seen = value;

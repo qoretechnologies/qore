@@ -276,7 +276,7 @@ class QoreOnnxCli {
             bopts.session_config = buildSessionConfig(opts);
         }
         if (opts.benchmark_inputs.val()) {
-            bopts.inputs = cast<hash<auto>>(readJsonFile(opts.benchmark_inputs));
+            bopts.inputs = cast<hash>(readJsonFile(opts.benchmark_inputs));
         }
         return bopts;
     }
@@ -298,7 +298,7 @@ class QoreOnnxCli {
             copts.candidate_session_config = buildSessionConfig(opts);
         }
         if (opts.benchmark_inputs.val()) {
-            copts.inputs = cast<hash<auto>>(readJsonFile(opts.benchmark_inputs));
+            copts.inputs = cast<hash>(readJsonFile(opts.benchmark_inputs));
         }
         if (opts.abs_tolerance.val()) copts.abs_tolerance = opts.abs_tolerance.toFloat();
         if (opts.rel_tolerance.val()) copts.rel_tolerance = opts.rel_tolerance.toFloat();
@@ -336,16 +336,16 @@ class QoreOnnxCli {
             popts.minimum_onnxruntime_version = opts.minimum_onnxruntime_version;
         }
         if (opts.preprocess.val()) {
-            popts.preprocess = cast<hash<auto>>(readJsonFile(opts.preprocess));
+            popts.preprocess = cast<hash>(readJsonFile(opts.preprocess));
         }
         if (opts.postprocess.val()) {
-            popts.postprocess = cast<hash<auto>>(readJsonFile(opts.postprocess));
+            popts.postprocess = cast<hash>(readJsonFile(opts.postprocess));
         }
         if (opts.dynamic_axes.val()) {
-            popts.dynamic_axes = cast<hash<auto>>(readJsonFile(opts.dynamic_axes));
+            popts.dynamic_axes = cast<hash>(readJsonFile(opts.dynamic_axes));
         }
         if (opts.benchmarks.val()) {
-            popts.benchmarks = cast<hash<auto>>(readJsonFile(opts.benchmarks));
+            popts.benchmarks = cast<hash>(readJsonFile(opts.benchmarks));
         }
         if (opts.golden_vectors.val()) {
             popts.golden_vectors =
@@ -384,13 +384,13 @@ class QoreOnnxCli {
         if (command.val()) {
             switch (command) {
                 case "inspect":
-                    writeInspectResult(cast<hash<auto>>(result));
+                    writeInspectResult(cast<hash>(result));
                     return;
                 case "validate":
-                    writeValidationResult(cast<hash<auto>>(result));
+                    writeValidationResult(cast<hash>(result));
                     return;
                 case "package":
-                    writePackageResult(cast<hash<auto>>(result));
+                    writePackageResult(cast<hash>(result));
                     return;
             }
         }

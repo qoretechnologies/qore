@@ -15,7 +15,7 @@ class NullCoalescingTest inherits QUnit::Test {
     }
 
     testCoalescing() {
-        code code_example = any sub() {return;};
+        code code_example = auto sub() {return;};
         File file_example = new File();
 
         assertEq(2, 2 ?? 3, "int ?? int");
@@ -32,4 +32,3 @@ class NullCoalescingTest inherits QUnit::Test {
         assertEq(file_example, file_example ?? 3, "object ?? int");
     }
 }
-

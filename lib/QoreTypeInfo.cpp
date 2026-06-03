@@ -68,6 +68,9 @@ const QoreStringOrNothingTypeInfo staticStringOrNothingTypeInfo;
 const QoreBoolTypeInfo staticBoolTypeInfo;
 const QoreBoolOrNothingTypeInfo staticBoolOrNothingTypeInfo;
 
+const QoreCharTypeInfo staticCharTypeInfo;
+const QoreCharOrNothingTypeInfo staticCharOrNothingTypeInfo;
+
 const QoreBinaryTypeInfo staticBinaryTypeInfo;
 const QoreBinaryOrNothingTypeInfo staticBinaryOrNothingTypeInfo;
 
@@ -153,6 +156,9 @@ const QoreSoftNumberOrNothingTypeInfo staticSoftNumberOrNothingTypeInfo;
 const QoreSoftBoolTypeInfo staticSoftBoolTypeInfo;
 const QoreSoftBoolOrNothingTypeInfo staticSoftBoolOrNothingTypeInfo;
 
+const QoreSoftCharTypeInfo staticSoftCharTypeInfo;
+const QoreSoftCharOrNothingTypeInfo staticSoftCharOrNothingTypeInfo;
+
 const QoreSoftStringTypeInfo staticSoftStringTypeInfo;
 const QoreSoftStringOrNothingTypeInfo staticSoftStringOrNothingTypeInfo;
 
@@ -180,6 +186,7 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *bigIntTypeInfo = &staticBigIntTypeInfo,
    *floatTypeInfo = &staticFloatTypeInfo,
    *boolTypeInfo = &staticBoolTypeInfo,
+   *charTypeInfo = &staticCharTypeInfo,
    *stringTypeInfo = &staticStringTypeInfo,
    *binaryTypeInfo = &staticBinaryTypeInfo,
    *dateTypeInfo = &staticDateTypeInfo,
@@ -210,6 +217,7 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *softFloatTypeInfo = &staticSoftFloatTypeInfo,
    *softNumberTypeInfo = &staticSoftNumberTypeInfo,
    *softBoolTypeInfo = &staticSoftBoolTypeInfo,
+   *softCharTypeInfo = &staticSoftCharTypeInfo,
    *softStringTypeInfo = &staticSoftStringTypeInfo,
    *softDateTypeInfo = &staticSoftDateTypeInfo,
    *softListTypeInfo = &staticSoftListTypeInfo,
@@ -225,6 +233,7 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *numberOrNothingTypeInfo = &staticNumberOrNothingTypeInfo,
    *stringOrNothingTypeInfo = &staticStringOrNothingTypeInfo,
    *boolOrNothingTypeInfo = &staticBoolOrNothingTypeInfo,
+   *charOrNothingTypeInfo = &staticCharOrNothingTypeInfo,
    *binaryOrNothingTypeInfo = &staticBinaryOrNothingTypeInfo,
    *objectOrNothingTypeInfo = &staticObjectOrNothingTypeInfo,
    *dateOrNothingTypeInfo = &staticDateOrNothingTypeInfo,
@@ -250,6 +259,7 @@ const QoreTypeInfo* anyTypeInfo = &staticAnyTypeInfo,
    *softFloatOrNothingTypeInfo = &staticSoftFloatOrNothingTypeInfo,
    *softNumberOrNothingTypeInfo = &staticSoftNumberOrNothingTypeInfo,
    *softBoolOrNothingTypeInfo = &staticSoftBoolOrNothingTypeInfo,
+   *softCharOrNothingTypeInfo = &staticSoftCharOrNothingTypeInfo,
    *softStringOrNothingTypeInfo = &staticSoftStringOrNothingTypeInfo,
    *softDateOrNothingTypeInfo = &staticSoftDateOrNothingTypeInfo,
    *softListOrNothingTypeInfo = &staticSoftListOrNothingTypeInfo,
@@ -436,6 +446,7 @@ void init_qore_types() {
 
     do_maps(NT_INT,             "int", bigIntTypeInfo, bigIntOrNothingTypeInfo);
     do_maps(NT_STRING,          "string", stringTypeInfo, stringOrNothingTypeInfo);
+    do_maps(NT_CHAR,            "char", charTypeInfo, charOrNothingTypeInfo);
     do_maps(NT_BOOLEAN,         "bool", boolTypeInfo, boolOrNothingTypeInfo);
     do_maps(NT_FLOAT,           "float", floatTypeInfo, floatOrNothingTypeInfo);
     do_maps(NT_NUMBER,          "number", numberTypeInfo, numberOrNothingTypeInfo);
@@ -461,6 +472,7 @@ void init_qore_types() {
     do_maps(NT_SOFTFLOAT,       "softfloat", softFloatTypeInfo, softFloatOrNothingTypeInfo);
     do_maps(NT_SOFTNUMBER,      "softnumber", softNumberTypeInfo, softNumberOrNothingTypeInfo);
     do_maps(NT_SOFTBOOLEAN,     "softbool", softBoolTypeInfo, softBoolOrNothingTypeInfo);
+    do_maps(NT_SOFTCHAR,        "softchar", softCharTypeInfo, softCharOrNothingTypeInfo);
     do_maps(NT_SOFTSTRING,      "softstring", softStringTypeInfo, softStringOrNothingTypeInfo);
     do_maps(NT_SOFTDATE,        "softdate", softDateTypeInfo, softDateOrNothingTypeInfo);
     do_maps(NT_SOFTLIST,        "softlist", softListTypeInfo, softListOrNothingTypeInfo);
@@ -2306,6 +2318,10 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
 }
 
 const QoreTypeInfo* getBuiltinUserTypeInfo(const char* str) {
+    if (!strcmp(str, "char") && (parse_get_parse_options() & QoreParseOptions::NO_CHAR_TYPE)) {
+        return nullptr;
+    }
+
     str_typeinfo_map_t::iterator i = str_typeinfo_map.find(str);
     if (i == str_typeinfo_map.end())
         return nullptr;
@@ -2318,6 +2334,10 @@ const QoreTypeInfo* getBuiltinUserTypeInfo(const char* str) {
 }
 
 const QoreTypeInfo* getBuiltinUserOrNothingTypeInfo(const char* str) {
+    if (!strcmp(str, "char") && (parse_get_parse_options() & QoreParseOptions::NO_CHAR_TYPE)) {
+        return nullptr;
+    }
+
     str_typeinfo_map_t::iterator i = str_ornothingtypeinfo_map.find(str);
     if (i == str_ornothingtypeinfo_map.end())
         return nullptr;

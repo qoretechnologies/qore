@@ -97,7 +97,7 @@ public class QdpDpqlTest inherits QUnit::Test {
         throw "MODULE-ERROR", "yaml module not available";
         return ();
 %else
-        return cast<list<auto>>(parse_yaml(data));
+        return cast<list>(parse_yaml(data));
 %endif
     }
 

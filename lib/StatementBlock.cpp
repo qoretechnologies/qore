@@ -569,6 +569,10 @@ int StatementBlock::parseInitMethod(const QoreTypeInfo* typeInfo, UserVariantBas
 
     // initialize code block
     QoreParseContext parse_context(uvb->getUserSignature()->selfid);
+    const MethodVariantBase* mvb = dynamic_cast<const MethodVariantBase*>(uvb);
+    if (mvb && mvb->isConstMethod()) {
+        parse_context.setFlags(PF_CONST_METHOD);
+    }
     int err = parseInitImpl(parse_context);
     if (parseCheckReturn() && !err) {
         err = -1;
@@ -618,6 +622,9 @@ int StatementBlock::parseInitClosure(UserVariantBase* uvb, UserClosureFunction* 
 
     // initialize code block
     QoreParseContext parse_context(uvb->getUserSignature()->selfid);
+    if (cf->isConstMethodContext()) {
+        parse_context.setFlags(PF_CONST_METHOD);
+    }
     int err = parseInitImpl(parse_context);
     if (parseCheckReturn() && !err) {
         err = -1;

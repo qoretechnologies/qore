@@ -94,7 +94,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v3: added timezone metadata for IR date constants
 //! v4: all serialized cast expression kinds carry their inner expression
 //! v5: fixed-offset IR date constants serialize their UTC offset instead of an empty zone name
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 5;
+//! v6: added char value serialization tag
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 6;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -158,8 +159,11 @@ constexpr uint64_t QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS = 1ULL << 50; //!< hashd
 constexpr uint64_t QORE_AOT_FEAT_TYPE_PARAM_BOUNDS = 1ULL << 51; //!< class/hashdecl type parameter records preserve bound type arguments
 constexpr uint64_t QORE_AOT_FEAT_PLUGIN_DISPATCH = 1ULL << 52; //!< IR debug/AOT records may contain plugin dispatch opcodes
 constexpr uint64_t QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND = 1ULL << 53; //!< complex buffer records/slots preserve sized/filled factory kind
+constexpr uint64_t QORE_AOT_FEAT_READONLY_LOCALS = 1ULL << 54; //!< signatures and local slot metadata preserve read-only local bindings
+constexpr uint64_t QORE_AOT_FEAT_CONST_METHODS = 1ULL << 55; //!< METHODS variant flags preserve const-method receiver contracts
+constexpr uint64_t QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS = 1ULL << 56; //!< Closure-call records preserve caller-cache invalidation metadata
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x01FFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -236,6 +240,9 @@ enum class QoreAOTValueTag : uint8_t {
     //! Encoded as import_idx(u16) + local_type_id(u16) + serializer_format_version(u16)
     //! + reserved(u16) + payload_len(u32) + payload bytes.
     VT_PLUGIN_INSTANCE = 20,
+    //! Unicode char value.
+    //! Encoded as codepoint(u32).
+    VT_CHAR = 21,
 };
 
 //! Optional value-container type metadata kind, present in VT_LIST/VT_HASH
@@ -1073,6 +1080,8 @@ enum class AOTExprKind : uint8_t {
     LOG_AEQ            = 105, //!< Logical absolute equality operator: left(AOTExprKind) + right(AOTExprKind)
     LOG_ANE            = 106, //!< Logical absolute not-equals operator: left(AOTExprKind) + right(AOTExprKind)
     COMPLEX_BUFFER_NEW = 107, //!< Complex buffer construction: type_path + init kind in expr streams; ref1=type_path, flags=init kind in slot maps
+    ITERATE            = 108, //!< Iterate operator: source expression
+    STREAMING          = 109, //!< Streaming operator: kind byte + predicate/count expression + source expression
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -1230,13 +1239,15 @@ enum class AOTExprNodeKind : uint8_t {
 
     EN_FOLDL         = 164, //!< 2 children: [accumulator_expr, source]
     EN_FOLDR         = 165, //!< 2 children: [accumulator_expr, source]
+    EN_ITERATE       = 166, //!< 1 child: [source]
+    EN_STREAMING     = 167, //!< u8 kind; 2 children: [predicate_or_count, source]
 };
 
 //! Identity for a local variable slot
 struct AOTLocalSlotId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path from QoreTypeInfo::getPath()
-    uint8_t flags = 0;       //!< bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv
+    uint8_t flags = 0;       //!< bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv, bit 4: read-only
     uint16_t param_index = 0;//!< parameter index (valid only if is_param flag set)
     uint32_t body_ordinal = UINT32_MAX; //!< index in all_body_locals when this slot is a body local
     const void* local_var_ptr = nullptr; //!< compile-time only: pointer to LocalVar for identity matching
@@ -1269,6 +1280,7 @@ struct AOTBodyLocalId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path
     bool is_closure = false; //!< true if closure variable
+    bool read_only = false;  //!< true if read-only binding
     uint32_t slot_id = UINT32_MAX; //!< local slot id when available
 };
 

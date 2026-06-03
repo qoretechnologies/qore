@@ -213,6 +213,107 @@ public:
     */
     DLLEXPORT static const QoreParseOptions FP_FAST_MATH;
 
+    //! extended option: disable the \c iterate streaming keyword (bit 72)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_ITERATE;
+
+    //! extended option: disable the \c first streaming keyword and \c find \c first modifier (bit 73)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_FIRST;
+
+    //! extended option: disable the \c any streaming operator keyword (bit 74)
+    /** The \c any type name remains available.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_ANY_OPERATOR;
+
+    //! extended option: disable the \c all streaming operator keyword (bit 75)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_ALL_OPERATOR;
+
+    //! extended option: disable the \c count streaming operator keyword (bit 76)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_COUNT;
+
+    //! extended option: disable the \c take streaming operator keyword (bit 77)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_TAKE;
+
+    //! extended option: disable the \c drop streaming operator keyword (bit 78)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_DROP;
+
+    //! extended option: disable the \c takewhile streaming operator keyword (bit 79)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_TAKEWHILE;
+
+    //! extended option: disable the \c takeuntil streaming operator keyword (bit 80)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_TAKEUNTIL;
+
+    //! extended option: disable \c find modifiers added for streaming support (bit 81)
+    /** Disables \c find \c first, \c find \c last, and \c find \c one. The legacy
+        \c find form remains available.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_FIND_MODIFIERS;
+
+    //! extended option: disable streaming-chain compiler fusion (bit 82)
+    /** Streaming operators remain available; only compiler fusion is disabled.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_STREAM_FUSION;
+
+    //! extended option: prefer the \c any streaming operator in legacy ambiguous expression contexts (bit 83)
+    /** Source-only \c any operator usage should use the parenthesized form (\c any \c (source)) so
+        \c any \c name; remains a declaration. This option is implied by \c PO_MODERN for compatibility
+        with the initial streaming-operator implementation. \c NO_ANY_OPERATOR disables the operator.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions STREAMING_ANY;
+
+    //! extended option: disable the \c char builtin type name and char literals (bit 84)
+    /** This option keeps \c char available for legacy code that uses it as an identifier or user-defined type name.
+        @since %Qore 2.4
+    */
+    DLLEXPORT static const QoreParseOptions NO_CHAR_TYPE;
+
+    //! extended option: keep string single-index access returning a string (bit 85)
+    /** When set, \c str[i] preserves the historical \c *string behavior instead of returning \c *char.
+        @since %Qore 2.4
+    */
+    DLLEXPORT static const QoreParseOptions NO_STRING_INDEX_CHAR;
+
+    //! extended option: interpret negative container offsets relative to the end (bit 86)
+    /** When set, negative list, string, binary, and buffer indexes and slice endpoints
+        are interpreted as offsets from the end of the container.
+        @since %Qore 2.4
+    */
+    DLLEXPORT static const QoreParseOptions NEGATIVE_OFFSETS;
+
+    //! extended option bundle: disable all streaming operator keywords and find modifiers
+    /** This is a convenience mask combining the individual keyword opt-outs.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_STREAMING_OPERATORS;
+
+    //! extended option: allow misleading no-op \c cast<hash<auto>> / \c cast<list<auto>> casts (bit 87)
+    /** When set, \c cast<hash<auto>>(...), \c cast<list<auto>>(...) and their \c "or nothing" variants
+        are accepted (as no-ops) instead of raising a parse error.  Provided for backward compatibility
+        with code written before these casts were rejected; new code should use \c cast<hash>(...) /
+        \c cast<list>(...) instead.  Not included in \c PO_MODERN.
+        @since %Qore 2.4
+    */
+    DLLEXPORT static const QoreParseOptions BROKEN_AUTO_CAST;
+
 private:
     int64 lo;  //!< bits 0-63 (compatible with legacy int64 parse options)
     int64 hi;  //!< bits 64-127 (extended parse options)

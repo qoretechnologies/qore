@@ -114,6 +114,16 @@ stream.close();
 %define NoJson
 %endtry
 
+%ifdef NoJson
+auto sub make_json(auto val, *int flags) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+
+auto sub parse_json(string val) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+%endif
+
 #! the AnthropicRestClient namespace contains all the objects in the AnthropicRestClient module
 public namespace AnthropicRestClient {
 #! Common base class for AnthropicRestClient functionality

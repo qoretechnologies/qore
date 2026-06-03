@@ -125,6 +125,13 @@ public class DebugCmdLineTest inherits QUnit::Test {
             hash<auto> r = dcl.testSplitCmd("cmd \\r");
             assertEq(("cmd", "\r"), r.args);
         }
+
+        # Unicode arguments are scanned as characters, not UTF-8 bytes
+        {
+            hash<auto> r = dcl.testSplitCmd("cmd café '東京 test'");
+            assertEq(("cmd", "café", "東京 test"), r.args);
+            assertEq({"start": 4, "end": 8}, r.pos[1]);
+        }
     }
 
     getStatementValueTests() {

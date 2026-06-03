@@ -93,6 +93,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     int err = parse_init_value(left, parse_context);
     const QoreTypeInfo* typeInfo = parse_context.typeInfo;
+    bool readonly_receiver = parse_is_readonly_receiver_expression(left, parse_context.pflag);
 
     // Store the source type for iterator element type inference in map operators
     m->setSourceType(typeInfo);
@@ -121,7 +122,14 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
                 // check parameters, if any
                 parse_context.typeInfo = nullptr;
-                if (m->parseArgs(parse_context, qore_method_private::get(*meth)->getFunction(), nullptr) && !err) {
+                QoreFunction* func = qore_method_private::get(*meth)->getFunction();
+                if (m->parseArgs(parse_context, func, nullptr) && !err) {
+                    err = -1;
+                }
+                if (readonly_receiver
+                    && check_readonly_receiver_method_call(loc, mname,
+                        static_cast<const MethodVariantBase*>(m->getVariant()), func)
+                    && !err) {
                     err = -1;
                 }
                 returnTypeInfo = parse_context.typeInfo;
@@ -166,6 +174,13 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     const QoreListNode* args = m->getArgs();
     if (!strcmp(mname, "copy")) {
+        if (readonly_receiver) {
+            parseException(*loc, "READONLY-RECEIVER-ERROR",
+                "cannot call non-const copy() on read-only receiver");
+            if (!err) {
+                err = -1;
+            }
+        }
         if (args && args->size()) {
             parse_error(*loc, "no arguments may be passed to copy methods (%lu argument%s given in call to " \
                 "%s::copy())", args->size(), args->size() == 1 ? "" : "s", qc->getName());
@@ -214,6 +229,29 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
         // allow the method to be resolved at runtime
         if (!meth) {
+            if (readonly_receiver) {
+                const QoreMethod* gate = qore_class_private::get(*qc)->parseGetMethodGate();
+                if (gate) {
+                    QoreFunction* gate_func = qore_method_private::get(*gate)->getFunction();
+                    gate_func->resolvePendingSignatures();
+                    QoreFunctionIterator vi(*gate_func);
+                    while (vi.next()) {
+                        if (check_readonly_receiver_method_call(loc, "methodGate",
+                                static_cast<const MethodVariantBase*>(vi.getVariant()), gate_func) && !err) {
+                            err = -1;
+                        }
+                    }
+                }
+
+                if (!gate) {
+                    parseException(*loc, "READONLY-RECEIVER-ERROR",
+                        "cannot resolve const method or const methodGate() for readonly receiver method call '%s()'",
+                        mname);
+                    if (!err) {
+                        err = -1;
+                    }
+                }
+            }
             QoreValue tmp = m;
             if (m->parseInit(tmp, parse_context) && !err) {
                 err = -1;
@@ -230,7 +268,14 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     }
 
     // check parameters, if any
-    if (m->parseArgs(parse_context, qore_method_private::get(*meth)->getFunction(), nullptr) && !err) {
+    QoreFunction* func = qore_method_private::get(*meth)->getFunction();
+    if (m->parseArgs(parse_context, func, nullptr) && !err) {
+        err = -1;
+    }
+    if (readonly_receiver
+        && check_readonly_receiver_method_call(loc, mname, static_cast<const MethodVariantBase*>(m->getVariant()),
+            func)
+        && !err) {
         err = -1;
     }
     returnTypeInfo = parse_context.typeInfo;

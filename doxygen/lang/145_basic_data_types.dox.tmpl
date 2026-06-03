@@ -8,6 +8,7 @@
     |!Type|!Description|!Example|!Default Value
     |@ref boolean|@ref True "True" or @ref False "False" value|@ref True "True"|@ref False "False"
     |@ref string|A sequence of characters with a @ref character_encoding "character encoding"|\c "string"|Empty string (i.e. \c "")
+    |@ref char|A single Unicode codepoint value|\c c'A'|<tt>c'\\u{0}'</tt>
     |@ref integer|A 64-bit signed integer|\c 1|\c 0
     |@ref float|A double-precision floating-point number|\c 1.00023|\c 0.0
     |@ref number|An arbitrary-precision number|\c 5.23928173726123e50n|\c 0.0n
@@ -82,6 +83,9 @@ on more than 1 line";
     @code{.py}
 string str = "hello";
 
+# Retrieves one character as a char value
+char ch = str[1];        # c'e'
+
 # Creates a substring with the first two characters of the original string
 string str1a = str[0..1];
 string str1b = str[0,1];
@@ -93,8 +97,10 @@ printf("string 1c: %y\n", str1c);
 # Creates a substring with the last two characters of the original string in reverse order
 string str2a = str[4..3];
 string str2b = str[4,3];
+string str2c = str[-1..-2];
 printf("string 2a: %y\n", str2a);
 printf("string 2b: %y\n", str2b);
+printf("string 2c: %y\n", str2c);
 
 # Creates a substring from different characters in the string
 string str3 = str[4,3..1,0];
@@ -108,8 +114,12 @@ string 1b: "he"
 string 1c: "he"
 string 2a: "ol"
 string 2b: "ol"
+string 2c: "ol"
 string 3: "olleh"
     @endcode \n
+
+    A single integer string index returns a @ref char value or @ref nothing when the index is out of range.  Range and list indexes still return strings.  The @ref no-string-index-char "%no-string-index-char" parse directive preserves the historical single-index behavior, returning \c *string instead of \c *char for compatibility with older code.
+    With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative string indexes and explicit negative range endpoints are resolved from the end of the string by character offset.  Use @ref no-negative-offsets "%no-negative-offsets" after @ref modern "%modern" to preserve legacy negative range behavior.
 
     When making a substring with a list of character offsets and referring to a character offset that does not exist,
     no characters are added to the output string; these references are ignored.
@@ -129,6 +139,7 @@ string 3: "olleh"
     |\c \\\\|Literal backslash
     |\c \\0 to \\377|Octal byte value (1-3 digits)
     |\c \\xHH|Hex byte value (1-2 hex digits)
+    |\c \\u{H...}|Unicode codepoint (1-6 hex digits), encoded as UTF-8
     |\c \\uHHHH|Unicode codepoint (exactly 4 hex digits), encoded as UTF-8
     |\c \\UHHHHHHHH|Unicode codepoint (exactly 8 hex digits), encoded as UTF-8
 
@@ -137,6 +148,7 @@ string 3: "olleh"
     @par Example:
     @code{.py}
 string box = "\u2500\u2500\u2500";    # "───" (3 box-drawing chars)
+string box2 = "\u{2500}\u{2500}\u{2500}";
 string smiley = "\U0001F600";          # "😀"
 string tab = "\t";
 string hex_A = "\x41";                 # "A"
@@ -145,6 +157,49 @@ string hex_A = "\x41";                 # "A"
     @see
     - @ref string_type, @ref softstring_type
     - @ref string_functions
+
+    <hr>
+    @section char Char
+
+    @par Description:
+    A \c char value stores exactly one Unicode codepoint inline in the value.  It has no associated encoding; encoding is only applied when the value is converted to a @ref string "string".\n\n
+    Char literals use a \c c prefix before a single- or double-quoted literal.  The decoded contents must contain exactly one codepoint:
+    @code{.py}
+char ascii = c'A';
+char newline = c"\n";
+char e_acute = c"\u{E9}";
+char smile = c"\U0001F600";
+    @endcode
+
+    A @ref char value converts automatically to @ref string "string" in string contexts and can be explicitly converted to @ref integer "integer" with \c int() or \c cast<int>().  Assignment from @ref string "string" or @ref integer "integer" to \c char requires the \c softchar type or an explicit cast and is checked at runtime:
+    @code{.py}
+char c1 = c'Q';
+string s = c1;             # "Q"
+int cp = int(c1);          # 81
+char c2 = cast<char>("Q"); # exactly one codepoint required
+char c3 = cast<char>(0x51);
+    @endcode
+
+    Strings expose char values directly:
+    @code{.py}
+char first = "café"[0];                         # c'c'
+list<int> cps = map $1.ord(), iterate "café";   # (99, 97, 102, 233)
+    @endcode
+
+    @par Pseudo Class for Type Char:
+    @ref Qore::zzz8charzzz9
+
+    @par Type Code:
+    @ref Qore::NT_CHAR
+
+    @par Type Name:
+    \c "char"
+
+    @see
+    - @ref char_type, @ref softchar_type
+    - <tt>[]</tt> operator
+    - <tt>iterate</tt> operator
+    - @ref no-char-type "%no-char-type"
 
     <hr>
     @section integer Integer
@@ -423,8 +478,10 @@ printf("binary 1c: %s\n", bin1c.toHex());
 # Creates a binary slice with the last two bytes of the original binary object in reverse order
 binary bin2a = bin[3..2];
 binary bin2b = bin[3,2];
+binary bin2c = bin[-1..-2];
 printf("binary 2a: %s\n", bin2a.toHex());
 printf("binary 2b: %s\n", bin2b.toHex());
+printf("binary 2c: %s\n", bin2c.toHex());
 
 # Creates a binary slice with different bytes of the original binary object
 binary bin3 = bin[3,2..1,0];
@@ -437,11 +494,13 @@ binary 1b: bead
 binary 1c: bead
 binary 2a: cefa
 binary 2b: cefa
+binary 2c: cefa
 binary 3: cefaadbe
     @endcode \n
 
     When making a binary slice with a list of byte offsets and referring to a byte offset that does not exist,
     no bytes are added to the output binary slice; these references are ignored.
+    With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative binary indexes and explicit negative range endpoints are resolved from the end of the binary value.
 
     @see
     - @ref binary_type

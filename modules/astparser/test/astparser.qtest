@@ -417,6 +417,7 @@ sub test() {
         addTestCase("Hashdecl parsing", \testHashdeclParsing());
         addTestCase("Hashdecl inheritance parsing", \testHashdeclInheritanceParsing());
         addTestCase("Constant parsing", \testConstantParsing());
+        addTestCase("Read-only const syntax parsing", \testReadonlyConstSyntaxParsing());
 %endif
         addTestCase("Symbol kind constants", \testSymbolKindConstants());
 %ifdef HasAstTreeSearcher
@@ -430,6 +431,7 @@ sub test() {
         addTestCase("Generic hashdecl CST", \testGenericHashdeclGetNodesInfo());
         addTestCase("Generic wildcard CST", \testGenericWildcardGetNodesInfo());
         addTestCase("Generic object type CST", \testGenericObjectTypeGetNodesInfo());
+        addTestCase("Const method CST", \testConstMethodGetNodesInfo());
 %ifdef HasAstTreeSearcher
         addTestCase("Scope symbols", \testScopeSymbols());
         addTestCase("Doc comments", \testDocComments());
@@ -476,6 +478,9 @@ sub test() {
         addTestCase("Standalone time literal", \testTimeLiteral());
         addTestCase("Special float literals", \testSpecialFloatLiterals());
         addTestCase("Union as variable name", \testUnionAsVariableName());
+        addTestCase("Streaming any ambiguity", \testStreamingAnyAmbiguity());
+        addTestCase("Value coalescing ?: alias", \testValueCoalescingAlias());
+        addTestCase("Negative offset directives", \testNegativeOffsetDirectives());
         addTestCase("String key in variable dot notation", \testStringKeyDotNotation());
         addTestCase("Hash kind - curly vs parens", \testHashKind());
 %ifdef HasAstTreeSearcher
@@ -1196,6 +1201,45 @@ sub test() {
         testAssertion("PI constant found", \equals(), (foundPI, True));
         testAssertion("E constant found", \equals(), (foundE, True));
     }
+
+    testReadonlyConstSyntaxParsing() {
+        string code = "
+%modern
+const int TopLimit = 3;
+public const string PublicName = \"qore\";
+
+int sub f(const int value) {
+    const auto local = value + TopLimit;
+    return local;
+}
+
+class C {
+    public {
+        const string Label = \"c\";
+    }
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertTrue(exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        assertEq(3, countNodesByType(nodes, "constant_declaration"), "typed constants parsed as constants");
+        assertEq(1, countNodesByType(nodes, "local_variable_declaration"), "const local parsed as local declaration");
+
+        *hash<auto> fn = findNodeByType(nodes, "function_declaration");
+        assertTrue(exists(fn), "function declaration found");
+        *hash<auto> params = findChildByType(fn, "parameter_list");
+        assertTrue(exists(params), "parameter list found");
+        *hash<auto> param = findChildByType(params, "parameter");
+        assertTrue(exists(param), "const parameter parsed as parameter");
+        assertEq("value", findChildByField(param, "name").text, "const parameter name");
+        *hash<auto> paramType = findChildByField(param, "type");
+        assertTrue(exists(paramType), "const parameter type parsed");
+        assertEq("int", getLeafText(paramType), "const parameter type");
+        assertTrue(param.loc.start_column < paramType.loc.start_column, "const modifier included in parameter range");
+    }
 %endif
 
     testSymbolKindConstants() {
@@ -1502,6 +1546,74 @@ sub test() {
         assertTrue(exists(objectType), "object generic type parsed as a type");
         assertEq(2, countNodesByType(objectType, "complex_type"), "object type contains nested hash type");
         assertEq(1, countNodesByType(objectType, "generic_type"), "object type contains Queue generic type");
+    }
+
+    testConstMethodGetNodesInfo() {
+        string testCode = "
+%new-style
+class C {
+    int value() const {
+        return 1;
+    }
+
+    abstract string name() const;
+}
+
+int C::out() const returns int {
+    return 2;
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertTrue(exists(tree), "parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash<auto> classNode = findNodeByType(nodes, "class_declaration");
+        assertTrue(exists(classNode), "class node found");
+
+        list<auto> methods = findAllChildrenByType(classNode, "method_declaration");
+        assertEq(2, methods.size(), "two inline method declarations");
+        foreach auto method in (methods) {
+            *hash<auto> qualifier = findChildByType(method, "method_qualifier");
+            assertTrue(exists(qualifier), "method has const qualifier node");
+            assertEq("const", qualifier.text, "method qualifier text");
+        }
+
+        *hash<auto> valueReturns = findChildByField(methods[0], "return_type");
+        assertTrue(exists(valueReturns), "value method has prefix return type");
+        assertEq("int", getLeafText(valueReturns), "value prefix return type");
+
+        *hash<auto> outMethod;
+        foreach auto node in (nodes) {
+            if (node.type == "function_declaration" && exists findChildByType(node, "method_qualifier")) {
+                outMethod = node;
+                break;
+            }
+        }
+        assertTrue(exists(outMethod), "out-of-line const method declaration found");
+        *hash<auto> outReturns = findChildByField(outMethod, "returns");
+        assertTrue(exists(outReturns), "out-of-line method has returns type");
+        assertEq("int", getLeafText(outReturns), "out-of-line returns type");
+
+        AstTreeSearcher searcher();
+        *list<auto> members = searcher.findTypeMembers(tree, "test.q", "C", False);
+        assertTrue(exists(members), "class members found");
+        bool foundValue = False;
+        bool foundName = False;
+        foreach auto member in (members) {
+            if (member.name == "value") {
+                foundValue = True;
+                assertEq(True, member.isConstMethod, "value member is const method");
+                assertEq("int", member.returnType, "value return type");
+            } else if (member.name == "name") {
+                foundName = True;
+                assertEq(True, member.isConstMethod, "name member is const method");
+                assertEq("string", member.returnType, "name return type");
+            }
+        }
+        assertTrue(foundValue, "value member found");
+        assertTrue(foundName, "name member found");
     }
 
 %ifdef HasAstTreeSearcher
@@ -2889,6 +3001,78 @@ sub test() {
         AstParser parser2();
         *AstTree tree2 = parser2.parseString(code2);
         assertEq(0, parser2.getErrorCount(), "no parse errors for st.union member access");
+    }
+
+    testStreamingAnyAmbiguity() {
+string code = "%modern
+bool sub hasValue(int value) {
+    return value > 0;
+}
+bool sub hasValues(list<int> values) {
+    any saved = values;
+    *any maybe = NOTHING;
+    bool has_values = any values;
+    bool has_positive = any hasValue($1), values;
+    return has_values && has_positive;
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors for modern streaming any");
+        assertTrue(exists(tree), "modern streaming any parsed successfully");
+
+        list<auto> nodes = tree.getNodesInfo();
+        assertEq(2, countNodesByType(nodes, "streaming_terminal_expression"),
+            "modern any source and predicate-call forms are streaming terminal expressions");
+        assertTrue(countNodesByType(nodes, "local_variable_declaration") >= 2,
+            "any declarations remain local variable declarations");
+
+string directiveCode = "%streaming-any
+bool sub hasValues(list<int> values) {
+    return any values;
+}
+";
+        AstParser directiveParser();
+        *AstTree directiveTree = directiveParser.parseString(directiveCode);
+        assertEq(0, directiveParser.getErrorCount(), "no parse errors for %streaming-any");
+        assertTrue(exists(directiveTree), "%streaming-any parsed successfully");
+    }
+
+    testValueCoalescingAlias() {
+        string code = "%modern
+auto sub fallback(auto value, auto def) {
+    auto x = value ?: def;
+    auto y = value ?* def;
+    return value ?: def ? \"yes\" : \"no\";
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors for ?: value coalescing alias");
+        assertTrue(exists(tree), "?: value coalescing alias parsed successfully");
+
+        list<auto> nodes = tree.getNodesInfo();
+        assertTrue(countNodesByType(nodes, "binary_expression") >= 2,
+            "?: alias and ?* canonical operator parse as binary expressions");
+        assertEq(1, countNodesByType(nodes, "ternary_expression"),
+            "conditional operator remains a ternary expression");
+    }
+
+    testNegativeOffsetDirectives() {
+        string code = "%modern
+%negative-offsets
+list<int> sub tail(list<int> values) {
+    return values[-2..];
+}
+%no-negative-offsets
+list<int> sub legacy(list<int> values) {
+    return values[..-1];
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(0, parser.getErrorCount(), "no parse errors for negative offset directives");
+        assertTrue(exists(tree), "negative offset directives parsed successfully");
     }
 
     testStringKeyDotNotation() {

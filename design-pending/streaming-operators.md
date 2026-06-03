@@ -2,7 +2,7 @@
 
 **Status:** Design.
 
-**Target:** Qore 2.3 alongside [`char-type.md`](char-type.md).
+**Target:** Qore 2.3 alongside [`char-type.md`](../design/char-type.md).
 
 **Companion:** [`pipe-operator.md`](pipe-operator.md) — separate
 proposal for `|>`-style pipe syntax (recommended deferred). The operators
@@ -149,14 +149,14 @@ source.
 
 ```qore
 any <pred-expr>, <iterable>       # bool — True if any element matches
-any <iterable>                    # bool — True if iterable yields >= 1 element
+any (<iterable>)                  # bool — True if iterable yields >= 1 element
 all <pred-expr>, <iterable>       # bool — True if every element matches
 ```
 
 ```qore
 bool any_critical = any $1 =~ /CRITICAL/, log.splitLines();
 bool all_positive = all $1 > 0, scores;
-bool not_empty    = any source;
+bool not_empty    = any (source);
 ```
 
 Both short-circuit: `any` stops on the first match, `all` stops on the
@@ -332,7 +332,7 @@ The existing factory methods stay for backward compatibility.
 | `first <pred>, <iterable>` | predicate + source | `*T` |
 | `first <iterable>` | source only | `*T` |
 | `any <pred>, <iterable>` | predicate + source | `bool` |
-| `any <iterable>` | source only | `bool` |
+| `any (<iterable>)` | source only | `bool` |
 | `all <pred>, <iterable>` | predicate + source | `bool` |
 | `take <n>, <iterable>` | int + source | iterator |
 | `drop <n>, <iterable>` | int + source | iterator |
@@ -605,12 +605,11 @@ a new kind of ambiguity.
 
 **`any` specifically** — the existing duck of "any is a type AND can
 be used as an identifier" extends to "any is also an operator at
-expression position." Code that has `any` as a variable inside an
-expression (e.g., the right-hand side of an assignment) needs care.
-Mitigation: `qore-migrate-rename` can rewrite identifier uses to a
-non-keyword name; the survey before release flags how many sites need
-this. If the conflict surface in qlib is too large, we fall back to
-the alternative names below.
+expression position." The source-only operator form uses parentheses
+(`any (source)`) so `any name;` remains a declaration. Predicate forms
+such as `any $1 > 0, source` remain unambiguous. If the remaining
+conflict surface in qlib is too large, we fall back to the alternative
+names below.
 
 **Alternative names if context-sensitive parsing proves insufficient:**
 
@@ -874,8 +873,7 @@ Mitigations:
 
 ## 9. References
 
-- [`char-type.md`](char-type.md) — the strong companion proposal (`char` value
-  type)
+- [`char-type.md`](../design/char-type.md) — implemented `char` value type
 - [`pipe-operator.md`](pipe-operator.md) — separate, deferred
   proposal for `|>` pipe sugar that would lower to the same fused IR as
   this proposal

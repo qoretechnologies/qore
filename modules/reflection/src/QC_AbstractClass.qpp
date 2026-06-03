@@ -237,6 +237,9 @@ const MC_FINAL = MC_FINAL;
 
 //! describes the @ref transient "transient" flag
 const MC_TRANSIENT = MC_TRANSIENT;
+
+//! describes const method variants
+const MC_CONST = MC_CONST;
 ///@}
 
 /** @defgroup code_flag_constants Code Flag Constants

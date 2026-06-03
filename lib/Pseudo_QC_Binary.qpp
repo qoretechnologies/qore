@@ -49,7 +49,7 @@ switch (b.typeCode()) {
 }
     @endcode
 */
-int <binary>::typeCode() [flags=CONSTANT] {
+int <binary>::typeCode() [const;flags=CONSTANT] {
    return NT_BINARY;
 }
 
@@ -64,7 +64,7 @@ int len = b.size();
 
     @see <binary>::sizep()
 */
-int <binary>::size() [flags=CONSTANT] {
+int <binary>::size() [const;flags=CONSTANT] {
    return b->size();
 }
 
@@ -91,7 +91,7 @@ if (i == -1) {
 
     @since %Qore 0.9.1
 */
-int <binary>::find(data pattern, softint byte_offset = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+int <binary>::find(data pattern, softint byte_offset = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
     q_get_data(pattern, bin_ptr, bin_len);
@@ -143,7 +143,7 @@ if (i == -1) {
 
     @since %Qore 0.9.1
 */
-int <binary>::rfind(data pattern, softint byte_offset = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+int <binary>::rfind(data pattern, softint byte_offset = -1) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
     q_get_data(pattern, bin_ptr, bin_len);
@@ -175,7 +175,7 @@ int <binary>::rfind(data pattern, softint byte_offset = -1) [flags=RET_VALUE_ONL
 bool b = bin.empty();
     @endcode
 */
-bool <binary>::empty() [flags=CONSTANT] {
+bool <binary>::empty() [const;flags=CONSTANT] {
    return b->empty();
 }
 
@@ -193,7 +193,7 @@ bool b = bin.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
 */
-bool <binary>::val() [flags=CONSTANT] {
+bool <binary>::val() [const;flags=CONSTANT] {
    return !b->empty();
 }
 
@@ -212,7 +212,7 @@ list<binary> l = bin.split(sep);
 
     @since %Qore 0.8.5
  */
-list<binary> <binary>::split(data separator) [flags=CONSTANT,NAMED_ARGS] {
+list<binary> <binary>::split(data separator) [const;flags=CONSTANT,NAMED_ARGS] {
     const char* bin_ptr;
     size_t bin_len;
     q_get_data(separator, bin_ptr, bin_len);
@@ -242,7 +242,7 @@ string str = binary("hello").toMD5(); # returns "5d41402abc4b2a76b9719d911017c59
 
     @since %Qore 0.8.5
  */
-string <binary>::toMD5() [flags=RET_VALUE_ONLY] {
+string <binary>::toMD5() [const;flags=RET_VALUE_ONLY] {
    DigestHelper dh(*b);
    if (dh.doDigest(MD5_ERR, EVP_md5(), xsink))
       return QoreValue();
@@ -270,7 +270,7 @@ string str = binary("hello").toSHA1(); # returns "aaf4c61ddcc5e8a2dabede0f3b482c
 
     @since %Qore 0.8.5
  */
-string <binary>::toSHA1() [flags=RET_VALUE_ONLY] {
+string <binary>::toSHA1() [const;flags=RET_VALUE_ONLY] {
    DigestHelper dh(*b);
    if (dh.doDigest(SHA1_ERR, EVP_sha1(), xsink))
       return QoreValue();
@@ -301,7 +301,7 @@ string str = binary("hello").toSHA224("hello"); # returns "ea09ae9cc6768c50fcee9
 
     @since %Qore 0.8.5
  */
-string <binary>::toSHA224() [flags=RET_VALUE_ONLY] {
+string <binary>::toSHA224() [const;flags=RET_VALUE_ONLY] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
    DigestHelper dh(*b);
    if (dh.doDigest(SHA224_ERR, EVP_sha224(), xsink))
@@ -337,7 +337,7 @@ string str = binary("hello").toSHA256(); # returns "2cf24dba5fb0a30e26e83b2ac5b9
 
     @since %Qore 0.8.5
  */
-string <binary>::toSHA256() [flags=RET_VALUE_ONLY] {
+string <binary>::toSHA256() [const;flags=RET_VALUE_ONLY] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
    DigestHelper dh(*b);
    if (dh.doDigest(SHA256_ERR, EVP_sha256(), xsink))
@@ -373,7 +373,7 @@ string str = binary("hello").toSHA384(); # returns "59e1748777448c69de6b800d7a33
 
     @since %Qore 0.8.5
  */
-string <binary>::toSHA384() [flags=RET_VALUE_ONLY] {
+string <binary>::toSHA384() [const;flags=RET_VALUE_ONLY] {
 #if !defined(OPENSSL_NO_SHA512) && defined(HAVE_OPENSSL_SHA512)
    DigestHelper dh(*b);
    if (dh.doDigest(SHA384_ERR, EVP_sha384(), xsink))
@@ -409,7 +409,7 @@ string str = binary("hello").toSHA512(); # returns "9b71d224bd62f3785d96d46ad3ea
 
     @since %Qore 0.8.5
  */
-string <binary>::toSHA512() [flags=RET_VALUE_ONLY] {
+string <binary>::toSHA512() [const;flags=RET_VALUE_ONLY] {
 #if !defined(OPENSSL_NO_SHA512) && defined(HAVE_OPENSSL_SHA512)
    DigestHelper dh(*b);
    if (dh.doDigest(SHA512_ERR, EVP_sha512(), xsink))
@@ -436,7 +436,7 @@ string str = b.toHex();
     - @ref <string>::toHex()
     - @ref Qore::make_hex_string(binary)
  */
-string <binary>::toHex() [flags=CONSTANT] {
+string <binary>::toHex() [const;flags=CONSTANT] {
    QoreStringNode *rv = new QoreStringNode;
    rv->concatHex(b);
    return rv;
@@ -491,7 +491,7 @@ string dump = b.toHexArray(NOTHING, NOTHING, 16, "\n");
     @since %Qore 2.3
  */
 string <binary>::toHexArray(*string byte_prefix, *string byte_suffix, int bytes_per_line = 0,
-        *string line_separator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+        *string line_separator) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     static const char hexdig[] = "0123456789abcdef";
 
     const size_t size = b->size();
@@ -559,7 +559,7 @@ string base64 = bin.toBase64(64);
     - <string>::toBase64()
     - make_base64_string(binary, softint)
 */
-string <binary>::toBase64(softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
+string <binary>::toBase64(softint max_line_length = -1) [const;flags=CONSTANT,NAMED_ARGS] {
     return new QoreStringNode(b, max_line_length);
 }
 
@@ -581,7 +581,7 @@ string base64 = bin.toBase64Url();
     - <string>::toBase64Url()
     - make_base64_url_string(binary)
 */
-string <binary>::toBase64Url(softint max_line_length = -1) [flags=CONSTANT,NAMED_ARGS] {
+string <binary>::toBase64Url(softint max_line_length = -1) [const;flags=CONSTANT,NAMED_ARGS] {
     QoreStringNode* rv = new QoreStringNode;
     rv->concatBase64Url(*b);
     return rv;
@@ -604,7 +604,7 @@ binary b1 = b0.substr(-10);
 
     @since %Qore 0.8.8
  */
-binary <binary>::substr(softint start) [flags=CONSTANT,NAMED_ARGS] {
+binary <binary>::substr(softint start) [const;flags=CONSTANT,NAMED_ARGS] {
    BinaryNode* b1 = new BinaryNode;
    b->substr(*b1, start);
    return b1;
@@ -628,7 +628,7 @@ binary b1 = b0.substr(-10, 5);
 
     @since %Qore 0.8.8
  */
-binary <binary>::substr(softint start, softint length) [flags=CONSTANT,NAMED_ARGS] {
+binary <binary>::substr(softint start, softint length) [const;flags=CONSTANT,NAMED_ARGS] {
    BinaryNode* b1 = new BinaryNode;
    b->substr(*b1, start, length);
    return b1;
@@ -647,7 +647,7 @@ string str = b.toString("iso-8859-1");
 
     @since %Qore 0.8.8
 */
-string <binary>::toString(*string encoding) [flags=CONSTANT,NAMED_ARGS] {
+string <binary>::toString(*string encoding) [const;flags=CONSTANT,NAMED_ARGS] {
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
    if (!b->size())
       return new QoreStringNode(qe);
@@ -661,6 +661,6 @@ string <binary>::toString(*string encoding) [flags=CONSTANT,NAMED_ARGS] {
 
     @since %Qore 0.8.9
 */
-bool <binary>::sizep() [flags=CONSTANT] {
+bool <binary>::sizep() [const;flags=CONSTANT] {
    return true;
 }

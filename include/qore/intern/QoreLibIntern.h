@@ -35,6 +35,7 @@
 
 #include <string>
 
+class MethodVariantBase;
 class RuntimeConfig;
 
 //#define _QORE_CYCLE_CHECK 1
@@ -152,6 +153,7 @@ static inline bool isoctaldigit(const char x) {
 #define NT_INTORFLOAT       -12
 #define NT_INTFLOATORNUMBER -13
 #define NT_FLOATORNUMBER    -14
+#define NT_SOFTCHAR         -15
 #define NT_SOFTBINARY       -15
 #define NT_HEXBINARY        -16
 #define NT_BASE64BINARY     -17
@@ -581,6 +583,10 @@ typedef std::list<qore_conditional_block_exit_statement_t> block_list_t;
 
 DLLLOCAL int check_lvalue(QoreValue n, bool assign = true);
 DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true);
+DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
+DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
+DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
+        const MethodVariantBase* variant, const QoreFunction* func = nullptr);
 DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);

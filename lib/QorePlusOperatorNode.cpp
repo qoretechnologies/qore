@@ -148,7 +148,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return lh->getAsFloat() + rh->getAsFloat();
     }
 
-    if (lt == NT_INT || rt == NT_INT) {
+    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
         return lh->getAsBigInt() + rh->getAsBigInt();
     }
 
@@ -309,7 +309,8 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             returnTypeInfo = numberTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_FLOAT) || QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {
             returnTypeInfo = floatTypeInfo;
-        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)) {
+        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)
+            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
             returnTypeInfo = bigIntTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_HASH)) {
             if (QoreTypeInfo::isType(rightTypeInfo, NT_HASH)

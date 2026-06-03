@@ -2237,7 +2237,7 @@ public namespace SqlUtil {
     #! insert operator info hash as returned by all @ref sql_iop_funcs() "insert operator functions"
     public hashdecl InsertOperatorInfo {
         string _iop;  #!< the insert operator string code
-        any arg;      #!< optional argument
+        auto arg;     #!< optional argument
     }
 
     #! update operator info hash as returned by all @ref sql_uop_funcs() "update operator functions"
@@ -6993,12 +6993,7 @@ bool b = c.matchKeys(h);
             if (h.size() != h1.size())
                 return False;
 
-            foreach string k in (keys h) {
-                if (!h1.hasKey(k))
-                    return False;
-            }
-
-            return True;
+            return all h1.hasKey($1.key), h;
         }
 
         #! returns @ref True "True" if the list<auto> argument has the same list of key strings as the keys in the object (in any order), @ref False "False" if not
@@ -7015,12 +7010,7 @@ bool b = c.matchKeys(l);
             if (h.size() != l.size())
                 return False;
 
-            foreach string k in (l) {
-                if (!h.hasKey(k))
-                    return False;
-            }
-
-            return True;
+            return all h.hasKey($1), l;
         }
 
         #! returns @ref True "True" if the container argument has the same keys (in any order), @ref False "False" if not
@@ -7052,13 +7042,7 @@ bool b = c.partialMatchKeys(h);
                 return False;
             }
 
-            foreach string k in (keys h) {
-                if (!h1.hasKey(k)) {
-                    return False;
-                }
-            }
-
-            return True;
+            return all h1.hasKey($1.key), h;
         }
 
         #! returns @ref True "True" if the list<auto> argument has at least the same keys (in any order, can have more keys), @ref False "False" if not
@@ -7078,12 +7062,7 @@ bool b = c.partialMatchKeys(l);
             # make a hash of the list for quick searching
             hash<string, bool> h1 = map {$1: True}, l;
 
-            foreach string k in (keys h) {
-                if (!h1{k})
-                    return False;
-            }
-
-            return True;
+            return all h1{$1.key}, h;
         }
 
         #! returns @ref True "True" if the container argument has at least the same keys (in any order, can have more keys), @ref False "False" if not

@@ -623,12 +623,7 @@ public const ExtendedExpressionImplementations = {
                 str = str.upr();
                 elems = map $1.upr(), elems;
             }
-            foreach string chars in (elems) {
-                if (str.contains(chars)) {
-                    return True;
-                }
-            }
-            return False;
+            return any str.contains($1), elems;
         },
     },
     DP_OP_LIST_CONTAINS_ANY: {
@@ -663,12 +658,7 @@ public const ExtendedExpressionImplementations = {
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             softlist<auto> l = dp_eval_arg(rec, exp, 0, tc);
             list<auto> vals = dp_eval_varargs_list(rec, exp, 1, exp.args.size(), tc);
-            foreach auto v in (vals) {
-                if (l.contains(v)) {
-                    return True;
-                }
-            }
-            return False;
+            return any l.contains($1), vals;
         },
     },
     DP_OP_FIND_IN: {

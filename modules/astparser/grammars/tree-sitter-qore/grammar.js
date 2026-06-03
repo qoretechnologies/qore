@@ -94,6 +94,14 @@ module.exports = grammar({
     // map/select optional filter comma vs enclosing comma (hash/list trailing comma)
     [$.map_expression],
     [$.select_expression],
+    [$.simple_type, $.streaming_terminal_expression],
+    [$._type_keyword, $.streaming_keyword_identifier, $.streaming_terminal_expression],
+    [$._type_keyword, $.streaming_keyword_identifier, $.streaming_terminal_expression, $.simple_type],
+    [$._type_keyword, $.streaming_keyword_identifier],
+    [$._type_keyword, $.streaming_keyword_identifier, $.simple_type],
+    [$.streaming_keyword_identifier, $.streaming_terminal_expression],
+    [$.streaming_keyword_identifier, $.streaming_limited_expression],
+    [$.streaming_keyword_identifier, $.streaming_boundary_expression],
   ],
 
   rules: {
@@ -194,6 +202,23 @@ module.exports = grammar({
         '%no-enum',
         '%no-transient',
         '%no-new',
+        '%no-iterate',
+        '%no-first',
+        '%no-any-operator',
+        '%no-all-operator',
+        '%no-count',
+        '%no-take',
+        '%no-drop',
+        '%no-takewhile',
+        '%no-takeuntil',
+        '%no-find-modifiers',
+        '%no-stream-fusion',
+        '%streaming-any',
+        '%no-streaming-operators',
+        '%no-char-type',
+        '%no-string-index-char',
+        '%negative-offsets',
+        '%no-negative-offsets',
         '%lockdown',
         '%modern',
         seq('%append-include-path', $.string),
@@ -349,6 +374,7 @@ module.exports = grammar({
       field('name', $.identifier),
       optional(field('type_parameters', $.type_parameter_list)),
       $.parameter_list,
+      optional($.method_qualifier),
       optional(seq('returns', field('returns', $.type))),
       choice(
         $.block,
@@ -405,19 +431,48 @@ module.exports = grammar({
     ),
 
     // ==================== Function ====================
-    function_declaration: $ => seq(
-      optional($.modifiers),
-      optional(field('return_type', $.type)),
-      choice('sub', $.identifier, $.scoped_identifier),
-      field('name', optional(choice($.identifier, $.scoped_identifier))),
-      optional(field('type_parameters', $.type_parameter_list)),
-      $.parameter_list,
-      optional(seq('returns', field('returns', $.type))),
-      choice(
-        $.block,
-        ';',
+    function_declaration: $ => choice(
+      seq(
+        optional($.modifiers),
+        optional(field('return_type', $.type)),
+        'sub',
+        field('name', optional(choice($.identifier, $.scoped_identifier))),
+        optional(field('type_parameters', $.type_parameter_list)),
+        $.parameter_list,
+        optional(seq('returns', field('returns', $.type))),
+        choice(
+          $.block,
+          ';',
+        ),
+      ),
+      seq(
+        optional($.modifiers),
+        optional(field('return_type', $.type)),
+        field('name', $.scoped_identifier),
+        optional(field('type_parameters', $.type_parameter_list)),
+        $.parameter_list,
+        optional($.method_qualifier),
+        optional(seq('returns', field('returns', $.type))),
+        choice(
+          $.block,
+          ';',
+        ),
+      ),
+      seq(
+        optional($.modifiers),
+        optional(field('return_type', $.type)),
+        field('name', $.identifier),
+        optional(field('type_parameters', $.type_parameter_list)),
+        $.parameter_list,
+        optional(seq('returns', field('returns', $.type))),
+        choice(
+          $.block,
+          ';',
+        ),
       ),
     ),
+
+    method_qualifier: $ => 'const',
 
     parameter_list: $ => seq(
       '(',
@@ -430,20 +485,24 @@ module.exports = grammar({
 
     parameter: $ => seq(
       optional($.modifiers),
+      optional('const'),
       optional(field('type', $.type)),
       field('name', $.identifier),
       optional(seq('=', field('default', $._expression))),
     ),
 
     // ==================== Constants and Variables ====================
-    constant_declaration: $ => seq(
+    constant_declaration: $ => prec(3, seq(
       optional($.modifiers),
       'const',
-      field('name', choice($.identifier, $.scoped_identifier)),
+      choice(
+        seq(field('type', $.type), field('name', choice($.identifier, $.scoped_identifier))),
+        field('name', choice($.identifier, $.scoped_identifier)),
+      ),
       '=',
       field('value', $._expression),
       ';',
-    ),
+    )),
 
     // 'our' / 'my' / 'thread_local' declarations (old-style and global scope)
     global_variable_declaration: $ => seq(
@@ -780,6 +839,7 @@ module.exports = grammar({
     ),
 
     local_variable_declaration: $ => prec.dynamic(2, seq(
+      optional('const'),
       optional(field('type', $.type)),
       commaSep1($.variable_declarator),
       ';',
@@ -827,7 +887,7 @@ module.exports = grammar({
 
     binary_expression: $ => choice(
       // Null coalescing
-      prec.left(PREC.NULL_COALESCE, seq($._expression, choice('??', '?*'), $._expression)),
+      prec.left(PREC.NULL_COALESCE, seq($._expression, choice('??', '?*', '?:'), $._expression)),
       // Logical
       prec.left(PREC.LOGICAL_OR, seq($._expression, choice('||', 'or'), $._expression)),
       prec.left(PREC.LOGICAL_AND, seq($._expression, choice('&&', 'and'), $._expression)),
@@ -869,6 +929,7 @@ module.exports = grammar({
 
     primary_expression: $ => choice(
       $.identifier,
+      $.streaming_keyword_identifier,
       $.variable_name,
       $.generic_scoped_identifier,
       $.scoped_identifier,
@@ -895,6 +956,11 @@ module.exports = grammar({
       $.select_expression,
       $.foldl_expression,
       $.foldr_expression,
+      $.find_expression,
+      $.iterate_expression,
+      $.streaming_terminal_expression,
+      $.streaming_limited_expression,
+      $.streaming_boundary_expression,
       // Multi-arg operators used as expressions
       $.push_expression,
       $.unshift_expression,
@@ -914,6 +980,7 @@ module.exports = grammar({
     call_expression: $ => prec(PREC.CALL, seq(
       field('function', choice(
         $.identifier,
+        $.streaming_keyword_identifier,
         $.generic_scoped_identifier,
         $.scoped_identifier,
         $.member_expression,
@@ -933,11 +1000,18 @@ module.exports = grammar({
     // 'union' is included because it is not a reserved word in Qore.
     _type_keyword: $ => choice(
       'string', 'int', 'float', 'number', 'bool', 'binary', 'date',
-      'list', 'hash', 'softint', 'softfloat', 'softnumber', 'softbool',
-      'softstring', 'softdate', 'softlist', 'timeout',
+      'char', 'list', 'hash', 'softint', 'softfloat', 'softnumber', 'softbool',
+      'softstring', 'softchar', 'softdate', 'softlist', 'timeout',
       'object', 'code', 'reference', 'nothing', 'any', 'auto', 'data',
       'union',
     ),
+
+    streaming_keyword_identifier: $ => choice(
+      'iterate', 'first', 'any', 'all', 'count',
+      'take', 'drop', 'takewhile', 'takeuntil',
+    ),
+
+    find_modifier: $ => prec(1, choice('first', 'last', 'one')),
 
     argument_list: $ => seq(
       '(',
@@ -954,7 +1028,7 @@ module.exports = grammar({
     ),
 
     named_argument: $ => seq(
-      field('name', choice($.identifier, $._type_keyword)),
+      field('name', choice($.identifier, $.streaming_keyword_identifier, $._type_keyword)),
       ':',
       field('value', $._expression),
     ),
@@ -962,7 +1036,8 @@ module.exports = grammar({
     member_expression: $ => prec.left(PREC.MEMBER, seq(
       field('object', $._expression),
       '.',
-      field('member', choice($.identifier, $.string, $.implicit_argument, $.variable_name)),
+      field('member', choice($.identifier, $.streaming_keyword_identifier, $.string, $.implicit_argument,
+        $.variable_name)),
     )),
 
     index_expression: $ => prec.left(PREC.MEMBER, seq(
@@ -1081,6 +1156,60 @@ module.exports = grammar({
       optional(prec.dynamic(-2, ',')),
     )),
 
+    find_expression: $ => prec.right(PREC.UNARY, choice(
+      seq(
+        'find',
+        field('mode', $.find_modifier),
+        field('value', $._expression),
+        'in',
+        field('source', $._expression),
+        'where',
+        '(',
+        field('condition', $._expression),
+        ')',
+      ),
+      seq(
+        'find',
+        field('value', $._expression),
+        'in',
+        field('source', $._expression),
+        'where',
+        '(',
+        field('condition', $._expression),
+        ')',
+      ),
+    )),
+
+    iterate_expression: $ => prec.right(PREC.UNARY, seq(
+      'iterate',
+      field('source', $._expression),
+    )),
+
+    streaming_terminal_expression: $ => prec.right(seq(
+      field('operator', choice('first', 'any', 'all', 'count')),
+      field('expression', $._expression),
+      optional(choice(
+        prec.dynamic(-1, seq(',', field('source', $._expression), optional(','))),
+        prec.dynamic(-2, ','),
+      )),
+    )),
+
+    streaming_limited_expression: $ => prec.right(seq(
+      field('operator', choice('take', 'drop')),
+      field('count', $._expression),
+      ',',
+      field('source', $._expression),
+      optional(prec.dynamic(-2, ',')),
+    )),
+
+    streaming_boundary_expression: $ => prec.right(seq(
+      field('operator', choice('takewhile', 'takeuntil')),
+      field('predicate', $._expression),
+      ',',
+      field('source', $._expression),
+      optional(prec.dynamic(-2, ',')),
+    )),
+
     implicit_argument: $ => /\$\d+/,
 
     // $# — last element index (e.g., list[$#])
@@ -1111,6 +1240,7 @@ module.exports = grammar({
       $.date,
       $.time,
       $.binary,
+      $.char_literal,
       $.special_float,
     ),
 
@@ -1176,6 +1306,14 @@ module.exports = grammar({
 
     binary: $ => token(/<[0-9a-fA-F]*>/),
 
+    char_literal: $ => token(seq(
+      'c',
+      choice(
+        seq("'", /([^'\\]|\\.)*/, "'"),
+        seq('"', /([^"\\]|\\.)*/, '"'),
+      ),
+    )),
+
     // ==================== Strings ====================
     string: $ => choice(
       $.single_quoted_string,
@@ -1213,7 +1351,9 @@ module.exports = grammar({
       '\\',
       choice(
         /x[0-9a-fA-F]{1,2}/,
+        /u\{[0-9a-fA-F]{1,6}\}/,
         /u[0-9a-fA-F]{4}/,
+        /U[0-9a-fA-F]{8}/,
         /[0-7]{1,3}/,  // octal escape
         /[^xu0-7]/,    // any other char: \n, \t, \a, \e, \,, etc.
       ),
@@ -1359,6 +1499,7 @@ module.exports = grammar({
       'float',
       'number',
       'bool',
+      'char',
       'string',
       'date',
       'binary',
@@ -1375,6 +1516,7 @@ module.exports = grammar({
       'softfloat',
       'softnumber',
       'softbool',
+      'softchar',
       'softstring',
       'softdate',
       'softlist',

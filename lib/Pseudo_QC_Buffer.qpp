@@ -88,7 +88,7 @@ if (measurements.typeCode() == NT_BUFFER) {
 }
     @endcode
 */
-int <buffer>::typeCode() [flags=CONSTANT] {
+int <buffer>::typeCode() [const;flags=CONSTANT] {
    return NT_BUFFER;
 }
 
@@ -103,7 +103,7 @@ assert(temperatures.complexType());
 
     @see <value>::fullType()
  */
-bool <buffer>::complexType() [flags=CONSTANT] {
+bool <buffer>::complexType() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -117,7 +117,7 @@ buffer<int64> ids = new buffer<int64>((1001, 1002, 1003));
 int len = ids.size();
     @endcode
 */
-int <buffer>::size() [flags=CONSTANT] {
+int <buffer>::size() [const;flags=CONSTANT] {
    return b->size();
 }
 
@@ -132,7 +132,7 @@ foreach int offset in (range(0, values.lsize() - 1)) {
 }
     @endcode
 */
-int <buffer>::lsize() [flags=CONSTANT] {
+int <buffer>::lsize() [const;flags=CONSTANT] {
    return b->size();
 }
 
@@ -147,7 +147,7 @@ if (!samples.empty()) {
 }
     @endcode
 */
-bool <buffer>::empty() [flags=CONSTANT] {
+bool <buffer>::empty() [const;flags=CONSTANT] {
    return b->empty();
 }
 
@@ -162,7 +162,7 @@ if (samples.val()) {
 }
     @endcode
 */
-bool <buffer>::val() [flags=CONSTANT] {
+bool <buffer>::val() [const;flags=CONSTANT] {
    return !b->empty();
 }
 
@@ -172,7 +172,7 @@ bool <buffer>::val() [flags=CONSTANT] {
 
     @see <buffer>::size()
 */
-bool <buffer>::sizep() [flags=CONSTANT] {
+bool <buffer>::sizep() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -187,7 +187,7 @@ if (ids.externalStorage()) {
 }
     @endcode
 */
-bool <buffer>::externalStorage() [flags=CONSTANT] {
+bool <buffer>::externalStorage() [const;flags=CONSTANT] {
    return b->hasExternalStorage();
 }
 
@@ -206,7 +206,7 @@ if (measurements.deviceStorage()) {
 }
     @endcode
 */
-bool <buffer>::deviceStorage() [flags=CONSTANT] {
+bool <buffer>::deviceStorage() [const;flags=CONSTANT] {
    return b->hasExternalDeviceStorage();
 }
 
@@ -222,7 +222,7 @@ if (!values.hostStorage()) {
 }
     @endcode
 */
-bool <buffer>::hostStorage() [flags=CONSTANT] {
+bool <buffer>::hostStorage() [const;flags=CONSTANT] {
    return b->hasHostStorage();
 }
 
@@ -239,7 +239,7 @@ if (info) {
 }
     @endcode
 */
-*hash<auto> <buffer>::deviceInfo() [flags=RET_VALUE_ONLY] {
+*hash<auto> <buffer>::deviceInfo() [const;flags=RET_VALUE_ONLY] {
    return qore_buffer_device_info_hash(b, xsink);
 }
 
@@ -278,7 +278,7 @@ buffer<*int64> scores = new buffer<*int64>((10, NOTHING, 30));
 assertEq(2, scores.count());
     @endcode
 */
-int <buffer>::count() [flags=RET_VALUE_ONLY] {
+int <buffer>::count() [const;flags=RET_VALUE_ONLY] {
    return b->countValid(xsink);
 }
 
@@ -292,7 +292,7 @@ buffer<float64> values = new buffer<float64>((1.5, 2.5));
 list<float> boxed = values.toList();
     @endcode
 */
-list<auto> <buffer>::toList() [flags=RET_VALUE_ONLY] {
+list<auto> <buffer>::toList() [const;flags=RET_VALUE_ONLY] {
    return b->toList(xsink);
 }
 
@@ -306,7 +306,7 @@ buffer<int64> original = new buffer<int64>((1, 2, 3));
 auto copy = original.clone();
     @endcode
 */
-auto <buffer>::clone() [flags=RET_VALUE_ONLY] {
+auto <buffer>::clone() [const;flags=RET_VALUE_ONLY] {
    return b->copy(xsink);
 }
 
@@ -347,7 +347,7 @@ map printf("sample: %n\n", $1), samples.iterator();
 
     @note The iterator boxes the dense buffer into a list snapshot.
 */
-AbstractIterator <buffer>::iterator() [flags=RET_VALUE_ONLY] {
+AbstractIterator <buffer>::iterator() [const;flags=RET_VALUE_ONLY] {
    ReferenceHolder<QoreListNode> l(b->toList(xsink), xsink);
    if (*xsink)
       return QoreValue();
@@ -367,7 +367,7 @@ buffer<decimal128> amounts = new buffer<decimal128>((10.25n, 1.75n));
 assertEq(12n, amounts.sum());
     @endcode
 */
-auto <buffer>::sum() [flags=RET_VALUE_ONLY] {
+auto <buffer>::sum() [const;flags=RET_VALUE_ONLY] {
    return b->sum(xsink);
 }
 
@@ -385,7 +385,7 @@ buffer<decimal128> amounts = new buffer<decimal128>((10.25n, 1.75n));
 assertEq(6n, amounts.mean());
     @endcode
 */
-auto <buffer>::mean() [flags=RET_VALUE_ONLY] {
+auto <buffer>::mean() [const;flags=RET_VALUE_ONLY] {
    return b->mean(xsink);
 }
 
@@ -399,7 +399,7 @@ buffer<int64> values = new buffer<int64>((4, 2, 8));
 assertEq(2, values.min());
     @endcode
 */
-auto <buffer>::min() [flags=RET_VALUE_ONLY] {
+auto <buffer>::min() [const;flags=RET_VALUE_ONLY] {
    return b->min(xsink);
 }
 
@@ -413,6 +413,6 @@ buffer<int64> values = new buffer<int64>((4, 2, 8));
 assertEq(8, values.max());
     @endcode
 */
-auto <buffer>::max() [flags=RET_VALUE_ONLY] {
+auto <buffer>::max() [const;flags=RET_VALUE_ONLY] {
    return b->max(xsink);
 }

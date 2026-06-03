@@ -15,6 +15,7 @@
     |@ref number_type "number"|@ref number, @ref float, or @ref integer|@ref number|Restricts values to @ref number values
     |@ref bool_type "bool"|@ref boolean|@ref boolean|Restricts values to @ref boolean values
     |@ref string_type "string"|@ref string|@ref string|Restricts values to @ref string values
+    |@ref char_type "char"|@ref char|@ref char|Restricts values to @ref char values
     |@ref date_type "date"|@ref date|@ref date|Restricts values to @ref date values; values may be either @ref absolute_dates "absolute" or @ref relative_dates "relative"
     |@ref date_type "date<absolute>"|@ref date|@ref date|Restricts values to @ref absolute_dates "absolute" date/time values only
     |@ref date_type "date<relative>"|@ref date|@ref date|Restricts values to @ref relative_dates "relative" date/time values only
@@ -41,6 +42,7 @@
     |@ref softnumber_type "softnumber"|@ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null|@ref float|Accepts @ref integer, @ref float, @ref boolean, @ref string, @ref null and converts non-number values to a float and returns the new value
     |@ref softbool_type "softbool"|@ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null|@ref boolean|Accepts @ref integer, @ref float, @ref boolean, @ref string, @ref null and converts non-boolean values to a boolean and returns the new value
     |@ref softstring_type "softstring"|@ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null|@ref string|Accepts @ref integer, @ref float, @ref boolean, @ref string, @ref null and converts non-string values to a string and returns the new value
+    |@ref softchar_type "softchar"|@ref char, @ref integer, @ref string|@ref char|Accepts @ref char, @ref integer, and single-codepoint @ref string values and converts them to @ref char
     |@ref softdate_type "softdate"|@ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref date, @ref null|@ref date|Accepts @ref integer, @ref float, @ref boolean, @ref string, @ref date, and @ref null and converts non-date values to a date and returns the new value
     |@ref softlist_type "softlist"|all types|@ref list|Accepts all types; @ref nothing is returned as an empty list; a list is returned unchanged, and any other type is returned as the first element of a new list
     |@ref softlist_complex_type "softlist<...>"|all types|@ref list|Accepts all data types; @ref nothing is returned as an empty list; a list is returned with its elements processed by the subtype declaration, and any other type is returned as the first element of a new list, also processed by the subtype declaration
@@ -54,6 +56,7 @@
     |@ref number_or_nothing_type "*number"|@ref number, @ref null, or @ref nothing|@ref number or @ref number|Restricts values to %Qore's @ref number or @ref nothing types; if @ref null is passed then @ref nothing is returned
     |@ref bool_or_nothing_type "*bool"|@ref boolean, @ref null, or @ref nothing|@ref boolean or @ref nothing|Restricts values to %Qore's @ref boolean or @ref nothing types; if @ref null is passed then @ref nothing is returned
     |@ref string_or_nothing_type "*string"|@ref string, @ref null, or @ref nothing|@ref string or @ref nothing|Restricts values to %Qore's @ref string or @ref nothing types; if @ref null is passed then @ref nothing is returned
+    |@ref char_or_nothing_type "*char"|@ref char, @ref null, or @ref nothing|@ref char or @ref nothing|Restricts values to %Qore's @ref char or @ref nothing types; if @ref null is passed then @ref nothing is returned
     |@ref date_or_nothing_type "*date"|@ref date, @ref null, or @ref nothing|@ref date or @ref nothing|Restricts values to %Qore's @ref date or @ref nothing type; values may be either absolute or relative date/time values; if @ref null is passed then @ref nothing is returned
     |@ref date_or_nothing_type "*date<absolute>"|@ref date, @ref null, or @ref nothing|@ref date or @ref nothing|Restricts values to absolute date/time values or @ref nothing; if @ref null is passed then @ref nothing is returned
     |@ref date_or_nothing_type "*date<relative>"|@ref date, @ref null, or @ref nothing|@ref date or @ref nothing|Restricts values to relative date/time values or @ref nothing; if @ref null is passed then @ref nothing is returned
@@ -78,6 +81,7 @@
     |@ref softnumber_or_nothing_type "*softnumber"|@ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null or @ref nothing|@ref number or @ref nothing|Accepts @ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null and converts non-number values to a number and returns the new value. If no value or @ref null is passed, then @ref nothing is returned
     |@ref softbool_or_nothing_type "*softbool"|@ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null or @ref nothing|@ref boolean or @ref nothing|Accepts @ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null and converts non-boolean values to a boolean and returns the new value. If no value or @ref null is passed, then @ref nothing is returned
     |@ref softstring_or_nothing_type "*softstring"|@ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null or @ref nothing|@ref string or @ref nothing|Accepts @ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref null and converts non-string values to a string and returns the new value. If no value or @ref null is passed, then @ref nothing is returned
+    |@ref softchar_or_nothing_type "*softchar"|@ref char, @ref integer, @ref string, @ref null or @ref nothing|@ref char or @ref nothing|Accepts @ref char, @ref integer, single-codepoint @ref string, @ref null, and @ref nothing values and converts non-char values to @ref char or @ref nothing
     |@ref softdate_or_nothing_type "*softdate"|@ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref date, @ref null or @ref nothing|@ref date or @ref nothing|Accepts @ref integer, @ref float, @ref number, @ref boolean, @ref string, @ref date, and @ref null and converts non-date values to a date and returns the new value. If no value or @ref null is passed, then @ref nothing is returned
     |@ref softlist_or_nothing_type "*softlist"|all types|@ref list or @ref nothing|Accepts all types; @ref nothing and list values are returned as the same value; @ref null is returned as @ref nothing, any other type is returned as the first element of a new list
     |@ref softlist_complex_or_nothing_type "*softlist<...>"|all types|@ref list or @ref nothing|Accepts all data types; @ref nothing and @ref null are returned as @ref nothing; a list is returned with its elements processed by the declared subtype, and any other type is returned as the first element of a new list with its element processed by the declared subtype
@@ -155,6 +159,28 @@ string sub foo(string str = "bar") {
     return str;
 }
     @endcode
+
+    <hr>
+    @section char_type char
+
+    <b>char Type Restriction</b>
+    |!Name|!Accepts %Qore Type(s)|!Returns %Qore Type(s)|!Description
+    |\c char|@ref char|@ref char|Restricts values to %Qore's @ref char type
+
+    @par Example
+    @code{.py}
+char sub firstInitial(string name) {
+    return name[0];
+}
+
+char c = c"\u{E9}";
+int cp = c.ord();       # 233
+string s = c;           # "é"
+    @endcode
+
+    @note Use @ref softchar_type "softchar" or \c cast<char>() when converting from @ref integer "integer" codepoints or @ref string "string" values.
+
+    @since %Qore 2.4
 
     <hr>
     @section date_type date
@@ -991,6 +1017,24 @@ softstring str = 200;
     @endcode
 
     <hr>
+    @section softchar_type softchar
+
+    <b>softchar Type Restriction</b>
+    |!Name|!Accepts %Qore Type(s)|!Returns %Qore Type(s)|!Description
+    |\c softchar|@ref char, @ref integer, @ref string|@ref char|Accepts @ref char values directly, integer Unicode codepoints in the range \c 0..0x10FFFF, and strings containing exactly one Unicode codepoint
+
+    @par Example
+    @code{.py}
+softchar from_int = 0x41;       # c'A'
+softchar from_string = "é";     # c'\u{E9}'
+char strict = from_string;
+    @endcode
+
+    @throw INVALID-CHAR-CONVERSION if an integer is outside the valid codepoint range or a string is empty or has more than one codepoint
+
+    @since %Qore 2.4
+
+    <hr>
     @section softdate_type softdate
 
     <b>softdate Type Restriction</b>
@@ -1012,7 +1056,7 @@ softdate d = "2001-10-10T20:00:05 +04:00";
     @par Example
     @code{.py}
 softlist sub foo(softlist l) {
-    foreach any element in (\l) {
+    foreach auto element in (\l) {
     }
     return l;
 }
@@ -1278,6 +1322,22 @@ reference<int> r = \i;
     return str;
 }
     @endcode
+
+    <hr>
+    @section char_or_nothing_type *char
+
+    <b>*char Type Restriction</b>
+    |!Name|!Accepts %Qore Type(s)|!Returns %Qore Type(s)|!Description
+    |\c *char|@ref char, @ref null, or @ref nothing|@ref char or @ref nothing|Restricts values to @ref char and @ref nothing; if @ref null is passed then @ref nothing is returned
+
+    @par Example
+    @code{.py}
+*char sub maybeFirst(string s) {
+    return s[0];
+}
+    @endcode
+
+    @since %Qore 2.4
 
     <hr>
     @section date_or_nothing_type *date
@@ -1594,6 +1654,24 @@ sub foo(*softstring str) {
     @endcode
 
     <hr>
+    @section softchar_or_nothing_type *softchar
+
+    <b>*softchar Type Restriction</b>
+    |!Name|!Accepts %Qore Type(s)|!Returns %Qore Type(s)|!Description
+    |\c *softchar|@ref char, @ref integer, @ref string, @ref null, @ref nothing|@ref char or @ref nothing|Accepts @ref char, integer codepoints, single-codepoint strings, @ref null, and @ref nothing; @ref null and @ref nothing are returned as @ref nothing
+
+    @par Example
+    @code{.py}
+sub setMarker(*softchar marker) {
+    # marker is either a char value or NOTHING
+}
+    @endcode
+
+    @throw INVALID-CHAR-CONVERSION if an integer is outside the valid codepoint range or a string is empty or has more than one codepoint
+
+    @since %Qore 2.4
+
+    <hr>
     @section softdate_or_nothing_type *softdate
 
     <b>*softdate Type Restriction</b>
@@ -1651,8 +1729,11 @@ printf("%s\n", l.fullType());
 
     @note
     - The \c any type restriction is the same as using no type restriction
+    - Assignment to \c any strips complex runtime type information for backward compatibility; this can have a large performance cost for large data structures
     - To assign any type without stripping complex types, use the @ref auto_type "auto" type restriction instead
-    - In general @ref auto_type "auto" is recommended over \c any
+    - In @ref modern "%modern" code, use @ref auto_type "auto" instead of \c any for unrestricted declarations unless complex type stripping is specifically required
+    - In @ref modern "%modern" mode, \c any is also the @ref streaming_any "any streaming operator" in expression contexts; legacy declarations such as \c "any value = expr;", function and method parameters, return types, and class members still parse \c any as a type name for compatibility
+    - In ambiguous expression syntax, write the streaming source expression explicitly as \c "any (expr)"; see @ref streaming-any "%streaming-any" for the parsing rules
 
     <hr>
     @section auto_type auto

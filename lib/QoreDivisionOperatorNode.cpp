@@ -125,7 +125,8 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
         if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT)) {
             pfunc = &QoreDivisionOperatorNode::floatDivision;
             parse_context.typeInfo = floatTypeInfo;
-        } else if (QoreTypeInfo::isType(lti, NT_INT) && QoreTypeInfo::isType(rti, NT_INT)) {
+        } else if ((QoreTypeInfo::isType(lti, NT_INT) || QoreTypeInfo::isType(lti, NT_CHAR))
+                && (QoreTypeInfo::isType(rti, NT_INT) || QoreTypeInfo::isType(rti, NT_CHAR))) {
             pfunc = &QoreDivisionOperatorNode::bigIntDivision;
             parse_context.typeInfo = bigIntTypeInfo;
         } else {
@@ -198,7 +199,7 @@ QoreValue QoreDivisionOperatorNode::doDivision(QoreValue lh, QoreValue rh, Excep
         return ln->doDivideBy(*rh.get<const QoreNumberNode>(), xsink);
     }
 
-    if (lt == NT_INT && rt == NT_INT) {
+    if ((lt == NT_INT || lt == NT_CHAR) && (rt == NT_INT || rt == NT_CHAR)) {
         int64 r = rh.getAsBigInt();
         if (!r) {
             xsink->raiseException("DIVISION-BY-ZERO", "division by zero found in integer expression");

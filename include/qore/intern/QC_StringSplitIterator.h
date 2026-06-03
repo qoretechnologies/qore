@@ -53,10 +53,9 @@ public:
         //! a "\r\n"-delimited text file iterates identically to a "\n" one.
         STRIP_TRAILING_CR    = 1,
         //! When set, the separator is ignored and each yielded piece is a
-        //! single character (codepoint) from the source.  Uses the
-        //! source string's encoding to advance one character at a time; for
-        //! UTF-8 sources this is a single-byte lead-byte scan, for other
-        //! encodings it relies on QoreString::getUnicodePointFromBytePos().
+        //! single character (codepoint) from the source. ASCII bytes in
+        //! ASCII-compatible encodings take a direct fast path; other
+        //! characters use QoreString::getUnicodePointFromBytePos().
         SPLIT_CHARS          = 2,
     };
 
@@ -96,6 +95,11 @@ private:
     // away for ref() per the Qore convention that refcount is conceptually
     // const-safe.
     QoreStringNode* src;
+
+    // Cached source buffer metadata for byte and ASCII-char fast paths.
+    const char* src_buf = nullptr;
+    size_t src_size = 0;
+    bool ascii_compat = false;
 
     // Delimiter copied into our own storage so the caller's QoreString may
     // be freed or reused without affecting us.  Empty delimiter splits the

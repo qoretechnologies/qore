@@ -45,11 +45,32 @@ bool CaseNode::isCaseNodeImpl() const {
     return !def;
 }
 
-bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
+bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionSink* xsink) {
     // Unwrap TAG_ENUM for switch/case comparison so enum constants match base type values
     QoreValue lhs = lhs_value.isEnum() ? lhs_value.getEnumMember()->getValue() : lhs_value;
-    QoreValue rhs = val.isEnum() ? val.getEnumMember()->getValue() : val;
-    return lhs.isEqualHard(rhs);
+    QoreValue rhs = rhs_value.isEnum() ? rhs_value.getEnumMember()->getValue() : rhs_value;
+
+    if (lhs.isEqualHard(rhs)) {
+        return true;
+    }
+
+    qore_type_t lt = lhs.getType();
+    qore_type_t rt = rhs.getType();
+    if ((lt == NT_CHAR && rt == NT_STRING) || (lt == NT_STRING && rt == NT_CHAR)) {
+        ExceptionSink local_xsink;
+        ExceptionSink* eq_xsink = xsink ? xsink : &local_xsink;
+        bool rv = QoreLogicalEqualsOperatorNode::softEqual(lhs, rhs, eq_xsink);
+        if (!xsink && local_xsink) {
+            local_xsink.clear();
+        }
+        return rv;
+    }
+
+    return false;
+}
+
+bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
+    return qore_switch_case_equal(lhs_value, val, xsink);
 }
 
 bool CaseNode::isCaseNode() const {
@@ -228,10 +249,18 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
             // Check only the simple case blocks (case 1: ...),
             // not those with relational operators. Could be changed later to provide more checking.
             // note that no exception can be raised here as the case node values are parse values
-            if (w->isCaseNode() && cw->isCaseNode() && w->val.isEqualHard(cw->val)) {
-                parse_error(*w->loc, "duplicate case values in switch");
-                if (!err) {
-                    err = -1;
+            if (w->isCaseNode() && cw->isCaseNode()) {
+                bool duplicate = qore_switch_case_equal(w->val, cw->val, &xsink);
+                if (xsink) {
+                    qore_program_private::addParseException(parse_context.pgm, xsink);
+                    if (!err) {
+                        err = -1;
+                    }
+                } else if (duplicate) {
+                    parse_error(*w->loc, "duplicate case values in switch");
+                    if (!err) {
+                        err = -1;
+                    }
                 }
             }
             assert(!xsink);

@@ -575,8 +575,8 @@ class StringTest inherits QUnit::Test {
         assertEq(rindex(str, "==="), -1, "negative rindex()");
         assertEq(bindex(str, "==="), -1, "negative bindex()");
 
-        assertEq(str[31], "ö", "first UTF-8 string index dereference");
-        assertEq(str[39], "ü", "second UTF-8 string index dereference");
+        assertEq(c'\u{F6}', str[31], "first UTF-8 string index dereference");
+        assertEq(c'\u{FC}', str[39], "second UTF-8 string index dereference");
 
         # save string
         string ostr = str;

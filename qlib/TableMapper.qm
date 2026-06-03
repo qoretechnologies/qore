@@ -1255,7 +1255,7 @@ on_error table_mapper.rollback();
         }
 
         private hash<auto> asOutputRecord(auto h) {
-            return cast<hash<auto>>(h);
+            return cast<hash>(h);
         }
 
         #! returns an iterator for the current object

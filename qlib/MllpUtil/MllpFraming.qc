@@ -249,7 +249,7 @@ public namespace MllpUtil {
                 if (err.typeCode() != NT_HASH) {
                     throw "MLLP-ACK-ERROR", "ACK option \"errors\" must be a list of hashes";
                 }
-                push errors, cast<hash<auto>>(err);
+                push errors, cast<hash>(err);
             }
             return errors;
         }
@@ -257,7 +257,7 @@ public namespace MllpUtil {
             if (opts.error.typeCode() != NT_HASH) {
                 throw "MLLP-ACK-ERROR", "ACK option \"error\" must be a hash";
             }
-            return (cast<hash<auto>>(opts.error),);
+            return (cast<hash>(opts.error),);
         }
         if (!mllpIsAcceptedAckCode(string(code)) && text) {
             return ({
@@ -284,7 +284,7 @@ public namespace MllpUtil {
 
     list<auto> sub mllpCodedElement(auto value, string ctx) {
         if (value.typeCode() == NT_HASH) {
-            hash<auto> h = cast<hash<auto>>(value);
+            hash<auto> h = cast<hash>(value);
             return (
                 mllpRequiredString(h, "code", ctx),
                 mllpOptionalString(h, "text", mllpOptionalString(h, "display")),

@@ -52,7 +52,7 @@ switch (f.typeCode()) {
 }
     @endcode
 */
-int <float>::typeCode() [flags=CONSTANT] {
+int <float>::typeCode() [const;flags=CONSTANT] {
    return NT_FLOAT;
 }
 
@@ -69,7 +69,7 @@ bool b = f.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
 */
-bool <float>::val() [flags=CONSTANT] {
+bool <float>::val() [const;flags=CONSTANT] {
    return (bool)f == 0.0 ? false : true;
 }
 
@@ -83,7 +83,7 @@ if (n.intp())
     printf("%y: can be converted to an integer: %d\n", n, int(n));
     @endcode
 */
-bool <float>::intp() [flags=CONSTANT] {
+bool <float>::intp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -97,7 +97,7 @@ if (n.strp())
     printf("%y: can be converted to a string: '%s'\n", n, string(n));
     @endcode
 */
-bool <float>::strp() [flags=CONSTANT] {
+bool <float>::strp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -134,7 +134,7 @@ string nstr = f.format(".,3"); # returns "-48.392.093.894,235"
     - %Qore 0.8.6
     - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
  */
-string <float>::format(string format) [flags=CONSTANT,NAMED_ARGS] {
+string <float>::format(string format) [const;flags=CONSTANT,NAMED_ARGS] {
    return format_float_intern(*format, f, xsink);
 }
 
@@ -160,7 +160,7 @@ string nstr = n.format(3, ".", ","); # returns "-48.392.093.894,235"
 
     @since %Qore 0.8.13
  */
-string <float>::format(int precision = 2, string decimal_separator = ".", string thousands_separator = "") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <float>::format(int precision = 2, string decimal_separator = ".", string thousands_separator = "") [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return format_float_intern(precision, decimal_separator, thousands_separator, f, xsink);
 }
 
@@ -176,7 +176,7 @@ if (f.nanp())
 
     @since %Qore 0.8.12
 */
-bool <float>::nanp() [flags=CONSTANT] {
+bool <float>::nanp() [const;flags=CONSTANT] {
    return std::isnan(f) != 0;
 }
 
@@ -192,7 +192,7 @@ if (f.infp())
 
     @since %Qore 0.8.12
 */
-bool <float>::infp() [flags=CONSTANT] {
+bool <float>::infp() [const;flags=CONSTANT] {
    return std::isinf(f) != 0;
 }
 
@@ -206,7 +206,7 @@ printf("sign: %d\n", f.sign());
 
     @since %Qore 0.8.6
 */
-int <float>::sign() [flags=CONSTANT] {
+int <float>::sign() [const;flags=CONSTANT] {
    if (!f)
       return 0;
    return f > 0.0 ? 1 : -1;
@@ -224,7 +224,7 @@ f = f.abs();
 
     @since %Qore 0.8.8
 */
-float <float>::abs() [flags=CONSTANT] {
+float <float>::abs() [const;flags=CONSTANT] {
    return fabs(f);
 }
 
@@ -247,6 +247,6 @@ float <float>::abs() [flags=CONSTANT] {
 
     @since %Qore 0.8.13
 */
-string <float>::toBase(int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <float>::toBase(int base = 10) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_number_private::toBase(f, base, xsink);
 }

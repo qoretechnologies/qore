@@ -62,7 +62,7 @@ public class SendCloudUpdateParcelDataProvider inherits SendCloudDataProviderBas
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> body = cast<hash<auto>>(req);
+        hash<auto> body = cast<hash>(req);
         return doPutWrapped("parcels", "parcel", body);
     }
 

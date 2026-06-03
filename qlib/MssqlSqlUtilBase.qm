@@ -540,7 +540,7 @@ public class MssqlPrimaryKey inherits SqlUtil::AbstractPrimaryKey, MssqlUniqueCo
     #! returns the MssqlColumn value of the given key if it exists, otherwise throws a \c KEY-ERROR exception
     /** @par Example:
         @code{.py}
-any v = c.name;
+auto v = c.name;
         @endcode
 
         @param k the name of the key to access

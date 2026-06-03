@@ -104,6 +104,9 @@ public:
     //! returns true if the method variant is static
     DLLEXPORT bool isStatic() const;
 
+    //! returns true if the method variant is const-qualified
+    DLLEXPORT bool isConstMethod() const;
+
     //! returns the access info for the member
     DLLEXPORT ClassAccess getAccess() const;
 

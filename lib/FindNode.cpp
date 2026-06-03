@@ -31,8 +31,8 @@
 #include <qore/Qore.h>
 #include "qore/intern/FindNode.h"
 
-FindNode::FindNode(const QoreProgramLocation* loc, QoreValue expr, QoreValue find_expr, QoreValue w)
-        : ParseNode(loc, NT_FIND) {
+FindNode::FindNode(const QoreProgramLocation* loc, QoreValue expr, QoreValue find_expr, QoreValue w, Mode n_mode)
+        : ParseNode(loc, NT_FIND), mode(n_mode) {
     exp = expr;
     find_exp = find_expr;
     where = w;
@@ -63,7 +63,34 @@ QoreString* FindNode::getAsString(bool &del, int foff, ExceptionSink *xsink) con
 
 // returns the type name as a c string
 const char* FindNode::getTypeName() const {
-    return "find expression";
+    return mode == Legacy ? "find expression" : "find modifier expression";
+}
+
+FindNode::Mode FindNode::parseMode(const char* str) {
+    if (!strcmp(str, "first")) {
+        return First;
+    }
+    if (!strcmp(str, "last")) {
+        return Last;
+    }
+    if (!strcmp(str, "one")) {
+        return One;
+    }
+    return Legacy;
+}
+
+const char* FindNode::modeName(Mode mode) {
+    switch (mode) {
+        case First:
+            return "first";
+        case Last:
+            return "last";
+        case One:
+            return "one";
+        case Legacy:
+            break;
+    }
+    return "";
 }
 
 QoreValue FindNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -73,6 +100,7 @@ QoreValue FindNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         return QoreValue();
 
     QoreListNode* lrv = nullptr;
+    size_t match_count = 0;
     for (context->pos = 0; context->pos < context->max_pos && !xsink->isEvent(); ++context->pos) {
         printd(4, "FindNode::eval() checking %d/%d\n", context->pos, context->max_pos);
         bool b = context->check_condition(where, xsink);
@@ -82,11 +110,26 @@ QoreValue FindNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
             continue;
 
         printd(4, "FindNode::eval() GOT IT: %d\n", context->pos);
+        ++match_count;
+        if (mode == One && match_count > 1) {
+            xsink->raiseException("MULTIPLE-MATCHES-ERROR",
+                "find one matched more than one row; at least %d rows matched", (int)match_count);
+            return QoreValue();
+        }
+
         ValueEvalOptimizedRefHolder result(exp, xsink);
         //ValueHolder result(exp->eval(xsink), xsink);
         if (*xsink) {
             return QoreValue();
         }
+        if (mode == First) {
+            return result.takeReferencedValue();
+        }
+        if (mode == Last || mode == One) {
+            rv = result.takeReferencedValue();
+            continue;
+        }
+
         if (!rv->isNothing()) {
             if (!lrv) {
                 lrv = new QoreListNode(autoTypeInfo);

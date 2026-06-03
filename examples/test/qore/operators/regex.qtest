@@ -882,12 +882,17 @@ class RegexTest inherits QUnit::Test {
         assertTrue(regex(special, regex_escape(special)));
         assertFalse(regex("helloXworldYtest", regex_escape(special)));
 
+        # Unicode codepoints are escaped as complete characters, not bytes
+        assertEq("caf\\é", regex_escape("café"));
+        assertTrue(regex("café", regex_escape("café")));
+
         # empty string
         assertEq("", regex_escape(""));
 
         # string pseudo-method
         assertEq("\\.", ".".regexEscape());
         assertEq("hello", "hello".regexEscape());
+        assertEq("caf\\é", "café".regexEscape());
     }
 
     testRegexExtractNamed() {

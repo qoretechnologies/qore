@@ -2038,6 +2038,9 @@ public string sub plural(int count, string base, string singular = "", string pl
     @param  text string to escape / backslash
     @return a string escaped / backslashed
 
+    @note Escaping is character-aware; non-ASCII codepoints are escaped as whole characters, not as their
+    encoded bytes.
+
     @par Example:
     @code{.py}
 string s = regex_escape ("Gain: $100"); # returns "Gain\\:\\ \\$100"
@@ -2046,8 +2049,12 @@ string s = regex_escape ("Gain: $100"); # returns "Gain\\:\\ \\$100"
     @since Util 1.2
 */
 public string sub regex_escape(string text) {
-    text =~ s/([^[:alnum:]])/\\$1/g;
-    return text;
+    string rv = "";
+    foreach char c in (iterate text) {
+        string s = c.toString();
+        rv += s =~ /^[[:alnum:]]$/ ? s : "\\" + s;
+    }
+    return rv;
 }
 
 #! Translates a shell pattern to a regular expression.
@@ -2065,40 +2072,40 @@ string s = glob_to_regex("*.*"); # returns ".*\\..*"
 */
 public string sub glob_to_regex(string pat) {
     string r = '';
-    int n = pat.length();
-    int i = 0;
-    while (i<n) {
-        string c = pat[i];
-        i++;
-        if (c == '?') {
+    Scanner s(pat);
+    while (!s.atEnd()) {
+        int cp = s.peek();
+        char c = cast<char>(cp);
+        s.advance();
+        if (c == c'?') {
             r += '.';
-        } else if (c == '*') {
+        } else if (c == c'*') {
             r += '.*';
-        } else if (c == '[') {
-            int j = i;
-            if (j < n && pat[j] == '!') {
-                j++;
+        } else if (c == c'[') {
+            int class_start = s.getBytePos();
+            if (!s.atEnd() && s.peek() == ord("!")) {
+                s.advance();
             }
-            if (j < n && pat[j] == ']') {
-                j++;
+            if (!s.atEnd() && s.peek() == ord("]")) {
+                s.advance();
             }
-            while (j < n && pat[j] != ']') {
-                j++;
+            while (!s.atEnd() && s.peek() != ord("]")) {
+                s.advance();
             }
-            if (j >= n) {
+            if (s.atEnd()) {
                 r += '\[';
             } else {
-                string s = replace (pat.substr(i, j-i), '\', '\\');
-                i = j + 1;
-                if (s[0] == '!') {
-                    s = '^' + s.substr(1);
-                } else if (s[0] == '^') {
-                    s = '\' + s;
+                string cls = replace(s.extractRange(class_start, s.getBytePos() - class_start), '\', '\\');
+                s.advance();
+                if (cls[0] == c'!') {
+                    cls = '^' + cls.substr(1);
+                } else if (cls[0] == c'^') {
+                    cls = '\' + cls;
                 }
-                r += '[' + s + ']';
+                r += '[' + cls + ']';
             }
         } else {
-            r += regex_escape(c);
+            r += Util::regex_escape(c.toString());
         }
     }
     return r;
@@ -2155,9 +2162,8 @@ list<int> l = parse_ranges("");            # returns () (empty list)
 */
 public list<int> sub parse_ranges(string text) {
     list<int> numbers = ();
-    # Filter by string length to keep "0" which is falsy but valid
-    list<string> parts = select (map trim($1), text.split(',')), $1.length() > 0;
-    foreach string str in (parts) {
+    # Filter by string length to keep "0" which is falsy but valid.
+    foreach string str in (select (map trim($1), text.splitString(',')), $1.length() > 0) {
         # Use regex to properly parse ranges, handling negative numbers
         # Match: optional negative sign + digits, optional (dash + optional negative sign + digits)
         if (*list<*string> m = (str =~ x/^(-?\d+)(?:-(-?\d+))?$/)) {

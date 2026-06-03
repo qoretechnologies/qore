@@ -79,7 +79,11 @@ QoreType::~QoreType() {
 
 QoreObject* get_type_object(const QoreTypeInfo* t, QoreProgram* source_pgm) {
     QoreType* qt = new QoreType(t, source_pgm);
-    QoreObject* obj = new QoreObject(QC_TYPE, getProgram(), qt);
+    // Built-in Type objects wrap static QoreTypeInfo data and do not need to
+    // keep the transient current Program alive.  Keeping them program-neutral
+    // also prevents AOT module init from embedding objects owned by a temporary
+    // shadow Program into constants in another Program.
+    QoreObject* obj = new QoreObject(QC_TYPE, source_pgm ? getProgram() : nullptr, qt);
     qt->setContainer(obj);
     return obj;
 }

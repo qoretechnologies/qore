@@ -58,9 +58,9 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
         if (resp.sequence.typeCode() == NT_LIST) {
             int idx = response_index{cx.raw_path} ?? 0;
             response_index{cx.raw_path} = idx + 1;
-            list<auto> seq = cast<list<auto>>(resp.sequence);
+            list<auto> seq = cast<list>(resp.sequence);
             if (idx < seq.size() && seq[idx].typeCode() == NT_HASH) {
-                resp = cast<hash<auto>>(seq[idx]);
+                resp = cast<hash>(seq[idx]);
             }
         }
         int code = resp.code ?? 200;
@@ -579,7 +579,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertTrue(repaired.repaired, "prefix parsing is reported as repair");
         assertEq("json-balanced-prefix", repaired.repair_kind,
             "repair type is exposed");
-        hash<auto> value = cast<hash<auto>>(repaired.value);
+        hash<auto> value = cast<hash>(repaired.value);
         assertEq(True, value.ok, "object fields are preserved");
         assertEq(1, value.items[0], "array values are preserved");
 
@@ -606,7 +606,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "embedded object extraction is reported as a repair");
         assertEq("json-python-literals-embedded", repaired.repair_kind,
             "repair kind identifies literal normalization plus extraction");
-        hash<auto> value = cast<hash<auto>>(repaired.value);
+        hash<auto> value = cast<hash>(repaired.value);
         assertEq(True, value.ok,
             "Python literal is normalized inside embedded JSON");
         assertEq(1, value.items[0],
@@ -619,7 +619,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "prose-wrapped JSON array is extracted and parsed");
         assertEq("json-balanced-embedded", array_repaired.repair_kind,
             "array extraction exposes the generic embedded repair kind");
-        list<auto> array_value = cast<list<auto>>(array_repaired.value);
+        list<auto> array_value = cast<list>(array_repaired.value);
         assertEq("a", array_value[0].key,
             "embedded array object is preserved");
     }
@@ -637,7 +637,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "literal normalization is reported as a repair");
         assertEq("json-python-literals", repaired.repair_kind,
             "repair kind identifies Python literal normalization");
-        hash<auto> value = cast<hash<auto>>(repaired.value);
+        hash<auto> value = cast<hash>(repaired.value);
         assertEq(True, value.ok, "True became JSON true");
         assertEq(False, value.skip, "False became JSON false");
         assertEq(NOTHING, value.value, "None became JSON null");
@@ -657,7 +657,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "balanced completion is reported as a repair");
         assertEq("json-balanced-completion", repaired.repair_kind,
             "repair type identifies appended delimiters");
-        hash<auto> value = cast<hash<auto>>(repaired.value);
+        hash<auto> value = cast<hash>(repaired.value);
         assertEq("iface-1", value.interface.key,
             "nested object survived balanced completion");
         assertEq(2, value.interface.items[1],
@@ -713,7 +713,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertTrue(repaired.repaired, "schema coercion reports repair");
         assertEq("schema-json-string", repaired.repair_kind,
             "schema repair type is exposed");
-        hash<auto> value = cast<hash<auto>>(repaired.value);
+        hash<auto> value = cast<hash>(repaired.value);
         assertEq("req-15", value.payload.ids[0].value,
             "stringified object fields are parsed");
         assertEq("iface-fsm", value.steps[0].payload.key,
@@ -2495,7 +2495,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "options": {"apikey": "<credential-1>"},
             "list": ("<credential-1>", "plain"),
         };
-        hash<auto> restored = cast<hash<auto>>(
+        hash<auto> restored = cast<hash>(
             PromptSecretProtector::restorePlaceholders(args, placeholders));
         assertEq(raw_secret, restored.options.apikey);
         assertEq(raw_secret, restored.list[0]);
@@ -2509,7 +2509,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "options": {"apikey": "<credential-1>"},
             "nested": ({"token": "<credential-1>"},),
         };
-        hash<auto> redacted = cast<hash<auto>>(
+        hash<auto> redacted = cast<hash>(
             PromptSecretProtector::redactPlaceholders(value, placeholders));
         assertEq("<redacted>", redacted.options.apikey);
         assertEq("<redacted>", redacted.nested[0].token);
@@ -2524,7 +2524,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "message": "tool failed with apikey=" + raw_secret,
             "args": {"apikey": raw_secret, "note": "<credential-1>"},
         };
-        hash<auto> redacted = cast<hash<auto>>(
+        hash<auto> redacted = cast<hash>(
             PromptSecretProtector::redactProtectedValues(value, placeholders));
         assertFalse(sprintf("%y", redacted).find(raw_secret) >= 0);
         assertEq("<redacted>", redacted.args.apikey);
@@ -2542,7 +2542,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             },
             "svalue": "secret-value-54321",
         };
-        hash<auto> redacted = cast<hash<auto>>(
+        hash<auto> redacted = cast<hash>(
             PromptSecretProtector::redactSensitiveValue(value));
         assertEq("<redacted>", redacted.apikey);
         assertEq("<redacted>", redacted.svalue);

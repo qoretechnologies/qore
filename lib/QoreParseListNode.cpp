@@ -126,6 +126,22 @@ int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse
 
     //printd(5, "QoreParseListNode::parseInitIntern() this: %p size: %d typeInfo: %p '%s' (vtype: %p '%s')\n", this,
     //  size(), typeInfo, QoreTypeInfo::getName(typeInfo), vtype, QoreTypeInfo::getName(vtype));
+
+    // Refresh the parse analysis to describe the list literal itself.  The
+    // per-element parse_init_value() calls above leave parse_context.analysis
+    // holding the LAST element's analysis (e.g. known_type = the element type
+    // for `(new A(), new A())`), which the ParseNode wrapper would otherwise
+    // save as this node's analysis.  Consumers such as QoreIRLowering's
+    // getExprTypeInfo() then see the element type instead of list<...> and
+    // mis-lower constructs like `map expr($1), <object-list>` as a single value
+    // (binding $1 to the whole list).  Set the known type to the list type so
+    // the analysis matches the node's typeInfo; a list literal always evaluates
+    // to a list, so it never returns NOTHING.
+    parse_context.analysis.clear();
+    parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
+    parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
+    parse_context.analysis.known_type = typeInfo;
+
     return err;
 }
 

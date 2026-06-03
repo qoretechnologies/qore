@@ -148,6 +148,9 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         in_method = true;
         uf->setClassType(parse_context.oflag->getTypeInfo());
     }
+    if (parse_context.pflag & PF_CONST_METHOD) {
+        uf->setConstMethodContext();
+    }
     int err = 0;
     if (parse_context.pflag & PF_CONST_EXPRESSION) {
         qore_program_private::get(*parse_context.pgm)->deferCodeInitialization(this);

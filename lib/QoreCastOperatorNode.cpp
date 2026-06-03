@@ -40,6 +40,62 @@
 
 QoreString QoreParseCastOperatorNode::cast_str("cast operator expression");
 
+static bool qore_cast_parse_type_is_auto(const QoreParseTypeInfo* pti) {
+    return pti && !pti->isWildcardTypeArg() && !pti->hasExplicitSubtypeList() && !strcmp(pti->cscope->ostr, "auto");
+}
+
+static bool qore_cast_parse_type_is_string(const QoreParseTypeInfo* pti) {
+    return pti && !pti->isWildcardTypeArg() && !pti->hasExplicitSubtypeList() && !strcmp(pti->cscope->ostr, "string");
+}
+
+static bool qore_cast_is_misleading_auto_container_cast(const QoreParseTypeInfo* pti, bool& is_hash) {
+    if (!pti || pti->isWildcardTypeArg() || !pti->hasExplicitSubtypeList()) {
+        return false;
+    }
+
+    if (!strcmp(pti->cscope->ostr, "hash")) {
+        if (pti->subtypes.size() == 1 && qore_cast_parse_type_is_auto(pti->subtypes[0])) {
+            is_hash = true;
+            return true;
+        }
+        if (pti->subtypes.size() == 2 && qore_cast_parse_type_is_string(pti->subtypes[0])
+                && qore_cast_parse_type_is_auto(pti->subtypes[1])) {
+            is_hash = true;
+            return true;
+        }
+    } else if (!strcmp(pti->cscope->ostr, "list") && pti->subtypes.size() == 1
+            && qore_cast_parse_type_is_auto(pti->subtypes[0])) {
+        is_hash = false;
+        return true;
+    }
+
+    return false;
+}
+
+static const QoreTypeInfo* qore_cast_get_complex_softlist_value_type(const QoreTypeInfo* type_info) {
+    const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexSoftList(type_info);
+    if (ti) {
+        return ti;
+    }
+
+    const char* name = QoreTypeInfo::getName(type_info);
+    if (name && (!strcmp(name, "softlist<auto>") || !strcmp(name, "*softlist<auto>"))) {
+        return autoTypeInfo;
+    }
+
+    if (name && (!strncmp(name, "softlist<", 9) || !strncmp(name, "*softlist<", 10))) {
+        return QoreTypeInfo::getComplexListValueType(type_info);
+    }
+
+    return nullptr;
+}
+
+static QoreValue qore_cast_coerce_softlist_value(const QoreTypeInfo* type_info, QoreValue value,
+        ExceptionSink* xsink) {
+    QoreTypeInfo::acceptAssignment(type_info, "<cast operator>", value, xsink);
+    return *xsink ? QoreValue() : value;
+}
+
 // if del is true, then the returned QoreString* should be deleted, if false, then it must not be
 QoreString* QoreParseCastOperatorNode::getAsString(bool& del, int foff, ExceptionSink* xsink) const {
     del = false;
@@ -103,6 +159,31 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
     bool or_nothing = (pti->or_nothing || (getProgram()->getParseOptions() & PO_BROKEN_CAST));
+    bool misleading_auto_hash = false;
+    // BROKEN_AUTO_CAST keeps backward compatibility: when set, accept the no-op
+    // cast<hash<auto>>/cast<list<auto>> and let it fall through to normal cast
+    // handling (which evaluates and returns the operand unchanged) instead of
+    // raising a parse error.
+    if (explicit_cast && qore_cast_is_misleading_auto_container_cast(pti, misleading_auto_hash)
+            && !(parse_get_parse_options() & QoreParseOptions::BROKEN_AUTO_CAST)) {
+        const char* container = misleading_auto_hash ? "hash" : "list";
+        const char* target = QoreParseTypeInfo::getName(pti);
+        const char* plain_target = pti->or_nothing
+            ? (misleading_auto_hash ? "*hash" : "*list")
+            : container;
+        parse_error(*loc, "cast<%s>(...) is invalid: %s<auto> is not a coercion; the auto subtype accepts all "
+            "%s values unchanged, making this cast a misleading no-op. Use cast<%s>(...) to assert a %s value "
+            "and strip container type metadata%s",
+            target, container, container, plain_target, container,
+            misleading_auto_hash
+                ? "; there is no soft hash type"
+                : "; use cast<softlist<auto>>(...) when scalar-to-list coercion is required");
+        parse_context.typeInfo = misleading_auto_hash
+            ? (pti->or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo)
+            : (pti->or_nothing ? autoListOrNothingTypeInfo : autoListTypeInfo);
+        set_cast_analysis();
+        return -1;
+    }
     if (!exp && or_nothing) {
         ReferenceHolder<> holder(this, nullptr);
         val = QoreValue();
@@ -289,6 +370,29 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     }
 
     {
+        const QoreTypeInfo* ti = qore_cast_get_complex_softlist_value_type(parse_context.typeInfo);
+        if (ti) {
+            // Softlist casts are coercive: scalar values become one-element lists and NOTHING becomes an empty
+            // list for non-optional softlist targets.
+            qore_list_private::parseCheckComplexListInitialization(loc, ti, expTypeInfo, exp, "cast to", false);
+
+            if (!exp) {
+                ReferenceHolder<> holder(this, nullptr);
+                val = qore_list_private::newComplexListFromValue(parse_context.typeInfo, QoreValue(), nullptr);
+                set_cast_analysis();
+                return err;
+            }
+
+            if (exp) {
+                ReferenceHolder<> holder(this, nullptr);
+                val = new QoreComplexListCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+                set_cast_analysis();
+                return err;
+            }
+        }
+    }
+
+    {
         const QoreTypeInfo* ti = or_nothing
             ? QoreTypeInfo::getComplexListValueType(parse_context.typeInfo)
             : QoreTypeInfo::getUniqueReturnComplexList(parse_context.typeInfo);
@@ -299,7 +403,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             qore_list_private::parseCheckComplexListInitialization(loc, ti, expTypeInfo, exp, "cast to", false);
 
             // check arg type compatibility with list if the type is not a softlist
-            if (!QoreTypeInfo::getUniqueReturnComplexSoftList(parse_context.typeInfo)) {
+            if (!qore_cast_get_complex_softlist_value_type(parse_context.typeInfo)) {
                 qore_type_result_e r = QoreTypeInfo::parseReturns(expTypeInfo, NT_LIST);
                 if (r == QTI_NOT_EQUAL) {
                     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
@@ -370,6 +474,7 @@ bool QoreScalarCastOperatorNode::isSupportedCastType(const QoreTypeInfo* typeInf
         case NT_FLOAT:
         case NT_NUMBER:
         case NT_STRING:
+        case NT_CHAR:
         case NT_BOOLEAN:
         case NT_DATE:
         case NT_BINARY:
@@ -395,6 +500,8 @@ const QoreTypeInfo* QoreScalarCastOperatorNode::getConversionTypeInfo(const Qore
             return softNumberOrNothingTypeInfo;
         case NT_STRING:
             return softStringOrNothingTypeInfo;
+        case NT_CHAR:
+            return softCharOrNothingTypeInfo;
         case NT_BOOLEAN:
             return softBoolOrNothingTypeInfo;
         case NT_DATE:
@@ -696,7 +803,7 @@ int QoreComplexListCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
     }
 
     // check the value
-    if ((!typeInfo || !QoreTypeInfo::getUniqueReturnComplexSoftList(typeInfo)) && (val.getType() != NT_LIST)) {
+    if ((!typeInfo || !qore_cast_get_complex_softlist_value_type(typeInfo)) && (val.getType() != NT_LIST)) {
         xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to '%s'", val.getFullTypeName(),
             typeInfo ? QoreTypeInfo::getName(typeInfo) : "list");
         return -1;
@@ -732,10 +839,19 @@ QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, Exception
         return QoreValue();
     }
 
+    bool is_softlist = qore_cast_get_complex_softlist_value_type(typeInfo);
+
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
     if (rv->isNothing()) {
-        assert(or_nothing);
-        return QoreValue();
+        if (or_nothing) {
+            return QoreValue();
+        }
+        assert(is_softlist);
+        return qore_cast_coerce_softlist_value(typeInfo, rv.takeReferencedValue(), xsink);
+    }
+
+    if (is_softlist && rv->getType() != NT_LIST) {
+        return qore_cast_coerce_softlist_value(typeInfo, rv.takeReferencedValue(), xsink);
     }
 
     assert(rv->getType() == NT_LIST);
@@ -760,9 +876,19 @@ QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionS
         return QoreValue();
     }
 
+    bool is_softlist = qore_cast_get_complex_softlist_value_type(typeInfo);
+
     if (inner.isNothing()) {
-        assert(or_nothing);
-        return QoreValue();
+        if (or_nothing) {
+            return QoreValue();
+        }
+        assert(is_softlist);
+        return qore_cast_coerce_softlist_value(typeInfo, inner, xsink);
+    }
+
+    if (is_softlist && inner.getType() != NT_LIST) {
+        QoreValue ref_inner = inner.hasNode() ? inner.refSelf() : inner;
+        return qore_cast_coerce_softlist_value(typeInfo, ref_inner, xsink);
     }
 
     assert(inner.getType() == NT_LIST);

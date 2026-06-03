@@ -328,7 +328,7 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         if (shipping_option_code_cache.hasKey(key)) {
             return shipping_option_code_cache{key};
         }
-        hash<auto> resp = cast<hash<auto>>(doV3Post("compat/shipping-options",
+        hash<auto> resp = cast<hash>(doV3Post("compat/shipping-options",
             {"shipping_method_ids": (shipping_method_id,)}));
         # Response shape: {"data": {"<id>": "<code>" | null}}
         *string code;

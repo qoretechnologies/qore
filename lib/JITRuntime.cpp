@@ -36,6 +36,7 @@
 #include "qore/intern/QoreRegexSubstOperatorNode.h"
 #include "qore/intern/QoreTransliteration.h"
 #include "qore/intern/QoreTransliterationOperatorNode.h"
+#include "qore/intern/QoreIterateOperatorNode.h"
 
 // Macro for JIT runtime functions: check xsink and throw C++ exception
 // if a Qore exception was raised. Used at return points of qore_rt_*
@@ -166,6 +167,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
+    { "qore_rt_list_index_dynamic", reinterpret_cast<void*>(&qore_rt_list_index_dynamic) },
     { "qore_rt_unary_op", reinterpret_cast<void*>(&qore_rt_unary_op) },
     { "qore_rt_plugin_unary", reinterpret_cast<void*>(&qore_rt_plugin_unary) },
     { "qore_rt_plugin_binary", reinterpret_cast<void*>(&qore_rt_plugin_binary) },
@@ -206,6 +208,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_context_ref_at_throwing", reinterpret_cast<void*>(&qore_rt_context_ref_at_throwing) },
     { "qore_rt_context_row", reinterpret_cast<void*>(&qore_rt_context_row) },
     { "qore_rt_context_row_throwing", reinterpret_cast<void*>(&qore_rt_context_row_throwing) },
+    { "qore_rt_iterate_value", reinterpret_cast<void*>(&qore_rt_iterate_value) },
+    { "qore_rt_iterate_value_throwing", reinterpret_cast<void*>(&qore_rt_iterate_value_throwing) },
+    { "qore_rt_iterator_create_iterate", reinterpret_cast<void*>(&qore_rt_iterator_create_iterate) },
+    { "qore_rt_iterator_create_iterate_throwing",
+        reinterpret_cast<void*>(&qore_rt_iterator_create_iterate_throwing) },
     { "qore_rt_context_max_pos", reinterpret_cast<void*>(&qore_rt_context_max_pos) },
     { "qore_rt_context_set_pos", reinterpret_cast<void*>(&qore_rt_context_set_pos) },
     { "qore_rt_context_destroy", reinterpret_cast<void*>(&qore_rt_context_destroy) },
@@ -216,6 +223,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_hash_key_access", reinterpret_cast<void*>(&qore_rt_hash_key_access) },
     { "qore_rt_hash_key_access_for_call", reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call) },
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
+    { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
     { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
     { "qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call) },
@@ -1474,6 +1482,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint6
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_dynamic(uint64_t left, uint64_t right,
+        int32_t string_index_char, ExceptionSink* xsink) {
+    ValueEvalOptimizedRefHolder lv(fromBits(left), xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+
+    ValueEvalOptimizedRefHolder rv(fromBits(right), xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    QoreValue result = QoreSquareBracketsOperatorNode::doSquareBrackets(*lv, *rv, true, string_index_char != 0,
+        negative_offsets, xsink);
+    return toBits(result);
+}
+
 static QoreValue qore_rt_build_selector_range(QoreValue start, QoreValue stop, ExceptionSink* xsink) {
     if (start.isNothing()) {
         xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
@@ -1513,10 +1539,11 @@ static QoreValue qore_rt_build_selector_range(QoreValue start, QoreValue stop, E
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
-        int32_t count, const uint64_t* selector_bits, ExceptionSink* xsink) {
+        int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
     qore_type_t left_type = left.getType();
     int selector_idx = 0;
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
 
     if (left_type == NT_LIST) {
         const QoreTypeInfo* vtype = nullptr;
@@ -1537,8 +1564,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
                 return toBits(QoreValue());
             }
 
-            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range, xsink),
-                xsink);
+            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range,
+                string_index_char != 0, negative_offsets, xsink), xsink);
             if (*xsink) {
                 return toBits(QoreValue());
             }
@@ -1605,8 +1632,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
             if (*xsink) {
                 return toBits(QoreValue());
             }
-            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range, xsink),
-                xsink);
+            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range,
+                string_index_char != 0, negative_offsets, xsink), xsink);
             if (*xsink) {
                 return toBits(QoreValue());
             }
@@ -1633,8 +1660,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
             if (*xsink) {
                 return toBits(QoreValue());
             }
-            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range, xsink),
-                xsink);
+            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range,
+                string_index_char != 0, negative_offsets, xsink), xsink);
             if (*xsink) {
                 return toBits(QoreValue());
             }
@@ -4008,6 +4035,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
 
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
@@ -4026,6 +4054,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             l = new_l;
         }
 
+        if (index < 0) {
+            if (negative_offsets) {
+                index += static_cast<int64_t>(l->size());
+            }
+            if (index < 0) {
+                xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate "
+                    "to a non-negative integer)", index);
+                return toBits(QoreValue());
+            }
+        }
+
         // Apply element type coercion if the list has a typed value type
         // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
@@ -4041,6 +4080,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             entry.discard(xsink);
         }
     } else if (lv.isNothing()) {
+        if (index < 0) {
+            xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
+                "non-negative integer)", index);
+            return toBits(QoreValue());
+        }
         // Auto-vivify: create new list from NOTHING, set element, assign to variable
         // Use variable's declared type to derive proper element type
         // (e.g. softlist<bool> → list<bool>, not list<auto>)
@@ -4081,6 +4125,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
         // ListIndexStore loads the container without taking an extra reference.
@@ -4097,6 +4142,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             new_l->deref(nullptr);
             l = new_l;
         }
+        if (index < 0) {
+            if (negative_offsets) {
+                index += static_cast<int64_t>(l->size());
+            }
+            if (index < 0) {
+                xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate "
+                    "to a non-negative integer)", index);
+                return toBits(QoreValue());
+            }
+        }
         // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
@@ -4111,6 +4166,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             entry.discard(xsink);
         }
     } else if (lv.isNothing()) {
+        if (index < 0) {
+            xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must evaluate to a "
+                "non-negative integer)", index);
+            return toBits(QoreValue());
+        }
         // Auto-vivify: create new list from NOTHING, set element, assign to variable
         // Use variable's declared type to derive proper element type
         assert(local_slot < (uint32_t)ctx->num_locals);
@@ -4143,36 +4203,48 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     return val_bits;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_access_compat(uint64_t list_val, int64_t index,
+        int32_t string_index_char, ExceptionSink* xsink) {
     QoreValue raw_v = fromBits(list_val);
     ValueEvalOptimizedRefHolder vh(raw_v, xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
     QoreValue v = *vh;
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
+    int64 qindex = static_cast<int64>(index);
     if (v.getType() == NT_LIST) {
         const QoreListNode* l = v.get<const QoreListNode>();
-        if (index >= 0 && static_cast<size_t>(index) < l->size()) {
-            return toBits(l->getReferencedEntry(static_cast<size_t>(index)));
+        if (QoreSquareBracketsOperatorNode::normalizeIndex(qindex, static_cast<int64>(l->size()),
+                negative_offsets)) {
+            return toBits(l->getReferencedEntry(static_cast<size_t>(qindex)));
         }
     } else if (v.getType() == NT_STRING) {
         QoreStringNodeValueHelper s(v);
-        QoreStringNode* rv = s->substr(static_cast<qore_offset_t>(index), 1, xsink);
-        return toBits(rv ? QoreValue(rv) : QoreValue());
+        if (string_index_char) {
+            return toBits(QoreValue::makeCharFromStringAt(**s, static_cast<qore_offset_t>(qindex), xsink));
+        }
+        return toBits(s->substr(static_cast<qore_offset_t>(qindex), 1, xsink));
     } else if (v.getType() == NT_BINARY) {
         const BinaryNode* b = v.get<const BinaryNode>();
-        if (index >= 0 && static_cast<size_t>(index) < b->size()) {
+        if (QoreSquareBracketsOperatorNode::normalizeIndex(qindex, static_cast<int64>(b->size()),
+                negative_offsets)) {
             return toBits(QoreValue(static_cast<int64>(
-                static_cast<const unsigned char*>(b->getPtr())[index])));
+                static_cast<const unsigned char*>(b->getPtr())[qindex])));
         }
     } else if (v.getType() == NT_BUFFER) {
         const QoreBufferNode* b = v.get<const QoreBufferNode>();
-        if (index >= 0 && static_cast<size_t>(index) < b->size()) {
-            return toBits(b->getReferencedEntry(static_cast<size_t>(index), xsink));
+        if (QoreSquareBracketsOperatorNode::normalizeIndex(qindex, static_cast<int64>(b->size()),
+                negative_offsets)) {
+            return toBits(b->getReferencedEntry(static_cast<size_t>(qindex), xsink));
         }
     }
     // Unsupported container type or index out of bounds: return NOTHING.
     return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
+    return qore_rt_list_index_access_compat(list_val, index, 1, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_assignment_value(uint64_t value_bits, int64_t index,
@@ -8878,12 +8950,13 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
     }
 
     bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
+    bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
     int64 start = 0;
     int64 stop = 0;
     int64 seq_size = 0;
     QoreValue seq = lvh.getValue();
     if (!QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size,
-            last_step.slice_values[0], last_step.slice_values[1], broken_list_range, xsink)) {
+            last_step.slice_values[0], last_step.slice_values[1], broken_list_range, negative_offsets, xsink)) {
         if (*xsink || is_delete) {
             return QoreValue();
         }
@@ -10751,6 +10824,27 @@ extern "C" DLLEXPORT void* qore_rt_iterator_create(uint64_t iterable_bits, void*
     return iter;
 }
 
+extern "C" DLLEXPORT void* qore_rt_iterator_create_iterate(uint64_t iterable_bits, ExceptionSink* xsink) {
+    QoreValue iterable = fromBits(iterable_bits);
+
+    FunctionalOperator::FunctionalValueType value_type;
+    FunctionalOperatorInterface* iter = QoreIterateOperatorNode::getFunctionalIterator(value_type, iterable,
+        nullptr, "streaming operator expression", xsink);
+
+    if ((xsink && *xsink) || value_type == FunctionalOperator::nothing) {
+        delete iter;
+        return nullptr;
+    }
+
+    return iter;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_iterate_value(uint64_t source_bits, ExceptionSink* xsink) {
+    QoreValue source = fromBits(source_bits);
+    return toBits(QoreIterateOperatorNode::evalIteratorValue(source,
+        QoreIterateOperatorNode::getElementTypeInfo(source, source.getTypeInfo()), xsink));
+}
+
 /// AOT version: looks up iterator_func pointer from AOT context by slot index
 extern "C" DLLEXPORT void* qore_rt_iterator_create_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t iterable_bits, ExceptionSink* xsink) {
@@ -11088,6 +11182,24 @@ extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_thr
 extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t iterable_bits, ExceptionSink* xsink) {
     void* result = qore_rt_iterator_create_aot(ctx, slot, iterable_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_iterate_throwing(
+        uint64_t iterable_bits, ExceptionSink* xsink) {
+    void* result = qore_rt_iterator_create_iterate(iterable_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_iterate_value_throwing(
+        uint64_t source_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_iterate_value(source_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -12252,10 +12364,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match_value(uint64_t case_val_
         uint64_t switch_val_bits, ExceptionSink* xsink) {
     QoreValue case_val = fromBits(case_val_bits);
     QoreValue switch_val = fromBits(switch_val_bits);
-    // Unwrap enum values (matches CaseNode::matches semantics)
-    QoreValue lhs = switch_val.isEnum() ? switch_val.getEnumMember()->getValue() : switch_val;
-    QoreValue rhs = case_val.isEnum() ? case_val.getEnumMember()->getValue() : case_val;
-    return toBits(QoreValue(lhs.isEqualHard(rhs)));
+    return toBits(QoreValue(qore_switch_case_equal(switch_val, case_val, xsink)));
 }
 
 // AOT-safe switch case match: case value loaded from expression slot at runtime

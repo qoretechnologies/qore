@@ -32,6 +32,35 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
 
+static bool parse_lvalue_root_read_only(QoreValue n) {
+    while (n.hasNode()) {
+        if (n.getType() == NT_VARREF) {
+            return n.get<VarRefNode>()->parseIsReadOnly();
+        }
+        if (n.getType() != NT_OPERATOR) {
+            return false;
+        }
+        if (auto* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(n.getInternalNode())) {
+            n = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<QoreSquareBracketsRangeOperatorNode*>(n.getInternalNode())) {
+            n = op->get(0);
+            continue;
+        }
+        if (auto* op = dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode())) {
+            n = op->getLeft();
+            continue;
+        }
+        if (auto* op = dynamic_cast<QoreCastOperatorNode*>(n.getInternalNode())) {
+            n = op->getExp();
+            continue;
+        }
+        return false;
+    }
+    return false;
+}
+
 IntermediateParseReferenceNode::IntermediateParseReferenceNode(const QoreProgramLocation* loc, QoreValue exp,
         const QoreTypeInfo* typeInfo, QoreObject* o, const void* lvid, const qore_class_private* n_cls)
         : ParseReferenceNode(loc, exp, typeInfo), self(o), lvalue_id(lvid), cls(n_cls) {
@@ -354,8 +383,17 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
     if (!lvexp) {
         return err;
     }
-    if (check_lvalue(lvexp)) {
-        parse_error(*loc, "the reference operator was expecting an lvalue, got '%s' instead", lvexp.getTypeName());
+    if (parse_lvalue_root_read_only(lvexp)) {
+        parseException(*loc, "READONLY-VARIABLE-ASSIGNMENT-ERROR",
+            "cannot create a mutable reference to a read-only local variable");
+        return -1;
+    }
+    int lvalue_err = check_lvalue(lvexp);
+    if (lvalue_err) {
+        if (lvalue_err == -1) {
+            parse_error(*loc, "the reference operator was expecting an lvalue, got '%s' instead",
+                lvexp.getTypeName());
+        }
         return -1;
     }
 

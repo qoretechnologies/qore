@@ -92,9 +92,10 @@ const qore_type_t NT_WEAKREF_LIST           = 49; //!< type value for WeakListRe
 const qore_type_t NT_ENUM                   = 50; //!< type value for enum values (TAG_ENUM in QoreValue)
 const qore_type_t NT_BUFFER                 = 51; //!< type value for QoreBufferNode
 const qore_type_t NT_PLUGIN_VALUE           = 52; //!< type value for module-defined plugin value nodes
+const qore_type_t NT_CHAR                   = 53; //!< type value for Unicode character values (QoreValue only)
 
 //! number of types implemented in the Qore library
-#define QORE_NUM_TYPES 53
+#define QORE_NUM_TYPES 54
 
 //! number of simple value types (not containers)
 #define NUM_SIMPLE_TYPES 8
