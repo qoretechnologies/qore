@@ -2804,12 +2804,24 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     #! Drive a RestClientIoPingPollOperation state machine without PollingConnectionMonitor
     private static *hash<ExceptionInfo> drivePingOp(Qore::AbstractPollOperation op) {
         try {
+            date deadline = now_us() + 30s;
             while (True) {
                 *hash<SocketPollInfo> info = op.continuePoll();
                 if (!info) {
                     break;
                 }
-                Socket::poll((info,), 5s);
+                timeout remaining = deadline - now_us();
+                if (remaining <= 0) {
+                    throw "POLL-TIMEOUT", sprintf("poll operation did not complete; state: %s",
+                        op.getState());
+                }
+                while (!Socket::poll((info,), min(remaining, 1s))) {
+                    remaining = deadline - now_us();
+                    if (remaining <= 0) {
+                        throw "POLL-TIMEOUT", sprintf("poll operation did not complete; state: %s",
+                            op.getState());
+                    }
+                }
             }
         } catch (hash<ExceptionInfo> ex) {
             return ex;
@@ -3138,15 +3150,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 %endif
     }
 
-    #! Regression test: connection-closed notifier must trigger a retry, not throw HTTPCLIENT-NOT-READY
+    #! Regression test: connection-closed notifier retries are bounded and do not throw HTTPCLIENT-NOT-READY
     /** The bug: when connection_ready_notifier fired because the connection went to CLOSED
         (not READY), continuePoll() called doSubmitPing() on the non-ready replacement
         connection, throwing HTTPCLIENT-NOT-READY and crashing the ping.
 
-        The fix: call doStartConnecting() instead of doSubmitPing() after the notifier fires.
+        First fix: call doStartConnecting() instead of doSubmitPing() after the notifier fires.
         doStartConnecting() re-evaluates readiness:
         - READY: calls doSubmitPing() immediately (SPS_IO_WAITING)
         - CLOSED/DRAINING: registers a new notifier for the replacement connection (SPS_CONNECTING retry)
+
+        Second fix: do not retry inside one poll cycle.  A closed/refused endpoint must finish the current
+        ping with a connection error so PollingConnectionMonitor can schedule the next
+        ping interval instead of spinning inside one ping operation.
     */
     testPingPollConnectionClosedRetry() {
         # Bind to a random port and immediately close — the port has nothing listening
@@ -3162,38 +3178,33 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             sprintf("http://127.0.0.1:%d", refused_port), {}, {
             "ping_method": "GET",
             "ping_path": "/ping",
+            "http_version": "1.1",
         });
+
+        ControllerLogCapture cap();
+        AsyncIoController::setLogger(cap);
+        on_exit AsyncIoController::setLogger(NOTHING);
 
         AbstractPollOperation op = rc.startPollConnect();
         assertEq("ping", op.getGoal());
 
-        # Drive for up to 2s. With the fix the ping retries on each CLOSED notifier
-        # (continuePoll() keeps returning poll info). Without the fix it throws
-        # HTTPCLIENT-NOT-READY on the very first CLOSED notifier.
-        date deadline = now_us() + 2s;
-        *hash<ExceptionInfo> caught;
-        try {
-            while (now_us() < deadline) {
-                *hash<SocketPollInfo> info = op.continuePoll();
-                if (!info) {
-                    break;
-                }
-                date remaining = deadline - now_us();
-                if (remaining > 0) {
-                    Socket::poll((info,), min(remaining, 250ms));
-                }
+        *hash<ExceptionInfo> caught = drivePingOp(op);
+        assertTrue(exists caught, "refused-port ping should terminate with an error");
+
+        list<string> submits = ();
+        foreach string msg in (cap.snapshot()) {
+            if (msg =~ /submit: operation 'HttpClientConnectionManager:/) {
+                push submits, msg;
             }
-        } catch (hash<ExceptionInfo> ex) {
-            caught = ex;
         }
 
         # The critical assertion: must NOT be the old HTTPCLIENT-NOT-READY crash
-        if (caught) {
-            assertNeq("HTTPCLIENT-NOT-READY", caught.err,
-                sprintf("ping should retry on connection close, not throw %s: %s",
-                    caught.err, caught.desc));
-        }
-        # Goal must not be reached — the port has nothing listening
+        assertNeq("HTTPCLIENT-NOT-READY", caught.err,
+            sprintf("ping should retry on connection close, not throw %s: %s",
+                caught.err, caught.desc));
+        assertLe(submits.size(), 1,
+            sprintf("closed ping should not create an unbounded connection loop; submits: %d",
+                submits.size()));
         assertFalse(op.goalReached());
     }
 
