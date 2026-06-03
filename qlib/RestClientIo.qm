@@ -4914,6 +4914,21 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         #! Whether we have already attempted a Negotiate challenge retry after a 401
         bool negotiate_retried = False;
 
+        #! Maximum connection attempts inside one polling ping operation
+        const MaxConnectAttempts = 1;
+
+        #! Main endpoint connection attempts in this ping operation
+        int connection_attempts = 0;
+
+        #! OAuth2 endpoint connection attempts in this ping operation
+        int oauth2_connection_attempts = 0;
+
+        #! Last main endpoint connection error seen while connecting
+        *hash<ExceptionInfo> connection_error;
+
+        #! Last OAuth2 endpoint connection error seen while connecting
+        *hash<ExceptionInfo> oauth2_connection_error;
+
         #! GSS context for the current Negotiate ping exchange
         *auto negotiate_context;
 
@@ -5038,13 +5053,19 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                 oauth2_conn_notifier.acknowledge();
                 delete oauth2_conn_notifier;
                 waiting_for_oauth2_conn = False;
-                # Re-check: start a new connection if closed/failed
-                checkTrackedConnectionFailure(oauth2_connection_ready_conn);
+                bool connection_failed = recordTrackedConnectionFailure(oauth2_connection_ready_conn, True);
+                bool connection_ready = oauth2_connection_ready_conn && oauth2_connection_ready_conn.isReady();
                 oauth2_connection_ready_conn = NOTHING;
-                oauth2_conn_notifier = startOAuth2ConnectionAsync();
-                if (oauth2_conn_notifier) {
-                    # Still not ready — retry with new notifier
-                    continue;
+                if (connection_failed) {
+                    checkConnectionAttemptLimit(True);
+                }
+                if (!connection_ready) {
+                    checkConnectionAttemptLimit(True);
+                    oauth2_conn_notifier = startOAuth2ConnectionAsync();
+                    if (oauth2_conn_notifier) {
+                        # Still not ready — retry with new notifier
+                        continue;
+                    }
                 }
                 # Connection ready — submit the OAuth2 token request
                 doSubmitOAuth2Request();
@@ -5075,23 +5096,29 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                         "socket": connection_ready_notifier,
                     };
                 }
-                # Notifier fired — connection became READY or CLOSED/DRAINING.
-                # Call doStartConnecting() to re-evaluate: if the connection is now
-                # READY, it submits the ping immediately (transitions to SPS_IO_WAITING).
-                # If it is CLOSED or DRAINING (e.g., connection failed or received
-                # GOAWAY), doStartConnecting() acquires a replacement connection and
-                # registers a new notifier, keeping state at SPS_CONNECTING for retry.
+                # Notifier fired because the connection became READY or left
+                # CONNECTING.  A ready connection can submit the ping directly.
+                # A closed/draining connection ends this ping cycle with the
+                # recorded connect error; PollingConnectionMonitor owns the
+                # next scheduled attempt.
                 connection_ready_notifier.acknowledge();
                 delete connection_ready_notifier;
                 waiting_for_connection = False;
-                checkTrackedConnectionFailure(connection_ready_conn);
+                bool connection_failed = recordTrackedConnectionFailure(connection_ready_conn);
+                bool connection_ready = connection_ready_conn && connection_ready_conn.isReady();
                 connection_ready_conn = NOTHING;
+                if (connection_failed) {
+                    checkConnectionAttemptLimit(False);
+                }
+                if (connection_ready) {
+                    doSubmitPing();
+                    continue;
+                }
+                checkConnectionAttemptLimit(False);
                 on_error conn.authFailure();
                 doStartConnecting();
-                # Re-evaluate from the top of the loop: if doStartConnecting() transitioned
-                # to SPS_IO_WAITING (connection was ready), the SPS_IO_WAITING handler below
-                # processes it.  If still SPS_CONNECTING (replacement connection), the
-                # SPS_CONNECTING handler returns the new poll info for the next notifier.
+                # Re-evaluate from the top of the loop if the attempt limit
+                # allows a replacement connection.
                 continue;
             }
 
@@ -5267,6 +5294,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                 doSubmitPing();
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "HTTPCLIENT-NOT-READY") {
+                    checkConnectionAttemptLimit(False);
                     # Connection was closed — create a self-signaling notifier so the
                     # poll loop calls continuePoll() again for retry
                     connection_ready_notifier = new EventNotifier();
@@ -5293,9 +5321,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # race is torn down by abandonAsyncHEForUrl() in cancelPendingWork().
         *EventNotifier rv = rcio.getConnectionManager().acquireConnectionAsync(
             rcio.getUrl(), \connection_ready_conn);
-        if (!rv) {
-            checkTrackedConnectionFailure(connection_ready_conn);
+        if (rv) {
+            noteConnectionAttempt(False);
+        } else {
+            bool connection_failed = recordTrackedConnectionFailure(connection_ready_conn);
             connection_ready_conn = NOTHING;
+            if (connection_failed) {
+                noteConnectionAttempt(False);
+                checkConnectionAttemptLimit(False);
+            }
         }
         return rv;
     }
@@ -5305,21 +5339,74 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # token endpoint connect must also never block the ping op's thread
         *EventNotifier rv = oauth2_rcio.getConnectionManager().acquireConnectionAsync(
             oauth2_rcio.getUrl(), \oauth2_connection_ready_conn);
-        if (!rv) {
-            checkTrackedConnectionFailure(oauth2_connection_ready_conn);
+        if (rv) {
+            noteConnectionAttempt(True);
+        } else {
+            bool connection_failed = recordTrackedConnectionFailure(oauth2_connection_ready_conn, True);
             oauth2_connection_ready_conn = NOTHING;
+            if (connection_failed) {
+                noteConnectionAttempt(True);
+                checkConnectionAttemptLimit(True);
+            }
         }
         return rv;
     }
 
-    private static checkTrackedConnectionFailure(*HttpClientIo::HttpClientConnection tracked_conn) {
+    private noteConnectionAttempt(bool oauth2) {
+        if (oauth2) {
+            ++oauth2_connection_attempts;
+        } else {
+            ++connection_attempts;
+        }
+        if ((oauth2 ? oauth2_connection_attempts : connection_attempts) > MaxConnectAttempts) {
+            throwConnectionAttemptLimit(oauth2);
+        }
+    }
+
+    private bool recordTrackedConnectionFailure(*HttpClientIo::HttpClientConnection tracked_conn,
+            bool oauth2 = False) {
         if (!tracked_conn || !tracked_conn.isClosed()) {
-            return;
+            return False;
         }
         *hash<auto> err = tracked_conn.getPollOperation().getError();
-        if (err && err.err == "QOREADDRINFO-GETINFO-ERROR") {
-            throw err.err, err.desc ?? "host resolution failed";
+        hash<ExceptionInfo> ex = err
+            ? <ExceptionInfo>{
+                "err": err.err,
+                "desc": err.desc ?? "connection failed",
+            }
+            : <ExceptionInfo>{
+                "err": "HTTPCLIENT-CONNECT-ERROR",
+                "desc": "connection closed before it became ready",
+            };
+        if (oauth2) {
+            oauth2_connection_error = ex;
+        } else {
+            connection_error = ex;
         }
+        return True;
+    }
+
+    private checkConnectionAttemptLimit(bool oauth2) {
+        if ((oauth2 ? oauth2_connection_attempts : connection_attempts) >= MaxConnectAttempts) {
+            throwConnectionAttemptLimit(oauth2);
+        }
+    }
+
+    private throwConnectionAttemptLimit(bool oauth2) {
+        int attempts = oauth2 ? oauth2_connection_attempts : connection_attempts;
+        *hash<ExceptionInfo> ex = oauth2 ? oauth2_connection_error : connection_error;
+        string target = oauth2 ? "OAuth2 token endpoint" : "REST ping endpoint";
+        state = SPS_COMPLETE;
+        try {
+            conn.authFailure();
+        } catch () {
+        }
+        if (ex) {
+            throw ex.err, sprintf("%s failed after %d connection attempts: %s",
+                target, attempts, ex.desc);
+        }
+        throw "REST-PING-CONNECT-ERROR", sprintf("%s did not become ready after %d connection attempts",
+            target, attempts);
     }
 
     #! Submits the ping request with EventNotifier signaling — no background thread

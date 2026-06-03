@@ -420,6 +420,12 @@ private:
     int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
 
+    //! Exit block of the innermost while/for/do-while loop currently being lowered
+    //! (nullptr at top level).  Blocks created via createBlock() while this is set are
+    //! stamped with QoreIRBasicBlock::enclosing_loop_exit so the IR interpreter can
+    //! resolve a debugger DebugFlowBreak to the correct enclosing loop's exit.
+    QoreIRBasicBlock* current_loop_exit = nullptr;
+
     //! Stack of active scope IDs for tracking nested on_exit handlers
     std::vector<uint32_t> scope_stack;
 

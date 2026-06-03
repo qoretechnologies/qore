@@ -1009,13 +1009,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        // Active enclosing-loop exit for debugger DebugFlowBreak resolution (see while case).
+        QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
+        current_loop_exit = exit_block;
+        body_block->enclosing_loop_exit = exit_block;
         ++loop_depth;
         if (!lowerStatementBlock(do_stmt->getCode(), error)) {
             --loop_depth;
+            current_loop_exit = prev_loop_exit;
             flow_stack.pop_back();
             return false;
         }
         --loop_depth;
+        current_loop_exit = prev_loop_exit;
         if (!blockHasTerminator(builder.getBlock())) {
             auto* br = builder.createBranch(cond_block);
             setLoopCheckpointExceptionTarget(br, cond_block);
@@ -1112,13 +1118,20 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        // Mark this loop's exit as the active enclosing-loop exit for blocks lowered in
+        // the body (body_block itself was created before this point, so stamp it too).
+        QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
+        current_loop_exit = exit_block;
+        body_block->enclosing_loop_exit = exit_block;
         ++loop_depth;
         if (!lowerStatementBlock(while_stmt->getCode(), error)) {
             --loop_depth;
+            current_loop_exit = prev_loop_exit;
             flow_stack.pop_back();
             return false;
         }
         --loop_depth;
+        current_loop_exit = prev_loop_exit;
         if (!blockHasTerminator(builder.getBlock())) {
             auto* br = builder.createBranch(cond_block);
             setLoopCheckpointExceptionTarget(br, cond_block);
@@ -1199,9 +1212,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, iter_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        // Active enclosing-loop exit for debugger DebugFlowBreak resolution (see while case).
+        QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
+        current_loop_exit = exit_block;
+        body_block->enclosing_loop_exit = exit_block;
+        iter_block->enclosing_loop_exit = exit_block;
         ++loop_depth;
         if (!lowerStatementBlock(for_stmt->getCode(), error)) {
             --loop_depth;
+            current_loop_exit = prev_loop_exit;
             flow_stack.pop_back();
             return false;
         }
@@ -1216,9 +1235,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (iter_expr && !iter_expr.isNothing()) {
             QoreIRValue lowered = lowerExpression(iter_expr, error);
             if (!lowered.isValid()) {
+                current_loop_exit = prev_loop_exit;
                 return false;
             }
         }
+        current_loop_exit = prev_loop_exit;
         if (!blockHasTerminator(builder.getBlock())) {
             auto* br = builder.createBranch(cond_block);
             setLoopCheckpointExceptionTarget(br, cond_block);
@@ -4854,7 +4875,13 @@ QoreIRBasicBlock* QoreIRLowering::createBlock(const std::string& prefix) {
         return nullptr;
     }
     std::string name = prefix + "." + std::to_string(block_counter++);
-    return func->createBlock(name);
+    QoreIRBasicBlock* b = func->createBlock(name);
+    // Stamp the innermost enclosing loop's exit so a debugger DebugFlowBreak firing
+    // in this block can be resolved to the correct loop exit by the IR interpreter.
+    if (b) {
+        b->enclosing_loop_exit = current_loop_exit;
+    }
+    return b;
 }
 
 static bool isContainerLiteral(const QoreValue& v) {

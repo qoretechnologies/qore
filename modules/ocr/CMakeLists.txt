@@ -61,6 +61,19 @@ if (NOT LEPTONICA_FOUND)
     return()
 endif()
 
+# Homebrew's lept.pc sets includedir=${prefix}/include/leptonica, so the include
+# dir reported by pkg-config already ends in "leptonica". The sources use
+# <leptonica/allheaders.h>, which needs the PARENT dir on the include path. Add
+# it so the angle-bracket include resolves the same way it does on MacPorts/Linux.
+foreach(_lept_dir ${LEPTONICA_INCLUDE_DIRS})
+    get_filename_component(_lept_name "${_lept_dir}" NAME)
+    if (_lept_name STREQUAL "leptonica")
+        get_filename_component(_lept_parent "${_lept_dir}" DIRECTORY)
+        list(APPEND LEPTONICA_INCLUDE_DIRS "${_lept_parent}")
+    endif()
+endforeach()
+list(REMOVE_DUPLICATES LEPTONICA_INCLUDE_DIRS)
+
 message(STATUS "tesseract + leptonica found - building ocr module")
 
 # Start of hacks to simulate installed QoreConfig.cmake
