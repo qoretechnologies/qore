@@ -180,6 +180,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "tool text", \geminiOpenAiForcedToolJsonTextTest());
         addTestCase("LlmBackend OpenAI chat facade retries malformed forced "
             "tool calls as JSON", \geminiOpenAiMalformedForcedToolRetryTest());
+        addTestCase("LlmBackend OpenAI chat facade returns useful malformed "
+            "forced-tool retry content",
+            \geminiOpenAiMalformedForcedToolRetryContentTest());
         addTestCase("LlmBackend OpenAI chat facade retries required empty "
             "tool responses", \geminiOpenAiRequiredToolEmptyRetryTest());
         addTestCase("LlmBackend OpenAI chat facade retries malformed "
@@ -1955,10 +1958,120 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "retry asks provider for structured JSON");
         assertEq("tool_calls", rv.choices[0].finish_reason,
             "retry response is normalized to OpenAI tool_calls");
+        assertEq(True,
+            rv.provider_diagnostics.forced_tool_retry.attempted,
+            "successful forced-tool JSON retry records diagnostics");
+        assertEq(True,
+            rv.provider_diagnostics.forced_tool_retry.recovered_tool_call,
+            "successful forced-tool JSON retry records recovery");
+        assertEq("MALFORMED_FUNCTION_CALL",
+            rv.provider_diagnostics.forced_tool_retry.original_finish_reason,
+            "forced-tool retry diagnostics preserve the original finish reason");
+        assertEq("tool_calls",
+            rv.provider_diagnostics.forced_tool_retry.retry_finish_reason,
+            "forced-tool retry diagnostics preserve the OpenAI retry finish "
+            "reason after tool-call synthesis");
+        assertEq("STOP",
+            rv.provider_diagnostics.forced_tool_retry
+                .retry_provider_diagnostics.finish_reason,
+            "forced-tool retry diagnostics preserve the native provider "
+            "retry finish reason");
         hash<auto> args = parse_json(
             rv.choices[0].message.tool_calls[0].function.arguments);
         assertEq("Gate payments", args.atomic_requirements[0].text,
             "retry JSON content becomes the forced tool arguments");
+    }
+
+    geminiOpenAiMalformedForcedToolRetryContentTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-tool-plain-1",
+                            "candidates": ({
+                                "finishReason": "MALFORMED_FUNCTION_CALL",
+                                "finishMessage": "Malformed function call: "
+                                    "call:default_api",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 80,
+                                "candidatesTokenCount": 0,
+                                "totalTokenCount": 80,
+                            },
+                        },
+                    },
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-malformed-tool-plain-retry-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {
+                                    "parts": ({
+                                        "text": "Which payment system should "
+                                            "provide settlement status?",
+                                    },),
+                                },
+                            },),
+                            "usageMetadata": {"totalTokenCount": 9},
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {"role": "system", "content": "Call the supplied tool."},
+                {"role": "user", "content": "Ask one clarification."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "first_question",
+                    "description": "Return the first clarification question",
+                    "parameters": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "question": {"type": "string"},
+                        },
+                        "required": ("question",),
+                    },
+                },
+            },),
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "first_question"},
+            },
+        });
+
+        assertEq(2, gemini_handler.requests.size(),
+            "malformed forced tool call with plain retry content is retried");
+        assertEq("Which payment system should provide settlement status?",
+            rv.choices[0].message.content,
+            "plain retry content is returned instead of the original null "
+            "malformed response");
+        assertEq("stop", rv.choices[0].finish_reason,
+            "plain retry response keeps its finish reason");
+        assertEq(False,
+            rv.provider_diagnostics.forced_tool_retry.recovered_tool_call,
+            "plain retry diagnostics record that no tool call was recovered");
+        assertEq(True,
+            rv.provider_diagnostics.forced_tool_retry.returned_retry_response,
+            "plain retry diagnostics record that the retry response was returned");
+        assertEq("MALFORMED_FUNCTION_CALL",
+            rv.provider_diagnostics.forced_tool_retry.original_finish_reason,
+            "plain retry diagnostics preserve original malformed finish reason");
+        assertEq("stop",
+            rv.provider_diagnostics.forced_tool_retry.retry_finish_reason,
+            "plain retry diagnostics preserve retry finish reason");
     }
 
     geminiOpenAiRequiredToolEmptyRetryTest() {

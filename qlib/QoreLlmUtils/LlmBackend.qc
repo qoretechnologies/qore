@@ -888,8 +888,17 @@ llm.chatStream(
         if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
                 forced_tool_name);
-            if (retry && openAiResponseHasToolCall(retry)) {
-                return retry;
+            if (retry) {
+                if (openAiResponseHasToolCall(retry)) {
+                    return attachForcedToolRetryDiagnostics(retry, rv, retry,
+                        True, True);
+                }
+                if (openAiResponseHasMessageContent(retry)) {
+                    return attachForcedToolRetryDiagnostics(retry, rv, retry,
+                        True, False);
+                }
+                rv = attachForcedToolRetryDiagnostics(rv, rv, retry, False,
+                    False);
             }
         }
         if (shouldRetryRequiredToolNoOutput(rv, body, tools)) {
@@ -1500,6 +1509,72 @@ llm.chatStream(
             cast<list<auto>>(response.choices)[0]);
         return choice.message.tool_calls.typeCode() == NT_LIST
             && choice.message.tool_calls.size() > 0;
+    }
+
+    private static bool openAiResponseHasMessageContent(
+            hash<auto> response) {
+        if (response.choices.typeCode() != NT_LIST || !response.choices) {
+            return False;
+        }
+        hash<auto> choice = cast<hash<auto>>(
+            cast<list<auto>>(response.choices)[0]);
+        hash<auto> message = choice.message.typeCode() == NT_HASH
+            ? cast<hash<auto>>(choice.message) : {};
+        return message.content.val();
+    }
+
+    private static hash<auto> attachForcedToolRetryDiagnostics(
+            hash<auto> response, hash<auto> original_response,
+            hash<auto> retry_response, bool returned_retry_response,
+            bool recovered_tool_call) {
+        hash<auto!> rv;
+        rv += response;
+
+        hash<auto!> diagnostics = {};
+        if (rv.provider_diagnostics.typeCode() == NT_HASH) {
+            diagnostics += cast<hash<auto>>(rv.provider_diagnostics);
+        }
+
+        hash<auto!> retry_diagnostics = {
+            "attempted": True,
+            "reason": "malformed_function_call",
+            "returned_retry_response": returned_retry_response,
+            "recovered_tool_call": recovered_tool_call,
+        };
+
+        *string original_finish =
+            getOpenAiResponseFirstChoiceFinishReason(original_response);
+        if (original_finish.val()) {
+            retry_diagnostics.original_finish_reason = original_finish;
+        }
+        *string retry_finish =
+            getOpenAiResponseFirstChoiceFinishReason(retry_response);
+        if (retry_finish.val()) {
+            retry_diagnostics.retry_finish_reason = retry_finish;
+        }
+        if (original_response.provider_diagnostics.typeCode() == NT_HASH) {
+            retry_diagnostics.original_provider_diagnostics =
+                original_response.provider_diagnostics;
+        }
+        if (retry_response.provider_diagnostics.typeCode() == NT_HASH) {
+            retry_diagnostics.retry_provider_diagnostics =
+                retry_response.provider_diagnostics;
+        }
+
+        diagnostics.forced_tool_retry = retry_diagnostics;
+        rv.provider_diagnostics = diagnostics;
+        return rv;
+    }
+
+    private static *string getOpenAiResponseFirstChoiceFinishReason(
+            hash<auto> response) {
+        if (response.choices.typeCode() != NT_LIST || !response.choices) {
+            return NOTHING;
+        }
+        hash<auto> choice = cast<hash<auto>>(
+            cast<list<auto>>(response.choices)[0]);
+        string finish_reason = (choice.finish_reason ?? "").toString();
+        return finish_reason.val() ? finish_reason : NOTHING;
     }
 
     private static *hash<auto> parseOpenAiForcedToolContent(*string content) {
