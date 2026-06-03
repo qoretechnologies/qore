@@ -241,6 +241,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("reconnect test", \reconnectTest());
         addTestCase("wedged-state reconnect recovery", \wedgedReconnectRecoveryTest());
         addTestCase("data provider test", \dataProviderTest());
+        addTestCase("connection data provider is delayed", \connectionDataProviderIsDelayedTest());
         addTestCase("WebSocketClient tests", \webSocketClientTests());
         addTestCase("HTTP/1.1 async WebSocket tests", \http1AsyncWebSocketTests());
         addTestCase("connection tests", \connectionTests());
@@ -621,6 +622,36 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertThrows("WEBSOCKET-RECV-TIMEOUT", \child.doRequest(), {"timeout": 1});
     }
 
+    connectionDataProviderIsDelayedTest() {
+        WebSocketConnectionObject conn({
+            "name": "delayed-data-provider-test",
+            "url": "ws://localhost:" + linfo.port,
+            "opts": {
+                "headers": {
+                    "test-header": "delayed-provider",
+                },
+            },
+        });
+        AbstractDataProvider prov = conn.getDataProvider();
+        assertTrue(prov instanceof WebSocketClientDelayedDataProvider,
+            "connection data provider must wait for observersReady()");
+
+        WebSocketClientDelayedDataProvider wsprov = cast<WebSocketClientDelayedDataProvider>(prov);
+        assertFalse(wsprov.isConnected(),
+            "connection data provider must not connect before observersReady()");
+
+        MyObserver observer();
+        wsprov.registerObserver(observer);
+        int hdr_gen = wsHandler.getHdrGen();
+        wsprov.observersReady();
+        wsHandler.waitForNewConnection(hdr_gen);
+        observer.wait(EVENT_WS_CONNECTED);
+        assertTrue(wsprov.isConnected(),
+            "connection data provider connects after observersReady()");
+        assertEq("delayed-provider", wsHandler.last_hdr."test-header",
+            "connection data provider must pass connection headers to the handshake");
+    }
+
     webSocketClientTests() {
         list<auto> l = ();
         Counter c(1);
@@ -734,24 +765,39 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             # Test async ping with polling API
             AbstractPollOperation poll_op = conn.startPollConnect(logger);
             assertEq("ws-ping", poll_op.getGoal(), "WebSocket poll operation goal should be 'ws-ping'");
-
-            # Drive the poll operation to completion
-            date start = now_us();
-            date timeout = 10s;
-            while (!poll_op.goalReached()) {
-                if (now_us() - start > timeout) {
-                    throw "TIMEOUT", "WebSocket poll operation timed out";
-                }
-                *hash<SocketPollInfo> info = poll_op.continuePoll();
-                if (info) {
-                    # Wait for socket readiness using Socket::poll() with list argument
-                    Socket::poll((info,), 1s);
-                }
-            }
-            assertTrue(poll_op.goalReached(), "WebSocket poll operation should reach goal");
-            hash<auto> output = poll_op.getOutput();
+            hash<auto> output = waitForWebSocketPingPoll(poll_op);
             assertEq(101, output.code, "WebSocket handshake should return 101 Switching Protocols");
         }
+
+        if (h2info) {
+            url = "wss://localhost:" + h2info.port;
+            conn = new WebSocketConnectionObject("test", "test", url, {"monitor": False}, {
+                "http_version": "auto",
+                "ssl_verify_cert": False,
+            });
+            AbstractPollOperation poll_op = conn.startPollConnect(logger);
+            assertEq("ws-ping", poll_op.getGoal(), "WebSocket poll operation goal should be 'ws-ping'");
+            hash<auto> output = waitForWebSocketPingPoll(poll_op);
+            assertEq(101, output.code,
+                "WebSocket ping poll should use an HTTP/1.1 upgrade even with an HTTP/2-capable listener");
+        }
+    }
+
+    private hash<auto> waitForWebSocketPingPoll(AbstractPollOperation poll_op) {
+        date start = now_us();
+        date timeout = 10s;
+        while (!poll_op.goalReached()) {
+            if (now_us() - start > timeout) {
+                throw "TIMEOUT", "WebSocket poll operation timed out";
+            }
+            *hash<SocketPollInfo> info = poll_op.continuePoll();
+            if (info) {
+                # Wait for socket readiness using Socket::poll() with list argument.
+                Socket::poll((info,), 1s);
+            }
+        }
+        assertTrue(poll_op.goalReached(), "WebSocket poll operation should reach goal");
+        return poll_op.getOutput();
     }
 
     #! HTTP/2 WebSocket tests (RFC 8441)

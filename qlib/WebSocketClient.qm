@@ -4071,7 +4071,14 @@ public class WebSocketPingPollOperation inherits Qore::HttpClientPingPollOperati
         };
         ws_headers += headers;
 
-        HTTPClient hc((http_opts ?? {}) + {"url": http_url});
+        hash<auto> client_opts = (http_opts ?? {}) + {"url": http_url};
+        if (!client_opts.http_version || client_opts.http_version == "auto") {
+            # WebSocketPingPollOperation validates an HTTP/1.1 Upgrade handshake (101 +
+            # Sec-WebSocket-Accept).  Do not let HTTPClient auto-negotiate HTTP/2 here,
+            # where the upgraded stream can stay open and make the ping poll time out.
+            client_opts.http_version = "1.1";
+        }
+        HTTPClient hc(client_opts);
         if (logger) {
             logger.logArgs("INFO", "WebSocketConnection async ping start: url=%y", base_url);
         }
@@ -4326,17 +4333,18 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         return ws;
     }
 
-    #! returns an WebSocketClientDataProvider object for this connection
+    #! returns an WebSocketClientDelayedDataProvider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 
-        @return an WebSocketClientDataProvider object for this connection
+        @return an WebSocketClientDelayedDataProvider object for this connection
 
         @see hasDataProvider()
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new WebSocketClientDataProvider({
+        return new WebSocketClientDelayedDataProvider({
             "url": url,
-     } + opts{"token", "token_type", "username", "password"});
+        } + opts{"async_io", "connect_timeout", "data", "headers", "http_version", "max_redirects", "password", "proxy",
+            "reconnect", "timeout", "token", "token_type", "username"});
     }
 
     #! returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
@@ -4657,8 +4665,10 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
     /** This method is meant to trigger event generation
     */
     observersReady() {
-        client.observersReady();
+        # start() can block while the handshake completes; do not leave required
+        # provider state updates after that lifecycle boundary.
         observers_ready = True;
+        client.observersReady();
     }
 
     #! Returns True if the object is currently connected
