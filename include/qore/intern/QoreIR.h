@@ -2387,6 +2387,13 @@ public:
     //! Used by the IR interpreter for loop-aware JIT promotion (OSR).
     bool is_loop_header = false;
 
+    //! Exit block of the innermost while/for/do-while loop whose body contains this
+    //! block (nullptr if this block is not inside such a loop body).  Set during
+    //! lowering.  Used by the IR interpreter to resolve a debugger DebugFlowBreak
+    //! (RC_BREAK) to the correct enclosing loop's exit — the loop's condition BrIf
+    //! is the unique branch whose false_target equals this exit block.
+    QoreIRBasicBlock* enclosing_loop_exit = nullptr;
+
     //! True if this block contains phi nodes at the beginning.
     //! Set during computeSlotIdsAndEmbed() to optimize phi loop skipping.
     bool has_phi_nodes = false;

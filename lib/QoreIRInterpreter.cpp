@@ -3496,7 +3496,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     bool can_debug = tlpd && statements && pgm;
     bool debug_active = can_debug && tlpd->runtimeCheck();
     int last_debug_line = -1;  // track line changes for dbgStep
-    bool debug_break_loop = false;  // set by dbgStep RC_BREAK to exit current loop
+    bool debug_break_loop = false;  // set by dbgStep RC_BREAK to exit current loop (legacy fallback)
+    // Set by dbgStep RC_BREAK to the exit block of the loop enclosing the break point.
+    // Execution then continues normally (running statement/scope cleanups) until the
+    // enclosing loop's condition BrIf — the unique branch whose false_target equals this
+    // block — is reached and diverted to it.  Resolving the loop this way (instead of
+    // "force the next BrIf false") avoids an inner if/switch BrIf wrongly consuming the
+    // break, which left the loop running.  See QoreIRBasicBlock::enclosing_loop_exit.
+    QoreIRBasicBlock* debug_break_target = nullptr;
 
     auto returnAfterUnhandledException = [&](bool values_cleaned = false) -> bool {
         if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
@@ -3948,10 +3955,17 @@ next_instruction:
                         return dbg_rc == RC_RETURN;
                     }
                     if (dbg_rc == RC_BREAK) {
-                        // Debug break: force the next BrIf to take the false branch
-                        // (exits the current loop), matching AST behavior where
-                        // RC_BREAK causes the while/for loop to exit
-                        debug_break_loop = true;
+                        // Debug break: exit the loop enclosing this statement, matching
+                        // AST behavior where RC_BREAK unwinds to the innermost while/for
+                        // loop.  Resolve the loop via the block's enclosing_loop_exit so
+                        // the correct loop's condition BrIf is the one diverted (an inner
+                        // if/switch BrIf must not consume the break).  Fall back to the
+                        // legacy "force next BrIf false" only when no loop is annotated.
+                        if (current_block->enclosing_loop_exit) {
+                            debug_break_target = current_block->enclosing_loop_exit;
+                        } else {
+                            debug_break_loop = true;
+                        }
                     }
                 }
             }
@@ -4870,8 +4884,15 @@ next_instruction:
                 auto* br = static_cast<QoreIRBranchIfInstruction*>(inst);
                 QoreValue cond = getIRValue(values, br->condition);
                 prev_block = block;
-                // Debug break: force false branch to exit the current loop
-                if (debug_break_loop) {
+                // Debug break: divert to the enclosing loop's exit.  Only the loop's
+                // own condition BrIf has false_target == debug_break_target, so inner
+                // if/switch BrIfs flow normally (preserving per-iteration cleanup) until
+                // the loop header is reached.
+                if (debug_break_target && br->false_target == debug_break_target) {
+                    block = debug_break_target;
+                    debug_break_target = nullptr;
+                } else if (debug_break_loop) {
+                    // legacy fallback: force false branch to exit the current loop
                     debug_break_loop = false;
                     block = br->false_target;
                 } else {
@@ -8100,7 +8121,12 @@ load_local_done:
                             return dbg_rc == RC_RETURN;
                         }
                         if (dbg_rc == RC_BREAK) {
-                            debug_break_loop = true;
+                            // See the dbgStep RC_BREAK handler above for rationale.
+                            if (current_block->enclosing_loop_exit) {
+                                debug_break_target = current_block->enclosing_loop_exit;
+                            } else {
+                                debug_break_loop = true;
+                            }
                         }
                     }
                 }
