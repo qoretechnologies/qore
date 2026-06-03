@@ -36,9 +36,16 @@ endif()
 #
 # Selected libraries are exported through QORE_ARROW_TARGETS so the
 # target_link_libraries() call below stays platform-agnostic.
-find_package(Arrow QUIET CONFIG)
+# NO_CMAKE_PACKAGE_REGISTRY: ignore the CMake user package registry
+# (~/.cmake/packages) when locating Arrow/Parquet.  A bundled-Arrow build — the
+# FetchContent fallback below, or a sibling project — registers its in-tree
+# RapidJSON/Arrow there via export(PACKAGE).  A stale entry pointing at a
+# deleted build tree (or one whose generated *Config.cmake declares a pre-3.5
+# cmake_minimum_required) otherwise hijacks detection and aborts configure under
+# CMake >= 4.
+find_package(Arrow QUIET CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 if (Arrow_FOUND)
-    find_package(Parquet QUIET CONFIG)
+    find_package(Parquet QUIET CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 endif()
 
 if (Arrow_FOUND AND Parquet_FOUND)

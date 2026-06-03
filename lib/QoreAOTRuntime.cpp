@@ -3849,20 +3849,13 @@ static QoreAOTContext* buildContextFromSlotMap(
 
                 // Construct UserClosureFunction + UserClosureVariant FIRST
                 // so signature locals are available for IR deserialization.
-                // Need a parse context so UserVariantBase ctor can call
-                // parse_get_parse_options() and getProgram()
-                ExceptionSink closure_xsink;
-                ProgramRuntimeParseContextHelper closure_pch(&closure_xsink, pgm);
-                if (closure_xsink.isException()) {
-                    if (trace_slot_reg) {
-                        fprintf(stderr, "[aot-slot-reg] '%s': closure expr slot %d parse context setup failed\n",
-                            name, i);
-                    }
-                    closure_xsink.clear();
-                    ptr = ir_end_ptr;
-                    closure_ir_missing = true;
-                    continue;
-                }
+                // The constructor needs getProgram() / parse option context, but
+                // this AOT slot-map reconstruction can run while the global AOT
+                // init lock is held. Taking a Program parse lock here can invert
+                // lock order with another loader thread that already has the
+                // Program parse lock and is waiting for AOT init. A plain current
+                // Program context is sufficient for this constructor path.
+                QoreProgramContextHelper closure_pch(pgm);
                 auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
                 auto* closure_variant = static_cast<UserClosureVariant*>(
                     const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
