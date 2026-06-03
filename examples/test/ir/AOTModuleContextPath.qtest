@@ -28,6 +28,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
             \modulePreservesInheritedConcreteMethodBody());
         addTestCase("AOT module preserves raw generic base compatibility",
             \modulePreservesRawGenericBaseCompatibility());
+        addTestCase("AOT reexported modules load concurrently into Programs",
+            \moduleConcurrentProgramLoadsWithReexport());
 
         set_return_value(main());
     }
@@ -448,5 +450,107 @@ printf(\"aot=%s\\n\", callAOTInheritedMethod());
         string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
         assertEq("child=parent-impl\naot=parent-impl\nEXIT=0\n", run_out,
             "AOT child class must call the inherited concrete parent method body");
+    }
+
+    moduleConcurrentProgramLoadsWithReexport() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string dep_qm_path = tmp_dir + "/AOTConcurrentReexportDep.qm";
+        string dep_qmod_path = tmp_dir + "/AOTConcurrentReexportDep.qmod";
+        string main_qm_path = tmp_dir + "/AOTConcurrentReexportMain.qm";
+        string main_qmod_path = tmp_dir + "/AOTConcurrentReexportMain.qmod";
+        string script_path = tmp_dir + "/run-concurrent-reexport.qr";
+
+        File f();
+        f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTConcurrentReexportDep {
+    version = \"1.0\";
+    desc = \"concurrent AOT reexport dependency module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTConcurrentReexportDep {
+    public int sub value() {
+        int base = 40;
+        code<int(int)> add = int sub (int x) {
+            return base + x;
+        };
+        return add(2);
+    }
+}
+");
+        f.close();
+
+        string compile_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, dep_qmod_path, dep_qm_path));
+        assertTrue(is_file(dep_qmod_path), "compiled concurrent reexport dependency module: " + compile_dep_out);
+        unlink(dep_qm_path);
+
+        f.open2(main_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires(reexport) AOTConcurrentReexportDep
+
+module AOTConcurrentReexportMain {
+    version = \"1.0\";
+    desc = \"concurrent AOT reexport main module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public int sub concurrentReexportValue() {
+    return AOTConcurrentReexportDep::value();
+}
+");
+        f.close();
+
+        string compile_main_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, tmp_dir, qore_bin, main_qmod_path, main_qm_path));
+        assertTrue(is_file(main_qmod_path), "compiled concurrent reexport main module: " + compile_main_out);
+        unlink(main_qm_path);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTConcurrentReexportMain
+
+const Threads = 16;
+
+Counter ready(Threads);
+Counter done(Threads);
+Mutex error_lock();
+list<string> errors = ();
+
+for (int i = 0; i < Threads; ++i) {
+    background sub (int id) {
+        on_exit done.dec();
+        ready.dec();
+        ready.waitForZero();
+
+        try {
+            Program p();
+            p.loadModule(\"AOTConcurrentReexportMain\");
+        } catch (hash<ExceptionInfo> ex) {
+            error_lock.lock();
+            on_exit error_lock.unlock();
+            errors += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }(i);
+}
+
+done.waitForZero();
+printf(\"value=%d errors=%d\\n\", concurrentReexportValue(), errors.size());
+if (errors) {
+    printf(\"%s\\n\", errors.join(\"\\n\"));
+}
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("value=42 errors=0\nEXIT=0\n", run_out,
+            "concurrent Program::loadModule() calls must not deadlock on AOT reexported modules");
     }
 }
