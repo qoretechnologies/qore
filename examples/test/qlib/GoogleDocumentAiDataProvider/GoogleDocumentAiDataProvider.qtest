@@ -78,8 +78,11 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
         assertEq("GoogleDocumentAi", app.name);
         assertEq("google-documentai", app.scheme);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("GoogleDocumentAi");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("GoogleDocumentAi"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("process-document", actions[0].action);
     }

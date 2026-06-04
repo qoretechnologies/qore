@@ -286,8 +286,12 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         assertEq("anthropic", prov.getName());
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider); this test asserts the
+        # app's own child surface only
         assertEq(("batches", "count-tokens", "files", "messages", "models", "skills"),
-            sort(prov.getChildProviderNames()));
+            sort(select prov.getChildProviderNames(),
+                $1 != AbstractDataProvider::GenericApiCallChildName));
 %endif
     }
 
@@ -388,21 +392,35 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
 
+        # NOTE on the `select ... != GenericApiCallChildName` filter below: every provider with
+        # a discoverable rest client (including these intermediate containers) gets __call__
+        # auto-injected by the framework. These assertions are about each container's own
+        # children, not the framework's auto-injection (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider).
+
         # verify batches children
         AbstractDataProvider batches = prov.getChildProvider("batches");
-        assertEq(("cancel", "create", "get", "list"), sort(batches.getChildProviderNames()));
+        assertEq(("cancel", "create", "get", "list"),
+            sort(select batches.getChildProviderNames(),
+                $1 != AbstractDataProvider::GenericApiCallChildName));
 
         # verify files children
         AbstractDataProvider files = prov.getChildProvider("files");
-        assertEq(("delete", "get", "get-content", "list", "upload"), sort(files.getChildProviderNames()));
+        assertEq(("delete", "get", "get-content", "list", "upload"),
+            sort(select files.getChildProviderNames(),
+                $1 != AbstractDataProvider::GenericApiCallChildName));
 
         # verify skills children
         AbstractDataProvider skills = prov.getChildProvider("skills");
-        assertEq(("create", "delete", "get", "list", "update"), sort(skills.getChildProviderNames()));
+        assertEq(("create", "delete", "get", "list", "update"),
+            sort(select skills.getChildProviderNames(),
+                $1 != AbstractDataProvider::GenericApiCallChildName));
 
         # verify models children (now a container)
         AbstractDataProvider models = prov.getChildProvider("models");
-        assertEq(("get", "list"), sort(models.getChildProviderNames()));
+        assertEq(("get", "list"),
+            sort(select models.getChildProviderNames(),
+                $1 != AbstractDataProvider::GenericApiCallChildName));
 %endif
     }
 

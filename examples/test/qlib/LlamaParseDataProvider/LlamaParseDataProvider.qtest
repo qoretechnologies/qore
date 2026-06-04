@@ -83,8 +83,11 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getApp("LlamaParse");
         assertEq("LlamaParse", app.name);
         assertEq("llamaparse", app.scheme);
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("LlamaParse");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("LlamaParse"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("parse-document", actions[0].action);
     }

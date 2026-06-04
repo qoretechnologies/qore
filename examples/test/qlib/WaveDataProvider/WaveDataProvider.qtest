@@ -473,8 +473,11 @@ public class WaveDataProviderTest inherits QUnit::Test {
         assertEq("Wave", app.name);
         assertEq("Wave", app.display_name);
 
-        # Get all actions for the Wave app
-        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Wave");
+        # Get all actions for the Wave app — filter out the framework-injected make-api-call
+        # action (covered by GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        *list<hash<DataProviderActionInfo>> actions = select
+            DataProviderActionCatalog::getActions("Wave"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertTrue(actions.size() > 0, "Wave app should have actions");
         assertEq(22, actions.size(), "Wave app should have exactly 22 actions");
 
