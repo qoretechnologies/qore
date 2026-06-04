@@ -171,6 +171,38 @@ class ConstMethodsParserTest inherits QUnit::Test {
         builtin.run();
         assertEq(11, builtin.callFunction("ok"));
 
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'first",
+            "auto sub bad() { const list<int> values = (1, 2); return values.first(); }",
+            "readonly-list-first-non-const");
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'rangeIterator",
+            "auto sub bad() { const list<int> values = (1, 2); return values.rangeIterator(); }",
+            "readonly-list-range-iterator-non-const");
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'values",
+            "auto sub bad() { const hash<auto> data = {\"a\": 1}; return data.values(); }",
+            "readonly-hash-values-non-const");
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'firstValue",
+            "auto sub bad() { const hash<auto> data = {\"a\": 1}; return data.firstValue(); }",
+            "readonly-hash-first-value-non-const");
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'keyIterator",
+            "auto sub bad() { const hash<auto> data = {\"a\": 1}; return data.keyIterator(); }",
+            "readonly-hash-key-iterator-non-const");
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'iterator",
+            "class IterObject { public { int value = 1; } } "
+                "auto sub bad() { const IterObject obj = new IterObject(); return obj.iterator(); }",
+            "readonly-object-iterator-non-const");
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'getCallReference",
+            "class RefObject { public int value() { return 1; } } "
+                "auto sub bad() { const RefObject obj = new RefObject(); return obj.getCallReference(\"value\"); }",
+            "readonly-object-callref-non-const");
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'view",
+            "auto sub bad() { const buffer<int64> values = new buffer<int64>((1, 2)); "
+                "return values.view(start: 0, count: 1); }",
+            "readonly-buffer-view-non-const");
+        assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'materialize",
+            "auto sub bad() { const buffer<int64> values = new buffer<int64>((1, 2)); "
+                "return values.materialize(); }",
+            "readonly-buffer-materialize-non-const");
+
         assertParseThrows("READONLY-RECEIVER-ERROR", "non-const method 'mutate",
             "class Child { int mutate() { return 1; } } "
                 "class Holder { private { Child child = new Child(); } int bad() const { return self.child.mutate(); } }",

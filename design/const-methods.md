@@ -1,8 +1,8 @@
 # Const Methods and Shallow Const Receivers
 
 Status: Implemented. This document records the v1 language design and durable
-semantics. Remaining builtin-annotation follow-up scope is tracked separately in
-`design-pending/const-methods-builtin-audit.md`.
+semantics. The stable builtin annotation audit is tracked in
+`design/const-methods-builtin-audit.md`.
 
 ## Summary
 
@@ -47,12 +47,10 @@ not need to preserve prerelease behavior where a readonly object binding could
 call a mutating method, and it does not need a legacy AOT mode for prerelease
 artifacts that encoded readonly lvalues without the final feature metadata.
 
-The pending cleanup items in
-`design-pending/readonly-const-bindings-followups.md` are not all blockers for
-const methods, but shared infrastructure should be hardened while implementing
-this design. In particular, reuse or complete the follow-up work for readonly
-expression-root analysis, reference bypass checks, IR/AOT verifier coverage,
-and AST/IR/JIT/AOT cross-mode tests.
+The readonly-binding infrastructure needed by const methods is recorded in
+`design/readonly-const-bindings.md`: readonly expression-root analysis,
+reference bypass checks, IR/AOT verifier coverage, and AST/IR/JIT/AOT
+cross-mode tests.
 
 Dependency direction is one-way: const methods depend on readonly bindings, but
 readonly-binding follow-ups do not depend on const methods. Receiver constness,
@@ -511,11 +509,10 @@ Readonly receiver sources include:
   allowed. The clone pattern relies on this: `Document::getId()` is permitted
   because it is const.
 
-Global (`our`) object bindings are not readonly receivers in v1, even when
-declared with a readonly-looking form; `our const` is out of scope per
-`design-pending/readonly-const-bindings-followups.md`. Receiver constness in v1
-derives only from local/closure `const` bindings, `self` in a const method, and
-expressions rooted at those.
+Global (`our`) object bindings are not readonly receivers in v1. `our const` is
+not a readonly-binding form. Receiver constness in v1 derives only from
+local/closure `const` bindings, `self` in a const method, and expressions rooted
+at those.
 
 The readonly property must propagate through expressions that merely alias a
 readonly value, so it cannot be dropped by a no-op rewrap:
@@ -658,15 +655,15 @@ and can be annotated last.
 
 The v1 builtin subset is captured in a checked-in audit artifact. The audit
 lists candidate methods, const decisions, and the reason for any
-`QCF_CONSTANT` instance method that is not marked const. The current audit and
-remaining alias-review follow-up scope are tracked in
-`design-pending/const-methods-builtin-audit.md`.
+`QCF_CONSTANT` instance method in the v1 subset that is not marked const. The
+current audit is tracked in `design/const-methods-builtin-audit.md`.
 The required v1 inventory starts with read-only pseudo-methods on `<value>`,
 `<int>`, `<float>`, `<string>`, `<list>`, `<hash>`, `<date>`, `<binary>`, and
 `<object>`, then covers common read-only inspectors/accessors on builtin
 date/time, string-like, collection wrapper, immutable view, type, and reflection
-classes. The exact method list is therefore an implementation deliverable, not
-an unresolved language-design question.
+classes. A broader audit of every service-style builtin class remains an
+incremental compatibility improvement, not an unresolved v1 language-design
+question.
 
 ## Lvalue and IR Enforcement
 

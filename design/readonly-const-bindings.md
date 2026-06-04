@@ -40,7 +40,10 @@ explicit statement block.
 Readonly is a property of a local binding, not transitive immutability of the
 value. The protected binding cannot be reassigned, removed, incremented,
 compound-assigned, used as the base of an index/member lvalue write, or exposed
-as a mutable reference. Objects and containers reachable through other mutable
+as a mutable reference. In-place mutating operators such as `push`, `pop`,
+`shift`, `unshift`, `splice`, `extract`, `trim`, `chomp`, regex substitution,
+and transliteration are rejected for the same reason: they acquire the binding
+as a writable lvalue. Objects and containers reachable through other mutable
 aliases keep their normal mutability.
 
 Readonly locals require an initializer. Qore does not implement
@@ -144,6 +147,17 @@ Readonly state is part of local and parameter metadata:
 
 Any new local-introduction or code-generation path must preserve this metadata
 and must either emit an initialization-only operation or reject later writes.
+
+Compatibility behavior follows the AOT feature flag:
+
+- New artifacts loaded by a readonly-aware runtime restore and verify readonly
+  state.
+- Old artifacts loaded by a readonly-aware runtime have no readonly local bits
+  because an old compiler could not emit this metadata.
+- New artifacts loaded by an old runtime must be rejected through unknown AOT
+  feature flags.
+- A readonly-aware artifact must set `QORE_AOT_FEAT_READONLY_LOCALS`; the loader
+  cannot infer missing readonly metadata from instruction bodies alone.
 
 ## Parse Options
 
