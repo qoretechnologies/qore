@@ -222,6 +222,12 @@ public class DataSchemaLoader {
         if (table_def.foreign_constraints) {
             result.foreign_constraints = table_def.foreign_constraints;
         }
+        if (table_def.partition_strategy) {
+            result.partition_strategy = table_def.partition_strategy;
+        }
+        if (table_def.partitions) {
+            result.partitions = table_def.partitions;
+        }
 
         # Store auto_triggers for expansion at alignment time (driver-dependent)
         if (table_def.auto_triggers) {

@@ -250,6 +250,10 @@ class DataSchemaTest inherits QUnit::Test {
             "foreign_constraints": {
                 "fk_role": {"columns": ("role_id",), "table": "roles"},
             },
+            "partition_strategy": {"method": "range", "columns": ("id",)},
+            "partitions": {
+                "test_p1": {"bound_from": 0, "bound_to": 100},
+            },
             "auto_triggers": {"created": True},
         };
 
@@ -264,6 +268,8 @@ class DataSchemaTest inherits QUnit::Test {
         assertTrue(result.indexes.hasKey("idx_name"));
         assertTrue(result.foreign_constraints.hasKey("fk_role"));
         assertEq("roles", result.foreign_constraints.fk_role.table);
+        assertEq(("id",), result.partition_strategy.columns);
+        assertEq(100, result.partitions.test_p1.bound_to);
 
         # Auto triggers preserved (expanded later)
         assertTrue(result.auto_triggers.created);
