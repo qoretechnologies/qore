@@ -210,6 +210,10 @@ qlib/QoreModelRegistry/
   schemas, dynamic axes, tokenizer metadata, preprocessing and postprocessing
   contracts, output-shape maps, provider diagnostics, and optional
   `device_binding` policy
+- **Execution adapters**: `ModelExecutableAdapter` gives DataProviderML and
+  application code a uniform execution surface for native `.qml` and ONNX
+  Runtime packages, including tensor-preserving ONNX runs and provider
+  diagnostics
 
 ### Package Safety Contract
 
@@ -238,6 +242,41 @@ packaging ONNX artifacts.
   postprocessing, tokenizer, tensor-contract, and execution-plan metadata.
 - `OnnxDiagnostics` creates compact actionable diagnostics used by CLI,
   registry, and DataProviderML surfaces.
+
+### ONNX Package And Execution Contracts
+
+`OnnxPackageTools` creates deterministic package directories and manifests for
+ONNX deployment artifacts. The manifest is the cross-module contract used by
+`qore-onnx`, QoreModelRegistry, and DataProviderML. For executable ONNX
+packages it records:
+
+- `runtime`, `task`, `entry_artifact`, opset, producer, and minimum ONNX
+  Runtime policy metadata
+- sorted package artifacts with roles, formats, checksums, safety
+  classification, external-data companions, and safe metadata extracts
+- input and output tensor schemas, dynamic axes, and output-shape maps
+- tokenizer companion metadata for HuggingFace-style packages
+- normalized preprocessing and postprocessing contracts for common `raw`,
+  `regression`, `classification`, `sequence-classification`, `embedding`,
+  `reranker`, `token-classification`, `encoder-decoder`, and `causal-lm`
+  tasks
+- optional runtime config, provider diagnostics, validation diagnostics,
+  benchmark metadata, golden vectors, and `device_binding` policy
+
+The normalized `execution.plan` keeps the fields needed for local execution in
+one place: runtime, task, entry artifact, required modules, input/output
+schemas, dynamic axes, tensor contract, tokenizer contract, preprocessing,
+postprocessing, output shapes, runtime config, and local-executable state.
+Registry backends store this plan with the model version, and
+`ModelExecutableAdapter` uses the plan to load the correct artifact and expose
+consistent run, tensor-run, feature-matrix, and diagnostic methods.
+
+Diagnostics are intentionally shared across layers. `ML::OnnxModel` exposes
+provider metadata and effective-provider reports; `QoreOnnxTools` summarizes
+inspection, validation, and package diagnostics with recommended actions and
+example commands; QoreModelRegistry persists package diagnostics in manifests;
+DataProviderML returns provider, inference, profile, I/O binding, and
+device-binding diagnostics through processor `getDiagnostics()` methods.
 
 ## Tensor And Device Memory
 
@@ -290,6 +329,9 @@ Device-upload and device-binding entry points are in the
   asynchronous, and dynamic-batch execution plus pooled device-binding and
   optional device-memory statistics.
 - DataProviderML conditionally registers the `onnx-model` processor.
+- DataProviderML `onnx-model` and registry-backed ONNX `registry-model`
+  processors support explicit `input_map`, selected `output_names`, compact
+  column/dataframe/tensor output modes, and tensor execution for shaped windows.
 - `QoreTokenizerUtils::EmbeddingModel` and `CrossEncoderReranker` accept ONNX
   model bytes as well as filesystem paths, so registry database/REST artifacts
   can be executed without temporary files
