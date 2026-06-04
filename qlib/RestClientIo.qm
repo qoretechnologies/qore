@@ -5057,26 +5057,28 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                 oauth2_conn_notifier.acknowledge();
                 delete oauth2_conn_notifier;
                 waiting_for_oauth2_conn = False;
-                bool connection_ready = oauth2_connection_ready_conn && oauth2_connection_ready_conn.isReady();
-                if (!connection_ready) {
-                    # Record a connect failure (closed/refused) if present; this also
-                    # counts the failed attempt.  A still-establishing connection
-                    # records nothing and must keep waiting, not throw.
-                    recordTrackedConnectionFailure(oauth2_connection_ready_conn, True);
-                    oauth2_connection_ready_conn = NOTHING;
-                    if (oauth2_connection_error) {
-                        # A real connect failure ends this cycle with a bounded error;
-                        # PollingConnectionMonitor owns the next scheduled attempt.
-                        checkConnectionAttemptLimit(True);
-                    }
-                    oauth2_conn_notifier = startOAuth2ConnectionAsync();
-                    if (oauth2_conn_notifier) {
-                        # Still establishing — wait on the new notifier
-                        continue;
-                    }
-                }
+                # Record a connect failure (closed/refused) if present; this also
+                # counts the failed attempt.  A ready or still-establishing
+                # connection records nothing.
+                recordTrackedConnectionFailure(oauth2_connection_ready_conn, True);
                 oauth2_connection_ready_conn = NOTHING;
-                # Connection ready — submit the OAuth2 token request
+                if (oauth2_connection_error) {
+                    # A real connect failure ends this cycle with a bounded error;
+                    # PollingConnectionMonitor owns the next scheduled attempt.
+                    checkConnectionAttemptLimit(True);
+                }
+                # Re-invoke the async connect to finish any happy-eyeballs race and
+                # commit the winner to the pool BEFORE submitting (see the main-path
+                # SPS_CONNECTING handler).  Submitting on a ready-but-not-yet-pooled
+                # HE winner leaves the QUIC request stream uncreated and the OAuth2
+                # request hung.  startOAuth2ConnectionAsync() returns NOTHING once the
+                # connection is ready and pooled, or a notifier while still connecting.
+                oauth2_conn_notifier = startOAuth2ConnectionAsync();
+                if (oauth2_conn_notifier) {
+                    # Still establishing — wait on the new notifier
+                    continue;
+                }
+                # Connection ready AND pooled — submit the OAuth2 token request
                 doSubmitOAuth2Request();
                 # Fall through to SPS_OAUTH2_REFRESH below
             }
@@ -5113,13 +5115,8 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                 connection_ready_notifier.acknowledge();
                 delete connection_ready_notifier;
                 waiting_for_connection = False;
-                if (connection_ready_conn && connection_ready_conn.isReady()) {
-                    connection_ready_conn = NOTHING;
-                    doSubmitPing();
-                    continue;
-                }
-                # Not ready: record a connect failure (closed/refused) if present;
-                # this also counts the failed attempt.  A still-establishing
+                # Record a connect failure (closed/refused) if present; this also
+                # counts the failed attempt.  A ready or still-establishing
                 # connection records nothing.
                 recordTrackedConnectionFailure(connection_ready_conn);
                 connection_ready_conn = NOTHING;
@@ -5128,7 +5125,16 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     # PollingConnectionMonitor owns the next scheduled attempt.
                     checkConnectionAttemptLimit(False);
                 }
-                # Connection still establishing — re-register a notifier and wait.
+                # Re-drive the connect via doStartConnecting(), which re-invokes
+                # acquireConnectionAsync().  This is REQUIRED for the happy-eyeballs
+                # path: the winning connection is only committed to the pool when
+                # advanceAsyncHE()/finishAsyncRace() runs *inside*
+                # acquireConnectionAsync().  Submitting the ping directly here on a
+                # ready-but-not-yet-pooled HE winner leaves acquireStream() unable to
+                # find it, so the QUIC request stream is never created and the ping
+                # hangs in io-waiting.  doStartConnecting() submits the ping once the
+                # connection is ready AND pooled, or re-registers a notifier while it
+                # is still establishing.
                 on_error conn.authFailure();
                 doStartConnecting();
                 continue;
@@ -5416,12 +5422,12 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
             conn.authFailure();
         } catch () {
         }
+        string attempt_str = sprintf("%d connection attempt%s", attempts, attempts == 1 ? "" : "s");
         if (ex) {
-            throw ex.err, sprintf("%s failed after %d connection attempts: %s",
-                target, attempts, ex.desc);
+            throw ex.err, sprintf("%s failed after %s: %s", target, attempt_str, ex.desc);
         }
-        throw "REST-PING-CONNECT-ERROR", sprintf("%s did not become ready after %d connection attempts",
-            target, attempts);
+        throw "REST-PING-CONNECT-ERROR", sprintf("%s did not become ready after %s",
+            target, attempt_str);
     }
 
     #! Submits the ping request with EventNotifier signaling — no background thread
