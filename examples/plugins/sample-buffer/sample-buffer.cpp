@@ -121,11 +121,6 @@ static uint64_t sampleDenseAddI64(void* result_buffer_data, int64_t result_size,
     return sampleBitsFromValue(QoreValue());
 }
 
-static QorePluginLoweringResult sampleLoweringHook(QoreIRLoweringContext*, const AbstractQoreNode*,
-        const QoreParseContext*, QoreIRBuilder*) {
-    return QorePluginLoweringResult::NotApplicable;
-}
-
 static QorePluginValueOps sampleValueOps() {
     QorePluginValueOps ops = {};
     ops.incref = sampleIncref;
@@ -177,7 +172,6 @@ static QorePluginTypeRegistration sampleRegistration(QorePluginTypeDescriptor& t
     ops[0].info = samplePureInfo(false);
     ops[0].runtime_helper = reinterpret_cast<void (*)()>(sampleAdd);
     ops[0].runtime_helper_symbol = "sample_buffer_add";
-    ops[0].lowering_pattern = sampleLoweringHook;
     ops[0].qdom_domains = QDOM_DEFAULT;
 
     ops[1] = {};
@@ -193,7 +187,6 @@ static QorePluginTypeRegistration sampleRegistration(QorePluginTypeDescriptor& t
     ops[1].info = samplePureInfo(true);
     ops[1].runtime_helper = reinterpret_cast<void (*)()>(sampleDenseAddI64);
     ops[1].runtime_helper_symbol = "sample_buffer_dense_add_i64";
-    ops[1].lowering_pattern = sampleLoweringHook;
     ops[1].qdom_domains = QDOM_DEFAULT;
 
     QorePluginTypeRegistration reg = {};

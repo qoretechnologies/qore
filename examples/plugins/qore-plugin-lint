@@ -20,7 +20,12 @@ sub usage(int rc) {
     string text = sprintf("Usage: %s [--module-name NAME] <module-name-or-qmod-path>\n\n"
         "Loads a plugin module, reads its committed PluginRegistry descriptors, and\n"
         "reports descriptor errors and advisory warnings. Use --module-name when the\n"
-        "module reference is a path or when loading registers more than one module.\n",
+        "module reference is a path or when loading registers more than one module.\n\n"
+        "Options:\n"
+        "  --require-runtime-symbols  Fail when an operation has no runtime helper symbol.\n"
+        "  --require-llvm             Fail when any operation has no accepted LLVM codegen hook.\n"
+        "  --require-llvm=OP[,OP...]  Fail when matching operation names have no accepted LLVM hook.\n"
+        "  --warnings-are-errors      Treat advisory warnings as errors.\n",
         get_script_name());
     if (rc) {
         stderr.printf("%s", text);
@@ -32,6 +37,10 @@ sub usage(int rc) {
 
 *string module_name;
 *string module_ref;
+bool require_runtime_symbols = False;
+bool require_all_llvm = False;
+bool warnings_are_errors = False;
+hash<auto> required_llvm_ops = {};
 
 while (ARGV.size()) {
     string arg = shift ARGV;
@@ -45,6 +54,19 @@ while (ARGV.size()) {
         module_name = shift ARGV;
     } else if (arg =~ /^--module-name=(.*)$/) {
         module_name = $1;
+    } else if (arg == "--require-runtime-symbols") {
+        require_runtime_symbols = True;
+    } else if (arg == "--require-llvm") {
+        require_all_llvm = True;
+    } else if (arg =~ /^--require-llvm=/) {
+        string llvm_list = arg.substr(15);
+        foreach string name in (llvm_list.split(",")) {
+            if (name) {
+                required_llvm_ops{name} = True;
+            }
+        }
+    } else if (arg == "--warnings-are-errors") {
+        warnings_are_errors = True;
     } else if (!exists module_ref) {
         module_ref = arg;
     } else {
@@ -56,10 +78,10 @@ while (ARGV.size()) {
 if (!exists module_ref) {
     usage(2);
 }
-string load_ref = exists module_name ? module_name : module_ref;
-if (!exists module_name && module_ref =~ /[\/\\]/ && !absolute_path(module_ref)) {
-    module_ref = getcwd() + "/" + module_ref;
-    load_ref = module_ref;
+bool module_ref_is_path = module_ref =~ /[\/\\]/;
+string load_ref = module_ref;
+if (module_ref_is_path && !absolute_path(module_ref)) {
+    load_ref = getcwd() + "/" + module_ref;
 }
 
 PluginRegistry registry = PluginRegistry::getProcessRegistry();
@@ -69,7 +91,13 @@ foreach string name in (registry.getProcessModules()) {
 }
 
 try {
-    load_module(load_ref);
+    if (module_ref_is_path && exists module_name) {
+        Program loader(PO_NEW_STYLE);
+        loader.parse(sprintf("%%prepend-module-path %y\n%%requires %s\nsub __qore_plugin_lint_loader() {}\n",
+            dirname(load_ref), module_name), "qore-plugin-lint module loader");
+    } else {
+        load_module(load_ref);
+    }
 } catch (hash<ExceptionInfo> ex) {
     stderr.printf("ERROR: failed to load module %y: %s: %s\n", load_ref, ex.err, ex.desc);
     exit(2);
@@ -146,6 +174,7 @@ for (int i = 0; i <= max_type_id; ++i) {
 
 hash<auto> op_ids = {};
 int max_op_id = -1;
+int llvm_ops = 0;
 foreach hash<auto> op in (ops) {
     int id = op.local_id;
     string key = sprintf("%d", id);
@@ -166,8 +195,25 @@ foreach hash<auto> op in (ops) {
         push errors, sprintf("operation %y has unknown helper_abi %y", op.operation_name, op.helper_abi);
     }
     if (!op.runtime_helper_symbol) {
-        push warnings, sprintf("operation %y has no runtime_helper_symbol; direct helper pointers work in-process but "
+        string msg = sprintf("operation %y has no runtime_helper_symbol; direct helper pointers work in-process but "
             "make QORD/AOT diagnostics less portable", op.operation_name);
+        if (require_runtime_symbols) {
+            push errors, msg;
+        } else {
+            push warnings, msg;
+        }
+    }
+    if (op.has_llvm_codegen) {
+        ++llvm_ops;
+    } else if (require_all_llvm || exists required_llvm_ops{op.operation_name}) {
+        push errors, sprintf("operation %y has no accepted LLVM codegen hook", op.operation_name);
+    } else if (op.num_extensions && !op.has_llvm_codegen) {
+        push warnings, sprintf("operation %y declares extension metadata but has no accepted LLVM codegen hook",
+            op.operation_name);
+    }
+    if (op.has_lowering_pattern && !op.lowering_claimed_node_kinds) {
+        push warnings, sprintf("operation %y has a lowering callback without claimed node kinds; it will be called "
+            "for every AST node kind", op.operation_name);
     }
     if (op.helper_abi =~ /^DenseBuffer/ && !op.can_vectorize) {
         push warnings, sprintf("dense-buffer operation %y is not marked can_vectorize", op.operation_name);
@@ -187,6 +233,10 @@ for (int i = 0; i <= max_op_id; ++i) {
     }
 }
 
+if (warnings_are_errors && warnings.size()) {
+    push errors, sprintf("%d warning(s) treated as errors", warnings.size());
+}
+
 foreach string warning in (warnings) {
     stderr.printf("WARN: %s\n", warning);
 }
@@ -200,5 +250,5 @@ if (errors.size()) {
     exit(1);
 }
 
-printf("PASS: plugin module %y: %d type(s), %d operation(s), %d warning(s)\n",
-    module_name, types.size(), ops.size(), warnings.size());
+printf("PASS: plugin module %y: %d type(s), %d operation(s), %d LLVM hook(s), %d warning(s)\n",
+    module_name, types.size(), ops.size(), llvm_ops, warnings.size());

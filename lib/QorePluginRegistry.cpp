@@ -1367,6 +1367,22 @@ QoreHashNode* makeOperationHash(const RegisteredPluginModule& module, const Regi
     if (hasException(xsink)) {
         return nullptr;
     }
+    h->setKeyValue("has_lowering_pattern", op.lowering_pattern != nullptr, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("lowering_claimed_node_kinds", static_cast<int64>(op.lowering_claimed_node_kinds), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("has_llvm_codegen", op.llvm_codegen != nullptr, xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
+    h->setKeyValue("num_extensions", static_cast<int64>(op.extensions.size()), xsink);
+    if (hasException(xsink)) {
+        return nullptr;
+    }
     h->setKeyValue("qdom_domains", op.qdom_domains, xsink);
     if (hasException(xsink)) {
         return nullptr;

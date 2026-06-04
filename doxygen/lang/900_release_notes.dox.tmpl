@@ -1475,10 +1475,17 @@ foreach string module_name in (registry.getProcessModules()) {
     pattern matchers so IR lowering can emit plugin-dispatch IR before generic
     \c any fallback; claimed-node \c NotApplicable results fail with
     \c PLUGIN-LOWERING-CLAIM-VIOLATED.
+    \c PluginRegistry::getOperations() now reflects whether a lowering callback
+    or accepted LLVM codegen hook is registered for each operation, allowing
+    descriptor tools to verify optimization coverage.
     See @ref plugin_types for the complete module-author
     overview, current limitations, the
     \c examples/plugins/sample-buffer reference module, and the advisory
-    \c examples/plugins/qore-plugin-lint descriptor linter.
+    \c examples/plugins/qore-plugin-lint descriptor linter. The
+    \c tools/plugin-type-verify.sh runner combines the registry smoke test,
+    descriptor linting, and optional AST/IR/JIT/tiered consumer workloads;
+    the in-tree dataframe consumer is available through the
+    \c plugin-type-verify-dataframe CMake target.
     @endparblock
 
     @par RFC 7231 / RFC 2822 Date Parsing

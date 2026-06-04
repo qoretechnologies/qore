@@ -2832,6 +2832,26 @@ if (NOT Protobuf_FOUND)
 endif()
 add_subdirectory(modules/protobuf)
 
+if (UNIX)
+    add_custom_target(plugin-type-verify-dataframe
+        COMMAND ${CMAKE_COMMAND} -E env
+            "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}"
+            "$<TARGET_FILE:qore-ir-plugin-registry-smoke>"
+        COMMAND "${CMAKE_SOURCE_DIR}/tools/plugin-type-verify.sh"
+            --build-dir "${CMAKE_BINARY_DIR}"
+            --qore-bin "$<TARGET_FILE:qore>"
+            --module dataframe
+            --qtest "${CMAKE_SOURCE_DIR}/modules/dataframe/test/dataframe.qtest"
+            --exec-modes ast,ir,jit,tiered
+            --skip-internal-smoke
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        DEPENDS qore qore-ir-plugin-registry-smoke reflection dataframe
+        COMMENT "Verifying plugin type support with dataframe"
+        VERBATIM
+    )
+    add_custom_target(plugin-type-verify DEPENDS plugin-type-verify-dataframe)
+endif()
+
 # HACK: we need to simulate QORE_USER_MODULES_DIR as the versioned one
 #       for qore core qlib modules.
 # NOTE: anything below will be installed into versioned dirs!
