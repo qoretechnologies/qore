@@ -49,6 +49,41 @@ class CountingIterator inherits AbstractIterator<int> {
     }
 }
 
+class MixedIterator inherits AbstractIterator<auto> {
+    private {
+        int pos;
+        auto value;
+        bool valid_flag;
+    }
+
+    bool next() {
+        if (self.pos == 0) {
+            ++self.pos;
+            self.value = 1;
+            self.valid_flag = True;
+            return True;
+        }
+
+        if (self.pos == 1) {
+            ++self.pos;
+            self.value = "x";
+            self.valid_flag = True;
+            return True;
+        }
+
+        self.valid_flag = False;
+        return False;
+    }
+
+    auto getValue() {
+        return self.value;
+    }
+
+    bool valid() {
+        return self.valid_flag;
+    }
+}
+
 int sub first(list<int> values) {
     return 99;
 }
@@ -66,6 +101,7 @@ class StreamingOperatorsTest inherits QUnit::Test {
         addTestCase("Terminal operators", \testTerminalOperators());
         addTestCase("Lazy operators", \testLazyOperators());
         addTestCase("Iterate sources", \testIterateSources());
+        addTestCase("Hard-list iterator materialization", \testHardListIteratorMaterialization());
         addTestCase("Fused streaming chains", \testFusedStreamingChains());
         addTestCase("Soft keyword identifiers", \testSoftKeywordIdentifiers());
         addTestCase("Contextual keyword compatibility", \testContextualKeywordCompatibility());
@@ -186,6 +222,43 @@ class StreamingOperatorsTest inherits QUnit::Test {
         int map_select_count = 0;
         (map ++map_select_count, (iterate "abc"), $1 != c'b');
         assertEq(map_select_count, 2, "discarded map select still drains selected string char source");
+    }
+
+    testHardListIteratorMaterialization() {
+        list<int> range_list = xrange(3);
+        assertEq(range_list, (0, 1, 2), "hard-list assignment materializes RangeIterator");
+
+        list<int> iterate_list = iterate 4;
+        assertEq(iterate_list, (0, 1, 2, 3), "hard-list assignment materializes iterate int source");
+
+        list<char> char_list = iterate "ab";
+        assertEq(char_list, (c'a', c'b'), "hard-list assignment materializes iterate string chars");
+
+        hash<string, int> h = {"a": 1};
+        list<hash<auto>> pair_list = iterate h;
+        assertEq(pair_list.size(), 1, "hard-list assignment materializes hash pairs");
+        assertEq(pair_list[0].key, "a", "materialized hash pair key");
+        assertEq(pair_list[0].value, 1, "materialized hash pair value");
+
+        CountingIterator i(3);
+        list<int> custom_list = i;
+        assertEq(custom_list, (0, 1, 2), "hard-list assignment materializes custom AbstractIterator");
+        assertEq(i.getCalls(), 4, "hard-list materialization drains iterator to completion");
+
+        *list<int> nullable_list = NOTHING;
+        assertEq(nullable_list, NOTHING, "nullable hard-list still accepts NOTHING");
+        nullable_list = xrange(2);
+        assertEq(nullable_list, (0, 1), "nullable hard-list materializes iterator");
+
+        softlist<object> soft = xrange(2);
+        assertEq(soft.size(), 1, "softlist<object> preserves iterator object as one value");
+        assertTrue(soft[0] instanceof AbstractIterator, "softlist<object> element is still an iterator");
+
+        auto preserved = xrange(2);
+        assertTrue(preserved instanceof AbstractIterator, "auto preserves iterator object");
+
+        MixedIterator mixed();
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { list<int> bad = mixed; });
     }
 
     testFusedStreamingChains() {

@@ -1,6 +1,6 @@
 # Streaming Operators
 
-**Status:** Implemented with two follow-up implementation areas remaining.
+**Status:** Implemented with one optional optimization follow-up remaining.
 
 **Target:** Qore 2.3 implementation baseline; follow-up work is tracked here
 instead of in `design-pending`.
@@ -60,6 +60,11 @@ contextual parsing and parse-option opt-outs.
 root expressions. When nested under another functional or streaming consumer,
 they remain lazy and can short-circuit the source.
 
+Assignment to an explicit hard-list target, `list<T>` or `*list<T>`, from an
+`AbstractIterator` drains the iterator into a new list and folds each yielded
+value through `T`. Assignment to `auto`, `any`, `object`, `AbstractIterator`,
+and compatible `softlist<T>` targets preserves the iterator object.
+
 `iterate` creates an iterator over the natural element type of its input. The
 current important cases are:
 
@@ -101,9 +106,9 @@ Focused tests exist in:
 - `examples/test/qlib/QoreCodeFormat/QoreCodeFormat.qtest`
 - `modules/astparser/test/astparser.qtest`
 
-## Remaining Gaps
+## Remaining Gap
 
-### 1. Broader Lazy-Operator Fusion
+### Broader Lazy-Operator Fusion
 
 The current native fusion path is implemented for nested streaming stages. The
 original design also called for a broader optimizer that recognizes mixed
@@ -114,27 +119,11 @@ Current IR lowering already has native implementations and some pattern-specific
 fused opcodes for common `map` / `select` / `foldl` shapes, but it is not a
 general mixed-stage pipeline optimizer.
 
-### 2. Generic Hard-List Iterator Materialization
-
-Root streaming operators materialize lists where appropriate, but the general
-assignment rule from the original proposal is not implemented:
-
-```qore
-list<int> a = xrange(3);    # currently rejected
-list<int> b = iterate 3;    # currently rejected
-```
-
-The desired rule is narrow: assignment to `list<T>` or `*list<T>` from an
-`AbstractIterator` drains the iterator into a new list, folding each yielded
-value through `T`. Assignment to `auto`, `any`, `object`, `AbstractIterator`,
-and `softlist<T>` must keep existing behavior and preserve the iterator object.
-
 ## Follow-Up Implementation Plan
 
-The AOT and parse-option compatibility items from the original follow-up plan
-are implemented. The remaining work is split into two independent tracks:
-generic iterator materialization for hard-list assignment, and a broader mixed
-lazy pipeline optimizer.
+The AOT, parse-option compatibility, and generic hard-list materialization
+items from the original follow-up plan are implemented. The remaining work is a
+broader mixed lazy pipeline optimizer.
 
 ### Completed: Freeze Current Semantics
 
@@ -212,12 +201,12 @@ Completed acceptance criteria:
 - `%no-streaming-operators` disables all streaming operators and find modifiers
   without breaking legacy `find`.
 
-### Phase 1: Implement Generic Hard-List Materialization
+### Completed: Implement Generic Hard-List Materialization
 
 Goal: make explicit hard-list targets collect iterator values without changing
 soft or unrestricted assignment behavior.
 
-Tasks:
+Completed items:
 
 - Add parse-time compatibility for assigning an `AbstractIterator` expression to
   `list<T>` or `*list<T>`.
@@ -227,10 +216,10 @@ Tasks:
   at the failing element.
 - Keep assignment to `auto`, `any`, `object`, `AbstractIterator`, and
   `softlist<T>` unchanged.
-- Add AST, IR, JIT, and AOT coverage for the materialization path or delegate to
-  one shared runtime helper from all execution modes.
+- Delegate runtime materialization to the shared typed-list assignment path used
+  by AST, IR, JIT, and AOT execution modes.
 
-Tests:
+Completed tests:
 
 - `list<int> l = xrange(3);`
 - `list<int> l = iterate 3;`
@@ -242,7 +231,7 @@ Tests:
 - negative test proving `softlist<T>` stores the iterator as one value
 - negative test proving `auto` preserves the iterator object
 
-Acceptance criteria:
+Completed acceptance criteria:
 
 - Hard-list targets collect iterator values consistently in AST, IR, JIT, and
   AOT execution modes.

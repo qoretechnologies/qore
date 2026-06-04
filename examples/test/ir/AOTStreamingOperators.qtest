@@ -48,6 +48,8 @@ public namespace AOTStreamingOperatorsMod {
         list<int> list_iter = map $1 * 2, (iterate (1, 2, 3));
         list<int> int_iter = map $1, (iterate 4);
         list<int> iterator_iter = map $1, (iterate xrange(3));
+        list<int> range_materialized = xrange(3);
+        list<int> iterate_materialized = iterate 3;
         hash<string, int> h = {\"a\": 1, \"b\": 2};
         hash pair = first $1.key == \"b\", h;
 
@@ -61,7 +63,7 @@ public namespace AOTStreamingOperatorsMod {
         *string last_name = find last %name in q where (%age >= 10);
         *string one_name = find one %name in q where (%age == 10);
 
-        return sprintf(\"%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s,%s,%s\\n\",
+        return sprintf(\"%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s,%s,%s\\n\",
             string_codes[0], string_codes[1],
             bytes[0], bytes[1],
             list_iter[2], int_iter[3], iterator_iter[2], pair.value,
@@ -71,6 +73,8 @@ public namespace AOTStreamingOperatorsMod {
             (count $1 % 2 == 1, values),
             taken[1], dropped[0], take_while.size(), take_until.size(),
             (first (drop 2, values)), (count (take 2, values)),
+            range_materialized[2], iterate_materialized[2],
+            range_materialized.size(), iterate_materialized.size(),
             first_name, last_name, one_name);
     }
 }
@@ -153,7 +157,7 @@ printf(\"%s\", AOTStreamingNoFusionMod::verify());
         compileModule(qm_path, qmod_path);
         compileModule(no_fusion_qm_path, no_fusion_qmod_path);
 
-        string expected = "65,90,65,90,6,3,2,2,1,1,1,3,2,3,3,3,3,2,bob,cam,bob\n";
+        string expected = "65,90,65,90,6,3,2,2,1,1,1,3,2,3,3,3,3,2,2,2,3,3,bob,cam,bob\n";
         string no_fusion_expected = "3,3,2,3\n";
 
         assertEq(expected, runModule(src_dir, script_path),

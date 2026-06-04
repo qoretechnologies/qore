@@ -48,6 +48,7 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/QoreIteratorBase.h"
 
 #include <algorithm>
@@ -2710,6 +2711,67 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     return true;
 }
 
+static bool qore_type_materialize_iterator_to_list(ExceptionSink* xsink, QoreValue& n, LValueHelper* lvhelper,
+        const QoreTypeInfo* value_type, bool& err) {
+    if (n.getType() != NT_OBJECT) {
+        return false;
+    }
+
+    QoreObject* iterator_obj = n.get<QoreObject>();
+    AbstractIteratorHelper iterator(xsink, "hard-list iterator materialization", iterator_obj);
+    if (xsink && *xsink) {
+        err = true;
+        return true;
+    }
+    if (!iterator) {
+        return false;
+    }
+
+    ReferenceHolder<QoreListNode> list(new QoreListNode(value_type), xsink);
+    size_t i = 0;
+    while (iterator.next(xsink)) {
+        if (xsink && *xsink) {
+            err = true;
+            return true;
+        }
+        if (i && !(i % 100) && qore_check_cancel(xsink, "hard-list iterator materialization")) {
+            err = true;
+            return true;
+        }
+
+        QoreValue value = iterator.getValue(xsink);
+        if (xsink && *xsink) {
+            err = true;
+            return true;
+        }
+        if (list->push(value, xsink)) {
+            err = true;
+            if (xsink && *xsink) {
+                xsink->appendLastDescription(" (while materializing iterator element %lu into type 'list<%s>')",
+                    i, QoreTypeInfo::getName(value_type));
+            }
+            return true;
+        }
+        ++i;
+    }
+    if (xsink && *xsink) {
+        err = true;
+        return true;
+    }
+
+    AbstractQoreNode* old = n.assign(list.release());
+    if (lvhelper) {
+        lvhelper->saveTemp(old);
+    } else {
+        discard(old, xsink);
+        if (xsink && *xsink) {
+            err = true;
+            return true;
+        }
+    }
+    return true;
+}
+
 static bool qore_complex_buffer_accepts_runtime(const QoreTypeInfo* target_ti, const QoreBufferNode& source,
         bool& needs_nullable_copy) {
     needs_nullable_copy = false;
@@ -2849,6 +2911,12 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 bool err = false;
                 ok = acceptInputComplexList(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
                     err);
+            } else if (typespec == QTS_COMPLEXLIST) {
+                bool err = false;
+                ok = qore_type_materialize_iterator_to_list(xsink, n, lvhelper, u.ti, err);
+                if (err) {
+                    return true;
+                }
             } else if (typespec == QTS_COMPLEXSOFTLIST) {
                 // see if value matches
                 if (QoreTypeInfo::runtimeAcceptsValue(u.ti, n) > 0) {
