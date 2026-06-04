@@ -27,7 +27,7 @@ variables:
 
 test-ubuntu-amd64:
   stage: test
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:7.0
   tags:
     - k8s
     - amd64
@@ -49,7 +49,7 @@ test-ubuntu-amd64:
 
 test-ubuntu-arm64:
   stage: test
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:7.0-arm64
   tags:
     - k8s
     - arm64
@@ -71,7 +71,7 @@ test-ubuntu-arm64:
 
 test-alpine-amd64:
   stage: test
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:7.0-alpine
   tags:
     - k8s
     - amd64
@@ -93,7 +93,7 @@ test-alpine-amd64:
 
 test-alpine-arm64:
   stage: test
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:7.0-alpine-arm64
   tags:
     - k8s
     - arm64
