@@ -185,6 +185,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiOpenAiMalformedForcedToolRetryContentTest());
         addTestCase("LlmBackend OpenAI chat facade retries required empty "
             "tool responses", \geminiOpenAiRequiredToolEmptyRetryTest());
+        addTestCase("LlmBackend OpenAI chat facade retries single required "
+            "empty tool responses as JSON",
+            \geminiOpenAiSingleRequiredToolEmptyJsonRetryTest());
+        addTestCase("LlmBackend OpenAI streaming facade retries single "
+            "required empty tool responses as JSON",
+            \callbackOpenAiStreamSingleRequiredToolEmptyJsonRetryTest());
         addTestCase("LlmBackend OpenAI chat facade retries malformed "
             "required tool responses", \geminiOpenAiRequiredToolMalformedRetryTest());
         addTestCase("LlmBackend OpenAI chat facade converts tool turns",
@@ -2181,6 +2187,212 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "retry function arguments are serialized");
         assertEq("STOP", rv.provider_diagnostics.finish_reason,
             "OpenAI facade exposes provider finish diagnostics");
+    }
+
+    geminiOpenAiSingleRequiredToolEmptyJsonRetryTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-single-required-empty-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {"parts": ()},
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 120,
+                                "candidatesTokenCount": 0,
+                                "totalTokenCount": 120,
+                            },
+                        },
+                    },
+                    {
+                        "code": 200,
+                        "body": {
+                            "responseId": "gemini-single-required-json-1",
+                            "candidates": ({
+                                "finishReason": "STOP",
+                                "content": {
+                                    "parts": ({
+                                        "text": make_json({
+                                            "operation": "revise",
+                                            "reason": "single tool JSON retry",
+                                        }),
+                                    },),
+                                },
+                            },),
+                            "usageMetadata": {
+                                "promptTokenCount": 135,
+                                "candidatesTokenCount": 7,
+                                "totalTokenCount": 142,
+                            },
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "model": "gemini-2.5-flash",
+            "messages": (
+                {"role": "system", "content": "Choose one action."},
+                {"role": "user", "content": "Continue design mode."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ("operation",),
+                    },
+                },
+            },),
+            "tool_choice": "required",
+        });
+
+        assertEq(2, gemini_handler.requests.size(),
+            "single required-tool empty response is retried once");
+        assertEq("ANY", gemini_handler.requests[0]
+                .body.toolConfig.functionCallingConfig.mode,
+            "initial request requires the single available tool");
+        assertFalse(gemini_handler.requests[1].body.hasKey("toolConfig"),
+            "single-tool required retry removes native tool choice");
+        assertFalse(gemini_handler.requests[1].body.hasKey("tools"),
+            "single-tool required retry uses JSON schema mode");
+        assertEq("application/json",
+            gemini_handler.requests[1].body.generationConfig.responseMimeType,
+            "single-tool required retry requests structured JSON");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "JSON retry response is synthesized to a tool call");
+        assertEq("required_tool_no_output",
+            rv.provider_diagnostics.forced_tool_retry.reason,
+            "diagnostics record why the JSON retry was attempted");
+        assertEq(True,
+            rv.provider_diagnostics.forced_tool_retry.recovered_tool_call,
+            "diagnostics record successful single-tool recovery");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("revise", args.operation,
+            "JSON retry arguments are serialized as the required tool call");
+    }
+
+    callbackOpenAiStreamSingleRequiredToolEmptyJsonRetryTest() {
+        int stream_calls = 0;
+        int sync_calls = 0;
+        list<hash<auto>> stream_bodies = ();
+        list<hash<auto>> sync_bodies = ();
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "model": "callback-model",
+            "api_callback": hash<auto> sub (string m, string p,
+                    hash<auto> body) {
+                ++sync_calls;
+                push sync_bodies, body;
+                return {
+                    "id": "callback-required-json-retry-1",
+                    "model": "callback-model",
+                    "choices": ({
+                        "message": {
+                            "role": "assistant",
+                            "content": make_json({
+                                "operation": "revise",
+                                "reason": "stream JSON retry",
+                            }),
+                        },
+                        "finish_reason": "stop",
+                    },),
+                    "usage": {
+                        "prompt_tokens": 20,
+                        "completion_tokens": 5,
+                        "total_tokens": 25,
+                    },
+                };
+            },
+            "api_stream_callback": sub (string m, string p, hash<auto> body,
+                    code<nothing(hash<auto>)> dcb) {
+                ++stream_calls;
+                push stream_bodies, body;
+                dcb({
+                    "id": "callback-required-empty-stream-1",
+                    "object": "chat.completion.chunk",
+                    "model": "callback-model",
+                    "choices": ({
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": "stop",
+                    },),
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 0,
+                        "total_tokens": 10,
+                    },
+                });
+            },
+        });
+
+        list<hash<auto>> chunks = ();
+        hash<auto> rv = llm.chatCompletionsStream({
+            "model": "callback-model",
+            "messages": (
+                {"role": "system", "content": "Choose one action."},
+                {"role": "user", "content": "Continue design mode."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ("operation",),
+                    },
+                },
+            },),
+            "tool_choice": "required",
+        }, sub (hash<auto> chunk) {
+            push chunks, chunk;
+        });
+
+        assertEq(1, stream_calls,
+            "streaming facade uses the streaming callback first");
+        assertEq(1, sync_calls,
+            "empty required streaming result is retried once synchronously");
+        assertEq("required", stream_bodies[0].tool_choice,
+            "initial stream request preserves required tool mode");
+        assertEq(1, stream_bodies[0].tools.size(),
+            "initial stream request includes the single tool");
+        assertFalse(sync_bodies[0].hasKey("tool_choice"),
+            "JSON retry removes callback tool choice");
+        assertFalse(sync_bodies[0].hasKey("tools"),
+            "JSON retry removes callback tools");
+        assertEq("json_schema", sync_bodies[0].response_format.type,
+            "callback chat retry receives the output schema");
+        assertEq(1, chunks.size(),
+            "only the original streamed terminal chunk is forwarded");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "streaming JSON retry is synthesized to a tool call");
+        assertEq("required_tool_no_output",
+            rv.provider_diagnostics.forced_tool_retry.reason,
+            "streaming diagnostics record required-tool retry");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("stream JSON retry", args.reason,
+            "streaming JSON retry arguments are serialized");
     }
 
     geminiOpenAiRequiredToolMalformedRetryTest() {

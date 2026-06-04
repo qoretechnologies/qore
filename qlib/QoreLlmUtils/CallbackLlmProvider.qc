@@ -348,6 +348,16 @@ backend.chatStream(history,
         if (request_model.val()) {
             body.model = request_model;
         }
+        if (opts.output_schema) {
+            body.response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": opts.output_schema.name ?? "output",
+                    "strict": True,
+                    "schema": opts.output_schema,
+                },
+            };
+        }
         if (tools) {
             list<auto> tool_defs = ();
             foreach hash<ToolDefinition> td in (tools) {
