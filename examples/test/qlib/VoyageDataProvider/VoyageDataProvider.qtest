@@ -92,7 +92,11 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         FakeVoyageRestClientIo rest();
         VoyageDataProvider::VoyageDataProvider prov(rest);
         assertEq("voyage", prov.getName());
-        assertEq(("create-embeddings", "rerank"), sort(prov.getChildProviderNames()));
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        assertEq(("create-embeddings", "rerank"),
+            sort(select prov.getChildProviderNames(),
+                $1 != AbstractDataProvider::GenericApiCallChildName));
 %endif
     }
 

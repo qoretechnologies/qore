@@ -81,8 +81,11 @@ public class MilvusDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getApp("Milvus");
         assertEq("Milvus", app.name);
         assertEq("milvus", app.scheme);
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("Milvus");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("Milvus"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("list-collections", actions[0].action);
     }

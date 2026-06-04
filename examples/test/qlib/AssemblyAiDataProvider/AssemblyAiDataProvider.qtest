@@ -115,8 +115,12 @@ public class AssemblyAiDataProviderTest inherits QUnit::Test {
         assertEq("AssemblyAI", app.name);
         assertEq("assemblyai", app.scheme);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("AssemblyAI");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider); this test asserts the
+        # provider's own action surface only
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("AssemblyAI"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("transcribe", actions[0].action);
     }

@@ -79,8 +79,11 @@ public class WeaviateDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getApp("Weaviate");
         assertEq("Weaviate", app.name);
         assertEq("weaviate", app.scheme);
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("Weaviate");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("Weaviate"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("list-classes", actions[0].action);
     }
