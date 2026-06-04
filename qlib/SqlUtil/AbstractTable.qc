@@ -966,6 +966,7 @@ bool b = table.empty();
         AbstractDatabase::checkDriverOptions(\desc.unique_constraints, drv);
         AbstractDatabase::checkDriverOptions(\desc.foreign_constraints, drv);
         AbstractDatabase::checkDriverOptions(\desc.triggers, drv);
+        AbstractDatabase::checkDriverOptions(\desc.partition_strategy, drv);
 
         # process column definitions
         foreach string cn in (desc.columns.keyIterator()) {
@@ -973,6 +974,14 @@ bool b = table.empty();
                 throw "DESCRIPTION-ERROR", sprintf("%s: value assigned to column key %y is not a hash, got type %y "
                     "instead (%y)", getDesc(), cn, desc.columns{cn}.type(), desc.columns{cn});
             AbstractDatabase::checkDriverOptions(\desc.columns{cn}, drv);
+        }
+
+        foreach string pn in (desc.partitions.keyIterator()) {
+            if (desc.partitions{pn}.typeCode() == NT_HASH) {
+                hash<auto> part = desc.partitions{pn};
+                AbstractDatabase::checkDriverOptions(\part, drv);
+                desc.partitions{pn} = part;
+            }
         }
 
         preSetupTableImpl(\desc, opt);

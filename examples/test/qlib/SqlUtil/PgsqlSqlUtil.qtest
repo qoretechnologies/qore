@@ -1062,10 +1062,13 @@ class PgsqlTest inherits SqlTestBase {
                 "name": {"qore_type": SqlUtil::VARCHAR, "size": 80},
             },
             "primary_key": {"name": "pk_" + parent, "columns": ("id",)},
-            "partition_strategy": {"method": "range", "columns": ("id",)},
+            "partition_strategy": {"method": "range", "columns": ("name",),
+                "driver": {"pgsql": {"columns": ("id",)}}},
             "partitions": {
-                (p1): {"bound_from": 0, "bound_to": 10},
-                (p2): {"bound_from": 10, "bound_to": 20},
+                (p1): {"bound_from": -10, "bound_to": -1,
+                    "driver": {"pgsql": {"bound_from": 0, "bound_to": 10}}},
+                (p2): {"bound_from": 10, "bound_to": 999,
+                    "driver": {"pgsql": {"bound_to": 20}}},
             },
         };
 
@@ -1090,6 +1093,7 @@ class PgsqlTest inherits SqlTestBase {
         assertTrue(partitions.hasKey(p1), "partition p1 introspected");
         assertEq(0, partitions{p1}.bound_from, "p1 lower bound parsed");
         assertEq(10, partitions{p1}.bound_to, "p1 upper bound parsed");
+        assertEq(20, partitions{p2}.bound_to, "partition driver override applied");
 
         hash<auto> desc_no_parts = t.getDescriptionHash();
         assertTrue(desc_no_parts.hasKey("partition_strategy"), "description includes strategy");

@@ -17,6 +17,7 @@ class DataSchemaTest inherits QUnit::Test {
         addTestCase("meta-schema migration action fields", \metaSchemaMigrationFieldTests());
         addTestCase("column normalization", \columnNormalizationTests());
         addTestCase("table normalization", \tableNormalizationTests());
+        addTestCase("partition normalization", \partitionNormalizationTests());
         addTestCase("reference data normalization", \referenceDataTests());
         addTestCase("auto-trigger expansion", \autoTriggerExpansionTests());
         addTestCase("DPQL expression evaluation in reference data", \dpqlExpressionTests());
@@ -112,7 +113,11 @@ class DataSchemaTest inherits QUnit::Test {
         assertTrue(ms."$defs".hasKey("migration"));
         assertTrue(ms."$defs".hasKey("migrationAction"));
         assertTrue(ms."$defs".hasKey("autoTriggerConfig"));
+        assertTrue(ms."$defs".hasKey("partitionStrategy"));
+        assertTrue(ms."$defs".hasKey("partitionSpec"));
         assertTrue(ms."$defs".hasKey("referenceData"));
+        assertTrue(ms."$defs".tableDefinition.properties.hasKey("partition_strategy"));
+        assertTrue(ms."$defs".tableDefinition.properties.hasKey("partitions"));
     }
 
     columnNormalizationTests() {
@@ -273,6 +278,65 @@ class DataSchemaTest inherits QUnit::Test {
 
         # Auto triggers preserved (expanded later)
         assertTrue(result.auto_triggers.created);
+    }
+
+    partitionNormalizationTests() {
+        hash<auto> table_def = {
+            "columns": {
+                "id": {"type": "int", "notnull": True},
+                "created": {"type": "date", "notnull": True},
+            },
+            "primary_key": {"name": "pk_events", "columns": ("id", "created")},
+            "partition_strategy": {"method": "range", "columns": ("created",)},
+            "partitions": {
+                "events_p202601": {"bound_from": "2026-01-01", "bound_to": "2026-02-01"},
+                "events_psql": {"bound_from_sql": "date '2026-03-01'",
+                    "bound_to_sql": "date '2026-04-01'"},
+                "events_default": {"is_default": True},
+            },
+        };
+
+        hash<auto> result = Schema::DataSchemaLoader::normalizeTable("events", table_def);
+        assertEq(Type::Date, result.partitions.events_p202601.bound_from.type());
+        assertEq(Type::Date, result.partitions.events_p202601.bound_to.type());
+        assertEq("2026-01-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_from));
+        assertEq("2026-02-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_to));
+        assertEq("date '2026-03-01'", result.partitions.events_psql.bound_from_sql);
+        assertEq("date '2026-04-01'", result.partitions.events_psql.bound_to_sql);
+        assertTrue(result.partitions.events_default.is_default);
+
+        table_def.partition_strategy.columns = ("id", "created");
+        table_def.partitions = {
+            "events_p202601": {"bound_from": (1, "2026-01-01"), "bound_to": (2, "2026-02-01")},
+        };
+        result = Schema::DataSchemaLoader::normalizeTable("events", table_def);
+        assertEq(1, result.partitions.events_p202601.bound_from[0]);
+        assertEq(Type::Date, result.partitions.events_p202601.bound_from[1].type());
+        assertEq("2026-01-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_from[1]));
+
+        assertThrows("DATA-SCHEMA-ERROR", "cannot be parsed as a date", sub () {
+            Schema::DataSchemaLoader::normalizeTable("events", {
+                "columns": {"created": {"type": "date"}},
+                "partition_strategy": {"method": "range", "columns": ("created",)},
+                "partitions": {"bad": {"bound_from": "not-a-date", "bound_to": "2026-02-01"}},
+            });
+        });
+
+        assertThrows("DATA-SCHEMA-ERROR", "has 1 values for 2 partition columns", sub () {
+            Schema::DataSchemaLoader::normalizeTable("events", {
+                "columns": {"id": {"type": "int"}, "created": {"type": "date"}},
+                "partition_strategy": {"method": "range", "columns": ("id", "created")},
+                "partitions": {"bad": {"bound_from": (1,), "bound_to": (2,)}},
+            });
+        });
+
+        assertThrows("DATA-SCHEMA-ERROR", "must be a list", sub () {
+            Schema::DataSchemaLoader::normalizeTable("events", {
+                "columns": {"id": {"type": "int"}, "created": {"type": "date"}},
+                "partition_strategy": {"method": "range", "columns": ("id", "created")},
+                "partitions": {"bad": {"bound_from": 1, "bound_to": 2}},
+            });
+        });
     }
 
     referenceDataTests() {

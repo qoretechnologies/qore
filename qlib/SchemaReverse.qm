@@ -345,9 +345,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         constructor(AbstractDatasource ds, string name, *hash<auto> opts) {
             m_ds = ds;
             m_name = name;
-            if (opts) {
-                m_options = opts;
-            }
+            m_options = opts ?? {};
         }
 
         #! @return current AbstractDatasource
@@ -935,9 +933,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         constructor(AbstractDatasource ds, string class_name, *hash<auto> opts) {
             m_ds = ds;
             m_class_name = class_name;
-            if (opts) {
-                m_options = opts;
-            }
+            m_options = opts ?? {};
         }
 
         string toString() {
