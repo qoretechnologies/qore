@@ -3974,7 +3974,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
             "where pn.nspname = %v and p.relname = %v order by i.inhseqno, cn.nspname, c.relname", schema, name);
 
-        int ordinal;
+        int ordinal = 0;
         foreach hash<auto> row in (qh.contextIterator()) {
             string pname = getCanonicalPartitionName(row.schema, row.relation_name);
             hash<PartitionInfo> info({
