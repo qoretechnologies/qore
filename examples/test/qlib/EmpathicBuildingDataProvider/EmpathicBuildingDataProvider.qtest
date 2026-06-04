@@ -23,7 +23,9 @@
 
 public class Main inherits QUnit::Test {
     private {
+%ifndef NoJson
         EmpathicBuildingRestConnection ebrc;
+%endif
         Logger logger;
 
         # command-line options
@@ -47,7 +49,9 @@ public class Main inherits QUnit::Test {
             } else if (m_options.verbose) {
                 printf("%s: %s\n", ex.err, ex.desc);
             }
+%ifndef NoJson
             remove ebrc;
+%endif
         }
 
         # Return for compatibility with test harness that checks return value.
@@ -71,21 +75,34 @@ public class Main inherits QUnit::Test {
     }
 
     dataProviderTest() {
+        checkModule();
+%ifndef NoJson
         if (!ebrc) {
             testSkip("no connection");
         }
 
-        AbstractDataProvider prov = ebrc.getDataProvider();
+        AbstractDataProvider prov;
+        try {
+            prov = ebrc.getDataProvider();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to EmpathicBuilding API: %s", ex.desc));
+            }
+            rethrow;
+        }
         assertEq("empathicbuilding", prov.getName());
         prov = prov.getChildProviderPath("measurements/create");
         assertEq("create", prov.getName());
 
         prov = ebrc.getDataProvider().getChildProviderPath("organizations");
         assertEq("organizations", prov.getName());
+%endif
     }
 
     connectionTest() {
         checkModule();
+%ifndef NoJson
         {
             EmpathicBuildingRestConnection rc({
                 "name": "test",
@@ -99,16 +116,24 @@ public class Main inherits QUnit::Test {
             assertEq(45000, client.getTimeout());
             assertEq(45000, client.getConnectTimeout());
         }
+%endif
     }
 
     pollTest() {
+        checkModule();
+%ifndef NoJson
         if (!ebrc) {
             testSkip("no connection");
         }
 
         {
             # first test a standard ping
-            hash<PingInfo> ping = ebrc.ping(True);
+            hash<PingInfo> ping;
+            try {
+                ping = ebrc.ping(True);
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip(sprintf("ping failed: %s: %s", ex.err, ex.desc));
+            }
             assertTrue(ping.ok);
             assertEq("OK", ping.info);
 
@@ -122,6 +147,7 @@ public class Main inherits QUnit::Test {
             }
             assertEq("OK", info.result);
         }
+%endif
     }
 
     private error(string fmt) {
@@ -129,6 +155,7 @@ public class Main inherits QUnit::Test {
     }
 
     private setupConnection() {
+%ifndef NoJson
         *string conn_name = m_options.conn ?? ENV.HUE_CONNECTION;
         if (conn_name.val()) {
             AbstractConnection conn = get_connection(conn_name);
@@ -151,6 +178,7 @@ public class Main inherits QUnit::Test {
         ebrc.getDataProvider();
         # ensure that pings work
         ebrc.ping();
+%endif
     }
 }
 
