@@ -8551,6 +8551,9 @@ on_exit printf("SQL> %s\n", sql);
             getPartitionStrategyUnlocked();
             getPartitionsUnlocked();
         }
+        if (createPartitionsInCreateTableImpl()) {
+            return;
+        }
         if (!partitionStrategy || partitions.empty()) {
             return;
         }
@@ -8572,6 +8575,10 @@ on_exit printf("SQL> %s\n", sql);
 
         # mark in options that the entire table is being created
         opt.create_table_all = True;
+        if (createPartitionsInCreateTableImpl()) {
+            getPartitionStrategyUnlocked();
+            getPartitionsUnlocked();
+        }
         list<auto> l += getCreateTableSqlUnlocked(opt);
         *list tl;
         tl = getCreatePartitionsSqlUnlocked(opt, cache); if (tl) l += tl;
@@ -8818,6 +8825,11 @@ on_exit printf("SQL> %s\n", sql);
 
     #! returns @ref True "True" if the database supports automatic partitioning
     private bool supportsAutoPartitioningImpl() {
+        return False;
+    }
+
+    #! returns @ref True "True" if initial partitions are emitted inline in \c CREATE \c TABLE
+    private bool createPartitionsInCreateTableImpl() {
         return False;
     }
 

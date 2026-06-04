@@ -4,11 +4,11 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires MysqlSqlUtil
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/MysqlSqlUtil.qm
 
 %requires ./SqlUtilTestBase.qm
 
@@ -210,6 +210,7 @@ class MysqlTest inherits SqlTestBase {
 
             addTestCase("test create table with auto increment - negative", \testCreateTableWithAutoIncrementNegative());
             addTestCase("test create table with auto increment - positive", \testCreateTableWithAutoIncrementPositive());
+            addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
         }
 
         set_return_value(main());
@@ -231,6 +232,105 @@ class MysqlTest inherits SqlTestBase {
         MysqlTestAutoIncrementPositiveSchema schema(table.getDatasource());
         schema.align(False, m_options.verbose, m_options.verbose > 0);
         assertEq(True, True, "schema alignment works");
+    }
+
+    private rangePartitionLifecycleTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        ds.execRaw("drop table if exists mysql_partition_test");
+        ds.commit();
+
+        on_exit {
+            try {
+                ds.execRaw("drop table if exists mysql_partition_test");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        MysqlTable t(ds, "mysql_partition_test");
+        t.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"native_type": "datetime", "notnull": True},
+                "v": {"qore_type": Type::String, "size": 20},
+            },
+            "primary_key": {"name": "mysql_partition_test_pk", "columns": ("id", "d")},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
+                "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
+            },
+        });
+        t.createCommit();
+
+        MysqlTable rt(ds, "mysql_partition_test");
+        assertEq(True, rt.supportsPartitions());
+        assertEq(False, rt.supportsPartitionDetach());
+
+        hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
+        assertEq("range", strategy.method);
+        assertEq(1, strategy.columns.size());
+        assertEq("d", strategy.columns[0]);
+
+        hash<string, PartitionInfo> parts = rt.listPartitions();
+        assertEq(2, parts.size());
+        assertEq(2026-02-01, parts.p2.bound_from);
+        assertEq(2026-03-01, parts.p2.bound_to);
+
+        hash<auto> desc = rt.getDescriptionHash({"with_partitions": True});
+        assertEq(2, desc.partitions.size());
+        assertTrue(rt.getCreateSql()[0] =~ /partition by range columns/i);
+
+        hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        });
+        assertEq(PartitionLookupStatus::Found, lookup.status);
+        assertEq("p2", lookup.partition.name);
+
+        hash<PartitionEnsureResult> ensure = rt.ensurePartitionCommit({
+            "name": "p3",
+            "bound_from": 2026-03-01,
+            "bound_to": 2026-04-01,
+        });
+        assertEq(True, ensure.created);
+        assertEq(True, ensure.materialized);
+        assertEq(PartitionVerifiedBy::Bounds, ensure.verified_by);
+        assertEq(True, rt.listPartitions().hasKey("p3"));
+
+        ds.execRaw("insert into mysql_partition_test values (3, '2026-03-15 00:00:00', 'x')");
+        ds.commit();
+        assertEq(1, ds.selectRow("select count(*) c from mysql_partition_test partition (p3)").c);
+        rt.truncatePartitionCommit("p3");
+        assertEq(0, ds.selectRow("select count(*) c from mysql_partition_test partition (p3)").c);
+
+        rt.dropPartitionCommit("p3");
+        assertEq(False, rt.listPartitions().hasKey("p3"));
+        assertThrows("PARTITION-ERROR", "does not support detaching partitions",
+            sub() {
+                rt.detachPartition("p2");
+            });
+
+        MysqlTable bad(ds, "mysql_partition_test_bad");
+        bad.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"qore_type": Type::Date, "notnull": True},
+            },
+            "primary_key": {"name": "mysql_partition_test_bad_pk", "columns": ("id", "d")},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
+            },
+        });
+        assertThrows("PARTITION-ERROR", "does not allow \"timestamp\" columns in RANGE COLUMNS partition keys",
+            sub() {
+                bad.getCreateSql();
+            });
     }
 
     private usageIntern() {

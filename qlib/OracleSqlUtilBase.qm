@@ -274,6 +274,8 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle16 OracleSqlUtilBase v1.6
+    - implemented range-partitioned table DDL, introspection, and lifecycle operations through the generic
+      @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - fixed a bug in the IN operator
       (<a href="https://github.com/qoretechnologies/qore/issues/4901">issue 4901</a>)
     - fixed space management on Oracle
@@ -2973,10 +2975,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             "dba_ind_expressions"   : "all_ind_expressions",
             "dba_indexes"           : "all_indexes",
             "dba_objects"           : "all_objects",
+            "dba_part_key_columns"  : "all_part_key_columns",
+            "dba_part_tables"       : "all_part_tables",
             "dba_sequences"         : "all_sequences",
             "dba_synonyms"          : "all_synonyms",
             "dba_tab_columns"       : "all_tab_columns",
             "dba_tab_comments"      : "all_tab_comments",
+            "dba_tab_partitions"    : "all_tab_partitions",
             "dba_tables"            : "all_tables",
             "dba_triggers"          : "all_triggers",
             "dba_views"             : "all_views",
@@ -3690,7 +3695,40 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
             sql += sprintf(" tablespace %s", ts);
         }
 
+        sql += getOraclePartitionCreateClause();
+
         return sql;
+    }
+
+    private string getOraclePartitionCreateClause() {
+        if (!partitionStrategy) {
+            return "";
+        }
+        if (partitionStrategy.method != "range") {
+            throw "PARTITION-ERROR", sprintf("%s: unsupported Oracle partition method %y", getDesc(),
+                partitionStrategy.method);
+        }
+
+        getPartitionsUnlocked();
+        if (partitions.empty()) {
+            throw "PARTITION-ERROR", sprintf("%s: Oracle range-partitioned tables require at least one partition "
+                "definition in the table description", getDesc());
+        }
+
+        string sql = sprintf(" partition by range (%s)", (foldl $1 + ", " + $2,
+            getColumnSqlNames(partitionStrategy.columns)));
+        if (partitionStrategy.auto) {
+            *string expr = partitionStrategy.auto.expression ?? partitionStrategy.auto.interval;
+            if (expr) {
+                sql += sprintf(" interval (%s)", expr);
+            }
+        }
+
+        list<string> defs = ();
+        foreach hash<PartitionInfo> pi in (partitions.iterator()) {
+            defs += "  " + getOraclePartitionDefinitionSql(pi);
+        }
+        return sql + " (\n" + (foldl $1 + ",\n" + $2, defs) + "\n)";
     }
 
     #! Returns the expression map for Oracle
@@ -3852,6 +3890,286 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
     #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word
     list getColumnSqlNames(softlist cols) {
         return map (OracleDatabase::OracleReservedWords{$1.lwr()} ? ("\"" + $1 + "\"") : $1), cols;
+    }
+
+    private bool supportsPartitionsImpl() {
+        return True;
+    }
+
+    private bool supportsAutoPartitioningImpl() {
+        return True;
+    }
+
+    private bool createPartitionsInCreateTableImpl() {
+        return True;
+    }
+
+    private *hash<PartitionStrategy> getPartitionStrategyImpl() {
+        *hash<auto> row = ds.selectRow("select partitioning_type, interval from "
+            + systemView("dba_part_tables") + (dblink ? "@" + dblink : "")
+            + " where owner = %v and table_name = %v", schema.upr(), name.upr());
+        if (!row) {
+            return;
+        }
+        if (row.partitioning_type != "RANGE") {
+            return;
+        }
+
+        *hash<auto> qh = ds.select("select column_name from " + systemView("dba_part_key_columns")
+            + (dblink ? "@" + dblink : "")
+            + " where owner = %v and name = %v and object_type = %v order by column_position",
+            schema.upr(), name.upr(), "TABLE");
+        if (!qh.column_name) {
+            return;
+        }
+
+        list<string> cols = ();
+        foreach string col in (qh.column_name) {
+            cols += native_case ? col : col.lwr();
+        }
+
+        hash<PartitionStrategy> rv({
+            "method": "range",
+            "columns": cols,
+        });
+        if (row.interval) {
+            rv.auto = {
+                "type": "interval",
+                "expression": row.interval,
+            };
+        }
+        return rv;
+    }
+
+    private hash<string, PartitionInfo> getPartitionsImpl() {
+        hash<string, PartitionInfo> rv();
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (!strategy) {
+            return rv;
+        }
+        getColumnsUnlocked();
+
+        *hash<auto> qh = ds.select("select partition_name, partition_position, high_value from "
+            + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
+            + " where table_owner = %v and table_name = %v order by partition_position",
+            schema.upr(), name.upr());
+
+        *string prev_bound_sql;
+        *auto prev_bound;
+        foreach hash<auto> row in (qh.contextIterator()) {
+            string pname = native_case ? row.partition_name : row.partition_name.lwr();
+            string high_value = row.high_value;
+            trim high_value;
+
+            hash<PartitionInfo> info({
+                "name": pname,
+                "method": strategy.method,
+                "columns": strategy.columns,
+                "ordinal": row.partition_position - 1,
+                "schema": schema,
+                "relation_name": pname,
+                "sql_name": sprintf("%s partition (%s)", getSqlName(), pname),
+                "is_default": high_value =~ /^MAXVALUE$/i,
+            });
+
+            if (!info.is_default) {
+                info.bound_to_sql = high_value;
+                if (exists prev_bound_sql) {
+                    info.bound_from_sql = prev_bound_sql;
+                }
+
+                *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
+                if (exists bound_to) {
+                    info.bound_to = bound_to;
+                }
+                if (exists prev_bound) {
+                    info.bound_from = prev_bound;
+                }
+
+                prev_bound_sql = high_value;
+                if (exists bound_to) {
+                    prev_bound = bound_to;
+                } else {
+                    delete prev_bound;
+                }
+            }
+
+            rv{info.name} = info;
+        }
+
+        return rv;
+    }
+
+    private hash<PartitionInfo> resolveOraclePartitionInfoUnlocked(string partition_name) {
+        string pname = native_case ? partition_name : partition_name.lwr();
+        hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+        if (!ph.hasKey(pname)) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
+        }
+        return ph{pname};
+    }
+
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+        assertNoOracleDefaultPartitionForAddUnlocked(spec);
+        return sprintf("alter table %s add %s", getSqlName(), getOraclePartitionDefinitionSql(spec));
+    }
+
+    private string getDropPartitionSqlImpl(string partition_name) {
+        hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
+        return sprintf("alter table %s drop partition %s", getSqlName(), info.name);
+    }
+
+    private string getTruncatePartitionSqlImpl(string partition_name) {
+        hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
+        return sprintf("alter table %s truncate partition %s", getSqlName(), info.name);
+    }
+
+    private bool partitionAutoStrategyCoversSpecImpl(hash<PartitionSpec> spec) {
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (!strategy || !strategy.auto || spec.is_default || !partitionSpecsHaveComparableBounds(spec)) {
+            return False;
+        }
+
+        *auto upper;
+        foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
+            if (pi.is_default || !exists pi.bound_to) {
+                continue;
+            }
+            if (!exists upper || upper < pi.bound_to) {
+                upper = pi.bound_to;
+            }
+        }
+        return !exists upper || upper < spec.bound_to;
+    }
+
+    private assertNoOracleDefaultPartitionForAddUnlocked(hash<PartitionSpec> spec) {
+        if (spec.is_default) {
+            return;
+        }
+        foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
+            if (pi.is_default) {
+                throw "PARTITION-ERROR", sprintf("%s: cannot add partition %y after catch-all partition %y; "
+                    "split the catch-all partition explicitly", getDesc(), spec.name, pi.name);
+            }
+        }
+    }
+
+    private string getOraclePartitionDefinitionSql(hash<PartitionSpec> spec) {
+        if (!spec.name) {
+            throw "PARTITION-ERROR", sprintf("%s: Oracle partition name is required", getDesc());
+        }
+        return sprintf("partition %s %s", spec.name, getOraclePartitionBoundSql(spec));
+    }
+
+    private string getOraclePartitionBoundSql(hash<PartitionSpec> spec) {
+        if (spec.is_default) {
+            return "values less than (maxvalue)";
+        }
+        if (spec.bound_sql) {
+            string sql = spec.bound_sql;
+            trim sql;
+            if (sql =~ x/^values\s+less\s+than\b/i) {
+                return sql;
+            }
+            return "values less than (" + sql + ")";
+        }
+        if (spec.bound_to_sql) {
+            return sprintf("values less than (%s)", spec.bound_to_sql);
+        }
+        return sprintf("values less than (%s)", getOraclePartitionBoundValuesSql(spec.bound_to));
+    }
+
+    private string getOraclePartitionBoundValuesSql(auto value) {
+        if (value.typeCode() != NT_LIST) {
+            return getSqlValue(value);
+        }
+        return foldl $1 + ", " + $2, (map getSqlValue($1), value);
+    }
+
+    private *auto parseOraclePartitionBoundValues(string sql, softlist<string> pcols) {
+        if (pcols.size() == 1) {
+            return parseOraclePartitionBoundValue(sql, columns{pcols[0]});
+        }
+
+        list<string> parts = sql.split(",");
+        if (parts.size() != pcols.size()) {
+            return;
+        }
+
+        list<auto> values = ();
+        foreach string part in (parts) {
+            *auto value = parseOraclePartitionBoundValue(part, columns{pcols[$#]});
+            if (!exists value) {
+                return;
+            }
+            values += value;
+        }
+        return values;
+    }
+
+    private *auto parseOraclePartitionBoundValue(string sql, *AbstractColumn col) {
+        trim sql;
+        if (sql =~ /^MAXVALUE$/i) {
+            return;
+        }
+
+        *string value = (sql =~ x/^TIMESTAMP'\s*(.*)'$/i)[0];
+        if (!exists value) {
+            value = (sql =~ x/^TO_DATE\('\s*([^']+)'.*$/i)[0];
+        }
+        if (!exists value) {
+            value = (sql =~ x/^TO_TIMESTAMP\('\s*([^']+)'.*$/i)[0];
+        }
+        if (!exists value) {
+            value = (sql =~ x/^'(.*)'$/)[0];
+        }
+
+        if (exists value) {
+            value =~ s/''/'/g;
+            return parseOraclePartitionTypedLiteral(value, col) ?? value;
+        }
+        if (*auto typed = parseOraclePartitionTypedLiteral(sql, col)) {
+            return typed;
+        }
+        if (sql =~ /^-?\d+$/) {
+            return sql.toInt();
+        }
+        if (sql =~ /^-?\d+\.\d+$/) {
+            return number(sql);
+        }
+    }
+
+    private *auto parseOraclePartitionTypedLiteral(string value, *AbstractColumn col) {
+        if (!col || !col.qore_type) {
+            return;
+        }
+        try {
+            switch (col.qore_type) {
+                case Type::Int: {
+                    if (value =~ /^-?\d+$/) {
+                        return value.toInt();
+                    }
+                    break;
+                }
+                case Type::Float: {
+                    if (value =~ /^-?\d+(\.\d+)?$/) {
+                        return value.toFloat();
+                    }
+                    break;
+                }
+                case Type::Number: {
+                    if (value =~ /^-?\d+(\.\d+)?$/) {
+                        return number(value);
+                    }
+                    break;
+                }
+                case Type::Date: {
+                    return date(value);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
     }
 
     #! returns the base type of the underlying object (either \"table\" or \c "view")
