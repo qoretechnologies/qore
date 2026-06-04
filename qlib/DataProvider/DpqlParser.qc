@@ -40,6 +40,21 @@ public hashdecl DpqlParseResult {
     list<hash<DpqlTokenInfo>> tokens;
 }
 
+#! Prefix-operator argument counts for DPQL operators that evaluate arguments in a controlled context
+const DpqlPrefixOperatorSpecs = {
+    DP_OP_MAP: {"min": 2, "max": 3},
+    DP_OP_HASH_MAP: {"min": 3, "max": 4},
+    DP_OP_SELECT: {"min": 2, "max": 2},
+    DP_OP_FIRST: {"min": 1, "max": 2},
+    DP_OP_ANY: {"min": 1, "max": 2},
+    DP_OP_ALL: {"min": 2, "max": 2},
+    DP_OP_COUNT: {"min": 1, "max": 2},
+    DP_OP_TAKE: {"min": 2, "max": 2},
+    DP_OP_DROP: {"min": 2, "max": 2},
+    DP_OP_TAKEWHILE: {"min": 2, "max": 2},
+    DP_OP_TAKEUNTIL: {"min": 2, "max": 2},
+};
+
 #! Parser for DPQL (Data Provider Query Language) expressions
 /** This class provides parsing of DPQL query expressions into DataProviderExpression
     structures. It implements a recursive descent parser for the DPQL grammar.
@@ -467,12 +482,7 @@ public class DpqlParser {
 
     #! Returns True if the expression uses DPQL prefix-operator syntax
     private bool isPrefixExpressionOperator(string exp_name) {
-        switch (exp_name) {
-            case DP_OP_MAP:
-            case DP_OP_HASH_MAP:
-                return True;
-        }
-        return False;
+        return DpqlPrefixOperatorSpecs{exp_name}.val();
     }
 
     #! Returns the DPQL symbol for an operator name
@@ -1754,15 +1764,19 @@ public class DpqlParser {
         syntax instead of function-call syntax.
     */
     private hash<DataProviderExpression> parsePrefixExpressionOperator(hash<DpqlTokenInfo> name_tok, string name) {
-        int required_args = name == DP_OP_MAP ? 2 : 3;
-        int max_args = required_args + 1;
+        hash<auto> spec = DpqlPrefixOperatorSpecs{name};
+        int min_args = spec.min;
+        int max_args = spec.max;
         list<auto> args = ();
         list<hash<DpqlTokenInfo>> arg_tokens = ();
 
-        for (int i = 0; i < required_args; ++i) {
+        while (args.size() < max_args) {
             skipWhitespace();
             if (atEnd()) {
-                addError(sprintf("Unexpected end of input in operator '%s'", name_tok.value),
+                addError(args.size() < min_args
+                    ? sprintf("Operator '%s' expects at least %d argument%s, got %d",
+                        name_tok.value, min_args, min_args == 1 ? "" : "s", args.size())
+                    : sprintf("Unexpected end of input in operator '%s'", name_tok.value),
                     "DPQL-E001", name_tok);
                 throw "DPQL-PARSE-ERROR", "Unexpected end of input";
             }
@@ -1772,29 +1786,23 @@ public class DpqlParser {
             arg_tokens += start_tok;
             skipWhitespace();
 
-            if (i < required_args - 1) {
-                expect(DPQL_TOK_COMMA, "','");
+            if (atEnd() || peek().type != DPQL_TOK_COMMA) {
+                break;
             }
-        }
 
-        if (!atEnd() && peek().type == DPQL_TOK_COMMA) {
+            if (args.size() >= max_args) {
+                addError(sprintf("Operator '%s' expects at most %d argument%s, got more",
+                    name_tok.value, max_args, max_args == 1 ? "" : "s"), "DPQL-E001", peek());
+                throw "DPQL-PARSE-ERROR", "Too many arguments";
+            }
             nextToken();
-            skipWhitespace();
-            if (atEnd()) {
-                addError(sprintf("Missing optional argument for operator '%s'", name_tok.value),
-                    "DPQL-E001", name_tok);
-                throw "DPQL-PARSE-ERROR", "Missing optional argument";
-            }
-            hash<DpqlTokenInfo> start_tok = peek();
-            args += parseOrExpr();
-            arg_tokens += start_tok;
-            skipWhitespace();
         }
 
-        if (args.size() > max_args) {
-            addError(sprintf("Operator '%s' expects at most %d arguments, got %d",
-                name_tok.value, max_args, args.size()), "DPQL-E001", name_tok);
-            throw "DPQL-PARSE-ERROR", "Too many arguments";
+        if (args.size() < min_args) {
+            addError(sprintf("Operator '%s' expects at least %d argument%s, got %d",
+                name_tok.value, min_args, min_args == 1 ? "" : "s", args.size()),
+                "DPQL-E001", name_tok);
+            throw "DPQL-PARSE-ERROR", "Too few arguments";
         }
 
         if (expressions && expressions{name}) {

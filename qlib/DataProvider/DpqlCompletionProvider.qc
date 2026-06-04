@@ -81,6 +81,21 @@ public hashdecl DpqlSignatureHelp {
     int active_parameter;
 }
 
+#! Expression operators rendered with DPQL prefix-operator syntax
+const DpqlPrefixExpressionOperators = (
+    DP_OP_MAP,
+    DP_OP_HASH_MAP,
+    DP_OP_SELECT,
+    DP_OP_FIRST,
+    DP_OP_ANY,
+    DP_OP_ALL,
+    DP_OP_COUNT,
+    DP_OP_TAKE,
+    DP_OP_DROP,
+    DP_OP_TAKEWHILE,
+    DP_OP_TAKEUNTIL,
+);
+
 #! DPQL Completion context structure
 /** Contains context information for generating completions.
 */
@@ -936,12 +951,7 @@ public class DpqlCompletionProvider {
 
     #! Returns True if the expression uses prefix-operator syntax in DPQL
     private bool isPrefixExpressionOperator(string ename) {
-        switch (ename) {
-            case DP_OP_MAP:
-            case DP_OP_HASH_MAP:
-                return True;
-        }
-        return False;
+        return inlist(ename, DpqlPrefixExpressionOperators);
     }
 
     #! Gets prefix expression operator completions
@@ -954,7 +964,7 @@ public class DpqlCompletionProvider {
         list<hash<DpqlCompletionItem>> items = ();
         string lwr_prefix = prefix.lwr();
 
-        foreach string ename in ((DP_OP_MAP, DP_OP_HASH_MAP)) {
+        foreach string ename in (DpqlPrefixExpressionOperators) {
             if (!expressions{ename}) {
                 continue;
             }

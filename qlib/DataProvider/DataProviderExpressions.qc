@@ -134,6 +134,37 @@ hash<auto> sub dp_eval_contains_any_args(hash<auto> rec, hash<DataProviderExpres
     return {"values": dp_eval_varargs_list(rec, exp, 1, end, tc), "options": options};
 }
 
+#! Returns the per-element record used by list-source streaming operators
+hash<auto> sub dp_stream_list_record(auto elem) {
+    return elem.typeCode() == NT_HASH ? elem : {"value": elem};
+}
+
+#! Returns the per-entry record used by hash-source streaming operators
+hash<auto> sub dp_stream_hash_record(string key, auto value) {
+    return {"key": key, "value": value};
+}
+
+#! Evaluates an optional streaming predicate against an iteration record
+bool sub dp_stream_accept(hash<auto> iter_rec, *auto predicate, *hash<auto> tc) {
+    return !exists predicate || AbstractDataProvider::evalGenericExpressionValue(iter_rec, predicate, tc).toBool();
+}
+
+#! Raises a consistent streaming-operator source type error
+sub dp_stream_source_error(string op, auto source) {
+    throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf(
+        "%s source must be a list or hash, got %s", op, source.fullType());
+}
+
+#! Validates a non-negative item count for streaming window operators
+int sub dp_stream_non_negative_count(string op, auto value) {
+    int count = value;
+    if (count < 0) {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf(
+            "%s count must be non-negative, got %d", op, count);
+    }
+    return count;
+}
+
 #! Extended expression implementations for data providers
 /** @since DataProvider 3.3
 */
@@ -2772,11 +2803,11 @@ public const ExtendedExpressionImplementations = {
             "role": ER_All,
             "name": DP_OP_MAP,
             "display_name": "map",
-            "short_desc": "Applies an expression to each element of a list, returning a new list",
-            "desc": "Applies the body expression to each element of the source list and returns a new list "
+            "short_desc": "Applies an expression to each element of a list or hash, returning a new list",
+            "desc": "Applies the body expression to each element of the source list or hash and returns a new list "
                 "of results. Within the body expression, field references (`@field`) resolve against the "
-                "current iteration element. An optional filter expression can be provided to skip elements "
-                "that do not match",
+                "current iteration element. Hash sources expose `@key` and `@value`. An optional filter "
+                "expression can be provided to skip elements that do not match",
             "symbol": "map",
             "render_template": "$symbol $args",
             "groups": "Data Manipulation",
@@ -2790,9 +2821,10 @@ public const ExtendedExpressionImplementations = {
                         "current element",
                 },
                 <DataProviderArgInfo>{
-                    "display_name": "Source List",
-                    "short_desc": "The list to iterate over",
-                    "desc": "The list to iterate over; each element becomes the context for the body expression",
+                    "display_name": "Source",
+                    "short_desc": "The list or hash to iterate over",
+                    "desc": "The list or hash to iterate over; each element becomes the context for the body "
+                        "expression",
                 },
                 <DataProviderArgInfo>{
                     "display_name": "Filter Expression",
@@ -2806,17 +2838,539 @@ public const ExtendedExpressionImplementations = {
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             auto body = exp.args[0];
-            softlist<auto> source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], tc);
+            auto source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], tc);
             *auto filter = exp.args.size() > 2 ? exp.args[2] : NOTHING;
             list<auto> result = ();
-            foreach auto elem in (source) {
-                hash<auto> iter_rec = elem.typeCode() == NT_HASH ? elem : {"value": elem};
-                if (exists filter && filter.val()) {
-                    if (!AbstractDataProvider::evalGenericExpressionValue(iter_rec, filter, tc)) {
-                        continue;
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        hash<auto> iter_rec = dp_stream_list_record(elem);
+                        if (!dp_stream_accept(iter_rec, filter, tc)) {
+                            continue;
+                        }
+                        result += AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
                     }
-                }
-                result += AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
+                    break;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        hash<auto> iter_rec = dp_stream_hash_record(key, source{key});
+                        if (!dp_stream_accept(iter_rec, filter, tc)) {
+                            continue;
+                        }
+                        result += AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
+                    }
+                    break;
+                default:
+                    dp_stream_source_error(DP_OP_MAP, source);
+            }
+            return result;
+        },
+    },
+    DP_OP_SELECT: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_SELECT,
+            "display_name": "select",
+            "short_desc": "Filters a list or hash source with a predicate expression",
+            "desc": "Applies the predicate expression to each element of a list or each key/value entry of a hash "
+                "and returns the matching source values. List elements that are hashes expose their fields; scalar "
+                "list elements expose `@value`. Hash sources expose `@key` and `@value` and return matching "
+                "key/value records",
+            "symbol": "select",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source to filter",
+                    "desc": "The list or hash source to filter",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Predicate Expression",
+                    "short_desc": "Expression evaluated for each source item",
+                    "desc": "Expression evaluated for each source item; truthy results keep the item",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto source = dp_eval_arg(rec, exp, 0, tc);
+            auto predicate = exp.args[1];
+            list<auto> result = ();
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                            result += elem;
+                        }
+                    }
+                    break;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        hash<auto> pair = dp_stream_hash_record(key, source{key});
+                        if (dp_stream_accept(pair, predicate, tc)) {
+                            result += pair;
+                        }
+                    }
+                    break;
+                default:
+                    dp_stream_source_error(DP_OP_SELECT, source);
+            }
+            return result;
+        },
+    },
+    DP_OP_FIRST: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_FIRST,
+            "display_name": "first",
+            "short_desc": "Returns the first source item, optionally matching a predicate",
+            "desc": "Returns the first item from a list or hash source. With two arguments, the first argument is "
+                "a predicate expression and the second is the source. Hash sources return a `key`/`value` record",
+            "symbol": "first",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Source or Predicate Expression",
+                    "short_desc": "Source for one-argument form, predicate for two-argument form",
+                    "desc": "Source for one-argument form, predicate expression for two-argument form",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source to inspect",
+                    "desc": "The list or hash source to inspect when a predicate is supplied",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."any",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            *auto predicate;
+            auto source;
+            if (exp.args.size() == 1) {
+                source = dp_eval_arg(rec, exp, 0, tc);
+            } else {
+                predicate = exp.args[0];
+                source = dp_eval_arg(rec, exp, 1, tc);
+            }
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                            return elem;
+                        }
+                    }
+                    return NOTHING;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        hash<auto> pair = dp_stream_hash_record(key, source{key});
+                        if (dp_stream_accept(pair, predicate, tc)) {
+                            return pair;
+                        }
+                    }
+                    return NOTHING;
+            }
+            dp_stream_source_error(DP_OP_FIRST, source);
+        },
+    },
+    DP_OP_ANY: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_ANY,
+            "display_name": "any",
+            "short_desc": "Returns True if any source item or predicate result is truthy",
+            "desc": "Returns True if any source item is truthy. With two arguments, the first argument is a "
+                "predicate expression and the second is the source; evaluation short-circuits on the first match",
+            "symbol": "any",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Source or Predicate Expression",
+                    "short_desc": "Source for one-argument form, predicate for two-argument form",
+                    "desc": "Source for one-argument form, predicate expression for two-argument form",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source to inspect",
+                    "desc": "The list or hash source to inspect when a predicate is supplied",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            *auto predicate;
+            auto source;
+            if (exp.args.size() == 1) {
+                source = dp_eval_arg(rec, exp, 0, tc);
+            } else {
+                predicate = exp.args[0];
+                source = dp_eval_arg(rec, exp, 1, tc);
+            }
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        if (exists predicate) {
+                            if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                                return True;
+                            }
+                        } else if (elem.toBool()) {
+                            return True;
+                        }
+                    }
+                    return False;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        hash<auto> pair = dp_stream_hash_record(key, source{key});
+                        if (exists predicate) {
+                            if (dp_stream_accept(pair, predicate, tc)) {
+                                return True;
+                            }
+                        } else if (pair.value.toBool()) {
+                            return True;
+                        }
+                    }
+                    return False;
+            }
+            dp_stream_source_error(DP_OP_ANY, source);
+        },
+    },
+    DP_OP_ALL: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_ALL,
+            "display_name": "all",
+            "short_desc": "Returns True if all predicate results are truthy",
+            "desc": "Returns True if the predicate expression evaluates to True for all source items. Empty "
+                "sources return True. The first argument is the predicate expression and the second is the source",
+            "symbol": "all",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Predicate Expression",
+                    "short_desc": "Expression evaluated for each source item",
+                    "desc": "Expression evaluated for each source item",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source to inspect",
+                    "desc": "The list or hash source to inspect",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto predicate = exp.args[0];
+            auto source = dp_eval_arg(rec, exp, 1, tc);
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        if (!dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                            return False;
+                        }
+                    }
+                    return True;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        if (!dp_stream_accept(dp_stream_hash_record(key, source{key}), predicate, tc)) {
+                            return False;
+                        }
+                    }
+                    return True;
+            }
+            dp_stream_source_error(DP_OP_ALL, source);
+        },
+    },
+    DP_OP_COUNT: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_COUNT,
+            "display_name": "count",
+            "short_desc": "Counts source items, optionally matching a predicate",
+            "desc": "Counts source items. With two arguments, the first argument is a predicate expression and "
+                "the second is the source",
+            "symbol": "count",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Source or Predicate Expression",
+                    "short_desc": "Source for one-argument form, predicate for two-argument form",
+                    "desc": "Source for one-argument form, predicate expression for two-argument form",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source to count",
+                    "desc": "The list or hash source to count when a predicate is supplied",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            *auto predicate;
+            auto source;
+            if (exp.args.size() == 1) {
+                source = dp_eval_arg(rec, exp, 0, tc);
+            } else {
+                predicate = exp.args[0];
+                source = dp_eval_arg(rec, exp, 1, tc);
+            }
+            int count = 0;
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    if (!exists predicate) {
+                        return source.size();
+                    }
+                    foreach auto elem in (cast<list>(source)) {
+                        if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                            ++count;
+                        }
+                    }
+                    return count;
+                case NT_HASH:
+                    if (!exists predicate) {
+                        return source.size();
+                    }
+                    foreach string key in (cast<hash>(source).keys()) {
+                        if (dp_stream_accept(dp_stream_hash_record(key, source{key}), predicate, tc)) {
+                            ++count;
+                        }
+                    }
+                    return count;
+            }
+            dp_stream_source_error(DP_OP_COUNT, source);
+        },
+    },
+    DP_OP_TAKE: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_TAKE,
+            "display_name": "take",
+            "short_desc": "Returns the first N source items",
+            "desc": "Returns the first N items from a list or hash source. Hash sources return key/value records",
+            "symbol": "take",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureIntType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Count",
+                    "short_desc": "Number of items to return",
+                    "desc": "Number of items to return; must be non-negative",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source",
+                    "desc": "The list or hash source",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            int limit = dp_stream_non_negative_count(DP_OP_TAKE, dp_eval_arg(rec, exp, 0, tc));
+            auto source = dp_eval_arg(rec, exp, 1, tc);
+            list<auto> result = ();
+            if (!limit) {
+                return result;
+            }
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        result += elem;
+                        if (result.size() >= limit) {
+                            break;
+                        }
+                    }
+                    break;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        result += dp_stream_hash_record(key, source{key});
+                        if (result.size() >= limit) {
+                            break;
+                        }
+                    }
+                    break;
+                default:
+                    dp_stream_source_error(DP_OP_TAKE, source);
+            }
+            return result;
+        },
+    },
+    DP_OP_DROP: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_DROP,
+            "display_name": "drop",
+            "short_desc": "Drops the first N source items",
+            "desc": "Drops the first N items from a list or hash source and returns the remaining items. Hash "
+                "sources return key/value records",
+            "symbol": "drop",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureIntType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Count",
+                    "short_desc": "Number of items to drop",
+                    "desc": "Number of items to drop; must be non-negative",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source",
+                    "desc": "The list or hash source",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            int drop_count = dp_stream_non_negative_count(DP_OP_DROP, dp_eval_arg(rec, exp, 0, tc));
+            auto source = dp_eval_arg(rec, exp, 1, tc);
+            int skipped = 0;
+            list<auto> result = ();
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        if (skipped < drop_count) {
+                            ++skipped;
+                            continue;
+                        }
+                        result += elem;
+                    }
+                    break;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        if (skipped < drop_count) {
+                            ++skipped;
+                            continue;
+                        }
+                        result += dp_stream_hash_record(key, source{key});
+                    }
+                    break;
+                default:
+                    dp_stream_source_error(DP_OP_DROP, source);
+            }
+            return result;
+        },
+    },
+    DP_OP_TAKEWHILE: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_TAKEWHILE,
+            "display_name": "takewhile",
+            "short_desc": "Returns source items while a predicate remains truthy",
+            "desc": "Returns items from a list or hash source until the predicate expression first evaluates to "
+                "False. Hash sources return key/value records",
+            "symbol": "takewhile",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Predicate Expression",
+                    "short_desc": "Expression evaluated for each source item",
+                    "desc": "Expression evaluated for each source item",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source",
+                    "desc": "The list or hash source",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto predicate = exp.args[0];
+            auto source = dp_eval_arg(rec, exp, 1, tc);
+            list<auto> result = ();
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        if (!dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                            break;
+                        }
+                        result += elem;
+                    }
+                    break;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        hash<auto> pair = dp_stream_hash_record(key, source{key});
+                        if (!dp_stream_accept(pair, predicate, tc)) {
+                            break;
+                        }
+                        result += pair;
+                    }
+                    break;
+                default:
+                    dp_stream_source_error(DP_OP_TAKEWHILE, source);
+            }
+            return result;
+        },
+    },
+    DP_OP_TAKEUNTIL: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "role": ER_All,
+            "name": DP_OP_TAKEUNTIL,
+            "display_name": "takeuntil",
+            "short_desc": "Returns source items until a predicate becomes truthy",
+            "desc": "Returns items from a list or hash source until the predicate expression first evaluates to "
+                "True. The matching item is not included. Hash sources return key/value records",
+            "symbol": "takeuntil",
+            "render_template": "$symbol $args",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Predicate Expression",
+                    "short_desc": "Expression evaluated for each source item",
+                    "desc": "Expression evaluated for each source item",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Source",
+                    "short_desc": "The list or hash source",
+                    "desc": "The list or hash source",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto predicate = exp.args[0];
+            auto source = dp_eval_arg(rec, exp, 1, tc);
+            list<auto> result = ();
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        if (dp_stream_accept(dp_stream_list_record(elem), predicate, tc)) {
+                            break;
+                        }
+                        result += elem;
+                    }
+                    break;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        hash<auto> pair = dp_stream_hash_record(key, source{key});
+                        if (dp_stream_accept(pair, predicate, tc)) {
+                            break;
+                        }
+                        result += pair;
+                    }
+                    break;
+                default:
+                    dp_stream_source_error(DP_OP_TAKEUNTIL, source);
             }
             return result;
         },
@@ -2827,10 +3381,11 @@ public const ExtendedExpressionImplementations = {
             "role": ER_All,
             "name": DP_OP_HASH_MAP,
             "display_name": "hash_map",
-            "short_desc": "Maps a list to a hash by applying key and value expressions to each element",
-            "desc": "Applies key and value expressions to each element of the source list and returns a hash. "
+            "short_desc": "Maps a list or hash to a hash by applying key and value expressions to each element",
+            "desc": "Applies key and value expressions to each element of the source list or hash and returns a hash. "
                 "Within the expressions, field references (`@field`) resolve against the current iteration "
-                "element. An optional filter expression can be provided to skip elements that do not match",
+                "element. Hash sources expose `@key` and `@value`. An optional filter expression can be "
+                "provided to skip elements that do not match",
             "symbol": "hash_map",
             "render_template": "$symbol $args",
             "groups": "Data Manipulation",
@@ -2850,9 +3405,9 @@ public const ExtendedExpressionImplementations = {
                         "against the current element",
                 },
                 <DataProviderArgInfo>{
-                    "display_name": "Source List",
-                    "short_desc": "The list to iterate over",
-                    "desc": "The list to iterate over; each element becomes the context for the expressions",
+                    "display_name": "Source",
+                    "short_desc": "The list or hash to iterate over",
+                    "desc": "The list or hash to iterate over; each element becomes the context for the expressions",
                 },
                 <DataProviderArgInfo>{
                     "display_name": "Filter Expression",
@@ -2867,19 +3422,34 @@ public const ExtendedExpressionImplementations = {
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             auto key_expr = exp.args[0];
             auto val_expr = exp.args[1];
-            softlist<auto> source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], tc);
+            auto source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], tc);
             *auto filter = exp.args.size() > 3 ? exp.args[3] : NOTHING;
             hash<auto> result = {};
-            foreach auto elem in (source) {
-                hash<auto> iter_rec = elem.typeCode() == NT_HASH ? elem : {"value": elem};
-                if (exists filter && filter.val()) {
-                    if (!AbstractDataProvider::evalGenericExpressionValue(iter_rec, filter, tc)) {
-                        continue;
+            switch (source.typeCode()) {
+                case NT_LIST:
+                    foreach auto elem in (cast<list>(source)) {
+                        hash<auto> iter_rec = dp_stream_list_record(elem);
+                        if (!dp_stream_accept(iter_rec, filter, tc)) {
+                            continue;
+                        }
+                        auto k = AbstractDataProvider::evalGenericExpressionValue(iter_rec, key_expr, tc);
+                        auto v = AbstractDataProvider::evalGenericExpressionValue(iter_rec, val_expr, tc);
+                        result{k} = v;
                     }
-                }
-                auto k = AbstractDataProvider::evalGenericExpressionValue(iter_rec, key_expr, tc);
-                auto v = AbstractDataProvider::evalGenericExpressionValue(iter_rec, val_expr, tc);
-                result{k} = v;
+                    break;
+                case NT_HASH:
+                    foreach string key in (cast<hash>(source).keys()) {
+                        hash<auto> iter_rec = dp_stream_hash_record(key, source{key});
+                        if (!dp_stream_accept(iter_rec, filter, tc)) {
+                            continue;
+                        }
+                        auto k = AbstractDataProvider::evalGenericExpressionValue(iter_rec, key_expr, tc);
+                        auto v = AbstractDataProvider::evalGenericExpressionValue(iter_rec, val_expr, tc);
+                        result{k} = v;
+                    }
+                    break;
+                default:
+                    dp_stream_source_error(DP_OP_HASH_MAP, source);
             }
             return result;
         },

@@ -1338,6 +1338,14 @@ sub invalid_dataframe_api() {
         assertEq(("Alice", "Carol"), index_filtered.getColumn("name"),
             "DataFrameBlock vectorized filter supports list index accessors");
 
+        QoreFilterRecordsProcessor stream_any_proc({
+            "dpql_where": 'any @value >= 90, @scores',
+        });
+        DataFrame::DataFrame stream_any_filtered = stream_any_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol"), stream_any_filtered.getColumn("name"),
+            "DataFrameBlock filter falls back to row evaluation for streaming DPQL operators");
+
         hash<DataProviderExpression> slice_expr = <DataProviderExpression>{
             "exp": DP_SEARCH_OP_EQ,
             "args": (
@@ -1751,6 +1759,16 @@ sub invalid_dataframe_api() {
             DataProviderShape::BufferColumns);
         assertEq((1, 3), nested_accessor_filtered.getColumn("id").toList(),
             "DPQL BufferColumns nested accessors build dense masks");
+
+        QoreFilterRecordsProcessor nested_stream_any_proc({
+            "dpql_where": 'any @value >= 90, @scores',
+        });
+        auto nested_stream_any_filtered = nested_stream_any_proc.processRecordsShape(nested_filter_columns,
+            DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(nested_stream_any_filtered),
+            "DPQL BufferColumns streaming operator fallback preserves BufferColumns shape");
+        assertEq((1, 3), nested_stream_any_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns streaming operators fall back to row evaluation");
 
         hash<DataProviderExpression> ternary_expr = <DataProviderExpression>{
             "exp": DP_SEARCH_OP_EQ,

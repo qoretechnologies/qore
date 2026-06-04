@@ -200,7 +200,10 @@
       expression-to-expression predicates such as \c @amount \c >= \c @target, numeric, trim/concat/null-handling,
       case-folding, date-part, and row-independent date arithmetic expressions, native string predicates including
       \c containsAny, list membership predicates, list/hash accessors, structured ternary values, and
-      ICU-backed locale-sensitive string predicates when a DataProvider expression passes an \c i18n locale options hash
+      ICU-backed locale-sensitive string predicates when a DataProvider expression passes an \c i18n locale options
+      hash; DPQL/DataProvider generic expressions also support streaming-style prefix operators including
+      \c select, \c first, \c any, \c all, \c count, \c take, \c drop, \c takewhile, and \c takeuntil, with
+      DataFrame and dense-column filters preserving correctness through row-evaluation fallback where needed
     - the dataframe benchmark suite shows Qore outperforming pandas for the
       included typed column construction, filtering, aggregation, join,
       value counting, missing-data cleanup, reshape, Arrow/Parquet roundtrip,
@@ -1759,6 +1762,8 @@ foreach string module_name in (registry.getProcessModules()) {
         cryptographic, regex, date/time, collection, and serialization operations
       - added Qore-style prefix operator syntax for DPQL \c map and \c hash_map expressions, where the
         body, key, value, and filter subexpressions are evaluated per source element
+      - added streaming-style DPQL/DataProvider generic expression operators \c select, \c first,
+        \c any, \c all, \c count, \c take, \c drop, \c takewhile, and \c takeuntil over list and hash sources
       - added \c now() function returning current timestamp with microsecond precision
       - added module-conditional expression registration for YAML, JSON, and XML serialization
         functions (registered when the corresponding modules are available)
