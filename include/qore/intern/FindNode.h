@@ -50,6 +50,9 @@ public:
 
     DLLLOCAL static Mode parseMode(const char* str);
     DLLLOCAL static const char* modeName(Mode mode);
+    DLLLOCAL Mode getMode() const {
+        return mode;
+    }
 
     // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
     // the ExceptionSink is only needed for QoreObject where a method may be executed

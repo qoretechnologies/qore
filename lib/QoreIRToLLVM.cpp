@@ -612,6 +612,13 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_find_throwing",
             llvm::FunctionType::get(i64_type,
                 {i64_type, i64_type, i64_type, ptr_type}, false));
+    // mode-aware find: (i64 exp, i64 source, i64 where, i32 mode, ptr xsink) -> i64
+    module.getOrInsertFunction("qore_rt_find_mode",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_find_mode_throwing",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
 }
 
 llvm::FunctionCallee QoreIRToLLVM::getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft) {
@@ -15335,12 +15342,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* exp_bits = makeExprBits(finst->exp);
             llvm::Value* find_exp_bits = makeExprBits(finst->find_exp);
             llvm::Value* where_bits = makeExprBits(finst->where);
+            llvm::Value* mode = llvm::ConstantInt::get(i32_type, finst->mode);
             auto find_ft = llvm::FunctionType::get(i64_type,
-                    {i64_type, i64_type, i64_type, ptr_type}, false);
-            auto helper = module.getOrInsertFunction("qore_rt_find", find_ft);
-            auto helper_throwing = module.getOrInsertFunction("qore_rt_find_throwing", find_ft);
+                    {i64_type, i64_type, i64_type, i32_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_find_mode", find_ft);
+            auto helper_throwing = module.getOrInsertFunction("qore_rt_find_mode_throwing", find_ft);
             llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
-                    {exp_bits, find_exp_bits, where_bits, xsink_arg}, module, llvm_func, inst);
+                    {exp_bits, find_exp_bits, where_bits, mode, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

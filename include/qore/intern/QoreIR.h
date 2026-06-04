@@ -2285,11 +2285,12 @@ public:
 class QoreIRFindInstruction : public QoreIRInstruction {
 public:
     QoreIRFindInstruction(const QoreValue& n_exp, const QoreValue& n_find_exp,
-            const QoreValue& n_where)
+            const QoreValue& n_where, int32_t n_mode = 0)
             : QoreIRInstruction(QoreIROpcode::Find),
               exp(n_exp),
               find_exp(n_find_exp),
-              where(n_where) {
+              where(n_where),
+              mode(n_mode) {
         exp.ref();
         find_exp.ref();
         where.ref();
@@ -2304,6 +2305,7 @@ public:
     QoreValue exp;
     QoreValue find_exp;
     QoreValue where;
+    int32_t mode = 0;
 };
 
 class QoreIRSummarizeInstruction : public QoreIRInstruction {

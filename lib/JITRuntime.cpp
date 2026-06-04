@@ -141,7 +141,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_backquote", reinterpret_cast<void*>(&qore_rt_backquote) },
     { "qore_rt_backquote_throwing", reinterpret_cast<void*>(&qore_rt_backquote_throwing) },
     { "qore_rt_find", reinterpret_cast<void*>(&qore_rt_find) },
+    { "qore_rt_find_mode", reinterpret_cast<void*>(&qore_rt_find_mode) },
     { "qore_rt_find_throwing", reinterpret_cast<void*>(&qore_rt_find_throwing) },
+    { "qore_rt_find_mode_throwing", reinterpret_cast<void*>(&qore_rt_find_mode_throwing) },
     { "qore_rt_background_dot_eval_name_call_aot",
         reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot) },
     { "qore_rt_background_dot_eval_name_call_aot_throwing",
@@ -926,9 +928,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* 
 
 extern "C" DLLEXPORT uint64_t qore_rt_find(uint64_t exp_bits, uint64_t find_exp_bits,
         uint64_t where_bits, ExceptionSink* xsink) {
+    return qore_rt_find_mode(exp_bits, find_exp_bits, where_bits, 0, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_find_mode(uint64_t exp_bits, uint64_t find_exp_bits,
+        uint64_t where_bits, int32_t mode, ExceptionSink* xsink) {
     QoreValue exp = fromBits(exp_bits);
     QoreValue find_exp = fromBits(find_exp_bits);
     QoreValue where = fromBits(where_bits);
+
+    if (mode < 0 || mode > 3) {
+        xsink->raiseException("IR-EXEC-ERROR", "invalid find mode %d", mode);
+        return toBits(QoreValue());
+    }
 
     ValueHolder rv(xsink);
     ReferenceHolder<Context> context(new Context(nullptr, xsink, find_exp), xsink);
@@ -937,6 +949,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_find(uint64_t exp_bits, uint64_t find_exp_
     }
 
     QoreListNode* lrv = nullptr;
+    size_t match_count = 0;
     for (context->pos = 0; context->pos < context->max_pos && !xsink->isEvent(); ++context->pos) {
         if ((context->pos & 0x3f) == 0 && qore_check_cancel(xsink, "find expression")) {
             return toBits(QoreValue());
@@ -949,10 +962,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_find(uint64_t exp_bits, uint64_t find_exp_
             continue;
         }
 
+        ++match_count;
+        if (mode == 3 && match_count > 1) {
+            xsink->raiseException("MULTIPLE-MATCHES-ERROR",
+                "find one matched more than one row; at least %d rows matched", (int)match_count);
+            return toBits(QoreValue());
+        }
+
         ValueEvalOptimizedRefHolder result(exp, xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
+        if (mode == 1) {
+            return toBits(result.takeReferencedValue());
+        }
+        if (mode == 2 || mode == 3) {
+            rv = result.takeReferencedValue();
+            continue;
+        }
+
         if (!rv->isNothing()) {
             if (!lrv) {
                 lrv = new QoreListNode(autoTypeInfo);
@@ -3744,6 +3772,16 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_find_throwing(
         uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_find(exp_bits, find_exp_bits, where_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_find_mode_throwing(
+        uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits, int32_t mode,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_find_mode(exp_bits, find_exp_bits, where_bits, mode, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

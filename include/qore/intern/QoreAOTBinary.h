@@ -95,7 +95,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v4: all serialized cast expression kinds carry their inner expression
 //! v5: fixed-offset IR date constants serialize their UTC offset instead of an empty zone name
 //! v6: added char value serialization tag
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 6;
+//! v7: serialized Find instructions include the explicit find mode
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 7;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;

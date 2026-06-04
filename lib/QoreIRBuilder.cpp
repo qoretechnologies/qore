@@ -1248,9 +1248,9 @@ QoreIRInstruction* QoreIRBuilder::createContextRow(const QoreProgramLocation* lo
 }
 
 QoreIRFindInstruction* QoreIRBuilder::createFind(const QoreValue& exp,
-        const QoreValue& find_exp, const QoreValue& where,
+        const QoreValue& find_exp, const QoreValue& where, int32_t mode,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRFindInstruction>(exp, find_exp, where);
+    auto inst = block->appendInstruction<QoreIRFindInstruction>(exp, find_exp, where, mode);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;

@@ -4507,7 +4507,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     }
     if (auto* find_node = dynamic_cast<const FindNode*>(node)) {
         auto* inst = builder.createFind(find_node->exp, find_node->find_exp, find_node->where,
-                find_node->loc);
+                static_cast<int32_t>(find_node->getMode()), find_node->loc);
         if (!exception_stack.empty()) {
             inst->exception_target = exception_stack.back();
         }
@@ -13955,11 +13955,6 @@ QoreIRValue QoreIRLowering::lowerStreaming(const QoreValue& expr, std::string& e
     if (!op) {
         return QoreIRValue();
     }
-    if (parse_context
-            && qore_program_private::getParseWarnOptions(parse_context->pgm).parse_options.hasAny(
-                QoreParseOptions::NO_STREAM_FUSION)) {
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, {}, op->loc, error);
-    }
     return lowerStreamingNative(op, expr, error);
 }
 
@@ -14427,7 +14422,10 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     std::vector<const QoreStreamingOperatorNode*> source_stages;
     QoreValue base_source = op->getSource();
     size_t source_stage_count = 0;
-    while (true) {
+    bool no_stream_fusion = parse_context
+        && qore_program_private::getParseWarnOptions(parse_context->pgm).parse_options.hasAny(
+            QoreParseOptions::NO_STREAM_FUSION);
+    while (!no_stream_fusion) {
         auto* source_op = dynamic_cast<const QoreStreamingOperatorNode*>(base_source.getInternalNode());
         if (!source_op || qore_streaming_kind_is_terminal(source_op->getKind())) {
             break;

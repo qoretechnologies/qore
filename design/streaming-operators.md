@@ -1,6 +1,6 @@
 # Streaming Operators
 
-**Status:** Implemented with follow-up work planned.
+**Status:** Implemented with two follow-up implementation areas remaining.
 
 **Target:** Qore 2.3 implementation baseline; follow-up work is tracked here
 instead of in `design-pending`.
@@ -96,6 +96,7 @@ User-facing behavior is documented in:
 Focused tests exist in:
 
 - `examples/test/qore/misc/streaming-operators.qtest`
+- `examples/test/ir/AOTStreamingOperators.qtest`
 - `examples/test/qore/misc/context.qtest`
 - `examples/test/qlib/QoreCodeFormat/QoreCodeFormat.qtest`
 - `modules/astparser/test/astparser.qtest`
@@ -128,46 +129,38 @@ The desired rule is narrow: assignment to `list<T>` or `*list<T>` from an
 value through `T`. Assignment to `auto`, `any`, `object`, `AbstractIterator`,
 and `softlist<T>` must keep existing behavior and preserve the iterator object.
 
-### 3. Dedicated AOT Regression Coverage
-
-AOT expression support exists for `iterate` and streaming operators, but the
-test suite should have a focused AOT qtest that compiles streaming expressions
-into a source-stripped module and executes them through the loaded artifact.
-
-### 4. Compatibility Coverage for Contextual Keywords
-
-The compatibility strategy is parse-option based. That needs systematic tests
-covering the full contextual-keyword surface, especially legacy identifier
-positions for the streaming words and per-keyword opt-outs.
-
 ## Follow-Up Implementation Plan
 
-### Phase 1: Document and Freeze Current Semantics
+The AOT and parse-option compatibility items from the original follow-up plan
+are implemented. The remaining work is split into two independent tracks:
+generic iterator materialization for hard-list assignment, and a broader mixed
+lazy pipeline optimizer.
 
-Goal: make the implemented behavior explicit before changing compiler behavior.
+### Completed: Freeze Current Semantics
 
-Tasks:
+Completed items:
 
 - Treat root `take` / `drop` / `takewhile` / `takeuntil` as list-producing
   expressions and nested occurrences as lazy streaming stages.
 - Document that generic iterator-to-list assignment is a planned follow-up, not
   current behavior.
-- Document `%no-stream-fusion` as disabling optimization only; the AST fallback
-  remains the semantic baseline.
+- Document `%no-stream-fusion` as disabling fusion optimization only. Native
+  non-fused lowering remains the semantic baseline, including source-stripped
+  AOT execution.
 - Document that source-renaming migration tooling is intentionally not part of
   the plan.
 
-Acceptance criteria:
+Completed acceptance criteria:
 
 - No remaining references to the retired pending proposal.
 - Stable design docs and Doxygen agree on root materialization, nested laziness,
   and parse-option compatibility.
 
-### Phase 2: Add AOT Streaming Regression Tests
+### Completed: Add AOT Streaming Regression Tests
 
-Goal: cover the existing AOT implementation before broader changes.
+Goal: cover the AOT implementation before broader changes.
 
-Tasks:
+Completed items:
 
 - Add `examples/test/ir/AOTStreamingOperators.qtest`.
 - Generate a small module that exercises:
@@ -179,21 +172,21 @@ Tasks:
   - `find first`, `find last`, and `find one`
 - Compile the module to a source-stripped qmod and execute the same assertions
   through source and loaded artifact paths.
-- Include one `%no-stream-fusion` variant to ensure AST fallback remains valid
-  when fusion is disabled.
+- Include one `%no-stream-fusion` variant to ensure native non-fused lowering
+  remains valid when fusion is disabled.
 
-Acceptance criteria:
+Completed acceptance criteria:
 
 - The new qtest passes in the normal IR/AOT test suite.
 - A source-stripped qmod preserves streaming operator behavior.
 - Any future AOT serialization break for `ITERATE` or `STREAMING` fails a
   focused test.
 
-### Phase 3: Harden Contextual Keyword Compatibility
+### Completed: Harden Contextual Keyword Compatibility
 
 Goal: make parse options the compatibility mechanism for legacy sources.
 
-Tasks:
+Completed items:
 
 - Add parser tests proving streaming words remain valid as:
   - local variables
@@ -211,7 +204,7 @@ Tasks:
 - Keep `%streaming-any` and modern-mode `any` behavior explicit: `any` remains a
   type name in declarations and becomes an operator only in expression contexts.
 
-Acceptance criteria:
+Completed acceptance criteria:
 
 - Legacy identifier positions work without opt-outs where contextual parsing can
   disambiguate safely.
@@ -219,7 +212,7 @@ Acceptance criteria:
 - `%no-streaming-operators` disables all streaming operators and find modifiers
   without breaking legacy `find`.
 
-### Phase 4: Implement Generic Hard-List Materialization
+### Phase 1: Implement Generic Hard-List Materialization
 
 Goal: make explicit hard-list targets collect iterator values without changing
 soft or unrestricted assignment behavior.
@@ -256,7 +249,7 @@ Acceptance criteria:
 - Existing unrestricted and soft-list assignment behavior is unchanged.
 - Long or user-defined iterators remain cancellable while materializing.
 
-### Phase 5: Introduce a General Lazy Pipeline Descriptor
+### Phase 2: Introduce a General Lazy Pipeline Descriptor
 
 Goal: create a compiler representation that can fuse mixed streaming and
 functional operator chains without duplicating lowering logic per operator.
@@ -286,7 +279,7 @@ Acceptance criteria:
 - `%no-stream-fusion` disables this generalized fusion path while leaving
   operator semantics available.
 
-### Phase 6: Lower Mixed Pipelines to Native IR
+### Phase 3: Lower Mixed Pipelines to Native IR
 
 Goal: replace wrapper-chain execution for supported mixed chains with one
 native loop.
@@ -324,7 +317,7 @@ Acceptance criteria:
 - Existing pattern-specific fast opcodes remain valid or are replaced only when
   the generalized path is demonstrably equivalent.
 
-### Phase 7: Extend Fusion to `foreach` Conservatively
+### Phase 4: Extend Fusion to `foreach` Conservatively
 
 Goal: close the statement-level fusion gap without risking control-flow bugs.
 
@@ -345,7 +338,7 @@ Acceptance criteria:
 - All control-flow tests pass with and without `%no-stream-fusion`.
 - Unsupported bodies fall back safely.
 
-### Phase 8: Verification and Benchmarking
+### Phase 5: Verification and Benchmarking
 
 Goal: prove correctness first, then quantify performance.
 

@@ -9038,8 +9038,8 @@ load_local_done:
             }
             case QoreIROpcode::Find: {
                 auto* find_inst = static_cast<QoreIRFindInstruction*>(inst);
-                QoreValue result = fromBits(qore_rt_find(toBits(find_inst->exp),
-                    toBits(find_inst->find_exp), toBits(find_inst->where), xsink));
+                QoreValue result = fromBits(qore_rt_find_mode(toBits(find_inst->exp),
+                    toBits(find_inst->find_exp), toBits(find_inst->where), find_inst->mode, xsink));
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);

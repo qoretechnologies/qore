@@ -1096,6 +1096,7 @@ static bool writeFind(AOTInstWriteCtx& ctx) {
     if (has_where && !ctx.writeExpr(ctx.writer, fi->where)) {
         return false;
     }
+    ctx.writer.writeU8(static_cast<uint8_t>(fi->mode));
     return true;
 }
 
@@ -1126,8 +1127,16 @@ static std::unique_ptr<QoreIRInstruction> readFind(
             return nullptr;
         }
     }
+    uint8_t mode = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (mode > 3) {
+        exp.discard(nullptr);
+        find_exp.discard(nullptr);
+        where.discard(nullptr);
+        ctx.error = "invalid find mode " + std::to_string(mode);
+        return nullptr;
+    }
 
-    auto* fi = new QoreIRFindInstruction(exp, find_exp, where);
+    auto* fi = new QoreIRFindInstruction(exp, find_exp, where, mode);
     fi->opcode = static_cast<QoreIROpcode>(opcode_raw);
     fi->result = QoreIRValue(result_id);
     fi->operands = operands;

@@ -326,7 +326,7 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createContextRow(const QoreProgramLocation* loc = nullptr);
     QoreIRFindInstruction* createFind(const QoreValue& exp, const QoreValue& find_exp,
-        const QoreValue& where, const QoreProgramLocation* loc = nullptr);
+        const QoreValue& where, int32_t mode = 0, const QoreProgramLocation* loc = nullptr);
     QoreIRSummarizeInstruction* createSummarize(const SummarizeStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
     QoreIRSwitchRegexMatchInstruction* createSwitchRegexMatch(const CaseNodeRegex* regex_case,

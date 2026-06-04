@@ -170,9 +170,17 @@ uint64_t qore_rt_backquote_throwing(const char* cmd, ExceptionSink* xsink);
 uint64_t qore_rt_find(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
     ExceptionSink* xsink);
 
+//! Execute a find expression from serialized sub-expression values with an explicit mode.
+uint64_t qore_rt_find_mode(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
+    int32_t mode, ExceptionSink* xsink);
+
 //! Throwing wrapper for invoke/EH paths.
 uint64_t qore_rt_find_throwing(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
     ExceptionSink* xsink);
+
+//! Throwing wrapper for mode-aware find invoke/EH paths.
+uint64_t qore_rt_find_mode_throwing(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
+    int32_t mode, ExceptionSink* xsink);
 
 //! Native AOT background obj.method(args) call with pre-evaluated receiver and args.
 uint64_t qore_rt_background_dot_eval_name_call_aot(const char* method_name, uint64_t recv_bits,

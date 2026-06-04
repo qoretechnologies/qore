@@ -812,6 +812,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 if (fi && fi->where) {
                     out << " where=<expr>";
                 }
+                if (fi && fi->mode) {
+                    out << " mode=" << fi->mode;
+                }
             } else if (inst->opcode == QoreIROpcode::ContextRef) {
                 auto* cri = dynamic_cast<const QoreIRContextRefInstruction*>(inst.get());
                 if (cri) {

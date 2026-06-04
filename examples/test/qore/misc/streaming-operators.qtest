@@ -49,6 +49,18 @@ class CountingIterator inherits AbstractIterator<int> {
     }
 }
 
+int sub first(list<int> values) {
+    return 99;
+}
+
+bool sub any(list<int> values) {
+    return False;
+}
+
+int sub count(list<int> values) {
+    return 77;
+}
+
 class StreamingOperatorsTest inherits QUnit::Test {
     constructor() : QUnit::Test("Streaming operators test", "1.0") {
         addTestCase("Terminal operators", \testTerminalOperators());
@@ -56,7 +68,19 @@ class StreamingOperatorsTest inherits QUnit::Test {
         addTestCase("Iterate sources", \testIterateSources());
         addTestCase("Fused streaming chains", \testFusedStreamingChains());
         addTestCase("Soft keyword identifiers", \testSoftKeywordIdentifiers());
+        addTestCase("Contextual keyword compatibility", \testContextualKeywordCompatibility());
+        addTestCase("Parse option opt-outs", \testParseOptionOptOuts());
         set_return_value(main());
+    }
+
+    parseOk(string code, string label) {
+        Program p();
+        p.parse("%modern\n" + code, label);
+    }
+
+    parseFails(string option, string code, string label) {
+        Program p();
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("%modern\n" + option + "\n" + code, label));
     }
 
     testTerminalOperators() {
@@ -90,6 +114,13 @@ class StreamingOperatorsTest inherits QUnit::Test {
         assertEq((count ()), 0, "count empty source");
         assertEq((count $1 > 1, values), 3, "count predicate");
         assertEq((count $1 > 9, values), 0, "count predicate no match");
+
+        assertEq(first(values), 99, "first(...) remains a function call");
+        assertEq((first (values)), 1, "first (...) is the streaming operator form");
+        assertEq(any(values), False, "any(...) remains a function call");
+        assertEq((any (values)), True, "any (...) is the streaming operator form");
+        assertEq(count(values), 77, "count(...) remains a function call");
+        assertEq((count (values)), 4, "count (...) is the streaming operator form");
 
         Program p();
         p.parse("%modern\nclass C { public { any value; *any maybe; } any get() { return 1; } abstract any getAbstract(); }\nany sub compat(any value) { return value; }\nauto sub closureCompat() { code c = any sub (any a) { return a; }; return c(1); }", "any-type-compat");
@@ -190,5 +221,80 @@ class StreamingOperatorsTest inherits QUnit::Test {
 
         count += 2;
         assertEq(count + take, 14, "streaming operator word local can be used in binary expressions");
+    }
+
+    testContextualKeywordCompatibility() {
+        parseOk("our int iterate; our int first; our int any; our int all; our int count;"
+            "our int take; our int drop; our int takewhile; our int takeuntil;",
+            "streaming words remain valid our variables");
+
+        parseOk("int sub iterate() { return 1; } int sub first() { return 2; }"
+            "int sub any() { return 3; } int sub all() { return 4; }"
+            "int sub count() { return 5; } int sub take() { return 6; }"
+            "int sub drop() { return 7; } int sub takewhile() { return 8; }"
+            "int sub takeuntil() { return 9; }",
+            "streaming words remain valid function names");
+
+        parseOk("class StreamingKeywordClass { public { int iterate; int first; int any;"
+            "int all; int count; int take; int drop; int takewhile; int takeuntil; }"
+            "int iterate() { return 1; } int first() { return 2; }"
+            "int any() { return 3; } int all() { return 4; }"
+            "int count() { return 5; } int take() { return 6; }"
+            "int drop() { return 7; } int takewhile() { return 8; }"
+            "int takeuntil() { return 9; } }",
+            "streaming words remain valid class members and methods");
+
+        parseOk("hashdecl StreamingKeywordHash { int iterate; int first; int any; int all;"
+            "int count; int take; int drop; int takewhile; int takeuntil; }",
+            "streaming words remain valid hashdecl field names");
+
+        parseOk("namespace StreamingKeywordNamespace { our int iterate;"
+            "int sub first() { return 1; } class any { } }",
+            "streaming words remain valid namespace members");
+    }
+
+    testParseOptionOptOuts() {
+        parseFails("%no-iterate",
+            "list sub t(list<int> values) { return map $1, (iterate values); }",
+            "no-iterate disables iterate operator");
+        parseFails("%no-first",
+            "int sub t(list<int> values) { return first $1 > 0, values; }",
+            "no-first disables first operator");
+        parseFails("%no-any-operator",
+            "bool sub t(list<int> values) { return any $1 > 0, values; }",
+            "no-any-operator disables any operator");
+        parseFails("%no-all-operator",
+            "bool sub t(list<int> values) { return all $1 > 0, values; }",
+            "no-all-operator disables all operator");
+        parseFails("%no-count",
+            "int sub t(list<int> values) { return count $1 > 0, values; }",
+            "no-count disables count operator");
+        parseFails("%no-take",
+            "list<int> sub t(list<int> values) { return take 1, values; }",
+            "no-take disables take operator");
+        parseFails("%no-drop",
+            "list<int> sub t(list<int> values) { return drop 1, values; }",
+            "no-drop disables drop operator");
+        parseFails("%no-takewhile",
+            "list<int> sub t(list<int> values) { return takewhile $1 > 0, values; }",
+            "no-takewhile disables takewhile operator");
+        parseFails("%no-takeuntil",
+            "list<int> sub t(list<int> values) { return takeuntil $1 > 0, values; }",
+            "no-takeuntil disables takeuntil operator");
+        parseFails("%no-find-modifiers",
+            "string sub t() { hash q = (\"name\": (\"a\"), \"age\": (1));"
+            "return find first %name in q where (%age == 1); }",
+            "no-find-modifiers disables find first modifier");
+        parseFails("%no-streaming-operators",
+            "bool sub t(list<int> values) { return any $1 > 0, values; }",
+            "no-streaming-operators disables streaming operator keywords");
+        parseFails("%no-streaming-operators",
+            "string sub t() { hash q = (\"name\": (\"a\"), \"age\": (1));"
+            "return find first %name in q where (%age == 1); }",
+            "no-streaming-operators disables find modifiers");
+
+        Program p();
+        p.parse("%new-style\n%streaming-any\nbool sub t(list<int> values) { return any $1 > 0, values; }",
+            "streaming-any enables any operator outside modern mode");
     }
 }
