@@ -101,8 +101,11 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
         assertEq("AwsTextract", app.name);
         assertEq("aws-textract", app.scheme);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("AwsTextract");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("AwsTextract"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(2, actions.size());
 
         list<string> action_codes = sort(map $1.action, actions);

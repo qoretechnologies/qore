@@ -103,8 +103,11 @@ public class CohereDataProviderTest inherits QUnit::Test {
         assertEq("Cohere", app.name);
         assertEq("cohere", app.scheme);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("Cohere");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("Cohere"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(4, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(("chat", "classify", "embed", "rerank"), action_names);
@@ -113,7 +116,10 @@ public class CohereDataProviderTest inherits QUnit::Test {
     private rootProviderTest() {
         FakeCohereRestClientIo fake();
         CohereDataProvider::CohereDataProvider prov(fake);
-        list<string> children = sort(prov.getChildProviderNames());
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = sort(select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName);
         assertEq(("chat", "classify", "embed", "rerank"), children);
     }
 

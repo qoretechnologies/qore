@@ -80,8 +80,11 @@ public class PineconeDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getApp("Pinecone");
         assertEq("Pinecone", app.name);
         assertEq("pinecone", app.scheme);
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("Pinecone");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("Pinecone"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("list-indexes", actions[0].action);
     }

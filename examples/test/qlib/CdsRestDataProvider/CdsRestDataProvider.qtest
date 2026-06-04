@@ -732,7 +732,12 @@ class CdsRestDataProviderTest inherits QUnit::Test {
 
             BcCompaniesDataProvider companies_dp(mock_client);
 
-            list<string> names = companies_dp.getChildProviderNames();
+            # filter out the framework-injected __call__ child from `names` so it lines up with
+            # `summary` (getChildProviderSummaryInfo does not include framework-injected children);
+            # the framework's auto-injection has dedicated coverage in
+            # GenericApiCallAutoInjection.qtest in RestClientDataProvider
+            list<string> names = select companies_dp.getChildProviderNames(),
+                $1 != AbstractDataProvider::GenericApiCallChildName;
             *list<hash<DataProviderSummaryInfo>> summary = companies_dp.getChildProviderSummaryInfo();
 
             assertEq(names.size(), summary.size(), "names and summary should have same count");

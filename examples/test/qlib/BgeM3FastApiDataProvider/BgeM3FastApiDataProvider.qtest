@@ -132,8 +132,11 @@ public class BgeM3FastApiDataProviderTest inherits QUnit::Test {
         installHandler({});
         BgeM3FastApiDataProvider::BgeM3FastApiDataProvider prov(makeRest());
         assertEq("bge-m3-fastapi", prov.getName());
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
         assertEq(("create-embeddings", "health", "metrics"),
-            sort(prov.getChildProviderNames()));
+            sort(select prov.getChildProviderNames(),
+                $1 != AbstractDataProvider::GenericApiCallChildName));
     }
 
     testChildMapPathResolution() {

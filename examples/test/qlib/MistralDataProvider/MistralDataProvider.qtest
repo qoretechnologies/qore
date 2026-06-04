@@ -103,8 +103,11 @@ public class MistralDataProviderTest inherits QUnit::Test {
         assertEq("mistral", app.scheme);
         assertEq("mistral-ai-logo.svg", app.logo_file_name);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("MistralAi");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("MistralAi"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(3, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(("chat-completion", "create-embeddings", "ocr"), action_names);
@@ -113,7 +116,10 @@ public class MistralDataProviderTest inherits QUnit::Test {
     private rootProviderTest() {
         FakeMistralRestClientIo fake();
         MistralDataProvider::MistralDataProvider prov(fake);
-        list<string> children = sort(prov.getChildProviderNames());
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = sort(select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName);
         assertEq(("chat-completion", "create-embeddings", "ocr"), children);
     }
 

@@ -317,8 +317,11 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         assertTrue(events.getInfo().supports_children);
         assertTrue(events.getInfo().children_can_support_observers);
 
-        # Verify all 21 event children
-        list<string> eventChildren = events.getChildProviderNames();
+        # Verify all 21 event children — filter out the framework-injected __call__ child
+        # (covered by GenericApiCallAutoInjection.qtest in RestClientDataProvider); every
+        # provider with a discoverable rest client picks it up, including this sub-container
+        list<string> eventChildren = select events.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName;
         assertTrue(eventChildren.contains(CustomerIoDataProvider::EVENT_EMAIL_SENT));
         assertTrue(eventChildren.contains(CustomerIoDataProvider::EVENT_EMAIL_DELIVERED));
         assertTrue(eventChildren.contains(CustomerIoDataProvider::EVENT_EMAIL_OPENED));

@@ -113,8 +113,11 @@ public class GroqDataProviderTest inherits QUnit::Test {
         assertEq("groq-logo.svg", app.logo_file_name);
         assertTrue(app.logo.size() > 0);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("Groq");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("Groq"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("chat-completion", actions[0].action);
         assertEq("/chat-completion", actions[0].path);
@@ -129,7 +132,10 @@ public class GroqDataProviderTest inherits QUnit::Test {
         FakeGroqRestClientIo fake();
         GroqDataProvider::GroqDataProvider prov(fake);
         assertEq("groq", prov.getName());
-        list<string> children = prov.getChildProviderNames();
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName;
         assertEq(("chat-completion",), children);
         AbstractDataProvider chat = prov.getChildProvider("chat-completion");
         assertTrue(chat instanceof
