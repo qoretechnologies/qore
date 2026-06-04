@@ -19,6 +19,9 @@ class CountingIterator inherits AbstractIterator<int> {
 
     constructor(int max) {
         self.max = max;
+        self.pos = 0;
+        self.calls = 0;
+        self.valid_flag = False;
     }
 
     bool next() {
@@ -254,11 +257,34 @@ class StreamingOperatorsTest inherits QUnit::Test {
         assertEq(soft.size(), 1, "softlist<object> preserves iterator object as one value");
         assertTrue(soft[0] instanceof AbstractIterator, "softlist<object> element is still an iterator");
 
+        CountingIterator soft_auto_iter(2);
+        softlist<auto> soft_auto = soft_auto_iter;
+        assertEq(soft_auto.size(), 1, "softlist<auto> preserves iterator object as one value");
+        assertTrue(soft_auto[0] instanceof AbstractIterator, "softlist<auto> element is still an iterator");
+        assertEq(soft_auto_iter.getCalls(), 0, "softlist<auto> assignment does not drain iterator");
+
+        CountingIterator nullable_soft_auto_iter(2);
+        *softlist<auto> nullable_soft_auto = nullable_soft_auto_iter;
+        assertEq(nullable_soft_auto.size(), 1, "*softlist<auto> preserves iterator object as one value");
+        assertTrue(nullable_soft_auto[0] instanceof AbstractIterator, "*softlist<auto> element is still an iterator");
+        assertEq(nullable_soft_auto_iter.getCalls(), 0, "*softlist<auto> assignment does not drain iterator");
+
+        CountingIterator variadic_soft_auto_iter(2);
+        softlist<auto> variadic_soft_auto = echoVariadic(variadic_soft_auto_iter);
+        assertEq(variadic_soft_auto.size(), 1, "*softlist<auto> parameter preserves iterator object as one value");
+        assertTrue(variadic_soft_auto[0] instanceof AbstractIterator,
+            "*softlist<auto> parameter element is still an iterator");
+        assertEq(variadic_soft_auto_iter.getCalls(), 0, "*softlist<auto> parameter does not drain iterator");
+
         auto preserved = xrange(2);
         assertTrue(preserved instanceof AbstractIterator, "auto preserves iterator object");
 
         MixedIterator mixed();
         assertThrows("RUNTIME-TYPE-ERROR", sub () { list<int> bad = mixed; });
+    }
+
+    softlist<auto> echoVariadic(*softlist<auto> args) {
+        return args;
     }
 
     testFusedStreamingChains() {

@@ -870,10 +870,11 @@ QoreIRInvokeInstruction* QoreIRBuilder::createInvoke(const QoreValue& expr, cons
 }
 
 QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
-        const QoreProgramLocation* loc) {
+        const QoreProgramLocation* loc, QoreIRPhiValueKind value_kind) {
     auto inst = block->appendInstruction<QoreIRPhiInstruction>();
     inst->loc = loc;
     inst->result = func->createValue();
+    inst->value_kind = value_kind;
     inst->incoming = incoming;
     for (const auto& inc : incoming) {
         inst->operands.push_back(inc.value);

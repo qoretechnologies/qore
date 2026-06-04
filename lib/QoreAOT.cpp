@@ -756,6 +756,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // CallClosureDirect and invoke-form closure calls carry whether their
     // arguments can invalidate caller local caches through reference writes.
     flags |= QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS;
+    // Phi instructions preserve whether the merged value is a QoreValue or a
+    // native representation such as a loop counter.
+    flags |= QORE_AOT_FEAT_TYPED_PHI;
     return flags;
 }
 

@@ -1325,6 +1325,8 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND, "complex-buffer-init-kind"},
         {QORE_AOT_FEAT_READONLY_LOCALS, "readonly-locals"},
         {QORE_AOT_FEAT_CONST_METHODS, "const-methods"},
+        {QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS, "call-closure-ref-args"},
+        {QORE_AOT_FEAT_TYPED_PHI, "typed-phi"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));

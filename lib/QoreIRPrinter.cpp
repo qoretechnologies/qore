@@ -744,6 +744,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
             } else if (inst->opcode == QoreIROpcode::Phi) {
                 auto* phi = dynamic_cast<const QoreIRPhiInstruction*>(inst.get());
                 if (phi) {
+                    if (phi->value_kind == QoreIRPhiValueKind::NativeInt) {
+                        out << "<native-int>";
+                    }
                     out << " ";
                     for (size_t i = 0; i < phi->incoming.size(); ++i) {
                         if (i) {

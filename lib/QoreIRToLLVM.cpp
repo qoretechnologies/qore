@@ -4916,9 +4916,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 error = "PHI incoming block not found";
                 return false;
             }
-            // Box to i64 if needed (PHI type is i64 for NaN-boxed values)
+            // Match incoming values to the PHI representation. QoreValue PHIs
+            // need boxed i64 operands; native integer PHIs keep loop counters
+            // and indexes out of the QoreValue/reference domain.
             // IMPORTANT: Set builder insert point to BEFORE the terminator of the predecessor block
-            // so that boxing instructions are placed in the correct block, not in whatever
+            // so that conversion instructions are placed in the correct block, not in whatever
             // block the builder was left pointing at (which may already have a terminator)
             if (getenv("QORE_LLVM_DEBUG")) {
                 llvm::BasicBlock* bm_bb = block_map[inc.block];
@@ -4937,7 +4939,26 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             } else {
                 builder->SetInsertPoint(bb);
             }
-            val = boxValue(val, inc.value.id);
+            switch (phi_inst->value_kind) {
+                case QoreIRPhiValueKind::NativeInt:
+                    if (val->getType()->isPointerTy()) {
+                        val = builder->CreatePtrToInt(val, i64_type);
+                    } else if (val->getType() == i64_type) {
+                        val = ensureIntType(val, inc.value.id);
+                    } else if (val->getType()->isIntegerTy()) {
+                        val = builder->CreateSExtOrTrunc(val, i64_type);
+                    } else if (val->getType()->isFloatingPointTy()) {
+                        val = builder->CreateFPToSI(val, i64_type);
+                    } else {
+                        error = "PHI native-int incoming has unsupported LLVM type";
+                        return false;
+                    }
+                    break;
+                case QoreIRPhiValueKind::QoreValue:
+                default:
+                    val = boxValue(val, inc.value.id);
+                    break;
+            }
             phi_node->addIncoming(val, bb);
         }
     }
@@ -7126,11 +7147,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Phi nodes ===
         case QoreIROpcode::Phi: {
             const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
-            // Phi type: use i64 as the common type for NaN-boxed values.
-            llvm::PHINode* phi_node = builder->CreatePHI(i64_type, phi->incoming.size());
+            llvm::Type* phi_type = i64_type;
+            llvm::PHINode* phi_node = builder->CreatePHI(phi_type, phi->incoming.size());
             values[inst->result.id] = phi_node;
-            // PHI carries NaN-boxed i64 values (incoming values are boxed in fixup pass)
-            nanboxed_values.insert(inst->result.id);
+            if (phi->value_kind == QoreIRPhiValueKind::QoreValue) {
+                // PHI carries NaN-boxed i64 values (incoming values are boxed in fixup pass).
+                nanboxed_values.insert(inst->result.id);
+            }
             // Store for fixup pass after all blocks are lowered (incoming values
             // may not be lowered yet due to forward edges).
             pending_phis.push_back({phi_node, phi});

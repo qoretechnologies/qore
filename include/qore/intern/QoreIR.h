@@ -941,11 +941,17 @@ struct QoreIRPhiIncoming {
     QoreIRBasicBlock* block = nullptr;
 };
 
+enum class QoreIRPhiValueKind : uint8_t {
+    QoreValue = 0,
+    NativeInt = 1,
+};
+
 class QoreIRPhiInstruction : public QoreIRInstruction {
 public:
     QoreIRPhiInstruction() : QoreIRInstruction(QoreIROpcode::Phi) {
     }
 
+    QoreIRPhiValueKind value_kind = QoreIRPhiValueKind::QoreValue;
     std::vector<QoreIRPhiIncoming> incoming;
 };
 

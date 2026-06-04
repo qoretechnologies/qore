@@ -96,7 +96,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v5: fixed-offset IR date constants serialize their UTC offset instead of an empty zone name
 //! v6: added char value serialization tag
 //! v7: serialized Find instructions include the explicit find mode
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 7;
+//! v8: serialized Phi instructions include the PHI value representation kind
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 8;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -163,8 +164,9 @@ constexpr uint64_t QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND = 1ULL << 53; //!< com
 constexpr uint64_t QORE_AOT_FEAT_READONLY_LOCALS = 1ULL << 54; //!< signatures and local slot metadata preserve read-only local bindings
 constexpr uint64_t QORE_AOT_FEAT_CONST_METHODS = 1ULL << 55; //!< METHODS variant flags preserve const-method receiver contracts
 constexpr uint64_t QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS = 1ULL << 56; //!< Closure-call records preserve caller-cache invalidation metadata
+constexpr uint64_t QORE_AOT_FEAT_TYPED_PHI = 1ULL << 57; //!< Serialized Phi records preserve native/QoreValue representation metadata
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x01FFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x03FFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

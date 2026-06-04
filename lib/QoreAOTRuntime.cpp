@@ -5442,6 +5442,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         case QoreIRInstGroup::Phi: {
             auto* pi = new QoreIRPhiInstruction();
             pi->opcode = opcode;
+            pi->value_kind = static_cast<QoreIRPhiValueKind>(QoreAOTBinaryReader::readU8(ptr));
             uint16_t num_incoming = QoreAOTBinaryReader::readU16(ptr);
             pi->incoming.reserve(num_incoming);
             for (int j = 0; j < num_incoming; ++j) {

@@ -220,7 +220,8 @@ public:
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
     QoreIRPhiInstruction* createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr,
+        QoreIRPhiValueKind value_kind = QoreIRPhiValueKind::QoreValue);
 
     QoreIRBranchInstruction* createBranch(QoreIRBasicBlock* target, const QoreProgramLocation* loc = nullptr);
     QoreIRBranchIfInstruction* createBranchIf(QoreIRValue cond, QoreIRBasicBlock* true_target,

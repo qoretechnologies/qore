@@ -1708,6 +1708,7 @@ static std::unique_ptr<QoreIRInstruction> readSwitchString(
 
 static bool writePhi(AOTInstWriteCtx& ctx) {
     auto* pi = static_cast<const QoreIRPhiInstruction*>(ctx.inst);
+    ctx.writer.writeU8(static_cast<uint8_t>(pi->value_kind));
     ctx.writer.writeU16(static_cast<uint16_t>(pi->incoming.size()));
     for (auto& inc : pi->incoming) {
         ctx.writer.writeU32(inc.value.id);
@@ -1723,6 +1724,7 @@ static std::unique_ptr<QoreIRInstruction> readPhi(
         AOTInstReadCtx& ctx) {
     auto* pi = new QoreIRPhiInstruction();
     pi->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    pi->value_kind = static_cast<QoreIRPhiValueKind>(QoreAOTBinaryReader::readU8(ctx.ptr));
     uint16_t num_incoming = QoreAOTBinaryReader::readU16(ctx.ptr);
     pi->incoming.reserve(num_incoming);
     for (int j = 0; j < num_incoming; ++j) {

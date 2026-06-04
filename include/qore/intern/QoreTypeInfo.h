@@ -3609,7 +3609,26 @@ protected:
 class QoreSoftAutoListTypeInfo : public QoreComplexSoftListTypeInfo {
 public:
     DLLLOCAL QoreSoftAutoListTypeInfo() : QoreComplexSoftListTypeInfo(q_accept_vec_t {
-            {QoreComplexListTypeSpec(autoTypeInfo), nullptr, true},
+            {QoreComplexSoftListTypeSpec(autoTypeInfo), [] (QoreValue& n, ExceptionSink* xsink) {
+                    switch (n.getType()) {
+                        case NT_LIST:
+                            break;
+                        case NT_NOTHING:
+                        case NT_NULL: {
+                            QoreListNode* l = new QoreListNode(autoTypeInfo);
+                            n.assign(l);
+                            break;
+                        }
+                        default: {
+                            QoreListNode* l = new QoreListNode(autoTypeInfo);
+                            l->push(n, nullptr);
+                            n.assign(l);
+                            break;
+                        }
+                    }
+                },
+                true
+            },
             {NT_NOTHING, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode(autoTypeInfo);
                     n.assign(l);
@@ -3627,7 +3646,7 @@ public:
                     n.assign(l);
                 }
             },
-        }, q_return_vec_t {{QoreComplexListTypeSpec(autoTypeInfo), true}}, QoreString("softlist<auto>")) {
+        }, q_return_vec_t {{QoreComplexSoftListTypeSpec(autoTypeInfo), true}}, QoreString("softlist<auto>")) {
         pname = tname;
    }
 };
@@ -3635,7 +3654,24 @@ public:
 class QoreSoftAutoListOrNothingTypeInfo : public QoreComplexSoftListTypeInfo {
 public:
     DLLLOCAL QoreSoftAutoListOrNothingTypeInfo() : QoreComplexSoftListTypeInfo(q_accept_vec_t {
-            {QoreComplexListTypeSpec(autoTypeInfo), nullptr},
+            {QoreComplexSoftListTypeSpec(autoTypeInfo), [] (QoreValue& n, ExceptionSink* xsink) {
+                    switch (n.getType()) {
+                        case NT_NOTHING:
+                            break;
+                        case NT_NULL:
+                            n.assignNothing();
+                            break;
+                        case NT_LIST:
+                            break;
+                        default: {
+                            QoreListNode* l = new QoreListNode(autoTypeInfo);
+                            l->push(n, nullptr);
+                            n.assign(l);
+                            break;
+                        }
+                    }
+                }
+            },
             {NT_NOTHING, nullptr},
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3644,7 +3680,7 @@ public:
                     n.assign(l);
                 }
             },
-        }, q_return_vec_t {{QoreComplexListTypeSpec(autoTypeInfo)}, {NT_NOTHING}}, QoreString("*softlist<auto>")) {
+        }, q_return_vec_t {{QoreComplexSoftListTypeSpec(autoTypeInfo)}, {NT_NOTHING}}, QoreString("*softlist<auto>")) {
         pname = tname;
     }
 };

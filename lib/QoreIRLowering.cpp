@@ -1361,7 +1361,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
             // Header: PHI for index, compare with size
             builder.setBlock(header_block);
-            auto* index_phi = builder.createPhi({}, stmt->loc);
+            auto* index_phi = builder.createPhi({}, stmt->loc, QoreIRPhiValueKind::NativeInt);
             QoreIRValue index_val = index_phi->result;
             QoreIRValue cmp_val = builder.createBinaryOp(QoreIROpcode::LtInt,
                 index_val, size, stmt->loc)->result;
@@ -1585,7 +1585,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.setBlock(header_block);
 
         // Create PHI for iteration index ($#) - will be completed after body
-        auto* index_phi = builder.createPhi({}, stmt->loc);
+        auto* index_phi = builder.createPhi({}, stmt->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, stmt->loc);
@@ -1892,7 +1892,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         // Header: PHI for index, compare with max_pos.
         builder.setBlock(header_block);
-        auto* index_phi = builder.createPhi({}, stmt->loc);
+        auto* index_phi = builder.createPhi({}, stmt->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
         QoreIRValue cmp = builder.createBinaryOp(QoreIROpcode::LtInt,
             index_val, max_pos, stmt->loc)->result;
@@ -11922,7 +11922,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, map->loc);
+        auto* index_phi = builder.createPhi({}, map->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -12114,7 +12114,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     builder.setBlock(header_block);
 
     // Create phi for index - will be completed after body block
-    auto* index_phi = builder.createPhi({}, map->loc);
+    auto* index_phi = builder.createPhi({}, map->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator (branches to exit if done, body if has element)
@@ -12314,7 +12314,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, select->loc);
+        auto* index_phi = builder.createPhi({}, select->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -12495,7 +12495,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     // Header block: create phi for index and check for next value
     builder.setBlock(header_block);
 
-    auto* index_phi = builder.createPhi({}, select->loc);
+    auto* index_phi = builder.createPhi({}, select->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
@@ -12688,7 +12688,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         builder.setBlock(header_block);
 
         // PHI for index
-        auto* index_phi = builder.createPhi({}, foldl->loc);
+        auto* index_phi = builder.createPhi({}, foldl->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         // PHI for accumulator
@@ -13064,7 +13064,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, ms->loc);
+        auto* index_phi = builder.createPhi({}, ms->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -13268,7 +13268,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     // Header block: create phi for index and check for next value
     builder.setBlock(header_block);
 
-    auto* index_phi = builder.createPhi({}, ms->loc);
+    auto* index_phi = builder.createPhi({}, ms->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
@@ -13456,7 +13456,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, hm->loc);
+        auto* index_phi = builder.createPhi({}, hm->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -13596,7 +13596,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // Header block
     builder.setBlock(header_block);
 
-    auto* index_phi = builder.createPhi({}, hm->loc);
+    auto* index_phi = builder.createPhi({}, hm->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
@@ -13763,7 +13763,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, hms->loc);
+        auto* index_phi = builder.createPhi({}, hms->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -13926,7 +13926,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // Header block
     builder.setBlock(header_block);
 
-    auto* index_phi = builder.createPhi({}, hms->loc);
+    auto* index_phi = builder.createPhi({}, hms->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
@@ -14259,6 +14259,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;
     builder.createBranchIf(is_null, null_block, preheader_block, loc);
 
+    QoreIRValue fold_initial_accum;
+    QoreIRValue fold_initial_has_accum;
+
     builder.setBlock(preheader_block);
     QoreIRValue result_list;
     if (build_result_list) {
@@ -14271,6 +14274,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             }
         }
         result_list = builder.createEmptyList(loc, elem_type)->result;
+    }
+    if (root_foldl) {
+        fold_initial_accum = builder.createConstNothing(loc)->result;
+        fold_initial_has_accum = builder.createConstBool(false, loc)->result;
     }
     {
         auto* br = builder.createBranch(header_block, loc);
@@ -14316,7 +14323,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             error = "fused streaming PHI lowering cancelled";
             return QoreIRValue();
         }
-        auto* phi = builder.createPhi({}, stages[i].loc);
+        auto* phi = builder.createPhi({}, stages[i].loc, QoreIRPhiValueKind::NativeInt);
         stage_phis.push_back(phi);
         stage_indices.push_back(phi->result);
     }
@@ -14328,24 +14335,20 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRValue root_index;
     QoreIRValue count_value;
     if (root_terminal) {
-        root_index_phi = builder.createPhi({}, loc);
+        root_index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
         root_index = root_index_phi->result;
         if (op->getKind() == QoreStreamingOperatorNode::Count) {
-            count_phi = builder.createPhi({}, loc);
+            count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
             count_value = count_phi->result;
         }
     }
     QoreIRValue fold_accum;
     QoreIRValue fold_has_accum;
-    QoreIRValue fold_initial_accum;
-    QoreIRValue fold_initial_has_accum;
     if (root_foldl) {
         fold_accum_phi = builder.createPhi({}, loc);
         fold_accum = fold_accum_phi->result;
         fold_has_accum_phi = builder.createPhi({}, loc);
         fold_has_accum = fold_has_accum_phi->result;
-        fold_initial_accum = builder.createConstNothing(loc)->result;
-        fold_initial_has_accum = builder.createConstBool(false, loc)->result;
     }
 
     for (size_t i = 0; i < stages.size(); ++i) {
@@ -14534,6 +14537,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
         builder.setBlock(init_accum_block);
         QoreIRValue true_val = builder.createConstBool(true, loc)->result;
+        QoreIRValue init_accum_val = builder.createRefSelf(element_val, loc)->result;
+        QoreIRBasicBlock* init_accum_exit_block = builder.getBlock();
         builder.createBranch(fold_cont_block, loc);
 
         builder.setBlock(fold_block);
@@ -14541,11 +14546,14 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         if (!fold_result.isValid()) {
             return QoreIRValue();
         }
+        QoreIRBasicBlock* fold_exit_block = builder.getBlock();
         builder.createBranch(fold_cont_block, loc);
 
         builder.setBlock(fold_cont_block);
-        auto* next_accum_phi = builder.createPhi({{element_val, init_accum_block}, {fold_result, fold_block}}, loc);
-        auto* next_has_phi = builder.createPhi({{true_val, init_accum_block}, {true_val, fold_block}}, loc);
+        auto* next_accum_phi = builder.createPhi(
+            {{init_accum_val, init_accum_exit_block}, {fold_result, fold_exit_block}}, loc);
+        auto* next_has_phi = builder.createPhi({{true_val, init_accum_exit_block}, {true_val, fold_exit_block}},
+            loc);
         FusedLoopState next_state = state;
         next_state.fold_accum = next_accum_phi->result;
         next_state.fold_has_accum = next_has_phi->result;
@@ -14571,7 +14579,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.createBranch(cont_block, loc);
 
         builder.setBlock(cont_block);
-        auto* next_count_phi = builder.createPhi({{inc_count, inc_block}, {state.count, predicate_block}}, loc);
+        auto* next_count_phi = builder.createPhi({{inc_count, inc_block}, {state.count, predicate_block}}, loc,
+            QoreIRPhiValueKind::NativeInt);
         FusedLoopState next_state = state;
         next_state.count = next_count_phi->result;
         next_state.root_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.root_index, one, loc)->result;
@@ -15030,11 +15039,11 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             error = "fused foreach PHI lowering cancelled";
             return false;
         }
-        auto* phi = builder.createPhi({}, stages[i].loc);
+        auto* phi = builder.createPhi({}, stages[i].loc, QoreIRPhiValueKind::NativeInt);
         stage_phis.push_back(phi);
         stage_indices.push_back(phi->result);
     }
-    auto* foreach_index_phi = builder.createPhi({}, loc);
+    auto* foreach_index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue foreach_index = foreach_index_phi->result;
 
     for (size_t i = 0; i < stages.size(); ++i) {
@@ -15247,6 +15256,10 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         builder.createBranch(latch_block, loc);
     }
 
+    // Stage and body lowering can create pass/skip/continuation blocks after the
+    // placeholder latch block.  Emit the latch after those blocks so LLVM lowering
+    // sees the PushImplicitElement result before the latch PopImplicitElement.
+    builder.getFunction()->moveBlockToEnd(latch_block);
     builder.setBlock(latch_block);
     builder.createPopImplicitElement(old_element, loc);
     QoreIRValue next_foreach_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.foreach_index, one,
@@ -15390,7 +15403,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             }
 
             builder.setBlock(header_block);
-            auto* index_phi = builder.createPhi({}, loc);
+            auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
             QoreIRValue index_val = index_phi->result;
             auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
             QoreIRValue element_val = next_inst->result;
@@ -15473,8 +15486,8 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             }
 
             builder.setBlock(header_block);
-            auto* index_phi = builder.createPhi({}, loc);
-            auto* count_phi = builder.createPhi({}, loc);
+            auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+            auto* count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
             QoreIRValue index_val = index_phi->result;
             QoreIRValue count_val = count_phi->result;
             auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
@@ -15485,6 +15498,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             if (!pred_bool.isValid()) {
                 return QoreIRValue();
             }
+            QoreIRBasicBlock* predicate_block = builder.getBlock();
             builder.createBranchIf(pred_bool, inc_block, cont_block, loc);
 
             builder.setBlock(inc_block);
@@ -15492,7 +15506,8 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             builder.createBranch(cont_block, loc);
 
             builder.setBlock(cont_block);
-            auto* next_count_phi = builder.createPhi({{inc_count, inc_block}, {count_val, body_block}}, loc);
+            auto* next_count_phi = builder.createPhi({{inc_count, inc_block}, {count_val, predicate_block}}, loc,
+                QoreIRPhiValueKind::NativeInt);
             QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, loc)->result;
             QoreIRBasicBlock* cont_exit_block = builder.getBlock();
             {
@@ -15511,7 +15526,8 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
             count_phi->operands.push_back(next_count_phi->result);
 
             builder.setBlock(exit_block);
-            auto* result_phi = builder.createPhi({{zero, iter_check_block}, {count_val, header_block}}, loc);
+            auto* result_phi = builder.createPhi({{zero, iter_check_block}, {count_val, header_block}}, loc,
+                QoreIRPhiValueKind::NativeInt);
             return result_phi->result;
         }
 
@@ -15575,7 +15591,7 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     }
 
     builder.setBlock(header_block);
-    auto* index_phi = builder.createPhi({}, loc);
+    auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
     QoreIRBasicBlock* take_done_block = nullptr;
     if (op->getKind() == QoreStreamingOperatorNode::Take) {
