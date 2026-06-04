@@ -2218,22 +2218,30 @@ auto v = c.name;
         }
 
         private bool checkExistenceImpl() {
-            *hash<auto> qh = ds.selectRow("select * from pg_catalog.pg_statio_all_tables where schemaname = %v and "
-                "relname = %v", schema, name);
+            # note: cannot use pg_catalog.pg_statio_all_tables here, as it lists only relations with
+            # physical storage and therefore excludes partitioned parent tables (relkind 'p'); query
+            # pg_class directly so that partitioned tables are recognized as well
+            *hash<auto> qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
+                "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
+                "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, name);
             if (qh)
                 return inDb = True;
             return False;
         }
 
         private Columns describeImpl() {
-            # get column descriptions
+            # get column descriptions; the relation join uses pg_class/pg_namespace (not
+            # pg_statio_all_tables, which omits partitioned parent tables - relkind 'p' - because
+            # they have no physical storage) so that partitioned tables can be described too
             *hash<auto> qh = ds.select("select column_name, data_type, character_maximum_length, "
                 "character_octet_length, numeric_precision, numeric_scale, datetime_precision, is_nullable, "
                 "column_default, description from information_schema.columns c "
-                "join pg_catalog.pg_statio_all_tables st on (c.table_schema = st.schemaname and c.table_name = "
-                "st.relname) left join pg_catalog.pg_description pgd on (st.relid = pgd.objoid and pgd.objsubid = "
-                "c.ordinal_position) where table_schema = %v and table_name = %v order by ordinal_position", schema,
-                name);
+                "join (select rc.oid as relid, rn.nspname as schemaname, rc.relname as relname "
+                "from pg_catalog.pg_class rc join pg_catalog.pg_namespace rn on (rn.oid = rc.relnamespace) "
+                "where rc.relkind in ('r', 'p', 'm', 'f')) st on (c.table_schema = st.schemaname and "
+                "c.table_name = st.relname) left join pg_catalog.pg_description pgd on (st.relid = pgd.objoid "
+                "and pgd.objsubid = c.ordinal_position) where table_schema = %v and table_name = %v "
+                "order by ordinal_position", schema, name);
             if (!qh.column_name)
                 throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", name, dsdesc);
 
