@@ -530,6 +530,19 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                         return false;
                     }
                 }
+            } else if (inst->opcode == QoreIROpcode::CreateParseRef) {
+                auto* pr = dynamic_cast<const QoreIRCreateParseRefInstruction*>(inst.get());
+                if (!pr) {
+                    error = "CreateParseRef instruction malformed";
+                    return false;
+                }
+                const ParseReferenceNode* prn = pr->node
+                    ? pr->node
+                    : dynamic_cast<const ParseReferenceNode*>(pr->expr.getInternalNode());
+                if (prn && rejectReadOnlyVarRefWrite(extractLValueBaseVarRef(prn->getLVExp()), "CreateParseRef",
+                        error)) {
+                    return false;
+                }
             } else if (inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallIndirect
                     || inst->opcode == QoreIROpcode::CallMethod

@@ -14,7 +14,12 @@
 #include <qore/QoreObject.h>
 #include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreIRBuilder.h>
+#include <qore/intern/QoreIRVerifier.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
+#include <qore/intern/LocalVar.h>
+#include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/VarRefNode.h>
 
 static bool checkOpcodeRegistry() {
     std::string registry_error;
@@ -120,12 +125,42 @@ static bool checkTypeProfileClassPayload() {
     return true;
 }
 
+static bool checkReadonlyCreateParseRefVerifier() {
+    LocalVar readonly_ref_local("readonly_ref_local", bigIntTypeInfo);
+    readonly_ref_local.setReadOnly();
+
+    QoreIRFunction func("ir_create_parse_ref_readonly_verify_fail");
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    builder.setBlock(entry);
+
+    QoreValue ref_exp(new ParseReferenceNode(nullptr,
+        QoreValue(new VarRefNode(nullptr, strdup("readonly_ref_local"), &readonly_ref_local, false))));
+    ValueHolder ref_holder(ref_exp, nullptr);
+    builder.createCreateParseRef(ref_holder->get<ParseReferenceNode>(), *ref_holder, nullptr);
+    builder.createReturnNothing();
+
+    std::string error;
+    if (QoreIRVerifier::verify(func, error)
+            || error.find("readonly local 'readonly_ref_local' used as write target by CreateParseRef")
+                == std::string::npos) {
+        std::cerr << "Readonly CreateParseRef verifier check failed";
+        if (!error.empty()) {
+            std::cerr << ": " << error;
+        }
+        std::cerr << "\n";
+        return false;
+    }
+    return true;
+}
+
 int main() {
     qore_init(QL_GPL);
     bool ok = checkOpcodeRegistry()
         && checkQoreValueTagReservations()
         && checkTypeProfileBuiltins()
-        && checkTypeProfileClassPayload();
+        && checkTypeProfileClassPayload()
+        && checkReadonlyCreateParseRefVerifier();
     qore_cleanup();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

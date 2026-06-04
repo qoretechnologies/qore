@@ -30,9 +30,17 @@ class ReadOnlyConstBindingsTest inherits QUnit::Test {
         addTestCase("Typed constants", \testTypedConstants());
         addTestCase("Read-only local variables", \testReadOnlyLocals());
         addTestCase("Read-only parameters", \testReadOnlyParameters());
+        addTestCase("Read-only reference bypasses", \testReadOnlyReferences());
+        addTestCase("Mutable alias boundaries", \testMutableAliasBoundaries());
         addTestCase("Unsupported read-only contexts", \testUnsupportedReadOnlyContexts());
         addTestCase("Parse option interactions", \testParseOptions());
         set_return_value(main());
+    }
+
+    assertReadonlyParseError(string code, string label, string detail = "cannot modify read-only local variable") {
+        Program p();
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", detail, \p.parse(),
+            ("%modern\n" + code, label));
     }
 
     testTypedConstants() {
@@ -55,10 +63,42 @@ class ReadOnlyConstBindingsTest inherits QUnit::Test {
             \p.parse(), ("%modern\nsub f() { const int x = 1; x += 2; }\n", "readonly-add-assign"));
         assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
             \p.parse(), ("%modern\nsub f() { const int x = 1; ++x; }\n", "readonly-increment"));
+        assertReadonlyParseError("sub f() { const int x = 1; x++; }\n", "readonly-post-increment",
+            "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const int x = 1; --x; }\n", "readonly-decrement",
+            "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const int x = 1; x--; }\n", "readonly-post-decrement",
+            "cannot modify read-only local variable 'x'");
         assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
             \p.parse(), ("%modern\nsub f() { const int x = 1; remove x; }\n", "readonly-remove"));
+        assertReadonlyParseError("sub f() { const int x = 1; delete x; }\n", "readonly-delete",
+            "cannot modify read-only local variable 'x'");
         assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot modify read-only local variable 'x'",
             \p.parse(), ("%modern\nsub f() { const list<int> x = (1,); x[0] = 2; }\n", "readonly-index"));
+        assertReadonlyParseError("sub f() { const hash<auto> x = {\"a\": 1}; x.a = 2; }\n",
+            "readonly-member", "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const hash<auto> x = {\"a\": 1}; x{\"a\"} = 2; }\n",
+            "readonly-hash-index", "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const list<int> x = (1, 2); push x, 3; }\n", "readonly-push",
+            "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const list<int> x = (1, 2); pop x; }\n", "readonly-pop",
+            "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const list<int> x = (1, 2); shift x; }\n", "readonly-shift",
+            "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const list<int> x = (1, 2); unshift x, 0; }\n",
+            "readonly-unshift", "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const list<int> x = (1, 2); splice x, 0, 1; }\n",
+            "readonly-splice", "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const list<int> x = (1, 2); int y = extract x, 0; }\n",
+            "readonly-extract", "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const string x = \" a \"; trim x; }\n", "readonly-trim",
+            "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const string x = \"a\\n\"; chomp x; }\n", "readonly-chomp",
+            "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const string x = \"abc\"; x =~ s/a/b/; }\n", "readonly-regex-subst",
+            "cannot modify read-only local variable 'x'");
+        assertReadonlyParseError("sub f() { const string x = \"ABC\"; x =~ tr/A-Z/a-z/; }\n",
+            "readonly-regex-translit", "cannot modify read-only local variable 'x'");
         assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "cannot create a mutable reference",
             \p.parse(), ("%modern\nsub f() { const int x = 1; reference<int> r = \\x; }\n", "readonly-ref"));
         assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "requires an initializer",
@@ -81,6 +121,42 @@ class ReadOnlyConstBindingsTest inherits QUnit::Test {
                 "readonly-param-index"));
         assertThrows("DUPLICATE-SIGNATURE", "f\\(int x\\) has already been declared",
             \p.parse(), ("%modern\nsub f(const int x) {}\nsub f(int x) {}\n", "readonly-param-overload"));
+    }
+
+    testReadOnlyReferences() {
+        assertReadonlyParseError("sub f() { const int x = 1; *reference<int> r = \\x; }\n",
+            "readonly-soft-reference", "cannot create a mutable reference");
+        assertReadonlyParseError("sub set(reference<int> r) { r = 2; }\n"
+            "sub f() { const int x = 1; set(\\x); }\n", "readonly-reference-arg",
+            "cannot create a mutable reference");
+        assertReadonlyParseError("sub set(*reference<int> r) { if (exists r) r = 2; }\n"
+            "sub f() { const int x = 1; set(\\x); }\n", "readonly-soft-reference-arg",
+            "cannot create a mutable reference");
+        assertReadonlyParseError("sub f() { int y = 0; const reference<int> r = \\y; r = 1; }\n",
+            "readonly-reference-binding-update", "cannot modify read-only local variable 'r'");
+        assertReadonlyParseError("sub f() { int y = 0; const *reference<int> r = \\y; r = 1; }\n",
+            "readonly-soft-reference-binding-update", "cannot modify read-only local variable 'r'");
+    }
+
+    testMutableAliasBoundaries() {
+        list<int> values = (1,);
+        const list<int> readonly_values = values;
+        values[0] = 2;
+        assertEq(2, values[0], "mutable list alias can still be updated");
+        assertEq(1, readonly_values[0], "readonly list binding keeps its value after copy-on-write");
+
+        hash<auto> info = {"count": 1};
+        const hash<auto> readonly_info = info;
+        info.count = 2;
+        assertEq(2, info.count, "mutable hash alias can still be updated");
+        assertEq(1, readonly_info.count, "readonly hash binding keeps its value after copy-on-write");
+
+        int sum = 0;
+        foreach int i in ((1, 2, 3)) {
+            const int loop_value = i;
+            sum += loop_value;
+        }
+        assertEq(6, sum, "readonly loop-body local initializes on each iteration");
     }
 
     testUnsupportedReadOnlyContexts() {
