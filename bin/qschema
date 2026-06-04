@@ -54,6 +54,7 @@ const Opts = {
     "verbose":       "v,verbose:i+",
     "output":        "o,output=s",
     "format":        "format=s",
+    "with_partitions": "with-partitions",
     "help":          "h,help",
     "version":       "V,version",
 };
@@ -187,6 +188,7 @@ class QSchemaMain {
         printf("  %s        Output file (for export)\n", color.key("-o, --output <file>"));
         printf("  %s     Output format for export %s\n", color.key("    --format yaml|json"),
             color.dim("(default: yaml)"));
+        printf("  %s     Include physical partitions in export\n", color.key("    --with-partitions"));
         printf("  %s                 Show this help\n", color.key("-h, --help"));
         printf("  %s              Show version\n", color.key("-V, --version"));
 
@@ -574,7 +576,11 @@ class QSchemaMain {
         }
 
         string class_name = "ExportedSchema";
-        SchemaReverse::SchemaReverse rev(ds, class_name);
+        hash<auto!> rev_opts;
+        if (opts.with_partitions) {
+            rev_opts.with_partitions = True;
+        }
+        SchemaReverse::SchemaReverse rev(ds, class_name, rev_opts);
 
         string output;
         if (format == "yaml") {

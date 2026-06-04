@@ -124,6 +124,9 @@ module SqlUtil {
       the referenced primary key order
     - added @ref SqlUtil::AbstractTable::bulkInsert() "AbstractTable::bulkInsert()" as a generic bulk insert
       hook for driver-specific high-throughput implementations
+    - added generic partition metadata hashdecls and @ref SqlUtil::AbstractTable "AbstractTable" partition
+      lifecycle APIs for range-partitioned tables; driver support is advertised by
+      @ref SqlUtil::AbstractTable::supportsPartitions() "supportsPartitions()"
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -1725,6 +1728,10 @@ db_table.getAlignSql(template_table, callback_opts);
       are @ref fk_desc_hash "foreign constraint hashes"
     - \c unique_constraints: (optional) a hash of unique constraint information keyed by constraint name; the values
       are @ref uk_desc_hash "unique constraint hashes"
+    - \c partition_strategy: (optional) a @ref SqlUtil::PartitionStrategy "partition strategy hash"; Phase 1
+      supports range partitioning
+    - \c partitions: (optional) a hash of @ref SqlUtil::PartitionSpec "partition specification hashes" keyed by
+      partition name; this key is used for table creation and description only, not for alignment deltas
     - \c driver: this key can optionally contain a hash keyed by driver name which contains a hash of values that will
       be added to the table description hash before processing; this way a table description hash can contain all the
       information required for the table including driver-specific options; any driver-specific options will overwrite
@@ -2219,6 +2226,114 @@ public namespace SqlUtil {
         hash<string, hash> driver;
         #! @ref True "True" for DBs that support an auto-increment column
         *bool auto_increment;
+    }
+
+    #! Partition lookup status codes
+    /** @since SqlUtil 2.4
+    */
+    public enum PartitionLookupStatus : string {
+        #! The partition was found
+        Found = "found",
+        #! No matching partition was found
+        NotFound = "not_found",
+        #! The partition bounds could not be compared generically
+        Uncomparable = "uncomparable",
+    }
+
+    #! Indicates how an ensurePartition() result was verified
+    /** @since SqlUtil 2.4
+    */
+    public enum PartitionVerifiedBy : string {
+        #! The partition was verified by comparing partition bounds
+        Bounds = "bounds",
+        #! The partition was verified by canonical partition name
+        Name = "name",
+        #! The partition was covered by automatic partitioning
+        Auto = "auto",
+    }
+
+    #! Partitioning strategy hash
+    /** @since SqlUtil 2.4
+    */
+    public hashdecl PartitionStrategy {
+        #! Partitioning method; Phase 1 supports \c "range"
+        string method = "range";
+        #! Partition key columns in declaration order
+        softlist<string> columns;
+        #! Optional automatic partitioning strategy
+        *hash<auto> auto;
+        #! Optional driver-specific configuration
+        *hash<auto> driver;
+    }
+
+    #! Partition definition or lookup specification hash
+    /** @since SqlUtil 2.4
+    */
+    public hashdecl PartitionSpec {
+        #! Canonical partition name
+        *string name;
+        #! Partitioning method; Phase 1 supports \c "range"
+        string method = "range";
+        #! Optional partition key columns; defaults to the table strategy columns
+        *softlist<string> columns;
+        #! Inclusive lower bound as a typed Qore value
+        *auto bound_from;
+        #! Exclusive upper bound as a typed Qore value
+        *auto bound_to;
+        #! Inclusive lower bound as a driver-native SQL expression
+        *string bound_from_sql;
+        #! Exclusive upper bound as a driver-native SQL expression
+        *string bound_to_sql;
+        #! Complete driver-native bound SQL expression
+        *string bound_sql;
+        #! True if this is the default partition
+        bool is_default = False;
+        #! Schema name when available
+        *string schema;
+        #! Unqualified relation name when available
+        *string relation_name;
+        #! SQL-ready relation name when available
+        *string sql_name;
+        #! Optional driver-specific configuration
+        *hash<auto> driver;
+    }
+
+    #! Partition introspection hash
+    /** @since SqlUtil 2.4
+    */
+    public hashdecl PartitionInfo inherits PartitionSpec {
+        #! Ordinal in the listPartitions() result
+        int ordinal;
+    }
+
+    #! Partition lookup result hash
+    /** @since SqlUtil 2.4
+    */
+    public hashdecl PartitionLookupResult {
+        #! Lookup status
+        PartitionLookupStatus status;
+        #! Matching partition when \c status is @ref PartitionLookupStatus::Found
+        *PartitionInfo partition;
+        #! Optional explanation for failed or uncomparable lookup results
+        *string reason;
+    }
+
+    #! Partition ensure result hash
+    /** @since SqlUtil 2.4
+    */
+    public hashdecl PartitionEnsureResult {
+        #! True if a physical partition was created
+        bool created = False;
+        #! True if a physical partition exists after the call
+        bool materialized = False;
+        #! True if the request is covered by automatic partitioning and no physical partition was created
+        bool deferred_auto = False;
+        #! How the result was verified
+        PartitionVerifiedBy verified_by = PartitionVerifiedBy::Bounds;
+        #! Backwards-friendly alias for \c verified_by == @ref PartitionVerifiedBy::Bounds
+        bool bounds_verified = False;
+        #! Matching or newly-created partition when available
+        *PartitionInfo partition;
     }
 
     #! SQL operator info hash as returned by all @ref sql_op_funcs "operator functions"

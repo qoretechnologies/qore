@@ -846,11 +846,13 @@ printf(\"%d\\n\", no_arg_func());
         string code = "%modern
 int i = 5;
 int r = i++;
-printf(\"%d:%d\\n\", r, i);
+int j;
+int s = j++;
+printf(\"%d:%d:%d:%d\\n\", r, i, s, j);
 ";
-        foreach string mode in ("ast", "ir", "jit") {
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
             string result = trim(runScript(code, mode));
-            assertEq("5:6", result, sprintf("int post-increment %s", mode));
+            assertEq("5:6:0:1", result, sprintf("int post-increment %s", mode));
         }
     }
 
@@ -860,11 +862,13 @@ printf(\"%d:%d\\n\", r, i);
         string code = "%modern
 int i = 5;
 int r = i--;
-printf(\"%d:%d\\n\", r, i);
+int j;
+int s = j--;
+printf(\"%d:%d:%d:%d\\n\", r, i, s, j);
 ";
-        foreach string mode in ("ast", "ir", "jit") {
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
             string result = trim(runScript(code, mode));
-            assertEq("5:4", result, sprintf("int post-decrement %s", mode));
+            assertEq("5:4:0:-1", result, sprintf("int post-decrement %s", mode));
         }
     }
 

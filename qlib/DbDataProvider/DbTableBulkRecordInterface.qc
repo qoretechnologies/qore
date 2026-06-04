@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbTableBulkRecordInterface class definition
 
-/** DbTableBulkRecordInterface.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DbTableBulkRecordInterface.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,9 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
 
         #! release the transaction with a rollback in the destructor?
         bool release_transaction;
+
+        #! use the native buffer-column shape
+        bool use_columnar = True;
     }
 
     #! creates the iterator
@@ -50,6 +53,13 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
         # release the transaction with a rollback in the destructor if we do not already have a transaction lock
         release_transaction = !table.getDatasource().currentThreadInTransaction();
         stmt = table.getStatement({"where": where_cond});
+
+        foreach AbstractColumn col in (table.describe().iterator()) {
+            if (col.qore_type == Type::Binary) {
+                use_columnar = False;
+                break;
+            }
+        }
     }
 
     #! Rolls back the transaction if applicable
@@ -87,12 +97,12 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
           transaction
     */
     private *auto getShapedValueImpl() {
-        return stmt.fetchColumnar(block_size);
+        return use_columnar ? stmt.fetchColumnar(block_size) : stmt.fetchColumns(block_size);
     }
 
     #! Returns the native pipeline shape produced by getShapedValueImpl()
     private DataProviderShape getValueShapeImpl() {
-        return DataProviderShape::BufferColumns;
+        return use_columnar ? DataProviderShape::BufferColumns : DataProviderShape::HashOfLists;
     }
 
     #! Returns a hash of lists according to the block size

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file OracleSqlUtil.qm Qore user module for working with Oracle SQL data
 
-/*  OracleSqlUtil.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  OracleSqlUtil.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -79,6 +79,8 @@ module OracleSqlUtil {
 
     @subsection oraclesqlutil_v1_6 OracleSqlUtil v1.6
     - updated to use the @ref oraclesqlutilbaseintro module for the base implementation
+    - load the base implementation by module-path source filename so source-tree tests use the local
+      @ref oraclesqlutilbaseintro implementation
 
     @subsection oraclesqlutil_v1_5 OracleSqlUtil v1.5
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic

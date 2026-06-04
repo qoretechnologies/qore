@@ -6979,16 +6979,22 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
             if (!old_value.isValid()) {
                 return QoreIRValue();
             }
+            QoreIRValue zero = builder.createConstInt(0, base_op->loc)->result;
+            QoreIRValue old_result = lowerBinaryOpOrInvoke(
+                QoreIROpcode::AddInt, expr, old_value, zero, base_op->loc, error);
+            if (!old_result.isValid()) {
+                return QoreIRValue();
+            }
             QoreIRValue one = builder.createConstInt(1, base_op->loc)->result;
             QoreIRValue new_value = lowerBinaryOpOrInvoke(
-                QoreIROpcode::AddAssignInt, expr, old_value, one, base_op->loc, error);
+                QoreIROpcode::AddAssignInt, expr, old_result, one, base_op->loc, error);
             if (!new_value.isValid()) {
                 return QoreIRValue();
             }
             if (!storeVarRef(var, new_value, error, "post-increment-int")) {
                 return QoreIRValue();
             }
-            return old_value;  // post-increment returns old value
+            return old_result;  // post-increment returns old value coerced to int
         }
     }
     // Range lvalue (e.g., list[0..2]++) - delegate entire expression to AST
@@ -7151,16 +7157,22 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
             if (!old_value.isValid()) {
                 return QoreIRValue();
             }
+            QoreIRValue zero = builder.createConstInt(0, base_op->loc)->result;
+            QoreIRValue old_result = lowerBinaryOpOrInvoke(
+                QoreIROpcode::AddInt, expr, old_value, zero, base_op->loc, error);
+            if (!old_result.isValid()) {
+                return QoreIRValue();
+            }
             QoreIRValue one = builder.createConstInt(1, base_op->loc)->result;
             QoreIRValue new_value = lowerBinaryOpOrInvoke(
-                QoreIROpcode::SubAssignInt, expr, old_value, one, base_op->loc, error);
+                QoreIROpcode::SubAssignInt, expr, old_result, one, base_op->loc, error);
             if (!new_value.isValid()) {
                 return QoreIRValue();
             }
             if (!storeVarRef(var, new_value, error, "post-decrement-int")) {
                 return QoreIRValue();
             }
-            return old_value;  // post-decrement returns old value
+            return old_result;  // post-decrement returns old value coerced to int
         }
     }
     // Range lvalue (e.g., list[0..2]--) - delegate entire expression to AST

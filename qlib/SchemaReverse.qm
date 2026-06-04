@@ -183,6 +183,8 @@ The output will be:
       structured hash output suitable for use with @ref Schema::DataSchema "DataSchema"
     - added @ref SchemaReverse::SchemaReverse::toYaml() "SchemaReverse::toYaml()" and
       @ref SchemaReverse::SchemaReverse::toJson() "SchemaReverse::toJson()" for full schema export
+    - added partition strategy output for partitioned tables and optional physical partition output with the
+      \c with_partitions option
 
     @subsection schemareverse_v1_1 SchemaReverse Module v1.1
     - initial release
@@ -333,15 +335,17 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             AbstractDatasource m_ds;
             Database m_db;
             string m_name;
+            hash<auto> m_options;
         }
 
         /*! Setup basic shared attributes.
             @param ds a AbstractDatasource with DB connection
             @param name a string with exact name or regex to match names of DB objects
          */
-        constructor(AbstractDatasource ds, string name) {
+        constructor(AbstractDatasource ds, string name, *hash<auto> opts) {
             m_ds = ds;
             m_name = name;
+            m_options = opts ?? {};
         }
 
         #! @return current AbstractDatasource
@@ -360,6 +364,16 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         #! @return a string with exact name or regex to match names
         string name() {
             return m_name;
+        }
+
+        #! @return option hash for reverse-engineering behavior
+        hash<auto> options() {
+            return m_options;
+        }
+
+        #! @return True if physical partitions should be included in table output
+        bool withPartitions() {
+            return m_options.with_partitions ? True : False;
         }
 
         #! Dedicated functionlity to get DB object info into the internal structure is done here.
@@ -415,8 +429,8 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         /*! @param ds an AbstractDatasource object
             @param name a string with exact object name
          */
-        constructor(AbstractDatasource ds, string name)
-            : AbstractReverseObject(ds, name)
+        constructor(AbstractDatasource ds, string name, *hash<auto> opts)
+            : AbstractReverseObject(ds, name, opts)
         {
         }
 
@@ -455,8 +469,8 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         /*! @param ds an AbstractDatasource object
             @param name a string with exact object name
          */
-        constructor(AbstractDatasource ds, string name)
-            : AbstractReverseObject(ds, name)
+        constructor(AbstractDatasource ds, string name, *hash<auto> opts)
+            : AbstractReverseObject(ds, name, opts)
         {
         }
 
@@ -500,8 +514,8 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         /*! @param ds an AbstractDatasource object
             @param name a string with exact object name
          */
-        constructor(AbstractDatasource ds, string name)
-            : AbstractReverseObject(ds, name)
+        constructor(AbstractDatasource ds, string name, *hash<auto> opts)
+            : AbstractReverseObject(ds, name, opts)
         {
         }
 
@@ -558,6 +572,19 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                     };
                 }
                 ret.foreign_constraints = fk_hash;
+            }
+
+            if (t.supportsPartitions()) {
+                *hash<PartitionStrategy> strategy = t.getPartitionStrategy();
+                if (strategy) {
+                    ret.partition_strategy = strategy;
+                }
+                if (withPartitions()) {
+                    hash<string, PartitionInfo> partitions = t.listPartitions();
+                    if (partitions) {
+                        ret.partitions = partitions;
+                    }
+                }
             }
 
             return ret;
@@ -639,8 +666,8 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         /*! @param ds an AbstractDatasource object
             @param mask a regexp mask used to specify what objects of this type are fetched
          */
-        constructor(AbstractDatasource ds, string mask = ".*")
-            : AbstractReverseObject(ds, mask)
+        constructor(AbstractDatasource ds, string mask = ".*", *hash<auto> opts)
+            : AbstractReverseObject(ds, mask, opts)
         {
         }
 
@@ -650,7 +677,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             while (it.next()) {
                 string s = it.getValue();
                 if (s.regex(name())) {
-                    ret{s} = new TableReverse(datasource(), s).toQore();
+                    ret{s} = new TableReverse(datasource(), s, options()).toQore();
                 }
             }
             return ret;
@@ -896,14 +923,17 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         private {
             AbstractDatasource m_ds;
             string m_class_name;
+            hash<auto> m_options;
         }
 
         /*! @param ds an AbstractDatasource object
             @param class_name a string with name of the resulting schema class
+            @param opts optional reverse-engineering options; \c with_partitions includes physical partitions
          */
-        constructor(AbstractDatasource ds, string class_name) {
+        constructor(AbstractDatasource ds, string class_name, *hash<auto> opts) {
             m_ds = ds;
             m_class_name = class_name;
+            m_options = opts ?? {};
         }
 
         string toString() {
@@ -914,7 +944,9 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             ListIterator<string> it(toReplace);
             while (it.next()) {
                 string key = regex_extract(it.getValue(), "<SCHEMA_(.*)>")[0];
-                AbstractReverseObject o = get_object(key.lwr(), m_ds);
+                AbstractReverseObject o = key.lwr() == "tables"
+                    ? get_object(key.lwr(), m_ds, ".*", m_options)
+                    : get_object(key.lwr(), m_ds);
                 string out = o.toString();
                 # HACK: let's guess that SchemaDescriptionOptions contains
                 #       objects supported in all DB servers/dialects.
@@ -940,7 +972,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                     "name": m_class_name,
                     "version": "1.0",
                 },
-                "tables": new TablesReverse(m_ds).toQore(),
+                "tables": new TablesReverse(m_ds, ".*", m_options).toQore(),
                 "sequences": new SequencesReverse(m_ds).toQore(),
             };
 

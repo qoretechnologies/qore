@@ -153,6 +153,10 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c triggers: a hash of trigger information keyed by trigger name; the values are the trigger source code; since triggers are driver-dependent, a driver-independent table description would include trigger hashes under the \c drivers key and the driver key name under that
             - \c foreign_constraints: (@ref fk_desc_hash "foreign constraint hashes") a hash<auto> describing the foreign constraints on the table
             - \c unique_constraints: (@ref uk_desc_hash "unique constraint hashes") a hash<auto> describing the unique constraints on the table
+            - \c partition_strategy: (@ref SqlUtil::PartitionStrategy "partition strategy hash") a hash<auto>
+              describing the table's partitioning strategy
+            - \c partitions: a hash of @ref SqlUtil::PartitionSpec "partition specification hashes" keyed by
+              partition name
             - \c table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining cached tables and foreign key relationships between tables
 
             @see @ref table_desc_hash
@@ -164,8 +168,46 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "triggers": Type::Hash,
             "foreign_constraints": Type::Hash,
             "unique_constraints": Type::Hash,
+            "partition_strategy": Type::Hash,
+            "partitions": Type::Hash,
             #"check_constraints": Type::Hash,
             "table_cache": "Tables",
+        };
+
+        #! partition strategy options
+        /** @since SqlUtil 2.4
+        */
+        const PartitionStrategyOptions = {
+            "method": Type::String,
+            "columns": "softstringlist",
+            "auto": Type::Hash,
+            "driver": Type::Hash,
+        };
+
+        #! partition specification options
+        /** @since SqlUtil 2.4
+        */
+        const PartitionSpecOptions = {
+            "name": Type::String,
+            "method": Type::String,
+            "columns": "softstringlist",
+            "bound_from": Type::NothingType,
+            "bound_to": Type::NothingType,
+            "bound_from_sql": Type::String,
+            "bound_to_sql": Type::String,
+            "bound_sql": Type::String,
+            "is_default": Type::Boolean,
+            "schema": Type::String,
+            "relation_name": Type::String,
+            "sql_name": Type::String,
+            "driver": Type::Hash,
+        };
+
+        #! options for getDescriptionHash()
+        /** @since SqlUtil 2.4
+        */
+        const GetDescriptionOptions = {
+            "with_partitions": Type::Boolean,
         };
 
         #! Column description options
@@ -416,6 +458,14 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         Constraints constraints;
         #! trigger descriptions
         Triggers triggers;
+        #! partitioning strategy
+        *PartitionStrategy partitionStrategy;
+        #! partition descriptions keyed by canonical partition name
+        hash<string, PartitionInfo> partitions;
+        #! True if the partition strategy cache has been loaded
+        bool partitionStrategyLoaded = False;
+        #! True if the partition list cache has been loaded
+        bool partitionsLoaded = False;
         #! native case option
         bool native_case = False;
         #! in database
@@ -455,6 +505,16 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             constraints = constraints.copy();
         if (triggers)
             triggers = triggers.copy();
+        if (partitionStrategy) {
+            hash<PartitionStrategy> ps(partitionStrategy);
+            partitionStrategy = ps;
+        }
+        if (partitions) {
+            hash<string, PartitionInfo> ph(partitions);
+            partitions = ph;
+        }
+        partitionStrategyLoaded = old.partitionStrategyLoaded;
+        partitionsLoaded = old.partitionsLoaded;
 
         copyImpl(old);
     }
@@ -836,7 +896,9 @@ bool b = table.empty();
             || !indexes.empty()
             || !foreignConstraints.empty()
             || !constraints.empty()
-            || !triggers.empty())
+            || !triggers.empty()
+            || partitionStrategy
+            || !partitions.empty())
             return False;
 
         return emptyImpl();
@@ -904,6 +966,7 @@ bool b = table.empty();
         AbstractDatabase::checkDriverOptions(\desc.unique_constraints, drv);
         AbstractDatabase::checkDriverOptions(\desc.foreign_constraints, drv);
         AbstractDatabase::checkDriverOptions(\desc.triggers, drv);
+        AbstractDatabase::checkDriverOptions(\desc.partition_strategy, drv);
 
         # process column definitions
         foreach string cn in (desc.columns.keyIterator()) {
@@ -911,6 +974,14 @@ bool b = table.empty();
                 throw "DESCRIPTION-ERROR", sprintf("%s: value assigned to column key %y is not a hash, got type %y "
                     "instead (%y)", getDesc(), cn, desc.columns{cn}.type(), desc.columns{cn});
             AbstractDatabase::checkDriverOptions(\desc.columns{cn}, drv);
+        }
+
+        foreach string pn in (desc.partitions.keyIterator()) {
+            if (desc.partitions{pn}.typeCode() == NT_HASH) {
+                hash<auto> part = desc.partitions{pn};
+                AbstractDatabase::checkDriverOptions(\part, drv);
+                desc.partitions{pn} = part;
+            }
         }
 
         preSetupTableImpl(\desc, opt);
@@ -1021,6 +1092,26 @@ bool b = table.empty();
             string src = desc.triggers{tn};
 
             addTriggerUnlocked(tn, src, opt.(getTriggerOptions().keys()));
+        }
+
+        if (desc.partition_strategy) {
+            setupPartitionStrategyUnlocked(desc.partition_strategy);
+        }
+
+        foreach string pn in (desc.partitions.keyIterator()) {
+            if (desc.partitions{pn}.typeCode() != NT_HASH) {
+                throw "DESCRIPTION-ERROR", sprintf("%s: value assigned to partition key %y is not a hash, got type "
+                    "%y instead (%y)", getDesc(), pn, desc.partitions{pn}.type(), desc.partitions{pn});
+            }
+
+            hash<auto!> ps(desc.partitions{pn});
+            if (!ps.name) {
+                ps.name = pn;
+            } else if (ps.name != pn) {
+                throw "DESCRIPTION-ERROR", sprintf("%s: partition key %y has mismatched name %y", getDesc(), pn,
+                    ps.name);
+            }
+            addPartitionToCacheUnlocked(normalizePartitionSpecUnlocked(ps, "DESCRIPTION-ERROR"));
         }
 
         setupTableImpl(desc, opt);
@@ -6188,8 +6279,317 @@ table.clear();
         delete constraints;
         delete indexes;
         delete triggers;
+        delete partitionStrategy;
+        delete partitions;
+        partitionStrategyLoaded = False;
+        partitionsLoaded = False;
 
         clearImpl();
+    }
+
+    #! returns @ref True "True" if this table supports table partitioning
+    /** @since SqlUtil 2.4
+    */
+    bool supportsPartitions() {
+        return supportsPartitionsImpl();
+    }
+
+    #! returns @ref True "True" if this table supports partition detach operations
+    /** @since SqlUtil 2.4
+    */
+    bool supportsPartitionDetach() {
+        return supportsPartitions() && supportsPartitionDetachImpl();
+    }
+
+    #! returns @ref True "True" if this table supports automatic partition materialization
+    /** @since SqlUtil 2.4
+    */
+    bool supportsAutoPartitioning() {
+        return supportsPartitions() && supportsAutoPartitioningImpl();
+    }
+
+    #! returns this table's partitioning strategy or @ref nothing if the table is not partitioned
+    /** @since SqlUtil 2.4
+    */
+    *hash<PartitionStrategy> getPartitionStrategy() {
+        l.lock();
+        on_exit l.unlock();
+
+        return getPartitionStrategyUnlocked();
+    }
+
+    #! returns partition descriptions keyed by canonical partition name
+    /** @since SqlUtil 2.4
+    */
+    hash<string, PartitionInfo> listPartitions() {
+        l.lock();
+        on_exit l.unlock();
+
+        return getPartitionsUnlocked();
+    }
+
+    #! finds a partition matching the given specification
+    /** @since SqlUtil 2.4
+    */
+    hash<PartitionLookupResult> findPartitionBySpec(hash<auto> spec) {
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        return findPartitionBySpecImpl(normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR"));
+    }
+
+    #! returns SQL to add a partition
+    /** @since SqlUtil 2.4
+    */
+    string getAddPartitionSql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        hash<PartitionSpec> ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
+        if (!ps.name) {
+            throw "PARTITION-ERROR", sprintf("%s: partition name is required", getDesc());
+        }
+        on_success if (opt.sql_callback_executed) {
+            addPartitionToCacheUnlocked(ps);
+        }
+        return AbstractDatabase::doCallback(opt, getAddPartitionSqlImpl(ps), AbstractDatabase::AC_Add,
+            "partition", ps.name, name);
+    }
+
+    #! adds a partition without transaction management
+    /** @since SqlUtil 2.4
+    */
+    hash<PartitionInfo> addPartition(hash<auto> spec, *hash<auto> opt) {
+        string sql;
+        hash<PartitionInfo> info;
+
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionSupportUnlocked();
+            hash<PartitionSpec> ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
+            if (!ps.name) {
+                throw "PARTITION-ERROR", sprintf("%s: partition name is required", getDesc());
+            }
+            sql = getAddPartitionSqlImpl(ps);
+            info = makePartitionInfoUnlocked(ps);
+
+            if (!inDb) {
+                addPartitionToCacheUnlocked(ps);
+                manual = True;
+                return info;
+            }
+        }
+
+        ds.execRaw(sql);
+
+        l.lock();
+        on_exit l.unlock();
+        clearPartitionsUnlocked();
+
+        return info;
+    }
+
+    #! adds a partition and commits the transaction
+    /** @since SqlUtil 2.4
+    */
+    hash<PartitionInfo> addPartitionCommit(hash<auto> spec, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        return addPartition(spec, opt);
+    }
+
+    #! returns SQL to drop a partition
+    /** @since SqlUtil 2.4
+    */
+    string getDropPartitionSql(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        on_success if (opt.sql_callback_executed) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDropPartitionSqlImpl(partition_name), AbstractDatabase::AC_Drop,
+            "partition", partition_name, name);
+    }
+
+    #! drops a partition without transaction management
+    /** @since SqlUtil 2.4
+    */
+    dropPartition(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        string sql;
+        bool execute;
+
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionSupportUnlocked();
+            execute = inDb;
+            if (execute) {
+                sql = getDropPartitionSqlImpl(partition_name);
+            } else {
+                clearPartitionsUnlocked();
+                manual = True;
+            }
+        }
+
+        if (execute) {
+            ds.execRaw(sql);
+            l.lock();
+            on_exit l.unlock();
+            clearPartitionsUnlocked();
+        }
+    }
+
+    #! drops a partition and commits the transaction
+    /** @since SqlUtil 2.4
+    */
+    dropPartitionCommit(string partition_name, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        dropPartition(partition_name, opt);
+    }
+
+    #! returns SQL to truncate a partition
+    /** @since SqlUtil 2.4
+    */
+    string getTruncatePartitionSql(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name),
+            AbstractDatabase::AC_Truncate, "partition", partition_name, name);
+    }
+
+    #! truncates a partition without transaction management
+    /** @since SqlUtil 2.4
+    */
+    truncatePartition(string partition_name, *hash<auto> opt) {
+        string sql = getTruncatePartitionSql(partition_name, opt);
+        ds.execRaw(sql);
+    }
+
+    #! truncates a partition and commits the transaction
+    /** @since SqlUtil 2.4
+    */
+    truncatePartitionCommit(string partition_name, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        truncatePartition(partition_name, opt);
+    }
+
+    #! returns SQL to detach a partition
+    /** @since SqlUtil 2.4
+    */
+    string getDetachPartitionSql(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionDetachSupportUnlocked();
+        on_success if (opt.sql_callback_executed) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name),
+            AbstractDatabase::AC_Drop, "partition", partition_name, name);
+    }
+
+    #! detaches a partition without transaction management
+    /** @since SqlUtil 2.4
+    */
+    detachPartition(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        string sql;
+        bool execute;
+
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionDetachSupportUnlocked();
+            execute = inDb;
+            if (execute) {
+                sql = getDetachPartitionSqlImpl(partition_name);
+            } else {
+                clearPartitionsUnlocked();
+                manual = True;
+            }
+        }
+
+        if (execute) {
+            ds.execRaw(sql);
+            l.lock();
+            on_exit l.unlock();
+            clearPartitionsUnlocked();
+        }
+    }
+
+    #! detaches a partition and commits the transaction
+    /** @since SqlUtil 2.4
+    */
+    detachPartitionCommit(string partition_name, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        detachPartition(partition_name, opt);
+    }
+
+    #! ensures that a partition matching the given specification exists
+    /** @since SqlUtil 2.4
+    */
+    hash<PartitionEnsureResult> ensurePartition(hash<auto> spec, *hash<auto> opt) {
+        hash<PartitionSpec> ps;
+
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionSupportUnlocked();
+            ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
+
+            hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
+            if (lookup.status == PartitionLookupStatus::Found) {
+                return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Bounds, lookup.partition);
+            }
+
+            if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
+                hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+                if (ph.hasKey(ps.name)) {
+                    return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Name, ph{ps.name});
+                }
+            }
+
+            if (supportsAutoPartitioningImpl() && partitionAutoStrategyCoversSpecImpl(ps)) {
+                return makePartitionEnsureResult(False, False, True, PartitionVerifiedBy::Auto);
+            }
+        }
+
+        hash<PartitionInfo> info = addPartition(ps, opt);
+        return makePartitionEnsureResult(True, True, False, PartitionVerifiedBy::Bounds, info);
+    }
+
+    #! ensures that a partition matching the given specification exists and commits the transaction if it was created
+    /** @since SqlUtil 2.4
+    */
+    hash<PartitionEnsureResult> ensurePartitionCommit(hash<auto> spec, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        return ensurePartition(spec, opt);
     }
 
     #! Returns a description hash of the table
@@ -6203,7 +6603,9 @@ table.clear();
 
         @since %SqlUtil 1.7.5
     */
-    hash<auto> getDescriptionHash() {
+    hash<auto> getDescriptionHash(*hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", GetDescriptionOptions, \opt);
+
         hash<auto> rv = {};
 
         l.lock();
@@ -6245,6 +6647,18 @@ table.clear();
                     "target_columns": i.value.target.columns.keys(),
                 };
                 rv.foreign_constraints{i.key} = fc;
+            }
+        }
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (strategy) {
+            rv.partition_strategy = strategy;
+        }
+
+        if (opt.with_partitions) {
+            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            if (ph) {
+                rv.partitions = ph;
             }
         }
 
@@ -6522,6 +6936,338 @@ string sql = table.getCreateTableSql();
         return oh;
     }
 
+    private assertPartitionSupportUnlocked() {
+        if (!supportsPartitionsImpl()) {
+            throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support table partitioning", getDesc(),
+                ds.getDriverName());
+        }
+    }
+
+    private assertPartitionDetachSupportUnlocked() {
+        assertPartitionSupportUnlocked();
+        if (!supportsPartitionDetachImpl()) {
+            throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support detaching partitions",
+                getDesc(), ds.getDriverName());
+        }
+    }
+
+    private setupPartitionStrategyUnlocked(hash<auto> strategy) {
+        if (!supportsPartitionsImpl()) {
+            throw "DESCRIPTION-ERROR", sprintf("%s: database driver %y does not support table partitioning",
+                getDesc(), ds.getDriverName());
+        }
+        partitionStrategy = normalizePartitionStrategyUnlocked(strategy, "DESCRIPTION-ERROR");
+        partitionStrategyLoaded = True;
+        validatePartitionUniqueKeysUnlocked(partitionStrategy.columns, "DESCRIPTION-ERROR");
+    }
+
+    private hash<PartitionStrategy> normalizePartitionStrategyUnlocked(hash<auto> strategy, string err) {
+        validateOptionsIntern(err, PartitionStrategyOptions, \strategy);
+
+        if (!strategy.method) {
+            strategy.method = "range";
+        }
+        if (strategy.method != "range") {
+            throw err, sprintf("%s: partition method %y is not supported; Phase 1 supports only %y", getDesc(),
+                strategy.method, "range");
+        }
+        if (!strategy.columns) {
+            throw err, sprintf("%s: partition strategy is missing the required %y key", getDesc(), "columns");
+        }
+
+        softlist<string> pcols = strategy.columns;
+        if (!pcols) {
+            throw err, sprintf("%s: partition strategy must reference at least one column", getDesc());
+        }
+
+        validatePartitionColumnsUnlocked(pcols, err);
+        hash<PartitionStrategy> rv(strategy);
+        return rv;
+    }
+
+    private validatePartitionColumnsUnlocked(softlist<string> pcols, string err) {
+        if (!columns) {
+            getColumnsUnlocked();
+        }
+
+        hash<string, bool> pch = map {$1: True}, pcols;
+        *hash<string, bool> invalid = pch - columns.keys();
+        if (invalid) {
+            throw err, sprintf("%s: partition key references unknown column(s): %y; known columns: %y", getDesc(),
+                invalid.keys(), columns.keys());
+        }
+    }
+
+    private validatePartitionUniqueKeysUnlocked(softlist<string> pcols, string err) {
+        hash<string, bool> pch = map {$1: True}, pcols;
+
+        if (!primaryKey.empty()) {
+            *hash<string, bool> missing = pch - primaryKey.keys();
+            if (missing) {
+                throw err, sprintf("%s: primary key %y must include partition key column(s): %y", getDesc(),
+                    primaryKey.getName(), missing.keys());
+            }
+        }
+
+        foreach AbstractIndex ix in (indexes.iterator()) {
+            if (!ix.unique) {
+                continue;
+            }
+            *hash<string, bool> missing = pch - ix.columns.keys();
+            if (missing) {
+                throw err, sprintf("%s: unique index %y must include partition key column(s): %y", getDesc(),
+                    ix.name, missing.keys());
+            }
+        }
+
+        foreach AbstractConstraint c in (constraints.iterator()) {
+            if (!(c instanceof AbstractUniqueConstraint)) {
+                continue;
+            }
+            AbstractUniqueConstraint uk = cast<AbstractUniqueConstraint>(c);
+            *hash<string, bool> missing = pch - uk.keys();
+            if (missing) {
+                throw err, sprintf("%s: unique constraint %y must include partition key column(s): %y", getDesc(),
+                    uk.getName(), missing.keys());
+            }
+        }
+    }
+
+    private hash<PartitionSpec> normalizePartitionSpecUnlocked(hash<auto> spec, string err) {
+        hash<auto> ps = {} + spec;
+        validateOptionsIntern(err, PartitionSpecOptions, \ps);
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (!strategy) {
+            throw err, sprintf("%s: table has no partition strategy", getDesc());
+        }
+
+        if (!ps.method) {
+            ps.method = strategy.method;
+        }
+        if (ps.method != strategy.method) {
+            throw err, sprintf("%s: partition method %y does not match table partition method %y", getDesc(),
+                ps.method, strategy.method);
+        }
+        if (ps.method != "range") {
+            throw err, sprintf("%s: partition method %y is not supported; Phase 1 supports only %y", getDesc(),
+                ps.method, "range");
+        }
+
+        if (!ps.columns) {
+            ps.columns = strategy.columns;
+        } else if (ps.columns != strategy.columns) {
+            throw err, sprintf("%s: partition columns %y do not match table partition columns %y", getDesc(),
+                ps.columns, strategy.columns);
+        }
+
+        if (!exists ps.is_default) {
+            ps.is_default = False;
+        }
+
+        bool has_typed_from = exists ps.bound_from;
+        bool has_typed_to = exists ps.bound_to;
+        bool has_sql_from = exists ps.bound_from_sql;
+        bool has_sql_to = exists ps.bound_to_sql;
+        bool has_bound_sql = exists ps.bound_sql;
+        bool has_typed = has_typed_from || has_typed_to;
+        bool has_sql_pair = has_sql_from || has_sql_to;
+
+        if (ps.is_default) {
+            if (has_typed || has_sql_pair || has_bound_sql) {
+                throw err, sprintf("%s: default partition %y cannot have range bounds", getDesc(), ps.name);
+            }
+            hash<PartitionSpec> rv(ps);
+            return rv;
+        }
+
+        if (has_bound_sql && (has_typed || has_sql_pair)) {
+            throw err, sprintf("%s: partition %y cannot combine %y with typed or paired SQL bounds", getDesc(),
+                ps.name, "bound_sql");
+        }
+        if (has_typed && has_sql_pair) {
+            throw err, sprintf("%s: partition %y cannot combine typed bounds with SQL bounds", getDesc(), ps.name);
+        }
+        if (has_typed_from != has_typed_to) {
+            throw err, sprintf("%s: partition %y must define both %y and %y", getDesc(), ps.name, "bound_from",
+                "bound_to");
+        }
+        if (has_sql_from != has_sql_to) {
+            throw err, sprintf("%s: partition %y must define both %y and %y", getDesc(), ps.name, "bound_from_sql",
+                "bound_to_sql");
+        }
+        if (!has_bound_sql && !has_typed && !has_sql_pair) {
+            throw err, sprintf("%s: partition %y must define range bounds", getDesc(), ps.name);
+        }
+
+        if (has_typed) {
+            validatePartitionBoundCardinalityUnlocked(ps.bound_from, ps.columns, err, "bound_from");
+            validatePartitionBoundCardinalityUnlocked(ps.bound_to, ps.columns, err, "bound_to");
+            validatePartitionTypedBoundsUnlocked(ps, err);
+        }
+
+        hash<PartitionSpec> rv(ps);
+        return rv;
+    }
+
+    private validatePartitionBoundCardinalityUnlocked(auto value, softlist<string> pcols, string err, string key) {
+        if (value.typeCode() == NT_LIST) {
+            if (value.size() != pcols.size()) {
+                throw err, sprintf("%s: partition %y has %d value(s) in %y but partition key has %d column(s): %y",
+                    getDesc(), key, value.size(), key, pcols.size(), pcols);
+            }
+        } else if (pcols.size() != 1) {
+            throw err, sprintf("%s: partition %y must be a list with %d value(s) for composite partition key %y",
+                getDesc(), key, pcols.size(), pcols);
+        }
+    }
+
+    private validatePartitionTypedBoundsUnlocked(hash<auto> ps, string err) {
+        if (!partitionBoundLess(ps.bound_from, ps.bound_to)) {
+            throw err, sprintf("%s: partition %y lower bound must be less than upper bound", getDesc(), ps.name);
+        }
+
+        foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
+            if (pi.is_default || exists pi.bound_sql || exists pi.bound_from_sql || !exists pi.bound_from) {
+                continue;
+            }
+            if (partitionBoundsOverlap(ps.bound_from, ps.bound_to, pi.bound_from, pi.bound_to)) {
+                throw err, sprintf("%s: partition %y bounds overlap existing partition %y", getDesc(), ps.name,
+                    pi.name);
+            }
+        }
+    }
+
+    private static bool partitionBoundLess(auto left, auto right) {
+        return left < right;
+    }
+
+    private static bool partitionBoundsOverlap(auto left_from, auto left_to, auto right_from, auto right_to) {
+        return partitionBoundLess(left_from, right_to) && partitionBoundLess(right_from, left_to);
+    }
+
+    private hash<PartitionInfo> makePartitionInfoUnlocked(hash<PartitionSpec> ps) {
+        if (!ps.name) {
+            throw "PARTITION-ERROR", sprintf("%s: partition name is required", getDesc());
+        }
+        ensurePartitionsHashUnlocked();
+
+        hash<PartitionInfo> info({
+            "name": ps.name,
+            "method": ps.method,
+            "columns": ps.columns,
+            "ordinal": partitions.size(),
+            "is_default": ps.is_default,
+        });
+
+        if (exists ps.bound_from) info.bound_from = ps.bound_from;
+        if (exists ps.bound_to) info.bound_to = ps.bound_to;
+        if (exists ps.bound_from_sql) info.bound_from_sql = ps.bound_from_sql;
+        if (exists ps.bound_to_sql) info.bound_to_sql = ps.bound_to_sql;
+        if (exists ps.bound_sql) info.bound_sql = ps.bound_sql;
+        if (exists ps.schema) info.schema = ps.schema;
+        if (exists ps.relation_name) info.relation_name = ps.relation_name;
+        if (exists ps.sql_name) info.sql_name = ps.sql_name;
+        if (exists ps.driver) info.driver = ps.driver;
+
+        return info;
+    }
+
+    private hash<PartitionInfo> addPartitionToCacheUnlocked(hash<PartitionSpec> ps) {
+        hash<PartitionInfo> info = makePartitionInfoUnlocked(ps);
+        if (partitions.hasKey(info.name)) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y already exists", getDesc(), info.name);
+        }
+        if (info.is_default) {
+            foreach hash<PartitionInfo> pi in (partitions.iterator()) {
+                if (pi.is_default) {
+                    throw "PARTITION-ERROR", sprintf("%s: default partition %y already exists", getDesc(), pi.name);
+                }
+            }
+        }
+        partitions{info.name} = info;
+        partitionsLoaded = True;
+        return info;
+    }
+
+    private hash<PartitionEnsureResult> makePartitionEnsureResult(bool created, bool materialized,
+            bool deferred_auto, PartitionVerifiedBy verified_by, *hash<PartitionInfo> partition) {
+        hash<PartitionEnsureResult> rv({
+            "created": created,
+            "materialized": materialized,
+            "deferred_auto": deferred_auto,
+            "verified_by": verified_by,
+            "bounds_verified": verified_by == PartitionVerifiedBy::Bounds,
+            "partition": partition,
+        });
+        return rv;
+    }
+
+    private *hash<PartitionStrategy> getPartitionStrategyUnlocked() {
+        if (partitionStrategyLoaded) {
+            return partitionStrategy;
+        }
+        if (manual || !supportsPartitionsImpl()) {
+            partitionStrategyLoaded = True;
+            return partitionStrategy;
+        }
+
+        partitionStrategy = getPartitionStrategyImpl();
+        partitionStrategyLoaded = True;
+        if (partitionStrategy) {
+            inDb = True;
+        }
+        return partitionStrategy;
+    }
+
+    private hash<string, PartitionInfo> getPartitionsUnlocked() {
+        ensurePartitionsHashUnlocked();
+        if (partitionsLoaded) {
+            return partitions;
+        }
+        if (manual || !supportsPartitionsImpl()) {
+            partitionsLoaded = True;
+            return partitions;
+        }
+
+        partitions = getPartitionsImpl();
+        partitionsLoaded = True;
+        if (partitions) {
+            inDb = True;
+        }
+        return partitions;
+    }
+
+    private ensurePartitionsHashUnlocked() {
+        if (!partitions) {
+            hash<string, PartitionInfo> ph();
+            partitions = ph;
+        }
+    }
+
+    private clearPartitionsUnlocked() {
+        delete partitions;
+        partitionsLoaded = False;
+    }
+
+    private bool partitionSpecsHaveComparableBounds(hash<PartitionSpec> ps) {
+        return !ps.is_default && exists ps.bound_from && exists ps.bound_to;
+    }
+
+    private validatePartitionStrategyAlignmentUnlocked(AbstractTable t) {
+        *PartitionStrategy source = getPartitionStrategyUnlocked();
+        *PartitionStrategy target = t.getPartitionStrategyUnlocked();
+
+        if (!source && !target) {
+            return;
+        }
+        if (!source || !target || source.method != target.method || source.columns != target.columns
+            || source.auto != target.auto || source.driver != target.driver) {
+            throw "PARTITION-ERROR", sprintf("cannot align partition strategy for %s to %s; existing: %y; "
+                "template: %y", getDesc(), t.getDesc(), source, target);
+        }
+    }
+
     #! returns a list of SQL strings required to align the table to the table given as an argument
     /** if the tables are identical then an empty list is returned
 
@@ -6589,6 +7335,7 @@ list<auto> l = table.getAlignSql(table2);
         }
 
         AbstractTable this = opt.sql_callback_executed ? self : self.copy();
+        this.validatePartitionStrategyAlignmentUnlocked(t);
 
         return this.getAlignSqlUnlocked(t, opt);
     }
@@ -7808,6 +8555,26 @@ on_exit printf("SQL> %s\n", sql);
         return l;
     }
 
+    private *list<auto> getCreatePartitionsSqlUnlocked(*hash<auto> opt, bool cache = True) {
+        if (cache) {
+            getPartitionStrategyUnlocked();
+            getPartitionsUnlocked();
+        }
+        if (createPartitionsInCreateTableImpl()) {
+            return;
+        }
+        if (!partitionStrategy || partitions.empty()) {
+            return;
+        }
+
+        list<auto> l = ();
+        foreach hash<PartitionInfo> pi in (partitions.iterator()) {
+            l += AbstractDatabase::doCallback(opt, getAddPartitionSqlImpl(pi), AbstractDatabase::AC_Add,
+                "partition", pi.name, name);
+        }
+        return l;
+    }
+
     private list<auto> getCreateSqlUnlocked(*hash<auto> opt, bool cache = True) {
         # make sure driver options take precedence over generic options
         if (opt) {
@@ -7817,8 +8584,13 @@ on_exit printf("SQL> %s\n", sql);
 
         # mark in options that the entire table is being created
         opt.create_table_all = True;
+        if (createPartitionsInCreateTableImpl()) {
+            getPartitionStrategyUnlocked();
+            getPartitionsUnlocked();
+        }
         list<auto> l += getCreateTableSqlUnlocked(opt);
         *list tl;
+        tl = getCreatePartitionsSqlUnlocked(opt, cache); if (tl) l += tl;
         if (!opt.omit.indexes) {
             tl = getCreateIndexesSqlUnlocked(opt, cache);
             if (tl) l += tl;
@@ -7846,6 +8618,8 @@ on_exit printf("SQL> %s\n", sql);
         getForeignConstraintsUnlocked(opt);
         getConstraintsUnlocked();
         getTriggersUnlocked();
+        getPartitionStrategyUnlocked();
+        getPartitionsUnlocked();
     }
 
     private auto execData(*hash<auto> opt, string sql, *list<auto> args) {
@@ -8046,6 +8820,116 @@ on_exit printf("SQL> %s\n", sql);
     }
 
     private preSetupTableImpl(reference desc, *hash<auto> opt) {
+    }
+
+    #! returns @ref True "True" if the database supports table partitioning
+    private bool supportsPartitionsImpl() {
+        return False;
+    }
+
+    #! returns @ref True "True" if the database supports detaching partitions
+    private bool supportsPartitionDetachImpl() {
+        return False;
+    }
+
+    #! returns @ref True "True" if the database supports automatic partitioning
+    private bool supportsAutoPartitioningImpl() {
+        return False;
+    }
+
+    #! returns @ref True "True" if initial partitions are emitted inline in \c CREATE \c TABLE
+    private bool createPartitionsInCreateTableImpl() {
+        return False;
+    }
+
+    #! returns the table partitioning strategy or @ref nothing if the table is not partitioned
+    private *hash<PartitionStrategy> getPartitionStrategyImpl() {
+    }
+
+    #! returns partition descriptions keyed by canonical partition name
+    private hash<string, PartitionInfo> getPartitionsImpl() {
+        hash<string, PartitionInfo> rv();
+        return rv;
+    }
+
+    #! finds a partition matching the given specification
+    private hash<PartitionLookupResult> findPartitionBySpecImpl(hash<PartitionSpec> spec) {
+        if (spec.is_default) {
+            foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
+                if (pi.is_default) {
+                    hash<PartitionLookupResult> rv({
+                        "status": PartitionLookupStatus::Found,
+                        "partition": pi,
+                    });
+                    return rv;
+                }
+            }
+            hash<PartitionLookupResult> rv({
+                "status": PartitionLookupStatus::NotFound,
+            });
+            return rv;
+        }
+
+        if (!partitionSpecsHaveComparableBounds(spec)) {
+            hash<PartitionLookupResult> rv({
+                "status": PartitionLookupStatus::Uncomparable,
+                "reason": "partition specification does not have typed comparable bounds",
+            });
+            return rv;
+        }
+
+        bool uncomparable;
+        foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
+            if (pi.is_default) {
+                continue;
+            }
+            if (!exists pi.bound_from || !exists pi.bound_to) {
+                uncomparable = True;
+                continue;
+            }
+            if (pi.bound_from == spec.bound_from && pi.bound_to == spec.bound_to) {
+                hash<PartitionLookupResult> rv({
+                    "status": PartitionLookupStatus::Found,
+                    "partition": pi,
+                });
+                return rv;
+            }
+        }
+
+        hash<PartitionLookupResult> rv({
+            "status": uncomparable ? PartitionLookupStatus::Uncomparable : PartitionLookupStatus::NotFound,
+            "reason": uncomparable ? "one or more existing partitions have SQL-only bounds" : NOTHING,
+        });
+        return rv;
+    }
+
+    #! returns @ref True "True" if automatic partitioning covers the given spec
+    private bool partitionAutoStrategyCoversSpecImpl(hash<PartitionSpec> spec) {
+        return False;
+    }
+
+    #! returns SQL to add a partition
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support adding partitions", getDesc(),
+            ds.getDriverName());
+    }
+
+    #! returns SQL to drop a partition
+    private string getDropPartitionSqlImpl(string partition_name) {
+        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support dropping partitions", getDesc(),
+            ds.getDriverName());
+    }
+
+    #! returns SQL to truncate a partition
+    private string getTruncatePartitionSqlImpl(string partition_name) {
+        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support truncating partitions", getDesc(),
+            ds.getDriverName());
+    }
+
+    #! returns SQL to detach a partition
+    private string getDetachPartitionSqlImpl(string partition_name) {
+        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
+            ds.getDriverName());
     }
 
     #! returns the type for number / numeric columns for the database so that data conversions can be handled properly

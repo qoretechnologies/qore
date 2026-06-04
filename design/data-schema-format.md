@@ -185,6 +185,82 @@ tables:
           data: {type: clob, comment: "Oracle-specific"}
 ```
 
+## Table Partitioning
+
+Tables can declare range partitioning with `partition_strategy` and optional initial physical
+partitions with `partitions`. Phase 1 partition support covers range partitioning.
+
+```yaml
+tables:
+  archive_events:
+    columns:
+      id: {type: int, notnull: true}
+      event_ts:
+        type: date
+        notnull: true
+        driver:
+          mysql: {native_type: datetime}
+      payload: {type: text}
+
+    primary_key:
+      name: pk_archive_events
+      columns: [id, event_ts]
+
+    partition_strategy:
+      method: range
+      columns: [event_ts]
+
+    partitions:
+      archive_events_202601:
+        bound_from: "2026-01-01"
+        bound_to: "2026-02-01"
+
+      archive_events_202602:
+        bound_from_sql: "date '2026-02-01'"
+        bound_to_sql: "date '2026-03-01'"
+
+      archive_events_default:
+        is_default: true
+```
+
+`partition_strategy.columns` defines the partition key. `partitions` is keyed by partition name;
+each partition can also set `name`, but it must match the hash key. `bound_from` is inclusive and
+`bound_to` is exclusive. Use scalar bounds for single-column keys and lists for multi-column keys.
+When the partition key column has type `date` or `timestamp`, string `bound_from` and `bound_to`
+values are normalized to typed dates by `DataSchemaLoader`; SQL expressions are not parsed and must
+use `bound_from_sql`, `bound_to_sql`, or `bound_sql`.
+
+Partition metadata supports the same `driver` override pattern used elsewhere in schema hashes:
+
+```yaml
+partition_strategy:
+  method: range
+  columns: [event_ts]
+  driver:
+    mysql:
+      columns: [event_ts]
+
+partitions:
+  archive_events_202601:
+    bound_to: "2026-02-01"
+    driver:
+      oracle:
+        bound_to_sql: "timestamp '2026-02-01 00:00:00'"
+```
+
+Database-specific restrictions still apply. For MySQL and MariaDB, every primary key or unique key
+on a partitioned table must include the partition key, and `timestamp` columns are not allowed in
+`RANGE COLUMNS` partition keys; use a `date` column or set the MySQL/MariaDB native type to
+`datetime` when the partition key needs date/time values.
+
+Schema alignment creates declared initial partitions with the table and can reverse-engineer
+partitioned tables. Partition lifecycle operations such as adding, dropping, truncating, detaching,
+or comparing physical partitions are exposed by `SqlUtil`; schema diff/alignment does not currently
+treat changes under `partitions` as an automatic partition lifecycle migration. By default
+reverse-engineering exports only `partition_strategy`; use `SchemaReverse` option
+`with_partitions: true` or `qschema export --with-partitions` to include the physical `partitions`
+hash.
+
 ## Auto-Triggers
 
 Auto-triggers generate standard database triggers for common patterns:
@@ -329,6 +405,7 @@ qschema diff <connection> <file>            # Compare schema to database
 qschema validate <file>                     # Validate schema file
 qschema info [-v] <file>                    # Show schema summary
 qschema export <connection> -o <file>       # Reverse-engineer database
+qschema export --with-partitions <connection> -o <file>
 ```
 
 ### Color Output
