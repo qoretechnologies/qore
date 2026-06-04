@@ -163,6 +163,7 @@ implementation; no intermediate feature target is kept.
 
 User-facing behavior is documented in:
 
+- `design/streaming-operators.md`
 - `doxygen/lang/145_basic_data_types.dox.tmpl`
 - `doxygen/lang/147_fast_text_processing.dox.tmpl`
 - `doxygen/lang/155_data_type_declarations.dox.tmpl`

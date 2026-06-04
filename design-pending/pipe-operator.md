@@ -11,7 +11,8 @@ streaming-operator AST and IR lowering used by the keyword forms.
 
 **Companions:**
 - [`char-type.md`](../design/char-type.md) — implemented `char` value type
-- streaming operators — implemented for 2.3; see
+- [`streaming-operators.md`](../design/streaming-operators.md) — implemented
+  for 2.3; see
   `doxygen/lang/180_operators.dox.tmpl` for the `iterate` keyword,
   keyword operators, and fusion behavior this sugar would chain
 
