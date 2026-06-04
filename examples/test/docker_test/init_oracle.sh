@@ -65,8 +65,15 @@ else
     echo export ORACLE_USER=${ORACLE_USER} >> /tmp/env.sh
     echo export QORE_DB_CONNSTR_ORACLE=oracle:${ORACLE_USER}/omq@rippy%rippy:1521 >> /tmp/env.sh
 
-    # create user for test
-    qore -ne "Datasource ds(\"oracle:system/qore@rippy%rippy:1521\"); ds.exec(\"create user ${ORACLE_USER} identified by omq default tablespace omq_data temporary tablespace temp\"); ds.exec(\"grant create session, create procedure, create sequence, create table, create trigger, create type, create view, create synonym, unlimited tablespace to ${ORACLE_USER}\"); ds.commit();"
-    echo created oracle user ${ORACLE_USER}
+    # create user for test; if Oracle is unavailable, skip Oracle tests
+    if qore -ne "Datasource ds(\"oracle:system/qore@rippy%rippy:1521\"); ds.exec(\"create user ${ORACLE_USER} identified by omq default tablespace omq_data temporary tablespace temp\"); ds.exec(\"grant create session, create procedure, create sequence, create table, create trigger, create type, create view, create synonym, unlimited tablespace to ${ORACLE_USER}\"); ds.commit();" 2>/dev/null; then
+        echo "created oracle user ${ORACLE_USER}"
+    else
+        echo "WARNING: could not connect to Oracle on rippy — Oracle tests will be skipped"
+        unset QORE_DB_CONNSTR_ORACLE
+        unset ORACLE_USER
+        # remove Oracle env vars from env.sh
+        sed -i '/ORACLE_USER/d;/QORE_DB_CONNSTR_ORACLE/d;/ORACLE_SID/d;/ORACLE_PWD/d' /tmp/env.sh
+    fi
 fi
 set -e
