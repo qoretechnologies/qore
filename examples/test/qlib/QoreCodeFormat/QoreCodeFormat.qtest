@@ -638,6 +638,9 @@ public hashdecl Info {
 
         # Invalid syntax should throw
         assertThrows("FORMAT-ERROR", \fmt.format(), "invalid syntax {{{{");
+        assertThrows("FORMAT-ERROR", \fmt.format(), "%modern\nsub test() { foreach const int v in ((1,)) {} }\n");
+        assertThrows("FORMAT-ERROR", \fmt.format(),
+            "%modern\nsub test() { try {} catch (const hash<ExceptionInfo> ex) {} }\n");
     }
 
     testOnBlockExit() {

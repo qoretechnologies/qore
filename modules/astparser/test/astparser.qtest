@@ -1239,6 +1239,17 @@ class C {
         assertTrue(exists(paramType), "const parameter type parsed");
         assertEq("int", getLeafText(paramType), "const parameter type");
         assertTrue(param.loc.start_column < paramType.loc.start_column, "const modifier included in parameter range");
+
+        AstParser foreachParser();
+        *AstTree foreachTree = foreachParser.parseString("%modern\nsub f() { foreach const int x in ((1,)) {} }\n");
+        assertTrue(!exists(foreachTree) || foreachParser.getErrorCount() > 0,
+            "foreach const reports parse errors");
+
+        AstParser catchParser();
+        *AstTree catchTree = catchParser.parseString(
+            "%modern\nsub f() { try {} catch (const hash<ExceptionInfo> ex) {} }\n");
+        assertTrue(!exists(catchTree) || catchParser.getErrorCount() > 0,
+            "catch const reports parse errors");
     }
 %endif
 

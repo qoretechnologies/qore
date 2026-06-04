@@ -3414,6 +3414,13 @@ statement:
         $$ = new ForStatement(@1.first_line, @9.last_line, $3, $5, $7, $9);
     }
     | TOK_FOREACH exp TOK_IN '(' exp ')' statement_or_block {
+        QoreValue v2($2);
+        if (v2.getType() == NT_VARREF && v2.get<VarRefNode>()->isReadOnlyDecl()) {
+            const QoreProgramLocation* loc =
+                qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+            parseException(*loc, "READONLY-VARIABLE-ASSIGNMENT-ERROR",
+                "read-only foreach variables are not supported; declare a mutable foreach variable");
+        }
         $$ = new ForEachStatement(@1.first_line, @7.last_line, $2, $5, $7);
     }
     | return_statement ';' { $$ = $1; }
@@ -3610,6 +3617,10 @@ try_statement:
         QoreValue v5($5);  // Convert to QoreValue for method calls
         if (v5.getType() == NT_VARREF) {
             VarRefNode* varRefNode = v5.get<VarRefNode>();
+            if (varRefNode->isReadOnlyDecl()) {
+                parseException(*loc, "READONLY-VARIABLE-ASSIGNMENT-ERROR",
+                    "read-only catch variables are not supported; declare a mutable catch variable");
+            }
             param = varRefNode->takeName();
             if (varRefNode->isDecl()) {
                 VarRefDeclNode* varRefDeclNode = static_cast<VarRefDeclNode*>(varRefNode);

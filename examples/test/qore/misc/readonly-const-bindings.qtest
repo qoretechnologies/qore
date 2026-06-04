@@ -30,6 +30,7 @@ class ReadOnlyConstBindingsTest inherits QUnit::Test {
         addTestCase("Typed constants", \testTypedConstants());
         addTestCase("Read-only local variables", \testReadOnlyLocals());
         addTestCase("Read-only parameters", \testReadOnlyParameters());
+        addTestCase("Unsupported read-only contexts", \testUnsupportedReadOnlyContexts());
         addTestCase("Parse option interactions", \testParseOptions());
         set_return_value(main());
     }
@@ -80,6 +81,25 @@ class ReadOnlyConstBindingsTest inherits QUnit::Test {
                 "readonly-param-index"));
         assertThrows("DUPLICATE-SIGNATURE", "f\\(int x\\) has already been declared",
             \p.parse(), ("%modern\nsub f(const int x) {}\nsub f(int x) {}\n", "readonly-param-overload"));
+    }
+
+    testUnsupportedReadOnlyContexts() {
+        Program p1();
+        p1.parse("%modern\nsub f() { const int a = 1, const int b = 2; const int c = 3, int d = 4; }\n",
+            "readonly-comma-repeated-type");
+        Program p2();
+        assertThrows("PARSE-EXCEPTION", "cannot resolve bareword 'b'",
+            \p2.parse(), ("%modern\nsub f() { const int a = 1, b = 2; }\n", "readonly-comma-ambiguous"));
+        Program p3();
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "read-only foreach variables are not supported",
+            \p3.parse(), ("%modern\nsub f() { foreach const int x in ((1,)) {} }\n", "readonly-foreach"));
+        Program p4();
+        assertThrows("READONLY-VARIABLE-ASSIGNMENT-ERROR", "read-only catch variables are not supported",
+            \p4.parse(), ("%modern\nsub f() { try { throw \"ERR\", \"desc\"; } " +
+                "catch (const hash<ExceptionInfo> ex) {} }\n", "readonly-catch"));
+        Program p5();
+        assertThrows("PARSE-EXCEPTION", "unexpected const",
+            \p5.parse(), ("%modern\nour const int x;\n", "readonly-our"));
     }
 
     testParseOptions() {
