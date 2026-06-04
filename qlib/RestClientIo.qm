@@ -4087,6 +4087,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     }
 
     private {
+        #! Periodic safety poll while waiting on EventNotifier-based completions.
+        const AsyncNotifierPollTimeoutMs = 1000;
+
         #! RestClientIo instance kept alive for the operation lifetime
         RestClientIo rcio;
 
@@ -4300,6 +4303,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
                     return <SocketPollInfo>{
                         "events": SOCK_POLLIN,
                         "socket": connection_ready_notifier,
+                        "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
                     };
                 }
 
@@ -4315,6 +4319,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
                     return <SocketPollInfo>{
                         "events": SOCK_POLLIN,
                         "socket": io_notifier,
+                        "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
                     };
                 }
 
@@ -4921,6 +4926,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         */
         const MaxConnectAttempts = 1;
 
+        #! Periodic safety poll while waiting on EventNotifier-based completions.
+        const AsyncNotifierPollTimeoutMs = 1000;
+
         #! Failed main endpoint connection attempts in this ping operation
         int connection_attempts = 0;
 
@@ -4932,6 +4940,12 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
         #! Last OAuth2 endpoint connection error seen while connecting
         *hash<ExceptionInfo> oauth2_connection_error;
+
+        #! Whether we have already retried after the in-flight ping request lost its socket
+        bool request_retried = False;
+
+        #! Whether we have already retried after the OAuth2 refresh request lost its socket
+        bool oauth2_request_retried = False;
 
         #! GSS context for the current Negotiate ping exchange
         *auto negotiate_context;
@@ -5051,6 +5065,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     return <SocketPollInfo>{
                         "events": SOCK_POLLIN,
                         "socket": oauth2_conn_notifier,
+                        "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
                     };
                 }
                 # Notifier fired — connection ready, still establishing, or closed
@@ -5088,11 +5103,22 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     return <SocketPollInfo>{
                         "events": SOCK_POLLIN,
                         "socket": oauth2_notifier,
+                        "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
                     };
                 }
                 # Notifier fired — acknowledge and retrieve the OAuth2 response
                 oauth2_notifier.acknowledge();
-                processOAuth2RefreshResult();
+                try {
+                    processOAuth2RefreshResult();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (!oauth2_request_retried
+                            && (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-ERROR")) {
+                        oauth2_request_retried = True;
+                        doStartOAuth2Refresh();
+                        continue;
+                    }
+                    rethrow;
+                }
                 # Start connecting (or submit ping immediately if already connected)
                 doStartConnecting();
                 # Fall through to SPS_CONNECTING or SPS_IO_WAITING handling below
@@ -5105,6 +5131,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     return <SocketPollInfo>{
                         "events": SOCK_POLLIN,
                         "socket": connection_ready_notifier,
+                        "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
                     };
                 }
                 # Notifier fired because the connection became READY or left
@@ -5146,13 +5173,27 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     return <SocketPollInfo>{
                         "events": SOCK_POLLIN,
                         "socket": notifier,
+                        "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
                     };
                 }
 
                 # Notifier has fired — acknowledge it and retrieve the response
                 notifier.acknowledge();
                 # Future::get() is non-blocking here: isDone() confirmed it is resolved
-                hash<auto> resp = pending_future.get();
+                hash<auto> resp;
+                try {
+                    resp = pending_future.get();
+                } catch (hash<ExceptionInfo> ex) {
+                    delete pending_future;
+                    delete pending_stream;
+                    if (!request_retried && (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-ERROR")) {
+                        request_retried = True;
+                        on_error conn.authFailure();
+                        doStartConnecting();
+                        continue;
+                    }
+                    rethrow;
+                }
                 delete pending_future;
                 delete pending_stream;
 
@@ -5246,7 +5287,16 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
     #! Parses the OAuth2 token refresh response and stores the new token
     private processOAuth2RefreshResult() {
-        hash<auto> resp = oauth2_future.get();
+        hash<auto> resp;
+        try {
+            resp = oauth2_future.get();
+        } catch (hash<ExceptionInfo> ex) {
+            delete oauth2_future;
+            remove oauth2_operation;
+            delete oauth2_notifier;
+            delete oauth2_rcio;
+            rethrow;
+        }
         delete oauth2_future;
         # oauth2_operation is still in-flight in the async I/O controller (the
         # controller dispatches its onComplete on the worker pool after the

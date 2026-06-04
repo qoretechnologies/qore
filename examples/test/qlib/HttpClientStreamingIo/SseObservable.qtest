@@ -119,6 +119,19 @@ class TestObserver inherits DataProvider::Observer {
         }
         return True;
     }
+
+    bool waitForEvent(string event_id, int count = 1, timeout t = 10s) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while ((select events, $1.event_id == event_id).size() < count) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+        return True;
+    }
 }
 
 class SseObservableTest inherits Test {
@@ -288,8 +301,8 @@ class SseObservableTest inherits Test {
         obs.registerObserver(observer);
         obs.observersReady();
 
-        bool got_events = observer.waitForEvents(10s);
-        assertEq(True, got_events, "received events with POST method");
+        bool got_data = observer.waitForEvent(HttpClientStreamingIo::EVENT_SSE_DATA, 1, 10s);
+        assertEq(True, got_data, "received data event with POST method");
 
         # Verify data event still arrived
         list<hash<auto>> data_events = (

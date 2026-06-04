@@ -439,6 +439,11 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 # HttpAsyncSocketIoController accept submissions).
                 "to": -1s,
             }, True);
+            # The server can queue an immediate SSE event before this poll
+            # operation is installed. Kick the notifier once so any pre-submit
+            # queue contents are drained promptly instead of waiting for another
+            # event or stream close.
+            notifier.notify();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(m);

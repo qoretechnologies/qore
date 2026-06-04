@@ -145,6 +145,9 @@ public class HttpAsyncSocketIoController {
         #! Thread pool for request handler dispatch
         ThreadPool handler_pool;
 
+        #! Handoff queue for handler-pool tasks
+        Queue handler_task_queue();
+
         #! Thread pool configuration for recreation after stop()
         hash<auto> pool_opts;
 
@@ -278,6 +281,36 @@ public class HttpAsyncSocketIoController {
         try {
             log(LoggerLevel::ERROR, "Async HTTP shutdown %s failed: %s: %s", action, ex.err, ex.desc);
         } catch () {
+        }
+    }
+
+    private dispatchOnError(*HttpAsyncTarget target, *Socket sock, hash<ExceptionInfo> ex,
+            *HttpServer::HttpListenerInterface listener, *hash<auto> cx, *string uh, string phase) {
+        string id = uh ?? "<unknown>";
+        if (!exists target || !exists sock) {
+            log(LoggerLevel::DEBUG, "Skipping onError callback for %s during %s: target=%y socket=%y (%s: %s)",
+                id, phase, exists target, exists sock, ex.err, ex.desc);
+            return;
+        }
+        try {
+            call_object_method(target, "onError", sock, ex, listener, cx);
+        } catch () {
+            log(LoggerLevel::ERROR, "onError callback threw for %s during %s", id, phase);
+        }
+    }
+
+    private bool wakeSocketIfPresent(*AbstractPollableIoObjectBase sock, *string uh, string phase) {
+        string id = uh ?? "<unknown>";
+        if (!exists sock) {
+            log(LoggerLevel::DEBUG, "Skipping socket wake for %s during %s: no socket", id, phase);
+            return False;
+        }
+        try {
+            controller.wakeSocket(sock);
+            return True;
+        } catch () {
+            log(LoggerLevel::DEBUG, "Socket wake failed for %s during %s", id, phase);
+            return False;
         }
     }
 
@@ -476,6 +509,11 @@ public class HttpAsyncSocketIoController {
                 logShutdownException("cancelling and closing late connection socket " + sock.uniqueHash(), ex);
             }
         }
+        try {
+            controller.flushCallbacks();
+        } catch (hash<ExceptionInfo> ex) {
+            logShutdownException("flushing late cancellation callbacks", ex);
+        }
         if (race_connections) {
             try {
                 race_connections = NOTHING;
@@ -511,6 +549,11 @@ public class HttpAsyncSocketIoController {
         no-ops; subclasses such as the HttpServer integration override them to
         capture and restore framework-specific thread-local data.
 
+        The ThreadPool task itself is a no-argument method reference; the
+        target/body pair is handed off through \c handler_task_queue.  This
+        avoids submitting a wrapper closure that captures request-local values
+        and can lose delayed dispatch state under heavy async scheduling.
+
         Exceptions raised by \a body are not caught here; callers may add their
         own try/catch inside \a body for dispatch-specific error handling.
 
@@ -518,12 +561,32 @@ public class HttpAsyncSocketIoController {
         @param body the user-code closure to run on a handler-pool thread
         @throw any exception raised by ThreadPool::submit() (e.g. when stopping)
     */
-    submitToHandlerPool(HttpAsyncTarget target, code body) {
-        handler_pool.submit(sub () {
-            auto save = target.saveDispatchContext();
-            on_exit target.restoreDispatchContext(save);
-            body();
-        });
+    submitToHandlerPool(HttpAsyncTarget target, code<nothing()> body) {
+        handler_pool.submit(\runHandlerPoolTask());
+        handler_task_queue.push({"target": target, "body": body});
+    }
+
+    private runHandlerPoolTask() {
+        hash<auto> task;
+        try {
+            task = handler_task_queue.get(10s);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "handler-pool task handoff failed: %s: %s",
+                ex.err, ex.desc);
+            return;
+        }
+
+        *HttpAsyncTarget target = task.target;
+        *code<nothing()> body = task.body;
+        if (!exists target || !exists body) {
+            log(LoggerLevel::ERROR, "handler-pool task missing target/body: target=%y body=%y",
+                exists target, exists body);
+            return;
+        }
+
+        auto save = target.saveDispatchContext();
+        on_exit target.restoreDispatchContext(save);
+        body();
     }
 
     #! Registers a persistent queue for a connection
@@ -1300,7 +1363,7 @@ public class HttpAsyncSocketIoController {
         });
 
         *Future peer_info_future = startPeerInfoFuture(peer_info);
-        if (peer_info_future !== NOTHING) {
+        if (exists peer_info_future) {
             cx{"peer-info-future"} = peer_info_future;
         }
 
@@ -1645,7 +1708,7 @@ public class HttpAsyncSocketIoController {
             "ssl": True,
         };
         *Future peer_info_future = startPeerInfoFuture(new_cinfo.cx.peer);
-        if (peer_info_future !== NOTHING) {
+        if (exists peer_info_future) {
             new_cinfo.cx{"peer-info-future"} = peer_info_future;
         }
 
@@ -1858,7 +1921,7 @@ public class HttpAsyncSocketIoController {
                         log(LoggerLevel::DEBUG, "failed to send 500 response for session=%d "
                             "stream=%d: %s: %s", session_id, stream_id, ex2.err, ex2.desc);
                     }
-                    controller.wakeSocket(listener);
+                    wakeSocketIfPresent(listener, uh, "HTTP/3 handler error response");
                 }
             });
         } catch (hash<ExceptionInfo> ex) {
@@ -1872,7 +1935,7 @@ public class HttpAsyncSocketIoController {
                 log(LoggerLevel::DEBUG, "failed to send 503 response for session=%d "
                     "stream=%d: %s: %s", session_id, stream_id, ex2.err, ex2.desc);
             }
-            controller.wakeSocket(listener);
+            wakeSocketIfPresent(listener, uh, "HTTP/3 submit failure response");
             # Clean up dispatched stream state for headers-only dispatch
             if (request.hdr) {
                 try {
@@ -1966,7 +2029,7 @@ public class HttpAsyncSocketIoController {
                 } else {
                     cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
                         result.hdr, result.body);
-                    controller.wakeSocket(cinfo.sock);
+                    wakeSocketIfPresent(cinfo.sock, uh, "HTTP/2 handler error response");
                 }
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR,
@@ -2054,12 +2117,8 @@ public class HttpAsyncSocketIoController {
                 cinfo = remove connections{uh};
             }
             if (cinfo) {
-                try {
-                    cinfo.target.onError(result.sock, result.ex, cinfo.listener, cinfo.cx);
-                } catch (hash<ExceptionInfo> ex2) {
-                    log(LoggerLevel::ERROR, "onError callback threw during SSL error for %s: %s: %s",
-                        uh, ex2.err, ex2.desc);
-                }
+                dispatchOnError(cinfo.target, result.sock, result.ex, cinfo.listener, cinfo.cx, uh,
+                    "SSL error");
             }
             try { result.sock.close(); } catch () {}
             return;
@@ -2169,10 +2228,22 @@ public class HttpAsyncSocketIoController {
             string state) {
         try {
             call_object_method(stream_op, "continueReading");
-        } catch () {
-            # Already in STATE_READING (getOutput() transitioned atomically)
-            # or request pending dispatch — nothing to do here
-            return;
+        } catch (hash<ExceptionInfo> ex) {
+            *string op_state;
+            try {
+                op_state = call_object_method(stream_op, "getState");
+            } catch () {
+            }
+
+            if (op_state == "wait_read") {
+                # The op has no request to consume, but may also no longer be
+                # registered with the controller after the previous callback.
+                # Re-submit it so queued response frames are flushed.
+            } else {
+                # Already in STATE_READING (getOutput() transitioned atomically)
+                # or request pending dispatch — nothing to do here
+                return;
+            }
         }
         hash<HttpActiveConnectionInfo> resumed_cinfo;
         {
@@ -2661,7 +2732,7 @@ public class HttpAsyncSocketIoController {
                         submitConnectionOp(uh, new_cinfo);
                         # Wake the socket to flush any data queued during
                         # header send (SSE events, WS frames)
-                        controller.wakeSocket(cinfo.sock);
+                        wakeSocketIfPresent(cinfo.sock, uh, "HTTP/2 submit failure resume");
                     } else {
                         # No pending streaming — close connection
                         try { cinfo.sock.close(); } catch () {}
@@ -2727,11 +2798,7 @@ public class HttpAsyncSocketIoController {
             remove connections{uh};
         }
 
-        try {
-            cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-        } catch (hash<ExceptionInfo> ex2) {
-            log(LoggerLevel::ERROR, "onError callback threw for %s: %s: %s", uh, ex2.err, ex2.desc);
-        }
+        dispatchOnError(cinfo.target, cinfo.sock, ex, cinfo.listener, cinfo.cx, uh, "connection error");
         # Do not close shared UDP socket for HTTP/3 connections
         if (state != HttpConnectionState::Http3 && state != HttpConnectionState::Http3Sending) {
             try { cinfo.sock.close(); } catch () {}
@@ -2740,18 +2807,38 @@ public class HttpAsyncSocketIoController {
 
     #! Handles header read completion
     private handleHeaderComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, hash<auto> output) {
-        output.info = addPersistentQueueClosures(output.info);
-        hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
-            "sock": cinfo.sock,
-            "hdr": output.hdr,
-            "header_info": output.info,
-            "listener": cinfo.listener,
-            "cx": cinfo.cx,
-            "keep_alive": True,
-            "ssl": cinfo.ssl,
+        string dispatch_uh = uh;
+        Socket dispatch_sock = cinfo.sock;
+        HttpAsyncTarget dispatch_target = cinfo.target;
+        *HttpServer::HttpListenerInterface dispatch_listener = cinfo.listener;
+        hash<auto> dispatch_cx = cinfo.cx;
+        bool dispatch_ssl = cinfo.ssl;
+        string dispatch_state = cinfo.state;
+        timeout dispatch_ttl = cinfo.ttl;
+        *HttpKeepAlivePollOperation dispatch_keep_alive_op = cinfo.keep_alive_op;
+        hash<HttpActiveConnectionInfo> dispatch_cinfo = <HttpActiveConnectionInfo>{
+            "sock": dispatch_sock,
+            "listener": dispatch_listener,
+            "cx": dispatch_cx,
+            "target": dispatch_target,
+            "state": dispatch_state,
+            "ttl": dispatch_ttl,
+            "keep_alive_op": dispatch_keep_alive_op,
+            "ssl": dispatch_ssl,
         };
 
-        log(LoggerLevel::DEBUG, "Header complete for keep-alive: %y", uh);
+        output.info = addPersistentQueueClosures(output.info);
+        hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
+            "sock": dispatch_sock,
+            "hdr": output.hdr,
+            "header_info": output.info,
+            "listener": dispatch_listener,
+            "cx": dispatch_cx,
+            "keep_alive": True,
+            "ssl": dispatch_ssl,
+        };
+
+        log(LoggerLevel::DEBUG, "Header complete for keep-alive: %y", dispatch_uh);
 
         # Check if H1 request body should be read by I/O controller
         # Only pre-read Content-Length bodies — NOT chunked. Chunked encoding
@@ -2769,55 +2856,57 @@ public class HttpAsyncSocketIoController {
                 try {
                     softint cl = content_length;
                     bool conn_close = (output.hdr.connection =~ /close/i);
-                    AbstractPollOperation body_op = cinfo.sock.startPollReadHttpBody(cl, False,
+                    AbstractPollOperation body_op = dispatch_sock.startPollReadHttpBody(cl, False,
                         conn_close);
                     # Stay in controller tracking — socket is managed during body read
                     hash<HttpActiveConnectionInfo> new_cinfo;
                     {
                         AutoWriteLock al(m);
                         hash<HttpActiveConnectionInfo> upd =
-                            cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                            cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
                         upd.state = HttpConnectionState::ReadBody;
                         upd.stream_op = body_op;
                         upd.pending_hdr = output.hdr;
                         upd.pending_header_info = output.info;
-                        new_cinfo = connections{uh} = upd;
+                        new_cinfo = connections{dispatch_uh} = upd;
                     }
-                    submitConnectionOp(uh, new_cinfo);
+                    submitConnectionOp(dispatch_uh, new_cinfo);
                     return;
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error starting body read for %y: %s: %s",
-                        uh, ex.err, ex.desc);
+                        dispatch_uh, ex.err, ex.desc);
                     # Fall through to normal dispatch — handler will read body
                 }
             }
         }
 
-        if (routeRequestToPersistentQueue(uh, conn_info)) {
+        if (routeRequestToPersistentQueue(dispatch_uh, conn_info)) {
             return;
         }
 
         # Remove from our tracking
         {
             AutoWriteLock al(m);
-            remove connections{uh};
+            remove connections{dispatch_uh};
         }
 
         # Try lightweight inline path first (no body, handler opts in via canHandleInline).
         # This runs directly on the call_dispatcher worker — no handler_pool thread hop.
         # The inline path skips context setup, auth, and logging for maximum throughput.
         try {
-            *hash<HttpRequestResultInfo> inline_result = cinfo.target.tryInlineRequest(conn_info);
+            *hash<HttpRequestResultInfo> inline_result = dispatch_target.tryInlineRequest(conn_info);
             if (inline_result) {
-                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, inline_result, cinfo.target);
+                handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx,
+                    inline_result, dispatch_target);
                 return;
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Error handling inline request: %s: %s", ex.err, ex.desc);
-            cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-            if (cinfo.state != HttpConnectionState::Http3
-                    && cinfo.state != HttpConnectionState::Http3Sending) {
-                try { cinfo.sock.close(); } catch () {}
+            dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener, dispatch_cx,
+                dispatch_uh, "inline request");
+            if (dispatch_state != HttpConnectionState::Http3
+                    && dispatch_state != HttpConnectionState::Http3Sending) {
+                try { dispatch_sock.close(); } catch () {}
             }
             return;
         }
@@ -2826,28 +2915,31 @@ public class HttpAsyncSocketIoController {
         # onHttpRequest / processNativeRequest may read the request body or
         # block while waiting for controller-backed socket I/O, so it must run
         # on a handler thread, not the call_dispatcher worker.
-        code request_handler = sub () {
+        code<nothing()> request_handler = sub () {
             try {
-                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
-                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
+                hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
+                    dispatch_target);
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "Error handling keep-alive request: %s: %s",
-                    ex.err, ex.desc);
-                cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                if (cinfo.state != HttpConnectionState::Http3
-                        && cinfo.state != HttpConnectionState::Http3Sending) {
-                    try { cinfo.sock.close(); } catch () {}
+                log(LoggerLevel::ERROR, "Error handling keep-alive request for %y: %s: %s",
+                    dispatch_uh, ex.err, ex.desc);
+                dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener, dispatch_cx,
+                    dispatch_uh, "keep-alive request");
+                if (dispatch_state != HttpConnectionState::Http3
+                        && dispatch_state != HttpConnectionState::Http3Sending) {
+                    try { dispatch_sock.close(); } catch () {}
                 }
             }
         };
 
         try {
-            submitToHandlerPool(cinfo.target, request_handler);
+            submitToHandlerPool(dispatch_target, request_handler);
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s", uh, ex.err, ex.desc);
-            if (cinfo.state != HttpConnectionState::Http3
-                    && cinfo.state != HttpConnectionState::Http3Sending) {
-                try { cinfo.sock.close(); } catch () {}
+            log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s",
+                dispatch_uh, ex.err, ex.desc);
+            if (dispatch_state != HttpConnectionState::Http3
+                    && dispatch_state != HttpConnectionState::Http3Sending) {
+                try { dispatch_sock.close(); } catch () {}
             }
         }
     }
@@ -2861,15 +2953,35 @@ public class HttpAsyncSocketIoController {
         @param body_data the body data read by the I/O controller (may be NOTHING for empty body)
     */
     private handleBodyComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, *binary body_data) {
+        string dispatch_uh = uh;
+        Socket dispatch_sock = cinfo.sock;
+        HttpAsyncTarget dispatch_target = cinfo.target;
+        *HttpServer::HttpListenerInterface dispatch_listener = cinfo.listener;
+        hash<auto> dispatch_cx = cinfo.cx;
+        bool dispatch_ssl = cinfo.ssl;
+        string dispatch_state = cinfo.state;
+        timeout dispatch_ttl = cinfo.ttl;
+        *HttpKeepAlivePollOperation dispatch_keep_alive_op = cinfo.keep_alive_op;
+        hash<HttpActiveConnectionInfo> dispatch_cinfo = <HttpActiveConnectionInfo>{
+            "sock": dispatch_sock,
+            "listener": dispatch_listener,
+            "cx": dispatch_cx,
+            "target": dispatch_target,
+            "state": dispatch_state,
+            "ttl": dispatch_ttl,
+            "keep_alive_op": dispatch_keep_alive_op,
+            "ssl": dispatch_ssl,
+        };
+
         # Build the connection info from saved headers (same as handleHeaderComplete)
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
-            "sock": cinfo.sock,
+            "sock": dispatch_sock,
             "hdr": cinfo.pending_hdr,
             "header_info": cinfo.pending_header_info,
-            "listener": cinfo.listener,
-            "cx": cinfo.cx,
+            "listener": dispatch_listener,
+            "cx": dispatch_cx,
             "keep_alive": True,
-            "ssl": cinfo.ssl,
+            "ssl": dispatch_ssl,
         };
 
         # Store the pre-read body for the handler (same convention as H2/H3)
@@ -2880,35 +2992,37 @@ public class HttpAsyncSocketIoController {
         log(LoggerLevel::DEBUG, "Body read complete for %y: %d bytes", uh,
             body_data ? body_data.size() : 0);
 
-        if (routeRequestToPersistentQueue(uh, conn_info)) {
+        if (routeRequestToPersistentQueue(dispatch_uh, conn_info)) {
             return;
         }
 
         # Remove from our tracking — handler thread owns the socket now
         {
             AutoWriteLock al(m);
-            remove connections{uh};
+            remove connections{dispatch_uh};
         }
 
         # Dispatch to handler pool (same as handleHeaderComplete)
-        code request_handler = sub () {
+        code<nothing()> request_handler = sub () {
             try {
-                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
-                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
+                hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
+                    dispatch_target);
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "Error handling request after body read: %s: %s",
-                    ex.err, ex.desc);
-                cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                try { cinfo.sock.close(); } catch () {}
+                log(LoggerLevel::ERROR, "Error handling request after body read for %y: %s: %s",
+                    dispatch_uh, ex.err, ex.desc);
+                dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener, dispatch_cx,
+                    dispatch_uh, "request after body read");
+                try { dispatch_sock.close(); } catch () {}
             }
         };
 
         try {
-            submitToHandlerPool(cinfo.target, request_handler);
+            submitToHandlerPool(dispatch_target, request_handler);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
-                uh, ex.err, ex.desc);
-            try { cinfo.sock.close(); } catch () {}
+                dispatch_uh, ex.err, ex.desc);
+            try { dispatch_sock.close(); } catch () {}
         }
     }
 
@@ -3538,18 +3652,37 @@ public class HttpAsyncSocketIoController {
             }
         }
 
+        string dispatch_uh = uh;
+        int dispatch_stream_id = stream_id;
+        Socket dispatch_sock = cinfo.sock;
+        HttpAsyncTarget dispatch_target = cinfo.target;
+        *HttpServer::HttpListenerInterface dispatch_listener = cinfo.listener;
+        hash<auto> dispatch_cx = cinfo.cx;
+        bool dispatch_ssl = cinfo.ssl;
+        Http2PollOperation dispatch_h2op = h2op;
+        hash<HttpActiveConnectionInfo> dispatch_cinfo = <HttpActiveConnectionInfo>{
+            "sock": dispatch_sock,
+            "listener": dispatch_listener,
+            "cx": dispatch_cx,
+            "target": dispatch_target,
+            "state": HttpConnectionState::Http2,
+            "stream_op": dispatch_h2op,
+            "is_http2": True,
+            "ssl": dispatch_ssl,
+        };
+
         # Convert HTTP/2 request to HttpConnectionInfo format
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
-            "sock": cinfo.sock,
+            "sock": dispatch_sock,
             "hdr": hdr,
             "header_info": {
                 "http2": True,
-                "stream_id": stream_id,
+                "stream_id": dispatch_stream_id,
                 "accept-encoding": accept_encoding,
                 "body": body_streaming ? NOTHING : request.body,
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
-                "io_wake": sub () { controller.wakeSocket(cinfo.sock); },
+                "io_wake": sub () { controller.wakeSocket(dispatch_sock); },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);
@@ -3557,14 +3690,14 @@ public class HttpAsyncSocketIoController {
                     # close signal on peer stream reset, releasing the dedicated
                     # handler thread even though disconnect() does not close a
                     # multiplexed connection (issue #5339).
-                    h2op.registerPersistentSessionQueue(q);
+                    dispatch_h2op.registerPersistentSessionQueue(q);
                 },
                 "deregister_persistent_queue": sub (string key) {
                     self.deregisterPersistentQueue(key);
-                    h2op.deregisterPersistentSessionQueue();
+                    dispatch_h2op.deregisterPersistentSessionQueue();
                 },
                 "resume_body_streaming": body_streaming ? sub () {
-                    resumeMultiplexedReading(h2op, uh,
+                    resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
                         HttpConnectionState::Http2);
                 } : NOTHING,
                 # Async-body opt-in: handlers that want inbound DATA frames
@@ -3577,15 +3710,15 @@ public class HttpAsyncSocketIoController {
                 # GrpcServerAsync for client-streaming / bidi and to drain
                 # the unary request body without the sync helper.
                 "register_body_queue": body_streaming ? sub (Queue q) {
-                    h2op.registerStreamQueue(stream_id, q);
-                    resumeMultiplexedReading(h2op, uh,
+                    dispatch_h2op.registerStreamQueue(dispatch_stream_id, q);
+                    resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
                         HttpConnectionState::Http2);
                 } : NOTHING,
             },
-            "listener": cinfo.listener,
-            "cx": cinfo.cx,
+            "listener": dispatch_listener,
+            "cx": dispatch_cx,
             "keep_alive": True,
-            "ssl": cinfo.ssl,
+            "ssl": dispatch_ssl,
         };
 
         # Check for persistent queue — if a dedicated thread is waiting for this
@@ -3594,18 +3727,18 @@ public class HttpAsyncSocketIoController {
         *code resume_reading;
         if (body_streaming) {
             resume_reading = sub () {
-                resumeMultiplexedReading(h2op, uh, HttpConnectionState::Http2);
+                resumeMultiplexedReading(dispatch_h2op, dispatch_uh, HttpConnectionState::Http2);
             };
         }
-        if (pushPersistentQueue(uh, hdr, {
+        if (pushPersistentQueue(dispatch_uh, hdr, {
             "type": "request",
             "conn_info": conn_info,
-            "stream_id": stream_id,
+            "stream_id": dispatch_stream_id,
             "body_streaming": body_streaming,
             "resume_reading": resume_reading,
         }, sub () {
             log(LoggerLevel::DEBUG, "HTTP/2 request routed to persistent queue: %y stream=%d %s %s",
-                uh, stream_id, request.method, request.path);
+                dispatch_uh, dispatch_stream_id, request.method, request.path);
         })) {
             return;
         }
@@ -3632,63 +3765,66 @@ public class HttpAsyncSocketIoController {
         #   - error paths during framework body reading (timeout, max_body, etc.)
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
-            submitToHandlerPool(cinfo.target, sub () {
+            submitToHandlerPool(dispatch_target, sub () {
                 try {
-                    hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                    hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                     if (body_streaming) {
-                        resumeMultiplexedReading(h2op, uh,
+                        resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
                             HttpConnectionState::Http2);
                     }
-                    handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
+                    handleHttp2MultiplexedResult(dispatch_uh, dispatch_cinfo,
+                        dispatch_stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d: %s: %s",
-                        stream_id, ex.err, ex.desc);
+                    log(LoggerLevel::ERROR, "Error handling HTTP/2 request stream=%d on %y: %s: %s",
+                        dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
                     if (body_streaming) {
-                        resumeMultiplexedReading(h2op, uh,
+                        resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
                             HttpConnectionState::Http2);
                     }
                     try {
-                        cinfo.sock.submitHttp2Response(stream_id, 500,
+                        dispatch_sock.submitHttp2Response(dispatch_stream_id, 500,
                             {"content-type": "text/plain"},
                             "Internal Server Error");
                     } catch (hash<ExceptionInfo> ex2) {
                         log(LoggerLevel::DEBUG, "submitHttp2Response 500 stream=%d failed: %s: %s",
-                            stream_id, ex2.err, ex2.desc);
+                            dispatch_stream_id, ex2.err, ex2.desc);
                     }
-                    controller.wakeSocket(cinfo.sock);
+                    wakeSocketIfPresent(dispatch_sock, dispatch_uh,
+                        "HTTP/2 multiplexed handler error response");
                 }
             });
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 multiplexed handler for stream=%d "
-                "on %y: %s: %s", stream_id, uh, ex.err, ex.desc);
+                "on %y: %s: %s", dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
             if (body_streaming) {
                 # Resume h2op — it was not resumed before submit in body_streaming mode
                 try {
-                    h2op.continueReading();
+                    dispatch_h2op.continueReading();
                     hash<HttpActiveConnectionInfo> resumed_cinfo;
                     {
                         AutoWriteLock al(m);
-                        if (connections.hasKey(uh)) {
+                        if (connections.hasKey(dispatch_uh)) {
                             hash<HttpActiveConnectionInfo> conn_info_upd =
-                                cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-                            conn_info_upd.stream_op = h2op;
+                                cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
+                            conn_info_upd.stream_op = dispatch_h2op;
                             conn_info_upd.state = HttpConnectionState::Http2;
-                            resumed_cinfo = connections{uh} = conn_info_upd;
+                            resumed_cinfo = connections{dispatch_uh} = conn_info_upd;
                         }
                     }
                     if (resumed_cinfo) {
-                        submitConnectionOp(uh, resumed_cinfo);
-                        controller.wakeSocket(cinfo.sock);
+                        submitConnectionOp(dispatch_uh, resumed_cinfo);
+                        wakeSocketIfPresent(resumed_cinfo.sock, dispatch_uh,
+                            "HTTP/2 multiplexed submit failure resume");
                     }
                 } catch () {}
             }
             # Send error response for this stream
             try {
-                cinfo.sock.submitHttp2Response(stream_id, 503,
+                dispatch_sock.submitHttp2Response(dispatch_stream_id, 503,
                     {"content-type": "text/plain"},
                     "Service Unavailable");
             } catch () {}
-            controller.wakeSocket(cinfo.sock);
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh, "HTTP/2 submit failure response");
         }
     }
 
@@ -3725,31 +3861,50 @@ public class HttpAsyncSocketIoController {
             h2op.registerStreamQueue(stream_id, stream_data_queue);
         }
 
+        string dispatch_uh = uh;
+        int dispatch_stream_id = stream_id;
+        Socket dispatch_sock = cinfo.sock;
+        HttpAsyncTarget dispatch_target = cinfo.target;
+        *HttpServer::HttpListenerInterface dispatch_listener = cinfo.listener;
+        hash<auto> dispatch_cx = cinfo.cx;
+        bool dispatch_ssl = cinfo.ssl;
+        Http2PollOperation dispatch_h2op = h2op;
+        hash<HttpActiveConnectionInfo> dispatch_cinfo = <HttpActiveConnectionInfo>{
+            "sock": dispatch_sock,
+            "listener": dispatch_listener,
+            "cx": dispatch_cx,
+            "target": dispatch_target,
+            "state": HttpConnectionState::Http2,
+            "stream_op": dispatch_h2op,
+            "is_http2": True,
+            "ssl": dispatch_ssl,
+        };
+
         # Closure for handlers to register a stream data listener.
         # The listener's notifyIo() method is called from the controller's
         # worker pool when the I/O thread drains data to the Queue.
         code<nothing(object)> register_stream_listener = sub (object listener) {
-            h2op.registerStreamListener(stream_id, listener);
+            dispatch_h2op.registerStreamListener(dispatch_stream_id, listener);
         };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
         # with other streams on the same connection
-        h2op.continueReading();
+        dispatch_h2op.continueReading();
         hash<HttpActiveConnectionInfo> new_cinfo;
         {
             AutoWriteLock al(m);
             # Check if connection still exists
-            if (!connections.hasKey(uh)) {
-                try { cinfo.sock.close(); } catch () {}
+            if (!connections.hasKey(dispatch_uh)) {
+                try { dispatch_sock.close(); } catch () {}
                 return;
             }
             # Cast to typed hash to update fields and assign back
-            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-            conn_info.stream_op = h2op;
+            hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{dispatch_uh});
+            conn_info.stream_op = dispatch_h2op;
             conn_info.state = HttpConnectionState::Http2;
-            new_cinfo = connections{uh} = conn_info;
+            new_cinfo = connections{dispatch_uh} = conn_info;
         }
-        submitConnectionOp(uh, new_cinfo);
+        submitConnectionOp(dispatch_uh, new_cinfo);
 
         # Build header hash
         hash<auto> hdr = request.headers;
@@ -3775,35 +3930,35 @@ public class HttpAsyncSocketIoController {
             int retries = 0;
             while (True) {
                 try {
-                    cinfo.sock.sendHttp2StreamData(stream_id, data, end_stream);
+                    dispatch_sock.sendHttp2StreamData(dispatch_stream_id, data, end_stream);
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "HTTP2-FLOW-CONTROL") {
                         if (++retries > 200) {
                             throw "HTTP2-FLOW-CONTROL", sprintf("stream %d: buffer "
-                                "not draining after %d retries", stream_id, retries);
+                                "not draining after %d retries", dispatch_stream_id, retries);
                         }
                         # Buffer full — wake I/O thread to drain, then wait
                         # deterministically for the CV signal
-                        controller.wakeSocket(cinfo.sock);
-                        if (cinfo.sock.waitForHttp2StreamDrain(stream_id, 10s)) {
+                        controller.wakeSocket(dispatch_sock);
+                        if (dispatch_sock.waitForHttp2StreamDrain(dispatch_stream_id, 10s)) {
                             throw "HTTP2-STREAM-ERROR", sprintf("stream %d: drain "
-                                "timed out or stream removed", stream_id);
+                                "timed out or stream removed", dispatch_stream_id);
                         }
                         continue;
                     }
                     rethrow;
                 }
             }
-            controller.wakeSocket(cinfo.sock);
+            controller.wakeSocket(dispatch_sock);
         };
 
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
-            "sock": cinfo.sock,
+            "sock": dispatch_sock,
             "hdr": hdr,
             "header_info": {
                 "http2": True,
-                "stream_id": stream_id,
+                "stream_id": dispatch_stream_id,
                 "is_extended_connect": True,
                 "is_websocket_connect": is_websocket_connect,
                 "accept-encoding": accept_encoding,
@@ -3812,44 +3967,47 @@ public class HttpAsyncSocketIoController {
                 "stream_uses_frame_state": stream_uses_frame_state,
                 "register_stream_listener": register_stream_listener,
                 "send_stream_data": send_stream_data,
-                "io_wake": sub () { controller.wakeSocket(cinfo.sock); },
+                "io_wake": sub () { controller.wakeSocket(dispatch_sock); },
             },
-            "listener": cinfo.listener,
-            "cx": cinfo.cx,
+            "listener": dispatch_listener,
+            "cx": dispatch_cx,
             "keep_alive": True,
-            "ssl": cinfo.ssl,
+            "ssl": dispatch_ssl,
         };
 
         # Dispatch to handler thread pool
         try {
-            submitToHandlerPool(cinfo.target, sub () {
+            submitToHandlerPool(dispatch_target, sub () {
                 try {
-                    hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
-                    handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
+                    hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                    handleHttp2MultiplexedResult(dispatch_uh, dispatch_cinfo,
+                        dispatch_stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error handling HTTP/2 extended CONNECT stream=%d: "
-                        "%s: %s", stream_id, ex.err, ex.desc);
+                        "%s: %s", dispatch_stream_id, ex.err, ex.desc);
                     # NOTE: do NOT call cinfo.target.onError() here — that closes the shared
                     # connection socket which breaks all other streams.  In HTTP/2 multiplexed
                     # mode, a handler error affects only this stream; send a 500 response.
                     try {
-                        cinfo.sock.submitHttp2Response(stream_id, 500,
+                        dispatch_sock.submitHttp2Response(dispatch_stream_id, 500,
                             {"content-type": "text/plain"},
                             "Internal Server Error");
                     } catch () {}
-                    controller.wakeSocket(cinfo.sock);
+                    wakeSocketIfPresent(dispatch_sock, dispatch_uh,
+                        "HTTP/2 extended CONNECT handler error response");
                 }
             });
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 extended CONNECT handler for stream=%d "
-                "on %y: %s: %s", stream_id, uh, ex.err, ex.desc);
+                "on %y: %s: %s", dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
             # Send error for this stream only — other streams continue
             try {
-                cinfo.sock.submitHttp2Response(stream_id, 503,
+                dispatch_sock.submitHttp2Response(dispatch_stream_id, 503,
                     {"content-type": "text/plain"},
                     "Service Unavailable");
             } catch () {}
-            controller.wakeSocket(cinfo.sock);
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh,
+                "HTTP/2 extended CONNECT submit failure response");
         }
     }
 
@@ -3890,6 +4048,7 @@ public class HttpAsyncSocketIoController {
             # submitConnectResponse() etc.  h2op is still on the I/O thread
             # handling other streams, so do NOT remove the connection or close.
             log(LoggerLevel::DEBUG, "HTTP/2 stream %d on %y handed to dedicated handler", stream_id, uh);
+            controller.wakeSocket(cinfo.sock);
             return;
         }
 
@@ -4016,12 +4175,8 @@ public class HttpAsyncSocketIoController {
         if (error) {
             log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s)",
                 uh, error.err, error.desc);
-            try {
-                cinfo.target.onError(cinfo.sock, cast<hash<ExceptionInfo>>(error),
-                    cinfo.listener, cinfo.cx);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "onError callback threw for %s: %s: %s", uh, ex.err, ex.desc);
-            }
+            dispatchOnError(cinfo.target, cinfo.sock, cast<hash<ExceptionInfo>>(error),
+                cinfo.listener, cinfo.cx, uh, "HTTP/2 connection close");
         } else {
             log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y", uh);
         }
