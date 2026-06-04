@@ -1,0 +1,57 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ActionCatalogReentrantSchemeModule.qm - test module for reentrant scheme-index registration
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+%requires ConnectionProvider
+
+module ActionCatalogReentrantSchemeModule {
+    version = "1.0";
+    desc = "test module for reentrant data provider action catalog registration";
+    author = "Qore Technologies";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("qore-test-reentrant-scheme", <ConnectionSchemeInfo>{
+            "display_name": "Reentrant Scheme",
+            "short_desc": "Reentrant scheme",
+            "desc": "Reentrant scheme",
+            "schemes": {
+                "qore-test-reentrant-scheme": True,
+            },
+            "base_scheme_map": {
+                "qore-test-reentrant-scheme": "qore-test-reentrant-scheme",
+            },
+            "cls": Class::forName("ConnectionProvider::HttpConnection"),
+            "options": {},
+        });
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": "QoreTestReentrantLoadedApp",
+            "display_name": "Reentrant Loaded App",
+            "short_desc": "Loaded app",
+            "desc": "Loaded app",
+            "groups": (AppGroup::DataTransformation,),
+            "scheme": "qore-test-reentrant-scheme",
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "reentrant-loaded.svg",
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": "QoreTestReentrantLoadedApp",
+            "path": "/loaded-action",
+            "action": "loaded-action",
+            "display_name": "Loaded Action",
+            "short_desc": "Loaded action",
+            "desc": "Loaded action",
+            "action_code": DPAT_API,
+            "output_type": new QoreHashDataType(),
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "value": new QoreDataField("value", "Value", new QoreStringDataType()),
+            }),
+        });
+    };
+}

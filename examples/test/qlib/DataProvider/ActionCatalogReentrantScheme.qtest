@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires ProviderIndexUtil
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%exec-class ActionCatalogReentrantSchemeTest
+
+const ReentrantScheme = "qore-test-reentrant-scheme";
+const ReentrantOuterApp = "QoreTestReentrantOuterApp";
+const ReentrantLoadedApp = "QoreTestReentrantLoadedApp";
+const ReentrantLoadedAction = "loaded-action";
+const ReentrantModule = "ActionCatalogReentrantSchemeModule";
+
+class ActionCatalogReentrantSchemeTest inherits QUnit::Test {
+    constructor() : Test("DataProvider action catalog reentrant scheme test", "1.0") {
+        addTestCase("indexed scheme module can register actions during app registration",
+            \indexedSchemeModuleCanRegisterActionsDuringAppRegistration());
+
+        set_return_value(main());
+    }
+
+    private checkYaml() {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+    }
+
+    indexedSchemeModuleCanRegisterActionsDuringAppRegistration() {
+        checkYaml();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        on_exit {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        }
+
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "schememap": {
+                ReentrantScheme: {
+                    ReentrantModule: True,
+                },
+            },
+        }, 0s, {});
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ReentrantOuterApp,
+            "display_name": "Reentrant Outer App",
+            "short_desc": "Outer app that triggers indexed scheme loading",
+            "desc": "Outer app that triggers indexed scheme loading",
+            "groups": (AppGroup::DataTransformation,),
+            "scheme": ReentrantScheme,
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "reentrant.svg",
+            "dynamic": True,
+        });
+
+        assertEq(ReentrantLoadedApp, DataProviderActionCatalog::getAppEx(ReentrantLoadedApp).name);
+        assertEq(ReentrantLoadedAction,
+            DataProviderActionCatalog::getActionHashEx(ReentrantLoadedApp){ReentrantLoadedAction}.action);
+    }
+}

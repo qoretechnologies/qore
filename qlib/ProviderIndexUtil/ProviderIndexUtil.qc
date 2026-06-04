@@ -90,6 +90,15 @@ public class ProviderIndexUtil {
         #! Initialized flag
         static bool initialized;
 
+        #! Initialization-in-progress flag
+        static bool initializing;
+
+        #! Thread currently initializing the data provider index
+        static *int initializing_tid;
+
+        #! Condition for threads waiting for data provider index initialization
+        static Condition init_cond();
+
         #! All apps loaded flag
         static bool apps_loaded;
 
@@ -337,17 +346,17 @@ public class ProviderIndexUtil {
         if (apps_loaded) {
             return;
         }
+        checkDataIndex();
+        if (!initialized) {
+            return;
+        }
+
         m.lock();
         on_exit m.unlock();
 
         # check again in the lock
         if (apps_loaded) {
             return;
-        }
-
-        if (!initialized) {
-            index = readDataProviderIndex();
-            initialized = True;
         }
 
         # iterate all apps and calculate the set of unloaded modules
@@ -372,16 +381,63 @@ public class ProviderIndexUtil {
         if (initialized) {
             return;
         }
-        m.lock();
-        on_exit m.unlock();
 
-        # check again in the lock
-        if (initialized) {
-            return;
+        {
+            m.lock();
+            on_exit m.unlock();
+            while (initializing && initializing_tid != gettid()) {
+                init_cond.wait(m);
+            }
+
+            # check again in the lock
+            if (initialized) {
+                return;
+            }
+
+            if (initializing) {
+                # Re-entrant lookups can happen while readDataProviderIndex() loads modules or resolves typed hash fields.
+                # Do not recursively initialize the index or try to relock this mutex from the same thread.
+                return;
+            }
+
+            initializing = True;
+            initializing_tid = gettid();
+            index = createEmptyDataProviderIndex();
         }
 
-        index = readDataProviderIndex();
+        *hash<DataProviderIndexInfo> new_index;
+        try {
+            new_index = readDataProviderIndex();
+        } catch (hash<ExceptionInfo> ex) {
+            m.lock();
+            on_exit m.unlock();
+            initializing = False;
+            remove initializing_tid;
+            init_cond.broadcast();
+            rethrow;
+        }
+
+        m.lock();
+        on_exit m.unlock();
+        if (new_index) {
+            index = new_index;
+        }
         initialized = True;
+        initializing = False;
+        remove initializing_tid;
+        init_cond.broadcast();
+    }
+
+    #! Returns an empty data provider index with all map fields initialized
+    static private hash<DataProviderIndexInfo> createEmptyDataProviderIndex() {
+        return <DataProviderIndexInfo>{
+            "factorymap": {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": {},
+            "actioninfomap": {},
+            "top_actioninfomap": {},
+        };
     }
 
     #! Sets or clears the global logger
