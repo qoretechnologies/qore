@@ -32,7 +32,7 @@
 %requires Util >= 1.0
 
 # the implementation is in OracleSqlUtilBase
-%requires(reexport) OracleSqlUtilBase.qm
+%requires(reexport) OracleSqlUtilBase
 
 # for bindOracleCollection
 %try-module oracle
