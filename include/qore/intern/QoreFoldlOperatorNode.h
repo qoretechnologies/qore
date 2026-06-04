@@ -79,6 +79,16 @@ public:
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->right.getInternalNode());
         return rv;
     }
+
+    //! Returns the fold expression for IR lowering.
+    DLLLOCAL const QoreValue& getFoldExpression() const {
+        return left;
+    }
+
+    //! Returns the iterator expression for IR lowering.
+    DLLLOCAL const QoreValue& getIteratorExpr() const {
+        return right;
+    }
 };
 
 class QoreFoldrOperatorNode : public QoreFoldlOperatorNode {

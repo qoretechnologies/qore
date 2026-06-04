@@ -65,6 +65,16 @@ public:
     DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
             ExceptionSink* xsink) const;
 
+    //! Returns the source expression for IR lowering.
+    DLLLOCAL const QoreValue& getSourceExpression() const {
+        return left;
+    }
+
+    //! Returns the predicate expression for IR lowering.
+    DLLLOCAL const QoreValue& getPredicateExpression() const {
+        return right;
+    }
+
 protected:
     const QoreTypeInfo* returnTypeInfo;
     FunctionalOperator* iterator_func;

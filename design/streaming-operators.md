@@ -1,9 +1,8 @@
 # Streaming Operators
 
-**Status:** Implemented with one optional optimization follow-up remaining.
+**Status:** Implemented.
 
-**Target:** Qore 2.3 implementation baseline; follow-up work is tracked here
-instead of in `design-pending`.
+**Target:** Qore 2.3 implementation baseline.
 
 ## Summary
 
@@ -60,6 +59,19 @@ contextual parsing and parse-option opt-outs.
 root expressions. When nested under another functional or streaming consumer,
 they remain lazy and can short-circuit the source.
 
+Lazy functional operators preserve their chain semantics in IR/JIT/AOT lowering.
+Intermediate `map`, `select`, `map-select`, and streaming stages pass values to
+downstream consumers as soon as each value is available; they must not
+materialize an intermediate result before the downstream stage runs. Root
+`map`, `select`, and `map-select` materialize only their final root result when
+that result is needed, and preserve scalar-source behavior by returning a
+scalar or `NOTHING` when the functional source is scalar. `foldl` consumes lazy
+chains in source order.
+`foldr` evaluates upstream lazy stages in source order and materializes only the
+minimal final input required for reverse reduction. Non-reference `foreach`
+over supported lazy chains executes the loop body per produced value without an
+intermediate list.
+
 Assignment to an explicit hard-list target, `list<T>` or `*list<T>`, from an
 `AbstractIterator` drains the iterator into a new list and folds each yielded
 value through `T`. Assignment to `auto`, `any`, `object`, `AbstractIterator`,
@@ -84,7 +96,7 @@ paths:
   `lib/scanner.lpp`
 - `QoreIterateOperatorNode`
 - `QoreStreamingOperatorNode`
-- native streaming IR lowering and nested streaming-stage fusion in
+- native streaming IR lowering and mixed lazy pipeline fusion in
   `QoreIRLowering`
 - JIT runtime helpers for `iterate`
 - AOT expression serialization for `ITERATE` and `STREAMING`
@@ -106,24 +118,10 @@ Focused tests exist in:
 - `examples/test/qlib/QoreCodeFormat/QoreCodeFormat.qtest`
 - `modules/astparser/test/astparser.qtest`
 
-## Remaining Gap
+## Completed Follow-Up Work
 
-### Broader Lazy-Operator Fusion
-
-The current native fusion path is implemented for nested streaming stages. The
-original design also called for a broader optimizer that recognizes mixed
-chains of existing lazy functional operators such as `map`, `select`, `foldl`,
-`foldr`, and `foreach`.
-
-Current IR lowering already has native implementations and some pattern-specific
-fused opcodes for common `map` / `select` / `foldl` shapes, but it is not a
-general mixed-stage pipeline optimizer.
-
-## Follow-Up Implementation Plan
-
-The AOT, parse-option compatibility, and generic hard-list materialization
-items from the original follow-up plan are implemented. The remaining work is a
-broader mixed lazy pipeline optimizer.
+The AOT, parse-option compatibility, generic hard-list materialization, and
+mixed lazy pipeline items from the original follow-up plan are implemented.
 
 ### Completed: Freeze Current Semantics
 
@@ -238,118 +236,53 @@ Completed acceptance criteria:
 - Existing unrestricted and soft-list assignment behavior is unchanged.
 - Long or user-defined iterators remain cancellable while materializing.
 
-### Phase 2: Introduce a General Lazy Pipeline Descriptor
+### Completed: Preserve Mixed Lazy Pipeline Semantics in IR
 
-Goal: create a compiler representation that can fuse mixed streaming and
-functional operator chains without duplicating lowering logic per operator.
+Goal: make IR lowering preserve the lazy functional-operator contract for mixed
+streaming and functional chains.
 
-Tasks:
+Completed items:
 
-- Add a chain collector that recognizes a source plus ordered stages:
+- Add a deterministic lazy-chain collector for:
+  - `map`
   - `select`
-  - non-hash `map`
-  - streaming `take`, `drop`, `takewhile`, `takeuntil`
-  - streaming terminals `first`, `any`, `all`, `count`
-  - `foldl` / `foldr` terminal reducers
-  - root `map` / `select` materialization terminals
-- Keep source evaluation exactly once.
+  - `map expr, source, predicate`
+  - `take`, `drop`, `takewhile`, and `takeuntil`
+- Lower streaming terminal consumers (`first`, `any`, `all`, `count`) over mixed
+  lazy chains without materializing intermediate lists.
+- Lower root `map`, `select`, and `map-select` over lazy chains by passing each
+  produced element through the ordered stages and materializing only the root
+  result when the value is needed.
+- Preserve scalar functional-source behavior by unwrapping the final root result
+  to a scalar or `NOTHING` when the innermost functional source is scalar.
+- Lower `foldl` over lazy chains in source order without intermediate
+  materialization.
+- Lower `foldr` by evaluating upstream lazy stages in source order and
+  materializing only the final reducer input needed for reverse iteration.
+- Lower non-reference `foreach` over supported lazy chains as one iterator loop,
+  preserving loop-variable assignment, `$#`, `break`, `continue`, and loop local
+  cleanup.
 - Preserve implicit argument semantics:
-  - `$1` for current element
-  - `$2` for reducer accumulator/next value where applicable
-  - `$#` for current element index
-- Preserve side-effect order, exception order, and cancellation behavior.
-- Define fallback boundaries for unsupported stages, hash-map operators,
-  reflective calls, and AST-delegated expressions.
+  - `$1` for the current stage element
+  - `$2` for reducer element values
+  - `$#` for the current stage or foreach index
+- Keep lowering-time cancellation checks for large generated chains and runtime
+  loop checkpointing on fused loops.
+- Treat `%no-stream-fusion` as an optimization directive only; it must not
+  reintroduce eager intermediate materialization or change lazy-chain semantics.
 
-Acceptance criteria:
+Completed tests:
 
-- The collector produces a deterministic stage list for supported chains.
-- Unsupported chains fall back to existing native or AST lowering.
-- `%no-stream-fusion` disables this generalized fusion path while leaving
-  operator semantics available.
-
-### Phase 3: Lower Mixed Pipelines to Native IR
-
-Goal: replace wrapper-chain execution for supported mixed chains with one
-native loop.
-
-Tasks:
-
-- Reuse the existing streaming fused-loop structure as the first backend.
-- Support direct-index list loops for typed list sources where profitable.
-- Support iterator loops for arbitrary iterable sources.
-- Add list-building terminals for root `map`, `select`, `take`, `drop`,
-  `takewhile`, and `takeuntil`.
-- Add scalar terminals for `first`, `any`, `all`, `count`, `foldl`, and `foldr`.
-- Ensure AST-delegated stage bodies push/pop implicit arguments correctly.
-- Ensure exception targets are wired through invoke and throw paths.
-- Add loop cancellation checkpoints and lowering-time cancellation checks for
-  very large generated chains.
-
-Tests:
-
-- `count P, (map E, source)`
-- `count P2, (map E, (select source, P1))`
-- `first P2, (map E, (drop N, source))`
-- `foldl R, (map E, (select source, P))`
-- `take N, (select source, P)` root materialization
-- side-effect ordering in each stage
-- exceptions thrown by stage predicates and map bodies
-- `%no-stream-fusion` equivalence against the same source
-
-Acceptance criteria:
-
-- Supported chains produce the same values and side effects with and without
-  fusion.
-- Fused IR does not materialize intermediate lists unless the root expression
-  requires a list.
-- Existing pattern-specific fast opcodes remain valid or are replaced only when
-  the generalized path is demonstrably equivalent.
-
-### Phase 4: Extend Fusion to `foreach` Conservatively
-
-Goal: close the statement-level fusion gap without risking control-flow bugs.
-
-Tasks:
-
-- Recognize `foreach` over a supported lazy chain.
-- Fuse only when the loop body can be lowered safely with existing statement
-  lowering and control-flow targets.
-- Preserve `break`, `continue`, `return`, exception handling, and closure
-  capture behavior.
-- Fall back to existing foreach lowering whenever control-flow targets are not
-  representable in the fused loop.
-
-Acceptance criteria:
-
-- `foreach` over `map` / `select` / streaming-stage chains avoids intermediate
-  list materialization in supported cases.
-- All control-flow tests pass with and without `%no-stream-fusion`.
-- Unsupported bodies fall back safely.
-
-### Phase 5: Verification and Benchmarking
-
-Goal: prove correctness first, then quantify performance.
-
-Tasks:
-
-- Add a semantic-equivalence qtest matrix that runs representative chains with
-  fusion enabled and with `%no-stream-fusion`.
-- Add AOT and JIT smoke coverage for the same representative chains.
-- Benchmark:
-  - streaming short-circuit operators over large inputs
-  - mixed `select` / `map` / `count` chains
-  - `foldl(map(...))` qlib-style chains
-  - root materialization chains
-- Compare against current lazy functional wrapper execution, not against an
-  eager materializing baseline.
-
-Acceptance criteria:
-
-- Full test suite passes.
-- Benchmarks show no meaningful regression for one-stage chains.
-- Mixed chains avoid per-stage wrapper overhead where the generalized fusion
-  path applies.
+- streaming terminals over `map`, `select`, `map-select`, and streaming stages
+  stop reading the source as soon as the terminal result is known
+- root `map` over `select` preserves interleaved side effects
+- `foldl` and `foldr` over `map(select(...))` preserve source-stage side-effect
+  order
+- non-reference `foreach` over `map(select(...))` runs the body per produced
+  value and short-circuits correctly on `break`
+- scalar functional chains such as `map $1, (select 3, True)` return scalar
+  results, while streaming chains such as `map $1, (take 2, 3)` return lists
+- `%no-stream-fusion` preserves lazy-chain semantics
 
 ## Explicit Non-Goals
 

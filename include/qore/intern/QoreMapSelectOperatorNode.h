@@ -87,6 +87,16 @@ public:
         return e[1];
     }
 
+    //! Returns the map expression for IR lowering.
+    DLLLOCAL const QoreValue& getMapExpression() const {
+        return e[0];
+    }
+
+    //! Returns the select expression for IR lowering.
+    DLLLOCAL const QoreValue& getSelectExpression() const {
+        return e[2];
+    }
+
     DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
             ExceptionSink* xsink) const;
 
