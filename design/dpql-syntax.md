@@ -258,18 +258,68 @@ format_date(@created, "YYYY-MM-DD")
 format_number(@price, ",", ".", 2)
 ```
 
-### Collection Functions
+### Collection and Streaming Operators
+
+Collection operators use Qore-style prefix syntax rather than function-call syntax. Arguments
+are separated with commas.
 
 ```dpql
 # Apply expression to each element, return list
-map(@orders, @product.name)
+map @product.name, @orders
 
 # With filter
-map(@orders, @product.name, @status == "active")
+map @product.name, @orders, @status == "active"
 
 # Build hash from list
-hash_map(@users, @id, @name)
+hash_map @id, @name, @users
 ```
+
+The body, key, value, and predicate expressions are evaluated in the context of the current
+source item. When a list item is a hash, its fields are available directly, such as
+`@product.name` or `@status`. Scalar list items are exposed as `@value`. Hash sources expose
+`@key` and `@value`.
+
+```dpql
+# Scalar list source
+select @scores, @value >= 90
+
+# Hash source
+hash_map @key, @value, @weights, @value > 0
+```
+
+Supported prefix operator forms:
+
+| Operator | Syntax | Result |
+|----------|--------|--------|
+| `map` | `map body, source[, filter]` | List of evaluated body results |
+| `hash_map` | `hash_map key, value, source[, filter]` | Hash built from evaluated keys and values |
+| `select` | `select source, predicate` | List of matching source items |
+| `first` | `first source` or `first predicate, source` | First item, first matching item, or `nothing` |
+| `any` | `any source` or `any predicate, source` | `true` if any item or predicate result is truthy |
+| `all` | `all predicate, source` | `true` if all predicate results are truthy |
+| `count` | `count source` or `count predicate, source` | Number of source items or matching items |
+| `take` | `take count, source` | First `count` items |
+| `drop` | `drop count, source` | Items after the first `count` items |
+| `takewhile` | `takewhile predicate, source` | Items until the predicate first becomes false |
+| `takeuntil` | `takeuntil predicate, source` | Items until the predicate first becomes true |
+
+```dpql
+select @orders, @amount > 100
+first @orders
+first @amount > 100, @orders
+any @value >= 90, @scores
+any @flags
+all @active, @users
+count @status == "active", @orders
+take 10, @orders
+drop 10, @orders
+takewhile @status != "closed", @events
+takeuntil @status == "closed", @events
+```
+
+For hash sources, `select`, `first`, `take`, `drop`, `takewhile`, and `takeuntil` return
+`key`/`value` records. `takeuntil` stops before the matching boundary item. `all` returns
+`true` for an empty source.
 
 ## Values
 

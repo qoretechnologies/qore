@@ -446,6 +446,35 @@ It handles three value types:
 - `hash<DataProviderExpression>` — recursively evaluates nested expressions
 - All other values are returned as-is (literals)
 
+### Streaming-Style Collection Operators
+
+DPQL collection operators such as `map`, `hash_map`, `select`, `first`, `any`, `all`,
+`count`, `take`, `drop`, `takewhile`, and `takeuntil` are parsed as normal
+`hash<DataProviderExpression>` nodes, but their body and predicate arguments are evaluated
+in a controlled per-item context rather than against the outer record. Integrations that
+evaluate or transform generic expressions must preserve that behavior:
+
+- List items that are hashes expose their fields directly, so `@status` resolves against
+  the current item.
+- Scalar list items expose `@value`.
+- Hash sources expose `@key` and `@value`.
+- Hash-source item-returning operators return `key`/`value` records.
+
+These operators can appear inside ordinary DPQL filters, for example:
+
+```dpql
+any @value >= 90, @scores
+select @orders, @amount > 100
+count @status == "active", @events
+```
+
+Shape-aware consumers such as DataFrame-backed providers and `QoreFilterRecordsProcessor`
+should only lower these expressions to dense masks when they can preserve the per-item
+context exactly. Otherwise they must fall back to generic row evaluation and rebuild the
+negotiated output shape (`DataFrameBlock`, `BufferColumns`, or row records). This keeps
+IR-lowered or native fast paths correct while allowing unsupported collection semantics to
+remain available through the generic evaluator.
+
 ### Old-Style Hash Matching
 
 `AbstractDataProviderRecordIterator::matchGeneric()` provides backward-compatible matching
