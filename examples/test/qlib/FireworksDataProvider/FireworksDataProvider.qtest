@@ -103,8 +103,11 @@ public class FireworksDataProviderTest inherits QUnit::Test {
         assertEq("fireworks-ai-logo.svg", app.logo_file_name);
         assertTrue(app.logo.size() > 0);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("FireworksAi");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("FireworksAi"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(2, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(("chat-completion", "create-embeddings"), action_names);
@@ -114,7 +117,10 @@ public class FireworksDataProviderTest inherits QUnit::Test {
         FakeFireworksRestClientIo fake();
         FireworksDataProvider::FireworksDataProvider prov(fake);
         assertEq("fireworks", prov.getName());
-        list<string> children = sort(prov.getChildProviderNames());
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = sort(select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName);
         assertEq(("chat-completion", "create-embeddings"), children);
     }
 

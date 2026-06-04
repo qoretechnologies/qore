@@ -89,8 +89,11 @@ public class ExaDataProviderTest inherits QUnit::Test {
         assertEq("exa", app.scheme);
         assertEq("exa-logo.svg", app.logo_file_name);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("Exa");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("Exa"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(3, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(("contents", "find-similar", "search"), action_names);
@@ -99,7 +102,10 @@ public class ExaDataProviderTest inherits QUnit::Test {
     private rootProviderTest() {
         FakeExaRestClientIo fake();
         ExaDataProvider::ExaDataProvider prov(fake);
-        list<string> children = sort(prov.getChildProviderNames());
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = sort(select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName);
         assertEq(("contents", "find-similar", "search"), children);
     }
 

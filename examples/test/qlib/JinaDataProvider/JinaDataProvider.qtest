@@ -102,8 +102,11 @@ public class JinaDataProviderTest inherits QUnit::Test {
         assertEq("Jina AI", app.display_name);
         assertEq("jina", app.scheme);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("JinaAi");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("JinaAi"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(2, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(("create-embeddings", "rerank"), action_names);
@@ -112,7 +115,10 @@ public class JinaDataProviderTest inherits QUnit::Test {
     private rootProviderTest() {
         FakeJinaRestClientIo fake();
         JinaDataProvider::JinaDataProvider prov(fake);
-        list<string> children = sort(prov.getChildProviderNames());
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = sort(select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName);
         assertEq(("create-embeddings", "rerank"), children);
     }
 

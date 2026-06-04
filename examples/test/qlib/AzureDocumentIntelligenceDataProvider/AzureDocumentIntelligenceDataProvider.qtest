@@ -106,8 +106,11 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
         assertEq("AzureDocumentIntelligence", app.name);
         assertEq("azure-documentintelligence", app.scheme);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("AzureDocumentIntelligence");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("AzureDocumentIntelligence"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("analyze-document", actions[0].action);
     }
