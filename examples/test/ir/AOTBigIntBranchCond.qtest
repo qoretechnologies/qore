@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTBigIntBranchCondTest
+
+# Regression test for a use-after-free in IR/JIT/AOT branch-condition lowering.
+#
+# An integer outside the inline INT48 range (e.g. the result of `x & (1 << 53)`)
+# is materialised as a refcounted QoreBigIntNode via the boxing AndAny path.
+# When such a value was used *directly* as a branch condition, the if/while/do
+# lowering wrongly classified it as "surviving" the discard.temps emitted before
+# the branch (because its static type is `int`), skipping the ToBool conversion.
+# discard.temps then freed the boxed temporary before BrIf's slow path
+# dereferenced it -> getAsBool() on a freed node (SIGSEGV under AOT, or a wrong
+# branch under IR/JIT).  The fix forces ToBool for int-typed conditions, which
+# reads the value while it is still live.  This test asserts that IR and JIT
+# match AST for boxed big-int conditions in if/while/do contexts.
+
+class AOTBigIntBranchCondTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTBigIntBranchCondTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("boxed big-int branch conditions match across exec modes",
+            \testBigIntBranchCond());
+
+        set_return_value(main());
+    }
+
+    private string script() {
+        return "%modern
+const BIG = 1 << 53;   # 2^53, exceeds INT48 -> boxed as QoreBigIntNode
+
+class Prog {
+    private { int target_po; }
+    constructor(int po) { target_po = po; }
+    # member read yields a boxed value -> AndAny -> boxed big-int temp as cond
+    bool memberAndCond() { if (target_po & BIG) { return True; } return False; }
+}
+
+# untyped operand also forces the boxing AndAny path
+bool sub autoAndCond(auto v) { if (v & BIG) { return True; } return False; }
+
+# boxed big-int temp as a while condition
+int sub whileAndCount(int v) {
+    int n = 0;
+    while (v & BIG) { ++n; v = 0; }
+    return n;
+}
+
+# boxed big-int temp as a do-while condition
+int sub doAndCount(int v) {
+    int n = 0;
+    do { ++n; v = 0; } while (v & BIG);
+    return n;
+}
+
+Prog set_po(BIG);
+Prog clr_po(4);
+printf(\"%y %y %y %y %d %d\\n\",
+    set_po.memberAndCond(),   # True
+    clr_po.memberAndCond(),   # False
+    autoAndCond(BIG),         # True
+    autoAndCond(4),           # False
+    whileAndCount(BIG),       # 1
+    doAndCount(0));           # 1 (body runs once, condition false)
+";
+    }
+
+    private string runMode(string path, string mode) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            libqore_dir, qore_bin, mode, path));
+    }
+
+    testBigIntBranchCond() {
+        TmpFile tf("qore-aot-bigint-branchcond-", ".q");
+        tf.file.write(script());
+        tf.file.close();
+
+        string ast = runMode(tf.path, "ast");
+        assertEq("True False True False 1 1\n", ast, "AST boxed big-int branch conditions");
+        assertEq(ast, runMode(tf.path, "ir"), "IR matches AST");
+        assertEq(ast, runMode(tf.path, "jit"), "JIT matches AST");
+    }
+}

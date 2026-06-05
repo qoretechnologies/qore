@@ -378,8 +378,24 @@ static bool statementMayCreateNodeTemp(const AbstractStatement* stmt) {
 }
 
 static bool conditionValueSurvivesDiscardTemps(const QoreValue& val) {
+    // A condition value survives the discard.temps emitted just before the
+    // branch only if it can never be a refcounted heap temporary that
+    // discard.temps would free.  Integers are deliberately excluded here even
+    // though isImmediateCleanupFreeType() accepts NT_INT: an integer outside the
+    // inline INT48 range — e.g. the result of `x & (1 << 53)` lowered via the
+    // boxing AndAny path — is materialised as a refcounted QoreBigIntNode, and
+    // that temporary is released by the discard.temps that precedes the branch.
+    // Treating such a value as a survivor skips the ToBool conversion and lets
+    // BrIf's slow path dereference the freed node — a use-after-free (crash or
+    // wrong branch).  Converting with ToBool first reads the value while it is
+    // still live, so only the genuinely never-boxed immediate types qualify:
+    // bool, float (always a native double), char, NOTHING and NULL.
     const QoreTypeInfo* type_info = getExprTypeInfo(val);
-    return isImmediateCleanupFreeType(type_info) || isImmediateCleanupFreeValue(val);
+    return QoreTypeInfo::isType(type_info, NT_BOOLEAN)
+        || QoreTypeInfo::isType(type_info, NT_FLOAT)
+        || QoreTypeInfo::isType(type_info, NT_CHAR)
+        || QoreTypeInfo::isType(type_info, NT_NOTHING)
+        || QoreTypeInfo::isType(type_info, NT_NULL);
 }
 
 static QoreIRPluginOperationRef pluginOperationRefFromInfo(const QorePluginResolvedOperationInfo& info,
