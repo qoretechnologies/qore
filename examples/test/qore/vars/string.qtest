@@ -550,6 +550,19 @@ class StringTest inherits QUnit::Test {
         assertTrue("b" >= "a");
         assertTrue("ab" > "a");
         assertTrue("a" < "ab");
+
+        string text = "string";
+        assertFalse(text[0] == "*");
+        assertTrue(text[0] == "s");
+        assertTrue(text[0] != "*");
+        assertTrue(text[0] < "t");
+        assertTrue(text[0] <= "s");
+        assertTrue(text[0] > "r");
+        assertTrue(text[0] >= "s");
+
+        text = "äbc";
+        assertTrue(text[0] == "ä");
+        assertTrue(text[0] < "å");
     }
 
     testEncoding() {

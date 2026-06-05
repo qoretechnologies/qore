@@ -458,7 +458,8 @@ void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const
         del = true;
     } else if (t == NT_CHAR) {
         str = new QoreString("", enc ? enc : QCS_UTF8);
-        if (str->concatUnicode(n.getChar(), xsink)) {
+        int err = xsink ? str->concatUnicode(n.getChar(), xsink) : str->concatUnicode(n.getChar());
+        if (err) {
             delete str;
             str = nullptr;
         } else {
