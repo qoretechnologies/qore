@@ -55,7 +55,8 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
 
     //printd(0, "QoreAssignmentOperatorNode::parseInitImpl() this: %p left: '%s' nt: %d ti: %p '%s'\n", this,
     //    left.getFullTypeName(), left.getType(), ti, QoreTypeInfo::getName(ti));
-    if (!err && checkLValue(left, parse_context.pflag)) {
+    int lvalue_err = 0;
+    if (!err && (lvalue_err = checkLValue(left, parse_context.pflag))) {
         err = -1;
     }
 
@@ -103,6 +104,12 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         if (!err) {
             err = -1;
         }
+    }
+
+    if (lvalue_err == -2) {
+        parse_context.typeInfo = ti;
+        parse_context.analysis.clear();
+        return err;
     }
 
     qore_type_result_e res;

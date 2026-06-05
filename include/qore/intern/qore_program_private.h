@@ -752,10 +752,11 @@ public:
     }
 
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
-    // (currently: PO_MODERN implies QoreParseOptions::NO_SUMMARIZE, which lives at bit 69)
     DLLLOCAL void applyParseOptionImplications() {
         if ((pwo.parse_options & PO_MODERN) == PO_MODERN) {
             pwo.parse_options |= QoreParseOptions::NO_SUMMARIZE;
+            pwo.parse_options |= QoreParseOptions::STREAMING_ANY;
+            pwo.parse_options |= PO_NEGATIVE_OFFSETS;
         }
     }
 

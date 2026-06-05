@@ -110,6 +110,56 @@ static bool has_separated_module_main(const char* path, const char* feature) {
     return !stat(modulePath.c_str(), &sb) && S_ISREG(sb.st_mode);
 }
 
+static bool qore_binary_load_error_can_fallback_to_source(ExceptionSink& xsink) {
+    if (!xsink.isException()) {
+        return false;
+    }
+
+    QoreValue desc = xsink.getExceptionDesc();
+    if (desc.getType() == NT_STRING) {
+        QoreStringValueHelper str(desc);
+        if (str->c_str() && strstr(str->c_str(), "source fallback is disabled")) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool qore_find_user_module_source(const std::string& dir, const char* name, QoreString& source_path,
+        bool& separated) {
+    struct stat sb;
+
+    source_path.sprintf("%s" QORE_DIR_SEP_STR "%s.qm", dir.c_str(), name);
+    if (!stat(source_path.c_str(), &sb) && S_ISREG(sb.st_mode)) {
+        separated = false;
+        return true;
+    }
+
+    source_path.clear();
+    source_path.sprintf("%s" QORE_DIR_SEP_STR "%s", dir.c_str(), name);
+    if (!stat(source_path.c_str(), &sb) && S_ISDIR(sb.st_mode) && has_separated_module_main(source_path.c_str(), name)) {
+        separated = true;
+        return true;
+    }
+
+    return false;
+}
+
+static bool qore_find_explicit_qmod_source(const char* path, QoreString& source_path) {
+    size_t len = strlen(path);
+    if (len <= 5 || strcasecmp(path + len - 5, ".qmod")) {
+        return false;
+    }
+
+    source_path = path;
+    source_path.terminate(len - 5);
+    source_path.concat(".qm");
+
+    struct stat sb;
+    return !stat(source_path.c_str(), &sb) && S_ISREG(sb.st_mode);
+}
+
 ModuleReExportHelper::ModuleReExportHelper(QoreAbstractModule* mi, bool reexp) : m(set_reexport(mi, reexp, reexport)) {
     //printd(5, "ModuleReExportHelper::ModuleReExportHelper() %p '%s' (reexp: %d) to %p '%s' (reexp: %d)\n", mi, mi ? mi->getName() : "n/a", reexp, m, m ? m->getName() : "n/a", reexport);
     if (m && mi && reexp) {
@@ -1220,8 +1270,24 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 return nullptr;
             }
 
-            mi = loadBinaryModuleFromPath(xsink, raw_path, name, reexport, pholder.release(), p,
+            ExceptionSink binary_xsink;
+            mi = loadBinaryModuleFromPath(binary_xsink, raw_path, name, reexport, pholder.release(), p,
                 load_opt, mod_desc_func);
+            if (binary_xsink) {
+                QoreString source_path;
+                if (qore_binary_load_error_can_fallback_to_source(binary_xsink)
+                        && qore_find_explicit_qmod_source(raw_path, source_path)) {
+                    binary_xsink.clear();
+                    mi = loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, nullptr,
+                        load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                    if (!mi && !xsink) {
+                        xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
+                            "fallback after binary module '%s' failed", name, raw_path);
+                    }
+                } else {
+                    xsink.assimilate(binary_xsink);
+                }
+            }
         } else if (QoreDir::folder_exists(modulePath, xsink)) {
             if (!has_separated_module_main(raw_path, name)) {
                 xsink.raiseException("LOAD-MODULE-ERROR", "cannot load separated user module '%s' from directory "
@@ -1261,6 +1327,27 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             search_paths.push_back(&p);
         }
     }
+
+    auto load_user_module_source = [&](const std::string& dir, bool& found) -> QoreAbstractModule* {
+        QoreString source_path;
+        bool separated = false;
+        if (!qore_find_user_module_source(dir, name, source_path, separated)) {
+            found = false;
+            return nullptr;
+        }
+        found = true;
+
+        if (!q_absolute_path(source_path.c_str())) {
+            q_normalize_path(source_path);
+        }
+
+        if (separated) {
+            return loadSeparatedModule(xsink, wsink, source_path.c_str(), name, pgm, reexport, pholder.release(),
+                load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+        }
+        return loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, pholder.release(),
+            load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+    };
 
     for (const std::string* path_ptr : search_paths) {
         const std::string& dir = *path_ptr;
@@ -1303,8 +1390,26 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     // which is more informative than "binary + Program" here.
                     break;
                 }
-                mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
+                ExceptionSink binary_xsink;
+                mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
                     pgm, load_opt, mod_desc_func);
+                if (binary_xsink) {
+                    if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
+                        bool source_found = false;
+                        mi = load_user_module_source(dir, source_found);
+                        if (source_found) {
+                            binary_xsink.clear();
+                            if (!mi && !xsink) {
+                                xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
+                                    "fallback after binary module '%s' failed", name, str.c_str());
+                            }
+                        } else {
+                            xsink.assimilate(binary_xsink);
+                        }
+                    } else {
+                        xsink.assimilate(binary_xsink);
+                    }
+                }
                 return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
             }
         }
@@ -1333,8 +1438,26 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     // search.
                     break;
                 }
-                mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
+                ExceptionSink binary_xsink;
+                mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
                     pgm, load_opt, mod_desc_func);
+                if (binary_xsink) {
+                    if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
+                        bool source_found = false;
+                        mi = load_user_module_source(dir, source_found);
+                        if (source_found) {
+                            binary_xsink.clear();
+                            if (!mi && !xsink) {
+                                xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
+                                    "fallback after binary module '%s' failed", name, str.c_str());
+                            }
+                        } else {
+                            xsink.assimilate(binary_xsink);
+                        }
+                    } else {
+                        xsink.assimilate(binary_xsink);
+                    }
+                }
                 return qore_check_load_module_intern(mi, op, version, pgm, xsink, unlock_lock) ? nullptr : mi;
             }
         }

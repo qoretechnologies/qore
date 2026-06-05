@@ -57,6 +57,7 @@
 #include <qore/intern/QoreHashMapSelectOperatorNode.h>
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 #include <qore/intern/QoreInstanceOfOperatorNode.h>
+#include <qore/intern/QoreIterateOperatorNode.h>
 #include <qore/intern/QoreIntPostDecrementOperatorNode.h>
 #include <qore/intern/QoreIntPostIncrementOperatorNode.h>
 #include <qore/intern/QoreIntPreDecrementOperatorNode.h>
@@ -111,6 +112,7 @@
 #include <qore/intern/QoreSpliceOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsRangeOperatorNode.h>
+#include <qore/intern/QoreStreamingOperatorNode.h>
 #include <qore/intern/QoreTransliterationOperatorNode.h>
 #include <qore/intern/QoreTrimOperatorNode.h>
 #include <qore/intern/QoreUnaryMinusOperatorNode.h>
@@ -129,7 +131,7 @@ static bool claimNode(const QoreValue& expr) {
 }
 
 static bool claimConstant(const QoreValue& expr) {
-    if (expr.isEnum() || expr.isNothing() || expr.isBool() || expr.isInt()
+    if (expr.isEnum() || expr.isNothing() || expr.isBool() || expr.isChar() || expr.isInt()
             || expr.isFloat() || expr.isNull()) {
         return true;
     }
@@ -273,6 +275,8 @@ CLAIM_NODE_FN(Select, QoreSelectOperatorNode)
 CLAIM_NODE_FN(MapSelect, QoreMapSelectOperatorNode)
 CLAIM_NODE_FN(HashMap, QoreHashMapOperatorNode)
 CLAIM_NODE_FN(HashMapSelect, QoreHashMapSelectOperatorNode)
+CLAIM_NODE_FN(Iterate, QoreIterateOperatorNode)
+CLAIM_NODE_FN(Streaming, QoreStreamingOperatorNode)
 CLAIM_NODE_FN(LogicalOr, QoreLogicalOrOperatorNode)
 CLAIM_NODE_FN(LogicalNot, QoreLogicalNotOperatorNode)
 CLAIM_NODE_FN(NullCoalescing, QoreNullCoalescingOperatorNode)
@@ -388,8 +392,10 @@ const QoreIRExprHandlerInfo QORE_IR_EXPR_REGISTRY[] = {
     QORE_IR_EXPR_ENTRY(lowerMapSelect, claimMapSelect, "Map-select operator"),
     QORE_IR_EXPR_ENTRY(lowerHashMap, claimHashMap, "Hash map operator"),
 
-    // More complex operators (1)
+    // More complex operators (3)
     QORE_IR_EXPR_ENTRY(lowerHashMapSelect, claimHashMapSelect, "Hash map-select operator"),
+    QORE_IR_EXPR_ENTRY(lowerIterate, claimIterate, "Iterate operator"),
+    QORE_IR_EXPR_ENTRY(lowerStreaming, claimStreaming, "Streaming operator"),
 
     // Logical operators (3)
     QORE_IR_EXPR_ENTRY(lowerLogicalAnd, claimLogicalAnd, "Logical AND (&&)"),

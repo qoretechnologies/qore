@@ -49,7 +49,7 @@ switch (b.typeCode()) {
 }
     @endcode
 */
-int <bool>::typeCode() [flags=CONSTANT] {
+int <bool>::typeCode() [const;flags=CONSTANT] {
    return NT_BOOLEAN;
 }
 
@@ -66,7 +66,7 @@ bool bool = b.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
 */
-bool <bool>::val() [flags=CONSTANT] {
+bool <bool>::val() [const;flags=CONSTANT] {
    return (bool)b;
 }
 
@@ -80,7 +80,7 @@ if (n.intp())
     printf("%y: can be converted to an integer: %d\n", n, int(n));
     @endcode
 */
-bool <bool>::intp() [flags=CONSTANT] {
+bool <bool>::intp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -94,6 +94,6 @@ if (n.strp())
     printf("%y: can be converted to a string: '%s'\n", n, string(n));
     @endcode
 */
-bool <bool>::strp() [flags=CONSTANT] {
+bool <bool>::strp() [const;flags=CONSTANT] {
    return true;
 }

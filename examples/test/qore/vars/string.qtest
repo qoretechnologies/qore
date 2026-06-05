@@ -550,6 +550,19 @@ class StringTest inherits QUnit::Test {
         assertTrue("b" >= "a");
         assertTrue("ab" > "a");
         assertTrue("a" < "ab");
+
+        string text = "string";
+        assertFalse(text[0] == "*");
+        assertTrue(text[0] == "s");
+        assertTrue(text[0] != "*");
+        assertTrue(text[0] < "t");
+        assertTrue(text[0] <= "s");
+        assertTrue(text[0] > "r");
+        assertTrue(text[0] >= "s");
+
+        text = "äbc";
+        assertTrue(text[0] == "ä");
+        assertTrue(text[0] < "å");
     }
 
     testEncoding() {
@@ -575,8 +588,8 @@ class StringTest inherits QUnit::Test {
         assertEq(rindex(str, "==="), -1, "negative rindex()");
         assertEq(bindex(str, "==="), -1, "negative bindex()");
 
-        assertEq(str[31], "ö", "first UTF-8 string index dereference");
-        assertEq(str[39], "ü", "second UTF-8 string index dereference");
+        assertEq(c'\u{F6}', str[31], "first UTF-8 string index dereference");
+        assertEq(c'\u{FC}', str[39], "second UTF-8 string index dereference");
 
         # save string
         string ostr = str;

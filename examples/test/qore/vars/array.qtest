@@ -259,7 +259,7 @@ public class ArrayTest inherits QUnit::Test {
     testElementDereference() {
         string astr = "hello";
         binary bin = binary(astr);
-        assertEq("l", astr[2], "string element dereference");
+        assertEq(c'l', astr[2], "string element dereference");
         assertEq(ord("o"), bin[4], "binary byte dereference");
     }
 

@@ -627,21 +627,32 @@ QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* meth
         QoreChannel*& channel_out, ExceptionSink* xsink) {
     MethodGuard g(this);
     if (!g.acquired()) {
+        releaseStreamReservation(true);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming send request: connection has been closed");
         return nullptr;
     }
     if (!poll_op_priv || isClosed()) {
+        releaseStreamReservation(true);
         raiseClosedSubmitError(
             "cannot submit streaming send request: connection is closed",
             xsink);
         return nullptr;
     }
     if (!isReady()) {
+        releaseStreamReservation(true);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming send request: connection is not ready");
         return nullptr;
     }
+    if (!beginStreamingSend()) {
+        releaseStreamReservation(true);
+        xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
+            "cannot submit streaming send request: another streaming send "
+            "request is already in progress on this connection");
+        return nullptr;
+    }
+    StreamingSendSetupGuard setup_guard(this);
 
     AbstractAsyncAction* action = nullptr;
     ReferenceHolder<QoreObject> future_obj(xsink);
@@ -657,10 +668,15 @@ QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* meth
         QorePromise* promise_raw = *promise_holder;
         ReferenceHolder<QoreFuture> future_holder(promise_holder->getFuture(xsink), xsink);
         if (*xsink) {
+            releaseStreamReservation();
             return nullptr;
         }
         QoreProgram* pgm = getProgram();
         future_obj = qore_new_future_impl_object(pgm, future_holder.release());
+        if (*xsink) {
+            releaseStreamReservation();
+            return nullptr;
+        }
         action = new PromiseAction(promise_raw, nullptr);
         promise_holder.release()->deref(xsink);
     }
@@ -670,8 +686,10 @@ QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* meth
         nullptr, 0, /* streaming */ streaming_recv, action, /* max_streams */ 1,
         /* streaming_send */ true, xsink);
     if (*xsink || stream_id < 0) {
+        releaseStreamReservation();
         return nullptr;
     }
+    setup_guard.markSubmitted();
 
     releaseStreamReservation();
 
@@ -696,13 +714,20 @@ QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* meth
     // Build result
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     result->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     if (streaming_recv) {
         QoreChannel* ch = *ch_holder;
         ch->ref();
         channel_out = ch;
     } else {
         result->setKeyValue("future", future_obj.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
+    setup_guard.keepOpen();
     return result.release();
 }
 
@@ -753,6 +778,7 @@ void Http1ClientConnection::pushSendData(const void* data, size_t len, Exception
     if (!data || !len) {
         // End-of-body sentinel
         pushSendData(nullptr, xsink);
+        finishStreamingSend();
         return;
     }
     SimpleRefHolder<QoreStringNode> str(new QoreStringNode((const char*)data, len, QCS_DEFAULT));
@@ -836,6 +862,7 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     // (we've already invalidated).  See HttpClientConnection.h.
     markInvalidated();
     drainInFlight();
+    finishStreamingSend();
 
     if (!poll_op_priv) {
         return;

@@ -97,11 +97,13 @@
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/QoreQuestionMarkOperatorNode.h"
 #include "qore/intern/QoreFoldlOperatorNode.h"
+#include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreMapOperatorNode.h"
 #include "qore/intern/QoreMapSelectOperatorNode.h"
 #include "qore/intern/QoreHashMapOperatorNode.h"
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
+#include "qore/intern/QoreStreamingOperatorNode.h"
 #include "qore/intern/QoreElementsOperatorNode.h"
 #include "qore/intern/QoreDeleteOperatorNode.h"
 #include "qore/intern/QoreRemoveOperatorNode.h"
@@ -875,6 +877,9 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
         case QoreAOTValueTag::VT_NUMBER:
         case QoreAOTValueTag::VT_CONST_REF:
             return skip_fixed(8, "scalar value payload");
+
+        case QoreAOTValueTag::VT_CHAR:
+            return skip_fixed(4, "char value");
 
         case QoreAOTValueTag::VT_ABS_DATE:
             return skip_fixed(16, "absolute date value");
@@ -2070,6 +2075,11 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             writeI64(v.getAsBigInt());
             return true;
         }
+        case NT_CHAR: {
+            writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_CHAR));
+            writeU32(v.getChar());
+            return true;
+        }
         case NT_FLOAT: {
             writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_FLOAT64));
             writeF64(v.getAsFloat());
@@ -2692,6 +2702,19 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             return QoreValue(val);
         }
 
+        case QoreAOTValueTag::VT_CHAR: {
+            if (ptr + 4 > end) {
+                error = "unexpected end of data reading char value";
+                return QoreValue();
+            }
+            unsigned cp = readU32(ptr);
+            if (!QoreValue::isValidCharCodepoint(cp)) {
+                error = "invalid char codepoint in value: U+" + std::to_string(cp);
+                return QoreValue();
+            }
+            return QoreValue::makeChar(cp);
+        }
+
         case QoreAOTValueTag::VT_FLOAT64: {
             if (ptr + 8 > end) {
                 error = "unexpected end of data reading float64 value";
@@ -3247,6 +3270,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"float",           &floatTypeInfo},
     {"number",          &numberTypeInfo},
     {"string",          &stringTypeInfo},
+    {"char",            &charTypeInfo},
     {"bool",            &boolTypeInfo},
     {"date",            &dateTypeInfo},
     {"binary",          &binaryTypeInfo},
@@ -3267,6 +3291,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"softfloat",       &softFloatTypeInfo},
     {"softnumber",      &softNumberTypeInfo},
     {"softstring",      &softStringTypeInfo},
+    {"softchar",        &softCharTypeInfo},
     {"softbool",        &softBoolTypeInfo},
     {"softdate",        &softDateTypeInfo},
     {"softlist",        &softListTypeInfo},
@@ -3274,6 +3299,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"*float",          &floatOrNothingTypeInfo},
     {"*number",         &numberOrNothingTypeInfo},
     {"*string",         &stringOrNothingTypeInfo},
+    {"*char",           &charOrNothingTypeInfo},
     {"*bool",           &boolOrNothingTypeInfo},
     {"*date",           &dateOrNothingTypeInfo},
     {"*binary",         &binaryOrNothingTypeInfo},
@@ -3289,6 +3315,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"*softfloat",      &softFloatOrNothingTypeInfo},
     {"*softnumber",     &softNumberOrNothingTypeInfo},
     {"*softstring",     &softStringOrNothingTypeInfo},
+    {"*softchar",       &softCharOrNothingTypeInfo},
     {"*softbool",       &softBoolOrNothingTypeInfo},
     {"*softdate",       &softDateOrNothingTypeInfo},
     {"*softlist",       &softListOrNothingTypeInfo},
@@ -4902,6 +4929,9 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
         // param type path — u32 index into per-blob TYPE_TABLE (see
         // return-type comment above).
         writer.writeU32(internTypePath(writer, sig->getParamTypeInfo(i)));
+        if ((writer.feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+            writer.writeU8(sig->isParamReadOnly(i) ? 0x01 : 0x00);
+        }
 
         // default argument
         bool has_default = sig->hasDefaultArg(i);
@@ -4925,7 +4955,7 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 }
             }
 
-            if (dv.isNothing() || dv.isNull() || dt == NT_BOOLEAN || dt == NT_INT
+            if (dv.isNothing() || dv.isNull() || dt == NT_BOOLEAN || dt == NT_INT || dt == NT_CHAR
                     || dt == NT_FLOAT || dt == NT_STRING || dt == NT_DATE
                     || dt == NT_NUMBER || dt == NT_BINARY || dt == NT_LIST
                     || dt == NT_HASH || dt == NT_OBJECT) {
@@ -5107,6 +5137,7 @@ static bool aotValueTagPreservesMemberDefault(const QoreValue& v) {
     switch (v.getType()) {
         case NT_BOOLEAN:
         case NT_INT:
+        case NT_CHAR:
         case NT_FLOAT:
         case NT_STRING:
         case NT_DATE:
@@ -6022,6 +6053,9 @@ static std::vector<AOTLocalSlotId> buildAOTLocalSlotsForUserSignature(const User
         AOTLocalSlotId slot;
         slot.local_var_ptr = reinterpret_cast<const void*>(sig->lv[i]);
         slot.flags = 0x01;
+        if (sig->isParamReadOnly(i)) {
+            slot.flags |= 0x10;
+        }
         slot.param_index = static_cast<uint16_t>(i);
         if (sig->lv[i]) {
             slot.name = sig->lv[i]->getName();
@@ -6133,6 +6167,8 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         // write user variant signatures
         {
             bool is_constructor = strcmp(method->getName(), "constructor") == 0;
+            bool is_destructor = strcmp(method->getName(), "destructor") == 0;
+            bool is_copy = strcmp(method->getName(), "copy") == 0;
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             while (qfi.next()) {
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
@@ -6151,6 +6187,23 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     if (mvb->isMethodSynchronized()
                             || (uvb && uvb->isSynchronized())) {
                         mflags |= 0x04;
+                    }
+                    if (mvb->isConstMethod()) {
+                        if ((writer.feature_flags & QORE_AOT_FEAT_CONST_METHODS) == 0) {
+                            error = "const method '";
+                            error += method->getName() ? method->getName() : "<unknown>";
+                            error += "' cannot be serialized without QORE_AOT_FEAT_CONST_METHODS";
+                            return false;
+                        }
+                        if (mi.is_static || is_constructor || is_destructor || is_copy) {
+                            error = "invalid const metadata on ";
+                            error += mi.is_static ? "static" : "special";
+                            error += " method '";
+                            error += method->getName() ? method->getName() : "<unknown>";
+                            error += "'";
+                            return false;
+                        }
+                        mflags |= 0x08;
                     }
                     writer.writeU8(mflags);
                     writeVariantSignature(writer, v);
@@ -6497,6 +6550,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_INT));
                 writer.writeI64(expr.getAsBigInt());
                 return true;
+            }
+            case NT_CHAR: {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+                return writer.writeValue(expr);
             }
             case NT_FLOAT: {
                 writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_FLOAT));
@@ -7360,6 +7417,19 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
                 parent_globals, const_reverse_map);
     }
+    if (auto* op = dynamic_cast<const QoreIterateOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::ITERATE));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::STREAMING));
+        writer.writeU8(static_cast<uint8_t>(op->getKind()));
+        return classifyAndWriteExpr(writer, op->getPredicate(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getSource(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
     if (auto* op = dynamic_cast<const QoreTrimOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::TRIM));
         return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
@@ -7757,7 +7827,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             bool can_inline = !sv.needsEval()
                 && !(sv.hasNode() && sv.getInternalNode() == node)
                 && (sv.isEnum() || st == NT_INT || st == NT_FLOAT || st == NT_BOOLEAN
-                    || st == NT_STRING || st == NT_DATE || st == NT_NUMBER || st == NT_BINARY
+                    || st == NT_CHAR || st == NT_STRING || st == NT_DATE || st == NT_NUMBER || st == NT_BINARY
                     || st == NT_NULL || st == NT_NOTHING);
             if (can_inline) {
                 bool ok = classifyAndWriteExpr(writer, sv, parent_locals, parent_globals, const_reverse_map);
@@ -8059,7 +8129,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         for (auto& bl : func.slot_ids.body_locals) {
             writer.writeStringRef(bl.name.c_str());
             writer.writeStringRef(bl.type_path.c_str());
-            writer.writeU8(bl.is_closure ? 1 : 0);
+            writer.writeU8((bl.is_closure ? 0x01 : 0) | (bl.read_only ? 0x02 : 0));
             writer.writeU32(bl.slot_id);
         }
         traceEntryOffset("after body-locals");
@@ -8327,7 +8397,11 @@ bool readInitFuncs(const uint8_t* data, uint32_t size,
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return readInitFuncs(reader, init_funcs, error);
+}
 
+bool readInitFuncs(const QoreAOTBinaryReader& reader,
+        std::vector<AOTInitFuncDescriptor>& init_funcs, std::string& error) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::INIT_FUNCS);
     if (!sec) {
         // No init funcs section — this is OK
@@ -9298,6 +9372,17 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return deserializeShellsFromOpenReader(error);
+}
+
+bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
+        QoreAOTBinaryReader&& open_reader, std::string& error) {
+    pgm = in_pgm;
+    reader = std::move(open_reader);
+    return deserializeShellsFromOpenReader(error);
+}
+
+bool QoreAOTBinaryDeserializer::deserializeShellsFromOpenReader(std::string& error) {
     if (!checkAOTFeatureCompatibility(reader, error)) {
         return false;
     }
@@ -9753,6 +9838,14 @@ bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
 bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm,
         const uint8_t* data, uint32_t size, std::string& error) {
     if (!openAndDeserializeShells(in_pgm, data, size, error)) {
+        return false;
+    }
+    return resolveAll(error);
+}
+
+bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm,
+        QoreAOTBinaryReader&& open_reader, std::string& error) {
+    if (!openAndDeserializeShells(in_pgm, std::move(open_reader), error)) {
         return false;
     }
     return resolveAll(error);
@@ -12076,9 +12169,13 @@ static bool readAndSetupVariantSignature(
     std::vector<std::string> param_names;
     std::vector<const QoreTypeInfo*> param_types;
     std::vector<QoreValue> param_defaults;
+    std::vector<uint8_t> param_flags;
     param_names.reserve(np);
     param_types.reserve(np);
     param_defaults.resize(np);  // sparse by has_default — keep indexed
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+        param_flags.reserve(np);
+    }
 
     for (uint32_t j = 0; j < np; ++j) {
         const char* pname = reader.readStringRef(ptr);
@@ -12091,6 +12188,10 @@ static bool readAndSetupVariantSignature(
             }
         } else {
             ptype_path = reader.readStringRef(ptr);
+        }
+        uint8_t pflags = 0;
+        if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+            pflags = QoreAOTBinaryReader::readU8(ptr);
         }
         uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
 
@@ -12109,6 +12210,9 @@ static bool readAndSetupVariantSignature(
             }
         }
         param_types.push_back(pti);
+        if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+            param_flags.push_back(pflags);
+        }
 
         if (has_default == 1) {
             // Constant default value
@@ -12308,7 +12412,7 @@ static bool readAndSetupVariantSignature(
     sig->setupFromAOTMetadata(pgm, ret_ti,
         std::move(param_names), std::move(param_types), std::move(param_defaults),
         sig_has_ellipsis, classTypeInfo, reader.getLabel(),
-        sig_first_line, sig_last_line);
+        sig_first_line, sig_last_line, std::move(param_flags));
 
     if (time_on_sub) {
         g_aot_dm_sig_setup_us += now_us_fn() - t_setup0;
@@ -12551,6 +12655,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     if (!collectAOTSlotMapFunctionNames(reader, slot_map_names, has_slot_map_section, error)) {
         return false;
     }
+    const bool has_const_methods = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_METHODS) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t class_idx = QoreAOTBinaryReader::readU32(ptr);
@@ -12573,6 +12678,15 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             bool is_final = (mflags & 0x01) != 0;
             bool is_abstract = (mflags & 0x02) != 0;
             bool is_synchronized = (mflags & 0x04) != 0;
+            if ((mflags & 0x08) != 0 && !has_const_methods) {
+                error = "AOT method '";
+                error += qc->getName();
+                error += "::";
+                error += method_name ? method_name : "(null)";
+                error += "' has const-method metadata without QORE_AOT_FEAT_CONST_METHODS";
+                return false;
+            }
+            bool is_const_method = has_const_methods && (mflags & 0x08) != 0;
 
             // Create the correct variant type for special methods:
             // constructor → UserConstructorVariant, destructor → UserDestructorVariant,
@@ -12583,6 +12697,15 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             bool is_constructor = method_name && strcmp(method_name, "constructor") == 0;
             bool is_destructor = method_name && strcmp(method_name, "destructor") == 0;
             bool is_copy = method_name && strcmp(method_name, "copy") == 0;
+            if (is_const_method && (is_static || is_constructor || is_destructor || is_copy)) {
+                error = "AOT method '";
+                error += qc->getName();
+                error += "::";
+                error += method_name ? method_name : "(null)";
+                error += "' has invalid const-method metadata on ";
+                error += is_static ? "a static method" : "a special method";
+                return false;
+            }
 
             uint64_t t_alloc0 = time_on ? now_us() : 0;
             // Capture both the MethodVariantBase* and the UserVariantBase*
@@ -12612,7 +12735,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                 auto* v = new UserMethodVariant(
                     static_cast<ClassAccess>(access), is_final,
                     nullptr, 0, 0, QoreValue(), nullptr, is_synchronized,
-                    QCF_NO_FLAGS, is_abstract);
+                    QCF_NO_FLAGS, is_abstract, is_const_method);
                 mvb = v; umv = v;
             }
 
@@ -13869,7 +13992,11 @@ bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::strin
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return readDependencies(reader, dependencies, error);
+}
 
+bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
+        std::string& error) {
     // Find DEPENDENCIES section
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::DEPENDENCIES);
     if (!sec) {
@@ -13922,7 +14049,11 @@ bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::st
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return readReexportModules(reader, reexport_modules, error);
+}
 
+bool readReexportModules(const QoreAOTBinaryReader& reader, std::vector<std::string>& reexport_modules,
+        std::string& error) {
     // Find REEXPORT_MODULES section
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::REEXPORT_MODULES);
     if (!sec) {
@@ -14160,6 +14291,12 @@ bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_c
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return readProgramMetadata(reader, exec_class_name, error);
+}
+
+bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_class_name,
+        std::string& error) {
+    exec_class_name.clear();
 
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::PROGRAM_METADATA);
     if (!sec) {

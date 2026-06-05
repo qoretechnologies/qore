@@ -83,7 +83,7 @@ switch (f.typeCode()) {
 
     @since %Qore 0.8.6
 */
-int <number>::typeCode() [flags=CONSTANT] {
+int <number>::typeCode() [const;flags=CONSTANT] {
    return NT_NUMBER;
 }
 
@@ -102,7 +102,7 @@ bool b = f.val();
 
     @since %Qore 0.8.6
 */
-bool <number>::val() [flags=CONSTANT] {
+bool <number>::val() [const;flags=CONSTANT] {
    return !n->zero();
 }
 
@@ -118,7 +118,7 @@ if (n.intp())
 
     @since %Qore 0.8.6
 */
-bool <number>::intp() [flags=CONSTANT] {
+bool <number>::intp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -134,7 +134,7 @@ if (n.strp())
 
     @since %Qore 0.8.6
 */
-bool <number>::strp() [flags=CONSTANT] {
+bool <number>::strp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -150,7 +150,7 @@ if (n.nanp())
 
     @since %Qore 0.8.6
 */
-bool <number>::nanp() [flags=CONSTANT] {
+bool <number>::nanp() [const;flags=CONSTANT] {
    return qore_number_private::get(*n)->nan();
 }
 
@@ -166,7 +166,7 @@ if (n.infp())
 
     @since %Qore 0.8.6
 */
-bool <number>::infp() [flags=CONSTANT] {
+bool <number>::infp() [const;flags=CONSTANT] {
    return qore_number_private::get(*n)->inf();
 }
 
@@ -180,7 +180,7 @@ printf("sign: %d\n", n.sign());
 
     @since %Qore 0.8.6
 */
-int <number>::sign() [flags=CONSTANT] {
+int <number>::sign() [const;flags=CONSTANT] {
    return qore_number_private::get(*n)->sign();
 }
 
@@ -194,7 +194,7 @@ printf("precision: %d\n", n.prec());
 
     @since %Qore 0.8.6
 */
-int <number>::prec() [flags=CONSTANT] {
+int <number>::prec() [const;flags=CONSTANT] {
    return (int64)qore_number_private::get(*n)->getPrec();
 }
 
@@ -205,7 +205,7 @@ int <number>::prec() [flags=CONSTANT] {
 
     @since %Qore 0.8.6
 */
-string <number>::toString(int format_flags) [flags=CONSTANT,NAMED_ARGS] {
+string <number>::toString(int format_flags) [const;flags=CONSTANT,NAMED_ARGS] {
    QoreStringNode* rv = new QoreStringNode;
    n->toString(*rv, format_flags);
    return rv;
@@ -242,7 +242,7 @@ string fstr = f.format(".,3"); # returns "-48.392.093.894,235"
     - %Qore 0.8.6
     - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
  */
-string <number>::format(string format) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <number>::format(string format) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(format->getEncoding()));
    return qore_number_private::get(*n)->format(**rv, *format, xsink) ? 0 : rv.release();
 }
@@ -269,7 +269,7 @@ string fstr = f.format(3, ".", ","); # returns "-48.392.093.894,235"
 
     @since %Qore 0.8.13
  */
-string <number>::format(int precision = 2, string decimal_separator = ".", string thousands_separator = "") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <number>::format(int precision = 2, string decimal_separator = ".", string thousands_separator = "") [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode);
    return qore_number_private::get(*n)->format(**rv, precision, *decimal_separator, *thousands_separator, xsink) ? 0 : rv.release();
 }
@@ -286,7 +286,7 @@ n = n.abs();
 
     @since %Qore 0.8.8
 */
-number <number>::abs() [flags=CONSTANT] {
+number <number>::abs() [const;flags=CONSTANT] {
    return qore_number_private::doUnary(*n, mpfr_abs);
 }
 
@@ -312,6 +312,6 @@ number <number>::abs() [flags=CONSTANT] {
 
     @since %Qore 0.8.13
 */
-string <number>::toBase(int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <number>::toBase(int base = 10) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_number_private::toBase(*n, base, xsink);
 }

@@ -213,7 +213,7 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
             : NOTHING;
         hash<auto> processing_context = buildProcessingContext(artifacts);
         *hash<auto> tokenizer = processing_context.tokenizer
-            ? cast<hash<auto>>(processing_context.tokenizer) : NOTHING;
+            ? cast<hash>(processing_context.tokenizer) : NOTHING;
         *hash<auto> preprocess = opts.preprocess;
         *hash<auto> postprocess = opts.postprocess;
         if (runtime == "onnxruntime") {
@@ -648,7 +648,7 @@ log(LL_INFO, "package diagnostics: %y", package.diagnostics);
         *hash<auto> input_schema = inputs ? {"tensors": inputs} : NOTHING;
         *hash<auto> output_schema = outputs ? {"tensors": outputs} : NOTHING;
         *hash<auto> tokenizer = processing_context.tokenizer
-            ? cast<hash<auto>>(processing_context.tokenizer) : NOTHING;
+            ? cast<hash>(processing_context.tokenizer) : NOTHING;
         hash<auto> plan = OnnxProcessingSpecs::buildExecutionPlan({
             "runtime": runtime,
             "task": task,

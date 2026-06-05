@@ -89,11 +89,11 @@ public class SendCloudCreateReturnDataProvider inherits SendCloudDataProviderBas
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> r = cast<hash<auto>>(req);
+        hash<auto> r = cast<hash>(req);
         # Look up the outgoing parcel to derive customer + merchant addresses and weight.
         hash<auto> parcel = lookupOutgoingParcel(int(r.outgoing_parcel));
         hash<auto> v3_body = buildV3ReturnBody(r, parcel);
-        hash<auto> response = cast<hash<auto>>(doV3Post("returns/announce-synchronously", v3_body));
+        hash<auto> response = cast<hash>(doV3Post("returns/announce-synchronously", v3_body));
         return flattenV3ReturnResponse(response, r, parcel);
     }
 
@@ -109,7 +109,7 @@ public class SendCloudCreateReturnDataProvider inherits SendCloudDataProviderBas
         # the outgoing parcel's recipient address
         hash<auto> from_address;
         if (r.address.typeCode() == NT_HASH && (r.address.address_line_1 || r.address.address)) {
-            from_address = mapAddressToV3(cast<hash<auto>>(r.address));
+            from_address = mapAddressToV3(cast<hash>(r.address));
         } else {
             from_address = mapParcelRecipientToV3(parcel);
         }

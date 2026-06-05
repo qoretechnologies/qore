@@ -718,7 +718,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         obs1.observersReady();
 
         assertTrue(observer1.waitForDataEvent("progress", SseTestTimeout),
-            label + ": first stream receives initial progress");
+            sprintf("%s: first stream receives initial progress; events=%s actions=%s",
+                label, observer1.describeEvents(), callback_handler.describeActions()));
 
         HttpClientStreamingIo::SseObservable obs2(mgr, url, "GET", "/callback");
         on_exit obs2.stopEvents();
@@ -729,7 +730,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(0, callback_handler.registered.waitForZero(SseTestTimeout),
             label + ": both callback streams should register");
         assertTrue(observer2.waitForDataEvent("progress", SseTestTimeout),
-            label + ": second stream receives initial progress");
+            sprintf("%s: second stream receives initial progress; events=%s actions=%s",
+                label, observer2.describeEvents(), callback_handler.describeActions()));
         assertEq(0, callback_handler.waitForDrainersWaitingForReady(SseTestTimeout),
             label + ": callback streams should be waiting for ready");
 

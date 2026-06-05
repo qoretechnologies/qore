@@ -67,7 +67,7 @@ public class TaskPolicyRule inherits AbstractGuardrailRule {
                 throw "GUARDRAIL-CONFIG-ERROR",
                     "TaskPolicyRule 'policy' parameter must be a hash";
             }
-            policy = cast<hash<auto>>(p.policy);
+            policy = cast<hash>(p.policy);
         } else {
             policy = {};
         }

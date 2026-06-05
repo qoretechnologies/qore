@@ -327,7 +327,7 @@ class Test inherits QUnit::Test {
         assertEq(NOTHING, pop l4);
 
         # pop and shift with untyped & unassigned lvalue
-        any nt;
+        auto nt;
         assertEq(NOTHING, pop nt, "pop with NOTHING lvalue");
         assertEq(NOTHING, shift nt, "shift with NOTHING lvalue");
     }

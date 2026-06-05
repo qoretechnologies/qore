@@ -62,7 +62,7 @@ public class SendCloudUpdateReturnDataProvider inherits SendCloudDataProviderBas
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> body = cast<hash<auto>>(req);
+        hash<auto> body = cast<hash>(req);
         int id = body.id;
         hash<auto> payload = body - "id";
         return doPutWrapped(sprintf("returns/%d", id), "return", payload);

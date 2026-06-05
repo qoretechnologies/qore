@@ -38,6 +38,9 @@
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+
+#include <cstdlib>
+#include <memory>
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QC_FutureImpl.h"
@@ -507,21 +510,32 @@ QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* meth
         QoreChannel*& channel_out, ExceptionSink* xsink) {
     MethodGuard g(this);
     if (!g.acquired()) {
+        releaseStreamReservation(true);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming send request: connection has been closed");
         return nullptr;
     }
     if (!poll_op_priv || isClosed()) {
+        releaseStreamReservation(true);
         raiseClosedSubmitError(
             "cannot submit streaming send request: connection is closed",
             xsink);
         return nullptr;
     }
     if (!isReady()) {
+        releaseStreamReservation(true);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming send request: connection is not ready");
         return nullptr;
     }
+    if (!beginStreamingSend()) {
+        releaseStreamReservation(true);
+        xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
+            "cannot submit streaming send request: another streaming send "
+            "request is already in progress on this connection");
+        return nullptr;
+    }
+    StreamingSendSetupGuard setup_guard(this);
 
     AbstractAsyncAction* action = nullptr;
     ReferenceHolder<QoreObject> future_obj(xsink);
@@ -537,10 +551,15 @@ QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* meth
         QorePromise* promise_raw = *promise_holder;
         ReferenceHolder<QoreFuture> future_holder(promise_holder->getFuture(xsink), xsink);
         if (*xsink) {
+            releaseStreamReservation();
             return nullptr;
         }
         QoreProgram* pgm = getProgram();
         future_obj = qore_new_future_impl_object(pgm, future_holder.release());
+        if (*xsink) {
+            releaseStreamReservation();
+            return nullptr;
+        }
         action = new PromiseAction(promise_raw, nullptr);
         promise_holder.release()->deref(xsink);
     }
@@ -550,11 +569,13 @@ QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* meth
         nullptr, 0, /* streaming */ true, action,
         /* max_streams */ max_concurrent_streams_, xsink);
     if (*xsink || stream_id < 0) {
+        releaseStreamReservation();
         return nullptr;
     }
 
     // Store stream_id for subsequent pushSendData/setTrailers calls
     streaming_send_stream_id = stream_id;
+    setup_guard.markSubmitted();
 
     releaseStreamReservation();
 
@@ -564,13 +585,20 @@ QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* meth
     // Build result
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     result->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     if (streaming_recv) {
         QoreChannel* ch = *ch_holder;
         ch->ref();
         channel_out = ch;
     } else {
         result->setKeyValue("future", future_obj.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
+    setup_guard.keepOpen();
     return result.release();
 }
 
@@ -597,17 +625,18 @@ void Http2ClientConnection::pushSendData(const void* data, size_t len, Exception
         // End-of-body: send empty DATA with END_STREAM
         poll_op_priv->sendStreamData(streaming_send_stream_id, nullptr, true, xsink);
         streaming_send_stream_id = -1;
+        finishStreamingSend();
     } else {
         // Create BinaryNode from raw data for the H2 sendStreamData API
         // BinaryNode takes ownership of the buffer, so we must copy
-        void* buf = malloc(len);
+        std::unique_ptr<void, decltype(&free)> buf(malloc(len), free);
         if (!buf) {
             xsink->raiseException("HTTPCLIENT-MEMORY-ERROR",
                 "failed to allocate %zu bytes for stream data", len);
             return;
         }
-        memcpy(buf, data, len);
-        SimpleRefHolder<BinaryNode> bin(new BinaryNode(buf, len));
+        memcpy(buf.get(), data, len);
+        SimpleRefHolder<BinaryNode> bin(new BinaryNode(buf.release(), len));
         poll_op_priv->sendStreamData(streaming_send_stream_id, *bin, false, xsink);
     }
 
@@ -645,6 +674,7 @@ void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
     // protocol-specific state.  See HttpClientConnection.h.
     markInvalidated();
     drainInFlight();
+    finishStreamingSend();
 
     if (!poll_op_priv) {
         return;

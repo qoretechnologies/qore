@@ -355,19 +355,9 @@ public class ColumnarExpressionFilter {
             }
             switch (op) {
                 case DP_OP_AND:
-                    foreach auto sub_arg in (arg.args) {
-                        if (!valueTruthy(evalDataFrameExpressionValue(df, sub_arg, row, \column_cache))) {
-                            return False;
-                        }
-                    }
-                    return True;
+                    return all valueTruthy(evalDataFrameExpressionValue(df, $1, row, \column_cache)), arg.args;
                 case DP_OP_OR:
-                    foreach auto sub_arg in (arg.args) {
-                        if (valueTruthy(evalDataFrameExpressionValue(df, sub_arg, row, \column_cache))) {
-                            return True;
-                        }
-                    }
-                    return False;
+                    return any valueTruthy(evalDataFrameExpressionValue(df, $1, row, \column_cache)), arg.args;
                 case DP_SEARCH_OP_NOT:
                     return !valueTruthy(evalDataFrameExpressionValue(df, arg.args[0], row, \column_cache));
                 case DP_SEARCH_OP_BETWEEN: {
@@ -861,19 +851,9 @@ public class ColumnarExpressionFilter {
             }
             switch (op) {
                 case DP_OP_AND:
-                    foreach auto sub_arg in (arg.args) {
-                        if (!valueTruthy(evalBufferExpressionValueAt(records, sub_arg, row, \column_cache))) {
-                            return False;
-                        }
-                    }
-                    return True;
+                    return all valueTruthy(evalBufferExpressionValueAt(records, $1, row, \column_cache)), arg.args;
                 case DP_OP_OR:
-                    foreach auto sub_arg in (arg.args) {
-                        if (valueTruthy(evalBufferExpressionValueAt(records, sub_arg, row, \column_cache))) {
-                            return True;
-                        }
-                    }
-                    return False;
+                    return any valueTruthy(evalBufferExpressionValueAt(records, $1, row, \column_cache)), arg.args;
                 case DP_SEARCH_OP_NOT:
                     return !valueTruthy(evalBufferExpressionValueAt(records, arg.args[0], row, \column_cache));
                 case DP_SEARCH_OP_BETWEEN: {
@@ -1454,12 +1434,7 @@ public class ColumnarExpressionFilter {
         softlist<auto> list_value = raw;
         list<auto> search_values = values.typeCode() == NT_LIST ? flattenAnyArgumentList(values)
             : normalizeAnyValueList(values);
-        foreach auto value in (search_values) {
-            if (list_value.contains(value)) {
-                return True;
-            }
-        }
-        return False;
+        return any list_value.contains($1), search_values;
     }
 
     #! Evaluates a scalar LIKE predicate
@@ -2154,42 +2129,22 @@ public class ColumnarExpressionFilter {
 
     #! Returns True if any argument depends on row data
     private static bool hasVectorizableRowDependentArg(list<auto> args) {
-        foreach auto arg in (args) {
-            if (!isScalarComparisonArg(arg) && (isVectorizableValueArg(arg) || isVectorizablePredicateArg(arg))) {
-                return True;
-            }
-        }
-        return False;
+        return any !isScalarComparisonArg($1) && (isVectorizableValueArg($1) || isVectorizablePredicateArg($1)), args;
     }
 
     #! Returns True if at least one expression argument is column-wise
     private static bool hasVectorizableValueArg(list<auto> args) {
-        foreach auto arg in (args) {
-            if (isVectorizableValueArg(arg)) {
-                return True;
-            }
-        }
-        return False;
+        return any isVectorizableValueArg($1), args;
     }
 
     #! Returns True if all expression arguments are either scalar or supported column-wise values
     private static bool allArgsVectorizableOrScalar(list<auto> args) {
-        foreach auto arg in (args) {
-            if (!isScalarComparisonArg(arg) && !isVectorizableValueArg(arg)) {
-                return False;
-            }
-        }
-        return True;
+        return all isScalarComparisonArg($1) || isVectorizableValueArg($1), args;
     }
 
     #! Returns True if all arguments are scalar literal/accessor operands
     private static bool allArgsScalar(list<auto> args) {
-        foreach auto arg in (args) {
-            if (!isScalarComparisonArg(arg)) {
-                return False;
-            }
-        }
-        return True;
+        return all isScalarComparisonArg($1), args;
     }
 
     #! Returns True if the argument is a top-level field reference
@@ -2363,19 +2318,9 @@ public class ColumnarExpressionFilter {
                 return AbstractDataProvider::applyKeyAccessorImpl(unwrapComparisonValue(expr.args[0]), key_list);
             }
             case DP_OP_AND:
-                foreach auto arg in (expr.args) {
-                    if (!valueTruthy(unwrapComparisonValue(arg))) {
-                        return False;
-                    }
-                }
-                return True;
+                return all valueTruthy(unwrapComparisonValue($1)), expr.args;
             case DP_OP_OR:
-                foreach auto arg in (expr.args) {
-                    if (valueTruthy(unwrapComparisonValue(arg))) {
-                        return True;
-                    }
-                }
-                return False;
+                return any valueTruthy(unwrapComparisonValue($1)), expr.args;
             case DP_SEARCH_OP_NOT:
                 return !valueTruthy(unwrapComparisonValue(expr.args[0]));
             case DP_SEARCH_OP_BETWEEN: {

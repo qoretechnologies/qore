@@ -91,6 +91,7 @@ struct CSTSymbolDetail {
     std::string typeName;    //!< for variables/members/params
     std::string access;      //!< "public", "private", "private:internal", etc.
     bool isStatic = false;
+    bool isConstMethod = false;
     std::vector<CSTParamInfo> params;  //!< for callables
 };
 
@@ -379,6 +380,9 @@ private:
 
     //! Check if a declaration has 'static' modifier.
     static bool hasStaticModifier(TSNode node, const AstParseResult* result);
+
+    //! Check if a declaration has trailing 'const' method qualifier.
+    static bool hasConstMethodQualifier(TSNode node, const AstParseResult* result);
 
     //! Extract parameter info from a function/method/constructor node.
     static std::vector<CSTParamInfo> extractParameters(TSNode funcNode,

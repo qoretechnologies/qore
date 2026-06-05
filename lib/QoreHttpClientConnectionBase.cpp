@@ -38,26 +38,78 @@
 #include <cassert>
 #include <unordered_map>
 
-bool HttpClientConnectionBase::tryReserveStream() {
+bool HttpClientConnectionBase::tryReserveStream(bool streaming_send) {
     AutoLocker al(reserve_lock);
+    if (streaming_send && (streaming_send_active || pending_streaming_send_count)) {
+        return false;
+    }
     int max = getMaxConcurrentStreams();
     if (max && (getActiveStreamCount() + pending_stream_count) >= max) {
         return false;
     }
     ++pending_stream_count;
+    if (streaming_send) {
+        ++pending_streaming_send_count;
+    }
     return true;
 }
 
-void HttpClientConnectionBase::releaseStreamReservation() {
+void HttpClientConnectionBase::releaseStreamReservation(bool streaming_send) {
     AutoLocker al(reserve_lock);
     if (pending_stream_count > 0) {
         --pending_stream_count;
+    }
+    if (streaming_send && pending_streaming_send_count > 0) {
+        --pending_streaming_send_count;
     }
 }
 
 int HttpClientConnectionBase::getPendingStreamCount() const {
     AutoLocker al(reserve_lock);
     return pending_stream_count;
+}
+
+bool HttpClientConnectionBase::beginStreamingSend() {
+    AutoLocker al(reserve_lock);
+    if (streaming_send_active) {
+        return false;
+    }
+    if (pending_streaming_send_count > 0) {
+        --pending_streaming_send_count;
+    }
+    streaming_send_active = true;
+    return true;
+}
+
+void HttpClientConnectionBase::finishStreamingSend() {
+    AutoLocker al(reserve_lock);
+    streaming_send_active = false;
+}
+
+HttpClientConnectionBase::StreamingSendSetupGuard::StreamingSendSetupGuard(
+        HttpClientConnectionBase* conn) : conn(conn) {
+}
+
+HttpClientConnectionBase::StreamingSendSetupGuard::~StreamingSendSetupGuard() {
+    if (!conn || keep_open) {
+        return;
+    }
+    if (submitted) {
+        ExceptionSink xsink;
+        conn->pushSendData(nullptr, 0, &xsink);
+        xsink.clear();
+        conn->finishStreamingSend();
+    } else {
+        conn->finishStreamingSend();
+    }
+}
+
+void HttpClientConnectionBase::StreamingSendSetupGuard::markSubmitted() {
+    submitted = true;
+}
+
+void HttpClientConnectionBase::StreamingSendSetupGuard::keepOpen() {
+    keep_open = true;
 }
 
 void HttpClientConnectionBase::setManager(HttpClientConnectionManagerBase* mgr) {
@@ -147,6 +199,7 @@ void HttpClientConnectionBase::closeConnection(ExceptionSink* xsink) {
     // Default: just transition the state machine to CLOSED.
     // C++ subclasses override to also abort the poll op and cancel the
     // controller submission.  Qore subclasses override at the Qore level.
+    finishStreamingSend();
     setClosed();
 }
 

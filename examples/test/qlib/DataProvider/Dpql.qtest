@@ -9,7 +9,7 @@
 %requires QUnit
 %requires Logger
 %requires Mime
-%requires DataProvider
+%requires ../../../../qlib/DataProvider
 
 %requires reflection
 
@@ -685,6 +685,91 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(30, exp.args[3].args[1]);
         }
 
+        # Test streaming prefix operators
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'select @users, @age >= 30');
+            assertEq(DP_OP_SELECT, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq("users", exp.args[0].field);
+            assertEq(DP_SEARCH_OP_GE, exp.args[1].exp);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('first @users');
+            assertEq(DP_OP_FIRST, exp.exp);
+            assertEq(1, exp.args.size());
+            assertEq("users", exp.args[0].field);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'first @age >= 30, @users');
+            assertEq(DP_OP_FIRST, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq(DP_SEARCH_OP_GE, exp.args[0].exp);
+            assertEq("users", exp.args[1].field);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'any @active, @users');
+            assertEq(DP_OP_ANY, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq("active", exp.args[0].field);
+            assertEq("users", exp.args[1].field);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'all @active, @users');
+            assertEq(DP_OP_ALL, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq("active", exp.args[0].field);
+            assertEq("users", exp.args[1].field);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('count @users');
+            assertEq(DP_OP_COUNT, exp.exp);
+            assertEq(1, exp.args.size());
+            assertEq("users", exp.args[0].field);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('take 2, @users');
+            assertEq(DP_OP_TAKE, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq(2, exp.args[0]);
+            assertEq("users", exp.args[1].field);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('drop 1, @users');
+            assertEq(DP_OP_DROP, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq(1, exp.args[0]);
+            assertEq("users", exp.args[1].field);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'takewhile @age < 35, @users');
+            assertEq(DP_OP_TAKEWHILE, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq(DP_SEARCH_OP_LT, exp.args[0].exp);
+            assertEq("users", exp.args[1].field);
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'takeuntil @age >= 35, @users');
+            assertEq(DP_OP_TAKEUNTIL, exp.exp);
+            assertEq(2, exp.args.size());
+            assertEq(DP_SEARCH_OP_GE, exp.args[0].exp);
+            assertEq("users", exp.args[1].field);
+        }
+
         # Test scientific notation
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
@@ -1103,6 +1188,113 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("hash_map @name, @age, @users, @age >= 30", dpql);
         }
 
+        # Test streaming prefix operator serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_SELECT,
+                "args": (
+                    <DataProviderFieldReference>{"field": "users"},
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GE,
+                        "args": (<DataProviderFieldReference>{"field": "age"}, 30),
+                    },
+                ),
+            };
+            assertEq("select @users, @age >= 30", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_FIRST,
+                "args": (<DataProviderFieldReference>{"field": "users"},),
+            };
+            assertEq("first @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_FIRST,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GE,
+                        "args": (<DataProviderFieldReference>{"field": "age"}, 30),
+                    },
+                    <DataProviderFieldReference>{"field": "users"},
+                ),
+            };
+            assertEq("first @age >= 30, @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_ANY,
+                "args": (<DataProviderFieldReference>{"field": "active"},
+                    <DataProviderFieldReference>{"field": "users"}),
+            };
+            assertEq("any @active, @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_ALL,
+                "args": (<DataProviderFieldReference>{"field": "active"},
+                    <DataProviderFieldReference>{"field": "users"}),
+            };
+            assertEq("all @active, @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_COUNT,
+                "args": (<DataProviderFieldReference>{"field": "users"},),
+            };
+            assertEq("count @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_TAKE,
+                "args": (2, <DataProviderFieldReference>{"field": "users"}),
+            };
+            assertEq("take 2, @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_DROP,
+                "args": (1, <DataProviderFieldReference>{"field": "users"}),
+            };
+            assertEq("drop 1, @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_TAKEWHILE,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_LT,
+                        "args": (<DataProviderFieldReference>{"field": "age"}, 35),
+                    },
+                    <DataProviderFieldReference>{"field": "users"},
+                ),
+            };
+            assertEq("takewhile @age < 35, @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_TAKEUNTIL,
+                "args": (
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GE,
+                        "args": (<DataProviderFieldReference>{"field": "age"}, 35),
+                    },
+                    <DataProviderFieldReference>{"field": "users"},
+                ),
+            };
+            assertEq("takeuntil @age >= 35, @users", DataProvider::serializeDpqlExpression(exp));
+        }
+
         # Test serializer uses symbol for function calls
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = {
@@ -1272,6 +1464,14 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@name == tr', 11, fields);
             list<hash<DpqlCompletionItem>> keyword_items = select items, $1.kind == "keyword" && $1.label == "true";
             assertTrue(keyword_items.size() > 0);
+        }
+
+        # Test prefix-operator completions
+        {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('sel', 3, fields);
+            list<hash<DpqlCompletionItem>> op_items = select items, $1.kind == "operator" && $1.label == "select";
+            assertEq(1, op_items.size(), "select offered as a prefix-operator completion");
+            assertTrue(op_items[0].snippet_text.val(), "select completion includes snippet text");
         }
 
         # Helper: build expression map excluding specific operators

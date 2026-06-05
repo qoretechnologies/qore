@@ -439,6 +439,11 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 # HttpAsyncSocketIoController accept submissions).
                 "to": -1s,
             }, True);
+            # The server can queue an immediate SSE event before this poll
+            # operation is installed. Kick the notifier once so any pre-submit
+            # queue contents are drained promptly instead of waiting for another
+            # event or stream close.
+            notifier.notify();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(m);
@@ -600,7 +605,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
 
             # Error hash from SseAction (plain hash<auto> with "err"/"desc" keys)
             # vs parsed SseMessageInfo hash — distinguish by hasKey("err")
-            hash<auto> evt_hash = cast<hash<auto>>(evt);
+            hash<auto> evt_hash = cast<hash>(evt);
             if (evt_hash.hasKey("err")) {
                 notifyClosed({
                     "reason": "stream-error",

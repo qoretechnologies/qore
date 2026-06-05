@@ -188,7 +188,7 @@ public class PromptSecretProtector {
             case NT_HASH: {
                 hash<auto!> rv = {};
                 foreach hash<auto> pair in (
-                        cast<hash<auto>>(value).pairIterator()) {
+                        cast<hash>(value).pairIterator()) {
                     rv{pair.key} = isSensitiveKey(pair.key)
                         ? (redaction_text ?? DefaultRedactionText)
                         : redactSensitiveValue(pair.value, redaction_text);
@@ -197,7 +197,7 @@ public class PromptSecretProtector {
             }
             case NT_LIST: {
                 list<auto> rv = ();
-                foreach auto item in (cast<list<auto>>(value)) {
+                foreach auto item in (cast<list>(value)) {
                     rv += redactSensitiveValue(item, redaction_text);
                 }
                 return rv;
@@ -244,7 +244,7 @@ public class PromptSecretProtector {
             case NT_HASH: {
                 hash<auto!> rv = {};
                 foreach hash<auto> pair in (
-                        cast<hash<auto>>(value).pairIterator()) {
+                        cast<hash>(value).pairIterator()) {
                     rv{pair.key} = replacePlaceholders(pair.value,
                         placeholders, redact, redaction_text);
                 }
@@ -252,7 +252,7 @@ public class PromptSecretProtector {
             }
             case NT_LIST: {
                 list<auto> rv = ();
-                foreach auto item in (cast<list<auto>>(value)) {
+                foreach auto item in (cast<list>(value)) {
                     rv += replacePlaceholders(item, placeholders, redact,
                         redaction_text);
                 }
@@ -278,7 +278,7 @@ public class PromptSecretProtector {
             case NT_HASH: {
                 hash<auto!> rv = {};
                 foreach hash<auto> pair in (
-                        cast<hash<auto>>(value).pairIterator()) {
+                        cast<hash>(value).pairIterator()) {
                     rv{pair.key} = isSensitiveKey(pair.key)
                         ? marker
                         : replaceProtectedRawValues(pair.value,
@@ -288,7 +288,7 @@ public class PromptSecretProtector {
             }
             case NT_LIST: {
                 list<auto> rv = ();
-                foreach auto item in (cast<list<auto>>(value)) {
+                foreach auto item in (cast<list>(value)) {
                     rv += replaceProtectedRawValues(item, placeholders,
                         marker);
                 }

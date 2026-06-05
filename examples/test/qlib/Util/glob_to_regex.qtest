@@ -25,6 +25,8 @@ public class ShellGlobToRegexTest inherits QUnit::Test {
             ('p': 'Book-[0-9]', 'r': 'Book\-[0-9]', 'f': 'Book-1'),
             ('p': 'Book-[!3-5]', 'r': 'Book\-[^3-5]', 'f': 'Book-1'),
             ('p': '^test$', 'r': '\^test\$', 'f': '^test$'),
+            ('p': 'café-?', 'r': 'caf\é\-.', 'f': 'café-x'),
+            ('p': '[!é]lan', 'r': '[^é]lan', 'f': 'elan'),
         );
 
         foreach hash<auto> t in (cases) {

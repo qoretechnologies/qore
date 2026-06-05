@@ -710,6 +710,8 @@ public class DataProviderActionCatalog {
 
         bool should_auto_register_generic_call = False;
         bool should_load_generic_api_call_builder = False;
+        bool app_is_rest_scheme = !app.disable_generic_api_call
+            && DataProviderActionCatalog::isRestScheme(app.scheme);
         {
             bool needs_lock = !lck.lockOwner();
             if (needs_lock) {
@@ -800,10 +802,12 @@ public class DataProviderActionCatalog {
             # escape hatch for REST apps that intentionally exclude themselves (today only
             # GenericRest, whose own /call action would otherwise be duplicated). The actual action
             # registration is deferred to after the lock is released because registerAction()
-            # acquires the same mutex non-reentrantly. The same REST predicate is re-applied inside
-            # registerGenericApiCallActionForApp() so the backlog drain doesn't re-register against
-            # a scheme that has since been seen to be non-REST.
-            if (!app.disable_generic_api_call && DataProviderActionCatalog::isRestScheme(app.scheme)) {
+            # acquires the same mutex non-reentrantly. The REST predicate is evaluated before taking
+            # this lock because scheme lookup may load indexed modules, whose module init can register
+            # data provider apps/actions and re-enter this catalog. The same REST predicate is
+            # re-applied inside registerGenericApiCallActionForApp() so the backlog drain doesn't
+            # re-register against a scheme that has since been seen to be non-REST.
+            if (app_is_rest_scheme) {
                 if (cb_build_generic_api_call_action) {
                     should_auto_register_generic_call = True;
                 } else {

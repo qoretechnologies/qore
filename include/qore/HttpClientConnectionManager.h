@@ -210,6 +210,27 @@ public:
         const char* scheme, const char* host, int port,
         ExceptionSink* xsink);
 
+    //! Acquires a connection for incremental request-body streaming.
+    /** Like @ref acquireConnection, but reserves the connection's
+        per-connection streaming-send slot in addition to a stream slot.
+        This prevents concurrent H2/H3 streaming-send callers from
+        overwriting the single active body-push stream id stored on the
+        connection object.
+
+        @param scheme URL scheme ("http" or "https")
+        @param host target hostname
+        @param port target TCP port
+        @param xsink exception sink
+
+        @return a borrowed connection pointer (do NOT @c deref);
+            @c nullptr on error (@a xsink set)
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionForStreamingSend(
+        const char* scheme, const char* host, int port,
+        ExceptionSink* xsink);
+
     //! Acquires a connection without blocking for it to become READY.
     /** Like @ref acquireConnection but, on a pool miss, returns the newly
         created connection while it is still in CONNECTING state.  The
@@ -484,16 +505,19 @@ private:
 
     //! Internal: shared implementation for @ref acquireConnection and
     //! @ref acquireConnectionAsync.  When @a wait_for_ready is @c false,
-    //! newly-created connections are returned in CONNECTING state.
+    //! newly-created connections are returned in CONNECTING state.  When
+    //! @a streaming_send is true, the reservation also claims the
+    //! per-connection incremental-body sender slot.
     DLLLOCAL HttpClientConnectionBase* acquireConnectionImpl(
         const char* scheme, const char* host, int port,
-        bool wait_for_ready, ExceptionSink* xsink);
+        bool wait_for_ready, bool streaming_send, ExceptionSink* xsink);
 
     //! Internal: scans the pool for a reusable connection (caller must
     //! hold a shared or unique lock).  Returns @c nullptr if no live
     //! connection has capacity.  Reservation is atomic via
     //! @c tryReserveStream — see open question 7.6 in the design doc.
-    DLLLOCAL HttpClientConnectionBase* findReusableLocked(const std::string& key);
+    DLLLOCAL HttpClientConnectionBase* findReusableLocked(const std::string& key,
+        bool streaming_send);
 
     //! Internal: removes closed and (optionally) max-age-expired connections
     //! from @c pool_[key] (caller must hold the unique lock).

@@ -107,7 +107,7 @@ public class FirecrawlRestClientBase {
     /** Maps the \c apikey option to a Bearer token header
     */
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = cast<hash<auto>>(DefaultOptions + opts);
+        hash<auto> rv = cast<hash>(DefaultOptions + opts);
         # Map apikey to Authorization Bearer header
         if (rv.apikey) {
             rv.headers."Authorization" = "Bearer " + rv.apikey;

@@ -70,7 +70,8 @@ public:
     }
 
     DLLLOCAL static bool getEffectiveRange(const QoreValue& seq, int64& start, int64& stop, int64& seq_size,
-            const QoreValue& start_index, const QoreValue& stop_index, bool broken_list_range, ExceptionSink* xsink);
+            const QoreValue& start_index, const QoreValue& stop_index, bool broken_list_range,
+            bool negative_offsets, ExceptionSink* xsink);
 
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
@@ -90,7 +91,7 @@ protected:
             ExceptionSink* xsink) const;
 
     DLLLOCAL bool getEffectiveRange(const QoreValue& seq, int64& start, int64& stop, int64& seq_size,
-            bool broken_list_range, ExceptionSink* xsink) const;
+            bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) const;
 };
 
 class QoreFunctionalSquareBracketsRangeOperator : public FunctionalOperatorInterface, public RangeIterator {

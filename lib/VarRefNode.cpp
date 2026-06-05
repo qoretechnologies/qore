@@ -61,6 +61,23 @@ bool VarRefNode::parseEqualTo(const VarRefNode& other) const {
     return false;
 }
 
+bool VarRefNode::parseIsReadOnly() const {
+    if (read_only_decl) {
+        return true;
+    }
+
+    switch (type) {
+        case VT_LOCAL:
+        case VT_CLOSURE:
+        case VT_LOCAL_TS:
+            return ref.id && ref.id->isReadOnly();
+        case VT_IMMEDIATE:
+            return ref.cvv && ref.cvv->isReadOnly();
+        default:
+            return false;
+    }
+}
+
 // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
 // the ExceptionSink is only needed for QoreObject where a method may be executed
 // use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
@@ -183,6 +200,9 @@ int VarRefNode::parseInitIntern(QoreParseContext& parse_context, bool is_new) {
         if (!ref.id) {
             ref.id = push_local_var(name.ostr, loc, parse_context.typeInfo, err, false, is_new ? 1 : 0,
                 parse_context.pflag);
+            if (read_only_decl) {
+                ref.id->setReadOnly();
+            }
             ++parse_context.lvids;
         }
         //printd(5, "VarRefNode::parseInitIntern() this: %p local var '%s' declared (id: %p)\n", this, name.ostr, ref.id);
@@ -350,6 +370,11 @@ int VarRefDeclNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_contex
         return -1;
     }
     bool is_assignment = parse_context.pflag & PF_FOR_ASSIGNMENT;
+    if (read_only_decl && new_decl && !is_assignment) {
+        parseException(*loc, "READONLY-VARIABLE-ASSIGNMENT-ERROR",
+            "read-only local variable '%s' requires an initializer", getName());
+        return -1;
+    }
 
     // this expression returns nothing if it's a new local variable
     // so if we're not assigning we return nothingTypeInfo as the
@@ -382,6 +407,9 @@ int VarRefDeclNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_contex
 AbstractQoreNode* VarRefDeclNode::makeNewCall(QoreValue args) {
     VarRefNewObjectNode* rv = new VarRefNewObjectNode(loc, takeName(), typeInfo, takeParseTypeInfo(),
         make_args(loc, args), type);
+    if (isReadOnlyDecl()) {
+        rv->setReadOnlyDecl();
+    }
     deref();
     return rv;
 }

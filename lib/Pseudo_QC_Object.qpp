@@ -58,7 +58,7 @@ switch (o.typeCode()) {
 }
     @endcode
  */
-int <object>::typeCode() [flags=CONSTANT] {
+int <object>::typeCode() [const;flags=CONSTANT] {
     return NT_OBJECT;
 }
 
@@ -75,7 +75,7 @@ bool b = n.complexType();
 
     @since %Qore 0.8.13
 */
-bool <object>::complexType() [flags=CONSTANT] {
+bool <object>::complexType() [const;flags=CONSTANT] {
     return true;
 }
 
@@ -88,7 +88,7 @@ bool <object>::complexType() [flags=CONSTANT] {
 list<string> l = o.keys();
     @endcode
  */
-list<string> <object>::keys() [flags=RET_VALUE_ONLY] {
+list<string> <object>::keys() [const;flags=RET_VALUE_ONLY] {
     return obj->getMemberList(xsink);
 }
 
@@ -103,7 +103,7 @@ list<string> <object>::keys() [flags=RET_VALUE_ONLY] {
 
     @see <object>::lastKey()
  */
-*string <object>::firstKey() [flags=RET_VALUE_ONLY] {
+*string <object>::firstKey() [const;flags=RET_VALUE_ONLY] {
     return qore_object_private::firstKey(obj, xsink);
 }
 
@@ -118,7 +118,7 @@ list<string> <object>::keys() [flags=RET_VALUE_ONLY] {
 
     @see <object>::firstKey()
  */
-*string <object>::lastKey() [flags=RET_VALUE_ONLY] {
+*string <object>::lastKey() [const;flags=RET_VALUE_ONLY] {
     return qore_object_private::lastKey(obj, xsink);
 }
 
@@ -132,7 +132,7 @@ list<string> <object>::keys() [flags=RET_VALUE_ONLY] {
 bool b = o.empty();
     @endcode
  */
-bool <object>::empty() [flags=RET_VALUE_ONLY] {
+bool <object>::empty() [const;flags=RET_VALUE_ONLY] {
     return !obj->size(xsink);
 }
 
@@ -147,7 +147,7 @@ int num = o.size();
 
     @see <object>::sizep()
  */
-int <object>::size() [flags=RET_VALUE_ONLY] {
+int <object>::size() [const;flags=RET_VALUE_ONLY] {
     return obj->size(xsink);
 }
 
@@ -162,7 +162,7 @@ string cn = o.className();
 
     @note equivalent to get_class_name()
  */
-string <object>::className() [flags=CONSTANT] {
+string <object>::className() [const;flags=CONSTANT] {
     return new QoreStringNode(obj->getClassName());
 }
 
@@ -175,7 +175,7 @@ string <object>::className() [flags=CONSTANT] {
 bool b = i.isSystem();
     @endcode
  */
-bool <object>::isSystem() [flags=CONSTANT] {
+bool <object>::isSystem() [const;flags=CONSTANT] {
     return obj->isSystemObject();
 }
 
@@ -193,7 +193,7 @@ bool b = o.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
  */
-bool <object>::val() [flags=RET_VALUE_ONLY] {
+bool <object>::val() [const;flags=RET_VALUE_ONLY] {
     return (bool)obj->size(xsink);
 }
 
@@ -267,7 +267,7 @@ bool b = obj.hasCallableMethod("getStatus");
 
     @since %Qore 0.8.8
  */
-bool <object>::hasCallableMethod(string method) [flags=CONSTANT,NAMED_ARGS] {
+bool <object>::hasCallableMethod(string method) [const;flags=CONSTANT,NAMED_ARGS] {
     return qore_class_private::runtimeHasCallableMethod(*(obj->getClass()), method->getBuffer());
 }
 
@@ -292,7 +292,7 @@ bool b = obj.hasCallableNormalMethod("getStatus");
 
     @since %Qore 0.8.8
  */
-bool <object>::hasCallableNormalMethod(string method) [flags=CONSTANT,NAMED_ARGS] {
+bool <object>::hasCallableNormalMethod(string method) [const;flags=CONSTANT,NAMED_ARGS] {
     return qore_class_private::runtimeHasCallableNormalMethod(*(obj->getClass()), method->getBuffer());
 }
 
@@ -316,7 +316,7 @@ bool b = obj.hasCallableStaticMethod("getStatus");
 
     @since %Qore 0.8.8
  */
-bool <object>::hasCallableStaticMethod(string method) [flags=CONSTANT,NAMED_ARGS] {
+bool <object>::hasCallableStaticMethod(string method) [const;flags=CONSTANT,NAMED_ARGS] {
     return qore_class_private::runtimeHasCallableStaticMethod(*(obj->getClass()), method->getBuffer());
 }
 
@@ -327,7 +327,7 @@ bool <object>::hasCallableStaticMethod(string method) [flags=CONSTANT,NAMED_ARGS
 
     @since %Qore 0.8.9
 */
-bool <object>::sizep() [flags=CONSTANT] {
+bool <object>::sizep() [const;flags=CONSTANT] {
     return true;
 }
 
@@ -338,7 +338,7 @@ bool <object>::sizep() [flags=CONSTANT] {
 
     @since %Qore 0.8.12
  */
-string <object>::uniqueHash() [flags=CONSTANT] {
+string <object>::uniqueHash() [const;flags=CONSTANT] {
     return obj->getUniqueHash();
 }
 

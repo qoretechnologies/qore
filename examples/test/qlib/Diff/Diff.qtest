@@ -499,6 +499,14 @@ h";
             string r = diff_words("old text", "new text", False);
             assertFalse(regex(r, "\033"), "words: no ANSI codes when disabled");
         }
+
+        # diff_words: Unicode codepoints stay intact while tokenizing
+        {
+            string r = diff_words("café 東京", "café 京都", False);
+            assertTrue(regex(r, "café "), "words unicode: prefix unchanged");
+            assertTrue(regex(r, "\\{-東京-\\}"), "words unicode: delete old token");
+            assertTrue(regex(r, "\\{\\+京都\\+\\}"), "words unicode: insert new token");
+        }
     }
 
     patchApply() {

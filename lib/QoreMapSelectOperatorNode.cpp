@@ -52,6 +52,11 @@ int QoreMapSelectOperatorNode::getAsString(QoreString &str, int foff, ExceptionS
 int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
 
+    // Preserve parse-analysis knowledge that this map-select's result is discarded.
+    if (parse_context.pflag & PF_RETURN_VALUE_IGNORED) {
+        ignoreReturnValue();
+    }
+
     // turn off "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
@@ -264,7 +269,7 @@ bool QoreFunctionalMapSelectListOperator::getNextImpl(ValueOptionalRefHolder& va
             continue;
 
         ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
-        if (!*xsink) {
+        if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
         }
@@ -290,7 +295,7 @@ bool QoreFunctionalMapSelectSingleValueOperator::getNextImpl(ValueOptionalRefHol
         return true;
 
     ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
-    if (!*xsink) {
+    if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }
@@ -322,7 +327,7 @@ bool QoreFunctionalMapSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder
             continue;
 
         ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
-        if (!*xsink) {
+        if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
         }
@@ -352,7 +357,7 @@ bool QoreFunctionalMapSelectOperator::getNextImpl(ValueOptionalRefHolder& val, E
             continue;
 
         ValueEvalOptimizedRefHolder tval(map->e[0], xsink);
-        if (!*xsink) {
+        if (!*xsink && map->ref_rv) {
             tval.ensureReferencedValue();
             val.takeValueFrom(tval);
         }

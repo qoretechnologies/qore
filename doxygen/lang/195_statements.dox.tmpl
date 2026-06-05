@@ -151,7 +151,7 @@ switch (val) {
 
     @par Description
     The first \a expression is evaluated and then compared to the value of each \a case_expression in declaration order until one of the \a case_expressions matches or is evaluated to @ref True "True". In this case all code up to a @ref break "break statement" is executed, at which time execution flow exits the <tt><b>switch</b></tt> statement.\n\n
-    Unless relational operators are used, the comparisons are "hard" comparisons; no type conversions are done, so in order for a match to be made, both the value and types of the expressions must match exactly. When relational operators are used, the operators are executed exactly as they are in the rest of %Qore, so type conversions may be performed if nesessary.  The only exception to this is when both arguments are strings then a soft comparison is made in order to avoid the case that strings fail to match only because their encodings are different.\n\n
+    Unless relational operators are used, the comparisons are "hard" comparisons; no type conversions are done, so in order for a match to be made, both the value and types of the expressions must match exactly. When relational operators are used, the operators are executed exactly as they are in the rest of %Qore, so type conversions may be performed if nesessary.  The exceptions are string/string comparisons, which use a soft comparison so strings do not fail to match only because their encodings are different, and char/string comparisons, where a @ref char value matches a string containing the same single codepoint.\n\n
     To use soft comparisons, you must explicitly specify the soft equals operator as follows:\n
     @code{.py}
 switch (1) {

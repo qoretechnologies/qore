@@ -198,7 +198,7 @@ string sub union_test2(auto x) {
 
 public class OverloadTest inherits QUnit::Test {
     public {
-        const Api = "hash sub p() { return {}; }*hash sub p(string a) {return {};}any sub p(string a, string b) { return 1; }";
+        const Api = "hash sub p() { return {}; }*hash sub p(string a) {return {};}auto sub p(string a, string b) { return 1; }";
     }
 
     constructor() : Test("Overload test", "1.0") {
@@ -428,8 +428,8 @@ public class OverloadTest inherits QUnit::Test {
         assertEq(0, f4_test(()));
         assertEq(0, f5_test("hi"));
         assertEq(1, f6(1));
-        # make sure we catch and fix the behavior of corner cases
-        any a;
+    # make sure we catch and fix the behavior of corner cases
+        auto a;
         assertEq(2, f6(1, NOTHING));
         assertEq(2, f6(1, a));
         assertEq(2, f6(1, "hi"));

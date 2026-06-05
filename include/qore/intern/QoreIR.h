@@ -64,6 +64,7 @@ class CaseNodeRegex;
 class QoreTypeInfo;
 class QoreMethod;
 class QoreClass;
+class qore_class_private;
 class QoreVarInfo;
 class AbstractQoreFunctionVariant;
 class QoreClosureParseNode;
@@ -673,7 +674,23 @@ enum class QoreIROpcode : uint16_t {
     PluginDenseBufferUnary  = 377,
     PluginDenseBufferBinary = 378,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (379, 380, ...)
+    //! Create an iterator using the `iterate` operator's source semantics
+    //! (hash pairs, binary bytes, int ranges, AbstractIterator delegation).
+    IteratorCreateIterate = 379,
+
+    //! Evaluate `iterate <source>` as an AbstractIterator object.
+    IterateValue       = 380,
+
+    //! Inline char constant.
+    ConstChar          = 381,
+
+    //! Convert a value to a native int.
+    ToInt              = 382,
+
+    //! Convert a value to a native float.
+    ToFloat            = 383,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (384, 385, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -681,8 +698,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::PluginDenseBufferBinary);
-static_assert(QORE_IR_MAX_OPCODE == 378, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ToFloat);
+static_assert(QORE_IR_MAX_OPCODE == 383, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -784,10 +801,12 @@ struct QoreIRConstant {
         String,
         Date,
         Enum,
+        Char,
     };
 
     Kind kind = Kind::Nothing;
     int64_t int_value = 0;
+    unsigned char_value = 0;
     double float_value = 0.0;
     bool bool_value = false;
     std::string string_value;
@@ -823,6 +842,13 @@ public:
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
     const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
+
+    // Pairs a PushTempMark with its matching DiscardTemps (0 = unpaired).  Set
+    // by the IR builder in correctly-nested call order during lowering, so the
+    // LLVM emitter can match each DiscardTemps to the right mark independently
+    // of the (possibly reordered) basic-block layout produced by short-circuit
+    // operators.  Transient — used only during IR->LLVM lowering, not serialized.
+    uint32_t temp_scope_id = 0;
 };
 
 struct QoreIRPluginOperationRef {
@@ -915,11 +941,17 @@ struct QoreIRPhiIncoming {
     QoreIRBasicBlock* block = nullptr;
 };
 
+enum class QoreIRPhiValueKind : uint8_t {
+    QoreValue = 0,
+    NativeInt = 1,
+};
+
 class QoreIRPhiInstruction : public QoreIRInstruction {
 public:
     QoreIRPhiInstruction() : QoreIRInstruction(QoreIROpcode::Phi) {
     }
 
+    QoreIRPhiValueKind value_kind = QoreIRPhiValueKind::QoreValue;
     std::vector<QoreIRPhiIncoming> incoming;
 };
 
@@ -1240,6 +1272,7 @@ public:
     LocalVar* local = nullptr;
     bool auto_ref = true;  // For LoadLocal: if true, calls refSelf(); if false, loads without inflating refcount
     bool weak = false;  // For StoreLocal: if true, wraps object/hash/list in weak reference
+    bool initial_assignment = false; // For StoreLocal/StoreClosure: declaration initializer write
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
     bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)
@@ -1353,6 +1386,11 @@ struct LVPathStep {
     // Operand index for dynamic navigation (HashKey, ListIndex)
     // References an operand in the instruction's operands vector
     uint32_t operand_idx = UINT32_MAX;
+
+    // Runtime value for ListIndex steps. Keep this separate from slot_id,
+    // which is an unsigned variable/AOT slot id and cannot represent negative
+    // list or buffer indexes.
+    int64_t index = 0;
 
     // For HashKeySlice / ListIndexSlice / ListRangeSlice: SSA ids (compile time) of the N
     // sub-expressions that form the slice selector list.  Consumed by the
@@ -1964,6 +2002,8 @@ public:
     // Phase 3: Aggressive inlining fields
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
     mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
+    mutable const UserVariantBase* cached_uvb = nullptr;
+    mutable const QoreTypeInfo* cached_return_type = nullptr;
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 
@@ -1996,6 +2036,12 @@ public:
     QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     QoreValue expr;                             //!< Original AST expression (for AOT)
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
+
+    // Cached inline IR call state (computed on first execution, avoids repeated lookups)
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr;
+    mutable const UserVariantBase* cached_uvb = nullptr;
+    mutable const QoreTypeInfo* cached_return_type = nullptr;
     //!< operands[0..n-1] are the method arguments (self is obtained from runtime)
 };
 
@@ -2023,6 +2069,8 @@ public:
     // Phase 3: Aggressive inlining fields
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
     mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
+    mutable const UserVariantBase* cached_uvb = nullptr;
+    mutable const QoreTypeInfo* cached_return_type = nullptr;
     //!< operands[0..n-1] are the pre-evaluated method arguments
 };
 
@@ -2050,6 +2098,16 @@ public:
     bool pseudo = false;                    //!< True if this is a pseudo-method call
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     const char* fallback_method_name = nullptr; //!< Method name for dynamic dispatch when method ptr is null (AOT)
+    const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
+
+    // Cached inline IR call state for direct object-method calls.
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr;
+    mutable const UserVariantBase* cached_uvb = nullptr;
+    mutable const QoreTypeInfo* cached_return_type = nullptr;
+    mutable const QoreClass* cached_object_class = nullptr;
+    mutable const qore_class_private* cached_class_ctx = nullptr;
+    mutable const QoreMethod* cached_method = nullptr;
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
 
@@ -2080,8 +2138,18 @@ public:
     bool pseudo = false;                        //!< True if this is a pseudo-method call
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
     const char* fallback_method_name = nullptr;           //!< Method name for dynamic dispatch when method ptr is null (AOT)
+    const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
     QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
+
+    // Cached inline IR call state for direct object-method calls.
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable const QoreIRFunction* cached_callee_ir = nullptr;
+    mutable const UserVariantBase* cached_uvb = nullptr;
+    mutable const QoreTypeInfo* cached_return_type = nullptr;
+    mutable const QoreClass* cached_object_class = nullptr;
+    mutable const qore_class_private* cached_class_ctx = nullptr;
+    mutable const QoreMethod* cached_method = nullptr;
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
 
@@ -2228,11 +2296,12 @@ public:
 class QoreIRFindInstruction : public QoreIRInstruction {
 public:
     QoreIRFindInstruction(const QoreValue& n_exp, const QoreValue& n_find_exp,
-            const QoreValue& n_where)
+            const QoreValue& n_where, int32_t n_mode = 0)
             : QoreIRInstruction(QoreIROpcode::Find),
               exp(n_exp),
               find_exp(n_find_exp),
-              where(n_where) {
+              where(n_where),
+              mode(n_mode) {
         exp.ref();
         find_exp.ref();
         where.ref();
@@ -2247,6 +2316,7 @@ public:
     QoreValue exp;
     QoreValue find_exp;
     QoreValue where;
+    int32_t mode = 0;
 };
 
 class QoreIRSummarizeInstruction : public QoreIRInstruction {
@@ -2278,6 +2348,7 @@ public:
     QoreIRBasicBlock* exception_target = nullptr;
     std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
     bool weak = false;            //!< true for weak (:=) assignment in StoreLValue invoke path
+    bool has_ref_args = false;    //!< True if any operand can pass a reference modified by the callee
 };
 
 //! LandingPad instruction - marks the entry point of an exception handler (catch block)
@@ -2313,8 +2384,8 @@ public:
     bool owns_regex_case = false;  //!< true when deserialized (we own the CaseNodeRegex)
 };
 
-//! Switch case match instruction - tests if switch value matches a case value with enum unwrapping
-//! Uses CaseNode::matches() which unwraps TAG_ENUM from both sides before isEqualHard()
+//! Switch case match instruction - tests if switch value matches a case value with switch matching semantics
+//! Uses CaseNode::matches() which unwraps TAG_ENUM and supports char/single-character string compatibility
 //! operands[0] is the switch value to test
 //! result is a bool indicating match
 class QoreIRSwitchCaseMatchInstruction : public QoreIRInstruction {
@@ -2622,6 +2693,24 @@ public:
     //! Checked by evalTiered() after IR execution to trigger JIT compilation.
     //! mutable: written during const IR execution.
     mutable bool osr_jit_requested = false;
+
+    // Cached interpreter metadata.  These vectors are structural properties of
+    // the IR function, so compute them once and reuse them across recursive and
+    // hot call paths instead of rescanning the instruction stream per execute().
+    mutable std::mutex interpreter_analysis_mutex;
+    mutable bool interpreter_analysis_ready = false;
+    mutable std::vector<uint32_t> interpreter_value_use_counts;
+    mutable std::vector<uint8_t> interpreter_dot_eval_only_bases;
+    mutable std::vector<int32_t> interpreter_operand_use_counts;
+    mutable std::vector<uint32_t> interpreter_param_slot_ids;
+    mutable std::vector<const LocalVar*> interpreter_param_local_vars;
+    mutable std::vector<uint8_t> interpreter_locals_ir_only;
+    mutable std::vector<uint8_t> interpreter_return_protected_slots;
+    mutable std::vector<uint32_t> interpreter_return_value_slot_ids;
+    mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
+    mutable bool interpreter_needs_slot_cache_tls = false;
+    mutable bool interpreter_has_non_ir_only_locals = false;
+    mutable bool interpreter_may_invalidate_external_caches = true;
 
 private:
     uint32_t next_value_id = 1;

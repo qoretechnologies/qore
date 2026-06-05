@@ -170,9 +170,17 @@ uint64_t qore_rt_backquote_throwing(const char* cmd, ExceptionSink* xsink);
 uint64_t qore_rt_find(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
     ExceptionSink* xsink);
 
+//! Execute a find expression from serialized sub-expression values with an explicit mode.
+uint64_t qore_rt_find_mode(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
+    int32_t mode, ExceptionSink* xsink);
+
 //! Throwing wrapper for invoke/EH paths.
 uint64_t qore_rt_find_throwing(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
     ExceptionSink* xsink);
+
+//! Throwing wrapper for mode-aware find invoke/EH paths.
+uint64_t qore_rt_find_mode_throwing(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
+    int32_t mode, ExceptionSink* xsink);
 
 //! Native AOT background obj.method(args) call with pre-evaluated receiver and args.
 uint64_t qore_rt_background_dot_eval_name_call_aot(const char* method_name, uint64_t recv_bits,
@@ -298,6 +306,9 @@ void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSink* xsink);
 
 //! Generic binary op: delegates to QoreIRInterpreter::evalBinary()
 uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink);
+
+//! Generic square-bracket access with caller-selected string index semantics.
+uint64_t qore_rt_list_index_dynamic(uint64_t left, uint64_t right, int32_t string_index_char, ExceptionSink* xsink);
 
 //! Generic unary op: delegates to QoreIRInterpreter::evalUnary()
 uint64_t qore_rt_unary_op(int opcode, uint64_t operand, ExceptionSink* xsink);
@@ -631,6 +642,14 @@ void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_t key_bits, uint64_t 
 //! Create a reverse iterator from a list/iterable (for foldr); returns opaque iterator pointer
 void* qore_rt_iterator_create_reverse(uint64_t iterable_bits, ExceptionSink* xsink);
 
+//! Create an iterator with `iterate` source semantics; returns opaque iterator pointer
+void* qore_rt_iterator_create_iterate(uint64_t iterable_bits, ExceptionSink* xsink);
+void* qore_rt_iterator_create_iterate_throwing(uint64_t iterable_bits, ExceptionSink* xsink);
+
+//! Evaluate `iterate <source>` as an AbstractIterator object.
+uint64_t qore_rt_iterate_value(uint64_t source_bits, ExceptionSink* xsink);
+uint64_t qore_rt_iterate_value_throwing(uint64_t source_bits, ExceptionSink* xsink);
+
 // --- Iterator cleanup helper ---
 
 //! Clean up an active iterator on non-normal function exit (return/throw inside foreach body)
@@ -710,6 +729,8 @@ uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key);
 //! Index into a list value; returns NaN-boxed result (with ref).
 //! Returns NOTHING if value is not a list or index is out of bounds.
 uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink);
+uint64_t qore_rt_list_index_access_compat(uint64_t list_val, int64_t index, int32_t string_index_char,
+        ExceptionSink* xsink);
 
 //! Extract the value assigned to one LHS entry in a list assignment.
 uint64_t qore_rt_list_assignment_value(uint64_t value, int64_t index, ExceptionSink* xsink);

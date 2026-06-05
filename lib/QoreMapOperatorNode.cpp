@@ -101,6 +101,11 @@ const QoreTypeInfo* QoreMapOperatorNode::setReturnTypeInfo(const QoreTypeInfo*& 
 int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
 
+    // Preserve parse-analysis knowledge that this map's result is discarded.
+    if (parse_context.pflag & PF_RETURN_VALUE_IGNORED) {
+        ignoreReturnValue();
+    }
+
     // turn off "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
@@ -291,7 +296,7 @@ bool QoreFunctionalMapListOperator::getNextImpl(ValueOptionalRefHolder& val, Exc
     ImplicitElementHelper eh(index());
     SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
     ValueEvalOptimizedRefHolder tval(map->left, xsink);
-    if (!*xsink) {
+    if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }
@@ -307,7 +312,7 @@ bool QoreFunctionalMapSingleValueOperator::getNextImpl(ValueOptionalRefHolder& v
     SingleArgvContextHelper argv_helper(v, xsink);
     v.clear();
     ValueEvalOptimizedRefHolder tval(map->left, xsink);
-    if (!*xsink) {
+    if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }
@@ -330,7 +335,7 @@ bool QoreFunctionalMapIteratorOperator::getNextImpl(ValueOptionalRefHolder& val,
         return false;
     SingleArgvContextHelper argv_helper(iv.release(), xsink);
     ValueEvalOptimizedRefHolder tval(map->left, xsink);
-    if (!*xsink) {
+    if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }
@@ -347,7 +352,7 @@ bool QoreFunctionalMapOperator::getNextImpl(ValueOptionalRefHolder& val, Excepti
     ImplicitElementHelper eh(index++);
     SingleArgvContextHelper argv_helper(iv.takeReferencedValue(), xsink);
     ValueEvalOptimizedRefHolder tval(map->left, xsink);
-    if (!*xsink) {
+    if (!*xsink && map->ref_rv) {
         tval.ensureReferencedValue();
         val.takeValueFrom(tval);
     }

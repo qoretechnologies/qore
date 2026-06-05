@@ -265,7 +265,7 @@ class SseStreamingTest inherits Test {
         assertTrue(exists item, name + " queue item available");
         assertTrue(exists item.value, name + " queue item is not end-of-stream");
         assertEq(NT_HASH, item.value.typeCode(), name + " queue item is an SSE hash");
-        return cast<hash<auto>>(item.value);
+        return cast<hash>(item.value);
     }
 
     testSseNotifierEvents() {

@@ -131,19 +131,51 @@ public:
         against @ref getMaxConcurrentStreams under @ref reserve_lock —
         no TOCTOU race with concurrent reservers.
 
+        When @a streaming_send is true, also reserves the per-connection
+        streaming-send state used by H2/H3 DATA-frame push APIs.  This is
+        separate from the protocol's multiplexed active-stream count:
+        H2/H3 can carry many response streams, but each connection object
+        has a single incremental request-body stream id.
+
+        @param streaming_send true for a request whose body will be pushed
+            incrementally via @ref pushSendData
+
         @return @c true on success, @c false at capacity
 
         @since %Qore 2.3
     */
-    DLLEXPORT bool tryReserveStream();
+    DLLEXPORT bool tryReserveStream(bool streaming_send = false);
 
     //! Releases a previously-reserved stream slot.
     /** Decrements @ref pending_stream_count.  No-op if no slot is
         currently reserved (e.g., double-release).
 
+        @param streaming_send true when releasing a reservation created
+            with @ref tryReserveStream(true)
+
         @since %Qore 2.3
     */
-    DLLEXPORT void releaseStreamReservation();
+    DLLEXPORT void releaseStreamReservation(bool streaming_send = false);
+
+    //! Converts a pending streaming-send reservation into active state.
+    /** Direct users that bypass the connection manager also use this to
+        claim the per-connection streaming-send slot before submitting a
+        streaming-send request.
+
+        @return @c true if the caller owns the streaming-send slot
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool beginStreamingSend();
+
+    //! Releases the active streaming-send slot after end-of-request-body.
+    /** This does not touch active response streams; it only makes the
+        connection eligible for another incremental request body after
+        @ref pushSendData(nullptr, 0) has closed the previous one.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void finishStreamingSend();
 
     //! Returns the current pending (reserved-but-not-yet-submitted) count.
     DLLEXPORT int getPendingStreamCount() const;
@@ -308,6 +340,39 @@ public:
         the poll op and cancel the controller submission.
     */
     DLLEXPORT virtual void closeConnection(ExceptionSink* xsink);
+
+protected:
+    //! RAII cleanup for a claimed streaming-send slot.
+    /** Used by protocol subclasses while constructing a streaming-send
+        request.  If setup fails after the stream has been submitted, the
+        guard sends an end-of-body sentinel with a private exception sink
+        before releasing the active flag.
+
+        @since %Qore 2.3
+    */
+    class DLLEXPORT StreamingSendSetupGuard {
+    public:
+        DLLEXPORT explicit StreamingSendSetupGuard(HttpClientConnectionBase* conn);
+        DLLEXPORT ~StreamingSendSetupGuard();
+
+        StreamingSendSetupGuard(const StreamingSendSetupGuard&) = delete;
+        StreamingSendSetupGuard& operator=(const StreamingSendSetupGuard&) = delete;
+
+        //! Marks that a protocol stream was submitted and needs END_STREAM
+        //! on setup failure.
+        DLLEXPORT void markSubmitted();
+
+        //! Leaves the active streaming-send slot open for caller-driven
+        //! @ref pushSendData calls.
+        DLLEXPORT void keepOpen();
+
+    private:
+        HttpClientConnectionBase* conn;
+        bool submitted = false;
+        bool keep_open = false;
+    };
+
+public:
 
     //! Blocks until the connection transitions out of CONNECTING
     /** @param timeout_ms wait budget in milliseconds (0 or negative = wait forever)
@@ -520,6 +585,18 @@ protected:
     //! Reserved-but-not-yet-submitted stream slots.  Protected by
     //! @ref reserve_lock.
     int pending_stream_count = 0;
+
+    //! Pending streaming-send reservations.  Protected by @ref reserve_lock.
+    /** At most one is allowed because H2/H3 connection objects keep one
+        active streaming-send stream id for incremental body pushes.
+    */
+    int pending_streaming_send_count = 0;
+
+    //! True while an incremental request body is still open.
+    /** Protected by @ref reserve_lock.  Cleared when the caller pushes
+        the end-of-body sentinel or when the connection is closed.
+    */
+    bool streaming_send_active = false;
 
     //! Lock protecting @ref manager_.
     /** This is the OUTERMOST lock in the close-hook lock-ordering chain:

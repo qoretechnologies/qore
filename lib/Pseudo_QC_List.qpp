@@ -56,7 +56,7 @@ switch (l.typeCode()) {
 }
     @endcode
 */
-int <list>::typeCode() [flags=CONSTANT] {
+int <list>::typeCode() [const;flags=CONSTANT] {
    return NT_LIST;
 }
 
@@ -73,7 +73,7 @@ bool b = n.complexType();
 
     @since %Qore 0.8.13
 */
-bool <list>::complexType() [flags=CONSTANT] {
+bool <list>::complexType() [const;flags=CONSTANT] {
    const qore_list_private* lp = qore_list_private::get(*l);
    return lp->complexTypeInfo ? true : false;
 }
@@ -89,7 +89,7 @@ int len = l.size();
 
     @see <list>::sizep()
 */
-int <list>::size() [flags=CONSTANT] {
+int <list>::size() [const;flags=CONSTANT] {
    return l->size();
 }
 
@@ -103,7 +103,7 @@ int <list>::size() [flags=CONSTANT] {
 bool b = l.empty();
     @endcode
 */
-bool <list>::empty() [flags=CONSTANT] {
+bool <list>::empty() [const;flags=CONSTANT] {
    return l->empty();
 }
 
@@ -121,7 +121,7 @@ bool b = l.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
 */
-bool <list>::val() [flags=CONSTANT] {
+bool <list>::val() [const;flags=CONSTANT] {
    return !l->empty();
 }
 
@@ -175,7 +175,7 @@ string str = ("a", "b", "c").join(":"); # returns "a:b:c"
 
     @since %Qore 0.8.5
  */
-string <list>::join(string separator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+string <list>::join(string separator) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return join_intern(separator, l, 0, xsink);
 }
 
@@ -192,7 +192,7 @@ foreach auto element in (val) {
 }
     @endcode
 */
-int <list>::lsize() [flags=CONSTANT] {
+int <list>::lsize() [const;flags=CONSTANT] {
    return l->size();
 }
 
@@ -210,7 +210,7 @@ list<int> l = (1, 2, 3);
 bool b = l.contains(5); # returns False
     @endcode
 */
-bool <list>::contains(auto value) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+bool <list>::contains(auto value) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return inlist_intern(value, l, xsink);
 }
 
@@ -260,6 +260,6 @@ AbstractIterator <list>::rangeIterator(auto value) [flags=CONSTANT,NAMED_ARGS] {
 
     @since %Qore 0.8.9
 */
-bool <list>::sizep() [flags=CONSTANT] {
+bool <list>::sizep() [const;flags=CONSTANT] {
    return true;
 }

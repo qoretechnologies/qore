@@ -367,8 +367,35 @@ public const DP_FUNC_GET_SECOND = "get_second";
 #! Maps a list by applying an expression to each element, returning a new list
 public const DP_OP_MAP = "map";
 
-#! Maps a list by applying key and value expressions to each element, returning a hash
+#! Maps a list or hash by applying key and value expressions to each element, returning a hash
 public const DP_OP_HASH_MAP = "hash_map";
+
+#! Filters a list or hash source by applying a predicate expression to each element
+public const DP_OP_SELECT = "select";
+
+#! Returns the first element in a list or hash source, optionally matching a predicate
+public const DP_OP_FIRST = "first";
+
+#! Returns True if any source element or predicate result is true
+public const DP_OP_ANY = "any";
+
+#! Returns True if all predicate results are true
+public const DP_OP_ALL = "all";
+
+#! Counts source elements, optionally matching a predicate
+public const DP_OP_COUNT = "count";
+
+#! Returns the first N elements from a list or hash source
+public const DP_OP_TAKE = "take";
+
+#! Drops the first N elements from a list or hash source
+public const DP_OP_DROP = "drop";
+
+#! Returns source elements until a predicate becomes false
+public const DP_OP_TAKEWHILE = "takewhile";
+
+#! Returns source elements until a predicate becomes true
+public const DP_OP_TAKEUNTIL = "takeuntil";
 #/@}
 
 /** @defgroup dpql_extended_operator_ops2 DPQL Extended Operator Constants (Part 2)

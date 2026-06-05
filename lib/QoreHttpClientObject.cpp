@@ -3361,7 +3361,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
-    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme, this_connection.host.c_str(),
+    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend(scheme, this_connection.host.c_str(),
         this_connection.port, xsink);
     if (!conn || *xsink) {
         return nullptr;
@@ -3369,37 +3369,57 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
 
     conn->ref();
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+    auto close_and_evict_conn = [&]() {
+        ExceptionSink close_xsink;
+        mgr.closeAndEvict(conn, &close_xsink);
+        close_xsink.clear();
+    };
     conn->waitForReadyOrError(timeout_ms, xsink);
     if (*xsink || conn->isClosed()) {
         if (!*xsink) {
             xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
                 "connection closed before HTTP/2 CONNECT request");
         }
-        mgr.closeAndEvict(conn, xsink);
+        close_and_evict_conn();
         return nullptr;
     }
 
     if (conn->getProtocol() != HttpClientProtocol::H2) {
-        mgr.releaseConnection(conn);
+        conn->releaseStreamReservation(true);
         xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection required for extended CONNECT");
         return nullptr;
     }
 
     QoreChannel* channel_raw = nullptr;
+    auto close_channel_raw = [&]() {
+        if (channel_raw) {
+            ExceptionSink close_xsink;
+            channel_raw->close();
+            channel_raw->deref(&close_xsink);
+            close_xsink.clear();
+            channel_raw = nullptr;
+        }
+    };
+    auto end_streaming_send = [&]() {
+        ExceptionSink end_xsink;
+        conn->pushSendData(nullptr, 0, &end_xsink);
+        end_xsink.clear();
+        conn->finishStreamingSend();
+    };
+    auto cleanup_failed_connect = [&]() {
+        end_streaming_send();
+        close_channel_raw();
+    };
     ReferenceHolder<QoreHashNode> submit_result(
         conn->submitRequestStreamingSend("CONNECT", msgpath, *h2_headers, true, channel_raw, xsink), xsink);
     if (*xsink || !submit_result || !channel_raw) {
-        mgr.releaseConnection(conn);
-        if (channel_raw) {
-            channel_raw->deref(xsink);
-        }
+        close_channel_raw();
         return nullptr;
     }
 
     int64_t submitted_stream_id = submit_result->getKeyValue("stream_id").getAsBigInt();
     if (submitted_stream_id <= 0 || submitted_stream_id > INT32_MAX) {
-        channel_raw->close();
-        channel_raw->deref(xsink);
+        cleanup_failed_connect();
         xsink->raiseException("HTTP2-CONNECT-ERROR", "invalid HTTP/2 CONNECT stream id " QLLD,
             submitted_stream_id);
         return nullptr;
@@ -3411,20 +3431,17 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         bool has_value = false;
         ValueHolder rv(channel_raw->recv(timeout_ms, xsink, timed_out, has_value), xsink);
         if (*xsink) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             return nullptr;
         }
         if (timed_out) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             xsink->raiseException("HTTP2-CONNECT-ERROR",
                 "timeout waiting for HTTP/2 CONNECT response (timeout: %d ms)", timeout_ms);
             return nullptr;
         }
         if (!has_value) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             xsink->raiseException("HTTP2-CONNECT-ERROR",
                 "HTTP/2 connection closed before CONNECT response was received");
             return nullptr;
@@ -3441,8 +3458,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             const char* desc_str = desc_val.getType() == NT_STRING
                 ? desc_val.get<const QoreStringNode>()->c_str()
                 : "HTTP/2 CONNECT request failed";
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             xsink->raiseException(err_str, "%s", desc_str);
             return nullptr;
         }
@@ -3461,8 +3477,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             out->setKeyValue("headers", hdr_val.refSelf(), xsink);
         }
         if (*xsink) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             return nullptr;
         }
 
@@ -3473,11 +3488,14 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
             if (hdr_val.getType() == NT_HASH) {
                 info->setKeyValue("response-headers", hdr_val.refSelf(), xsink);
             }
+            if (*xsink) {
+                cleanup_failed_connect();
+                return nullptr;
+            }
         }
 
         if (status_code != 200) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             xsink->raiseException("HTTP2-CONNECT-ERROR",
                 "HTTP/2 CONNECT request failed with status %d", status_code);
             return nullptr;
@@ -3568,7 +3586,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
     }
     HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
-    HttpClientConnectionBase* conn = mgr.acquireConnection("https", this_connection.host.c_str(),
+    HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend("https", this_connection.host.c_str(),
         this_connection.port, xsink);
     if (!conn || *xsink) {
         restore_forced_h3();
@@ -3577,40 +3595,60 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
 
     conn->ref();
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+    auto close_and_evict_conn = [&]() {
+        ExceptionSink close_xsink;
+        mgr.closeAndEvict(conn, &close_xsink);
+        close_xsink.clear();
+    };
     conn->waitForReadyOrError(timeout_ms, xsink);
     if (*xsink || conn->isClosed()) {
         if (!*xsink) {
             xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
                 "connection closed before HTTP/3 CONNECT request");
         }
-        mgr.closeAndEvict(conn, xsink);
+        close_and_evict_conn();
         restore_forced_h3();
         return nullptr;
     }
 
     if (conn->getProtocol() != HttpClientProtocol::H3) {
-        mgr.releaseConnection(conn);
+        conn->releaseStreamReservation(true);
         restore_forced_h3();
         xsink->raiseException("HTTP3-ERROR", "HTTP/3 connection required for extended CONNECT");
         return nullptr;
     }
 
     QoreChannel* channel_raw = nullptr;
+    auto close_channel_raw = [&]() {
+        if (channel_raw) {
+            ExceptionSink close_xsink;
+            channel_raw->close();
+            channel_raw->deref(&close_xsink);
+            close_xsink.clear();
+            channel_raw = nullptr;
+        }
+    };
+    auto end_streaming_send = [&]() {
+        ExceptionSink end_xsink;
+        conn->pushSendData(nullptr, 0, &end_xsink);
+        end_xsink.clear();
+        conn->finishStreamingSend();
+    };
+    auto cleanup_failed_connect = [&]() {
+        end_streaming_send();
+        close_channel_raw();
+    };
     ReferenceHolder<QoreHashNode> submit_result(
         conn->submitRequestStreamingSend("CONNECT", msgpath, *h3_headers, true, channel_raw, xsink), xsink);
     if (*xsink || !submit_result || !channel_raw) {
-        mgr.releaseConnection(conn);
-        if (channel_raw) {
-            channel_raw->deref(xsink);
-        }
+        close_channel_raw();
         restore_forced_h3();
         return nullptr;
     }
 
     int64_t stream_id = submit_result->getKeyValue("stream_id").getAsBigInt();
     if (stream_id < 0) {
-        channel_raw->close();
-        channel_raw->deref(xsink);
+        cleanup_failed_connect();
         restore_forced_h3();
         xsink->raiseException("HTTP3-CONNECT-ERROR", "invalid HTTP/3 CONNECT stream id " QLLD,
             stream_id);
@@ -3622,22 +3660,19 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
         bool has_value = false;
         ValueHolder rv(channel_raw->recv(timeout_ms, xsink, timed_out, has_value), xsink);
         if (*xsink) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             restore_forced_h3();
             return nullptr;
         }
         if (timed_out) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             restore_forced_h3();
             xsink->raiseException("HTTP3-CONNECT-ERROR",
                 "timeout waiting for HTTP/3 CONNECT response (timeout: %d ms)", timeout_ms);
             return nullptr;
         }
         if (!has_value) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             restore_forced_h3();
             xsink->raiseException("HTTP3-CONNECT-ERROR",
                 "HTTP/3 connection closed before CONNECT response was received");
@@ -3655,8 +3690,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             const char* desc_str = desc_val.getType() == NT_STRING
                 ? desc_val.get<const QoreStringNode>()->c_str()
                 : "HTTP/3 CONNECT request failed";
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             restore_forced_h3();
             xsink->raiseException(err_str, "%s", desc_str);
             return nullptr;
@@ -3677,8 +3711,7 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
             out->setKeyValue("headers", hdr_val.refSelf(), xsink);
         }
         if (*xsink) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             restore_forced_h3();
             return nullptr;
         }
@@ -3691,16 +3724,14 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
                 info->setKeyValue("response-headers", hdr_val.refSelf(), xsink);
             }
             if (*xsink) {
-                channel_raw->close();
-                channel_raw->deref(xsink);
+                cleanup_failed_connect();
                 restore_forced_h3();
                 return nullptr;
             }
         }
 
         if (status_code != 200) {
-            channel_raw->close();
-            channel_raw->deref(xsink);
+            cleanup_failed_connect();
             restore_forced_h3();
             xsink->raiseException("HTTP3-CONNECT-ERROR",
                 "HTTP/3 CONNECT request failed with status %d", status_code);
@@ -4491,7 +4522,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
             // Acquire connection manually (can't use mgr.request() because
             // body must be pushed between submit and future-get)
-            HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+            HttpClientConnectionBase* conn = mgr.acquireConnectionForStreamingSend(scheme,
                 this_connection.host.c_str(), this_connection.port, xsink);
             if (!conn || *xsink) {
                 return nullptr;
@@ -4501,6 +4532,22 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // or the Future/Channel wait.
             conn->ref();
             ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+            auto close_and_evict_conn = [&]() {
+                ExceptionSink close_xsink;
+                mgr.closeAndEvict(conn, &close_xsink);
+                close_xsink.clear();
+            };
+            auto close_and_evict_if_unusable = [&]() {
+                if (conn->getProtocol() == HttpClientProtocol::H1 || conn->isClosed()) {
+                    close_and_evict_conn();
+                }
+            };
+            auto push_end_best_effort = [&]() {
+                ExceptionSink end_xsink;
+                conn->pushSendData(nullptr, 0, &end_xsink);
+                end_xsink.clear();
+                conn->finishStreamingSend();
+            };
 
             // Ensure the connection is ready
             conn->waitForReadyOrError(timeout_ms, xsink);
@@ -4509,17 +4556,27 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
                         "connection closed before streaming send request");
                 }
-                mgr.closeAndEvict(conn, xsink);
+                close_and_evict_conn();
                 return nullptr;
             }
 
             // Submit streaming send request via virtual dispatch (H1/H2/H3)
             QoreChannel* channel_raw = nullptr;
+            auto close_channel_raw = [&]() {
+                if (channel_raw) {
+                    ExceptionSink channel_xsink;
+                    channel_raw->close();
+                    channel_raw->deref(&channel_xsink);
+                    channel_xsink.clear();
+                    channel_raw = nullptr;
+                }
+            };
             ReferenceHolder<QoreHashNode> submit_result(
                 conn->submitRequestStreamingSend(meth, msgpath, *nh,
                     streaming_recv, channel_raw, xsink), xsink);
             if (*xsink || !submit_result) {
-                mgr.releaseConnection(conn);
+                close_channel_raw();
+                close_and_evict_if_unusable();
                 return nullptr;
             }
 
@@ -4528,12 +4585,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 while (true) {
                     ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
                     if (*xsink) {
-                        conn->pushSendData(nullptr, 0, xsink);
-                        if (channel_raw) {
-                            channel_raw->close();
-                            channel_raw->deref(xsink);
-                        }
-                        mgr.closeAndEvict(conn, xsink);
+                        push_end_best_effort();
+                        close_channel_raw();
+                        close_and_evict_if_unusable();
                         return nullptr;
                     }
 
@@ -4546,12 +4600,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             } else {
                                 conn->pushSendData(str->c_str(), str->size(), xsink);
                                 if (*xsink) {
-                                    conn->pushSendData(nullptr, 0, xsink);
-                                    if (channel_raw) {
-                                        channel_raw->close();
-                                        channel_raw->deref(xsink);
-                                    }
-                                    mgr.closeAndEvict(conn, xsink);
+                                    push_end_best_effort();
+                                    close_channel_raw();
+                                    close_and_evict_if_unusable();
                                     return nullptr;
                                 }
                             }
@@ -4564,12 +4615,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             } else {
                                 conn->pushSendData(b->getPtr(), b->size(), xsink);
                                 if (*xsink) {
-                                    conn->pushSendData(nullptr, 0, xsink);
-                                    if (channel_raw) {
-                                        channel_raw->close();
-                                        channel_raw->deref(xsink);
-                                    }
-                                    mgr.closeAndEvict(conn, xsink);
+                                    push_end_best_effort();
+                                    close_channel_raw();
+                                    close_and_evict_if_unusable();
                                     return nullptr;
                                 }
                             }
@@ -4584,12 +4632,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 "send_callback returned type '%s'; expected "
                                 "'string', 'binary', or NOTHING",
                                 res->getTypeName());
-                            conn->pushSendData(nullptr, 0, xsink);
-                            if (channel_raw) {
-                                channel_raw->close();
-                                channel_raw->deref(xsink);
-                            }
-                            mgr.closeAndEvict(conn, xsink);
+                            push_end_best_effort();
+                            close_channel_raw();
+                            close_and_evict_if_unusable();
                             return nullptr;
                     }
 
@@ -4613,12 +4658,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     int64 r = is->read(const_cast<void*>(buf->getPtr()),
                         chunk_size, xsink);
                     if (*xsink) {
-                        conn->pushSendData(nullptr, 0, xsink);
-                        if (channel_raw) {
-                            channel_raw->close();
-                            channel_raw->deref(xsink);
-                        }
-                        mgr.closeAndEvict(conn, xsink);
+                        push_end_best_effort();
+                        close_channel_raw();
+                        close_and_evict_if_unusable();
                         return nullptr;
                     }
                     if (r <= 0) {
@@ -4626,12 +4668,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                     conn->pushSendData(buf->getPtr(), (size_t)r, xsink);
                     if (*xsink) {
-                        conn->pushSendData(nullptr, 0, xsink);
-                        if (channel_raw) {
-                            channel_raw->close();
-                            channel_raw->deref(xsink);
-                        }
-                        mgr.closeAndEvict(conn, xsink);
+                        push_end_best_effort();
+                        close_channel_raw();
+                        close_and_evict_if_unusable();
                         return nullptr;
                     }
                 }
@@ -4641,28 +4680,43 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             if (trailer_callback) {
                 ValueHolder trailer_result(trailer_callback->execValue(nullptr, xsink), xsink);
                 if (*xsink) {
-                    conn->pushSendData(nullptr, 0, xsink);
-                    if (channel_raw) {
-                        channel_raw->close();
-                        channel_raw->deref(xsink);
-                    }
-                    mgr.closeAndEvict(conn, xsink);
+                    push_end_best_effort();
+                    close_channel_raw();
+                    close_and_evict_if_unusable();
                     return nullptr;
                 }
                 if (trailer_result->getType() == NT_HASH) {
                     conn->setTrailers(trailer_result->get<const QoreHashNode>(), xsink);
+                    if (*xsink) {
+                        push_end_best_effort();
+                        close_channel_raw();
+                        close_and_evict_if_unusable();
+                        return nullptr;
+                    }
                 }
             }
 
             // Push end sentinel
             conn->pushSendData(nullptr, 0, xsink);
+            if (*xsink) {
+                close_channel_raw();
+                close_and_evict_if_unusable();
+                return nullptr;
+            }
 
             if (streaming_recv) {
                 // Streaming receive: drain channel (same logic as the
                 // recv_callback/os path below)
+                if (!channel_raw) {
+                    xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
+                        "submitRequestStreamingSend result missing response channel");
+                    close_and_evict_if_unusable();
+                    return nullptr;
+                }
                 ReferenceHolder<QoreChannel> channel(channel_raw, xsink);
                 bool channel_done = false;
                 bool got_headers = false;
+                bool keep_channel_open = false;
 
                 while (true) {
                     bool timed_out = false;
@@ -4707,6 +4761,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             desc_str = desc->c_str();
                         }
                         xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+                        close_and_evict_if_unusable();
                         return nullptr;
                     }
 
@@ -4792,6 +4847,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             clearStreamingChannel();
                             channel->ref();
                             streaming_recv_channel = *channel;
+                            keep_channel_open = true;
                             break;
                         }
                         // Fall through to check for body data in the same
@@ -4875,7 +4931,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                 }
 
-                channel->close();
+                if (!keep_channel_open) {
+                    channel->close();
+                }
 
                 if (channel_done && !redirect_passthru && code >= 300
                         && code < 400 && code != 304) {
@@ -4884,6 +4942,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (!ans) {
                         xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
                             "no response received from streaming request");
+                        close_and_evict_if_unusable();
                         return nullptr;
                     }
                     break;
@@ -4894,6 +4953,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (future_v.getType() != NT_OBJECT) {
                     xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
                         "submitRequestStreamingSend result missing 'future' key");
+                    close_and_evict_if_unusable();
                     return nullptr;
                 }
                 QoreObject* future_obj = const_cast<QoreObject*>(
@@ -4907,6 +4967,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
                 if (*xsink) {
                     result.discard(xsink);
+                    close_and_evict_if_unusable();
                     return nullptr;
                 }
                 if (result.getType() != NT_HASH) {
@@ -4914,6 +4975,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
                         "Future returned non-hash result type %d",
                         (int)result.getType());
+                    close_and_evict_if_unusable();
                     return nullptr;
                 }
 

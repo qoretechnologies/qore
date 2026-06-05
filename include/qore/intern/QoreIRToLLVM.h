@@ -387,6 +387,12 @@ private:
     struct TempCleanupMark {
         size_t invoke_alloca_count = 0;
         size_t pending_ssa_count = 0;
+        // Matches QoreIRInstruction::temp_scope_id of the PushTempMark that
+        // produced this entry (0 = legacy/unpaired).  A DiscardTemps selects
+        // its mark by this id rather than by stack position, so the pairing
+        // survives basic-block reordering (e.g. short-circuit operators that
+        // move a loop-body DiscardTemps after a sibling block's DiscardTemps).
+        uint32_t scope_id = 0;
     };
     std::vector<TempCleanupMark> temp_cleanup_marks;
 
@@ -672,7 +678,7 @@ private:
 
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.
-    void emitDiscardTemps(llvm::Module& module);
+    void emitDiscardTemps(llvm::Module& module, uint32_t scope_id = 0);
 
     // Register an alloca-backed cleanup slot and, for large functions, add its
     // address to the entry-block cleanup pointer array used by

@@ -225,6 +225,15 @@ public class DpqlSerializer {
 
             case DP_OP_MAP:
             case DP_OP_HASH_MAP:
+            case DP_OP_SELECT:
+            case DP_OP_FIRST:
+            case DP_OP_ANY:
+            case DP_OP_ALL:
+            case DP_OP_COUNT:
+            case DP_OP_TAKE:
+            case DP_OP_DROP:
+            case DP_OP_TAKEWHILE:
+            case DP_OP_TAKEUNTIL:
                 result = serializePrefixOperator(op, exp.args);
                 break;
 

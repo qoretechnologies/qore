@@ -173,6 +173,9 @@ public class DpqlActionSession {
             case "dpql-validate":
                 return handleValidate(args);
 
+            case "dpql-eval":
+                return handleEval(args);
+
             case "dpql-serialize":
                 return handleSerialize(args);
 
@@ -348,6 +351,141 @@ public class DpqlActionSession {
         return {
             "diagnostics": diags,
         };
+    }
+
+    #! Verifies a DPQL expression end to end and dry-runs it against a sample record
+    /** Combines syntactic parsing, provider-aware validation, server-side push-down
+        classification, and an in-memory evaluation against a sample record so a caller
+        (e.g. a design tool) can confirm a generated expression is actually executable
+        for the target provider without running a real backend query.
+
+        @param args supports:
+        - \c text: (required) the DPQL expression text
+        - \c fields: (optional) record-type field override; otherwise the context fields
+          set with \c dpql-set-context are used
+        - \c record: (optional) a sample record (hash) to evaluate the expression against;
+          if not given and a provider context is set, the provider's example record is used
+        - \c template_context: (optional) hash of template values used during evaluation
+
+        @return a hash with:
+        - \c success: @ref True "True" when the expression parses, has no error-severity
+          diagnostics, and either evaluates locally or is fully pushed down to the provider
+        - \c diagnostics: combined parse and provider-aware validation diagnostics
+        - \c expression: the parsed expression (if parsing succeeded)
+        - \c pushdown: when a search-context provider is set, \c {"fully_pushdownable": bool}
+          indicating whether the whole expression can be executed server-side
+        - \c evaluation: the dry-run result, \c {"executed": bool, "record": ..., "result": ...}
+          on success or \c {"executed": False, "record": ..., "error": {...}} on failure
+    */
+    private hash<auto> handleEval(*hash<auto> args) {
+        string text = getRequiredStringArg(args, "text");
+        *hash<string, AbstractDataField> use_fields = getFieldsOverride(args) ?? fields;
+        *hash<auto> template_context;
+        if (exists args.template_context) {
+            if (args.template_context.typeCode() != NT_HASH) {
+                throw "INVALID-PARAMETER", sprintf("Parameter 'template_context' must be a hash, got %s",
+                    args.template_context.type());
+            }
+            template_context = args.template_context;
+        }
+
+        # 1. parse, then provider-aware validation when a record type is known
+        hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text, expressions, use_fields);
+        list<hash<DpqlDiagnostic>> diags = result.diagnostics ?? ();
+        if (use_fields && result.success) {
+            list<hash<DpqlDiagnostic>> vdiags = DataProvider::validateDpqlExpression(text, use_fields, expressions,
+                search_context ? provider_expressions : NOTHING);
+            if (vdiags) {
+                diags += vdiags;
+            }
+        }
+        bool has_errors = (select diags, $1.severity == "error") ? True : False;
+
+        hash<auto> rv = {
+            "success": result.success && !has_errors,
+            "diagnostics": diags,
+            "expression": result.expression,
+        };
+        if (!result.expression) {
+            return rv;
+        }
+        # strip the optional type so eval/push-down APIs accept the value
+        hash<DataProviderExpression> exp = result.expression;
+
+        # 2. server-side push-down classification (only meaningful in a search context):
+        # the expression can be pushed down only if every operator it uses is in the
+        # provider's server-supported expression set (the same basis the search-context
+        # validator uses); operators outside that set would be evaluated client-side
+        bool fully_pushdownable = False;
+        if (search_context && exists provider_expressions) {
+            hash<string, hash<DataProviderExpressionInfo>> server_exprs = provider_expressions;
+            fully_pushdownable = allOperatorsServerSupported(exp, server_exprs);
+            rv.pushdown = {
+                "fully_pushdownable": fully_pushdownable,
+            };
+        }
+
+        # 3. in-memory dry-run evaluation against a sample record
+        *hash<auto> rec = args.record;
+        if (!exists rec && provider && use_fields) {
+            try {
+                rec = provider.getExampleRecordData();
+            } catch (hash<ExceptionInfo> ex) {
+                # no example record available for this provider; skip the dry run
+            }
+        }
+        if (exists rec) {
+            try {
+                auto eval_result = AbstractDataProvider::evalGenericExpression(rec, exp, template_context);
+                rv.evaluation = {
+                    "executed": True,
+                    "record": rec,
+                    "result": eval_result,
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                rv.evaluation = {
+                    "executed": False,
+                    "record": rec,
+                    "error": {"err": ex.err, "desc": ex.desc},
+                };
+                # A local evaluation failure is only a real problem when the expression
+                # would be evaluated client-side at runtime.  If it is fully pushed down
+                # to the provider, the server executes it and the absence of a local
+                # implementation is expected, not an error.
+                if (!fully_pushdownable) {
+                    diags += <DpqlDiagnostic>{
+                        "severity": "error",
+                        "code": "DPQL-E100",
+                        "message": sprintf("expression failed local evaluation and is not "
+                            "pushed down to the provider: %s: %s", ex.err, ex.desc),
+                        "line": 1,
+                        "column": 1,
+                        "end_line": 1,
+                        "end_column": 1,
+                    };
+                    rv.diagnostics = diags;
+                    rv.success = False;
+                }
+            }
+        }
+
+        return rv;
+    }
+
+    #! Returns @ref True "True" if every operator in the expression tree is in the
+    #! provider's server-supported expression set
+    private bool allOperatorsServerSupported(hash<DataProviderExpression> exp,
+            hash<string, hash<DataProviderExpressionInfo>> server_expressions) {
+        if (!server_expressions.hasKey(exp.exp)) {
+            return False;
+        }
+        foreach auto arg in (exp.args) {
+            if (arg instanceof hash<DataProviderExpression>
+                    && !allOperatorsServerSupported(cast<hash<DataProviderExpression>>(arg), server_expressions)) {
+                return False;
+            }
+        }
+        return True;
     }
 
     private hash<auto> handleCompletions(*hash<auto> args) {

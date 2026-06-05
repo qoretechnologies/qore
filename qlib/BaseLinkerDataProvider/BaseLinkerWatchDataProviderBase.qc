@@ -105,7 +105,7 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
     #! Performs a single polling operation
     private pollOnce() {
         try {
-            hash<auto> params = cast<hash<auto>>({
+            hash<auto> params = cast<hash>({
                 "logs_types": (getLogType(),),
             });
             if (last_log_id > 0) {

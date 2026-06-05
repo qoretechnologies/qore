@@ -81,7 +81,7 @@ class ThreadPoolTest inherits QUnit::Test {
 
     ThreadPoolTest() {
         Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-        p.parse("sub set(string k, any val) { save_thread_data((k: val)); } any sub get(string k) { return get_thread_data(k); }", "");
+        p.parse("sub set(string k, auto val) { save_thread_data((k: val)); } auto sub get(string k) { return get_thread_data(k); }", "");
         p.callFunction("set", "key", "value1");
         assertEq("value1", p.callFunction("get", "key"));
 

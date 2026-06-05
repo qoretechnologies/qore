@@ -37,6 +37,7 @@ QoreScanner::QoreScanner(const QoreStringNode* s)
         : src(const_cast<QoreStringNode*>(s)),
           src_buf(s ? s->c_str() : ""),
           src_size(s ? s->size() : 0),
+          ascii_compat(s && s->getEncoding()->isAsciiCompat()),
           tid(q_gettid()) {
     if (src) {
         src->ref();
@@ -47,6 +48,7 @@ QoreScanner::QoreScanner(const QoreScanner& old)
         : src(old.src),
           src_buf(old.src_buf),
           src_size(old.src_size),
+          ascii_compat(old.ascii_compat),
           cursor(old.cursor),
           line(old.line),
           column(old.column),
@@ -66,6 +68,12 @@ int QoreScanner::peek(ExceptionSink* xsink) const {
     if (cursor >= src_size) {
         return -1;
     }
+    if (ascii_compat) {
+        unsigned char b = static_cast<unsigned char>(src_buf[cursor]);
+        if (b < 0x80) {
+            return b;
+        }
+    }
     unsigned clen = 0;
     unsigned cp = src->getUnicodePointFromBytePos(cursor, clen, xsink);
     if (xsink && *xsink) {
@@ -79,6 +87,10 @@ int QoreScanner::peekAt(int char_offset, ExceptionSink* xsink) const {
     if (char_offset > 0) {
         // Walk forward N codepoints.
         for (int i = 0; i < char_offset && pos < src_size; ++i) {
+            if (ascii_compat && static_cast<unsigned char>(src_buf[pos]) < 0x80) {
+                ++pos;
+                continue;
+            }
             unsigned clen = 0;
             src->getUnicodePointFromBytePos(pos, clen, xsink);
             if (xsink && *xsink) {
@@ -114,6 +126,12 @@ int QoreScanner::peekAt(int char_offset, ExceptionSink* xsink) const {
     if (pos >= src_size) {
         return -1;
     }
+    if (ascii_compat) {
+        unsigned char b = static_cast<unsigned char>(src_buf[pos]);
+        if (b < 0x80) {
+            return b;
+        }
+    }
     unsigned clen = 0;
     unsigned cp = src->getUnicodePointFromBytePos(pos, clen, xsink);
     if (xsink && *xsink) {
@@ -125,6 +143,19 @@ int QoreScanner::peekAt(int char_offset, ExceptionSink* xsink) const {
 bool QoreScanner::advance(ExceptionSink* xsink) {
     if (cursor >= src_size) {
         return false;
+    }
+    if (ascii_compat) {
+        unsigned char b = static_cast<unsigned char>(src_buf[cursor]);
+        if (b < 0x80) {
+            ++cursor;
+            if (b == '\n') {
+                ++line;
+                column = 1;
+            } else {
+                ++column;
+            }
+            return true;
+        }
     }
     unsigned clen = 0;
     unsigned cp = src->getUnicodePointFromBytePos(cursor, clen, xsink);
@@ -210,7 +241,8 @@ QoreStringNode* QoreScanner::getStringRefSelf() const {
 //! Stateful scanner over a string for tokenizer / parser implementations.
 /** Holds a reference to a source string plus a byte cursor, line, and column
     counter.  Provides constant-time byte access and amortised constant-time
-    codepoint access (subject to the underlying string's encoding).
+    codepoint access (subject to the underlying string's encoding). ASCII
+    bytes in ASCII-compatible encodings take a direct fast path.
 
     Designed to replace the per-char @c input[pos] pattern used in
     Qdx::QoreTokenizer, OpenApi3SchemaTokenizer, AsyncApiSchemaTokenizer,

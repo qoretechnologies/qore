@@ -134,6 +134,9 @@ public:
 
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         for (unsigned i = 0; i < typeList.size(); ++i) {
+            if (isParamReadOnly(i)) {
+                str.append("const ");
+            }
             str.append(QoreTypeInfo::getPath(typeList[i]));
             const char* vname = getName(i);
             if (vname) {
@@ -195,6 +198,10 @@ public:
         return varargs;
     }
 
+    DLLLOCAL bool isParamReadOnly(unsigned i) const {
+        return i < paramReadOnlyList.size() && paramReadOnlyList[i];
+    }
+
 protected:
     unsigned short num_param_types = 0,    // number of parameters that have type information
         min_param_types = 0;                // minimum number of parameters with type info (without default args)
@@ -203,6 +210,7 @@ protected:
     type_vec_t typeList;
     arg_vec_t defaultArgList;
     name_vec_t names;
+    std::vector<uint8_t> paramReadOnlyList;
 
     // parameter signature string (lazy — see getSignatureText)
     mutable std::string str;
@@ -311,7 +319,8 @@ public:
         const QoreClass* classTypeInfo = nullptr,
         const char* parseLocFile = nullptr,
         int parseLocFirstLine = 0,
-        int parseLocLastLine = 0);
+        int parseLocLastLine = 0,
+        std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>());
 
     DLLLOCAL void replaceResolvedTypes(const QoreTypeInfo* retType,
         std::vector<const QoreTypeInfo*>&& paramTypes);
@@ -390,6 +399,9 @@ public:
         }
 
         for (unsigned i = 0; i < parseTypeList.size(); ++i) {
+            if (isParamReadOnly(i)) {
+                str.append("const ");
+            }
             if (!parseTypeList[i] && typeList.size() > i && typeList[i])
                 str.append(QoreTypeInfo::getPath(typeList[i]));
             else
@@ -1843,6 +1855,7 @@ public:
     }
 
     DLLLOCAL int checkFinal() const;
+    DLLLOCAL int checkConstOverrides() const;
 
     // virtual copy constructor
     DLLLOCAL virtual MethodFunctionBase* copy(const QoreClass* n_qc) const = 0;
@@ -1885,6 +1898,7 @@ protected:
     LVarSet varlist;  // closure local variable environment
     const QoreTypeInfo* classTypeInfo;
     bool has_nested_closures = false;  // set during parse if body contains nested closures
+    bool const_method_context = false; // true when created inside a const method
 
 public:
     DLLLOCAL UserClosureFunction(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : QoreFunction("<anonymous closure>"), classTypeInfo(0) {
@@ -1916,6 +1930,14 @@ public:
 
     DLLLOCAL void setHasNestedClosures() {
         has_nested_closures = true;
+    }
+
+    DLLLOCAL void setConstMethodContext() {
+        const_method_context = true;
+    }
+
+    DLLLOCAL bool isConstMethodContext() const {
+        return const_method_context;
     }
 };
 

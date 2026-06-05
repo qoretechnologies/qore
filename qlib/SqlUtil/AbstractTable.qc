@@ -256,6 +256,33 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "tablecode": "code",
         };
 
+        #! generic SQL create-as-select options
+        /** This option is comprised of @ref AbstractDatabase::CreationOptions plus
+            @ref SqlUtil::AbstractTable::SqlDataCallbackOptions.
+        */
+        const CreateAsSelectOptions = AbstractDatabase::CreationOptions + SqlDataCallbackOptions;
+
+        #! generic SQL table drop options
+        /** This option is comprised of @ref AbstractDatabase::CallbackOptions plus the following keys:
+            - \c if_exists: (\c bool_type) if @ref True "True" then a missing table is ignored
+            - \c cascade: (\c bool_type) if @ref True "True" and supported by the underlying database driver,
+              dependent objects are dropped with the table
+            - \c cascade_constraints: (\c bool_type) if @ref True "True" and supported by the underlying database
+              driver, dependent constraints are dropped with the table
+            - \c force: (\c bool_type) legacy alias for the strongest driver-supported table drop behavior
+        */
+        const DropTableOptions = AbstractDatabase::CallbackOptions + (
+            "if_exists": Type::Boolean,
+            "cascade": Type::Boolean,
+            "cascade_constraints": Type::Boolean,
+            "force": Type::Boolean,
+        );
+
+        #! generic table statistics preference options
+        /** This option is currently identical to @ref AbstractDatabase::CallbackOptions.
+        */
+        const StatsPreferencesOptions = AbstractDatabase::CallbackOptions;
+
         #! generic SQL insert options
         /** In addition to any @ref SqlDataCallbackOptions, the following keys can be set for this option:
             - \c returning: a list having elements of one of the two following types:
@@ -612,7 +639,7 @@ map printf("unique constraint %s\n", $1.getName()), table.getUniqueConstraintIte
 table.dropCommit();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional drop options; see @ref SqlUtil::AbstractTable::DropTableOptions for more info
 
         @throw OPTION-ERROR invalid or unknown callback option
 
@@ -631,7 +658,7 @@ table.dropCommit();
 table.drop();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional drop options; see @ref SqlUtil::AbstractTable::DropTableOptions for more info
 
         @throw OPTION-ERROR invalid or unknown callback option
 
@@ -703,7 +730,7 @@ t.tryExecRaw("drop table tmp_table");
 list l = table.getDropSql();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional drop options; see @ref SqlUtil::AbstractTable::DropTableOptions for more info
 
         @return a list of strings that can be used to drop the table and any other objects assocatied with the table
         (for example: PostgreSQL table trigger function(s))
@@ -711,8 +738,14 @@ list l = table.getDropSql();
         @throw OPTION-ERROR invalid or unknown callback option
     */
     softlist<auto> getDropSql(*hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDropTableOptions(), \opt);
+        if (opt.if_exists && !checkExistence()) {
+            AbstractDatabase::doOkCallback(opt, AbstractDatabase::AC_NotFound, "table", getSqlName());
+            return ();
+        }
         cache();
-        return AbstractDatabase::doCallback(opt, getDropSqlImpl(), AbstractDatabase::AC_Drop, "table", getSqlName());
+        return AbstractDatabase::doCallback(opt, getDropSqlImpl(opt), AbstractDatabase::AC_Drop, "table",
+            getSqlName());
     }
 
     #! truncates all the table data; releases the transaction lock after executing
@@ -776,6 +809,73 @@ string sql = table.getTruncateSql();
         return AbstractDatabase::doCallback(opt, getTruncateSqlImpl(), AbstractDatabase::AC_Truncate, "table", name);
     }
 
+    #! sets table statistics preferences and commits or rolls back the transaction
+    /** @par Example:
+        @code{.py}
+table.setStatsPreferencesCommit({"incremental": True, "granularity": "AUTO"});
+        @endcode
+
+        @param preferences a hash keyed by statistics preference name
+        @param opt optional callback options; see @ref SqlUtil::AbstractTable::StatsPreferencesOptions for more info
+
+        @return no value
+
+        @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
+        @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
+
+        @since SqlUtil 2.4
+    */
+    setStatsPreferencesCommit(hash<auto> preferences, *hash<auto> opt) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        setStatsPreferences(preferences, opt);
+    }
+
+    #! sets table statistics preferences without transaction management
+    /** @par Example:
+        @code{.py}
+table.setStatsPreferences({"incremental": True, "granularity": "AUTO"});
+        @endcode
+
+        @param preferences a hash keyed by statistics preference name
+        @param opt optional callback options; see @ref SqlUtil::AbstractTable::StatsPreferencesOptions for more info
+
+        @return no value
+
+        @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
+        @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
+
+        @since SqlUtil 2.4
+    */
+    setStatsPreferences(hash<auto> preferences, *hash<auto> opt) {
+        map ds.execRaw($1), getSetStatsPreferencesSql(preferences, opt);
+    }
+
+    #! returns SQL to set table statistics preferences
+    /** @par Example:
+        @code{.py}
+list<auto> sql = table.getSetStatsPreferencesSql({"incremental": True, "granularity": "AUTO"});
+        @endcode
+
+        @param preferences a hash keyed by statistics preference name
+        @param opt optional callback options; see @ref SqlUtil::AbstractTable::StatsPreferencesOptions for more info
+
+        @return a list of SQL strings that can be used to set table statistics preferences
+
+        @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
+        @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
+
+        @since SqlUtil 2.4
+    */
+    list<auto> getSetStatsPreferencesSql(hash<auto> preferences, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getStatsPreferencesOptions(), \opt);
+        if (!preferences) {
+            throw "OPTION-ERROR", sprintf("%s: at least one table statistics preference is required", getDesc());
+        }
+        return AbstractDatabase::doCallback(opt, getSetStatsPreferencesSqlImpl(preferences),
+            AbstractDatabase::AC_Modify, "table statistics preferences", getSqlName());
+    }
+
     #! creates the table in the database; releases the transaction lock after creating the table
     /** @par Example:
         @code{.py}
@@ -820,6 +920,163 @@ table.create();
     #! A legacy wrapper for create()
     deprecated createNoCommit(*hash<auto> opt) {
         create(opt);
+    }
+
+    #! creates the table from a select statement and commits or rolls back the transaction
+    /** @par Example:
+        @code{.py}
+target.createAsSelectCommit(source, {
+    "columns": ("id", "name"),
+    "where": {"type": "CUSTOMER"},
+});
+        @endcode
+
+        @param source the source table for the select statement; this table must use the same datasource as the
+        current target table
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return the return value from the underlying datasource execution call
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    auto createAsSelectCommit(AbstractTable source, *hash<auto> select_hash, *hash<auto> opt) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return createAsSelect(source, select_hash, opt);
+    }
+
+    #! creates the table from a select statement without transaction management
+    /** @par Example:
+        @code{.py}
+target.createAsSelect(source, {"columns": ("id", "name")});
+        @endcode
+
+        @param source the source table for the select statement; this table must use the same datasource as the
+        current target table
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return the return value from the underlying datasource execution call
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    auto createAsSelect(AbstractTable source, *hash<auto> select_hash, *hash<auto> opt) {
+        hash<SqlResultInfo> info = getCreateAsSelectSqlWithInfo(source, select_hash, opt);
+        on_success {
+            inDb = True;
+            manual = False;
+        }
+        return ds.vexec(info.sql, info.args);
+    }
+
+    #! creates the table from a select statement and returns execution metadata
+    /** @par Example:
+        @code{.py}
+hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("id", "name")});
+        @endcode
+
+        @param source the source table for the select statement; this table must use the same datasource as the
+        current target table
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return a hash giving the result of the operation, the SQL used for it, and bind arguments; the \c result key
+        will hold the return value from the underlying datasource execution call
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    hash<SqlResultInfo> createAsSelectWithInfo(AbstractTable source, *hash<auto> select_hash, *hash<auto> opt) {
+        hash<SqlResultInfo> rv = getCreateAsSelectSqlWithInfo(source, select_hash, opt);
+        on_success {
+            inDb = True;
+            manual = False;
+        }
+        rv.result = ds.vexec(rv.sql, rv.args);
+        return rv;
+    }
+
+    #! returns the SQL required to create the table from a select statement
+    /** @par Example:
+        @code{.py}
+list<auto> args;
+string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \args);
+        @endcode
+
+        @param source the source table for the select statement
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param args an optional reference to a list for any bind arguments
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return the SQL string that can be used to create the target table from the source select statement
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    string getCreateAsSelectSql(AbstractTable source, *hash<auto> select_hash, *reference<list<auto>> args,
+            *hash<auto> opt) {
+        return getCreateAsSelectSqlIntern(source, select_hash, \args, opt);
+    }
+
+    #! @ref SqlUtil::AbstractTable::getCreateAsSelectSql() variant
+    string getCreateAsSelectSql(AbstractTable source, *hash<auto> select_hash, *reference<list<auto>> args) {
+        return getCreateAsSelectSqlIntern(source, select_hash, \args, NOTHING);
+    }
+
+    #! @ref SqlUtil::AbstractTable::getCreateAsSelectSql() variant
+    string getCreateAsSelectSql(AbstractTable source, *hash<auto> select_hash, *hash<auto> opt) {
+        list<auto> args;
+        return getCreateAsSelectSqlIntern(source, select_hash, \args, opt);
+    }
+
+    #! returns the SQL and bind arguments required to create the table from a select statement
+    /** @par Example:
+        @code{.py}
+hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns": ("id", "name")});
+        @endcode
+
+        @param source the source table for the select statement
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return a hash giving the SQL used for the operation and bind arguments
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    hash<SqlResultInfo> getCreateAsSelectSqlWithInfo(AbstractTable source, *hash<auto> select_hash,
+            *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.sql = getCreateAsSelectSqlIntern(source, select_hash, \rv.args, opt);
+        return rv;
     }
 
     #! renames the table
@@ -4687,12 +4944,7 @@ string sql = table.getSelectSql(sh, \args);
         if (matchAnyUnique(cols)) {
             return True;
         }
-        foreach AbstractIndex ix in (indexes.iterator()) {
-            if (ix.unique && ix.columns.partialMatchKeys(cols)) {
-                return True;
-            }
-        }
-        return False;
+        return any $1.unique && $1.columns.partialMatchKeys(cols), indexes.iterator();
     }
 
     #! Returns True if this DB requires the orderby columns to match a unique
@@ -5459,7 +5711,7 @@ string sql = table.getSelectSql(sh, \args);
                     throw "WHERE-ERROR", sprintf("expected \"hash\" in \"where\" list; got type %y instead",
                         c.fullType());
                 }
-                owl = getWhereClauseListIntern(\info, cast<hash<auto>>(c), cprefix);
+                owl = getWhereClauseListIntern(\info, cast<hash>(c), cprefix);
                 if (owl) {
                     wl += "(" + (foldl $1 + " and " + $2, owl) + ")";
                 }
@@ -5472,7 +5724,7 @@ string sql = table.getSelectSql(sh, \args);
                 throw "WHERE-ERROR", sprintf("expected \"hash\" or \"list\" in \"where\" argument; got type %y "
                     "instead", cond.fullType());
             }
-            wl = getWhereClauseListIntern(\info, cast<hash<auto>>(cond), cprefix);
+            wl = getWhereClauseListIntern(\info, cast<hash>(cond), cprefix);
             if (wl) {
                 return " where " + (foldl $1 + " and " + $2, wl);
             }
@@ -6421,6 +6673,34 @@ table.clear();
             "partition", partition_name, name);
     }
 
+    #! returns SQL to drop a partition matching the given specification
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the SQL string required to drop the resolved partition
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    string getDropPartitionSql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        on_success if (opt.sql_callback_executed) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDropPartitionSqlImpl(partition_name), AbstractDatabase::AC_Drop,
+            "partition", partition_name, name);
+    }
+
     #! drops a partition without transaction management
     /** @since SqlUtil 2.4
     */
@@ -6452,6 +6732,31 @@ table.clear();
         }
     }
 
+    #! drops a partition matching the given specification without transaction management
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    dropPartition(hash<auto> spec, *hash<auto> opt) {
+        string partition_name;
+
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionSupportUnlocked();
+            partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        }
+
+        dropPartition(partition_name, opt);
+    }
+
     #! drops a partition and commits the transaction
     /** @since SqlUtil 2.4
     */
@@ -6459,6 +6764,23 @@ table.clear();
         on_exit ds.commit();
         on_error ds.rollback();
         dropPartition(partition_name, opt);
+    }
+
+    #! drops a partition matching the given specification and commits the transaction
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    dropPartitionCommit(hash<auto> spec, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        dropPartition(spec, opt);
     }
 
     #! returns SQL to truncate a partition
@@ -6475,11 +6797,52 @@ table.clear();
             AbstractDatabase::AC_Truncate, "partition", partition_name, name);
     }
 
+    #! returns SQL to truncate a partition matching the given specification
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the SQL string required to truncate the resolved partition
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    string getTruncatePartitionSql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name),
+            AbstractDatabase::AC_Truncate, "partition", partition_name, name);
+    }
+
     #! truncates a partition without transaction management
     /** @since SqlUtil 2.4
     */
     truncatePartition(string partition_name, *hash<auto> opt) {
         string sql = getTruncatePartitionSql(partition_name, opt);
+        ds.execRaw(sql);
+    }
+
+    #! truncates a partition matching the given specification without transaction management
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    truncatePartition(hash<auto> spec, *hash<auto> opt) {
+        string sql = getTruncatePartitionSql(spec, opt);
         ds.execRaw(sql);
     }
 
@@ -6492,6 +6855,23 @@ table.clear();
         truncatePartition(partition_name, opt);
     }
 
+    #! truncates a partition matching the given specification and commits the transaction
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    truncatePartitionCommit(hash<auto> spec, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        truncatePartition(spec, opt);
+    }
+
     #! returns SQL to detach a partition
     /** @since SqlUtil 2.4
     */
@@ -6502,6 +6882,34 @@ table.clear();
         on_exit l.unlock();
 
         assertPartitionDetachSupportUnlocked();
+        on_success if (opt.sql_callback_executed) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name),
+            AbstractDatabase::AC_Modify, "partition", partition_name, name);
+    }
+
+    #! returns SQL to detach a partition matching the given specification
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the SQL string required to detach the resolved partition
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    string getDetachPartitionSql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionDetachSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
         on_success if (opt.sql_callback_executed) {
             clearPartitionsUnlocked();
         }
@@ -6557,6 +6965,33 @@ table.clear();
         return AbstractTable::getTable(ds, detached_name);
     }
 
+    #! detaches a partition matching the given specification without transaction management
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    AbstractTable detachPartition(hash<auto> spec, *hash<auto> opt) {
+        string partition_name;
+
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionDetachSupportUnlocked();
+            partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        }
+
+        return detachPartition(partition_name, opt);
+    }
+
     #! detaches a partition and commits the transaction
     /** @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
 
@@ -6568,6 +7003,25 @@ table.clear();
         on_exit ds.commit();
         on_error ds.rollback();
         return detachPartition(partition_name, opt);
+    }
+
+    #! detaches a partition matching the given specification and commits the transaction
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    AbstractTable detachPartitionCommit(hash<auto> spec, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        return detachPartition(spec, opt);
     }
 
     #! ensures that a partition matching the given specification exists
@@ -6653,6 +7107,24 @@ table.clear();
         }
 
         return;
+    }
+
+    private string resolvePartitionNameForLifecycleSpecUnlocked(hash<auto> spec, string err) {
+        hash<PartitionSpec> ps = normalizePartitionSpecUnlocked(spec, err);
+        hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
+        if (lookup.status == PartitionLookupStatus::Found) {
+            return lookup.partition.name;
+        }
+
+        if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
+            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            if (ph.hasKey(ps.name)) {
+                return ph{ps.name}.name;
+            }
+        }
+
+        throw err, sprintf("%s: partition matching specification %y was not found%s", getDesc(), spec,
+            lookup.reason ? sprintf(": %s", lookup.reason) : "");
     }
 
     #! ensures that a partition matching the given specification exists and commits the transaction if it was created
@@ -7955,7 +8427,7 @@ string sql = table.getAlignSqlString(table2);
         validateOptionsIntern("OPTION-ERROR", getConstraintOptions(), \opt);
         l.lock();
         on_exit l.unlock();
-        return getCreateConstraintsSql(opt, cache);
+        return getCreateConstraintsSqlUnlocked(opt, cache);
     }
 
     #! returns a list of SQL strings that could be used to create other table attributes (such as comments, if supported and present) or @ref nothing if there are none
@@ -8458,6 +8930,27 @@ string sql = table.getAlignSqlString(table2);
         return InsertOptions;
     }
 
+    #! returns the create-as-select options for this driver
+    /** override in subclasses to return driver-specific options
+    */
+    private hash<auto> getCreateAsSelectOptions() {
+        return CreateAsSelectOptions;
+    }
+
+    #! returns the table drop options for this driver
+    /** override in subclasses to return driver-specific options
+    */
+    private hash<auto> getDropTableOptions() {
+        return DropTableOptions;
+    }
+
+    #! returns the table statistics preference options for this driver
+    /** override in subclasses to return driver-specific options
+    */
+    private hash<auto> getStatsPreferencesOptions() {
+        return StatsPreferencesOptions;
+    }
+
     #! returns the insert from iterator options for this driver
     /** override in subclasses to return driver-specific options
     */
@@ -8576,6 +9069,24 @@ on_exit printf("SQL> %s\n", sql);
     private string getCreateTableSqlUnlocked(*hash<auto> opt) {
         getColumnsUnlocked();
         return AbstractDatabase::doCallback(opt, getCreateTableSqlImpl(opt), AbstractDatabase::AC_Create, "table", name);
+    }
+
+    private string getCreateAsSelectSqlIntern(AbstractTable source, *hash<auto> select_hash,
+            reference<list<auto>> args, *hash<auto> opt) {
+        if (inDb) {
+            throw "CREATE-TABLE-ERROR", sprintf("%s has already been read from or created in the database",
+                getDesc());
+        }
+        validateOptionsIntern("OPTION-ERROR", getCreateAsSelectOptions(), \opt);
+
+        args = ();
+        string select_sql = source.getSelectSql(select_hash, \args);
+        string sql = AbstractDatabase::doCallback(opt, getCreateAsSelectSqlImpl(select_sql, opt),
+            AbstractDatabase::AC_Create, "table", name);
+        if (opt.sqlarg_callback) {
+            opt.sqlarg_callback(sql, args);
+        }
+        return sql;
     }
 
     private *list<auto> getCreateIndexesSqlUnlocked(*hash<auto> opt, bool cache = True) {
@@ -8869,12 +9380,21 @@ on_exit printf("SQL> %s\n", sql);
         return True;
     }
 
-    private softlist<auto> getDropSqlImpl() {
+    private softlist<auto> getDropSqlImpl(*hash<auto> opt) {
+        if (opt.force || opt.cascade || opt.cascade_constraints) {
+            throw "OPTION-ERROR", sprintf("%s: cascade table drop options are not supported by database driver %y",
+                getDesc(), ds.getDriverName());
+        }
         return sprintf("drop table %s", getSqlName());
     }
 
     private string getTruncateSqlImpl() {
         return sprintf("truncate table %s", getSqlName());
+    }
+
+    private list<auto> getSetStatsPreferencesSqlImpl(hash<auto> preferences) {
+        throw "STATS-PREFERENCES-NOT-SUPPORTED", sprintf("%s: database driver %y does not support table statistics "
+            "preferences", getDesc(), ds.getDriverName());
     }
 
     #! tries to execute a command so that if an error occurs the current transaction status is not lost
@@ -9036,6 +9556,15 @@ on_exit printf("SQL> %s\n", sql);
     */
     private bool partitionDdlIsTransactionalImpl() {
         return False;
+    }
+
+    #! Reimplement in subclasses to provide driver-specific create-as-select SQL
+    private string getCreateAsSelectSqlImpl(string select_sql, *hash<auto> opt) {
+        if (opt.replace) {
+            throw "OPTION-ERROR", sprintf("%s: create-as-select option %y is not supported by database driver %y",
+                getDesc(), "replace", ds.getDriverName());
+        }
+        return sprintf("create table %s as %s", getSqlName(), select_sql);
     }
 
     #! returns the type for number / numeric columns for the database so that data conversions can be handled properly

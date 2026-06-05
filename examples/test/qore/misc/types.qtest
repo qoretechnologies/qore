@@ -488,7 +488,7 @@ class TypeTest inherits QUnit::Test {
             h.a.b = 2;
         }
         {
-            any h;
+            any h = NOTHING;
             h.a = hash<MyHash>{};
             # ensure types are stripped on assignment with internal values of untyped hashes
             assertEq(Type::Hash, h.a.fullType());
@@ -526,7 +526,7 @@ class TypeTest inherits QUnit::Test {
             assertEq(Type::Hash, l[0].fullType());
         }
         {
-            any l;
+            any l = NOTHING;
             l[0] = hash<MyHash>{};
             # ensure types are stripped on assignment with internal values of untyped lists
             assertEq(Type::Hash, l[0].fullType());

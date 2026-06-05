@@ -51,7 +51,7 @@ switch (d.typeCode()) {
 }
     @endcode
  */
-int <date>::typeCode() {
+int <date>::typeCode() [const] {
    return NT_DATE;
 }
 
@@ -64,7 +64,7 @@ int <date>::typeCode() {
 bool b = d.absolute();
     @endcode
 */
-bool <date>::absolute() {
+bool <date>::absolute() [const] {
    return dt->isAbsolute();
 }
 
@@ -77,7 +77,7 @@ bool <date>::absolute() {
 bool b = d.relative();
     @endcode
 */
-bool <date>::relative() {
+bool <date>::relative() [const] {
    return dt->isRelative();
 }
 
@@ -92,7 +92,7 @@ int n = d.years();
 
     @note equivalent to get_years(date)
 */
-int <date>::years() [flags=CONSTANT] {
+int <date>::years() [const;flags=CONSTANT] {
    return dt->getYear();
 }
 
@@ -109,7 +109,7 @@ int n = d.months();
 
     @note equivalent to get_months(date)
 */
-int <date>::months() [flags=CONSTANT] {
+int <date>::months() [const;flags=CONSTANT] {
    return dt->getMonth();
 }
 
@@ -126,7 +126,7 @@ int n = d.days();
 
     @note equivalent to get_days(date)
 */
-int <date>::days() [flags=CONSTANT] {
+int <date>::days() [const;flags=CONSTANT] {
    return dt->getDay();
 }
 
@@ -143,7 +143,7 @@ int n = d.hours();
 
     @note equivalent to get_hours(date)
 */
-int <date>::hours() [flags=CONSTANT] {
+int <date>::hours() [const;flags=CONSTANT] {
    return dt->getHour();
 }
 
@@ -160,7 +160,7 @@ int n = d.minutes();
 
     @note equivalent to get_minutes(date)
 */
-int <date>::minutes() [flags=CONSTANT] {
+int <date>::minutes() [const;flags=CONSTANT] {
    return dt->getMinute();
 }
 
@@ -179,7 +179,7 @@ int n = d.seconds();
     - equivalent to get_seconds(date)
     - to get the number of seconds of duration in a date/time value, use @ref <date>::durationSeconds() instead
 */
-int <date>::seconds() [flags=CONSTANT] {
+int <date>::seconds() [const;flags=CONSTANT] {
    return dt->getSecond();
 }
 
@@ -198,7 +198,7 @@ int n = d.milliseconds();
     - equivalent to get_milliseconds(date)
     - to get the number of milliseconds of duration in a date/time value, use @ref <date>::durationMilliseconds() instead
 */
-int <date>::milliseconds() [flags=CONSTANT] {
+int <date>::milliseconds() [const;flags=CONSTANT] {
    return dt->getMillisecond();
 }
 
@@ -217,7 +217,7 @@ int n = d.microseconds();
     - equivalent to get_microseconds(date)
     - to get the number of microseconds of duration in a date/time value, use @ref <date>::durationMicroseconds() instead
 */
-int <date>::microseconds() [flags=CONSTANT] {
+int <date>::microseconds() [const;flags=CONSTANT] {
    return dt->getMicrosecond();
 }
 
@@ -248,7 +248,7 @@ int us = PT2M15S3u.durationSeconds(); # returns 135
 
     @since %Qore 0.8.7
 */
-int <date>::durationSeconds() [flags=CONSTANT] {
+int <date>::durationSeconds() [const;flags=CONSTANT] {
    return dt->getRelativeSeconds();
 }
 
@@ -279,7 +279,7 @@ int us = PT2M15S3u.durationMilliseconds(); # returns 135000
 
     @since %Qore 0.8.7
 */
-int <date>::durationMilliseconds() [flags=CONSTANT] {
+int <date>::durationMilliseconds() [const;flags=CONSTANT] {
    return dt->getRelativeMilliseconds();
 }
 
@@ -308,7 +308,7 @@ int us = PT2M15S3u.durationMicroseconds(); # returns 135000003
 
     @since %Qore 0.8.7
 */
-int <date>::durationMicroseconds() [flags=CONSTANT] {
+int <date>::durationMicroseconds() [const;flags=CONSTANT] {
    return dt->getRelativeMicroseconds();
 }
 
@@ -333,7 +333,7 @@ float dt = PT2M15S3u.durationSecondsFloat(); # returns 135.000003
 
     @since %Qore 0.8.12
 */
-float <date>::durationSecondsFloat() [flags=CONSTANT] {
+float <date>::durationSecondsFloat() [const;flags=CONSTANT] {
    return dt->getRelativeSecondsDouble();
 }
 
@@ -352,7 +352,7 @@ string str = d.format("Day, Mon D, YYYY-MM-DD HH:mm:SS");
 
     @note equivalent to format_date(string, date)
 */
-string <date>::format(string format) [flags=CONSTANT,NAMED_ARGS] {
+string <date>::format(string format) [const;flags=CONSTANT,NAMED_ARGS] {
    QoreStringNode *rv = new QoreStringNode;
    dt->format(*rv, format->getBuffer());
    return rv;
@@ -367,7 +367,7 @@ string <date>::format(string format) [flags=CONSTANT,NAMED_ARGS] {
 bool b = d.isDst();
     @endcode
  */
-bool <date>::isDst() [flags=CONSTANT] {
+bool <date>::isDst() [const;flags=CONSTANT] {
    bool is_dst;
 
    AbstractQoreZoneInfo::getUTCOffset(dt->getZone(), dt->getEpochSecondsUTC(), is_dst);
@@ -383,7 +383,7 @@ bool <date>::isDst() [flags=CONSTANT] {
 *TimeZone zone = d.zone();
     @endcode
  */
-*TimeZone <date>::zone() [flags=CONSTANT] {
+*TimeZone <date>::zone() [const;flags=CONSTANT] {
    return dt->isAbsolute() ? new QoreObject(QC_TIMEZONE, 0, new TimeZoneData(dt->getZone())) : 0;
 }
 
@@ -396,7 +396,7 @@ bool <date>::isDst() [flags=CONSTANT] {
 *string zn = d.currentZoneName();
     @endcode
  */
-*string <date>::currentZoneName() [flags=CONSTANT] {
+*string <date>::currentZoneName() [const;flags=CONSTANT] {
    if (dt->isRelative())
       return QoreValue();
 
@@ -416,7 +416,7 @@ bool <date>::isDst() [flags=CONSTANT] {
 int utcoffset = d.getUtcOffset();
     @endcode
  */
-int <date>::getUtcOffset() [flags=CONSTANT] {
+int <date>::getUtcOffset() [const;flags=CONSTANT] {
    return AbstractQoreZoneInfo::getUTCOffset(dt->getZone());
 }
 
@@ -432,7 +432,7 @@ bool b = d.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
 */
-bool <date>::val() [flags=CONSTANT] {
+bool <date>::val() [const;flags=CONSTANT] {
    return dt->hasValue();
 }
 
@@ -446,7 +446,7 @@ if (n.intp())
     printf("%y: can be converted to an integer: %d\n", n, int(n));
     @endcode
 */
-bool <date>::intp() [flags=CONSTANT] {
+bool <date>::intp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -460,7 +460,7 @@ if (n.strp())
     printf("%y: can be converted to a string: '%s'\n", n, string(n));
     @endcode
 */
-bool <date>::strp() [flags=CONSTANT] {
+bool <date>::strp() [const;flags=CONSTANT] {
    return true;
 }
 
@@ -477,7 +477,7 @@ date midnight = dt.midnight();
 
     @since %Qore 0.8.5
 */
-date <date>::midnight() [flags=CONSTANT] {
+date <date>::midnight() [const;flags=CONSTANT] {
    DateTimeNode* rv = new DateTimeNode(*dt);
    rv->setTime(0, 0, 0);
    return rv;
@@ -493,7 +493,7 @@ int secs = d.getEpochSeconds();
 
     @since %Qore 0.8.8
  */
-int <date>::getEpochSeconds() [flags=CONSTANT] {
+int <date>::getEpochSeconds() [const;flags=CONSTANT] {
     return dt->isAbsolute() ? dt->getEpochSecondsUTC() : 0;
 }
 
@@ -511,7 +511,7 @@ int secs = d.getEpochMilliseconds();
 
     @since %Qore 2.0
  */
-int <date>::getEpochMilliseconds() [flags=CONSTANT] {
+int <date>::getEpochMilliseconds() [const;flags=CONSTANT] {
     return dt->isAbsolute() ? dt->getEpochMillisecondsUTC() : 0;
 }
 
@@ -529,7 +529,7 @@ int secs = d.getEpochMicroseconds();
 
     @since %Qore 2.0
  */
-int <date>::getEpochMicroseconds() [flags=CONSTANT] {
+int <date>::getEpochMicroseconds() [const;flags=CONSTANT] {
     return dt->isAbsolute() ? dt->getEpochMicrosecondsUTC() : 0;
 }
 
@@ -543,7 +543,7 @@ int secs = d.getEpochSecondsLocalTime();
 
     @since %Qore 0.8.8
  */
-int <date>::getEpochSecondsLocalTime() [flags=CONSTANT] {
+int <date>::getEpochSecondsLocalTime() [const;flags=CONSTANT] {
    return dt->isAbsolute() ? dt->getEpochSeconds() : 0;
 }
 
@@ -559,7 +559,7 @@ hash<DateTimeInfo> h = d.info(date);
 
     @since %Qore 0.8.8
 */
-hash<DateTimeInfo> <date>::info() [flags=CONSTANT] {
+hash<DateTimeInfo> <date>::info() [const;flags=CONSTANT] {
    return date_info(*dt);
 }
 
@@ -576,7 +576,7 @@ int dn = dt.dayNumber();
 
     @since %Qore 0.8.12
 */
-int <date>::dayNumber() [flags=CONSTANT] {
+int <date>::dayNumber() [const;flags=CONSTANT] {
   return dt->getDayNumber();
 }
 
@@ -595,7 +595,7 @@ int dn = dt.dayOfWeek();
 
     @since %Qore 0.8.12
 */
-int <date>::dayOfWeek() [flags=CONSTANT] {
+int <date>::dayOfWeek() [const;flags=CONSTANT] {
    return dt->getDayOfWeek();
 }
 
@@ -614,7 +614,7 @@ int dn = dt.isoDayOfWeek();
 
     @since %Qore 0.8.12
 */
-int <date>::isoDayOfWeek() [flags=CONSTANT] {
+int <date>::isoDayOfWeek() [const;flags=CONSTANT] {
    int d = dt->getDayOfWeek();
    return (!d ? 7 : d);
 }
@@ -635,7 +635,7 @@ hash<IsoWeekInfo> h = 2007-05-15.isoWeekHash(); # returns year=2007, week=20, da
 
     @since %Qore 0.8.12
 */
-hash<IsoWeekInfo> <date>::isoWeekHash() [flags=CONSTANT] {
+hash<IsoWeekInfo> <date>::isoWeekHash() [const;flags=CONSTANT] {
     int year, week, day;
     dt->getISOWeek(year, week, day);
 
@@ -663,7 +663,7 @@ string str = 2007-05-15.isoWeekString(); # returns "2007-W20-2"
 
     @since %Qore 0.8.12
 */
-string <date>::isoWeekString() [flags=CONSTANT] {
+string <date>::isoWeekString() [const;flags=CONSTANT] {
    int year, week, day;
    dt->getISOWeek(year, week, day);
    QoreStringNode *str = new QoreStringNode();

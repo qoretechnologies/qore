@@ -9,7 +9,7 @@
 %exec-class FunctionTypeTest
 
 # Function to test against
-any sub simple_shift() {
+auto sub simple_shift() {
     return shift argv;
 }
 

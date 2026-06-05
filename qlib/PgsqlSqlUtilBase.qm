@@ -4289,10 +4289,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         delete triggerFunctions;
     }
 
-    private softlist getDropSqlImpl() {
+    private softlist getDropSqlImpl(*hash<auto> opt) {
         getTriggers();
         list l = ();
-        l += sprintf("drop table %s", getSqlName());
+        if (opt.cascade_constraints) {
+            throw "OPTION-ERROR", sprintf("%s: table drop option %y is not supported by database driver %y",
+                getDesc(), "cascade_constraints", ds.getDriverName());
+        }
+        l += sprintf("drop table%s %s%s", opt.if_exists ? " if exists" : "", getSqlName(),
+            (opt.force || opt.cascade) ? " cascade" : "");
         map l += $1.getDropSql(), triggerFunctions.iterator();
         return l;
     }

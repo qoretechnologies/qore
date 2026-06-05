@@ -1503,6 +1503,7 @@ int UserSignature::pushParam(BarewordNode* b, bool needs_types, bool bare_refs) 
     names.push_back(b->str);
     parseTypeList.push_back(0);
     typeList.push_back(0);
+    paramReadOnlyList.push_back(false);
     str.append(NO_TYPE_INFO);
     str.append(" ");
     str.append(b->str);
@@ -1540,6 +1541,7 @@ int UserSignature::pushParam(VarRefNode* v, QoreValue defArg, bool needs_types) 
     }
 
     names.push_back(v->getName());
+    paramReadOnlyList.push_back(v->isReadOnlyDecl());
 
     bool is_decl = v->isDecl();
     if (needs_types && !is_decl) {
@@ -1626,7 +1628,8 @@ void UserSignature::setupFromAOTMetadata(
         const QoreClass* classTypeInfo,
         const char* parseLocFile,
         int parseLocFirstLine,
-        int parseLocLastLine) {
+        int parseLocLastLine,
+        std::vector<uint8_t>&& paramFlags) {
     returnTypeInfo = retType;
     clearTypeParameterSubstitutionCache();
 
@@ -1650,10 +1653,18 @@ void UserSignature::setupFromAOTMetadata(
         QoreProgramLocation tmp(interned, parseLocFirstLine, parseLocLastLine);
         loc = pp->getLocation(tmp, parseLocFirstLine, parseLocLastLine);
     }
+    paramReadOnlyList.assign(nparams, false);
+    for (size_t i = 0, e = std::min(nparams, paramFlags.size()); i < e; ++i) {
+        paramReadOnlyList[i] = (paramFlags[i] & 0x01) != 0;
+    }
+
     lv.resize(nparams);
     for (size_t i = 0; i < nparams; ++i) {
         const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
         lv[i] = pp->createLocalVar(pname, getParamLocalTypeInfo(paramTypes[i]));
+        if (paramReadOnlyList[i]) {
+            lv[i]->setReadOnly();
+        }
     }
 
     typeList = std::move(paramTypes);
@@ -1774,7 +1785,11 @@ void UserSignature::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
         // check for dups but do not check if the variables are referenced in the block
         // push args declared as type "*reference" as "any"; if no value passed, then they have no type restrictions
         // NOTE that when complex types are supported, the type restriction should be that of the reference's subtype
-        lv.push_back(push_local_var(names[i].c_str(), loc, getParamLocalTypeInfo(typeList[i]), err, true, 1));
+        LocalVar* param_lvar = push_local_var(names[i].c_str(), loc, getParamLocalTypeInfo(typeList[i]), err, true, 1);
+        if (isParamReadOnly(i)) {
+            param_lvar->setReadOnly();
+        }
+        lv.push_back(param_lvar);
         printd(5, "UserSignature::parseInitPushLocalVars() registered local var %s (id: %p)\n", names[i].c_str(),
             lv[i]);
     }

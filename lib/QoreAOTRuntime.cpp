@@ -35,6 +35,7 @@
 #include <time.h>
 #include <atomic>
 #include <cstdlib>
+#include <cstring>
 
 #include <qore/ModuleManager.h>
 #include <qore/QoreThreadLock.h>
@@ -174,6 +175,8 @@
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreFoldlOperatorNode.h"
+#include "qore/intern/QoreIterateOperatorNode.h"
+#include "qore/intern/QoreStreamingOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
@@ -1310,6 +1313,18 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         skipOneExpr(rdr, p, e);  // right operand
         return;
     }
+    if (ek == AOTExprKind::ITERATE) {
+        skipOneExpr(rdr, p, e);
+        return;
+    }
+    if (ek == AOTExprKind::STREAMING) {
+        if (p < e) {
+            ++p;  // streaming operator kind
+        }
+        skipOneExpr(rdr, p, e);
+        skipOneExpr(rdr, p, e);
+        return;
+    }
     if (ek == AOTExprKind::SQUARE_BRACKET_RANGE) {
         skipOneExpr(rdr, p, e);  // source expression
         skipOneExpr(rdr, p, e);  // start expression
@@ -2176,6 +2191,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 printd(2, "AOT v2: '%s' local[%d] = '%s' closure_use mismatch: flags=0x%x, propagating\n",
                     name, i, lname ? lname : "", lflags);
                 lv->setClosureUse();
+            }
+            if ((lflags & 0x10) && !lv->isReadOnly()) {
+                lv->setReadOnly();
             }
             ctx->locals[i] = lv;
             printd(3, "AOT v2: '%s' local[%d] = '%s' (flags=0x%x param_idx=%d) -> %p\n",
@@ -3515,6 +3533,38 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::ITERATE: {
+                std::string source_err;
+                QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!source_err.empty()) {
+                    source.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreIterateOperatorNode(&loc_builtin, source)));
+                }
+                continue;
+            }
+            case AOTExprKind::STREAMING: {
+                auto streaming_kind = static_cast<QoreStreamingOperatorNode::Kind>(
+                    QoreAOTBinaryReader::readU8(ptr));
+                std::string predicate_err;
+                QoreValue predicate = readOneExpr(reader, ptr, end, predicate_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string source_err;
+                QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!predicate_err.empty() || !source_err.empty()) {
+                    predicate.discard(nullptr);
+                    source.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreStreamingOperatorNode(&loc_builtin, streaming_kind, predicate, source)));
+                }
+                continue;
+            }
             case AOTExprKind::MAP_SELECT: {
                 std::string map_err;
                 QoreValue map_expr = readOneExpr(reader, ptr, end, map_err, pgm,
@@ -4305,7 +4355,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     for (int i = 0; i < num_body_locals; ++i) {
         const char* blname = reader.readStringRef(ptr);
         const char* bltype = reader.readStringRef(ptr);
-        uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t bl_flags = QoreAOTBinaryReader::readU8(ptr);
         uint32_t bl_slot_id = UINT32_MAX;
         if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BODY_LOCAL_SLOT) != 0) {
             bl_slot_id = QoreAOTBinaryReader::readU32(ptr);
@@ -4330,8 +4380,11 @@ static QoreAOTContext* buildContextFromSlotMap(
 
             lv = pp->createLocalVar(blname ? blname : "", ti);
         }
-        if (bl_closure && !lv->closureUse()) {
+        if ((bl_flags & 0x01) && !lv->closureUse()) {
             lv->setClosureUse();
+        }
+        if ((bl_flags & 0x02) && !lv->isReadOnly()) {
+            lv->setReadOnly();
         }
         ctx->all_body_locals.push_back(lv);
     }
@@ -5076,6 +5129,12 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             bool weak = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool is_closure = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool is_ref = QoreAOTBinaryReader::readU8(ptr) != 0;
+            bool read_only = false;
+            bool initial_assignment = false;
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+                read_only = QoreAOTBinaryReader::readU8(ptr) != 0;
+                initial_assignment = QoreAOTBinaryReader::readU8(ptr) != 0;
+            }
             LocalVar* lv = resolveLocal(lname);
             if (!lv && lname && *lname) {
                 // Create a new local variable for handler/closure locals
@@ -5086,8 +5145,12 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 lv = pp->createLocalVar(lname, ti);
             }
+            if (lv && read_only && !lv->isReadOnly()) {
+                lv->setReadOnly();
+            }
             auto* li = new QoreIRLocalInstruction(opcode, lv, auto_ref);
             li->weak = weak;
+            li->initial_assignment = initial_assignment;
             li->is_closure = is_closure;
             li->is_ref = is_ref;
             li->slot_id = slot_id;
@@ -5379,6 +5442,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         case QoreIRInstGroup::Phi: {
             auto* pi = new QoreIRPhiInstruction();
             pi->opcode = opcode;
+            pi->value_kind = static_cast<QoreIRPhiValueKind>(QoreAOTBinaryReader::readU8(ptr));
             uint16_t num_incoming = QoreAOTBinaryReader::readU16(ptr);
             pi->incoming.reserve(num_incoming);
             for (int j = 0; j < num_incoming; ++j) {
@@ -8483,11 +8547,11 @@ static std::string makeAOTRegistrationFailureMessage(const char* label,
 }
 
 static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
-        const uint8_t* metadata, uint32_t metadata_len,
+        const QoreAOTBinaryReader& reader,
         const char* label, std::string& error) {
     std::vector<AOTModuleCommand> commands;
     std::string read_error;
-    if (!readModuleCommands(metadata, metadata_len, commands, read_error)) {
+    if (!readModuleCommands(reader, commands, read_error)) {
         error = "AOT module-command metadata read error";
         if (label && *label) {
             error += " in ";
@@ -8543,6 +8607,23 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         (int)commands.size(), commands.size() == 1 ? "" : "s",
         label ? label : "<aot>");
     return true;
+}
+
+static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
+        const uint8_t* metadata, uint32_t metadata_len,
+        const char* label, std::string& error) {
+    QoreAOTBinaryReader reader;
+    std::string read_error;
+    if (!reader.open(metadata, metadata_len, read_error)) {
+        error = "AOT module-command metadata read error";
+        if (label && *label) {
+            error += " in ";
+            error += label;
+        }
+        error += ": " + read_error;
+        return false;
+    }
+    return applyAOTModuleCommandsToProgram(pgm, reader, label, error);
 }
 
 //! Decide whether a recorded AOT dependency that failed to load is genuinely unavailable.
@@ -11026,6 +11107,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     std::string runtime_module_path = std::move(aot_module_init_context_path);
     aot_module_init_context_path.clear();
     const char* module_context_path = runtime_module_path.empty() ? label : runtime_module_path.c_str();
+    std::string module_context_desc =
+        (module_context_path && *module_context_path) ? module_context_path : "<unknown module path>";
+    if (label && *label && (!module_context_path || strcmp(label, module_context_path))) {
+        module_context_desc += "; source label: ";
+        module_context_desc += label;
+    }
 
     // Phase 1.5 load-time profiling (temporary): QORE_AOT_LOAD_TRACE=1
     // emits per-phase wall-clock timing so we can see where module
@@ -11090,14 +11177,27 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         local_pgm->setScriptPath(module_context_path);
     }
 
+    QoreAOTBinaryReader metadata_reader;
+    {
+        std::string reader_error;
+        if (!metadata_reader.open(metadata, static_cast<uint32_t>(metadata_len), reader_error)) {
+            QoreStringNode* err = new QoreStringNodeMaker(
+                "AOT module metadata read error for module '%s' (%s): %s",
+                mod_name ? mod_name : "<unknown>",
+                (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
+                reader_error.c_str());
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
+    }
+
     // Apply inherited plus compiled-in module path lists BEFORE loading
     // dependencies; source modules inherit the requiring Program's search
     // surface before their own directives are applied.
     {
         std::vector<std::string> prepended, appended;
         std::string mp_error;
-        if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
-                prepended, appended, mp_error)) {
+        if (readModulePathLists(metadata_reader, prepended, appended, mp_error)) {
             inheritAOTModulePathLists(local_pgm, parent_pgm, prepended, appended);
         } else {
             inheritAOTModulePathLists(local_pgm, parent_pgm);
@@ -11106,8 +11206,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     {
         std::string cmd_error;
-        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata,
-                static_cast<uint32_t>(metadata_len), module_context_path, cmd_error)) {
+        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata_reader, module_context_path, cmd_error)) {
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
@@ -11123,7 +11222,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // base classes, types, and other references from dependency modules.
     std::vector<std::string> deps;
     std::string dep_error;
-    if (!readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
+    if (!readDependencies(metadata_reader, deps, dep_error)) {
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
@@ -11136,7 +11235,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // Read reexported module names from metadata
     std::vector<std::string> reexport_deps;
     std::string reexport_error;
-    if (!readReexportModules(metadata, static_cast<uint32_t>(metadata_len), reexport_deps, reexport_error)) {
+    if (!readReexportModules(metadata_reader, reexport_deps, reexport_error)) {
         printd(0, "AOT module v3 '%s': WARNING - failed to read reexport modules: %s\n",
             mod_name, reexport_error.c_str());
         // Non-fatal — continue without reexport info
@@ -11146,7 +11245,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // runTimeLoadModule will call addToProgram which imports the namespace.
     //
     // The dependency list is built from the parsed program's feature lists at compile time
-    // (see serializeDependencies()), so it lists exactly the modules that were loaded when the
+    // (see serializeProgramFeatureDependencies()), so it lists exactly the modules that were loaded when the
     // .qmod was compiled — including optional %try-module modules whose %ifndef-guarded code
     // (e.g. json's make_json) was baked into the binary.  Such a module is therefore a hard
     // runtime requirement: if it is genuinely unavailable the compiled function/type slots that
@@ -11170,7 +11269,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                     "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                     "and cannot be loaded without it",
                     mod_name ? mod_name : "<unknown>",
-                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                    module_context_desc.c_str(), dep.c_str(), dep.c_str());
                 local_pgm->waitForTerminationAndDeref(nullptr);
                 return err;
             }
@@ -11208,7 +11307,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                 xsink.clear();
                 parse_ctx_failed = true;
             } else if (!deserializer.deserializeIntoProgram(local_pgm,
-                    metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
+                    std::move(metadata_reader), deser_error)) {
                 deser_failed = true;
             }
         }
@@ -11338,8 +11437,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     std::vector<AOTInitFuncDescriptor> init_descriptors;
     {
         std::string init_error;
-        if (readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
-                init_descriptors, init_error)) {
+        if (readInitFuncs(deserializer.getReader(), init_descriptors, init_error)) {
             printd(2, "AOT v3 '%s': read %d init descriptors, deferring for ns_init\n",
                 mod_name, (int)init_descriptors.size());
             if (aotInitTraceEnabled()) {

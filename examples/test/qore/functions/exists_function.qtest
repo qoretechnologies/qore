@@ -9,7 +9,7 @@
 %exec-class ExistsFunctionTest
 
 # The function we test for
-any sub simple_shift() {
+auto sub simple_shift() {
     return shift argv;
 }
 

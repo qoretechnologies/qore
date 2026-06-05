@@ -803,6 +803,23 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
     assert(!parse_context.typeInfo);
     // issue #3637: qc might be non-null while method is null in case of calls to implicit copy() methods, for example
     int err = parseArgs(parse_context, method ? qore_method_private::get(*method)->getFunction() : nullptr, nullptr);
+    if (parse_context.pflag & PF_CONST_METHOD) {
+        if (is_copy) {
+            parseException(*loc, "READONLY-RECEIVER-ERROR", "cannot call non-const copy() on read-only receiver");
+            if (!err) {
+                err = -1;
+            }
+        } else if (variant
+            && check_readonly_receiver_method_call(loc, getName(), static_cast<const MethodVariantBase*>(variant))
+            && !err) {
+            err = -1;
+        } else if (!variant && method
+            && check_readonly_receiver_method_call(loc, getName(), nullptr,
+                qore_method_private::get(*method)->getFunction())
+            && !err) {
+            err = -1;
+        }
+    }
     // issue #2380 make sure to set the method correctly if resolved from a hierarchy
     if (variant) {
         method = static_cast<const MethodVariantBase*>(variant)->method();

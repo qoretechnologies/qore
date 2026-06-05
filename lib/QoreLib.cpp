@@ -33,6 +33,7 @@
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreClassIntern.h"
 #include "qore/AbstractPollableIoObjectBase.h"
 #include "qore/intern/qore_qd_private.h"
 #include "qore/intern/ql_crypto.h"
@@ -44,6 +45,7 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/QoreQuestionMarkOperatorNode.h"
 
 #include <atomic>
 #include <cctype>
@@ -1784,13 +1786,21 @@ int check_lvalue(QoreValue n, bool assignment) {
     return check_lvalue(n.getInternalNode(), assignment);
 }
 
-// returns 0 for OK, -1 for error
-int check_lvalue(AbstractQoreNode* node, bool assignment) {
+static int check_lvalue_intern(QoreValue n, bool assignment, bool direct);
+
+static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool direct) {
     qore_type_t ntype = node->getType();
     //printd(5, "type: %s\n", node->getTypeName());
     if (ntype == NT_VARREF) {
-        if (assignment)
-            reinterpret_cast<VarRefNode*>(node)->parseAssigned();
+        VarRefNode* vrn = reinterpret_cast<VarRefNode*>(node);
+        if (vrn->parseIsReadOnly() && !(direct && assignment && vrn->isDecl())) {
+            parseException(*vrn->loc, "READONLY-VARIABLE-ASSIGNMENT-ERROR",
+                "cannot modify read-only local variable '%s'", vrn->getName());
+            return -2;
+        }
+        if (assignment) {
+            vrn->parseAssigned();
+        }
         return 0;
     }
 
@@ -1804,30 +1814,152 @@ int check_lvalue(AbstractQoreNode* node, bool assignment) {
         {
             QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(node);
             if (op) {
-                return check_lvalue(op->getLeft(), assignment);
+                return check_lvalue_intern(op->getLeft(), assignment, false);
             }
         }
         {
             QoreSquareBracketsRangeOperatorNode* op = dynamic_cast<QoreSquareBracketsRangeOperatorNode*>(node);
             if (op) {
-                return check_lvalue(op->get(0), assignment);
+                return check_lvalue_intern(op->get(0), assignment, false);
             }
         }
         {
             QoreHashObjectDereferenceOperatorNode* op = dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(node);
             if (op) {
-                return check_lvalue(op->getLeft(), assignment);
+                return check_lvalue_intern(op->getLeft(), assignment, false);
             }
         }
         {
             QoreCastOperatorNode* op = dynamic_cast<QoreCastOperatorNode*>(node);
             if (op) {
-                return check_lvalue(op->getExp(), assignment);
+                return check_lvalue_intern(op->getExp(), assignment, false);
             }
         }
     }
 
     return -1;
+}
+
+static int check_lvalue_intern(QoreValue n, bool assignment, bool direct) {
+    if (n.isNothing()) {
+        return 0;
+    }
+
+    if (!n.hasNode()) {
+        return -1;
+    }
+
+    return check_lvalue_intern(n.getInternalNode(), assignment, direct);
+}
+
+// returns 0 for OK, -1 for error
+int check_lvalue(AbstractQoreNode* node, bool assignment) {
+    return check_lvalue_intern(node, assignment, true);
+}
+
+static bool parse_is_readonly_receiver_node(AbstractQoreNode* node, int pflag) {
+    if (!node) {
+        return false;
+    }
+
+    qore_type_t ntype = node->getType();
+    if (ntype == NT_SELF_VARREF) {
+        return pflag & PF_CONST_METHOD;
+    }
+
+    if (ntype == NT_VARREF) {
+        VarRefNode* vrn = reinterpret_cast<VarRefNode*>(node);
+        return vrn->parseIsReadOnly()
+            || ((pflag & PF_CONST_METHOD) && vrn->getType() == VT_LOCAL && vrn->ref.id && vrn->ref.id->isSelf());
+    }
+
+    if (ntype == NT_OPERATOR) {
+        {
+            QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(node);
+            if (op) {
+                return parse_is_readonly_receiver_expression(op->getLeft(), pflag);
+            }
+        }
+        {
+            QoreSquareBracketsRangeOperatorNode* op = dynamic_cast<QoreSquareBracketsRangeOperatorNode*>(node);
+            if (op) {
+                return parse_is_readonly_receiver_expression(op->get(0), pflag);
+            }
+        }
+        {
+            QoreHashObjectDereferenceOperatorNode* op = dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(node);
+            if (op) {
+                return parse_is_readonly_receiver_expression(op->getLeft(), pflag);
+            }
+        }
+        {
+            QoreCastOperatorNode* op = dynamic_cast<QoreCastOperatorNode*>(node);
+            if (op) {
+                return parse_is_readonly_receiver_expression(op->getExp(), pflag);
+            }
+        }
+        {
+            QoreQuestionMarkOperatorNode* op = dynamic_cast<QoreQuestionMarkOperatorNode*>(node);
+            if (op) {
+                return parse_is_readonly_receiver_expression(op->get(1), pflag)
+                    && parse_is_readonly_receiver_expression(op->get(2), pflag);
+            }
+        }
+    }
+
+    return false;
+}
+
+bool parse_is_readonly_receiver_expression(QoreValue n, int pflag) {
+    return n.hasNode() && parse_is_readonly_receiver_node(n.getInternalNode(), pflag);
+}
+
+int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n) {
+    if (!parse_is_readonly_receiver_expression(n, PF_CONST_METHOD)) {
+        return 0;
+    }
+
+    parseException(*loc, "READONLY-VARIABLE-ASSIGNMENT-ERROR",
+        "cannot modify self-rooted lvalue in const method");
+    return -2;
+}
+
+int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
+        const MethodVariantBase* variant, const QoreFunction* func) {
+    if (variant) {
+        if (variant->isConstMethod()) {
+            return 0;
+        }
+
+        parseException(*loc, "READONLY-RECEIVER-ERROR",
+            "cannot call non-const method '%s(%s)' on read-only receiver",
+            name, variant->getSignature()->getSignatureText());
+        return -1;
+    }
+
+    if (!func) {
+        return 0;
+    }
+
+    QoreFunctionIterator vi(*func);
+    size_t count = 0;
+    while (vi.next()) {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "readonly receiver const-method candidate check")) {
+            return -1;
+        }
+        const MethodVariantBase* mv = dynamic_cast<const MethodVariantBase*>(vi.getVariant());
+        if (!mv || mv->isConstMethod()) {
+            continue;
+        }
+
+        const AbstractFunctionSignature* sig = mv->getSignature();
+        parseException(*loc, "READONLY-RECEIVER-ERROR",
+            "cannot call non-const method '%s(%s)' on read-only receiver",
+            name, sig ? sig->getSignatureText() : "");
+        return -1;
+    }
+
+    return 0;
 }
 
 static void stat_get_blocks(const struct stat& sbuf, int64& blksize, int64& blocks) {

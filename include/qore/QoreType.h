@@ -56,6 +56,7 @@ DLLEXPORT extern const QoreTypeInfo* anyTypeInfo,
    *bigIntTypeInfo,
    *floatTypeInfo,
    *boolTypeInfo,
+   *charTypeInfo,
    *stringTypeInfo,
    *binaryTypeInfo,
    *dateTypeInfo,
@@ -86,6 +87,7 @@ DLLEXPORT extern const QoreTypeInfo* anyTypeInfo,
    *softFloatTypeInfo,            // converts to float from int, string, bool, number, and null
    *softNumberTypeInfo,           // converts to number from int, string, bool, float, and null
    *softBoolTypeInfo,             // converts to bool from int, float, string, number, and null
+   *softCharTypeInfo,             // converts to char from int and single-codepoint string
    *softStringTypeInfo,           // converts to string from int, float, bool, number, and null
    *softDateTypeInfo,             // converts to date from int, float, bool, string, number, and null
    *softListTypeInfo,             // converts NOTHING -> empty list, list -> the same list, and everything else: list(arg)
@@ -101,6 +103,7 @@ DLLEXPORT extern const QoreTypeInfo* anyTypeInfo,
    *numberOrNothingTypeInfo,
    *stringOrNothingTypeInfo,
    *boolOrNothingTypeInfo,
+   *charOrNothingTypeInfo,
    *binaryOrNothingTypeInfo,
    *objectOrNothingTypeInfo,
    *bufferOrNothingTypeInfo,
@@ -126,6 +129,7 @@ DLLEXPORT extern const QoreTypeInfo* anyTypeInfo,
    *softFloatOrNothingTypeInfo,
    *softNumberOrNothingTypeInfo,
    *softBoolOrNothingTypeInfo,
+   *softCharOrNothingTypeInfo,
    *softStringOrNothingTypeInfo,
    *softDateOrNothingTypeInfo,
    *softListOrNothingTypeInfo,

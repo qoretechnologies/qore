@@ -116,7 +116,7 @@ string msg = Hl7v2Util::hl7v2_build_oru_r01({
             if (observation_arg.typeCode() != NT_HASH) {
                 throw "HL7V2-ORU-ERROR", "ORU^R01 observations must be hashes";
             }
-            hash<auto> observation = cast<hash<auto>>(observation_arg);
+            hash<auto> observation = cast<hash>(observation_arg);
             push segments, base.formatSegment({
                 "tag": "OBX",
                 "fields": hl7v2ObxFields(++set_id, observation, order),
@@ -227,7 +227,7 @@ string msg = Hl7v2Util::hl7v2_build_oru_r01({
 
     list<auto> sub hl7v2CodedElement(auto value, string ctx) {
         if (value.typeCode() == NT_HASH) {
-            hash<auto> h = cast<hash<auto>>(value);
+            hash<auto> h = cast<hash>(value);
             return (
                 hl7v2RequireString(h, "code", ctx),
                 hl7v2OptionalString(h, "text", hl7v2OptionalString(h, "display")),
@@ -255,7 +255,7 @@ string msg = Hl7v2Util::hl7v2_build_oru_r01({
         if (opts{key}.typeCode() != NT_HASH) {
             throw "HL7V2-ORU-ERROR", sprintf("%s %y must be a hash", ctx, key);
         }
-        return cast<hash<auto>>(opts{key});
+        return cast<hash>(opts{key});
     }
 
     list<auto> sub hl7v2RequireNonEmptyList(hash<auto> opts, string key, string ctx) {

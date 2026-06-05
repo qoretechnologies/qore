@@ -210,6 +210,10 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
         return ls->equalSoft(*rs, xsink);
     }
 
+    if (lt == NT_CHAR && rt == NT_CHAR) {
+        return l.getChar() == r.getChar();
+    }
+
     if (lt == NT_NUMBER) {
         switch (rt) {
             case NT_NUMBER:
@@ -218,6 +222,7 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
                 return l.get<const QoreNumberNode>()->equals(r.getAsFloat());
             case NT_INT:
             case NT_BOOLEAN:
+            case NT_CHAR:
                 return l.get<const QoreNumberNode>()->equals(r.getAsBigInt());
             default: {
                 ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
@@ -233,6 +238,7 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
                 return r.get<const QoreNumberNode>()->equals(l.getAsFloat());
             case NT_INT:
             case NT_BOOLEAN:
+            case NT_CHAR:
                 return r.get<const QoreNumberNode>()->equals(l.getAsBigInt());
             default: {
                 ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
@@ -245,7 +251,7 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
         return l.getAsFloat() == r.getAsFloat();
     }
 
-    if (lt == NT_INT || rt == NT_INT) {
+    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
         return l.getAsBigInt() == r.getAsBigInt();
     }
 

@@ -2344,7 +2344,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     */
     returnConnectionToAsyncIo(Socket sock, hash<auto> cx, HttpListener listener) {
         if (asyncIo && asyncTarget) {
-            hash<auto> async_cx = exists cx.peer ? cx : cast<hash<auto>>({
+            hash<auto> async_cx = exists cx.peer ? cx : cast<hash>({
                 "peer": cx."peer-info",
                 "socket": cx."socket-info",
             });

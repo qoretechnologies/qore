@@ -70,6 +70,7 @@ QoreValue QoreUnaryMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
             return v->get<const DateTimeNode>()->unaryMinus();
         }
 
+        case NT_CHAR:
         case NT_INT: {
             // QoreValue(int64) may allocate a QoreBigIntNode for large integers
             QoreValue result(-(v->getAsBigInt()));
@@ -129,6 +130,7 @@ int QoreUnaryMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 parse_context.typeInfo = floatTypeInfo;
                 break;
             case NT_INT:
+            case NT_CHAR:
                 parse_context.typeInfo = bigIntTypeInfo;
                 break;
             case NT_DATE:
@@ -138,6 +140,7 @@ int QoreUnaryMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 if (!QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_NUMBER)
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_FLOAT)
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_INT)
+                    && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_CHAR)
                     && !QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_DATE)) {
                     QoreStringNode* edesc = new QoreStringNode("the expression with the unary minus '-' operator " \
                         "is ");

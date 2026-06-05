@@ -328,7 +328,7 @@ on_error ds.rollback();
                 queueData(data.toColumnarResult());
                 return;
             }
-            queueData(cast<hash<auto>>(data));
+            queueData(cast<hash>(data));
         }
 
         #! returns the current size of the cache as a number of rows
@@ -393,12 +393,7 @@ on_error ds.rollback();
             if (data.typeCode() != NT_HASH || !data) {
                 return False;
             }
-            foreach auto value in (data.iterator()) {
-                if (value.typeCode() != NT_BUFFER) {
-                    return False;
-                }
-            }
-            return True;
+            return all $1.typeCode() == NT_BUFFER, data.iterator();
         }
 
         #! Queues dense column blocks in block-sized slices to avoid materializing large packed inputs at once

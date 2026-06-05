@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTConstMethodsTest
+
+class AOTConstMethodsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTConstMethodsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("AOT qmod preserves const method metadata",
+            \testAOTQmodConstMethodMetadata());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTConstMethodsMod {
+    version = \"1.0\";
+    desc = \"AOT const method metadata regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTConstMethodsMod {
+    public class ConstBase {
+        abstract int value() const;
+    }
+
+    public class ConcreteReader inherits ConstBase {
+        private {
+            int v;
+        }
+
+        constructor(int v) {
+            self.v = v;
+        }
+
+        public int value() const {
+            return v;
+        }
+
+        public int viaSelf() const {
+            return value();
+        }
+
+        public int mutate() {
+            return ++v;
+        }
+    }
+
+    public class Holder {
+        private {
+            ConcreteReader reader = new ConcreteReader(6);
+        }
+
+        public int read() const {
+            return reader.value();
+        }
+    }
+
+    public int sub verifyConstReceiver() {
+        const ConcreteReader reader = new ConcreteReader(4);
+        const ConstBase base = new ConcreteReader(5);
+        const Holder holder = new Holder();
+        return reader.value() + reader.viaSelf() + base.value() + holder.read();
+    }
+}
+";
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    testAOTQmodConstMethodMetadata() {
+        TmpDir tmp("qore-aot-const-methods-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        mkdir(qo_dir);
+
+        string qm_path = src_dir + "/AOTConstMethodsMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern\n%requires AOTConstMethodsMod\n"
+            "int sub run() {\n"
+            "    const AOTConstMethodsMod::ConcreteReader reader = new AOTConstMethodsMod::ConcreteReader(10);\n"
+            "    return reader.value() + AOTConstMethodsMod::verifyConstReceiver();\n"
+            "}\n"
+            "printf(\"%d\\n\", run());\n");
+        script.close();
+
+        string bad_script_path = tmp_dir + "/bad.qr";
+        File bad_script();
+        bad_script.open2(bad_script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        bad_script.write("%modern\n%requires AOTConstMethodsMod\n"
+            "int sub bad() {\n"
+            "    const AOTConstMethodsMod::ConcreteReader reader = new AOTConstMethodsMod::ConcreteReader(10);\n"
+            "    return reader.mutate();\n"
+            "}\n"
+            "printf(\"%d\\n\", bad());\n");
+        bad_script.close();
+
+        string qmod_path = qmod_dir + "/AOTConstMethodsMod.qmod";
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -m --strip-source -o %s %s 2>&1",
+            libqore_dir, qcc_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled const-method module: " + compile_out);
+
+        assertEq("29\n", runModule(qmod_dir, script_path),
+            "AOT qmod preserves readonly receiver calls to const methods");
+        assertEq("29\n", runModule(src_dir, script_path),
+            "source module keeps the same const method semantics");
+
+        string qcc_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -c --output-dir=%s %s 2>&1",
+            libqore_dir, qmod_dir, qcc_bin, qo_dir, script_path));
+        assertTrue(is_file(qo_dir + "/run.qo"),
+            "qcc compile-only consumer accepts const methods from AOT qmod: " + qcc_out);
+
+        string bad_out = runModule(qmod_dir, bad_script_path);
+        assertRegex("READONLY-RECEIVER-ERROR", bad_out);
+        assertRegex("non-const method 'mutate", bad_out);
+    }
+}

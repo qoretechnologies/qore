@@ -293,19 +293,27 @@ hdr, expected_status, error_passthru, include_debug. Qorus assigns
 sort=1 to the synthetic `qorus_app_connection` field, then sort=2..N to
 preselected options, then sort=999999 to non-preselected options.
 
-## Frontend `{type, value}` wrapping
+## Qorus UI `{type, value}` encoding boundary
 
-The `{type, value}` wrapping seen in UI request/response payloads is a
-**frontend-only convention** defined in qorus-ide
-(`src/helpers/common.ts`, type `TTypedValue`). The frontend recursively wraps
-every leaf with `inferTypedValue()` for editor selection and
-template-vs-literal distinction, and unwraps with `typedToPlain()` before
-display.
+The `{type, value}` wrapping seen in Qorus UI request/response payloads is a
+Qorus UI transport convention, not a DataProvider API shape. qorus-ide uses
+typed editor values (see its `TTypedValue` representation) so it can preserve
+editor type, template-vs-literal intent, and widget selection.
 
-The backend always sends plain hashes/lists. The data provider has to unwrap
-the wrapped inputs from the UI — `GenericApiCallProvider::extractBodyType()`
-handles this for `body_type`. A canonical framework-level unwrap helper is
-an open issue (see below).
+The Qore DataProvider contract remains plain Qore values: providers,
+`getRequestTypeWithOptionsImpl()`, `getRequestTypeWithDataImpl()`, and
+`doRequestImpl()` should receive normal hashes/lists/scalars. When
+`context=ui` is used, Qorus owns both directions of the encoding boundary:
+it UI-encodes option/field responses and must decode incoming `{type, value}`
+payloads before invoking DataProvider APIs. This is documented in Qorus'
+`design/ui-data-encoding.md`.
+
+`GenericApiCallProvider::extractBodyType()` currently accepts both plain
+`body_type` values and leaked `{value: ...}` values as a narrow compatibility
+guard for existing callers. It should not become the pattern for new providers,
+and Qore should not add a generic `unwrapTypedValue()` helper to the
+DataProvider module; that would mix a Qorus UI transport concern into reusable
+qlib provider code.
 
 ## Testing
 
@@ -330,14 +338,12 @@ the framework's reflective discovery — no per-app test code needed).
 
 ## Open issues
 
-- **Canonical `unwrapTypedValue()` helper in DataProvider.** Every provider
-  that reads UI-context options currently writes its own ad-hoc unwrap
-  (handles both `{value: "x"}` and raw `"x"`). A framework helper that
-  recursively unwraps a `{type, value}` tree would eliminate duplication.
-  See `GenericApiCallProvider::extractBodyType()` as a working example.
-- **Server-side option-value unwrap at the HTTP boundary.** Today the
-  unwrap is per-provider; doing it once in the catalog/HTTP handler would
-  guarantee every provider's `doRequestImpl()` sees plain values.
+- **Qorus-side `context=ui` decode before DataProvider calls.** Qorus should
+  decode incoming UI-encoded option and request payloads at the REST/API
+  boundary, before invoking DataProvider dynamic-option resolution or action
+  execution. Once that boundary is consistently enforced,
+  `GenericApiCallProvider::extractBodyType()` can drop its compatibility
+  handling for leaked `{value: ...}` wrappers.
 - **Pagination wrapper.** Common pattern across most REST APIs; would
   warrant a `make-api-call-paginated` variant with strategy
   (page-number / cursor / next-link / Link-header).

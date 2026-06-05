@@ -439,10 +439,10 @@ public:
     DLLLOCAL bool addGlobalVars(qore_root_ns_private& rns);
 
     DLLLOCAL cnemap_t::iterator parseAddConstant(const QoreProgramLocation* loc, const char* name, QoreValue value,
-            bool pub);
+            bool pub, const QoreTypeInfo* typeInfo = nullptr);
 
     DLLLOCAL void parseAddConstant(const QoreProgramLocation* loc, const NamedScope& name, QoreValue value,
-            bool pub);
+            bool pub, const QoreTypeInfo* typeInfo = nullptr);
 
     //! Adds a typedef to the namespace; returns the TypedefEntry* on success, nullptr on error
     DLLLOCAL TypedefEntry* parseAddTypedef(const QoreProgramLocation* loc, const char* name,
@@ -698,8 +698,8 @@ public:
     }
 
     DLLLOCAL static void parseAddConstant(QoreNamespace& ns, const QoreProgramLocation* loc, const NamedScope& name,
-            QoreValue value, bool pub) {
-        ns.priv->parseAddConstant(loc, name, value, pub);
+            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr) {
+        ns.priv->parseAddConstant(loc, name, value, pub, typeInfo);
     }
 
     DLLLOCAL static void parseCommit(QoreNamespace& ns) {
@@ -1803,7 +1803,7 @@ protected:
             const NamedScope& name, const QoreTypeInfo*& typeInfo, bool& found);
 
     DLLLOCAL void parseAddConstantIntern(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
-            QoreValue value, bool pub);
+            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr);
 
     DLLLOCAL void parseAddClassIntern(const QoreProgramLocation* loc, const NamedScope& name, QoreClass* oc);
 
@@ -2538,8 +2538,8 @@ public:
     }
 
     DLLLOCAL static void parseAddConstant(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
-            QoreValue value, bool pub) {
-        getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub);
+            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr) {
+        getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo);
     }
 
     // returns 0 for success, non-zero for error

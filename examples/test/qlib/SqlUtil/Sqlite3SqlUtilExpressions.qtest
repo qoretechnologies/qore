@@ -104,6 +104,12 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         # Verify expression map completeness
         addTestCase("expression map keys", \testExpressionMapKeys());
 
+        # Generic SqlUtil CTAS API
+        addTestCase("create as select", \testCreateAsSelect());
+        addTestCase("drop table options", \testDropTableOptions());
+        addTestCase("stats preferences unsupported", \testStatsPreferencesUnsupported());
+        addTestCase("create constraints SQL", \testCreateConstraintsSql());
+
         set_return_value(main());
     }
 
@@ -159,6 +165,20 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         ds.commit();
     }
 
+    private cleanupCreateAsSelectTest() {
+        Sqlite3Table t(ds, "sqlite3_ctas_test");
+        if (t.checkExistence()) {
+            t.dropCommit();
+        }
+    }
+
+    private cleanupDropOptionsTest() {
+        Sqlite3Table t(ds, "sqlite3_drop_options_test");
+        if (t.checkExistence()) {
+            t.dropCommit();
+        }
+    }
+
     # Helper: create a field reference
     private hash<DataProviderFieldReference> fref(string name) {
         return <DataProviderFieldReference>{"field": name};
@@ -192,6 +212,84 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
             ),
             "where": {"id": id},
         });
+    }
+
+    testCreateAsSelect() {
+        if (!table) { testSkip("no DB connection"); }
+
+        cleanupCreateAsSelectTest();
+        on_exit {
+            try {
+                cleanupCreateAsSelectTest();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        Sqlite3Table target(ds, "sqlite3_ctas_test");
+        hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(table, {
+            "columns": ("id", "name"),
+            "where": {"is_active": 1},
+        });
+        assertTrue(info.sql =~ /^create table sqlite3_ctas_test as select/i);
+        assertEq(1, info.args.size());
+        assertEq(1, info.args[0]);
+
+        info = target.createAsSelectWithInfo(table, {
+            "columns": ("id", "name"),
+            "where": {"is_active": 1},
+        });
+        assertTrue(info.sql =~ /^create table sqlite3_ctas_test as select/i);
+        assertEq(1, info.args.size());
+
+        Sqlite3Table materialized(ds, "sqlite3_ctas_test");
+        assertEq(2, materialized.rowCount());
+        hash<auto> rows = materialized.select({"columns": ("id", "name"), "orderby": "id"});
+        assertEq((1, 3), rows.id);
+        assertEq(("Hello World", "UPPER CASE"), rows.name);
+    }
+
+    testDropTableOptions() {
+        if (!table) { testSkip("no DB connection"); }
+
+        cleanupDropOptionsTest();
+        on_exit {
+            try {
+                cleanupDropOptionsTest();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        ds.execRaw("create table sqlite3_drop_options_test (id integer primary key)");
+        ds.commit();
+
+        Sqlite3Table t(ds, "sqlite3_drop_options_test");
+        softlist<auto> sql = t.getDropSql({"if_exists": True});
+        assertEq(1, sql.size());
+        assertEq("drop table if exists sqlite3_drop_options_test", sql[0]);
+        t.dropCommit({"if_exists": True});
+        assertFalse(t.checkExistence());
+
+        assertEq((), t.getDropSql({"if_exists": True}));
+        t.dropCommit({"if_exists": True});
+
+        ds.execRaw("create table sqlite3_drop_options_test (id integer primary key)");
+        ds.commit();
+        Sqlite3Table t2(ds, "sqlite3_drop_options_test");
+        assertThrows("OPTION-ERROR", "cascade table drop options", \t2.getDropSql(), {"cascade": True});
+    }
+
+    testStatsPreferencesUnsupported() {
+        if (!table) { testSkip("no DB connection"); }
+
+        assertThrows("STATS-PREFERENCES-NOT-SUPPORTED", "does not support table statistics preferences",
+            \table.getSetStatsPreferencesSql(), {"incremental": True});
+    }
+
+    testCreateConstraintsSql() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *list<auto> sql = table.getCreateConstraintsSql();
+        assertEq(NOTHING, sql);
     }
 
     # --- Pattern matching tests ---

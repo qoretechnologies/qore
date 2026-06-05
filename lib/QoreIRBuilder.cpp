@@ -50,6 +50,10 @@ QoreIRBuilder::QoreIRBuilder(QoreIRFunction* n_func) : func(n_func) {
 void QoreIRBuilder::setFunction(QoreIRFunction* n_func) {
     func = n_func;
     block = nullptr;
+    // Defensive: marks are balanced within a function, but drop any residue
+    // (e.g. from a function whose lowering aborted on error) so scope ids never
+    // leak across functions.  Ids stay globally monotonic and are not reset.
+    temp_scope_id_stack.clear();
 }
 
 void QoreIRBuilder::setBlock(QoreIRBasicBlock* n_block) {
@@ -98,6 +102,16 @@ QoreIRConstInstruction* QoreIRBuilder::createConstBool(bool value, const QorePro
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::Bool;
     inst->constant.bool_value = value;
+    return inst;
+}
+
+QoreIRConstInstruction* QoreIRBuilder::createConstChar(unsigned value, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    inst->opcode = QoreIROpcode::ConstChar;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->constant.kind = QoreIRConstant::Kind::Char;
+    inst->constant.char_value = value;
     return inst;
 }
 
@@ -716,12 +730,6 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
-    // For generic Call/CallMethod/CallStatic/CallIndirect, conservatively assume
-    // ref args are possible since we don't have resolved variant information
-    if (op == QoreIROpcode::Call || op == QoreIROpcode::CallMethod ||
-        op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallIndirect) {
-        inst->has_ref_args = true;
-    }
     return inst;
 }
 
@@ -862,10 +870,11 @@ QoreIRInvokeInstruction* QoreIRBuilder::createInvoke(const QoreValue& expr, cons
 }
 
 QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
-        const QoreProgramLocation* loc) {
+        const QoreProgramLocation* loc, QoreIRPhiValueKind value_kind) {
     auto inst = block->appendInstruction<QoreIRPhiInstruction>();
     inst->loc = loc;
     inst->result = func->createValue();
+    inst->value_kind = value_kind;
     inst->incoming = incoming;
     for (const auto& inc : incoming) {
         inst->operands.push_back(inc.value);
@@ -1005,12 +1014,21 @@ QoreIRInstruction* QoreIRBuilder::createRefSelf(QoreIRValue value, const QorePro
 QoreIRInstruction* QoreIRBuilder::createDiscardTemps(const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
     inst->loc = loc;
+    // Pair with the innermost open PushTempMark via the nesting stack.  The
+    // lowering brackets push/discard symmetrically, so the stack top is always
+    // this discard's matching mark.
+    if (!temp_scope_id_stack.empty()) {
+        inst->temp_scope_id = temp_scope_id_stack.back();
+        temp_scope_id_stack.pop_back();
+    }
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PushTempMark);
     inst->loc = loc;
+    inst->temp_scope_id = next_temp_scope_id++;
+    temp_scope_id_stack.push_back(inst->temp_scope_id);
     return inst;
 }
 
@@ -1078,6 +1096,15 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardNotNothing(QoreIRValue value, 
 QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreate(QoreIRValue iterable,
         FunctionalOperator* iterator_func, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRIteratorCreateInstruction>(iterable, iterator_func);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(QoreIRValue iterable,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRIteratorCreateInstruction>(iterable);
+    inst->opcode = QoreIROpcode::IteratorCreateIterate;
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -1222,9 +1249,9 @@ QoreIRInstruction* QoreIRBuilder::createContextRow(const QoreProgramLocation* lo
 }
 
 QoreIRFindInstruction* QoreIRBuilder::createFind(const QoreValue& exp,
-        const QoreValue& find_exp, const QoreValue& where,
+        const QoreValue& find_exp, const QoreValue& where, int32_t mode,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRFindInstruction>(exp, find_exp, where);
+    auto inst = block->appendInstruction<QoreIRFindInstruction>(exp, find_exp, where, mode);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;

@@ -1280,11 +1280,12 @@ LocalVarValue* thread_try_find_lvar(const LocalVar* local) {
     return td->tlpd->lvstack.findMaybe(local);
 }
 
-ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
+ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval,
+        bool assign, bool read_only) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)
     uint64_t order = tlpd->getNextVarOrder();
-    ClosureVarValue* cvv = tlpd->cvstack.instantiate(n_id, typeInfo, nval, assign, order);
+    ClosureVarValue* cvv = tlpd->cvstack.instantiate(n_id, typeInfo, nval, assign, order, read_only);
     return cvv;
 }
 

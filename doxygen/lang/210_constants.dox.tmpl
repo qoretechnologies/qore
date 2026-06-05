@@ -6,14 +6,25 @@
     Constant definitions allow programmers to refer to values with %Qore identifiers rather than using the value or the expression that generates the value.
 
     @par Constant Declaration Syntax
-    <tt>[@ref mod_public "public"] <b>const</b></tt> <em>@ref namespace_paths "[namespace_path::]"constant_identifier</em> <tt>=</tt> <em>@ref expressions "initialization_expression"</em>;
+    <tt>[@ref mod_public "public"] <b>const</b></tt> <em>[@ref data_type_declarations "type"]</em> <em>@ref namespace_paths "[namespace_path::]"constant_identifier</em> <tt>=</tt> <em>@ref expressions "initialization_expression"</em>;
 
     @par Example
     @code{.py}
 const PI_SQUARED = pow(Qore::M_PI, 2);
+const string SERVICE_NAME = "orders";
+public const int DEFAULT_LIMIT = 100;
     @endcode
 
     When defining a @ref user_modules "user module", constant definitions can be preceded by @ref mod_public "public", which means that the constant will be available (imported) in the @ref Qore::Program "Program" object importing the module.  Note that however the @ref mod_public "public" keyword cannot be used when defining class constants in a public or private declaration block.  See @ref mod_public "public" for more information.
+
+    A constant declaration can include an explicit type before the constant name. The initializer must be compatible with this type, and invalid initializers are reported while the program is parsed:
+    @code{.py}
+const int PORT = 8011;       # OK
+const *string LABEL = NOTHING;
+# const int Bad = "not an int";  # PARSE-TYPE-ERROR
+    @endcode
+
+    @note The \c const keyword also declares @ref readonly_local_variables "read-only local variables" and @ref readonly_function_parameters "read-only function parameters" in statement and parameter contexts, and marks @ref const_methods "const methods" after a method parameter list. Read-only bindings are runtime local variables, not parse-time constants, and are not affected by @ref no-constant-defs "%no-constant-defs".
 
     @since 0.8.1 The expression used to initialize a constant can be any valid @ref expressions "Qore expression" as long as no variables are referenced.
 

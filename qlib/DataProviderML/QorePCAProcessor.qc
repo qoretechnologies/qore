@@ -261,13 +261,13 @@ public class QorePCAProcessor inherits AbstractDataProviderMLProcessor {
         updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
         *auto result = processCompleteShapeWindows(records, DataProvider::DataProviderShape::HashOfLists, 2, False);
         if (exists result) {
-            return cast<hash<auto>>(result);
+            return cast<hash>(result);
         }
         *auto fallback = processShapeRowsFallback(records, DataProvider::DataProviderShape::HashOfLists, False);
         if (!exists fallback) {
             return;
         }
-        return cast<hash<auto>>(fallback);
+        return cast<hash>(fallback);
     }
 
     #! Uses the row-oriented implementation as a semantics-preserving fallback

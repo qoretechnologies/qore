@@ -78,6 +78,57 @@ Consumers should use `named_callable` before offering named-call snippets or dia
 They should use `named_parameters`, not just `params`, for builtin APIs because a builtin
 variant can have parameter names in documentation while remaining positional-only.
 
+## Const Method Metadata
+
+Const methods add receiver-mutability metadata to method variants. This metadata is
+separate from code flags such as `CONSTANT` and `RET_VALUE_ONLY`: those flags describe
+effect/return-value behavior, while const-method metadata describes whether a readonly
+receiver may call the method.
+
+For every method variant, metadata includes:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `is_const_method` | `bool` | `True` when the variant is a const method and may be called through a statically readonly receiver |
+
+The human-readable `signature` field should preserve the trailing const spelling for
+display:
+
+```json
+{
+  "name": "getId",
+  "signature": "int Document::getId() const",
+  "return_type": "int",
+  "is_static": false,
+  "is_const_method": true,
+  "flags": ["CONSTANT"]
+}
+```
+
+`is_const_method` is the authoritative machine-readable field. Consumers should not infer
+it from the `flags` array, from `CONSTANT`, from `RET_VALUE_ONLY`, or by parsing the
+signature string. Older metadata that lacks `is_const_method` is treated as
+`false`.
+
+### Source-Specific Const Method Rules
+
+- qpp `.meta.json`: emit `is_const_method` from the explicit const-method
+  declaration metadata, such as qpp `[const]` or equivalent builder metadata.
+  Keep `CONSTANT` and `RET_VALUE_ONLY` in the existing `flags` array; do not use
+  those flags to imply receiver constness.
+- Reflection metadata: `is_const_method` comes from
+  `Reflection::AbstractMethodVariant::isConstMethod()` or the equivalent variant
+  modifier (`"const"` / `MC_CONST`).
+- QM/QC metadata: `AstMetadataExtractor` reads the trailing const qualifier from
+  astparser/tree-sitter method metadata and emits `is_const_method` for source-defined
+  methods.
+- `SymbolMerger`: preserve `is_const_method` when merging reflection structure with AST
+  or qpp documentation. Reflection remains authoritative for loaded symbols, but qpp and
+  source metadata must still carry the field for offline indexes and source-only metadata.
+
+QLS can use this field for display, readonly-receiver completions, diagnostics, and
+generated examples involving `const` object bindings.
+
 ## Generic Class Metadata
 
 QPP metadata also exposes builtin class type parameters when a class is declared
@@ -447,3 +498,7 @@ set(QORE_QM_METADATA_DEPENDS qore astparser)
 | `cmake/QoreMacros.cmake` | `qore_install_qpp_metadata()`, `qore_extract_qm_metadata()`, auto-extraction in user module macros |
 | `qlib/QoreApiMetadata/QppDocIndex.qc` | Recursive directory scanning for metadata files |
 | `qlib/QoreApiMetadata/MetadataStore.qc` | `fromSourceFile()` used by extraction script |
+| `qlib/QoreApiMetadata/AstMetadataExtractor.qc` | QM/QC source metadata extraction from astparser/tree-sitter output |
+| `qlib/QoreApiMetadata/ReflectionMetadataExtractor.qc` | Runtime reflection metadata extraction |
+| `qlib/QoreApiMetadata/SymbolMerger.qc` | Merges reflection, AST, and qpp metadata while preserving structural fields |
+| `lib/qpp.cpp` | qpp `.meta.json` emission for builtin and binary module APIs |

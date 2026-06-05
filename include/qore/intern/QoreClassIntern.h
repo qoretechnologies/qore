@@ -217,18 +217,20 @@ protected:
     ClassAccess access;                     // variant access code
     bool final;                             // is the variant final or not
     bool abstract;                          // is the variant abstract or not
+    bool const_method;                      // true for const-qualified instance methods
     std::string asig;                       // abstract signature, only set for abstract method variants
 
 public:
     // if %broken-varargs is set, add QCF_USES_EXTRA_ARGS to abstract methods by default as derived methods could use
     // extra arguments
     DLLLOCAL MethodVariantBase(ClassAccess n_access, bool n_final, int64 n_flags, bool n_is_user = false,
-            bool n_is_abstract = false) :
+            bool n_is_abstract = false, bool n_const_method = false) :
             AbstractQoreFunctionVariant(n_flags |
                 (n_is_abstract && (getProgram()->getParseOptions() & PO_BROKEN_VARARGS)
                     ? QCF_USES_EXTRA_ARGS
                     : 0
-                ), n_is_user), access(n_access), final(n_final), abstract(n_is_abstract) {
+                ), n_is_user), access(n_access), final(n_final), abstract(n_is_abstract),
+                const_method(n_const_method) {
     }
 
     DLLLOCAL bool isAbstract() const {
@@ -245,6 +247,10 @@ public:
 
     DLLLOCAL bool isFinal() const {
         return final;
+    }
+
+    DLLLOCAL bool isConstMethod() const {
+        return const_method;
     }
 
     DLLLOCAL virtual bool isMethodSynchronized() const {
@@ -309,7 +315,8 @@ public:
 class MethodVariant : public MethodVariantBase {
 public:
     DLLLOCAL MethodVariant(ClassAccess n_access, bool n_final, int64 n_flags, bool n_is_user = false,
-            bool is_abstract = false) : MethodVariantBase(n_access, n_final, n_flags, n_is_user, is_abstract) {
+            bool is_abstract = false, bool n_const_method = false)
+            : MethodVariantBase(n_access, n_final, n_flags, n_is_user, is_abstract, n_const_method) {
     }
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const = 0;
     DLLLOCAL virtual QoreValue evalPseudoMethod(const QoreValue n, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
@@ -369,8 +376,9 @@ protected:
 
 public:
     DLLLOCAL UserMethodVariant(ClassAccess n_access, bool n_final, StatementBlock* b, int n_sig_first_line,
-            int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced, int64 n_flags, bool is_abstract)
-            : MethodVariant(n_access, n_final, n_flags, true, is_abstract),
+            int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced, int64 n_flags, bool is_abstract,
+            bool n_const_method = false)
+            : MethodVariant(n_access, n_final, n_flags, true, is_abstract, n_const_method),
             UserVariantBase(b, n_sig_first_line, n_sig_last_line, params, rv, false), synchronized(synced) {
          if (signature.hasVarargs()) {
             flags |= QCF_USES_EXTRA_ARGS;
@@ -532,8 +540,9 @@ class BuiltinMethodVariant : public MethodVariant, public BuiltinFunctionVariant
 public:
    DLLLOCAL BuiltinMethodVariant(ClassAccess n_access, bool n_final, int64 n_flags, int64 n_functionality,
         const QoreTypeInfo* n_returnTypeInfo, const type_vec_t &n_typeList = type_vec_t(),
-        const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t())
-        : MethodVariant(n_access, n_final, n_flags),
+        const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t(),
+        bool n_const_method = false)
+        : MethodVariant(n_access, n_final, n_flags, false, false, n_const_method),
             BuiltinFunctionVariantBase(n_flags, n_functionality, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names) {}
 
    // the following defines the pure virtual functions that are common to all builtin variants
@@ -542,7 +551,7 @@ public:
 
 class BuiltinAbstractMethodVariant : public BuiltinMethodVariant {
 public:
-   DLLLOCAL BuiltinAbstractMethodVariant(ClassAccess n_access, int64 n_flags, const QoreTypeInfo* n_returnTypeInfo, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) : BuiltinMethodVariant(n_access, false, n_flags, QDOM_DEFAULT, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names) {
+   DLLLOCAL BuiltinAbstractMethodVariant(ClassAccess n_access, int64 n_flags, const QoreTypeInfo* n_returnTypeInfo, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t(), bool n_const_method = false) : BuiltinMethodVariant(n_access, false, n_flags, QDOM_DEFAULT, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names, n_const_method) {
       abstract = true;
    }
 
@@ -554,7 +563,7 @@ public:
 
 class BuiltinNormalMethodVariantBase : public BuiltinMethodVariant {
 public:
-    DLLLOCAL BuiltinNormalMethodVariantBase(ClassAccess n_access, bool n_final, int64 n_flags, int64 n_functionality, const QoreTypeInfo* n_returnTypeInfo, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) : BuiltinMethodVariant(n_access, n_final, n_flags, n_functionality, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names) {}
+    DLLLOCAL BuiltinNormalMethodVariantBase(ClassAccess n_access, bool n_final, int64 n_flags, int64 n_functionality, const QoreTypeInfo* n_returnTypeInfo, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t(), bool n_const_method = false) : BuiltinMethodVariant(n_access, n_final, n_flags, n_functionality, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names, n_const_method) {}
 
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const;
 
@@ -569,7 +578,7 @@ protected:
     q_method_t method;
 
 public:
-    DLLLOCAL BuiltinNormalMethodValueVariant(q_method_t m, ClassAccess n_access, bool n_final = false, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const QoreTypeInfo* n_returnTypeInfo = 0, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) : BuiltinNormalMethodVariantBase(n_access, n_final, n_flags, n_functionality, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names), method(m) {
+    DLLLOCAL BuiltinNormalMethodValueVariant(q_method_t m, ClassAccess n_access, bool n_final = false, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const QoreTypeInfo* n_returnTypeInfo = 0, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t(), bool n_const_method = false) : BuiltinNormalMethodVariantBase(n_access, n_final, n_flags, n_functionality, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names, n_const_method), method(m) {
     }
     DLLLOCAL virtual QoreValue evalImpl(QoreObject* self, AbstractPrivateData* private_data, const QoreListNode* args,
             RuntimeConfig& rc, ExceptionSink* xsink) const {
@@ -583,7 +592,7 @@ protected:
     const void* ptr;
 
 public:
-    DLLLOCAL BuiltinExternalNormalMethodValueVariant(const void* n_ptr, q_external_method_t m, ClassAccess n_access, bool n_final = false, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const QoreTypeInfo* n_returnTypeInfo = 0, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) : BuiltinNormalMethodVariantBase(n_access, n_final, n_flags, n_functionality, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names), method(m), ptr(n_ptr) {
+    DLLLOCAL BuiltinExternalNormalMethodValueVariant(const void* n_ptr, q_external_method_t m, ClassAccess n_access, bool n_final = false, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const QoreTypeInfo* n_returnTypeInfo = 0, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t(), bool n_const_method = false) : BuiltinNormalMethodVariantBase(n_access, n_final, n_flags, n_functionality, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names, n_const_method), method(m), ptr(n_ptr) {
     }
     DLLLOCAL virtual QoreValue evalImpl(QoreObject* self, AbstractPrivateData* private_data, const QoreListNode* args,
             RuntimeConfig& rc, ExceptionSink* xsink) const {
@@ -2364,6 +2373,14 @@ public:
         return methodGate || hm.find("methodGate") != hm.end() || ahm.find("methodGate") != ahm.end();
     }
 
+    DLLLOCAL const QoreMethod* parseGetMethodGate() const {
+        if (methodGate) {
+            return methodGate;
+        }
+        hm_method_t::const_iterator i = hm.find("methodGate");
+        return i != hm.end() ? i->second : nullptr;
+    }
+
     // checks for all special methods except constructor & destructor
     DLLLOCAL bool checkAssignSpecialIntern(const QoreMethod* m) {
         // set quick pointers
@@ -2773,7 +2790,8 @@ public:
         constlist.assimilate(cmap, "class", name.c_str());
     }
 
-    DLLLOCAL void parseAddConstant(const QoreProgramLocation* loc, const std::string &cname, QoreValue val, ClassAccess access) {
+    DLLLOCAL void parseAddConstant(const QoreProgramLocation* loc, const std::string &cname, QoreValue val,
+            ClassAccess access, const QoreTypeInfo* typeInfo = nullptr) {
         ValueHolder val_holder(val, nullptr);
         if (parseCheckSystemCommitted(loc)) {
             return;
@@ -2789,7 +2807,7 @@ public:
 
         //printd(5, "parseAddConstant() this: %p cls: %p const: %s access: %d\n", this, cls, cname.c_str(), access);
 
-        constlist.parseAdd(loc, cname, val_holder.release(), access, name.c_str());
+        constlist.parseAdd(loc, cname, val_holder.release(), access, name.c_str(), typeInfo);
     }
 
     DLLLOCAL bool parseHasVar(const char* vn) {
@@ -3533,8 +3551,8 @@ public:
     }
 
     DLLLOCAL static void parseAddConstant(QoreClass& qc, const QoreProgramLocation* loc, const std::string &cname,
-            QoreValue val, ClassAccess access) {
-        qc.priv->parseAddConstant(loc, cname, val, access);
+            QoreValue val, ClassAccess access, const QoreTypeInfo* typeInfo = nullptr) {
+        qc.priv->parseAddConstant(loc, cname, val, access, typeInfo);
     }
 
     DLLLOCAL static LocalVar* getSelfId(const QoreClass& qc) {

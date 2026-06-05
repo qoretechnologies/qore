@@ -8,10 +8,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../build/modules/dataframe"
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/reflection"
 
 %requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/DataProvider
+%requires reflection
 
 %try-module dataframe
 %define NoDataFrame
@@ -69,6 +71,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("typeInferenceTest", \typeInferenceTest());
         addTestCase("metadataTest", \metadataTest());
         addTestCase("accessTest", \accessTest());
+        addTestCase("pluginDescriptorRegistryTest", \pluginDescriptorRegistryTest());
         addTestCase("pluginOperatorTest", \pluginOperatorTest());
         addTestCase("denseBufferColumnTest", \denseBufferColumnTest());
         addTestCase("roundTripTest", \roundTripTest());
@@ -241,6 +244,97 @@ sub invalid_dataframe_api() {
         hash<auto> row = df.getRow(1);
         assertEq(20, row.a, "getRow a");
         assertEq("y", row.b, "getRow b");
+    }
+
+    pluginDescriptorRegistryTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        PluginRegistry process_registry = PluginRegistry::getProcessRegistry();
+        PluginRegistry program_registry = PluginRegistry::get();
+
+        bool active = False;
+        foreach string name in (program_registry.getActiveModules()) {
+            if (name == "dataframe") {
+                active = True;
+                break;
+            }
+        }
+        assertTrue(active, "dataframe plugin module is active in the current Program");
+
+        list<hash<auto>> types = process_registry.getTypes("dataframe");
+        assertEq(3, types.size(), "dataframe registers three plugin types");
+        assertEq(3, program_registry.getTypes("dataframe").size(),
+            "program-bound registry exposes active dataframe plugin types");
+
+        hash<auto> types_by_id = {};
+        foreach hash<auto> type in (types) {
+            string key = type.local_type_id.toString();
+            assertFalse(exists types_by_id{key}, sprintf("duplicate dataframe plugin type id %s", key));
+            types_by_id{key} = type;
+            assertEq(1, type.serializer_format_version, "dataframe plugin serializer format version");
+        }
+        assertEq("DataFrame", types_by_id{"0"}.type_name, "DataFrame type id");
+        assertEq("DataFrame::ColumnRef", types_by_id{"1"}.type_name, "ColumnRef type id");
+        assertEq("DataFrame::RowMask", types_by_id{"2"}.type_name, "RowMask type id");
+
+        list<hash<auto>> ops = process_registry.getOperations("dataframe");
+        assertEq(56, ops.size(), "dataframe registers all plugin operations");
+        assertEq(56, program_registry.getOperations("dataframe").size(),
+            "program-bound registry exposes active dataframe plugin operations");
+
+        hash<auto> op_ids = {};
+        hash<auto> op_counts = {};
+        int llvm_ops = 0;
+        foreach hash<auto> op in (ops) {
+            string key = op.local_id.toString();
+            assertFalse(exists op_ids{key}, sprintf("duplicate dataframe plugin operation id %s", key));
+            op_ids{key} = True;
+
+            if (!exists op_counts{op.operation_name}) {
+                op_counts{op.operation_name} = 0;
+            }
+            ++op_counts{op.operation_name};
+
+            assertTrue(op.global_id > 0, sprintf("operation %s has a process-global id", key));
+            assertEq(1, op.canonical_signature_version,
+                sprintf("operation %s uses the current canonical signature version", key));
+            assertTrue(op.runtime_helper_symbol.val(),
+                sprintf("operation %s exposes a runtime helper symbol", key));
+            assertEq("ReadOnly", op.access, sprintf("operation %s is read-only", key));
+            assertEq("FreshNoAliasInputs", op.result_alias,
+                sprintf("operation %s returns a fresh value", key));
+            assertEq("Exact", op.type_promotion_kind,
+                sprintf("operation %s uses exact type promotion", key));
+            assertFalse(op.has_lowering_pattern,
+                sprintf("operation %s uses descriptor lowering instead of custom lowering", key));
+            assertEq(0, op.lowering_claimed_node_kinds,
+                sprintf("operation %s has no custom lowering claims", key));
+
+            bool expect_llvm = op.local_id != 2;
+            assertEq(expect_llvm, op.has_llvm_codegen,
+                sprintf("operation %s accepted LLVM codegen extension state", key));
+            assertEq(expect_llvm ? 1 : 0, op.num_extensions,
+                sprintf("operation %s extension count", key));
+            if (op.has_llvm_codegen) {
+                ++llvm_ops;
+            }
+        }
+
+        for (int i = 0; i < 56; ++i) {
+            assertTrue(exists op_ids{i.toString()}, sprintf("operation id %d is registered", i));
+        }
+
+        assertEq(55, llvm_ops, "dataframe hot plugin operations expose accepted LLVM hooks");
+        assertEq(3, op_counts{"subscript"}, "three dataframe subscript variants");
+        assertEq(1, op_counts{"slice"}, "one dataframe slice operation");
+        assertEq(1, op_counts{"bit_and"}, "one RowMask bit_and operation");
+        assertEq(1, op_counts{"bit_or"}, "one RowMask bit_or operation");
+        assertEq(1, op_counts{"bit_xor"}, "one RowMask bit_xor operation");
+        assertEq(1, op_counts{"bit_not"}, "one RowMask bit_not operation");
+        foreach string comparison in (("eq", "ne", "lt", "le", "gt", "ge")) {
+            assertEq(8, op_counts{comparison}, sprintf("eight ColumnRef %s comparison variants", comparison));
+        }
     }
 
     pluginOperatorTest() {
@@ -1244,6 +1338,14 @@ sub invalid_dataframe_api() {
         assertEq(("Alice", "Carol"), index_filtered.getColumn("name"),
             "DataFrameBlock vectorized filter supports list index accessors");
 
+        QoreFilterRecordsProcessor stream_any_proc({
+            "dpql_where": 'any @value >= 90, @scores',
+        });
+        DataFrame::DataFrame stream_any_filtered = stream_any_proc.processRecordsShape(nested_df,
+            DataProviderShape::DataFrameBlock);
+        assertEq(("Alice", "Carol"), stream_any_filtered.getColumn("name"),
+            "DataFrameBlock filter falls back to row evaluation for streaming DPQL operators");
+
         hash<DataProviderExpression> slice_expr = <DataProviderExpression>{
             "exp": DP_SEARCH_OP_EQ,
             "args": (
@@ -1657,6 +1759,16 @@ sub invalid_dataframe_api() {
             DataProviderShape::BufferColumns);
         assertEq((1, 3), nested_accessor_filtered.getColumn("id").toList(),
             "DPQL BufferColumns nested accessors build dense masks");
+
+        QoreFilterRecordsProcessor nested_stream_any_proc({
+            "dpql_where": 'any @value >= 90, @scores',
+        });
+        auto nested_stream_any_filtered = nested_stream_any_proc.processRecordsShape(nested_filter_columns,
+            DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(nested_stream_any_filtered),
+            "DPQL BufferColumns streaming operator fallback preserves BufferColumns shape");
+        assertEq((1, 3), nested_stream_any_filtered.getColumn("id").toList(),
+            "DPQL BufferColumns streaming operators fall back to row evaluation");
 
         hash<DataProviderExpression> ternary_expr = <DataProviderExpression>{
             "exp": DP_SEARCH_OP_EQ,

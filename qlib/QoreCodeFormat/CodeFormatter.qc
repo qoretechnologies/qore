@@ -156,6 +156,15 @@ public const OperatorStrings = {
     "AOK_Elements": "elements",
     "AOK_Exists": "exists",
     "AOK_Extract": "extract",
+    "AOK_Iterate": "iterate",
+    "AOK_First": "first",
+    "AOK_Any": "any",
+    "AOK_All": "all",
+    "AOK_Count": "count",
+    "AOK_Take": "take",
+    "AOK_Drop": "drop",
+    "AOK_TakeWhile": "takewhile",
+    "AOK_TakeUntil": "takeuntil",
     "AOK_Foldl": "foldl",
     "AOK_Foldr": "foldr",
     "AOK_Instanceof": "instanceof",
@@ -282,6 +291,23 @@ public const ParseOptionStrings = {
     "APOK_NO_TRANSIENT": "%no-transient",
     "APOK_NO_TYPEDEF": "%no-typedef",
     "APOK_NO_ENUM": "%no-enum",
+    "APOK_NO_ITERATE": "%no-iterate",
+    "APOK_NO_FIRST": "%no-first",
+    "APOK_NO_ANY_OPERATOR": "%no-any-operator",
+    "APOK_NO_ALL_OPERATOR": "%no-all-operator",
+    "APOK_NO_COUNT": "%no-count",
+    "APOK_NO_TAKE": "%no-take",
+    "APOK_NO_DROP": "%no-drop",
+    "APOK_NO_TAKEWHILE": "%no-takewhile",
+    "APOK_NO_TAKEUNTIL": "%no-takeuntil",
+    "APOK_NO_FIND_MODIFIERS": "%no-find-modifiers",
+    "APOK_NO_STREAM_FUSION": "%no-stream-fusion",
+    "APOK_STREAMING_ANY": "%streaming-any",
+    "APOK_NO_STREAMING_OPERATORS": "%no-streaming-operators",
+    "APOK_NO_CHAR_TYPE": "%no-char-type",
+    "APOK_NO_STRING_INDEX_CHAR": "%no-string-index-char",
+    "APOK_NEGATIVE_OFFSETS": "%negative-offsets",
+    "APOK_NO_NEGATIVE_OFFSETS": "%no-negative-offsets",
     "APOK_NO_UNCONTROLLED_APIS": "%no-uncontrolled-apis",
     "APOK_LOCK_WARNINGS": "%lock-warnings",
     "APOK_LOCK_OPTIONS": "%lock-options",
@@ -1153,7 +1179,8 @@ public class CodeFormatter {
         }
 
         # For standalone functions (not class methods), emit `sub` keyword
-        if (!inClassContext) {
+        bool scopedMethod = exists node.scopedMethod && node.scopedMethod;
+        if (!inClassContext && !scopedMethod) {
             prefix += "sub ";
         }
         prefix += name;
@@ -1173,14 +1200,21 @@ public class CodeFormatter {
             initStr = " : " + emitExpressionStr(node.inits);
         }
 
+        string methodQualifier = exists node.isConstMethod && node.isConstMethod ? " const" : "";
+        string returnsStr = "";
+        if (exists node.returnsType) {
+            returnsStr = " returns " + emitExpressionStr(node.returnsType);
+        }
+        string declSuffix = methodQualifier + initStr + returnsStr;
+
         # Check for abstract (no body)
         if (!exists node.body) {
-            emitWrappedHeader(prefix, params, "(", ")", initStr + ";");
+            emitWrappedHeader(prefix, params, "(", ")", declSuffix + ";");
             return;
         }
 
         # Body
-        emitWrappedHeader(prefix, params, "(", ")", initStr + " {");
+        emitWrappedHeader(prefix, params, "(", ")", declSuffix + " {");
         emitter.indent();
         emitStatementBody(node.body);
         emitter.dedent();
@@ -1233,7 +1267,11 @@ public class CodeFormatter {
         if (mods != "") {
             prefix += mods + " ";
         }
-        prefix += "const " + name + " = ";
+        prefix += "const ";
+        if (exists node.typeName && exists node.typeName.name && node.typeName.name != "") {
+            prefix += node.typeName.name + " ";
+        }
+        prefix += name + " = ";
 
         if (exists node.value) {
             emitExprLine(prefix, node.value, ";");
@@ -1370,8 +1408,12 @@ public class CodeFormatter {
                 if (exists member.loc) {
                     emitCommentsBeforeLine1(findRealStartLine1(member));
                 }
-                # Member group members are expressions (usually DeclExpr)
-                emitExprLine("", member, ";");
+                if (member.nodetype == ANT_Declaration) {
+                    emitDeclaration(member);
+                } else {
+                    # Member group members are expressions (usually DeclExpr)
+                    emitExprLine("", member, ";");
+                }
                 # Skip comments within this member's source range (they are included
                 # in the source-extracted expression text)
                 if (exists member.loc) {

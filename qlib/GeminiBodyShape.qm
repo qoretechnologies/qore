@@ -31,6 +31,16 @@
 %define NoJson
 %endtry
 
+%ifdef NoJson
+auto sub make_json(auto val, *int flags) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+
+auto sub parse_json(string val) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+%endif
+
 module GeminiBodyShape {
     version = "1.0";
     desc = "Pure-static request/response shapers for the Gemini generateContent "
@@ -144,7 +154,7 @@ public *hash<auto> sub sanitizeSchema(*hash<auto> schema, bool compact = False) 
     if (!schema) {
         return NOTHING;
     }
-    return cast<hash<auto>>(GeminiBodyShape::sanitizeSchemaValue(schema,
+    return cast<hash>(GeminiBodyShape::sanitizeSchemaValue(schema,
         compact, 0, NOTHING));
 }
 
@@ -152,7 +162,7 @@ public *hash<auto> sub sanitizeSchema(*hash<auto> schema, bool compact = False) 
 auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
         *string field_name) {
     if (value.typeCode() == NT_HASH) {
-        hash<auto> input = cast<hash<auto>>(value);
+        hash<auto> input = cast<hash>(value);
         hash<auto> rv;
         foreach string key in (keys input) {
             if (GeminiBodyShape::isSchemaKeywordStripped(key)
@@ -172,7 +182,7 @@ auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
             if ((key == "properties" || key == "patternProperties")
                     && input{key}.typeCode() == NT_HASH) {
                 rv{key} = GeminiBodyShape::sanitizeSchemaPropertyMap(
-                    cast<hash<auto>>(input{key}), compact, depth + 1);
+                    cast<hash>(input{key}), compact, depth + 1);
                 continue;
             }
             rv{key} = GeminiBodyShape::sanitizeSchemaValue(input{key}, compact,
@@ -181,7 +191,7 @@ auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
         foreach string key in (("allOf", "anyOf", "oneOf")) {
             if (input{key}.typeCode() == NT_LIST) {
                 rv = GeminiBodyShape::applySchemaComposition(rv,
-                    cast<list<auto>>(input{key}), key == "allOf",
+                    cast<list>(input{key}), key == "allOf",
                     compact, depth + 1, field_name);
             }
         }
@@ -189,7 +199,7 @@ auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
                 && GeminiBodyShape::shouldFlattenCompactSchemaProperties(
                     field_name, depth)) {
             rv.properties = GeminiBodyShape::flattenCompactSchemaProperties(
-                cast<hash<auto>>(rv.properties));
+                cast<hash>(rv.properties));
         }
         return rv;
     }
@@ -249,7 +259,7 @@ auto sub flattenCompactSchemaProperty(auto value) {
     if (value.typeCode() != NT_HASH) {
         return value;
     }
-    hash<auto> schema = cast<hash<auto>>(value);
+    hash<auto> schema = cast<hash>(value);
     if (schema.type == "object" || schema.properties.typeCode() == NT_HASH) {
         hash<auto!> rv = {"type": "object"};
         if (schema.description.val()) {
@@ -264,7 +274,7 @@ auto sub flattenCompactSchemaProperty(auto value) {
         }
         if (schema.items.typeCode() == NT_HASH) {
             rv.items = GeminiBodyShape::flattenCompactArrayItemSchema(
-                cast<hash<auto>>(schema.items));
+                cast<hash>(schema.items));
         }
         return rv;
     }
@@ -367,7 +377,7 @@ hash<auto> sub applySchemaComposition(hash<auto> base, list<auto> raw_variants,
         auto sanitized = GeminiBodyShape::sanitizeSchemaValue(raw, compact,
             depth, field_name);
         if (sanitized.typeCode() == NT_HASH) {
-            variants += cast<hash<auto>>(sanitized);
+            variants += cast<hash>(sanitized);
         }
     }
     if (!variants) {
@@ -413,8 +423,8 @@ hash<auto> sub mergeSchemaObjects(hash<auto> left, hash<auto> right) {
     if (right.items.typeCode() == NT_HASH) {
         if (rv.items.typeCode() == NT_HASH) {
             rv.items = GeminiBodyShape::mergeSchemaObjects(
-                cast<hash<auto>>(rv.items),
-                cast<hash<auto>>(right.items));
+                cast<hash>(rv.items),
+                cast<hash>(right.items));
         } else {
             rv.items = right.items;
         }
@@ -422,15 +432,15 @@ hash<auto> sub mergeSchemaObjects(hash<auto> left, hash<auto> right) {
 
     if (right.properties.typeCode() == NT_HASH) {
         hash<auto> props = rv.properties.typeCode() == NT_HASH
-            ? cast<hash<auto>>(rv.properties) : {};
-        hash<auto> right_props = cast<hash<auto>>(right.properties);
+            ? cast<hash>(rv.properties) : {};
+        hash<auto> right_props = cast<hash>(right.properties);
         foreach string key in (keys right_props) {
             if (exists props{key}
                     && props{key}.typeCode() == NT_HASH
                     && right_props{key}.typeCode() == NT_HASH) {
                 props{key} = GeminiBodyShape::mergeSchemaObjects(
-                    cast<hash<auto>>(props{key}),
-                    cast<hash<auto>>(right_props{key}));
+                    cast<hash>(props{key}),
+                    cast<hash>(right_props{key}));
             } else if (!exists props{key}) {
                 props{key} = right_props{key};
             }
@@ -521,7 +531,7 @@ list<auto> sub mergeEnumLists(auto left, auto right) {
 
 list<auto> sub schemaList(auto value) {
     if (value.typeCode() == NT_LIST) {
-        return cast<list<auto>>(value);
+        return cast<list>(value);
     }
     return ();
 }
@@ -585,7 +595,7 @@ public hash<auto> sub parseToolResponse(*string content) {
     try {
         auto parsed = parse_json(content);
         return parsed.typeCode() == NT_HASH
-            ? cast<hash<auto>>(parsed)
+            ? cast<hash>(parsed)
             : {"result": parsed};
     } catch () {
         return {"result": content};

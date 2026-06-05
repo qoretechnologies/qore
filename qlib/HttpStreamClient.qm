@@ -58,14 +58,13 @@ module HttpStreamClient {
     @code{.py}
 %modern
 %requires HttpStreamClient
-%requires json
 
 HTTPClient client({"url": "https://api.example.com"});
 
 # Start streaming request
 hash<auto> info;
 HTTPResponseStream stream = HttpStreamClient::sendAndStream(client, "POST", "/events",
-    make_json({"subscribe": "updates"}),
+    "{\"subscribe\":\"updates\"}",
     {"Accept": "text/event-stream", "Content-Type": "application/json"},
     \info);
 

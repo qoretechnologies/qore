@@ -47,6 +47,7 @@ public:
     QoreIRConstInstruction* createConstInt(int64_t value, const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstFloat(double value, const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstBool(bool value, const QoreProgramLocation* loc = nullptr);
+    QoreIRConstInstruction* createConstChar(unsigned value, const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstNothing(const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstNull(const QoreProgramLocation* loc = nullptr);
     QoreIRConstInstruction* createConstString(const std::string& value, const QoreProgramLocation* loc = nullptr);
@@ -219,7 +220,8 @@ public:
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
     QoreIRPhiInstruction* createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr,
+        QoreIRPhiValueKind value_kind = QoreIRPhiValueKind::QoreValue);
 
     QoreIRBranchInstruction* createBranch(QoreIRBasicBlock* target, const QoreProgramLocation* loc = nullptr);
     QoreIRBranchIfInstruction* createBranchIf(QoreIRValue cond, QoreIRBasicBlock* true_target,
@@ -288,6 +290,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorCreateInstruction* createIteratorCreate(QoreIRValue iterable,
         FunctionalOperator* iterator_func = nullptr, const QoreProgramLocation* loc = nullptr);
+    QoreIRIteratorCreateInstruction* createIteratorCreateIterate(QoreIRValue iterable,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
     QoreIRRefForeachInitInstruction* createRefForeachInit(const QoreValue& parse_ref_expr,
@@ -323,7 +327,7 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createContextRow(const QoreProgramLocation* loc = nullptr);
     QoreIRFindInstruction* createFind(const QoreValue& exp, const QoreValue& find_exp,
-        const QoreValue& where, const QoreProgramLocation* loc = nullptr);
+        const QoreValue& where, int32_t mode = 0, const QoreProgramLocation* loc = nullptr);
     QoreIRSummarizeInstruction* createSummarize(const SummarizeStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
     QoreIRSwitchRegexMatchInstruction* createSwitchRegexMatch(const CaseNodeRegex* regex_case,
@@ -334,6 +338,14 @@ public:
 private:
     QoreIRFunction* func = nullptr;
     QoreIRBasicBlock* block = nullptr;
+
+    // Pairs PushTempMark/DiscardTemps with matching temp_scope_id values.  The
+    // lowering emits these markers in correctly-nested call order, so a simple
+    // stack here captures the true nesting even when the resulting basic-block
+    // layout is reordered (e.g. by short-circuit operators).  See
+    // QoreIRInstruction::temp_scope_id.
+    uint32_t next_temp_scope_id = 1;
+    std::vector<uint32_t> temp_scope_id_stack;
 };
 
 #endif

@@ -1219,7 +1219,7 @@ public namespace DebugProgramControl {
                                                     break;
 
                                                 case 'dismiss':
-                                                    any v = AbstractDebugControl::unserialize(rd.value);
+                                                    auto v = AbstractDebugControl::unserialize(rd.value);
                                                     ctxCT{varName} = v.typeCode() == NT_BOOLEAN ? v : resolveValue(varName, string(v), boolStrings, ctxCT{rd.name});
                                                     break;
 
@@ -1228,7 +1228,7 @@ public namespace DebugProgramControl {
                                                     break;
                                             }
                                         } else {
-                                            any v = AbstractDebugControl::unserialize(rd.value);
+                                            auto v = AbstractDebugControl::unserialize(rd.value);
                                             switch (varName) {
                                                 case 'frame':
                                                     if (v <= 0) {

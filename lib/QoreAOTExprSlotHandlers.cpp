@@ -808,6 +808,23 @@ static bool write_slot_SELECT(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreSelectOperatorNode>(ctx);
 }
 
+static bool write_slot_ITERATE(AOTExprSlotWriteCtx& ctx) {
+    return write_unary_slot_payload<QoreIterateOperatorNode>(ctx);
+}
+
+static bool write_slot_STREAMING(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(op->getKind()));
+    return classifyAndWriteExpr(ctx.writer, op->getPredicate(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getSource(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
 static bool write_slot_RANGE(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreRangeOperatorNode>(ctx);
 }

@@ -243,6 +243,7 @@ namespace detail {
  *   Integers:      Bits 63-48 = 0xFFF9, bits 47-0 = 48-bit signed value
  *   Pointers:      Bits 63-48 = 0xFFFA, bits 47-0 = 48-bit address
  *   Special:       Bits 63-48 = 0xFFFB, bits 47-0 = discriminator (0-3)
+ *   Char:          Bits 63-48 = 0xFFFC, bits 20-0 = Unicode codepoint
  *
  * TAG ALLOCATION (bits 63-48):
  *   < 0xFFC0:      Encoded doubles (raw bits + 2^48)
@@ -251,6 +252,7 @@ namespace detail {
  *   0xFFF9:        48-bit signed integers
  *   0xFFFA:        Pointers to AbstractQoreNode
  *   0xFFFB:        Special values (nothing=0, null=1, false=2, true=3)
+ *   0xFFFC:        Unicode character codepoint
  *   0xFFFD:        Enum member pointers
  *   0xFFFE-0xFFFF: Reserved for future plugin immediate tags
  *
@@ -306,6 +308,7 @@ private:
     static constexpr uint16_t TAG16_INT48       = 0xFFF9;
     static constexpr uint16_t TAG16_POINTER     = 0xFFFA;
     static constexpr uint16_t TAG16_SPECIAL     = 0xFFFB;
+    static constexpr uint16_t TAG16_CHAR        = 0xFFFC;
     static constexpr uint16_t TAG16_ENUM        = 0xFFFD;
     static constexpr uint16_t TAG12_SHORTSTR    = 0xFFC;
     static constexpr uint16_t TAG16_SHORTSTR_FIRST = 0xFFC0;
@@ -316,6 +319,7 @@ private:
     static constexpr uint64_t TAG_INT48         = static_cast<uint64_t>(TAG16_INT48) << 48;
     static constexpr uint64_t TAG_POINTER       = static_cast<uint64_t>(TAG16_POINTER) << 48;
     static constexpr uint64_t TAG_SPECIAL       = static_cast<uint64_t>(TAG16_SPECIAL) << 48;
+    static constexpr uint64_t TAG_CHAR          = static_cast<uint64_t>(TAG16_CHAR) << 48;
     //! Short strings: 0xFFC + (length in bits 48-50), so 0xFFC0-0xFFC6
     static constexpr uint64_t TAG_SHORTSTR_BASE = static_cast<uint64_t>(TAG12_SHORTSTR) << 52;
     //! Enum values: stores pointer to QoreEnumMember, zero allocation, zero ref-counting
@@ -329,6 +333,8 @@ private:
         "pointer tag must not collide with plugin immediate tags");
     static_assert(TAG16_SPECIAL < TAG16_PLUGIN_IMMEDIATE_FIRST,
         "special-value tag must not collide with plugin immediate tags");
+    static_assert(TAG16_CHAR < TAG16_PLUGIN_IMMEDIATE_FIRST,
+        "char tag must not collide with plugin immediate tags");
     static_assert(TAG16_ENUM < TAG16_PLUGIN_IMMEDIATE_FIRST,
         "enum tag must not collide with plugin immediate tags");
 
@@ -352,6 +358,9 @@ private:
 
     //! Maximum bytes for inline short string storage
     static constexpr size_t SHORTSTR_MAX_BYTES = 6;
+
+    //! Maximum Unicode codepoint value.
+    static constexpr unsigned CHAR_MAX_CODEPOINT = 0x10FFFF;
 
     // ========================================================================
     // Private helpers
@@ -454,6 +463,11 @@ public:
         return tag() == TAG_ENUM;
     }
 
+    //! Returns true if the value is an inline Unicode character.
+    DLLLOCAL bool isChar() const {
+        return tag() == TAG_CHAR;
+    }
+
     //! Returns true if the value is a boolean (true or false)
     DLLLOCAL bool isBool() const {
         return bits == VAL_TRUE || bits == VAL_FALSE;
@@ -503,6 +517,7 @@ public:
         return tag == TAG16_INT48
             || tag == TAG16_POINTER
             || tag == TAG16_SPECIAL
+            || tag == TAG16_CHAR
             || (tag >= TAG16_SHORTSTR_FIRST && tag <= TAG16_SHORTSTR_LAST)
             || tag == TAG16_ENUM;
     }
@@ -535,6 +550,12 @@ public:
     DLLLOCAL bool getBool() const {
         assert(isBool());
         return bits == VAL_TRUE;
+    }
+
+    //! Extracts a Unicode codepoint (asserts if not a char)
+    DLLLOCAL unsigned getChar() const {
+        assert(isChar());
+        return static_cast<unsigned>(payload());
     }
 
     //! Extracts pointer value (asserts if not a pointer)
@@ -616,6 +637,25 @@ public:
         @return UTF-8 string value, using inline storage when the byte length fits
     */
     DLLEXPORT static QoreValue makeUtf8StringValue(const char* str);
+
+    //! Returns true if the codepoint is valid for a char value.
+    DLLLOCAL static bool isValidCharCodepoint(unsigned codepoint) {
+        return codepoint <= CHAR_MAX_CODEPOINT;
+    }
+
+    //! Create a char value from a Unicode codepoint.
+    DLLEXPORT static QoreValue makeChar(unsigned codepoint);
+
+    //! Create a char value from a string that must contain exactly one codepoint.
+    DLLEXPORT static QoreValue makeCharFromString(const QoreString& str, ExceptionSink* xsink);
+
+    //! Create a char value from a single-character substring at the given character offset.
+    DLLEXPORT static QoreValue makeCharFromStringAt(const QoreString& str, qore_offset_t offset,
+            ExceptionSink* xsink);
+
+    //! Create a one-character string from a Unicode codepoint.
+    DLLEXPORT static QoreStringNode* makeCharString(unsigned codepoint, const QoreEncoding* enc,
+            ExceptionSink* xsink);
 
     //! Get length of short string (asserts if not a short string)
     DLLLOCAL size_t shortStringLen() const {
@@ -726,6 +766,12 @@ public:
     //! Sets a boolean value (any current value is overwritten without dereferencing)
     DLLLOCAL void set(bool b) {
         bits = b ? VAL_TRUE : VAL_FALSE;
+    }
+
+    //! Sets a Unicode character value.
+    DLLLOCAL void setChar(unsigned codepoint) {
+        assert(isValidCharCodepoint(codepoint));
+        bits = TAG_CHAR | codepoint;
     }
 
     //! Sets a value from another QoreValue (any current value is overwritten without dereferencing)
@@ -1215,5 +1261,7 @@ DLLEXPORT extern const char* qoreBoolTypeName;
 DLLEXPORT extern const char* qoreIntTypeName;
 //! "float"
 DLLEXPORT extern const char* qoreFloatTypeName;
+//! "char"
+DLLEXPORT extern const char* qoreCharTypeName;
 
 #endif // _QORE_QOREVALUE_H

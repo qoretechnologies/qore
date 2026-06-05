@@ -500,6 +500,7 @@ static bool checkPluginLLVMCodegenFastMathContext(uint32_t global_id) {
 }
 
 static bool checkRegistrationAndIntrospection() {
+    ScopedEnvVar verify_plugins("QORE_PLUGIN_VERIFY", "1");
     ExceptionSink xsink;
     QorePluginTypeDescriptor type;
     std::array<QorePluginOperation, 5> ops;
@@ -1000,7 +1001,6 @@ static bool checkRegistrationAndIntrospection() {
     }
     element_type_xsink.clear();
 
-    setenv("QORE_PLUGIN_VERIFY", "1", 1);
     uint32_t bad_alias_global_id = 0;
     if (qore_plugin_get_process_operation_id("plugin-smoke", 2, &bad_alias_global_id, &xsink)
             || xsink || !bad_alias_global_id) {

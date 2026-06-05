@@ -79,6 +79,16 @@ public:
         return expTypeInfo;
     }
 
+    //! Returns the map expression for IR lowering.
+    DLLLOCAL const QoreValue& getMapExpression() const {
+        return left;
+    }
+
+    //! Returns the iterator expression for IR lowering.
+    DLLLOCAL const QoreValue& getIteratorExpr() const {
+        return right;
+    }
+
 protected:
     const QoreTypeInfo* returnTypeInfo;
     const QoreTypeInfo* expTypeInfo = nullptr;

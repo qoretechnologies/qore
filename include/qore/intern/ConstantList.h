@@ -102,6 +102,7 @@ public:
         init : 1,         // already initialized
         builtin : 1,      // builtin vs user
         delayed_eval : 1, // delayed evaluation
+        explicit_type : 1, // constant has an explicit declared type
         has_init_expr : 1, // had a delayed-eval init expression (for AOT)
         saved_val_set : 1, // saved_val contains a runtime value or preserved init expression
         aot_shell_pending : 1, // AOT-deserialized shell whose init-func has not run
@@ -367,7 +368,7 @@ public:
 
     // add a constant to a list with duplicate checking (pub & priv + pending)
     DLLLOCAL void parseAdd(const QoreProgramLocation* loc, const std::string& name, QoreValue val, ClassAccess access,
-            const char* cname);
+            const char* cname, const QoreTypeInfo* typeInfo = nullptr);
 
     DLLLOCAL int parseInit();
     DLLLOCAL int parseCommitRuntimeInit();

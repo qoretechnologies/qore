@@ -1800,6 +1800,10 @@ public:
     }
 
 protected:
+    DLLLOCAL QoreBaseConvertTypeInfo(const char* name, q_accept_vec_t&& a_vec, q_return_vec_t&& r_vec)
+            : QoreBaseTypeInfo(name, std::move(a_vec), std::move(r_vec)) {
+    }
+
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
         return true;
@@ -1812,6 +1816,10 @@ public:
     }
 
 protected:
+    DLLLOCAL QoreBaseOrNothingConvertTypeInfo(const char* name, q_accept_vec_t&& a_vec, q_return_vec_t&& r_vec)
+            : QoreBaseOrNothingTypeInfo(name, std::move(a_vec), std::move(r_vec)) {
+    }
+
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
         return true;
@@ -1896,7 +1904,15 @@ protected:
 
 class QoreStringTypeInfo : public QoreBaseConvertTypeInfo {
 public:
-    DLLLOCAL QoreStringTypeInfo() : QoreBaseConvertTypeInfo("string", NT_STRING) {
+    DLLLOCAL QoreStringTypeInfo() : QoreBaseConvertTypeInfo("string", q_accept_vec_t {
+            {NT_STRING, nullptr, true},
+            {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+                QoreStringNode* str = QoreValue::makeCharString(n.getChar(), QCS_UTF8, xsink);
+                if (!xsink || !*xsink) {
+                    discard(n.assign(str), xsink);
+                }
+            }},
+        }, q_return_vec_t {{NT_STRING, true}}) {
     }
 
 protected:
@@ -1916,7 +1932,17 @@ protected:
 
 class QoreStringOrNothingTypeInfo : public QoreBaseOrNothingConvertTypeInfo {
 public:
-   DLLLOCAL QoreStringOrNothingTypeInfo() : QoreBaseOrNothingConvertTypeInfo("*string", NT_STRING) {
+   DLLLOCAL QoreStringOrNothingTypeInfo() : QoreBaseOrNothingConvertTypeInfo("*string", q_accept_vec_t {
+            {NT_STRING, nullptr},
+            {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+                QoreStringNode* str = QoreValue::makeCharString(n.getChar(), QCS_UTF8, xsink);
+                if (!xsink || !*xsink) {
+                    discard(n.assign(str), xsink);
+                }
+            }},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        }, q_return_vec_t {{NT_STRING}, {NT_NOTHING}}) {
    }
 
 protected:
@@ -1928,7 +1954,10 @@ protected:
 
 class QoreBoolTypeInfo : public QoreBaseConvertTypeInfo {
 public:
-    DLLLOCAL QoreBoolTypeInfo() : QoreBaseConvertTypeInfo("bool", NT_BOOLEAN) {
+    DLLLOCAL QoreBoolTypeInfo() : QoreBaseConvertTypeInfo("bool", q_accept_vec_t {
+            {NT_BOOLEAN, nullptr, true},
+            {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) { discard(n.assign(true), xsink); }},
+        }, q_return_vec_t {{NT_BOOLEAN, true}}) {
     }
 
 protected:
@@ -1948,11 +1977,54 @@ protected:
 
 class QoreBoolOrNothingTypeInfo : public QoreBaseOrNothingConvertTypeInfo {
 public:
-    DLLLOCAL QoreBoolOrNothingTypeInfo() : QoreBaseOrNothingConvertTypeInfo("*bool", NT_BOOLEAN) {
+    DLLLOCAL QoreBoolOrNothingTypeInfo() : QoreBaseOrNothingConvertTypeInfo("*bool", q_accept_vec_t {
+            {NT_BOOLEAN, nullptr},
+            {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) { discard(n.assign(true), xsink); }},
+            {NT_NOTHING, nullptr},
+            {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+        }, q_return_vec_t {{NT_BOOLEAN}, {NT_NOTHING}}) {
     }
 
 protected:
     // returns true if this type could contain an object or a closure
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+};
+
+class QoreCharTypeInfo : public QoreBaseConvertTypeInfo {
+public:
+    DLLLOCAL QoreCharTypeInfo() : QoreBaseConvertTypeInfo("char", NT_CHAR) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual bool needsScanImpl() const {
+        return false;
+    }
+
+    DLLLOCAL virtual bool hasDefaultValueImpl() const {
+        return true;
+    }
+
+    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+        return QoreValue::makeChar(0);
+    }
+};
+
+class QoreCharOrNothingTypeInfo : public QoreBaseOrNothingConvertTypeInfo {
+public:
+    DLLLOCAL QoreCharOrNothingTypeInfo() : QoreBaseOrNothingConvertTypeInfo("*char", NT_CHAR) {
+    }
+
+protected:
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return true;
+    }
+
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
     }
@@ -2741,6 +2813,10 @@ public:
                discard(n.assign(n.getAsBigInt()), xsink);
             }
          },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               discard(n.assign(n.getAsBigInt()), xsink);
+            }
+         },
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(n.getAsBigInt()), xsink);
             }
@@ -2788,6 +2864,10 @@ public:
                discard(n.assign(n.getAsBigInt()), xsink);
             }
          },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               discard(n.assign(n.getAsBigInt()), xsink);
+            }
+         },
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(n.getAsBigInt()), xsink);
             }
@@ -2826,6 +2906,10 @@ public:
             }
          },
          {NT_BOOLEAN, [] (QoreValue& n, ExceptionSink* xsink) {
+               discard(n.assign(n.getAsFloat()), xsink);
+            }
+         },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(n.getAsFloat()), xsink);
             }
          },
@@ -2876,6 +2960,10 @@ public:
                discard(n.assign(n.getAsFloat()), xsink);
             }
          },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               discard(n.assign(n.getAsFloat()), xsink);
+            }
+         },
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(n.getAsFloat()), xsink);
             }
@@ -2920,6 +3008,10 @@ public:
          },
          {NT_BOOLEAN, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(new QoreNumberNode(n.getAsFloat())), xsink);
+            }
+         },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               discard(n.assign(new QoreNumberNode(n.getAsBigInt())), xsink);
             }
          },
       }, q_return_vec_t {{NT_NUMBER, true}}) {
@@ -2968,6 +3060,10 @@ public:
          },
          {NT_BOOLEAN, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(new QoreNumberNode(n.getAsFloat())), xsink);
+            }
+         },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               discard(n.assign(new QoreNumberNode(n.getAsBigInt())), xsink);
             }
          },
          {NT_NOTHING, nullptr},
@@ -3069,6 +3165,10 @@ public:
                discard(n.assign(n.getAsBool()), xsink);
             }
          },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               discard(n.assign(n.getAsBool()), xsink);
+            }
+         },
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(n.getAsBool()), xsink);
             }
@@ -3116,6 +3216,10 @@ public:
                discard(n.assign(n.getAsBool()), xsink);
             }
          },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               discard(n.assign(n.getAsBool()), xsink);
+            }
+         },
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(n.getAsBool()), xsink);
             }
@@ -3141,6 +3245,92 @@ protected:
    }
 };
 
+class QoreSoftCharTypeInfo : public QoreTypeInfo {
+public:
+   DLLLOCAL QoreSoftCharTypeInfo() : QoreTypeInfo("softchar", q_accept_vec_t {
+         {NT_CHAR, nullptr, true},
+         {NT_INT, [] (QoreValue& n, ExceptionSink* xsink) {
+               int64 i = n.getAsBigInt();
+               if (i < 0 || i > 0x10FFFF || !QoreValue::isValidCharCodepoint(static_cast<unsigned>(i))) {
+                  if (xsink) {
+                     xsink->raiseException("INVALID-CHAR-CONVERSION",
+                        "integer value " QLLD " cannot be converted to char; valid codepoints are 0..0x10FFFF", i);
+                  }
+                  return;
+               }
+               n.setChar(static_cast<unsigned>(i));
+            }
+         },
+         {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
+               QoreValue ch;
+               {
+                  QoreStringValueHelper str(n);
+                  ch = QoreValue::makeCharFromString(**str, xsink);
+               }
+               discard(n.assign(ch), xsink);
+            }
+         },
+      }, q_return_vec_t {{NT_CHAR, true}}) {
+   }
+
+protected:
+   DLLLOCAL virtual bool canConvertToScalarImpl() const {
+      return true;
+   }
+
+   DLLLOCAL virtual bool needsScanImpl() const {
+      return false;
+   }
+
+   DLLLOCAL virtual bool hasDefaultValueImpl() const {
+      return true;
+   }
+
+   DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
+      return QoreValue::makeChar(0);
+   }
+};
+
+class QoreSoftCharOrNothingTypeInfo : public QoreTypeInfo {
+public:
+   DLLLOCAL QoreSoftCharOrNothingTypeInfo() : QoreTypeInfo("*softchar", q_accept_vec_t {
+         {NT_CHAR, nullptr},
+         {NT_INT, [] (QoreValue& n, ExceptionSink* xsink) {
+               int64 i = n.getAsBigInt();
+               if (i < 0 || i > 0x10FFFF || !QoreValue::isValidCharCodepoint(static_cast<unsigned>(i))) {
+                  if (xsink) {
+                     xsink->raiseException("INVALID-CHAR-CONVERSION",
+                        "integer value " QLLD " cannot be converted to char; valid codepoints are 0..0x10FFFF", i);
+                  }
+                  return;
+               }
+               n.setChar(static_cast<unsigned>(i));
+            }
+         },
+         {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
+               QoreValue ch;
+               {
+                  QoreStringValueHelper str(n);
+                  ch = QoreValue::makeCharFromString(**str, xsink);
+               }
+               discard(n.assign(ch), xsink);
+            }
+         },
+         {NT_NOTHING, nullptr},
+         {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
+      }, q_return_vec_t {{NT_CHAR}, {NT_NOTHING}}) {
+   }
+
+protected:
+   DLLLOCAL virtual bool canConvertToScalarImpl() const {
+      return true;
+   }
+
+   DLLLOCAL virtual bool needsScanImpl() const {
+      return false;
+   }
+};
+
 class QoreSoftStringTypeInfo : public QoreTypeInfo {
 public:
    DLLLOCAL QoreSoftStringTypeInfo() : QoreTypeInfo("softstring", q_accept_vec_t {
@@ -3155,6 +3345,13 @@ public:
          },
          {NT_INT, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(new QoreStringNodeMaker(QLLD, n.getAsBigInt())), xsink);
+            }
+         },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               QoreStringNode* str = QoreValue::makeCharString(n.getChar(), QCS_UTF8, xsink);
+               if (!xsink || !*xsink) {
+                  discard(n.assign(str), xsink);
+               }
             }
          },
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3204,6 +3401,13 @@ public:
          },
          {NT_INT, [] (QoreValue& n, ExceptionSink* xsink) {
                discard(n.assign(new QoreStringNodeMaker(QLLD, n.getAsBigInt())), xsink);
+            }
+         },
+         {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
+               QoreStringNode* str = QoreValue::makeCharString(n.getChar(), QCS_UTF8, xsink);
+               if (!xsink || !*xsink) {
+                  discard(n.assign(str), xsink);
+               }
             }
          },
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3405,7 +3609,26 @@ protected:
 class QoreSoftAutoListTypeInfo : public QoreComplexSoftListTypeInfo {
 public:
     DLLLOCAL QoreSoftAutoListTypeInfo() : QoreComplexSoftListTypeInfo(q_accept_vec_t {
-            {QoreComplexListTypeSpec(autoTypeInfo), nullptr, true},
+            {QoreComplexSoftListTypeSpec(autoTypeInfo), [] (QoreValue& n, ExceptionSink* xsink) {
+                    switch (n.getType()) {
+                        case NT_LIST:
+                            break;
+                        case NT_NOTHING:
+                        case NT_NULL: {
+                            QoreListNode* l = new QoreListNode(autoTypeInfo);
+                            n.assign(l);
+                            break;
+                        }
+                        default: {
+                            QoreListNode* l = new QoreListNode(autoTypeInfo);
+                            l->push(n, nullptr);
+                            n.assign(l);
+                            break;
+                        }
+                    }
+                },
+                true
+            },
             {NT_NOTHING, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode(autoTypeInfo);
                     n.assign(l);
@@ -3423,7 +3646,7 @@ public:
                     n.assign(l);
                 }
             },
-        }, q_return_vec_t {{QoreComplexListTypeSpec(autoTypeInfo), true}}, QoreString("softlist<auto>")) {
+        }, q_return_vec_t {{QoreComplexSoftListTypeSpec(autoTypeInfo), true}}, QoreString("softlist<auto>")) {
         pname = tname;
    }
 };
@@ -3431,7 +3654,24 @@ public:
 class QoreSoftAutoListOrNothingTypeInfo : public QoreComplexSoftListTypeInfo {
 public:
     DLLLOCAL QoreSoftAutoListOrNothingTypeInfo() : QoreComplexSoftListTypeInfo(q_accept_vec_t {
-            {QoreComplexListTypeSpec(autoTypeInfo), nullptr},
+            {QoreComplexSoftListTypeSpec(autoTypeInfo), [] (QoreValue& n, ExceptionSink* xsink) {
+                    switch (n.getType()) {
+                        case NT_NOTHING:
+                            break;
+                        case NT_NULL:
+                            n.assignNothing();
+                            break;
+                        case NT_LIST:
+                            break;
+                        default: {
+                            QoreListNode* l = new QoreListNode(autoTypeInfo);
+                            l->push(n, nullptr);
+                            n.assign(l);
+                            break;
+                        }
+                    }
+                }
+            },
             {NT_NOTHING, nullptr},
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3440,7 +3680,7 @@ public:
                     n.assign(l);
                 }
             },
-        }, q_return_vec_t {{QoreComplexListTypeSpec(autoTypeInfo)}, {NT_NOTHING}}, QoreString("*softlist<auto>")) {
+        }, q_return_vec_t {{QoreComplexSoftListTypeSpec(autoTypeInfo)}, {NT_NOTHING}}, QoreString("*softlist<auto>")) {
         pname = tname;
     }
 };

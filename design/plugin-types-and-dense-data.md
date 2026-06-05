@@ -63,6 +63,8 @@ Implemented infrastructure includes:
 - process-global plugin registry and Qore-side `Qore::Reflection::PluginRegistry`
 - runtime helper dispatch for value/list helper ABIs
 - dense-buffer helper dispatch for raw numeric buffer helpers
+- reflected operation metadata for accepted LLVM codegen hooks and registered
+  lowering callbacks, so descriptor linters can verify optimization coverage
 - `PLUGIN_IMPORTS`, `PLUGIN_TYPE_REGISTRY`, and `PLUGIN_HELPER_REFS` QORD sections
 - serialized plugin value instances through `VT_PLUGIN_INSTANCE`
 - Program-local plugin fallback-site diagnostics
@@ -71,6 +73,7 @@ Implemented infrastructure includes:
   `QORE_PLUGIN_CROSS_TYPE_TRACE`, and `QORE_PLUGIN_QORD_TRACE`
 - `examples/plugins/sample-buffer/`
 - `examples/plugins/qore-plugin-lint`
+- `tools/plugin-type-verify.sh`
 
 ### IR, JIT, AOT, and LLVM Hooks
 
@@ -289,11 +292,16 @@ Before committing changes in this area:
 4. Update `doxygen/lang/900_release_notes.dox.tmpl`.
 5. Add or update tests in `modules/dataframe/test/dataframe.qtest`,
    `examples/test/qlib/DataProvider/`, or DBI module tests.
-6. Run targeted docs builds with `docs-lang-final-fast` and affected module
+6. Run `cmake --build <build-dir> --target plugin-type-verify-dataframe` for
+   the in-tree dataframe consumer. For other plugin consumers, run
+   `tools/plugin-type-verify.sh --module <name> --qtest <consumer.qtest>`.
+   Use `--strict-lint` for CI checks and `--require-llvm` only when every
+   registered operation is expected to provide an accepted LLVM hook.
+7. Run targeted docs builds with `docs-lang-final-fast` and affected module
    doc targets.
-7. Run targeted qtests in AST/IR/JIT/tiered modes when parser, type, IR, or
+8. Run targeted qtests in AST/IR/JIT/tiered modes when parser, type, IR, or
    plugin dispatch behavior changes.
-8. Run the dataframe benchmark suite when claiming performance improvements.
+9. Run the dataframe benchmark suite when claiming performance improvements.
 
 ## Public Compatibility Rules
 

@@ -142,7 +142,7 @@ public class LlmRequestClassifier {
                     repaired.error_detail ?? repaired.error_code);
         }
 
-        hash<auto> parsed = cast<hash<auto>>(repaired.value);
+        hash<auto> parsed = cast<hash>(repaired.value);
         hash<LlmRequestClassification> rv =
             normalizeClassification(parsed);
         rv.raw = parsed;

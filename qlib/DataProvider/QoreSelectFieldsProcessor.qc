@@ -128,12 +128,7 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
             }
             input_names{i.value} = True;
         }
-        foreach hash<auto> i in (field_map.pairIterator()) {
-            if (i.key != i.value && input_names{i.key}) {
-                return False;
-            }
-        }
-        return True;
+        return all $1.key == $1.value || !input_names{$1.key}, field_map.pairIterator();
     }
 
     #! Returns input fields in configured output order

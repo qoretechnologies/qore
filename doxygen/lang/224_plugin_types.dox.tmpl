@@ -202,18 +202,31 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     ./build/qore examples/plugins/qore-plugin-lint sample-buffer
     @endcode
 
+    For end-to-end consumer checks, \c tools/plugin-type-verify.sh builds and
+    runs the native plugin registry smoke test, runs the descriptor linter, and
+    can execute a module workload in AST, IR, JIT, and tiered modes with
+    \c QORE_PLUGIN_VERIFY=1:
+
+    @code
+tools/plugin-type-verify.sh --module dataframe \
+    --qtest modules/dataframe/test/dataframe.qtest
+
+cmake --build build --target plugin-type-verify-dataframe
+    @endcode
+
     \c examples/plugins/sample-buffer registers one sample type, a scalar
     \c add operation, and a \c DenseBufferBinary \c dense_add_i64 helper with
     cooperative cancellation. It demonstrates descriptor construction,
     \c QoreModuleInitContext::plugin_module_handle usage, lifecycle hooks,
     serializer callbacks, runtime-helper symbols, operation metadata, and a
-    parse-lowering hook that currently returns \c NotApplicable.
+    dense helper implementation with cancellation checks.
 
     \c examples/plugins/qore-plugin-lint loads a built module, reads committed
     descriptors through \c PluginRegistry, and reports hard descriptor errors
-    and advisory warnings. Use the C dry-run validator shown above for
-    module-local tests that can inspect descriptor tables before module init
-    commits them.
+    and advisory warnings. It can also fail CI on warnings, missing runtime
+    helper symbols, or missing accepted LLVM codegen hooks. Use the C dry-run
+    validator shown above for module-local tests that can inspect descriptor
+    tables before module init commits them.
 
     @section plugin_types_operation_metadata Operation Metadata
 
@@ -544,6 +557,9 @@ foreach string module_name in (registry.getProcessModules()) {
             op.secondary_type,
             op.return_type,
             op.helper_abi);
+        if (op.has_llvm_codegen) {
+            printf("    LLVM codegen hook accepted\n");
+        }
         if (op.fp_reassociation_allowed) {
             printf("    permits FP reassociation when %%fp-fast-math is enabled\n");
         }

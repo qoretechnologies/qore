@@ -2192,66 +2192,69 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
         bin->append(body, body_len);
     }
 
-    // Under stream_lock: store and register
-    AutoLocker al(stream_lock);
+    int64_t stream_id;
+    {
+        // Under stream_lock: store and register
+        AutoLocker al(stream_lock);
 
-    // Re-check state under stream_lock.  The lock-free state read at the
-    // top of this function races with setError() on the I/O thread: setError
-    // releases stream_lock between writing error_info and storing the
-    // CLOSED state, so a window exists where this thread sees the OK state,
-    // proceeds to build the request, and then arrives here only after the
-    // I/O thread has already drained stream_action via notifyPendingStreams.
-    // Without this re-check, our action would attach AFTER the drain - the
-    // future would never resolve, manifesting as a FUTURE-TIMEOUT in the
-    // caller (mgr.request -> q_future_get_blocking).  Surface the closure
-    // error eagerly instead.
-    if (h1_state.load(std::memory_order_acquire) == H1State::CLOSED) {
-        bin->deref(xsink);
-        std::string err_str = "HTTP1-CONNECTION-CLOSED";
-        std::string desc_str = "connection closed before request could be submitted";
-        if (error_info) {
-            QoreValue ev = error_info->getKeyValue("err");
-            QoreValue dv = error_info->getKeyValue("desc");
-            if (ev.getType() == NT_STRING) {
-                QoreStringValueHelper ev_str(ev);
-                err_str = ev_str->c_str();
+        // Re-check state under stream_lock.  The lock-free state read at the
+        // top of this function races with setError() on the I/O thread: setError
+        // releases stream_lock between writing error_info and storing the
+        // CLOSED state, so a window exists where this thread sees the OK state,
+        // proceeds to build the request, and then arrives here only after the
+        // I/O thread has already drained stream_action via notifyPendingStreams.
+        // Without this re-check, our action would attach AFTER the drain - the
+        // future would never resolve, manifesting as a FUTURE-TIMEOUT in the
+        // caller (mgr.request -> q_future_get_blocking).  Surface the closure
+        // error eagerly instead.
+        if (h1_state.load(std::memory_order_acquire) == H1State::CLOSED) {
+            bin->deref(xsink);
+            std::string err_str = "HTTP1-CONNECTION-CLOSED";
+            std::string desc_str = "connection closed before request could be submitted";
+            if (error_info) {
+                QoreValue ev = error_info->getKeyValue("err");
+                QoreValue dv = error_info->getKeyValue("desc");
+                if (ev.getType() == NT_STRING) {
+                    QoreStringValueHelper ev_str(ev);
+                    err_str = ev_str->c_str();
+                }
+                if (dv.getType() == NT_STRING) {
+                    QoreStringValueHelper dv_str(dv);
+                    desc_str = dv_str->c_str();
+                }
             }
-            if (dv.getType() == NT_STRING) {
-                QoreStringValueHelper dv_str(dv);
-                desc_str = dv_str->c_str();
-            }
+            action->deref(xsink);
+            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            return -1;
         }
-        action->deref(xsink);
-        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
-        return -1;
-    }
 
-    // Capacity check
-    if (max_streams && active_stream_count >= max_streams) {
-        bin->deref(xsink);
-        action->deref(xsink);
-        xsink->raiseException("HTTP1-CAPACITY-ERROR",
-            "connection at capacity: %d/%d streams",
-            active_stream_count, max_streams);
-        return -1;
-    }
+        // Capacity check
+        if (max_streams && active_stream_count >= max_streams) {
+            bin->deref(xsink);
+            action->deref(xsink);
+            xsink->raiseException("HTTP1-CAPACITY-ERROR",
+                "connection at capacity: %d/%d streams",
+                active_stream_count, max_streams);
+            return -1;
+        }
 
-    int64_t stream_id = ++next_stream_id;
-    if (completed_channel_action) {
-        completed_channel_action->deref(xsink);
-        completed_channel_action = nullptr;
-        completed_sid = 0;
+        stream_id = ++next_stream_id;
+        if (completed_channel_action) {
+            completed_channel_action->deref(xsink);
+            completed_channel_action = nullptr;
+            completed_sid = 0;
+        }
+        stream_action = action;  // takes ownership
+        ++active_stream_count;
+        active_sid = (int)stream_id;
+        active_method = method;
+        streaming_active = streaming;
+        streaming_send = streaming_send_flag;
+        if (pending_request_data) {
+            pending_request_data->deref(xsink);
+        }
+        pending_request_data = bin;
     }
-    stream_action = action;  // takes ownership
-    ++active_stream_count;
-    active_sid = (int)stream_id;
-    active_method = method;
-    streaming_active = streaming;
-    streaming_send = streaming_send_flag;
-    if (pending_request_data) {
-        pending_request_data->deref(xsink);
-    }
-    pending_request_data = bin;
 
     return stream_id;
 }

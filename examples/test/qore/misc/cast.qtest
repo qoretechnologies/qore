@@ -151,13 +151,6 @@ class CastingTest inherits QUnit::Test {
         }
 
         {
-            hash<auto> h0 = {};
-            auto h = h0;
-            cast<hash<auto>>(h).a = 1;
-            assertEq("hash<auto>", h.fullType());
-        }
-
-        {
             hash<StatInfo> h0 = <StatInfo>{};
             auto h = h0;
             cast<hash<StatInfo>>(h).size = 1;
@@ -227,6 +220,10 @@ class CastingTest inherits QUnit::Test {
 
         assertEq("hash<string, auto>", cast<hash<auto!>>({}).fullType());
         assertEq("list<auto>", cast<list<auto!>>(()).fullType());
+        assertEq((1,), cast<softlist<auto>>(1));
+        assertEq((), cast<softlist<auto>>(NOTHING));
+        assertEq((), cast<softlist<auto>>(NULL));
+        assertNothing(cast<*softlist<auto>>(NOTHING));
         assertEq(1, cast<auto!>(1));
         assertEq(1, cast<int>("1"));
         assertEq("1", cast<string>(1));
@@ -242,6 +239,30 @@ class CastingTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             p.parse("sub t() { auto x = cast<hash<auto!>>({}); auto y = cast<list<auto!>>(()); "
                 "auto z = cast<auto!>(1); }", "");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "not a coercion", \p.parse(),
+                ("sub t() { auto x = cast<hash<auto>>({}); }", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "not a coercion", \p.parse(),
+                ("sub t() { auto x = cast<hash<string, auto>>({}); }", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "not a coercion", \p.parse(),
+                ("sub t() { auto x = cast<list<auto>>(()); }", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "not a coercion", \p.parse(),
+                ("sub t() { auto x = cast<*list<auto>>(NOTHING); }", ""));
         }
 
         {

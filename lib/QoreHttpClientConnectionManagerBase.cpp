@@ -161,7 +161,7 @@ std::string HttpClientConnectionManagerBase::poolKey(const char* host, int port)
 // ============================================================
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
-        const std::string& key) {
+        const std::string& key, bool streaming_send) {
     auto it = pool_.find(key);
     if (it == pool_.end()) {
         return nullptr;
@@ -188,7 +188,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
             if (conn->getProtocol() != HttpClientProtocol::H2) {
                 continue;
             }
-            if (conn->tryReserveStream()) {
+            if (conn->tryReserveStream(streaming_send)) {
                 return conn;
             }
         }
@@ -200,7 +200,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
             if (conn->getProtocol() == HttpClientProtocol::H2) {
                 continue;  // already tried above
             }
-            if (conn->tryReserveStream()) {
+            if (conn->tryReserveStream(streaming_send)) {
                 return conn;
             }
         }
@@ -212,7 +212,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
         if (conn->isClosed() || conn->isDraining()) {
             continue;
         }
-        if (conn->tryReserveStream()) {
+        if (conn->tryReserveStream(streaming_send)) {
             return conn;
         }
     }
@@ -292,7 +292,19 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true, xsink);
+    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true,
+        /*streaming_send=*/false, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForStreamingSend(
+        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase",
+        "acquireConnectionForStreamingSend", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true,
+        /*streaming_send=*/true, xsink);
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
@@ -301,12 +313,13 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsyn
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/false, xsink);
+    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/false,
+        /*streaming_send=*/false, xsink);
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl(
         const char* scheme, const char* host, int port,
-        bool wait_for_ready, ExceptionSink* xsink) {
+        bool wait_for_ready, bool streaming_send, ExceptionSink* xsink) {
     // All three protocols (H1, H2, H3) are supported as of Phase P5.
 
     // Drain any deferred derefs from onConnectionClosed.  Safe here
@@ -326,7 +339,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                     "connection manager is shutting down");
                 return nullptr;
             }
-            HttpClientConnectionBase* live = findReusableLocked(key);
+            HttpClientConnectionBase* live = findReusableLocked(key, streaming_send);
             if (live) {
                 return live;
             }
@@ -400,7 +413,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             // Pass the out-vector so max-age-expired conns are collected
             // for close-after-lock-drop instead of being kept in the pool.
             evictDeadLocked(key, &max_age_evicted);
-            live_to_return = findReusableLocked(key);
+            live_to_return = findReusableLocked(key, streaming_send);
 
             // Capacity check
             if (!live_to_return && opts_.max_connections_per_host) {
@@ -454,7 +467,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             observed_protocols_.fetch_or(
                 1u << static_cast<unsigned>(conn_raw->getProtocol()),
                 std::memory_order_release);
-            reserved = conn_raw->tryReserveStream();
+            reserved = conn_raw->tryReserveStream(streaming_send);
         }
 
         // The newly-created connection has 0 active streams and 0

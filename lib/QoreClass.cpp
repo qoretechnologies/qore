@@ -105,6 +105,9 @@ int qore_method_private::parseInit() {
             if (func->checkFinal() && !err) {
                 err = -1;
             }
+            if (func->checkConstOverrides() && !err) {
+                err = -1;
+            }
         }
     }
 
@@ -164,6 +167,10 @@ AbstractMethod::~AbstractMethod() {
         i.second->deref();
 }
 
+static bool method_const_contract_satisfied(const MethodVariantBase* required, const MethodVariantBase* candidate) {
+    return !required->isConstMethod() || candidate->isConstMethod();
+}
+
 int AbstractMethod::parseCommit() {
     if (check_parse) {
         check_parse = false;
@@ -202,7 +209,13 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, bool committed) {
         if (pending_save.find(sig) != pending_save.end()) {
             continue;
         }
-        if (vlist.find(sig) != vlist.end()) {
+        vmap_t::iterator vi = vlist.find(sig);
+        if (vi != vlist.end()) {
+            if (i.second->isConstMethod() && !vi->second->isConstMethod()) {
+                vi->second->deref();
+                i.second->ref();
+                vi->second = i.second;
+            }
             continue;
         }
         //printd(5, "AbstractMethod::parseMergeBase(m: %p) this: %p adding to vlist from parent: '%s'\n", &m, this, sig);
@@ -245,7 +258,13 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bo
         if (pending_save.find(sig) != pending_save.end()) {
             continue;
         }
-        if (vlist.find(sig) != vlist.end()) {
+        vmap_t::iterator vi = vlist.find(sig);
+        if (vi != vlist.end()) {
+            if (i.second->isConstMethod() && !vi->second->isConstMethod()) {
+                vi->second->deref();
+                i.second->ref();
+                vi->second = i.second;
+            }
             continue;
         }
         //printd(5, "AbstractMethod::parseMergeBase(m: %p, f: %p %s::%s) this: %p adding to vlist from parent: "
@@ -259,8 +278,15 @@ void AbstractMethod::parseAdd(MethodVariantBase* v) {
     // see if there is already an committed variant matching this signature
     // in this case it must be inherited
     const char* sig = v->getAbstractSignature();
-    if (vlist.find(sig) != vlist.end())
+    vmap_t::iterator vi = vlist.find(sig);
+    if (vi != vlist.end()) {
+        if (v->isConstMethod() && !vi->second->isConstMethod()) {
+            vi->second->deref();
+            v->ref();
+            vi->second = v;
+        }
         return;
+    }
     //printd(5, "AbstractMethod::parseAdd(v: %p) this: %p (%s) new\n", v, this, sig);
 
     // already referenced for "normal" insertion, ref again for abstract method insertion
@@ -278,6 +304,9 @@ void AbstractMethod::parseOverride(MethodVariantBase* v) {
     const char* sig = v->getAbstractSignature();
     vmap_t::iterator vi = vlist.find(sig);
     if (vi != vlist.end()) {
+        if (!method_const_contract_satisfied(vi->second, v)) {
+            return;
+        }
         pending_save.insert(vmap_t::value_type(sig, vi->second));
 
         // move from vlist to pending_save
@@ -291,8 +320,15 @@ void AbstractMethod::add(MethodVariantBase* v) {
     // see if there is already an committed variant matching this signature
     // in this case it must be inherited
     const char* sig = v->getAbstractSignature();
-    if (vlist.find(sig) != vlist.end())
+    vmap_t::iterator vi = vlist.find(sig);
+    if (vi != vlist.end()) {
+        if (v->isConstMethod() && !vi->second->isConstMethod()) {
+            vi->second->deref();
+            v->ref();
+            vi->second = v;
+        }
         return;
+    }
     // already referenced for "normal" insertion, ref again for abstract method insertion
     v->ref();
     vlist.insert(vmap_t::value_type(sig, v));
@@ -313,6 +349,9 @@ void AbstractMethod::override(MethodVariantBase* v) {
     const char* sig = v->getAbstractSignature();
     vmap_t::iterator vi = vlist.find(sig);
     if (vi != vlist.end()) {
+        if (!method_const_contract_satisfied(vi->second, v)) {
+            return;
+        }
         vi->second->deref();
 
         vlist.erase(vi);
@@ -328,8 +367,8 @@ void AbstractMethod::checkAbstract(const char* cname, const char* mname, vmap_t&
         }
         for (auto& vi : vlist) {
             MethodVariantBase* v = vi.second;
-            desc->sprintf("\n * abstract %s %s::%s(%s)", QoreTypeInfo::getName(v->getReturnTypeInfo()), cname, mname,
-                v->getSignature()->getSignatureText());
+            desc->sprintf("\n * abstract %s %s::%s(%s)%s", QoreTypeInfo::getName(v->getReturnTypeInfo()), cname,
+                mname, v->getSignature()->getSignatureText(), v->isConstMethod() ? " const" : "");
         }
     }
 }
@@ -4571,11 +4610,34 @@ void QoreClass::addMethod(const char* nme, q_method_t m, ClassAccess access, int
         typeList, defaultArgList, nameList));
 }
 
+void QoreClass::addConstMethod(const char* nme, q_method_t m, ClassAccess access, int64 flags, int64 domain,
+        const QoreTypeInfo* returnTypeInfo, unsigned num_params, ...) {
+    type_vec_t typeList;
+    arg_vec_t defaultArgList;
+    name_vec_t nameList;
+    if (num_params) {
+        va_list args;
+        va_start(args, num_params);
+        qore_process_params(num_params, typeList, defaultArgList, nameList, args);
+        va_end(args);
+    }
+
+    priv->addBuiltinMethod(nme, new BuiltinNormalMethodValueVariant(m, access, false, flags, domain, returnTypeInfo,
+        typeList, defaultArgList, nameList, true));
+}
+
 void QoreClass::addMethod(const void* ptr, const char* nme, q_external_method_t m, ClassAccess access, int64 flags,
         int64 domain, const QoreTypeInfo* returnTypeInfo, const type_vec_t& typeList, const arg_vec_t& defaultArgList,
         const name_vec_t& nameList) {
     priv->addBuiltinMethod(nme, new BuiltinExternalNormalMethodValueVariant(ptr, m, access, false, flags, domain,
         returnTypeInfo, typeList, defaultArgList, nameList));
+}
+
+void QoreClass::addConstMethod(const void* ptr, const char* nme, q_external_method_t m, ClassAccess access,
+        int64 flags, int64 domain, const QoreTypeInfo* returnTypeInfo, const type_vec_t& typeList,
+        const arg_vec_t& defaultArgList, const name_vec_t& nameList) {
+    priv->addBuiltinMethod(nme, new BuiltinExternalNormalMethodValueVariant(ptr, m, access, false, flags, domain,
+        returnTypeInfo, typeList, defaultArgList, nameList, true));
 }
 
 void QoreClass::addStaticMethod(const char* nme, q_func_t m, ClassAccess access, int64 flags, int64 domain,
@@ -4640,11 +4702,35 @@ void QoreClass::addAbstractMethod(const char *n_name, ClassAccess access, int64 
         defaultArgList, nameList));
 }
 
+void QoreClass::addConstAbstractMethod(const char* n_name, ClassAccess access, int64 n_flags,
+        const QoreTypeInfo* returnTypeInfo, unsigned num_params, ...) {
+    type_vec_t typeList;
+    arg_vec_t defaultArgList;
+    name_vec_t nameList;
+    if (num_params) {
+        va_list args;
+        va_start(args, num_params);
+        qore_process_params(num_params, typeList, defaultArgList, nameList, args);
+        va_end(args);
+    }
+    //printd(5, "QoreClass::addConstAbstractMethod() %s::%s() num_params: %d\n", getName(), n_name, num_params);
+
+    priv->addBuiltinMethod(n_name, new BuiltinAbstractMethodVariant(access, n_flags, returnTypeInfo, typeList,
+        defaultArgList, nameList, true));
+}
+
 void QoreClass::addAbstractMethod(const char* n_name, ClassAccess access, int64 n_flags,
         const QoreTypeInfo* returnTypeInfo, const type_vec_t& typeList, const arg_vec_t& defaultArgList,
         const name_vec_t& nameList) {
     priv->addBuiltinMethod(n_name, new BuiltinAbstractMethodVariant(access, n_flags, returnTypeInfo, typeList,
         defaultArgList, nameList));
+}
+
+void QoreClass::addConstAbstractMethod(const char* n_name, ClassAccess access, int64 n_flags,
+        const QoreTypeInfo* returnTypeInfo, const type_vec_t& typeList, const arg_vec_t& defaultArgList,
+        const name_vec_t& nameList) {
+    priv->addBuiltinMethod(n_name, new BuiltinAbstractMethodVariant(access, n_flags, returnTypeInfo, typeList,
+        defaultArgList, nameList, true));
 }
 
 // sets a builtin function as class destructor - no duplicate checking is made
@@ -5748,6 +5834,57 @@ int MethodFunctionBase::checkFinal() const {
     return 0;
 }
 
+static const MethodVariantBase* find_method_variant_by_signature(const vlist_t& vlist,
+        const AbstractFunctionSignature* sig) {
+    for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
+        const MethodVariantBase* v = METHVB_const(*i);
+        if (v->getSignature() == sig) {
+            return v;
+        }
+    }
+    return nullptr;
+}
+
+int MethodFunctionBase::checkConstOverrides() const {
+    if (vlist.empty()) {
+        return 0;
+    }
+
+    ilist_t::const_iterator i = ilist.begin(), e = ilist.end();
+    ++i;
+    for (; i != e; ++i) {
+        const MethodFunctionBase* m = METHFB_const((*i).func);
+        for (vlist_t::const_iterator vi = m->vlist.begin(), ve = m->vlist.end(); vi != ve; ++vi) {
+            const MethodVariantBase* base_variant = METHVB_const(*vi);
+            if (!base_variant->isConstMethod()) {
+                continue;
+            }
+
+            const AbstractFunctionSignature* child_sig = nullptr;
+            int rc = parseCompareResolvedSignature(vlist, base_variant->getSignature(), child_sig);
+            if (rc == QTI_NOT_EQUAL) {
+                continue;
+            }
+
+            const MethodVariantBase* child_variant = find_method_variant_by_signature(vlist, child_sig);
+            if (!child_variant || child_variant->isConstMethod()) {
+                continue;
+            }
+
+            const UserSignature* usig = dynamic_cast<const UserSignature*>(child_variant->getSignature());
+            const QoreProgramLocation* loc = usig ? usig->getParseLocation() : &loc_builtin;
+            parseException(*loc, "CONST-METHOD-ERROR",
+                "child class method %s::%s(%s) cannot override const parent class method %s::%s(%s) "
+                "without repeating const", qc->getName(), getName(),
+                child_variant->getSignature()->getSignatureText(), m->qc->getName(), getName(),
+                base_variant->getSignature()->getSignatureText());
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 void MethodFunctionBase::addBuiltinMethodVariant(MethodVariantBase* variant) {
     ClassAccess ma = variant->getAccess();
     if (access > ma) {
@@ -5873,8 +6010,9 @@ MethodVariantBase* MethodFunctionBase::parseHasVariantWithSignature(MethodVarian
     AbstractFunctionSignature& sig = *(v->getSignature());
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         (*i)->parseResolveUserSignature();
-        if ((*i)->isSignatureIdentical(sig, relaxed_match)) {
-            return reinterpret_cast<MethodVariantBase*>(*i);
+        MethodVariantBase* candidate = reinterpret_cast<MethodVariantBase*>(*i);
+        if (candidate->isSignatureIdentical(sig, relaxed_match) && method_const_contract_satisfied(v, candidate)) {
+            return candidate;
         }
     }
     return nullptr;
@@ -5909,8 +6047,9 @@ bool MethodFunctionBase::parseHasAmbiguousSignature(const MethodFunctionBase& ot
 MethodVariantBase* MethodFunctionBase::runtimeHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match) const {
     AbstractFunctionSignature& sig = *(v->getSignature());
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
-        if ((*i)->isSignatureIdentical(sig, relaxed_match)) {
-            return reinterpret_cast<MethodVariantBase*>(*i);
+        MethodVariantBase* candidate = reinterpret_cast<MethodVariantBase*>(*i);
+        if (candidate->isSignatureIdentical(sig, relaxed_match) && method_const_contract_satisfied(v, candidate)) {
+            return candidate;
         }
     }
     return nullptr;

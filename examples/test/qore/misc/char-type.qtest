@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CharTypeTest
+
+class CharTypeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Char type test", "1.0") {
+        addTestCase("Char literals and pseudo-methods", \testCharLiterals());
+        addTestCase("Char conversions and operators", \testCharConversions());
+        addTestCase("String index char behavior", \testStringIndex());
+        addTestCase("String char iteration", \testStringIteration());
+        addTestCase("Char parse options", \testParseOptions());
+        set_return_value(main());
+    }
+
+    testCharLiterals() {
+        char a = c'A';
+        char nl = c'\n';
+        char apos = c"'";
+        char quote = c'"';
+        char e = c'\u{E9}';
+        char smile = c'\u{1F600}';
+
+        assertEq(NT_CHAR, a.typeCode(), "type code");
+        assertEq("char", a.type(), "type name");
+        assertEq(65, a.ord(), "ASCII ord");
+        assertEq(65, a.getUnicode(), "ASCII getUnicode alias");
+        assertEq(10, nl.ord(), "escaped newline ord");
+        assertEq(39, apos.ord(), "double-quoted apostrophe ord");
+        assertEq(34, quote.ord(), "single-quoted double quote ord");
+        assertEq(233, e.ord(), "braced Unicode escape ord");
+        assertEq(233, e.getUnicode(), "braced Unicode getUnicode alias");
+        assertEq(0x1F600, smile.ord(), "supplementary codepoint ord");
+        assertEq(0x1F600, smile.getUnicode(), "supplementary getUnicode alias");
+
+        assertEq("A", a.toString(), "char to string");
+        assertTrue(a.val(), "char values are truthy");
+        assertTrue(a.charp(), "charp");
+        assertTrue(a.intp(), "intp");
+        assertTrue(a.strp(), "strp");
+        assertEq(1, a.length(), "length");
+        assertEq(2, e.size(), "UTF-8 size");
+        assertEq(4, smile.utf8ByteLen(), "supplementary UTF-8 size");
+        assertEq("a", a.lwr(), "lower-case string view");
+        assertEq("A", c'a'.upr(), "upper-case string view");
+    }
+
+    testCharConversions() {
+        char a = c'A';
+        char z = cast<char>("Z");
+        char x = cast<char>(120);
+        string s = a;
+
+        assertEq("A", s, "implicit char to string assignment");
+        assertEq(90, z.ord(), "string to char cast");
+        assertEq(120, x.ord(), "integer to char cast");
+        assertEq(66, a + 1, "char plus int");
+        assertEq(1, c'b' - c'a', "char minus char");
+        assertEq(130, c'A' * 2, "char multiplication");
+        assertEq(2, c'd' / 50, "char division");
+        assertTrue(c'a' < c'b', "char comparison");
+        assertTrue(c'A' == "A", "char string equality");
+        assertTrue(c'A' == 65, "char integer equality");
+        assertFalse(c'A' !~ /^A$/, "char regex negative match converts to string");
+        assertTrue(c'A' !~ /^B$/, "char regex negative non-match converts to string");
+
+        assertThrows("INVALID-CHAR-CONVERSION", sub() { char c = cast<char>("ab"); }, NOTHING,
+            "multi-character string cast");
+        assertThrows("INVALID-CHAR-CONVERSION", sub() { char c = cast<char>(0x110000); }, NOTHING,
+            "out-of-range codepoint cast");
+
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(),
+            ("char sub t(string s) { return s; }", "implicit-string-to-char"));
+    }
+
+    testStringIndex() {
+        string s = "A\u{E9}\u{1F600}";
+
+        char a = s[0];
+        char e = s[1];
+        char smile = s[2];
+        *char missing = s[9];
+
+        assertEq(65, a.ord(), "indexed ASCII char");
+        assertEq(233, e.ord(), "indexed BMP char");
+        assertEq(0x1F600, smile.ord(), "indexed supplementary char");
+        assertEq(65, s[0].getUnicode(), "indexed ASCII char getUnicode compatibility");
+        assertEq(233, s[1].getUnicode(), "indexed BMP char getUnicode compatibility");
+        assertEq(0x1F600, s[2].getUnicode(), "indexed supplementary char getUnicode compatibility");
+        assertNothing(missing, "out-of-range string index");
+        assertEq("\u{E9}\u{1F600}", s[1..2], "range string index remains string");
+        assertEq("A\u{1F600}", s[0, 2], "list string index remains string");
+
+        int switch_match;
+        switch (s[0]) {
+            case "A":
+                switch_match = 1;
+                break;
+            default:
+                switch_match = -1;
+                break;
+        }
+        assertEq(1, switch_match, "char switch matches one-character string case");
+
+        switch ("A") {
+            case c'A':
+                switch_match = 2;
+                break;
+            default:
+                switch_match = -1;
+                break;
+        }
+        assertEq(2, switch_match, "string switch matches char case");
+
+        switch (s[1]) {
+            case "\u{E9}":
+                switch_match = 3;
+                break;
+            default:
+                switch_match = -1;
+                break;
+        }
+        assertEq(3, switch_match, "non-ASCII char switch matches one-character string case");
+
+        switch (s[0]) {
+            case "AA":
+                switch_match = -1;
+                break;
+            default:
+                switch_match = 4;
+                break;
+        }
+        assertEq(4, switch_match, "char switch does not match multi-character string case");
+
+        Program p(new ParseOptions(names: ("new-style", "no-string-index-char")));
+        p.parse("string sub t() { return \"abc\"[1]; }", "legacy-string-index");
+        assertEq("b", p.callFunction("t"), "legacy single string index");
+    }
+
+    testStringIteration() {
+        string s = "A\u{E9}\u{1F600}";
+
+        assertEq((65, 233, 0x1F600), map $1.ord(), s.iterator(), "<string>::iterator chars");
+        assertEq((65, 233, 0x1F600), map $1.ord(), (iterate s), "iterate string chars");
+        assertEq((65, 233, 0x1F600), map $1, s.codePointIterator(), "codePointIterator stays integer");
+        assertEq(("A", "\u{E9}", "\u{1F600}"), map $1, s.splitChars(), "splitChars stays string");
+        assertEq("object<StringIterator>", s.iterator().fullType(), "StringIterator full type");
+    }
+
+    testParseOptions() {
+        ParseOptions opts = new ParseOptions(names: ("no-char-type", "no-string-index-char"));
+        assertTrue(opts.hasAll(name: "no-char-type"), "no-char-type option name");
+        assertTrue(opts.hasAll(name: "no-string-index-char"), "no-string-index-char option name");
+
+        Program p(new ParseOptions(names: ("new-style", "no-char-type")));
+        assertThrows("PARSE-EXCEPTION", \p.parse(),
+            ("char sub t() { return c'A'; }", "no-char-type"));
+    }
+}

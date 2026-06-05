@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/reflection"
+%requires QUnit
+%requires FsUtil
+%requires reflection
+
+%exec-class AOTReadonlyConstBindingsTest
+
+class AOTReadonlyConstBindingsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string reflection_module_dir;
+    }
+
+    constructor() : QUnit::Test("AOTReadonlyConstBindingsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        reflection_module_dir = ENV.QORE_REFLECTION_MODULE_DIR
+            ?? get_script_dir() + "/../../../build/modules/reflection";
+
+        addTestCase("AOT qmod preserves readonly binding metadata and execution",
+            \testAOTQmodReadonlyBindings());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTReadonlyConstBindingsMod {
+    version = \"1.0\";
+    desc = \"AOT readonly const binding regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTReadonlyConstBindingsMod {
+    public class Probe {
+        public int value(const int x) const {
+            return x + 3;
+        }
+    }
+
+    public int sub readonlyParam(const int value) {
+        return value + 1;
+    }
+
+    public code<int()> sub makeClosure(int value) {
+        const int captured = value + 2;
+        return int sub() {
+            return captured;
+        };
+    }
+
+    public int sub verifyLoopLocals() {
+        int total = 0;
+        foreach int i in ((1, 2, 3)) {
+            const int local = i;
+            total += local;
+        }
+        return total;
+    }
+
+    public int sub verify() {
+        const list<int> values = (1, 2);
+        Probe probe = new Probe();
+        return verifyLoopLocals() + readonlyParam(values[0]) + makeClosure(values[1])() + probe.value(5);
+    }
+}
+";
+    }
+
+    private string modulePath(string module_dir) {
+        string path = module_dir + ":" + reflection_module_dir;
+        string cur = ENV.QORE_MODULE_DIR ?? "";
+        return cur == "" ? path : path + ":" + cur;
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, modulePath(module_dir), qore_bin, script_path));
+    }
+
+    testAOTQmodReadonlyBindings() {
+        TmpDir tmp("qore-aot-readonly-const-bindings-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        mkdir(qo_dir);
+
+        string qm_path = src_dir + "/AOTReadonlyConstBindingsMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern
+%requires reflection
+%requires AOTReadonlyConstBindingsMod
+printf(\"%d\\n%s\\n%s\\n\", AOTReadonlyConstBindingsMod::verify(),
+    Function::forName(\"AOTReadonlyConstBindingsMod::readonlyParam\").getVariants()[0].toString(),
+    Class::forName(\"AOTReadonlyConstBindingsMod::Probe\").getMethod(\"value\").getVariants()[0].toString());
+");
+        script.close();
+
+        string qmod_path = qmod_dir + "/AOTReadonlyConstBindingsMod.qmod";
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -m --strip-source -o %s %s 2>&1",
+            libqore_dir, qcc_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled readonly-binding module: " + compile_out);
+
+        string expected = "20\npublic int readonlyParam(const int value)\n"
+            "public int Probe::value(const int x) const\n";
+        assertEq(expected, runModule(src_dir, script_path),
+            "source module preserves readonly binding semantics and reflection metadata");
+        assertEq(expected, runModule(qmod_dir, script_path),
+            "AOT qmod preserves readonly binding semantics and reflection metadata");
+
+        string qcc_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -c --output-dir=%s %s 2>&1",
+            libqore_dir, modulePath(qmod_dir), qcc_bin, qo_dir, script_path));
+        assertTrue(is_file(qo_dir + "/run.qo"),
+            "qcc compile-only consumer accepts readonly metadata from AOT qmod: " + qcc_out);
+    }
+}

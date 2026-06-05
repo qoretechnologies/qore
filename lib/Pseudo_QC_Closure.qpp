@@ -49,6 +49,6 @@ switch (c.typeCode()) {
 }
     @endcode
 */
-int <closure>::typeCode() [flags=CONSTANT] {
+int <closure>::typeCode() [const;flags=CONSTANT] {
    return NT_RUNTIME_CLOSURE;
 }

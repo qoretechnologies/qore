@@ -277,6 +277,9 @@ public namespace FsUtil {
 
         # return everything without the extension
         int ext_start = bn.length() - extension.length();
+        if (!ext_start) {
+            return "";
+        }
         return bn[..ext_start - 1];
 
     }

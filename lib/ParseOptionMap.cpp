@@ -117,6 +117,23 @@ void ParseOptionMap::static_init() {
     DO_MAP("no-summarize",             QoreParseOptions::NO_SUMMARIZE);
     DO_MAP("no-module-path-directives", QoreParseOptions::NO_MODULE_PATH_DIRECTIVES);
     DO_MAP("fp-fast-math",             QoreParseOptions::FP_FAST_MATH);
+    DO_MAP("no-iterate",               QoreParseOptions::NO_ITERATE);
+    DO_MAP("no-first",                 QoreParseOptions::NO_FIRST);
+    DO_MAP("no-any-operator",          QoreParseOptions::NO_ANY_OPERATOR);
+    DO_MAP("no-all-operator",          QoreParseOptions::NO_ALL_OPERATOR);
+    DO_MAP("no-count",                 QoreParseOptions::NO_COUNT);
+    DO_MAP("no-take",                  QoreParseOptions::NO_TAKE);
+    DO_MAP("no-drop",                  QoreParseOptions::NO_DROP);
+    DO_MAP("no-takewhile",             QoreParseOptions::NO_TAKEWHILE);
+    DO_MAP("no-takeuntil",             QoreParseOptions::NO_TAKEUNTIL);
+    DO_MAP("no-find-modifiers",        QoreParseOptions::NO_FIND_MODIFIERS);
+    DO_MAP("no-stream-fusion",         QoreParseOptions::NO_STREAM_FUSION);
+    DO_MAP("streaming-any",            QoreParseOptions::STREAMING_ANY);
+    DO_MAP("no-char-type",             QoreParseOptions::NO_CHAR_TYPE);
+    DO_MAP("no-string-index-char",     QoreParseOptions::NO_STRING_INDEX_CHAR);
+    DO_MAP("negative-offsets",         PO_NEGATIVE_OFFSETS);
+    DO_MAP("no-streaming-operators",   QoreParseOptions::NO_STREAMING_OPERATORS);
+    DO_MAP("broken-auto-cast",         QoreParseOptions::BROKEN_AUTO_CAST);
 
     // the following are not useful from the command-line
     //DO_MAP("no-user-constants",        PO_NO_INHERIT_USER_CONSTANTS);

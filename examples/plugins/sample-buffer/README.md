@@ -20,6 +20,13 @@ QORE_MODULE_DIR=build/modules/reflection:build/examples/plugins/sample-buffer \
     ./build/qore examples/plugins/qore-plugin-lint sample-buffer
 ```
 
+Or run the plugin-type verification smoke and linter together:
+
+```sh
+tools/plugin-type-verify.sh --module sample-buffer \
+    --module-ref build/examples/plugins/sample-buffer/sample-buffer-api-*.qmod
+```
+
 The type currently uses `auto` as its reflected Qore type because native
 plugin value instances are still reserved for a later implementation pass. The
 module is still useful as a complete reference for descriptor construction,

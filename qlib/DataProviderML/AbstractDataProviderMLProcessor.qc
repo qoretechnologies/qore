@@ -342,7 +342,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
                 || shape == DataProvider::DataProviderShape::RowRecords || data.typeCode() != NT_HASH) {
             return data;
         }
-        return DataProvider::AbstractDataProcessor::convertHashListResultShape(cast<hash<auto>>(data),
+        return DataProvider::AbstractDataProcessor::convertHashListResultShape(cast<hash>(data),
             cast<enum<DataProvider::DataProviderShape>>(shape));
     }
 

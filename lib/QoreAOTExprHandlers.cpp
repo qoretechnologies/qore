@@ -91,11 +91,13 @@
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/QoreQuestionMarkOperatorNode.h"
 #include "qore/intern/QoreFoldlOperatorNode.h"
+#include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreMapOperatorNode.h"
 #include "qore/intern/QoreMapSelectOperatorNode.h"
 #include "qore/intern/QoreHashMapOperatorNode.h"
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
+#include "qore/intern/QoreStreamingOperatorNode.h"
 #include "qore/intern/QoreElementsOperatorNode.h"
 #include "qore/intern/QoreDeleteOperatorNode.h"
 #include "qore/intern/QoreRemoveOperatorNode.h"
@@ -878,8 +880,20 @@ static QoreValue read_expr_global_varref(AOTExprReadCtx& ctx) {
     }
     Var* gvar = resolve_global_varref_payload(index_str, ctx.pgm, ctx.globals, ctx.num_globals);
     if (!gvar) {
-        ctx.error = "cannot resolve global variable reference '" + std::string(index_str)
-            + "' while deserializing native AOT expression";
+        // A numeric slot reference that fails to resolve indicates genuine
+        // corruption: the slot must exist in the supplied globals[] array, so
+        // keep that a hard error.  A "name:"-keyed reference, however, may
+        // simply not be registered yet -- globals declared with `our` in the
+        // not-yet-committed target source (e.g. Qorus's `our hash Qorus`) are
+        // not present in the root namespace during sibling .qo
+        // cross-resolution, which only builds shells sufficient for the
+        // following parseCommit().  Such references are bound when the
+        // declaring fragment is committed/loaded; defer here (return NOTHING)
+        // rather than aborting the whole cross-resolution pass.
+        if (is_numeric_global_slot_ref(index_str)) {
+            ctx.error = "cannot resolve global variable slot reference '" + std::string(index_str)
+                + "' while deserializing native AOT expression";
+        }
         return QoreValue();
     }
     GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin, strdup(gvar->getName()), gvar);
@@ -3830,6 +3844,65 @@ static bool write_expr_select(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_select(AOTExprReadCtx& ctx) {
     return read_binary_expr<QoreSelectOperatorNode>(ctx);
+}
+
+// ============================================================================
+// ITERATE/STREAMING (108-109)
+// ============================================================================
+
+static bool write_expr_iterate(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreIterateOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::ITERATE));
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_iterate(AOTExprReadCtx& ctx) {
+    std::string source_err;
+    QoreValue source = readOneExpr(ctx.reader, ctx.ptr, ctx.end, source_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    if (!source_err.empty()) {
+        source.discard(nullptr);
+        ctx.error = source_err;
+        return QoreValue();
+    }
+    return QoreValue(new QoreIterateOperatorNode(&loc_builtin, source));
+}
+
+static bool write_expr_streaming(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STREAMING));
+    ctx.writer.writeU8(static_cast<uint8_t>(op->getKind()));
+    return classifyAndWriteExpr(ctx.writer, op->getPredicate(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getSource(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_streaming(AOTExprReadCtx& ctx) {
+    auto kind = static_cast<QoreStreamingOperatorNode::Kind>(
+        QoreAOTBinaryReader::readU8(ctx.ptr));
+    std::string predicate_err;
+    QoreValue predicate = readOneExpr(ctx.reader, ctx.ptr, ctx.end, predicate_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    std::string source_err;
+    QoreValue source = readOneExpr(ctx.reader, ctx.ptr, ctx.end, source_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    if (!predicate_err.empty() || !source_err.empty()) {
+        predicate.discard(nullptr);
+        source.discard(nullptr);
+        ctx.error = !predicate_err.empty() ? predicate_err : source_err;
+        return QoreValue();
+    }
+    return QoreValue(new QoreStreamingOperatorNode(&loc_builtin, kind, predicate, source));
 }
 
 // ============================================================================

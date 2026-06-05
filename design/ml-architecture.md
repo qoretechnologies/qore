@@ -11,7 +11,9 @@ architecture:
    algorithms plus metric and registry processors
 3. **`QoreModelRegistry` user module** (Qore) — Model versioning, package
    artifact metadata, comparison, and deployment management with pluggable backends
-4. **`tokenizer` binary module** (C++/utf8proc) — HuggingFace-compatible text tokenization
+4. **`QoreOnnxTools` user module** (Qore) — ONNX inspection, validation,
+   benchmarking, optimization, quantization, packaging, execution-plan, and CLI helpers
+5. **`tokenizer` binary module** (C++/utf8proc) — HuggingFace-compatible text tokenization
 
 ## Design Principles
 
@@ -31,9 +33,9 @@ architecture:
 ┌──────────────────────────────────────────────────────────┐
 │                Qorus / Applications                      │
 ├──────────────────────────────────────────────────────────┤
-│               DataProviderML (Qore)                      │
+│       DataProviderML (Qore)        QoreOnnxTools (Qore)  │
 │  Algorithm processors + preprocessing + metrics +        │
-│  registry model processor                                │
+│  registry model processor        qore-onnx CLI helpers   │
 ├──────────────────────────────────────────────────────────┤
 │             QoreModelRegistry (Qore)                     │
 │  Model versions + named artifacts + execution metadata   │
@@ -204,6 +206,14 @@ qlib/QoreModelRegistry/
   and reports descriptive errors for metadata-only packages
 - **Artifact access**: `loadArtifact()`, `loadNamedArtifact()`,
   `loadJsonArtifact()`, and `loadTokenizerConfig()` for raw and parsed artifacts
+- **ONNX package contracts**: manifests carry runtime, entry artifact, tensor
+  schemas, dynamic axes, tokenizer metadata, preprocessing and postprocessing
+  contracts, output-shape maps, provider diagnostics, and optional
+  `device_binding` policy
+- **Execution adapters**: `ModelExecutableAdapter` gives DataProviderML and
+  application code a uniform execution surface for native `.qml` and ONNX
+  Runtime packages, including tensor-preserving ONNX runs and provider
+  diagnostics
 
 ### Package Safety Contract
 
@@ -215,19 +225,150 @@ artifact or an ONNX artifact; SafeTensors-only and PyTorch pickle packages stay
 metadata-only until converted to ONNX or connected to an explicit external
 runtime.
 
+## QoreOnnxTools
+
+`QoreOnnxTools` (`qlib/QoreOnnxTools/`) is the ONNX deployment tooling layer.
+It provides library helpers and the `qore-onnx` command for inspecting,
+validating, benchmarking, comparing, profiling, optimizing, quantizing, and
+packaging ONNX artifacts.
+
+### Key Components
+
+- `OnnxModelTools` wraps model inspection, validation, benchmarking, compare,
+  optimize, and Python-environment checks.
+- `OnnxPackageTools` builds deterministic ONNX package directories and package
+  manifests.
+- `OnnxProcessingSpecs` builds and normalizes standard preprocessing,
+  postprocessing, tokenizer, tensor-contract, and execution-plan metadata.
+- `OnnxDiagnostics` creates compact actionable diagnostics used by CLI,
+  registry, and DataProviderML surfaces.
+
+### ONNX Package And Execution Contracts
+
+`OnnxPackageTools` creates deterministic package directories and manifests for
+ONNX deployment artifacts. The manifest is the cross-module contract used by
+`qore-onnx`, QoreModelRegistry, and DataProviderML. For executable ONNX
+packages it records:
+
+- `runtime`, `task`, `entry_artifact`, opset, producer, and minimum ONNX
+  Runtime policy metadata
+- sorted package artifacts with roles, formats, checksums, safety
+  classification, external-data companions, and safe metadata extracts
+- input and output tensor schemas, dynamic axes, and output-shape maps
+- tokenizer companion metadata for HuggingFace-style packages
+- normalized preprocessing and postprocessing contracts for common `raw`,
+  `regression`, `classification`, `sequence-classification`, `embedding`,
+  `reranker`, `token-classification`, `encoder-decoder`, and `causal-lm`
+  tasks
+- optional runtime config, provider diagnostics, validation diagnostics,
+  benchmark metadata, golden vectors, and `device_binding` policy
+
+The normalized `execution.plan` keeps the fields needed for local execution in
+one place: runtime, task, entry artifact, required modules, input/output
+schemas, dynamic axes, tensor contract, tokenizer contract, preprocessing,
+postprocessing, output shapes, runtime config, and local-executable state.
+Registry backends store this plan with the model version, and
+`ModelExecutableAdapter` uses the plan to load the correct artifact and expose
+consistent run, tensor-run, feature-matrix, and diagnostic methods.
+
+Diagnostics are intentionally shared across layers. `ML::OnnxModel` exposes
+provider metadata and effective-provider reports; `QoreOnnxTools` summarizes
+inspection, validation, and package diagnostics with recommended actions and
+example commands; QoreModelRegistry persists package diagnostics in manifests;
+DataProviderML returns provider, inference, profile, I/O binding, and
+device-binding diagnostics through processor `getDiagnostics()` methods.
+
+## Tensor And Device Memory
+
+Dense tensor data is represented with core `buffer<T>` values and
+`ML::Tensor`. The core `QoreBufferNode` substrate supports Qore-owned host
+storage, immutable external host storage, and immutable external device storage.
+Device-backed buffers expose `deviceStorage()`, `hostStorage()`,
+`deviceInfo()`, and `materialize()` pseudo-methods; `ML::Tensor` exposes the
+same storage metadata at tensor level.
+
+`ML::Tensor` rejects nullable buffers because ONNX/model tensors do not carry a
+Qore validity bitmap. Device-backed tensors keep their native owner alive
+through the wrapped buffer owner and materialize to host storage through a
+module-provided copy callback when host reads are required.
+
+Device upload APIs live in the `ml` module, not in core buffer methods:
+
+- `Tensor::toDevice("cuda", id)` uploads host tensor data to CUDA memory when
+  the module is built with CUDA runtime support.
+- `Tensor::toDevice("metal", id)` allocates a Metal `MTLBuffer` with shared
+  storage on Apple Silicon builds with Metal support.
+- `Tensor::pinnedHost()` creates CUDA page-locked host storage when available;
+  on Apple Silicon UMA it is an honest no-op that returns a tensor sharing the
+  same host buffer.
+- `Tensor::mockDevice()` is a test helper that tags copied host bytes as a
+  device buffer so device paths can be tested without accelerator hardware.
+
+Device-upload and device-binding entry points are in the
+`UNCONTROLLED_API` functional domain, so programs parsed with
+`PO_NO_UNCONTROLLED_APIS` cannot call them.
+
 ## ONNX Integration
 
-- CMake detects ONNX Runtime via pkg-config or find_library
-- `HAVE_ONNXRUNTIME` define gates all ONNX code
-- Hashdecls `OnnxTensorInfo` and `OnnxModelInfo` in `ql_ml.qpp` with `#ifdef`
-- Class registration in `ml-module.cpp` with `#ifdef`
-- `ml_get_capabilities().has_onnx` for runtime detection
-- DataProviderML conditionally registers the onnx-model processor
+- CMake detects ONNX Runtime via pkg-config or find_library.
+- `HAVE_ONNXRUNTIME` gates ONNX implementation code while stub classes keep the
+  Qore API loadable on CPU-only or ONNX-free builds.
+- Hashdecls such as `OnnxTensorInfo`, `OnnxModelInfo`,
+  `OnnxProviderConfig`, `OnnxSessionConfig`, and `OnnxDeviceBindingConfig`
+  live in `ql_ml.qpp`.
+- `ml_get_capabilities().has_onnx` reports ONNX Runtime availability, and
+  `ml_get_capabilities().has_metal` reports Apple Metal/UMA upload support.
+- `OnnxModel` supports path and in-memory model loading, direct runs,
+  tensor-returning runs, batch runs, provider diagnostics, and inference
+  transfer statistics.
+- `OnnxIoBinding` provides reusable input/output bindings, including
+  `bindOutputDevice()` and `bindOutputsDevice()` for provider-managed device
+  output allocation.
+- `OnnxRunOptions` wraps per-run ONNX Runtime options.
+- `OnnxSessionPool` provides bounded reusable session pools with synchronous,
+  asynchronous, and dynamic-batch execution plus pooled device-binding and
+  optional device-memory statistics.
+- DataProviderML conditionally registers the `onnx-model` processor.
+- DataProviderML `onnx-model` and registry-backed ONNX `registry-model`
+  processors support explicit `input_map`, selected `output_names`, compact
+  column/dataframe/tensor output modes, and tensor execution for shaped windows.
 - `QoreTokenizerUtils::EmbeddingModel` and `CrossEncoderReranker` accept ONNX
   model bytes as well as filesystem paths, so registry database/REST artifacts
   can be executed without temporary files
 - DataProviderML text/embedding/reranking processors can load ONNX and tokenizer
   artifacts from QoreModelRegistry packages
+
+### Provider And Device Binding Model
+
+ONNX device binding is opt-in through `OnnxSessionConfig.device_binding` and
+higher-level DataProviderML/registry options. The policy controls whether
+outputs target CPU memory, the active provider device, or an explicit device;
+whether host fallback is allowed; whether outputs are materialized before
+returning; and whether zero-copy input/output behavior is required.
+
+Provider behavior is split into three groups:
+
+- **Raw-device-memory providers**: CUDA, TensorRT, and ROCm expose device
+  memory that ONNX Runtime can bind. Compatible device inputs bind without a
+  host copy, and provider-managed outputs can return as device-backed
+  `ML::Tensor` values.
+- **EP-acceleration providers**: CoreML, OpenVINO, DirectML, and WebGPU
+  accelerate inference but manage opaque provider memory. Device-binding
+  output requests resolve to host tensors without fabricated transfer counts;
+  `provider_host_resolutions` makes that resolution observable.
+- **CPU provider**: device output requests are configuration errors unless
+  host fallback is explicitly allowed.
+
+Apple Silicon has two paths: CoreML is an EP-acceleration provider, while
+Metal/UMA tensors created with `Tensor::toDevice("metal")` use shared memory
+that is readable by CPU, CoreML, and WebGPU paths without a DMA host/device
+transfer. Transfer counters stay at zero for those UMA host/device copies.
+
+DataProviderML's ONNX processor exposes `device_binding`, `output_device`,
+`materialize_outputs`, `allow_host_fallback`, and `require_zero_copy` options
+and reports transfer counters through diagnostics. QoreModelRegistry manifests
+can carry `execution.device_binding`; `ModelExecutableAdapter` propagates it
+into loaded ONNX sessions and includes the resulting diagnostics.
 
 ## Tokenizer Module
 

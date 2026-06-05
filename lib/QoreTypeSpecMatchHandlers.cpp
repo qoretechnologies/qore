@@ -187,6 +187,28 @@ static qore_type_result_e match_QTS_COMPLEXHASH(const QoreTypeSpec& self, QoreTy
     return rv;
 }
 
+static qore_type_result_e match_hard_list_from_iterator(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
+    if (self.getTypeSpec() != QTS_COMPLEXLIST) {
+        return QTI_NOT_EQUAL;
+    }
+
+    const QoreTypeInfo* source_element_type = QoreTypeInfo::getAbstractIteratorElementType(ctx.t.getTypeInfo());
+    if (!source_element_type) {
+        return QTI_NOT_EQUAL;
+    }
+
+    qore_type_result_e rv = qore_match_is_auto_vti(self.getComplexList())
+        ? QTI_NEAR
+        : match_type(self.getComplexList(), source_element_type, ctx.may_not_match, ctx.may_need_filter);
+    if (rv > QTI_NOT_EQUAL) {
+        ctx.may_need_filter = true;
+        ctx.max_result = QTI_IDENT;
+    } else {
+        ctx.max_result = rv;
+    }
+    return rv;
+}
+
 // Handler for QTS_COMPLEXLIST and QTS_COMPLEXSOFTLIST: complex list element type match
 static qore_type_result_e match_QTS_COMPLEXLIST(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
     switch (ctx.t.getTypeSpec()) {
@@ -217,7 +239,10 @@ static qore_type_result_e match_QTS_COMPLEXLIST(const QoreTypeSpec& self, QoreTy
                 }
                 return rv;
             }
-            break;
+            return match_hard_list_from_iterator(self, ctx);
+        }
+        case QTS_PARAMCLASS: {
+            return match_hard_list_from_iterator(self, ctx);
         }
         case QTS_TYPE: {
             if (ctx.t.getType() == NT_LIST) {

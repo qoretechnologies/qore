@@ -49,7 +49,7 @@ switch (c.typeCode()) {
 
     @return Qore::NT_CALLREF
 */
-int <callref>::typeCode() [flags=CONSTANT] {
+int <callref>::typeCode() [const;flags=CONSTANT] {
     return NT_FUNCREF;
 }
 
@@ -66,7 +66,7 @@ bool b = c.val();
     - @ref perl-bool-eval "%perl-bool-eval"
     - @ref strict-bool-eval "%strict-bool-eval"
 */
-bool <callref>::val() [flags=CONSTANT] {
+bool <callref>::val() [const;flags=CONSTANT] {
     return true;
 }
 
@@ -89,7 +89,7 @@ if (n.callp())
 
     @return @ref True because this is a callable type
 */
-bool <callref>::callp() [flags=CONSTANT] {
+bool <callref>::callp() [const;flags=CONSTANT] {
     return true;
 }
 
@@ -101,7 +101,7 @@ bool <callref>::callp() [flags=CONSTANT] {
 
     @since %Qore 2.0
  */
-string <callref>::uniqueHash() [flags=CONSTANT] {
+string <callref>::uniqueHash() [const;flags=CONSTANT] {
     QoreStringNode* rv = new QoreStringNode;
     qore_get_ptr_hash(*rv, c);
     return rv;

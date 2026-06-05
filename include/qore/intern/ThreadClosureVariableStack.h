@@ -118,8 +118,8 @@ public:
     }
 
     DLLLOCAL ClosureVarValue* instantiate(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval,
-            bool assign, uint64_t order) {
-        ClosureVarValue* cvar = new ClosureVarValue(id, typeInfo, nval, assign);
+            bool assign, uint64_t order, bool read_only = false) {
+        ClosureVarValue* cvar = new ClosureVarValue(id, typeInfo, nval, assign, read_only);
         instantiateIntern(cvar, order);
         return cvar;
     }

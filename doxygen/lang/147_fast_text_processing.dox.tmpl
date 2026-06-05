@@ -15,21 +15,24 @@
        @ref <string>::getByte() "<string>::getByte()" pseudo-method and the
        @ref Qore::Scanner "Scanner" class expose cursor-based reads that never allocate
        per-character.
-    3. <b>Lazy iterators</b> — @ref Qore::StringCharIterator "StringCharIterator",
+    3. <b>Lazy iterators</b> — @ref Qore::StringIterator "StringIterator",
+       @ref Qore::StringCharIterator "StringCharIterator",
        @ref Qore::StringSplitIterator "StringSplitIterator", and
        @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator" yield codepoints,
        delimited tokens, and regex-delimited lines on demand, replacing eager
        @ref <string>::split() "<string>::split()" / list-returning patterns where memory or
        latency matters.
 
-    None of these APIs change existing language semantics; they sit alongside the older
-    @ref <string>::split() "<string>::split()", @ref <string>::substr() "<string>::substr()",
-    and list-returning regex helpers.  Adopt them when profiles point at string churn, then
-    leave the rest of the code base alone.
+    These APIs sit alongside the older @ref <string>::split() "<string>::split()",
+    @ref <string>::substr() "<string>::substr()", and list-returning regex helpers.  String
+    iteration now has direct language support through @ref char "char" values:
+    @ref <string>::iterator() "<string>::iterator()" and <tt>iterate string</tt>
+    yield chars, while @ref <string>::codePointIterator() "<string>::codePointIterator()" remains
+    available for integer codepoints.
 
     @section ftp_byte_access Byte- and Codepoint-Indexed Access
 
-    @par @ref <string>::getByte() "<string>::getByte()"
+    @par <string>::getByte()
     @parblock
     Returns the byte value (\c 0-255) at the given byte offset, or @ref nothing if the offset is
     out of range.  No allocation, no copy, no encoding conversion.  Negative offsets count from
@@ -45,10 +48,10 @@ string s = "abc";
     Use @ref <string>::getByte() "getByte()" as the primitive in tight scan loops where the
     input is known to be ASCII or where you only care about specific byte values (e.g.
     delimiters, escape characters, ASCII control bytes).  For codepoint-aware reads use the
-    @ref Qore::Scanner "Scanner" class or a @ref Qore::StringCharIterator "StringCharIterator".
+    @ref Qore::Scanner "Scanner" class or a @ref Qore::StringIterator "StringIterator".
     @endparblock
 
-    @par @ref Qore::Scanner "Scanner"
+    @par Scanner
     @parblock
     @ref Qore::Scanner "Scanner" wraps a string with a cursor exposing byte-level and
     codepoint-level peek/advance/match operations.  Construction is allocation-free for the
@@ -74,22 +77,26 @@ sc.advance();                          # consume ';'
     The lazy text iterators all return immediately and produce one element at a time when
     iterated, with constant memory regardless of input size.
 
-    @par @ref <string>::codePointIterator() "<string>::codePointIterator()" / @ref Qore::StringCharIterator "StringCharIterator"
-    Iterate codepoints (not bytes) without materialising a list.  Supports forward and reverse
-    iteration; the codepoint is exposed as a single-character string.
+    @par <string>::iterator() / StringIterator
+    Iterate codepoints (not bytes) without materialising a list.  Each element is a @ref char value.
+    This is also the iterator used by <tt>iterate</tt> for string sources.
 
-    @par @ref <string>::splitString() "<string>::splitString()" / @ref Qore::StringSplitIterator "StringSplitIterator"
+    @par <string>::codePointIterator() / StringCharIterator
+    Iterate codepoints as integers without materialising a list.  This preserves the pre-char API for
+    callers that need numeric Unicode codepoint values directly.
+
+    @par <string>::splitString() / StringSplitIterator
     Lazy delimiter split.  Equivalent to @ref <string>::split() "<string>::split()" but without
     building the full list up front — useful for very large inputs or when the consumer can
     short-circuit.
 
-    @par @ref <string>::splitChars() "<string>::splitChars()" / @ref Qore::StringCharIterator "StringCharIterator"
-    Lazy per-codepoint split, yielding each codepoint as a string.
+    @par <string>::splitChars() / StringSplitIterator
+    Lazy per-codepoint split, yielding each codepoint as a single-character string.
 
-    @par @ref <string>::splitLines() "<string>::splitLines()" / @ref Qore::StringSplitIterator "StringSplitIterator"
+    @par <string>::splitLines() / StringSplitIterator
     Lazy newline-delimited line split.
 
-    @par @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()" / @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator"
+    @par <string>::splitLinesRegex() / StringRegexSplitIterator
     Lazy regex-delimited split.  Replaces the previous eager list-returning behaviour of the
     @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()" pseudo-method.
 
@@ -109,7 +116,8 @@ sc.advance();                          # consume ';'
     |------|-----------------|
     | Read a single byte at a known offset | @ref <string>::getByte() "<string>::getByte()" |
     | Hand-written tokenizer / parser | @ref Qore::Scanner "Scanner" |
-    | Iterate codepoints | @ref <string>::codePointIterator() "<string>::codePointIterator()" |
+    | Iterate characters as char values | @ref <string>::iterator() "<string>::iterator()" or <tt>iterate string</tt> |
+    | Iterate codepoints as integers | @ref <string>::codePointIterator() "<string>::codePointIterator()" |
     | Lazy delimiter split (large input or short-circuit) | @ref <string>::splitString() "<string>::splitString()" |
     | Lazy line split | @ref <string>::splitLines() "<string>::splitLines()" |
     | Lazy regex split | @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()" |
@@ -133,10 +141,12 @@ sc.advance();                          # consume ';'
     @see
     - @ref string_views — internal view layer description in the @ref string "string section"
     - @ref Qore::Scanner "Scanner" — full Scanner API reference
-    - @ref Qore::StringCharIterator "StringCharIterator",
+    - @ref Qore::StringIterator "StringIterator",
+      @ref Qore::StringCharIterator "StringCharIterator",
       @ref Qore::StringSplitIterator "StringSplitIterator",
       @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator" — iterator API reference
     - @ref <string>::getByte() "<string>::getByte()",
+      @ref <string>::iterator() "<string>::iterator()",
       @ref <string>::codePointIterator() "<string>::codePointIterator()",
       @ref <string>::splitString() "<string>::splitString()",
       @ref <string>::splitChars() "<string>::splitChars()",

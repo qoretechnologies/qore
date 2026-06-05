@@ -72,7 +72,7 @@ QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionS
             double factor = lt == NT_FLOAT ? lh->getAsFloat() : rh->getAsFloat();
             us = (int64)(us * factor);
         } else {
-            int64 factor = lt == NT_INT ? lh->getAsBigInt() : rh->getAsBigInt();
+            int64 factor = (lt == NT_INT || lt == NT_CHAR) ? lh->getAsBigInt() : rh->getAsBigInt();
             us *= factor;
         }
         return DateTimeNode::makeRelativeFromSeconds(us / 1000000, (int)(us % 1000000));
@@ -88,7 +88,7 @@ QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionS
         return lh->getAsFloat() * rh->getAsFloat();
     }
 
-    if (lt == NT_INT || rt == NT_INT) {
+    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
         return lh->getAsBigInt() * rh->getAsBigInt();
     }
 
@@ -151,7 +151,9 @@ int QoreMultiplicationOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     } else {
         if (QoreTypeInfo::hasType(leftTypeInfo) && QoreTypeInfo::hasType(rightTypeInfo)) {
             // otherwise only set return type if return types on both sides are known at parse time
-            if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) && QoreTypeInfo::isType(rightTypeInfo, NT_INT)) {
+            if ((QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR))
+                    && (QoreTypeInfo::isType(rightTypeInfo, NT_INT)
+                        || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR))) {
                 returnTypeInfo = bigIntTypeInfo;
             } else if (QoreTypeInfo::isType(leftTypeInfo, NT_NUMBER) && QoreTypeInfo::isType(rightTypeInfo,
                 NT_NUMBER)) {

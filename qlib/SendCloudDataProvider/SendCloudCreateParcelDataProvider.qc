@@ -74,9 +74,9 @@ public class SendCloudCreateParcelDataProvider inherits SendCloudDataProviderBas
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> r = cast<hash<auto>>(req);
+        hash<auto> r = cast<hash>(req);
         hash<auto> v3_body = buildV3ShipmentBody(r);
-        hash<auto> response = cast<hash<auto>>(doV3Post("shipments/announce", v3_body));
+        hash<auto> response = cast<hash>(doV3Post("shipments/announce", v3_body));
         return flattenV3Shipment(response.data);
     }
 
@@ -195,7 +195,7 @@ public class SendCloudCreateParcelDataProvider inherits SendCloudDataProviderBas
         list<auto> addrs = (resp.sender_addresses ?? ());
         foreach hash<auto> a in (addrs) {
             if (int(a.id) == id) {
-                return mapSenderRecordToV3(cast<hash<auto>>(a));
+                return mapSenderRecordToV3(cast<hash>(a));
             }
         }
         throw "SENDCLOUD-ERROR",
@@ -219,7 +219,7 @@ public class SendCloudCreateParcelDataProvider inherits SendCloudDataProviderBas
                 "an explicit `sender_address` id, an inline `from_*` block on the request, or "
                 "at least one sender address registered in Settings → Addresses → Sender";
         }
-        return mapSenderRecordToV3(cast<hash<auto>>(addrs[0]));
+        return mapSenderRecordToV3(cast<hash>(addrs[0]));
     }
 
     #! Maps a v2 sender-address record to a v3 from_address hash
@@ -324,7 +324,7 @@ public class SendCloudCreateParcelDataProvider inherits SendCloudDataProviderBas
         if (!shipment) return {};
         hash<auto> p = {};
         if (shipment.parcels.typeCode() == NT_LIST && elements shipment.parcels > 0) {
-            p = cast<hash<auto>>(shipment.parcels[0]);
+            p = cast<hash>(shipment.parcels[0]);
         }
 
         hash<auto> out = {};
@@ -347,7 +347,7 @@ public class SendCloudCreateParcelDataProvider inherits SendCloudDataProviderBas
 
         # Recipient (un-nest)
         hash<auto> to = (shipment.to_address.typeCode() == NT_HASH)
-            ? cast<hash<auto>>(shipment.to_address)
+            ? cast<hash>(shipment.to_address)
             : ({});
         out.name = to.name;
         out.company_name = to.company_name;

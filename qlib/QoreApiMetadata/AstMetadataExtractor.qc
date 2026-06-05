@@ -508,6 +508,10 @@ public class AstMetadataExtractor {
         }
         string sig = AstMetadataExtractor::buildSignature(
             ret_type, method_name, params);
+        bool is_const_method = exists m.isConstMethod && m.isConstMethod ? True : False;
+        if (is_const_method) {
+            sig += " const";
+        }
 
         # extract doc fields into typed locals
         *string meth_desc;
@@ -557,6 +561,7 @@ public class AstMetadataExtractor {
             "throws": meth_throws,
             "access": meth_access,
             "is_static": m.isStatic ? True : False,
+            "is_const_method": is_const_method,
             "is_deprecated": meth_depr,
             "deprecated_reason": meth_depr_reason,
             "since": meth_since,

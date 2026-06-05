@@ -788,7 +788,7 @@ For dynamic options, implement `getRequestTypeWithDataImpl()`.
 > universal `rest` member convention. See
 > [Generic "Make an API call" Action](generic-api-call-action.md) for the
 > full design (reflective discovery, builder hooks, request/response
-> schema, opt-out, frontend `{type, value}` wrapping).
+> schema, opt-out, and the Qorus UI encoding boundary).
 
 ### DPAT_EVENT
 
@@ -985,7 +985,7 @@ Implement **both** methods:
 
 ```qore
 private *AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
-    *string table_id = options.tableID.value ?? options.tableID;
+    *string table_id = options.tableID;
     if (!table_id) {
         return RequestType;
     }
@@ -996,13 +996,18 @@ private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
     if (req.typeCode() != NT_HASH) {
         return RequestType;
     }
-    *string table_id = req.tableID.value ?? req.tableID;
+    *string table_id = req.tableID;
     if (!table_id) {
         return RequestType;
     }
     return buildDynamicType(table_id);
 }
 ```
+
+Provider implementations should not unwrap Qorus UI `{type, value}` hashes.
+That encoding belongs to the Qorus `context=ui` REST/API boundary; by the time
+these methods are called, `options`, request data, and action input should
+already be plain Qore values.
 
 ---
 

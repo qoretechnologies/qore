@@ -4,8 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class IRExecModeSmokeTest
@@ -22,6 +22,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR range/maybe-NOTHING smoke", \testIrRangeMaybeSmoke());
         addTestCase("IR fold/map smoke", \testIrFoldMapSmoke());
         addTestCase("IR map select smoke", \testIrMapSelectSmoke());
+        addTestCase("IR mixed lazy streaming fusion", \testIrMixedLazyStreamingFusion());
         addTestCase("IR map with iterator objects", \testIrMapWithIteratorObjects());
         addTestCase("IR lvalue/op-assign smoke", \testIrLvalueOpSmoke());
         addTestCase("IR store-local smoke", \testIrStoreLocalSmoke());
@@ -153,6 +154,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR closure call smoke", \testIrClosureCallSmoke());
         addTestCase("IR reference argument smoke", \testIrReferenceArgumentSmoke());
         addTestCase("IR reference shift assignment smoke", \testIrReferenceShiftAssignment());
+        addTestCase("IR tiered fused closure increment cache", \testIrTieredFusedClosureIncrementCache());
         addTestCase("IR runtime constant smoke", \testIrRuntimeConstantSmoke());
         addTestCase("IR backquote smoke", \testIrBackquoteSmoke());
         addTestCase("IR typed list construction smoke", \testIrTypedListConstructionSmoke());
@@ -559,6 +561,105 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("mapselect:2:4,8\n", stdout_output, "Unexpected IR map select output");
+    }
+
+    testIrMixedLazyStreamingFusion() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("class CountingIterator inherits AbstractIterator<int> {\n");
+        script.file.write("    private { int max; int pos; int value; int calls; bool valid_flag; }\n");
+        script.file.write("    constructor(int max) { self.max = max; }\n");
+        script.file.write("    bool next() { ++self.calls; if (self.pos >= self.max) { self.valid_flag = False; return False; } self.value = self.pos++; self.valid_flag = True; return True; }\n");
+        script.file.write("    int getValue() { return self.value; }\n");
+        script.file.write("    bool valid() { return self.valid_flag; }\n");
+        script.file.write("    int getCalls() { return self.calls; }\n");
+        script.file.write("}\n");
+        script.file.write("CountingIterator i(5);\n");
+        script.file.write("printf(\"map-first:%y:%d\\n\", (first \$1 >= 20, (map \$1 * 10, i)), i.getCalls());\n");
+        script.file.write("CountingIterator j(5);\n");
+        script.file.write("printf(\"select-map-first:%y:%d\\n\", (first \$1 >= 20, (map \$1 * 10, (select j, \$1 % 2 == 0))), j.getCalls());\n");
+        script.file.write("CountingIterator k(5);\n");
+        script.file.write("printf(\"select-take:%y:%d\\n\", (take 2, (select k, \$1 % 2 == 0)), k.getCalls());\n");
+        script.file.write("CountingIterator m(5);\n");
+        script.file.write("printf(\"mapselect-first:%y:%d\\n\", (first \$1 >= 20, (map \$1 * 10, m, \$1 % 2 == 0)), m.getCalls());\n");
+        script.file.write("list<int> values = (10, 20, 30, 40);\n");
+        script.file.write("printf(\"indices:%y:%y\\n\", (map \$#, values, \$# % 2 == 0), (map \$#, (select values, \$# % 2 == 0)));\n");
+        script.file.write("our auto seen = ();\n");
+        script.file.write("bool sub lazyPred(int v) { seen += sprintf(\"s%d\", v); return v % 2 == 1; }\n");
+        script.file.write("int sub lazyMap(int v) { seen += sprintf(\"m%d\", v); return v * 10; }\n");
+        script.file.write("int sub lazyFold(int a, int v) { seen += sprintf(\"f%d\", v); return a + v; }\n");
+        script.file.write("list<int> order_values = (1, 2, 3);\n");
+        script.file.write("auto map_out = map lazyMap(\$1), (select order_values, lazyPred(\$1));\n");
+        script.file.write("printf(\"map-order:%y:%y\\n\", map_out, seen);\n");
+        script.file.write("seen = ();\n");
+        script.file.write("auto foldl_out = foldl lazyFold(\$1, \$2), (map lazyMap(\$1), (select order_values, lazyPred(\$1)));\n");
+        script.file.write("printf(\"foldl-order:%y:%y\\n\", foldl_out, seen);\n");
+        script.file.write("seen = ();\n");
+        script.file.write("auto foldr_out = foldr lazyFold(\$1, \$2), (map lazyMap(\$1), (select order_values, lazyPred(\$1)));\n");
+        script.file.write("printf(\"foldr-order:%y:%y\\n\", foldr_out, seen);\n");
+        script.file.write("seen = ();\n");
+        script.file.write("foreach (int v) in (map lazyMap(\$1), (select order_values, lazyPred(\$1))) { seen += sprintf(\"b%d\", v); }\n");
+        script.file.write("printf(\"foreach-order:%y\\n\", seen);\n");
+        script.file.write("printf(\"scalar:%y:%y:%y\\n\", (map \$1, (select 3, True)), (map \$1, (select 3, False)), (map \$1, (take 2, 3)));\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir --ir-fallback-warn %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("map-first:20:3\nselect-map-first:20:3\nselect-take:[0, 2]:3\n"
+            "mapselect-first:20:3\nindices:[0, 2]:[0, 1]\n"
+            "map-order:[10, 30]:[\"s1\", \"m1\", \"s2\", \"s3\", \"m3\"]\n"
+            "foldl-order:40:[\"s1\", \"m1\", \"s2\", \"s3\", \"m3\", \"f30\"]\n"
+            "foldr-order:40:[\"s1\", \"m1\", \"s2\", \"s3\", \"m3\", \"f10\"]\n"
+            "foreach-order:[\"s1\", \"m1\", \"b10\", \"s2\", \"s3\", \"m3\", \"b30\"]\n"
+            "scalar:3:null:[0, 1]\n",
+            stdout_output, "Unexpected IR mixed lazy streaming output");
+
+        TmpFile no_fusion_script();
+        no_fusion_script.file.write("%modern\n%no-stream-fusion\n");
+        no_fusion_script.file.write("class CountingIterator inherits AbstractIterator<int> {\n");
+        no_fusion_script.file.write("    private { int max; int pos; int value; int calls; bool valid_flag; }\n");
+        no_fusion_script.file.write("    constructor(int max) { self.max = max; }\n");
+        no_fusion_script.file.write("    bool next() { ++self.calls; if (self.pos >= self.max) { self.valid_flag = False; return False; } self.value = self.pos++; self.valid_flag = True; return True; }\n");
+        no_fusion_script.file.write("    int getValue() { return self.value; }\n");
+        no_fusion_script.file.write("    bool valid() { return self.valid_flag; }\n");
+        no_fusion_script.file.write("    int getCalls() { return self.calls; }\n");
+        no_fusion_script.file.write("}\n");
+        no_fusion_script.file.write("CountingIterator i(5);\n");
+        no_fusion_script.file.write("printf(\"no-fusion:%y:%d\\n\", (first \$1 >= 20, (map \$1 * 10, i)), i.getCalls());\n");
+        no_fusion_script.file.close();
+
+        TmpFile no_fusion_out();
+        TmpFile no_fusion_err();
+
+        string no_fusion_cmd = sprintf("%s --exec-mode=ir --ir-fallback-warn %s > %s 2> %s",
+            qore_bin, no_fusion_script.path, no_fusion_out.path, no_fusion_err.path);
+        int no_fusion_rc = runCommand(no_fusion_cmd, no_fusion_script.path);
+        string no_fusion_err_output = ReadOnlyFile::readTextFile(no_fusion_err.path);
+        assertEq(0, no_fusion_rc, "IR no-fusion process should exit cleanly");
+        assertFalse(no_fusion_err_output =~ /IR exec fallback to AST:/, "Unexpected IR no-fusion fallback warning");
+
+        string no_fusion_stdout_output = ReadOnlyFile::readTextFile(no_fusion_out.path);
+        assertEq("no-fusion:20:3\n", no_fusion_stdout_output, "Unexpected IR no-fusion streaming output");
     }
 
     testIrMapWithIteratorObjects() {
@@ -5286,6 +5387,45 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("32\n16\n", stdout_output, "Unexpected IR reference shift assignment output");
+    }
+
+    testIrTieredFusedClosureIncrementCache() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("bool sub touch(reference<int> r) { return False; }\n");
+        script.file.write("int sub f() {\n");
+        script.file.write("    int i = 0;\n");
+        script.file.write("    int first = i;\n");
+        script.file.write("    if (i < -1000) { touch(\\i); }\n");
+        script.file.write("    ++i;\n");
+        script.file.write("    return i;\n");
+        script.file.write("}\n");
+        script.file.write("for (int n = 0; n < 8; ++n) { printf(\"%d\\n\", f()); }\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10 %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "tiered fused closure increment process should exit cleanly");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("1\n1\n1\n1\n1\n1\n1\n1\n", stdout_output,
+            "fused closure increment must update subsequent LoadClosure reads");
     }
 
     testIrRuntimeConstantSmoke() {

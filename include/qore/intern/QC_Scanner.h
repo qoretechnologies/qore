@@ -40,7 +40,8 @@ DLLEXPORT extern qore_classid_t CID_SCANNER;
 //! Stateful scanner over a string for tokenizer / parser implementations.
 /** Holds a reference to a source string plus a byte cursor, line, and column
     counter.  Provides constant-time byte access and amortised constant-time
-    codepoint access (subject to the underlying string's encoding).
+    codepoint access (subject to the underlying string's encoding). ASCII
+    bytes in ASCII-compatible encodings take a direct fast path.
 
     Designed to replace the per-char @c input[pos] pattern used in
     @c Qdx::QoreTokenizer, @c OpenApi3SchemaTokenizer,
@@ -152,6 +153,7 @@ private:
     // unless mutated; src has refcount >= 1 while we hold it).
     const char* src_buf;
     size_t src_size;
+    bool ascii_compat;
     // Byte cursor.
     size_t cursor = 0;
     // 1-based line and column.

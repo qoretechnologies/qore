@@ -207,7 +207,7 @@ class ReferenceTest inherits QUnit::Test {
         }
 
         {
-            any x;
+            auto x;
             reference<list> r1 = \x;
             r1 = ();
             assertEq((), x);

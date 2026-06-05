@@ -17,7 +17,7 @@
     |A @ref static_method_calls "static method call"|Qore static method calls (see @ref static_methods)|@code{.py} ClassName::static_method("argument")@endcode
     |Expressions with operators|Use of @ref operators "Qore operators"|@code{.py} 1 + 2@endcode @code{.py} a || b@endcode @code{.py} background my_function()@endcode
     |An expression in parentheses|Use of parentheses for clarity or to specify evaluation precedence|@code{.py} (3 * (2 + a))@endcode
-    |A @ref find "find expression"|Finds a value or values in a hash of lists, such as returned by the Qore::SQL::Datasource::select() or Qore::SQL::SQLStatement::fetchColumns() method|@code{.py} find %name, %id in data where (%name =~ /Smith/)@endcode
+    |A @ref find "find expression"|Finds a value or values in a hash of lists, such as returned by the Qore::SQL::Datasource::select() or Qore::SQL::SQLStatement::fetchColumns() method|@code{.py} find %name, %id in data where (%name =~ /Smith/)@endcode @code{.py} find first %% in data where (%id == 100)@endcode
     |A context reference (<tt>%name</tt>)|A contextual reference to the value of a key of the current row being iterated by a @ref context "context", @ref summarize "summarize", @ref subcontext "subcontext" statement, or a @ref find "find expression"|@code{.py} %name@endcode
     |A context row reference (<tt>%%</tt>)|A contextual reference to the current row being iterated by a @ref context "context", @ref summarize "summarize", @ref subcontext "subcontext" statement, or a @ref find "find expression"; this expression returns a hash of the current row|@code{.py} %%@endcode
     |A @ref call_reference "call reference"|A reference to a function or object method call (similar to a function pointer in C or C++). Function references are resolved in the second phase of parsing (commit phase), while object method references are resolved at run-time|@code{.py} \function_call()@endcode @code{.py} \object_expression.method_name()@endcode
@@ -52,11 +52,15 @@
 
     @par Synopsis
     The find expression can be used to quickly find data in a hash of lists (such as a query result set returned by the Qore::SQL::Datasource::select() or Qore::SQL::SQLStatement::fetchColumns() methods). The find expression will loop through a data structure, and for each element in the structure where the \c where expression is @ref True "True", it will evaluate and return a result expression.\n\n
-    If the \a where_expression only is @ref True "True" for one element in the list, it will return the result of evaluating the result expression directly, otherwise if the \a where_expression is @ref True "True" more than once, then a list of the results of evaluting the result expression for each element is returned.\n\n
+    If the \a where_expression only is @ref True "True" for one element in the list, the legacy form returns the result of evaluating the result expression directly. If the \a where_expression is @ref True "True" more than once, then the legacy form returns a list of the results of evaluating the result expression for each matching element.\n\n
+    The <tt><b>first</b></tt>, <tt><b>last</b></tt>, and <tt><b>one</b></tt> modifiers make the result cardinality explicit. <tt><b>find first</b></tt> returns the first matching result and stops scanning. <tt><b>find last</b></tt> returns the last matching result. <tt><b>find one</b></tt> returns the only matching result and raises an exception if more than one row matches.\n\n
     In each expression in the find expression, column values can be referred to by preceding the name with a \c "%" character (as with @ref context "context statements").
 
     @par Syntax
-    <tt><b>find</b></tt> \a result_expression <tt><b>in</b></tt> \a data_expression <tt>\b where (</tt>\a where_expression<tt>)</tt>
+    <tt><b>find</b></tt> \a result_expression <tt><b>in</b></tt> \a data_expression <tt>\b where (</tt>\a where_expression<tt>)</tt>\n
+    <tt><b>find first</b></tt> \a result_expression <tt><b>in</b></tt> \a data_expression <tt>\b where (</tt>\a where_expression<tt>)</tt>\n
+    <tt><b>find last</b></tt> \a result_expression <tt><b>in</b></tt> \a data_expression <tt>\b where (</tt>\a where_expression<tt>)</tt>\n
+    <tt><b>find one</b></tt> \a result_expression <tt><b>in</b></tt> \a data_expression <tt>\b where (</tt>\a where_expression<tt>)</tt>
 
     @par Description
     \a result_expression \n
@@ -64,10 +68,29 @@
     \a data_expression \n
     This expression must evaluate to a hash of lists, so that the internal context can be set up for the find loop.\n\n
     \a where_expression \n
-    This expression will be evaluated for each row in the \a data_expression. Each time it evaluates to @ref True "True", the \a result_expression will be evaulated and used for the return value for the find expression.
+    This expression will be evaluated for each row in the \a data_expression. Each time it evaluates to @ref True "True", the \a result_expression will be evaluated and used for the return value for the find expression.
 
-    @par Example
+    @par Legacy Example
     @code{.py} rlist = find %fname, %id in data where (%lname =~ /^Smith/);@endcode
+
+    @par Cardinality Examples
+    @code{.py}
+# return the first row hash with the given id
+*hash<auto> row = find first %% in data where (%id == request_id);
+
+# return the last status observed for an account
+*string latest_status = find last %status in data where (%account_id == acct_id);
+
+# require exactly one matching account id
+*int account_id = find one %id in data where (%email == email);
+    @endcode
+
+    Use @ref no-find-modifiers "%no-find-modifiers" or
+    @ref no-streaming-operators "%no-streaming-operators" to disable the
+    <tt><b>find first</b></tt>, <tt><b>find last</b></tt>, and
+    <tt><b>find one</b></tt> forms for legacy source compatibility.
+
+    @throw MULTIPLE-MATCHES-ERROR <tt><b>find one</b></tt> matched more than one row.
 
     @see
     - context

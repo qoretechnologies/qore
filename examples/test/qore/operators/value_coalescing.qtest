@@ -15,7 +15,7 @@ class ValueCoalescingTest inherits QUnit::Test {
     }
 
     testCoalescing() {
-        code code_example = any sub() {return;};
+        code code_example = auto sub() {return;};
         File file_example = new File();
 
         assertEq(2, 2 ?* 3, "int ?* int");
@@ -32,6 +32,21 @@ class ValueCoalescingTest inherits QUnit::Test {
         assertEq(4, NOTHING ?* NOTHING ?* 4 ?* NOTHING, "NOTHING ?* NOTHING ?* int ?* NOTHING");
         assertEq('a', True ?* False ? 'a' : 'b', "?: has lower prio");
         assertEq(file_example, file_example ?* 3, "object ?* int");
+
+        assertEq(2, 2 ?: 3, "int ?: int");
+        assertEq(3, 0 ?: 3, "zero ?: int");
+        assertEq(3, 0?:3, "zero?:int without whitespace");
+        assertEq("a", "a" ?: 3, "str ?: int");
+        assertEq(3, "" ?: 3, "empty_str ?: int");
+        assertEq('a', NOTHING ?: 'a', "NOTHING ?: str");
+        assertEq(True, False ?: True, "False ?: True");
+        assertEq(4, NOTHING ?: NOTHING ?: 4 ?: NOTHING, "NOTHING ?: NOTHING ?: int ?: NOTHING");
+        assertEq('a', True ?: False ? 'a' : 'b', "?: alias has value-coalescing precedence");
+
+        int side_effects = 0;
+        assertEq(1, 1 ?: (++side_effects), "?: does not evaluate fallback for truthy left operand");
+        assertEq(0, side_effects, "?: fallback side effect skipped");
+        assertEq(1, 0 ?: (++side_effects), "?: evaluates fallback for falsy left operand");
+        assertEq(1, side_effects, "?: fallback side effect executed once");
     }
 }
-

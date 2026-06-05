@@ -250,7 +250,7 @@ public class FilesystemBackend inherits AbstractModelRegistryBackend {
         list<hash<ModelVersionInfo>> result();
         foreach auto version in (index.versions ?? ()) {
             push result, AbstractModelRegistryBackend::normalizeVersionInfo(
-                cast<hash<auto>>(version));
+                cast<hash>(version));
         }
         return result;
     }

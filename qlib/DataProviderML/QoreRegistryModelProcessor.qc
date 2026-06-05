@@ -743,16 +743,16 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
         *auto result = processCompleteShapeWindows(records, DataProvider::DataProviderShape::HashOfLists);
         if (exists result) {
             if (isColumnOutputMode()) {
-                return cast<hash<auto>>(convertColumnOutputShape(cast<hash<auto>>(result),
+                return cast<hash>(convertColumnOutputShape(cast<hash>(result),
                     DataProvider::DataProviderShape::HashOfLists));
             }
-            return cast<hash<auto>>(result);
+            return cast<hash>(result);
         }
         *auto fallback = processShapeRowsFallback(records, DataProvider::DataProviderShape::HashOfLists);
         if (!exists fallback) {
             return;
         }
-        return cast<hash<auto>>(fallback);
+        return cast<hash>(fallback);
     }
 
     #! Processes records in an explicitly negotiated pipeline shape
@@ -768,7 +768,7 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 return result;
             }
             if (isColumnOutputMode()) {
-                return convertColumnOutputShape(cast<hash<auto>>(result), shape);
+                return convertColumnOutputShape(cast<hash>(result), shape);
             }
             return AbstractDataProviderMLProcessor::convertBulkOutputShape(result, shape);
         }

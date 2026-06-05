@@ -36,6 +36,8 @@
 
 DLLEXPORT extern QoreClass* QC_STRINGCHARITERATOR;
 DLLEXPORT extern qore_classid_t CID_STRINGCHARITERATOR;
+DLLEXPORT extern QoreClass* QC_STRINGITERATOR;
+DLLEXPORT extern qore_classid_t CID_STRINGITERATOR;
 
 //! Lazy forward iterator over a string's Unicode codepoints.
 /** Each call to next() advances by one character (codepoint), and getValue()
@@ -44,8 +46,9 @@ DLLEXPORT extern qore_classid_t CID_STRINGCHARITERATOR;
     supports works correctly (UTF-8 / UTF-16LE / UTF-16BE / Latin-1 / etc).
 
     Use this for general character iteration where the source string may
-    contain non-ASCII codepoints.  For pure ASCII / byte-oriented parsing,
-    @ref Qore::zzz8stringzzz9::getByte() is faster (no codepoint decode).
+    contain non-ASCII codepoints.  ASCII bytes in ASCII-compatible encodings
+    take a direct fast path; byte-oriented parsing can still use
+    @ref Qore::zzz8stringzzz9::getByte() to avoid iterator/value overhead.
 */
 class StringCharIterator : public QoreIteratorBase {
 public:
@@ -75,6 +78,11 @@ private:
     // Source string; ref'd in ctor, deref'd in dtor.
     QoreStringNode* src;
 
+    // Cached source buffer metadata for fast ASCII access.
+    const char* src_buf = nullptr;
+    size_t src_size = 0;
+    bool ascii_compat = false;
+
     // Byte offset of the next codepoint to decode.
     size_t cursor = 0;
 
@@ -85,6 +93,39 @@ private:
     bool m_valid = false;
 
     // true once iteration has reached end-of-string.
+    bool exhausted = false;
+};
+
+//! Lazy forward iterator over a string's Unicode characters as char values.
+class StringIterator : public QoreIteratorBase {
+public:
+    DLLLOCAL StringIterator(const QoreStringNode* s);
+    DLLLOCAL StringIterator(const StringIterator& old);
+    DLLLOCAL virtual ~StringIterator();
+
+    DLLLOCAL bool next(ExceptionSink* xsink);
+
+    //! Returns the current codepoint as a char value.
+    DLLLOCAL QoreValue getValue(ExceptionSink* xsink);
+
+    DLLLOCAL bool valid() const { return m_valid; }
+
+    DLLLOCAL void reset();
+
+    DLLLOCAL virtual const char* getName() const override { return "StringIterator"; }
+
+    DLLLOCAL virtual const QoreTypeInfo* getElementType() const override;
+
+    QORE_NATIVE_FAST_PATH_NEXT_XSINK()
+
+private:
+    QoreStringNode* src;
+    const char* src_buf = nullptr;
+    size_t src_size = 0;
+    bool ascii_compat = false;
+    size_t cursor = 0;
+    unsigned int current_cp = 0;
+    bool m_valid = false;
     bool exhausted = false;
 };
 

@@ -19,8 +19,8 @@ public class FillTest inherits BaseTest {
     private {
         string text = 'This paragraph will be filled, first without any indentation,
 and then with some (including a hanging indent).';
-        any expect;
-        any result;
+        auto expect;
+        auto result;
     }
 
     #! Test the fill() method

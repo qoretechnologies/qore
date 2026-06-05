@@ -45,6 +45,19 @@ class ContextTest inherits QUnit::Test {
 
         list ages = find %age in q where (%name == "david" || %name == "isabella");
         assertEq(ages, (37, 1), "list find");
+
+        *string first_child = find first %name in q where (%age < 10);
+        assertEq(first_child, "laura", "find first");
+        *string last_child = find last %name in q where (%age < 10);
+        assertEq(last_child, "isabella", "find last");
+        *string only_child = find one %name in q where (%age == 7);
+        assertEq(only_child, "laura", "find one");
+        *string no_match = find one %name in q where (%age > 100);
+        assertEq(no_match, NOTHING, "find one no match");
+        assertThrows("MULTIPLE-MATCHES-ERROR", sub() {
+            find one %name in q where (%age < 10);
+        }, NOTHING, "find one multiple matches");
+
         context (q) {
             assertEq(%%, ("name" : "david", "age" : 37), "context row");
             assertEq(cx_first(), True, "cx_first()");
@@ -114,4 +127,3 @@ class ContextTest inherits QUnit::Test {
         }
     }
 }
-

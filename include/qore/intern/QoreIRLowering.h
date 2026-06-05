@@ -59,7 +59,9 @@ class QoreFoldrOperatorNode;
 class QoreMapSelectOperatorNode;
 class QoreHashMapOperatorNode;
 class QoreHashMapSelectOperatorNode;
+class QoreStreamingOperatorNode;
 class QoreIROnBlockExitInstruction;
+class ForEachStatement;
 
 class QoreIRLowering;
 
@@ -215,6 +217,8 @@ public:
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerHashMapSelect(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerIterate(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerStreaming(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalAnd(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalOr(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalNot(const QoreValue& expr, std::string& error);
@@ -251,12 +255,66 @@ private:
     QoreIRValue lowerFoldlNative(const QoreFoldlOperatorNode* foldl, const QoreValue& expr, std::string& error);
     //! Native IR lowering for foldr operator (reverse iteration)
     QoreIRValue lowerFoldrNative(const QoreFoldrOperatorNode* foldr, const QoreValue& expr, std::string& error);
+    //! Native reverse-fold lowering over an already-lowered iterable value.
+    QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
+        std::string& error);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator
     QoreIRValue lowerHashMapNative(const QoreHashMapOperatorNode* hm, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map+select operator
     QoreIRValue lowerHashMapSelectNative(const QoreHashMapSelectOperatorNode* hms, const QoreValue& expr, std::string& error);
+    //! Native IR lowering for streaming operators
+    QoreIRValue lowerStreamingNative(const QoreStreamingOperatorNode* op, const QoreValue& expr, std::string& error);
+    //! Stage descriptor for fused lazy streaming/functional pipelines.
+    struct LazyPipelineStage {
+        enum Kind {
+            StreamTake,
+            StreamDrop,
+            StreamTakeWhile,
+            StreamTakeUntil,
+            Select,
+            Map,
+            MapSelect,
+        };
+
+        Kind kind;
+        const QoreValue* primary = nullptr;    //!< limit/predicate/map expression
+        const QoreValue* secondary = nullptr;  //!< map-select predicate
+        const QoreProgramLocation* loc = nullptr;
+    };
+
+    //! Root consumer descriptor for fused lazy pipelines.
+    struct LazyPipelineRoot {
+        enum Kind {
+            Streaming,
+            List,
+            Foldl,
+        };
+
+        Kind kind;
+        const QoreStreamingOperatorNode* streaming = nullptr;
+        const QoreValue* fold_expr = nullptr;
+        const QoreTypeInfo* list_element_type = nullptr;
+        const QoreProgramLocation* loc = nullptr;
+        bool need_result = true;
+    };
+
+    //! Collects a supported lazy source chain into ordered stages and an innermost source expression.
+    bool collectLazyPipelineStages(const QoreValue& source, QoreValue& base_source,
+        std::vector<LazyPipelineStage>& source_stages, std::string& error);
+
+    //! Shared native IR lowering for fused lazy streaming/functional pipelines.
+    QoreIRValue lowerLazyPipelineFused(const QoreValue& base_source,
+        const std::vector<LazyPipelineStage>& source_stages, const LazyPipelineRoot& root, std::string& error);
+
+    //! Native IR lowering for non-reference foreach over a lazy functional/streaming pipeline.
+    bool lowerForeachLazyPipelineFused(const ForEachStatement* foreach_stmt, const QoreValue& base_source,
+        const std::vector<LazyPipelineStage>& source_stages, std::string& error);
+
+    //! Fused native IR lowering for nested streaming and functional-operator chains
+    QoreIRValue lowerStreamingFused(const QoreStreamingOperatorNode* op, const QoreValue& base_source,
+        const std::vector<LazyPipelineStage>& source_stages, std::string& error);
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
     bool guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
     bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
@@ -297,6 +355,8 @@ private:
     const QoreTypeInfo* getGuaranteedTypeForValue(const QoreValue* expr, const QoreTypeInfo* fallback) const;
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
+    bool callArgumentMayPassReference(const QoreValue& arg) const;
+    bool callArgsMayPassReferences(const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
@@ -304,7 +364,7 @@ private:
         const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
         const QoreListNode* args) const;
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
-        const QoreProgramLocation* loc, std::string& error);
+        const QoreProgramLocation* loc, std::string& error, bool has_ref_args = false);
     QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left, QoreIRValue right,

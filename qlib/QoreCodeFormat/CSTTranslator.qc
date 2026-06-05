@@ -264,6 +264,17 @@ public class CSTTranslator {
         }
     }
 
+    #! Return true if this CST node contains a leading const binding keyword.
+    private bool hasConstKeyword(hash<auto> node) {
+        string text = trim(extractText(node));
+        return text =~ /(^|\s)const(\s|$)/;
+    }
+
+    #! Return true if this CST node contains a trailing const method qualifier.
+    private bool hasConstMethodQualifier(hash<auto> node) {
+        return exists findType(node, "method_qualifier");
+    }
+
     #! Get type name string from a type node
     private *string getTypeName(*hash<auto> typeNode) {
         if (!exists typeNode) {
@@ -530,6 +541,14 @@ public class CSTTranslator {
                 return translateFoldlExpr(node);
             case "foldr_expression":
                 return translateFoldrExpr(node);
+            case "find_expression":
+                return {"nodetype": ANT_Expression, "kind": AEK_Find, "loc": node.loc};
+            case "iterate_expression":
+                return translateKeywordExpr(node, "AOK_Iterate");
+            case "streaming_terminal_expression":
+            case "streaming_limited_expression":
+            case "streaming_boundary_expression":
+                return translateStreamingExpr(node);
             case "push_expression":
             case "unshift_expression":
             case "splice_expression":
@@ -854,6 +873,7 @@ public class CSTTranslator {
     private hash<auto> translateMethodDecl(hash<auto> node) {
         *hash<auto> nameNode = findField(node, "name");
         *hash<auto> returnType = findField(node, "return_type");
+        *hash<auto> returnsType = findField(node, "returns");
         *hash<auto> paramList = findType(node, "parameter_list");
         *hash<auto> body = findType(node, "block");
         *string mods = getModifiers(node);
@@ -870,6 +890,13 @@ public class CSTTranslator {
         if (exists returnType) {
             result.returnType = {"nodetype": ANT_Expression, "kind": AEK_Name,
                 "name": {"name": extractText(returnType)}, "loc": returnType.loc};
+        }
+        if (hasConstMethodQualifier(node)) {
+            result.isConstMethod = True;
+        }
+        if (exists returnsType) {
+            result.returnsType = {"nodetype": ANT_Expression, "kind": AEK_Name,
+                "name": {"name": extractText(returnsType)}, "loc": returnsType.loc};
         }
         *hash<auto> typeParams = findField(node, "type_parameters");
         if (exists typeParams) {
@@ -887,20 +914,10 @@ public class CSTTranslator {
     private hash<auto> translateFunctionDecl(hash<auto> node) {
         *hash<auto> nameNode = findField(node, "name");
         *hash<auto> returnType = findField(node, "return_type");
+        *hash<auto> returnsType = findField(node, "returns");
         *hash<auto> paramList = findType(node, "parameter_list");
         *hash<auto> body = findType(node, "block");
         *string mods = getModifiers(node);
-
-        # Check for "returns" clause (sub func() returns type { ... })
-        *hash<auto> returnsNode;
-        if (exists node.children) {
-            foreach hash<auto> child in (node.children) {
-                if (child.type == "type" && child.field == "return_type") {
-                    returnsNode = child;
-                    break;
-                }
-            }
-        }
 
         hash<auto> result = {
             "nodetype": ANT_Declaration,
@@ -914,6 +931,19 @@ public class CSTTranslator {
         if (exists returnType) {
             result.returnType = {"nodetype": ANT_Expression, "kind": AEK_Name,
                 "name": {"name": extractText(returnType)}, "loc": returnType.loc};
+        }
+        if (exists nameNode) {
+            string nameText = getIdentName(nameNode);
+            if (nameText =~ /::/ && extractText(node) !~ /(^|\s)sub\s/) {
+                result.scopedMethod = True;
+            }
+        }
+        if (hasConstMethodQualifier(node)) {
+            result.isConstMethod = True;
+        }
+        if (exists returnsType) {
+            result.returnsType = {"nodetype": ANT_Expression, "kind": AEK_Name,
+                "name": {"name": extractText(returnsType)}, "loc": returnsType.loc};
         }
         *hash<auto> typeParams = findField(node, "type_parameters");
         if (exists typeParams) {
@@ -974,6 +1004,7 @@ public class CSTTranslator {
     }
 
     private hash<auto> translateConstantDecl(hash<auto> node) {
+        *hash<auto> typeNode = findField(node, "type");
         *hash<auto> nameNode = findField(node, "name");
         *hash<auto> valueNode = findField(node, "value");
         *string mods = getModifiers(node);
@@ -986,6 +1017,9 @@ public class CSTTranslator {
         };
         if (exists mods) {
             result.modifiers = mods;
+        }
+        if (exists typeNode) {
+            result.typeName = {"name": extractText(typeNode)};
         }
         if (exists valueNode) {
             result.value = translateExpression(valueNode);
@@ -1665,6 +1699,7 @@ public class CSTTranslator {
             case "||": return "AOK_LogicalOr";
             case "??": return "AOK_NullCoalesce";
             case "?*": return "AOK_ValueCoalesce";
+            case "?:": return "AOK_ValueCoalesce";
             case "=~": return "AOK_RegexMatch";
             case "!~": return "AOK_RegexNotMatch";
             case "instanceof": return "AOK_Instanceof";
@@ -2496,6 +2531,58 @@ public class CSTTranslator {
         };
     }
 
+    private hash<auto> translateKeywordExpr(hash<auto> node, string opName) {
+        if (node.loc.start_line != node.loc.end_line) {
+            return {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
+        }
+
+        string argsText;
+        if (exists node.children && node.children.size() > 0) {
+            hash<auto> firstChild = node.children[0];
+            hash<auto> argsLoc = {
+                "start_line": firstChild.loc.start_line,
+                "start_column": firstChild.loc.start_column,
+                "end_line": node.loc.end_line,
+                "end_column": node.loc.end_column,
+            };
+            argsText = extractText({"loc": argsLoc});
+        } else {
+            argsText = extractText(node);
+        }
+
+        return {
+            "nodetype": ANT_Expression,
+            "kind": AEK_Unary,
+            "op": opName,
+            "expression": {"nodetype": ANT_Expression, "kind": AEK_Name,
+                "name": {"name": argsText}, "loc": node.loc},
+            "loc": node.loc,
+        };
+    }
+
+    private hash<auto> translateStreamingExpr(hash<auto> node) {
+        string opName;
+        string text = extractText(node);
+        if (text =~ /^first\b/) {
+            opName = "AOK_First";
+        } else if (text =~ /^any\b/) {
+            opName = "AOK_Any";
+        } else if (text =~ /^all\b/) {
+            opName = "AOK_All";
+        } else if (text =~ /^count\b/) {
+            opName = "AOK_Count";
+        } else if (text =~ /^takewhile\b/) {
+            opName = "AOK_TakeWhile";
+        } else if (text =~ /^takeuntil\b/) {
+            opName = "AOK_TakeUntil";
+        } else if (text =~ /^take\b/) {
+            opName = "AOK_Take";
+        } else if (text =~ /^drop\b/) {
+            opName = "AOK_Drop";
+        }
+        return translateKeywordExpr(node, opName ?? node.type);
+    }
+
     private hash<auto> translateMultiArgExpr(hash<auto> node) {
         # push, unshift, splice, extract - all become unary with the operator name
         string opName;
@@ -2581,6 +2668,7 @@ public class CSTTranslator {
         *hash<auto> typeNode = findField(node, "type");
         *hash<auto> nameNode = findField(node, "name");
         *hash<auto> defaultNode = findField(node, "default");
+        bool isConst = hasConstKeyword(node);
 
         # Build parameter as a DeclExpr with optional assignment
         string typeStr = "";
@@ -2596,7 +2684,14 @@ public class CSTTranslator {
             # Parameter with default: type name = value → Assignment(Decl, value)
             # AEK_Decl loc must cover "type name" only, not the "= value" part
             hash<auto> declLoc;
-            if (exists typeNode && exists nameNode) {
+            if (isConst && exists nameNode) {
+                declLoc = {
+                    "start_line": node.loc.start_line,
+                    "start_column": node.loc.start_column,
+                    "end_line": nameNode.loc.end_line,
+                    "end_column": nameNode.loc.end_column,
+                };
+            } else if (exists typeNode && exists nameNode) {
                 declLoc = {
                     "start_line": typeNode.loc.start_line,
                     "start_column": typeNode.loc.start_column,
@@ -2618,6 +2713,9 @@ public class CSTTranslator {
             }
             if (nameStr.val()) {
                 declExpr.name = {"name": nameStr};
+            }
+            if (isConst) {
+                declExpr.modifiers = "const";
             }
 
             hash<auto> result = {
@@ -2641,6 +2739,9 @@ public class CSTTranslator {
         }
         if (nameStr.val()) {
             result.name = {"name": nameStr};
+        }
+        if (isConst) {
+            result.modifiers = "const";
         }
         return result;
     }
@@ -2742,6 +2843,7 @@ public class CSTTranslator {
         # local_variable_declaration has type and variable_declarator children
         *hash<auto> typeNode = findField(node, "type");
         *hash<auto> declarator = findType(node, "variable_declarator");
+        bool isConst = hasConstKeyword(node);
         if (exists declarator) {
             *hash<auto> nameNode = findField(declarator, "name");
             *hash<auto> valueNode = findField(declarator, "value");
@@ -2749,7 +2851,14 @@ public class CSTTranslator {
             if (exists valueNode) {
                 # Compute AEK_Decl loc: from type start (or name start) to name end
                 hash<auto> declLoc;
-                if (exists typeNode && exists nameNode) {
+                if (isConst && exists nameNode) {
+                    declLoc = {
+                        "start_line": node.loc.start_line,
+                        "start_column": node.loc.start_column,
+                        "end_line": nameNode.loc.end_line,
+                        "end_column": nameNode.loc.end_column,
+                    };
+                } else if (exists typeNode && exists nameNode) {
                     declLoc = {
                         "start_line": typeNode.loc.start_line,
                         "start_column": typeNode.loc.start_column,
@@ -2766,6 +2875,9 @@ public class CSTTranslator {
                     "kind": AEK_Decl,
                     "loc": declLoc,
                 };
+                if (isConst) {
+                    declExpr.modifiers = "const";
+                }
 
                 # Extract operator between name and value from source text
                 # to detect compound assignments (+=, -=, etc.)

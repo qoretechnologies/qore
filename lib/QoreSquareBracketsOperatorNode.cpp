@@ -36,6 +36,51 @@
 
 QoreString QoreSquareBracketsOperatorNode::op_str("[] operator expression");
 
+QoreOperatorNode* QoreSquareBracketsOperatorNode::copyBackground(ExceptionSink* xsink) const {
+    QoreSquareBracketsOperatorNode* rv = copyBackgroundExplicit<QoreSquareBracketsOperatorNode>(xsink);
+    if (rv) {
+        rv->typeInfo = typeInfo;
+        rv->rhs_list_range = rhs_list_range;
+        rv->string_index_char = string_index_char;
+        rv->negative_offsets = negative_offsets;
+    }
+    return rv;
+}
+
+bool QoreSquareBracketsOperatorNode::normalizeIndex(int64& offset, int64 size, bool negative_offsets) {
+    if (negative_offsets && offset < 0) {
+        offset += size;
+    }
+    return offset >= 0 && offset < size;
+}
+
+static bool qore_get_effective_selector_range(const QoreValue& seq, const QoreValue& range_value,
+        bool negative_offsets, int64& start, int64& stop, bool& empty, ExceptionSink* xsink) {
+    empty = false;
+
+    if (!negative_offsets || range_value.getType() != NT_LIST) {
+        return false;
+    }
+
+    const QoreListNode* range_list = range_value.get<const QoreListNode>();
+    size_t range_size = range_list->size();
+    if (!range_size) {
+        empty = true;
+        return true;
+    }
+
+    const QoreValue start_index = range_list->retrieveEntry(0);
+    const QoreValue stop_index = range_list->retrieveEntry(range_size - 1);
+    if (start_index.getAsBigInt() >= 0 && stop_index.getAsBigInt() >= 0) {
+        return false;
+    }
+
+    int64 seq_size;
+    empty = !QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size, start_index,
+        stop_index, static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+    return true;
+}
+
 int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
     // turn off "return value ignored" flags
@@ -43,6 +88,8 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     assert(!typeInfo);
+    string_index_char = !parse_check_parse_option(QoreParseOptions::NO_STRING_INDEX_CHAR);
+    negative_offsets = parse_check_parse_option(PO_NEGATIVE_OFFSETS);
 
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
@@ -121,7 +168,8 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
             }
         } else {
             if (QoreTypeInfo::isType(lti, NT_STRING)) {
-                typeInfo = rti_is_list ? stringTypeInfo : stringOrNothingTypeInfo;
+                typeInfo = rti_is_list ? stringTypeInfo
+                    : (string_index_char ? charOrNothingTypeInfo : stringOrNothingTypeInfo);
             } else if (QoreTypeInfo::isType(lti, NT_BINARY)) {
                 if (rti_is_list) {
                     typeInfo = binaryTypeInfo;
@@ -326,7 +374,8 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
 
     // do not evalute RHS if it's a list with ranges
     if (rhs_list_range)
-        return doSquareBracketsListRange(*lh, right.get<const QoreParseListNode>(), xsink);
+        return doSquareBracketsListRange(*lh, right.get<const QoreParseListNode>(), string_index_char,
+            negative_offsets, xsink);
 
     ValueEvalOptimizedRefHolder rh(right, xsink);
     if (*xsink)
@@ -341,17 +390,18 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
         }
     }
 
-    return doSquareBrackets(*lh, *rh, true, xsink);
+    return doSquareBrackets(*lh, *rh, true, string_index_char, negative_offsets, xsink);
 }
 
 QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
-        ExceptionSink* xsink) {
+        bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
     switch (l.getType()) {
         case NT_LIST: {
             // calculate the runtime element type if possible
             const QoreTypeInfo* vtype = nullptr;
             // try to find a common value type, if any
             bool vcommon = false;
+            bool have_value = false;
             ReferenceHolder<QoreListNode> ret(new QoreListNode(autoTypeInfo), xsink);
             const QoreParseListNode::nvec_t& vl = pln->getValues();
             for (unsigned i = 0; i < vl.size(); ++i) {
@@ -360,7 +410,51 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                     return QoreValue();
                 bool is_range = (vl[i].getType() == NT_OPERATOR
                     && dynamic_cast<const QoreRangeOperatorNode*>(vl[i].getInternalNode()));
-                ValueHolder entry(doSquareBrackets(l, *rh, is_range, xsink), xsink);
+
+                int64 start;
+                int64 stop;
+                bool empty;
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                        xsink)) {
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                    if (empty) {
+                        continue;
+                    }
+
+                    int step = start <= stop ? 1 : -1;
+                    unsigned cancel_check = 0;
+                    for (int64 j = start;; j += step) {
+                        if (++cancel_check % 100 == 0 && qore_check_cancel(xsink, "negative offset range selector")) {
+                            return QoreValue();
+                        }
+
+                        QoreValue index_value(j);
+                        ValueHolder entry(doSquareBrackets(l, index_value, false, string_index_char,
+                            negative_offsets, xsink), xsink);
+                        if (*xsink) {
+                            return QoreValue();
+                        }
+
+                        if (!have_value) {
+                            vtype = entry->getTypeInfo();
+                            vcommon = true;
+                            have_value = true;
+                        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, entry->getTypeInfo())) {
+                            vcommon = false;
+                        }
+
+                        ret->push(entry.release(), xsink);
+                        if (j == stop) {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+
+                ValueHolder entry(doSquareBrackets(l, *rh, is_range, string_index_char, negative_offsets, xsink),
+                    xsink);
                 if (*xsink)
                     return QoreValue();
                 if (is_range) {
@@ -369,18 +463,20 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                     ConstListIterator li(entry->get<const QoreListNode>());
                     while (li.next()) {
                         QoreValue n = li.getValue();
-                        if (!i) {
+                        if (!have_value) {
                             vtype = n.getTypeInfo();
                             vcommon = true;
+                            have_value = true;
                         } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, n.getTypeInfo()))
                             vcommon = false;
 
                         ret->push(n.refSelf(), xsink);
                     }
                 } else {
-                    if (!i) {
+                    if (!have_value) {
                         vtype = entry->getTypeInfo();
                         vcommon = true;
+                        have_value = true;
                     } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, entry->getTypeInfo()))
                         vcommon = false;
                     ret->push(entry.release(), xsink);
@@ -402,7 +498,36 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                     return QoreValue();
                 bool is_range = (i.getType() == NT_OPERATOR
                     && dynamic_cast<const QoreRangeOperatorNode*>(i.getInternalNode()));
-                if (doString(ret, l, *rh, is_range, xsink))
+                int64 start;
+                int64 stop;
+                bool empty;
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                        xsink)) {
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                    if (empty) {
+                        continue;
+                    }
+
+                    int step = start <= stop ? 1 : -1;
+                    unsigned cancel_check = 0;
+                    for (int64 j = start;; j += step) {
+                        if (++cancel_check % 100 == 0 && qore_check_cancel(xsink, "negative offset range selector")) {
+                            return QoreValue();
+                        }
+
+                        QoreValue index_value(j);
+                        if (doString(ret, l, index_value, false, string_index_char, negative_offsets, xsink)) {
+                            return QoreValue();
+                        }
+                        if (j == stop) {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                if (doString(ret, l, *rh, is_range, string_index_char, negative_offsets, xsink))
                     return QoreValue();
             }
             return ret.release();
@@ -415,7 +540,36 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                     return QoreValue();
                 bool is_range = (i.getType() == NT_OPERATOR
                     && dynamic_cast<const QoreRangeOperatorNode*>(i.getInternalNode()));
-                if (doBinary(bin, l, *rh, is_range, xsink))
+                int64 start;
+                int64 stop;
+                bool empty;
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                        xsink)) {
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                    if (empty) {
+                        continue;
+                    }
+
+                    int step = start <= stop ? 1 : -1;
+                    unsigned cancel_check = 0;
+                    for (int64 j = start;; j += step) {
+                        if (++cancel_check % 100 == 0 && qore_check_cancel(xsink, "negative offset range selector")) {
+                            return QoreValue();
+                        }
+
+                        QoreValue index_value(j);
+                        if (doBinary(bin, l, index_value, false, negative_offsets, xsink)) {
+                            return QoreValue();
+                        }
+                        if (j == stop) {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                if (doBinary(bin, l, *rh, is_range, negative_offsets, xsink))
                     return QoreValue();
             }
             return bin.release();
@@ -427,8 +581,8 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
 }
 
 int QoreSquareBracketsOperatorNode::doString(SimpleRefHolder<QoreStringNode>& ret, const QoreValue l,
-        const QoreValue r, bool list_ok, ExceptionSink* xsink) {
-    ValueHolder entry(doSquareBrackets(l, r, list_ok, xsink), xsink);
+        const QoreValue r, bool list_ok, bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
+    ValueHolder entry(doSquareBrackets(l, r, list_ok, string_index_char, negative_offsets, xsink), xsink);
     if (*xsink)
         return -1;
     if (!entry->isNothing()) {
@@ -439,8 +593,8 @@ int QoreSquareBracketsOperatorNode::doString(SimpleRefHolder<QoreStringNode>& re
 }
 
 int QoreSquareBracketsOperatorNode::doBinary(SimpleRefHolder<BinaryNode>& bin, const QoreValue l, const QoreValue r,
-        bool list_ok, ExceptionSink* xsink) {
-    ValueHolder entry(doSquareBrackets(l, r, list_ok, xsink), xsink);
+        bool list_ok, bool negative_offsets, ExceptionSink* xsink) {
+    ValueHolder entry(doSquareBrackets(l, r, list_ok, true, negative_offsets, xsink), xsink);
     if (*xsink)
         return -1;
     switch (entry->getType()) {
@@ -461,7 +615,7 @@ int QoreSquareBracketsOperatorNode::doBinary(SimpleRefHolder<BinaryNode>& bin, c
 }
 
 QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, const QoreValue r, bool list_ok,
-        ExceptionSink* xsink) {
+        bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
     qore_type_t left_type = l.getType();
     qore_type_t right_type = r.getType();
 
@@ -475,7 +629,8 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
                 bool vcommon = false;
                 ReferenceHolder<QoreListNode> ret(new QoreListNode(autoTypeInfo), xsink);
                 while (it.next()) {
-                    ValueHolder entry(doSquareBrackets(l, it.getValue(), false, xsink), xsink);
+                    ValueHolder entry(doSquareBrackets(l, it.getValue(), false, string_index_char, negative_offsets,
+                        xsink), xsink);
                     if (*xsink)
                         return QoreValue();
 
@@ -515,7 +670,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
             case NT_STRING: {
                 SimpleRefHolder<QoreStringNode> ret(new QoreStringNode);
                 while (it.next()) {
-                    if (doString(ret, l, it.getValue(), false, xsink))
+                    if (doString(ret, l, it.getValue(), false, string_index_char, negative_offsets, xsink))
                         return QoreValue();
                 }
                 return ret.release();
@@ -523,7 +678,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
             case NT_BINARY: {
                 SimpleRefHolder<BinaryNode> bin(new BinaryNode);
                 while (it.next()) {
-                    if (doBinary(bin, l, it.getValue(), false, xsink))
+                    if (doBinary(bin, l, it.getValue(), false, negative_offsets, xsink))
                         return QoreValue();
                 }
                 return bin.release();
@@ -537,26 +692,35 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
     int64 offset = r.getAsBigInt();
     switch (left_type) {
         case NT_LIST: {
-            return l.get<const QoreListNode>()->getReferencedEntry(offset);
+            const QoreListNode* list = l.get<const QoreListNode>();
+            if (!normalizeIndex(offset, static_cast<int64>(list->size()), negative_offsets)) {
+                return QoreValue();
+            }
+            return list->getReferencedEntry(static_cast<size_t>(offset));
         }
 
         case NT_STRING: {
             QoreStringNodeValueHelper str(l);
+            if (string_index_char) {
+                return QoreValue::makeCharFromStringAt(**str, offset, xsink);
+            }
             return str->substr(offset, 1, xsink);
         }
 
         case NT_BINARY: {
             const BinaryNode* b = l.get<const BinaryNode>();
-            if (offset < 0 || (size_t)offset >= b->size())
+            if (!normalizeIndex(offset, static_cast<int64>(b->size()), negative_offsets)) {
                 return QoreValue();
+            }
             return (int64)(((unsigned char*)b->getPtr())[offset]);
         }
 
         case NT_BUFFER: {
-            if (offset < 0) {
+            const QoreBufferNode* b = l.get<const QoreBufferNode>();
+            if (!normalizeIndex(offset, static_cast<int64>(b->size()), negative_offsets)) {
                 return QoreValue();
             }
-            return l.get<const QoreBufferNode>()->getReferencedEntry(offset, xsink);
+            return b->getReferencedEntry(static_cast<size_t>(offset), xsink);
         }
     }
 
@@ -575,7 +739,8 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
     if (rhs_list_range) {
         if (lhs->getType() == NT_LIST) {
             value_type = list;
-            return new QoreFunctionalSquareBracketsComplexOperator(lhs, right.get<const QoreParseListNode>(), xsink);
+            return new QoreFunctionalSquareBracketsComplexOperator(lhs, right.get<const QoreParseListNode>(),
+                string_index_char, negative_offsets, xsink);
         }
     } else {
         if (rhs.eval(right))
@@ -588,16 +753,17 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
                 return nullptr;
 
             value_type = list;
-            return new QoreFunctionalSquareBracketsOperator(lhs, rhs, xsink);
+            return new QoreFunctionalSquareBracketsOperator(lhs, rhs, string_index_char, negative_offsets, xsink);
         }
     }
 
     ValueHolder res(xsink);
 
     if (rhs_list_range)
-        res = doSquareBracketsListRange(*lhs, right.get<const QoreParseListNode>(), xsink);
+        res = doSquareBracketsListRange(*lhs, right.get<const QoreParseListNode>(), string_index_char,
+            negative_offsets, xsink);
     else
-        res = doSquareBrackets(*lhs, *rhs, true, xsink);
+        res = doSquareBrackets(*lhs, *rhs, true, string_index_char, negative_offsets, xsink);
 
     if (*xsink)
         return nullptr;
@@ -617,7 +783,7 @@ bool QoreFunctionalSquareBracketsOperator::getNextImpl(ValueOptionalRefHolder& v
         return true;
 
     val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, rightList->retrieveEntry(offset), false,
-        xsink), true);
+        string_index_char, negative_offsets, xsink), true);
 
     return false;
 }
@@ -625,7 +791,7 @@ bool QoreFunctionalSquareBracketsOperator::getNextImpl(ValueOptionalRefHolder& v
 const QoreTypeInfo* QoreFunctionalSquareBracketsOperator::getValueTypeImpl() const {
     switch (leftValue->getType()) {
         case NT_LIST: return leftValue->get<const QoreListNode>()->getValueTypeInfo();
-        case NT_STRING: return stringTypeInfo;
+        case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
         case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
     }
@@ -658,14 +824,16 @@ bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHo
                                                     // iterator ...
             return getNextImpl(val, xsink);         // ... and get the next top-level element
         } else  // set the value using the index from the inner subrange
-            val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, *rangeVal, false, xsink), true);
+            val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, *rangeVal, false,
+                string_index_char, negative_offsets, xsink), true);
     } else {
         ValueEvalOptimizedRefHolder rh(rightParseList->get(offset), xsink);
         if (*xsink)
             return false;
 
         // set the value using the top-level index
-        val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, *rh, false, xsink), true);
+        val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, *rh, false, string_index_char,
+            negative_offsets, xsink), true);
     }
 
     return false;
@@ -674,7 +842,7 @@ bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHo
 const QoreTypeInfo* QoreFunctionalSquareBracketsComplexOperator::getValueTypeImpl() const {
     switch (leftValue->getType()) {
         case NT_LIST: return leftValue->get<const QoreListNode>()->getValueTypeInfo();
-        case NT_STRING: return stringTypeInfo;
+        case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
         case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
     }

@@ -342,6 +342,17 @@ Mutation honours the existing `binary` COW invariant — see §10.4. For
 all v1 records `byte_length == Name::size()`; the v2 variable-tail
 extension is the only place this invariant relaxes.
 
+**Implementation note:** current `BinaryNode` is an owning `{ptr, len}`
+buffer, not itself a span/view type. The `BindeclInstance` wrapper can
+still hold `{BinaryNode*, byte_offset, byte_length}` directly, but the
+zero-copy `bindecl -> binary` conversion for a non-zero or shorter span
+requires an explicit storage decision before implementation: either add
+span-aware binary storage / a binary-slice node that preserves the public
+`binary` contract, or deliberately copy only in that conversion path and
+revise the public semantics. This design keeps zero-copy span conversion
+as the v1 target; the runtime and AOT estimates include the work needed
+to make that target real.
+
 Construction:
 
 ```qore
@@ -765,76 +776,53 @@ The wire-format and on-disk concerns of AOT/IR are split into §6
 
 ### 5.7 AST parser module mirror
 
-Per the project guideline ("When editing the core parser
-(`lib/parser.ypp`, `lib/scanner.lpp`), mirror changes in
-`modules/astparser/src/`"), the astparser module needs a parallel set
-of changes so that QLS, qore-doc, and other tooling can parse, search,
-and document `bindecl` declarations.
+The astparser module now uses the tree-sitter grammar and `CSTSearcher`
+for the active public API. The old Bison-based astparser implementation
+and AST node hierarchy have been removed, so `bindecl` tooling support
+belongs in the tree-sitter grammar, generated artifacts, CST metadata,
+and downstream search/formatting consumers.
 
-**Scanner — `modules/astparser/src/ast_scanner.lpp`:**
+**Grammar — `modules/astparser/grammars/tree-sitter-qore/grammar.js`:**
 
-- Recognise the `bindecl` keyword (mirror of `TOK_BINDECL`).
+- Recognise the `bindecl` keyword and the declaration/member structure.
 - Recognise the context-sensitive primitive type keywords (`uint8`,
   `int8`, `uint16`, `int16`, `uint32`, `int32`, `uint64`, `int64`,
   `float32`, `float64`, `bool8`, `byte`, `zstring`) inside
   `bindecl { ... }` blocks; outside, they remain identifiers. The
   existing global `string` keyword is reused unchanged inside bindecl
-  member position; no new lexer state is needed for it.
-- Doc-comment claim/attach handling for `bindecl` (mirror of the
-  `ATTACH_HASHDECL_DOC_COMMENT` macro at `ast_parser.ypp:204`).
+  member position.
+- Add tree-sitter rules for `bindecl_declaration`, `bindecl_member`,
+  layout/member attributes, fixed array counts, and bitfield widths.
+- Regenerate committed artifacts under
+  `modules/astparser/grammars/tree-sitter-qore/src/`.
 
-**Grammar — `modules/astparser/src/ast_parser.ypp`:**
+**CST search and metadata:**
 
-- New tokens: `TOK_BINDECL`, `BINDECL_IDENTIFIER` (and any
-  `BINDECL_IDENTIFIER_OPENCURLY` form if literal-construction syntax is
-  added in v2).
-- New non-terminals: `bindecl_def`, `bindecl_attributes`,
-  `bindecl_member`, `bindecl_attribute_list`, `bindecl_layout_attr`,
-  `bindecl_member_attr_list`, `fixed_array_count`, `bitfield_width`.
-- Production placement: `bindecl_def` slots into the same grammar
-  positions as `hashdecl_def` (top-level decl, namespace decl,
-  member-list-of-namespace) — see `ast_parser.ypp:573`, `:921`,
-  `:1359` for the existing template.
-- Destructor declarations for new non-terminals follow the
-  `hashdecl_*` pattern at `:533–:535`.
-
-**AST nodes — `modules/astparser/src/ast/declarations/`:**
-
-- `ASTBindeclDeclaration.h` — mirror of `ASTHashDeclaration.h`. Holds
-  the decl name, attribute list, member list, and source location.
-  Inherits from `ASTDeclaration`.
-- `ASTBindeclMemberDeclaration.h` — mirror of
-  `ASTHashMemberDeclaration.h`. Holds member name, type, optional
-  bitfield width, optional per-field attribute list, and doc comment.
-- `ASTDeclarationKind.h` — new enum value `ADK_Bindecl`.
-- `ASTNodeType.h` — new enum value `ANT_BindeclDeclaration` (and
-  `ANT_BindeclMemberDeclaration` if separate visitor support is
-  needed).
-
-**Visitors / printers / searchers:**
-
-- `AstPrinter.cpp` / `.h` — new `printBindeclDeclaration` and
-  `printBindeclMemberDeclaration` mirroring the hashdecl printers.
-- `AstTreeSearcher.cpp` / `.h` — visit hooks for the new node kinds so
-  symbol search / hover / go-to-definition work.
 - `CSTSearcher.cpp` / `.h` — concrete-syntax-tree searcher updates for
-  the new tokens and node types.
-- `AstTreePrinter.cpp` / `.h` — pretty-printer for the new nodes.
+  the new node types so symbol search, hover, go-to-definition, and
+  member listing work.
+- `GetNodesInfoQuery.cpp` / `.h` — no special AST-node layer is needed,
+  but tests must verify the CST shape and field names for `bindecl`.
+- `ASTDeclarationKind.h` / `ASTNodeType.h` — add public enum constants
+  only if the ql_ast compatibility constants require them.
 
 **Module exports — `modules/astparser/src/ql_ast.qpp`:**
 
 - New constants for the bindecl kind (`ADK_Bindecl`) so Qore-side
-  consumers (QLS) can dispatch on declaration kind.
+  consumers (QLS) can dispatch on declaration kind, if the existing
+  compatibility constants are not expressive enough.
 - The `AstParser`/`AstTree`/`AstTreeSearcher` qclass APIs already
-  accept abstract declaration nodes; no surface-API change.
+  expose tree-sitter CST nodes and abstract symbol metadata; no
+  surface-API change should be needed unless bindecl-specific metadata
+  has to be published.
 
 **Test coverage:**
 
-- `examples/test/qore/astparser/` (or wherever the astparser tests
-  live) gets bindecl-specific cases: parse a simple bindecl, verify
-  the AST structure, verify the printer roundtrip, verify symbol
-  search finds the decl name and member names, verify hover info
-  reports the resolved offset/width.
+- `modules/astparser/test/` gets bindecl-specific cases: parse a
+  simple bindecl, verify the CST structure and field names, verify
+  QoreCodeFormat roundtrip output, verify symbol search finds the decl
+  name and member names, and verify hover/member metadata reports the
+  resolved offset/width.
 
 The astparser work is **not** optional — QLS and qore-doc are the user-
 facing surfaces for new language constructs, and shipping `bindecl`
@@ -981,16 +969,20 @@ extensions are gated by a single new feature flag bit; readers without
 the flag refuse to load blobs that advertise it (existing behaviour
 for forward-incompatible features).
 
-**Feature flag bit.** `QORE_AOT_FEAT_BINDECL = 1ULL << 21` (verified
-against `include/qore/intern/QoreAOTBinary.h:90–112`; bits 0–20 taken,
-21 is the next free slot). `QORE_AOT_SUPPORTED_FEATURES` extends to
-`0x3FFFFFULL`.
+**Feature flag bit.** Claim the next free `QORE_AOT_FEAT_*` bit at
+implementation time. Earlier drafts named bit 21, but that is no longer
+available on the active branch. As of the 2026-06-05 review pass,
+`include/qore/intern/QoreAOTBinary.h` uses feature bits through bit 57
+and `QORE_AOT_SUPPORTED_FEATURES == 0x03FFFFFFFFFFFFFF`, so the next
+candidate is `QORE_AOT_FEAT_BINDECL = 1ULL << 58` and the supported mask
+would extend to `0x07FFFFFFFFFFFFFF`. Re-verify before landing because
+the AOT feature space is actively used by unrelated work.
 
 **New QORD section type — `BINDECL_DECL`.** The section id must be
-claimed at implementation time from `QoreAOTSectionType`; in the current
-tree (`include/qore/intern/QoreAOTBinary.h:115–137`), ids 1–21 are
-taken (21 = `BUILD_INFO`), so the next candidate is **22**. Section
-payload per declaration:
+claimed at implementation time from `QoreAOTSectionType`. Earlier drafts
+named section id 22, but that is now used by `MODULE_COMMANDS`; as of
+the 2026-06-05 review pass, ids 1–25 are taken, so the next candidate is
+**26**. Section payload per declaration:
 
 ```
 u32  decl_id_in_blob
@@ -1140,22 +1132,25 @@ incompatibility behaviour). New runtimes loading old blobs: the new
 unset; no behaviour change. The QORD blob version number does *not*
 change; only the feature flag mask widens.
 
-### 6.3 AST persistence — astparser tree serialization
+### 6.3 Astparser CST serialization and roundtrip
 
-The astparser module produces an in-memory AST that QLS, qore-doc, and
-diagnostic tools traverse. There's no on-disk AST persistence today
-beyond the source itself, so "AST persistence" is really "the AST node
-classes round-trip through the printer and re-parse cleanly":
+The astparser module now produces a tree-sitter concrete syntax tree
+that QLS, qore-doc, QoreCodeFormat, and diagnostic tools traverse.
+There's no on-disk astparser persistence today beyond the source
+itself, so this work is really CST shape stability and formatter
+roundtrip support:
 
-- `AstPrinter::printBindeclDeclaration` (added per §5.7) must emit
-  source that re-parses to a structurally-identical AST.
-- `AstTreePrinter` (the node-shape printer used for diagnostics) must
-  cover the new node types so issue reports are not silent.
-- The CST (concrete-syntax-tree) printer used by reformatting tooling
-  must preserve attribute ordering — `[endian=big, align=packed]` and
+- `modules/astparser/src/queries/GetNodesInfoQuery.*` and
+  `AstTreePrinter` must cover the new node types and fields so
+  diagnostic output and tests expose the bindecl structure.
+- `CSTSearcher` must publish the bindecl symbols and member metadata
+  needed by QLS, qore-doc, and QoreApiMetadata.
+- QoreCodeFormat translation/printing must emit source that re-parses
+  to an equivalent CST.
+- Reformatting must preserve or intentionally normalize attribute
+  ordering — `[endian=big, align=packed]` and
   `[align=packed, endian=big]` are semantically identical but produce
-  different bytes; the reformatter should normalise to attribute
-  alphabetical order.
+  different bytes; the formatter should define the canonical order.
 
 No new persistent AST file format and no serialized AST ID assignment.
 The in-memory astparser enums still gain ordinary source-level values
@@ -1226,8 +1221,8 @@ cross-module dependency tracking works the same way as for
 
 Every new keyword and lexer construct introduced by this proposal gets
 a matching parse option that disables it for older sources. This
-follows the same pattern documented in the `char` design
-(`char-type.md` §7.2) and is required because user code may have
+follows the same compatibility pattern documented in the `char` design
+(`../design/char-type.md`) and is required because user code may have
 identifiers named `bindecl` or any of the primitive type keywords.
 
 | Parse directive | Parse option flag (C++) | Disables                                        |
@@ -1383,6 +1378,15 @@ The pseudo-class exposes `<bindecl>::isShared()` so library code can
 defensively check before bulk mutations where a one-shot upfront
 `clone()` is cheaper than per-write COW.
 
+The current `BinaryNode` implementation does not expose a first-class
+subspan value. That means the implementation must centralize span COW in
+`BindeclInstance` instead of assuming existing binary mutation helpers
+already know about `byte_offset` / `byte_length`. In particular, the
+first mutation of a shared cast-over packet must copy only the logical
+record span into a fresh private `BinaryNode`, reset `byteOffset()` to
+zero, and leave the rest of the original packet unmaterialized. This is a
+runtime design point, not just a field-store helper detail.
+
 ### 10.5 Native ABI layout is not just alignment
 
 FFI use cases are the most likely place for users to over-trust
@@ -1446,18 +1450,18 @@ implementation review against the relevant memory entries
 |---|---|
 | Lexer changes (keyword + context-sensitive primitives + `PO_NO_BINDECL`)  | 4-5 days               |
 | Parser + layout pass (offsets, bitfields, fixed arrays, attribute validation, fingerprint) | 1-2 weeks    |
-| Type checker (bindeclTypeInfo, member access, constructor + cast forms)   | 1-2 weeks              |
-| Runtime (BindeclDecl, span-aware BindeclInstance, NT_BINDECL_INSTANCE node type, COW mutation checks) | 1-2 weeks  |
-| IR opcodes (Load/StoreBindeclField + verifier)                            | 1 week                 |
-| JIT / AOT lowering (LLVM emit, QORD section, feature flag bit 21 / next section id) | 2 weeks                |
-| **Serialization** — `Serializable` integration + `BindeclSerializationInfo` hashdecl + writer/reader hooks | 1 week        |
-| **AOT serialization** — QORD `BINDECL_DECL` section writer/reader, layout fingerprint, decl path resolution, constant-pending discipline | 1-2 weeks |
-| **astparser module mirror** — scanner/grammar/AST nodes/printers/searchers | 1-2 weeks              |
+| Type checker (bindeclTypeInfo, member access, constructor + cast forms)   | 2-3 weeks              |
+| Runtime and field semantics (BindeclDecl, span-aware BindeclInstance, NT_BINDECL_INSTANCE node type, COW mutation checks, binary-span conversion strategy, scalar/array/string/bitfield encoding) | 3-4 weeks |
+| IR opcodes (Load/StoreBindeclField + verifier)                            | 1-1.5 weeks            |
+| JIT / AOT lowering (LLVM emit, QORD section, current feature flag / section id allocation) | 3-4 weeks              |
+| **Serialization** — `Serializable` integration + `BindeclSerializationInfo` hashdecl + writer/reader hooks | 1-1.5 weeks    |
+| **AOT serialization** — QORD `BINDECL_DECL` section writer/reader, layout fingerprint, decl path resolution, constant-pending discipline | 1.5-2 weeks |
+| **astparser module mirror** — tree-sitter grammar, generated artifacts, CST metadata, printers/searchers | 1.5-2.5 weeks |
 | `<bindecl>` pseudo-class + reflection module                              | 4-5 days               |
 | Test coverage (qtest suite — layout, fixed arrays, write semantics, span casts, bitfields, endian, AOT, Serializable, astparser, parse-option) | 2-3 weeks    |
 | Doc updates (Doxygen, language guide, release notes)                      | 4-5 days               |
-| **Total (sequential)**                                                    | **~12-15 weeks**       |
-| **Total (parallel, 2 developers)**                                        | **~8-10 weeks**        |
+| **Total (sequential)**                                                    | **~15-20 weeks**       |
+| **Total (parallel, 2 developers)**                                        | **~10-13 weeks**       |
 
 The FFI module is a **separate design** with its own effort estimate;
 it is not counted here. The bindecl-side integration shim it consumes
@@ -1467,20 +1471,27 @@ full FFI module — libffi integration, ABI aliases and layout
 validation, calling convention testing across x86_64 / aarch64 /
 arm32, callback trampolines, pointer lifetime rules, sandbox
 plumbing — and the `linux-syscall` submodule both belong in their
-own design-pending file.
+own design-pending file. If planned immediately after `bindecl`, a
+minimal libffi consumer that only exercises fixed signatures and
+`bindecl` pointer arguments is likely another **8-12 weeks**; a
+production-quality FFI / syscall module with ABI aliases, validation,
+callbacks, varargs, pointer lifetime rules, sandboxing, and cross-arch
+testing is more realistically **12-20+ weeks**.
 
 This estimate is independent of, and complementary to,
 [`plugin-types-and-dense-data.md`](../design/plugin-types-and-dense-data.md).
 
 The estimate is lower than the broader draft because v1 now excludes
 variable-length tails and the full FFI module. It is still above the
-earliest sketch because the review pass surfaced three areas that were
+earliest sketch because review surfaced four areas that were
 under-scoped: full `Serializable` round-trip (including the
 layout-fingerprint discipline and cross-module decl resolution); QORD
-serialization in the level of detail the AOT loader actually needs; and
-the astparser module mirror, which is a hard requirement per the project
-guideline. Variable-length tails are a follow-up effort estimated at
-**2-4 weeks** once the static-layout machinery has landed.
+serialization in the level of detail the AOT loader actually needs; the
+astparser module mirror, which is a hard requirement per the project
+guideline; and the runtime storage work needed to make span-backed
+`bindecl` instances interact cleanly with today's owning `BinaryNode`
+implementation. Variable-length tails are a follow-up effort estimated
+at **2-4 weeks** once the static-layout machinery has landed.
 
 ### 11.1 Acceptance test matrix
 

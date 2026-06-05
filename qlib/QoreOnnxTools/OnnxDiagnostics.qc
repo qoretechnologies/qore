@@ -165,7 +165,7 @@ hash<auto> diagnostics =
 
         hash<auto> validation;
         if (package_info.validation) {
-            validation = summarizeValidation(cast<hash<auto>>(package_info.validation));
+            validation = summarizeValidation(cast<hash>(package_info.validation));
             foreach string action in (validation.recommended_actions) {
                 addUnique(\actions, action);
             }
@@ -252,7 +252,7 @@ hash<auto> diagnostics =
             rv.auto_provider_selected = provider_info.auto_provider_selected ? True : False;
         }
         if (provider_info.provider_report) {
-            return providerSummary(cast<hash<auto>>(provider_info.provider_report));
+            return providerSummary(cast<hash>(provider_info.provider_report));
         }
         return rv;
     }

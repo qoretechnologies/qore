@@ -25,7 +25,46 @@
 
     Variables may be assigned any value unless restricted with a type declaration. If no type declaration is given, then the variable is assumed to be type @ref any_type "any". Note that type declarations are required for all variables (and for function and method parameters and class members) when the @ref require-types "%require-types" parse option is set.
 
+    @subsection readonly_local_variables Read-Only Local Variables
+    A local variable can be declared with \c const to make the binding read-only after its initializer has run:
+    @code{.py}
+const int limit = 100;
+const auto config = get_config();
+const *string label = NOTHING;
+
+sub process(list<int> values) {
+    const int count = values.size();
+    const list<int> snapshot = values;
+    # count = 0;        # READONLY-VARIABLE-ASSIGNMENT-ERROR
+    # remove snapshot;  # READONLY-VARIABLE-ASSIGNMENT-ERROR
+}
+    @endcode
+
+    Read-only local variables must have an initializer. In @ref require-types "%require-types" mode, including @ref modern "%modern", the declaration must also include an explicit type; use \c "const auto name = expr" when the initializer should determine the type.
+
+    The read-only property applies to the variable binding itself and is not transitive immutability. A read-only variable cannot be reassigned, removed, incremented, used as the target of compound assignment, written through an index/member lvalue, or captured by a mutable @ref lvalue_references "reference". Objects and containers referenced by the value still have their normal runtime behavior when accessed through other mutable references.
+
+    @code{.py}
+%modern
+
+sub example(hash<auto> source) {
+    const auto h = source;
+    # h.name = "new";           # cannot modify read-only local variable 'h'
+    source.name = "new";        # OK: source is a separate mutable parameter
+
+    const int answer = 42;
+    # reference<int> r = \answer;  # cannot create a mutable reference
+}
+    @endcode
+
+    At top level and in namespace or class declaration contexts, \c const declares a @ref constants "constant" instead of a read-only local variable.
+
     @ref local_variables "Local variables" are not shared between threads (local variables have a distinct value in each thread, with some very particular exceptions), however global variables are. See @ref threading (and in particular @ref threading_and_variables) for more information.
+
+    @par Read-Only Local Variable Syntax
+    <tt><b>const</b> <em>@ref data_type_declarations "type"</em> <em>name</em> = <em>@ref expressions "initialization_expression"</em>;</tt>\n
+    <tt><b>const</b> auto <em>name</em> = <em>@ref expressions "initialization_expression"</em>;</tt>\n
+    <tt><b>const</b> <em>@ref data_type_declarations "type"</em> <em>name</em>(<em>constructor_args, ...</em>);</tt>
 
     Global variables are members of @ref qore_namespaces "namespaces"; if a global variable is declared anywhere outside a namespace declaration, and a namespace path is not given, then the global variable will be assumed to be in the root namespace.
 

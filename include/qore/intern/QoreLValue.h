@@ -975,6 +975,8 @@ public:
         } else if (vt == NT_FLOAT) {
             v.f = val.getAsFloat();
             if (type != QV_Float) type = QV_Float;
+        } else if (vt == NT_CHAR) {
+            setInlineValue(val);
         } else if (val.isShortString()) {
             setInlineValue(val);
         } else if (val.hasNode()) {

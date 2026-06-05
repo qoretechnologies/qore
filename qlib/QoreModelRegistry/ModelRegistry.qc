@@ -120,7 +120,7 @@ public class ModelRegistry {
                 }
                 return new FilesystemBackend(options.path, options.tenant_id);
             }
-%ifndef NoSqlUtil
+%ifndef NoJson
             case "database": {
                 if (!exists options.datasource) {
                     throw "ML-REGISTRY-ERROR",

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <typeinfo>
 #include <unordered_map>
@@ -61,6 +62,7 @@
 #include <qore/intern/QoreOrEqualsOperatorNode.h>
 #include <qore/intern/QoreXorEqualsOperatorNode.h>
 #include <qore/intern/QoreFoldlOperatorNode.h>
+#include <qore/intern/QoreIterateOperatorNode.h>
 #include <qore/intern/QoreLogicalComparisonOperatorNode.h>
 #include <qore/intern/QoreLogicalEqualsOperatorNode.h>
 #include <qore/intern/QoreLogicalGreaterThanOperatorNode.h>
@@ -73,7 +75,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 378,
+static_assert(QORE_IR_MAX_OPCODE == 383,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -96,7 +98,7 @@ static_assert(QORE_IR_MAX_OPCODE == 378,
 #include <qore/intern/QoreDeleteOperatorNode.h>
 
 extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
-        int32_t count, const uint64_t* selector_bits, ExceptionSink* xsink);
+        int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink);
 
 static int qore_ir_check_closure_self_valid(QoreObject* obj, ExceptionSink* xsink) {
     return (obj && qore_closure_self_context(obj))
@@ -631,7 +633,7 @@ struct IRCallFrame {
     std::unordered_set<const LocalVar*> instantiated_locals;
     std::vector<const LocalVar*> instantiated_locals_ordered;
     std::unordered_set<const LocalVar*> locally_uninstantiated;
-    std::vector<bool> locals_ir_only;
+    std::vector<uint8_t> locals_ir_only;
     std::vector<bool> locals_instantiated;
     std::vector<uint32_t> local_init_slots;
     std::vector<std::vector<uint32_t>> local_load_slots;
@@ -1262,15 +1264,13 @@ static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
 
 // Write-through for closure variable stores: writes the value to the actual
 // ClosureVarValue so that changes are visible outside the IR interpreter.
+static ClosureVarValue* findClosureVarValueForIR(LocalVar* var);
+
 static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
     if (!var) {
         return;
     }
-    // See LocalVar::eval for the lookup priority strategy. In summary: when
-    // a nested function call has pushed its own CVV on cvstack (different from
-    // the closure's captured CVV for the same LocalVar*), the write must go to
-    // the NESTED function's own CVV, not the captured one.
-    ClosureVarValue* cv = resolve_closure_var_value(var);
+    ClosureVarValue* cv = findClosureVarValueForIR(var);
     if (!cv) {
         // Closure variable not found — fall back to local stack assignment.
         // This happens when a function has closureUse() variables but executes
@@ -1291,6 +1291,24 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     helper.assign(stored);
 }
 
+static ClosureVarValue* findClosureVarValueForIR(LocalVar* var) {
+    if (!var) {
+        return nullptr;
+    }
+    // See LocalVar::eval / assignClosureVarValue for lookup priority strategy.
+    return resolve_closure_var_value(var);
+}
+
+static bool incrementClosureVarIntFast(LocalVar* var, int64_t delta, int64_t& result, ExceptionSink* xsink) {
+    ClosureVarValue* cv = findClosureVarValueForIR(var);
+    if (!cv || cv->isReadOnly() || cv->finalized || cv->val.getType() != NT_INT) {
+        return false;
+    }
+    result = cv->val.getAsBigInt() + delta;
+    discard(cv->val.assign(static_cast<int64>(result)), xsink);
+    return !(xsink && *xsink);
+}
+
 // Variant of assignClosureVarValue that TRANSFERS ownership of value's reference.
 // See assignLocalVarValueTransfer for rationale.
 static void assignClosureVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
@@ -1298,8 +1316,7 @@ static void assignClosureVarValueTransfer(LocalVar* var, QoreValue value, Except
         value.discard(xsink);
         return;
     }
-    // See LocalVar::eval / assignClosureVarValue for lookup priority strategy.
-    ClosureVarValue* cv = resolve_closure_var_value(var);
+    ClosureVarValue* cv = findClosureVarValueForIR(var);
     if (!cv) {
         // Fall back to local stack assignment
         LValueHelper helper(xsink);
@@ -1424,7 +1441,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     for (const auto& block : func.blocks) {
         for (const auto& inst_uptr : block->instructions) {
             if (((++inst_count % 100) == 0)
-                    && qore_check_cancel(xsink, "IR use-count build")) {
+                    && qore_check_cancel(xsink, "IR interpreter analysis")) {
                 return false;
             }
             const QoreIRInstruction* inst = inst_uptr.get();
@@ -1505,12 +1522,1094 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     }
     dot_eval_only_bases.assign(counts.size(), 0);
     for (size_t i = 0; i < dot_eval_base_candidates.size(); ++i) {
-        if (i && ((i % 100) == 0) && qore_check_cancel(xsink, "IR dot-eval base analysis")) {
+        if (i && ((i % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
             return false;
         }
         if (dot_eval_base_candidates[i] && !non_dot_eval_uses[i]) {
             dot_eval_only_bases[i] = 1;
         }
+    }
+    return true;
+}
+
+static bool localWriteMayInvalidateCallerCaches(const QoreIRFunction& func, const LocalVar* lv) {
+    if (!lv) {
+        return true;
+    }
+    if (!func.ir_only_locals.count(reinterpret_cast<const void*>(lv))) {
+        return true;
+    }
+    return lv->closureUse() || QoreTypeInfo::isReference(lv->getTypeInfo());
+}
+
+static bool varRefWriteMayInvalidateCallerCaches(const QoreIRFunction& func, const VarRefNode* var) {
+    if (!var) {
+        return true;
+    }
+    switch (var->getType()) {
+        case VT_GLOBAL:
+        case VT_LOCAL_TS:
+        case VT_CLOSURE:
+        case VT_IMMEDIATE:
+            return true;
+        case VT_LOCAL:
+            return localWriteMayInvalidateCallerCaches(func, var->ref.id);
+        default:
+            return true;
+    }
+}
+
+static bool containerWriteMayInvalidateCallerCaches(const QoreIRFunction& func, const VarRefNode* container,
+        const LocalVar* container_lv) {
+    return container_lv ? localWriteMayInvalidateCallerCaches(func, container_lv)
+        : varRefWriteMayInvalidateCallerCaches(func, container);
+}
+
+static bool lvaluePathMayInvalidateCallerCaches(const QoreIRFunction& func,
+        const QoreIRLValuePathInstruction* inst) {
+    if (!inst || inst->path.empty()) {
+        return true;
+    }
+    const LVPathStep& root = inst->path.front();
+    switch (root.kind) {
+        case LVPathStepKind::LocalVar: {
+            auto* lv = reinterpret_cast<const LocalVar*>(root.ref_ptr);
+            return localWriteMayInvalidateCallerCaches(func, lv)
+                || (root.type_info && QoreTypeInfo::isReference(root.type_info));
+        }
+        case LVPathStepKind::SelfMember:
+            return false;
+        case LVPathStepKind::ClosureVar:
+        case LVPathStepKind::GlobalVar:
+        case LVPathStepKind::ThreadLocalVar:
+        case LVPathStepKind::StaticVar:
+            return true;
+        default:
+            return true;
+    }
+}
+
+static bool instructionMayInvalidateCallerCaches(const QoreIRFunction& func, const QoreIRInstruction* inst) {
+    if (!inst) {
+        return true;
+    }
+    switch (inst->opcode) {
+        case QoreIROpcode::StoreClosure:
+        case QoreIROpcode::StoreGlobal:
+        case QoreIROpcode::StoreThreadLocal:
+        case QoreIROpcode::NewObject:
+        case QoreIROpcode::CreateParseRef:
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::BackgroundInt:
+        case QoreIROpcode::Invoke:
+        case QoreIROpcode::InvokeSimError:
+        case QoreIROpcode::OnBlockExit:
+        case QoreIROpcode::ScopeExit:
+        case QoreIROpcode::Backquote:
+            return true;
+
+        case QoreIROpcode::StoreLocal: {
+            auto* local_inst = static_cast<const QoreIRLocalInstruction*>(inst);
+            return localWriteMayInvalidateCallerCaches(func, local_inst->local);
+        }
+        case QoreIROpcode::AddAssignLocalInt: {
+            auto* add_inst = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            return !add_inst->target_ir_only || localWriteMayInvalidateCallerCaches(func, add_inst->target);
+        }
+        case QoreIROpcode::IncrementLocalInt: {
+            auto* inc_inst = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            return !inc_inst->ir_only || localWriteMayInvalidateCallerCaches(func, inc_inst->local);
+        }
+        case QoreIROpcode::HashKeyStore: {
+            auto* store_inst = static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
+            return containerWriteMayInvalidateCallerCaches(func, store_inst->container, store_inst->container_lv);
+        }
+        case QoreIROpcode::HashKeyStoreDynamic: {
+            auto* store_inst = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst);
+            return containerWriteMayInvalidateCallerCaches(func, store_inst->container, store_inst->container_lv);
+        }
+        case QoreIROpcode::ListIndexStore: {
+            auto* store_inst = static_cast<const QoreIRListIndexStoreInstruction*>(inst);
+            return varRefWriteMayInvalidateCallerCaches(func, store_inst->container);
+        }
+        case QoreIROpcode::StoreLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue:
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::UnshiftLValue:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::SpliceLValue: {
+            auto* lval_inst = static_cast<const QoreIRLValueInstruction*>(inst);
+            return varRefWriteMayInvalidateCallerCaches(func, extractLValueBaseVarRef(lval_inst->lvalue));
+        }
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary:
+            return lvaluePathMayInvalidateCallerCaches(func, static_cast<const QoreIRLValuePathInstruction*>(inst));
+
+        case QoreIROpcode::CallDirect: {
+            auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst);
+            return !direct_inst->is_self_recursive
+                && (!direct_inst->func || direct_inst->func != func.source_qf);
+        }
+
+        default:
+            return false;
+    }
+}
+
+static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
+    std::vector<uint32_t> value_use_counts;
+    std::vector<uint8_t> dot_eval_only_bases;
+    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, xsink)) {
+        return false;
+    }
+    std::vector<int32_t> operand_use_counts(func.max_value_id + 1, 0);
+    std::vector<uint8_t> return_protected_slots(func.max_value_id + 1, 0);
+    std::vector<uint32_t> return_value_slot_ids;
+    std::vector<uint32_t> return_preserve_slot_ids;
+    bool needs_slot_cache_tls = false;
+    bool may_invalidate_external_caches = false;
+    size_t inst_count = 0;
+    for (const auto& b : func.blocks) {
+        for (const auto& inst_ptr : b->instructions) {
+            if (((++inst_count % 100) == 0)
+                    && qore_check_cancel(xsink, "IR interpreter analysis")) {
+                return false;
+            }
+            if (!inst_ptr) {
+                continue;
+            }
+            if (inst_ptr->opcode == QoreIROpcode::OnBlockExit) {
+                needs_slot_cache_tls = true;
+            }
+            if (inst_ptr->opcode == QoreIROpcode::Return) {
+                auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_ptr.get());
+                if (ret->has_value && ret->value.isValid() && ret->value.id < return_protected_slots.size()) {
+                    return_protected_slots[ret->value.id] = 1;
+                    return_value_slot_ids.push_back(ret->value.id);
+                }
+            } else if (inst_ptr->opcode == QoreIROpcode::RefSelf && inst_ptr->result.isValid()
+                    && inst_ptr->result.id < return_protected_slots.size()) {
+                return_protected_slots[inst_ptr->result.id] = 1;
+                return_preserve_slot_ids.push_back(inst_ptr->result.id);
+            }
+            if (!may_invalidate_external_caches
+                    && instructionMayInvalidateCallerCaches(func, inst_ptr.get())) {
+                may_invalidate_external_caches = true;
+            }
+            for (const auto& op : inst_ptr->operands) {
+                if (op.isValid() && op.id < operand_use_counts.size()) {
+                    ++operand_use_counts[op.id];
+                }
+            }
+        }
+    }
+    int max_param_idx = -1;
+    for (const auto& [idx, slot_id] : func.param_slot_ids) {
+        (void)slot_id;
+        if (idx > max_param_idx) {
+            max_param_idx = idx;
+        }
+    }
+    for (const auto& [idx, lv] : func.param_local_vars) {
+        (void)lv;
+        if (idx > max_param_idx) {
+            max_param_idx = idx;
+        }
+    }
+    std::vector<uint32_t> param_slot_ids;
+    std::vector<const LocalVar*> param_local_vars;
+    if (max_param_idx >= 0) {
+        param_slot_ids.assign(static_cast<size_t>(max_param_idx) + 1, UINT32_MAX);
+        param_local_vars.assign(static_cast<size_t>(max_param_idx) + 1, nullptr);
+        for (const auto& [idx, slot_id] : func.param_slot_ids) {
+            if (idx >= 0) {
+                param_slot_ids[static_cast<size_t>(idx)] = slot_id;
+            }
+        }
+        for (const auto& [idx, lv] : func.param_local_vars) {
+            if (idx >= 0) {
+                param_local_vars[static_cast<size_t>(idx)] = lv;
+            }
+        }
+    }
+    std::vector<uint8_t> locals_ir_only;
+    bool has_non_ir_only_locals = false;
+    size_t local_slot_count = func.local_var_slots.empty()
+        ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
+    if (local_slot_count > 0) {
+        locals_ir_only.assign(local_slot_count, 0);
+        for (auto& [lvar, sid] : func.local_var_slots) {
+            if (lvar && sid < local_slot_count) {
+                if (func.ir_only_locals.count(reinterpret_cast<const void*>(lvar))) {
+                    locals_ir_only[sid] = 1;
+                } else {
+                    has_non_ir_only_locals = true;
+                }
+            }
+        }
+    }
+    func.interpreter_value_use_counts = std::move(value_use_counts);
+    func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
+    func.interpreter_operand_use_counts = std::move(operand_use_counts);
+    func.interpreter_param_slot_ids = std::move(param_slot_ids);
+    func.interpreter_param_local_vars = std::move(param_local_vars);
+    func.interpreter_locals_ir_only = std::move(locals_ir_only);
+    func.interpreter_return_protected_slots = std::move(return_protected_slots);
+    func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
+    func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
+    func.interpreter_needs_slot_cache_tls = needs_slot_cache_tls;
+    func.interpreter_has_non_ir_only_locals = has_non_ir_only_locals;
+    func.interpreter_may_invalidate_external_caches = may_invalidate_external_caches;
+    func.interpreter_analysis_ready = true;
+    return true;
+}
+
+static bool ensureInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
+    if (func.interpreter_analysis_ready) {
+        return true;
+    }
+    std::lock_guard<std::mutex> lock(func.interpreter_analysis_mutex);
+    return func.interpreter_analysis_ready || buildInterpreterAnalysis(func, xsink);
+}
+
+static LocalVar* findIRSelfLocalForInterpreter(const QoreIRFunction* ir) {
+    if (!ir) {
+        return nullptr;
+    }
+    LocalVar* named_self = nullptr;
+    for (const auto& [lv, slot_id] : ir->local_var_slots) {
+        (void)slot_id;
+        if (!lv || !lv->getName()) {
+            continue;
+        }
+        if (lv->isSelf()) {
+            return const_cast<LocalVar*>(lv);
+        }
+        if (!named_self && !strcmp(lv->getName(), "self")) {
+            named_self = const_cast<LocalVar*>(lv);
+        }
+    }
+    return named_self;
+}
+
+static bool methodVariantFastCallEligibleForInterpreter(const AbstractQoreFunctionVariant* variant) {
+    const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
+    if (mvb) {
+        return mvb->isStaticallyFastMethodCallEligible();
+    }
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    return uvb && uvb->isStaticallyFastCallEligible();
+}
+
+static inline bool exactPrimitiveTypeAcceptsValue(const QoreTypeInfo* type_info, const QoreValue& value) {
+    qore_type_t value_type = value.getType();
+    return (type_info == bigIntTypeInfo && value_type == NT_INT)
+        || (type_info == floatTypeInfo && value_type == NT_FLOAT)
+        || (type_info == boolTypeInfo && value_type == NT_BOOLEAN)
+        || (type_info == stringTypeInfo && value_type == NT_STRING)
+        || (type_info == charTypeInfo && value_type == NT_CHAR);
+}
+
+static void acceptInterpreterIRReturnType(const UserSignature* sig, const QoreTypeInfo* return_type,
+        const QoreTypeInfo* receiver_type_info, QoreValue& value, ExceptionSink* xsink) {
+    const QoreTypeInfo* rt = return_type;
+    if (!rt) {
+        rt = sig ? sig->getReturnTypeInfo() : nullptr;
+        if (receiver_type_info) {
+            rt = qore_substitute_type_params_if_needed(rt, receiver_type_info);
+        } else if (sig && sig->needsTypeParameterSubstitution()) {
+            rt = qore_substitute_type_params_if_needed(rt);
+        }
+    } else if (receiver_type_info) {
+        rt = qore_substitute_type_params_if_needed(rt, receiver_type_info);
+    } else if (sig && sig->needsTypeParameterSubstitution()) {
+        rt = qore_substitute_type_params_if_needed(rt);
+    }
+
+    if (!rt || rt == autoTypeInfo) {
+        return;
+    }
+    if (exactPrimitiveTypeAcceptsValue(rt, value)) {
+        return;
+    }
+
+    if (value.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+        QoreTypeInfo::acceptAssignment(rt, "<block return>", value, xsink, nullptr);
+        if (xsink && *xsink && sig) {
+            xsink->overrideLocation(*sig->getParseLocation());
+            xsink->appendLastDescription(": block missing return statement");
+        }
+    } else {
+        QoreTypeInfo::acceptAssignment(rt, "<return statement>", value, xsink);
+    }
+}
+
+static bool preserveInterpreterFastCallArg(QoreValue val) {
+    switch (val.getType()) {
+        case NT_REFERENCE:
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsigned num_params,
+        const uint64_t* args, ExceptionSink* xsink, const QoreTypeInfo* receiver_type_info = nullptr) {
+    for (unsigned i = 0; i < num_params; ++i) {
+        QoreValue raw = fromBits(args[i]);
+        QoreValue val;
+        if (!raw.needsEval() || preserveInterpreterFastCallArg(raw)) {
+            val = raw.refSelf();
+        } else {
+            ValueEvalOptimizedRefHolder eval_arg(raw, xsink);
+            if (xsink && *xsink) {
+                for (int j = static_cast<int>(i) - 1; j >= 0; --j) {
+                    sig->lv[j]->uninstantiate(xsink);
+                }
+                return -1;
+            }
+            val = eval_arg.getReferencedValue();
+        }
+
+        const QoreTypeInfo* param_type_info = sig->getParamTypeInfo(i);
+        if (receiver_type_info) {
+            param_type_info = qore_substitute_type_params_if_needed(param_type_info, receiver_type_info);
+        }
+        if (param_type_info && !exactPrimitiveTypeAcceptsValue(param_type_info, val)
+                && (QoreTypeInfo::hasType(param_type_info)
+                || QoreTypeInfo::mayRequireFilter(param_type_info, val))) {
+            QoreTypeInfo::acceptInputParam(param_type_info, i, sig->getName(i), val, xsink);
+            if (xsink && *xsink) {
+                val.discard(xsink);
+                for (int j = static_cast<int>(i) - 1; j >= 0; --j) {
+                    sig->lv[j]->uninstantiate(xsink);
+                }
+                return -1;
+            }
+        }
+
+        sig->lv[i]->instantiate(val);
+    }
+    return 0;
+}
+
+static void uninstantiateInterpreterFastCallParams(const UserSignature* sig, unsigned num_params,
+        ExceptionSink* xsink) {
+    for (int i = static_cast<int>(num_params) - 1; i >= 0; --i) {
+        sig->lv[i]->uninstantiate(xsink);
+    }
+}
+
+class InterpreterFastCallParamScope {
+public:
+    InterpreterFastCallParamScope(const UserSignature* sig, unsigned num_params, ExceptionSink* xsink)
+            : sig(sig), num_params(num_params), xsink(xsink) {
+    }
+
+    ~InterpreterFastCallParamScope() {
+        cleanup();
+    }
+
+    void activateParams() {
+        params_instantiated = true;
+    }
+
+    void instantiateEmptyArgv() {
+        assert(sig && sig->argvid);
+        sig->argvid->instantiate(QoreValue());
+        argv_instantiated = true;
+    }
+
+    void cleanup() {
+        if (!params_instantiated) {
+            return;
+        }
+        if (argv_instantiated) {
+            sig->argvid->uninstantiate(xsink);
+            argv_instantiated = false;
+        }
+        uninstantiateInterpreterFastCallParams(sig, num_params, xsink);
+        params_instantiated = false;
+    }
+
+private:
+    const UserSignature* sig;
+    unsigned num_params;
+    ExceptionSink* xsink;
+    bool params_instantiated = false;
+    bool argv_instantiated = false;
+};
+
+template <typename DirectCallInst>
+static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant, QoreProgram* caller_pgm, int nargs, bool reject_copy_method) {
+    auto reject = [&]() -> int8_t {
+        inst->inline_ir_state.store(-1, std::memory_order_release);
+        return -1;
+    };
+    int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
+    if (state > 0 && inst->cached_callee_ir && inst->cached_uvb) {
+        return state;
+    }
+    if (state == -1) {
+        return -1;
+    }
+
+    if (!variant || inst->has_ref_args || !method) {
+        return reject();
+    }
+    if (reject_copy_method && !strcmp(method->getName(), "copy")) {
+        return reject();
+    }
+
+    const UserVariantBase* uvb = inst->cached_uvb ? inst->cached_uvb : variant->getUserVariantBase();
+    if (!uvb || uvb->pgm != caller_pgm || uvb->hasCachedFunction()
+            || !methodVariantFastCallEligibleForInterpreter(variant)) {
+        return reject();
+    }
+
+    const QoreIRFunction* callee_ir = inst->cached_callee_ir ? inst->cached_callee_ir : uvb->getCachedIR();
+    const UserSignature* sig = uvb->getUserSignature();
+    if (!callee_ir || !sig
+            || sig->needsTypeParameterSubstitution()
+            || !callee_ir->ast_visible_body_locals.empty()
+            || callee_ir->hasTypeSpecialization()
+            || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
+                && nargs != static_cast<int>(sig->numParams()))) {
+        return reject();
+    }
+
+    inst->cached_callee_ir = callee_ir;
+    inst->cached_uvb = uvb;
+    inst->cached_return_type = sig->getReturnTypeInfo();
+    int8_t eligible_state = callee_ir->direct_params_eligible
+        && nargs >= static_cast<int>(sig->numParams()) ? 1 : 2;
+    inst->inline_ir_state.store(eligible_state, std::memory_order_release);
+    return eligible_state;
+}
+
+static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction* inst,
+        QoreProgram* caller_pgm, int nargs) {
+    auto reject = [&]() -> int8_t {
+        inst->inline_ir_state.store(-1, std::memory_order_release);
+        return -1;
+    };
+    int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
+    if (state > 0 && inst->cached_callee_ir && inst->cached_uvb) {
+        return state;
+    }
+    if (state == -1) {
+        return -1;
+    }
+
+    if (!caller_pgm) {
+        caller_pgm = getProgram();
+    }
+    if (!inst->variant || inst->has_ref_args || !caller_pgm) {
+        return reject();
+    }
+    const UserVariantBase* uvb = inst->cached_uvb ? inst->cached_uvb : inst->variant->getUserVariantBase();
+    if (!uvb || uvb->pgm != caller_pgm || uvb->hasCachedFunction()
+            || !uvb->isStaticallyFastCallEligible()) {
+        return reject();
+    }
+
+    const QoreIRFunction* callee_ir = inst->cached_callee_ir ? inst->cached_callee_ir : uvb->getCachedIR();
+    const UserSignature* sig = uvb->getUserSignature();
+    if (!callee_ir || !sig
+            || sig->needsTypeParameterSubstitution()
+            || !callee_ir->ast_visible_body_locals.empty()
+            || callee_ir->hasTypeSpecialization()
+            || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
+                && nargs != static_cast<int>(sig->numParams()))) {
+        return reject();
+    }
+
+    inst->cached_callee_ir = callee_ir;
+    inst->cached_uvb = uvb;
+    inst->cached_return_type = sig->getReturnTypeInfo();
+    int8_t eligible_state = callee_ir->direct_params_eligible
+        && nargs >= static_cast<int>(sig->numParams()) ? 1 : 2;
+    inst->inline_ir_state.store(eligible_state, std::memory_order_release);
+    return eligible_state;
+}
+
+static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
+        QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
+        bool* may_invalidate_external_caches = nullptr) {
+    int8_t inline_state = ensureInterpreterInlineIRFunctionState(inst, caller_pgm, nargs);
+    if (inline_state <= 0) {
+        return false;
+    }
+
+    const UserVariantBase* uvb = inst->cached_uvb;
+    if (uvb->hasCachedFunction()) {
+        inst->inline_ir_state.store(-1, std::memory_order_release);
+        return false;
+    }
+
+    const QoreIRFunction* callee_ir = inst->cached_callee_ir;
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+    bool use_direct_params = inline_state == 1;
+    if (!use_direct_params
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
+        result = QoreValue();
+        return true;
+    }
+    std::optional<InterpreterFastCallParamScope> param_scope;
+    if (!use_direct_params) {
+        param_scope.emplace(sig, num_params, xsink);
+        param_scope->activateParams();
+        if (sig->argvid) {
+            param_scope->instantiateEmptyArgv();
+        }
+    }
+
+    std::optional<ThreadSafeLocalVarRuntimeEnvironmentHelper> closure_env_clear;
+    if (thread_has_runtime_closure_env()) {
+        closure_env_clear.emplace(nullptr);
+    }
+    QoreValue ir_return_value;
+    IRDirectParams dp{args, nargs};
+    const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
+    bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+        nullptr, uvb->getStatementBlock(), uvb->pgm, false, direct_params);
+    if (param_scope) {
+        param_scope->cleanup();
+    }
+    if (!ok && !(xsink && *xsink)) {
+        ir_return_value.discard(xsink);
+        inst->inline_ir_state.store(-1, std::memory_order_release);
+        return false;
+    }
+
+    if (!(xsink && *xsink)) {
+        acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
+    }
+    if (xsink && *xsink) {
+        ir_return_value.discard(xsink);
+        result = QoreValue();
+    } else {
+        result = ir_return_value;
+    }
+    if (may_invalidate_external_caches) {
+        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches;
+    }
+    return true;
+}
+
+template <typename DirectMethodInst>
+static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const QoreMethod* method,
+        QoreObject* self, const QoreTypeInfo* receiver_type_info, int8_t inline_state,
+        uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
+        bool* may_invalidate_external_caches = nullptr) {
+    const UserVariantBase* uvb = inst->cached_uvb;
+    if (uvb->hasCachedFunction()) {
+        inst->inline_ir_state.store(-1, std::memory_order_release);
+        return false;
+    }
+
+    const QoreIRFunction* callee_ir = inst->cached_callee_ir;
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+    ObjectSubstitutionHelper osh(self, qore_class_private::get(*method->getClass()));
+    const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
+    SelfInstantiationHelper self_helper(selfid, self);
+
+    bool use_direct_params = inline_state == 1;
+    if (!use_direct_params
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, receiver_type_info) < 0) {
+        result = QoreValue();
+        return true;
+    }
+    std::optional<InterpreterFastCallParamScope> param_scope;
+    if (!use_direct_params) {
+        param_scope.emplace(sig, num_params, xsink);
+        param_scope->activateParams();
+        if (sig->argvid) {
+            param_scope->instantiateEmptyArgv();
+        }
+    }
+
+    QoreValue ir_return_value;
+    IRDirectParams dp{args, nargs};
+    const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
+    bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+        nullptr, uvb->getStatementBlock(), uvb->pgm, false, direct_params);
+    if (param_scope) {
+        param_scope->cleanup();
+    }
+    if (!ok && !(xsink && *xsink)) {
+        ir_return_value.discard(xsink);
+        inst->inline_ir_state.store(-1, std::memory_order_release);
+        return false;
+    }
+
+    if (!(xsink && *xsink)) {
+        acceptInterpreterIRReturnType(sig, inst->cached_return_type, receiver_type_info, ir_return_value, xsink);
+    }
+    if (xsink && *xsink) {
+        ir_return_value.discard(xsink);
+        result = QoreValue();
+    } else {
+        result = ir_return_value;
+    }
+    if (may_invalidate_external_caches) {
+        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches;
+    }
+    return true;
+}
+
+template <typename DirectMethodInst>
+static bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObject* self,
+        QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
+        bool* may_invalidate_external_caches = nullptr) {
+    if (!self || !caller_pgm) {
+        return false;
+    }
+    int8_t inline_state = ensureInterpreterResolvedInlineIRCallState(
+        inst, inst->method, inst->variant, caller_pgm, nargs, true);
+    if (inline_state <= 0) {
+        return false;
+    }
+
+    return executeInterpreterInlineIRMethodTarget(inst, inst->method, self, nullptr,
+        inline_state, args, nargs, result, xsink, may_invalidate_external_caches);
+}
+
+static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(const QoreMethod* method) {
+    if (!method) {
+        return nullptr;
+    }
+    const qore_method_private* priv = qore_method_private::get(*method);
+    const QoreFunction* func = priv ? priv->getFunction() : nullptr;
+    return func && func->numVariants() == 1 ? func->first() : nullptr;
+}
+
+template <typename DotEvalInst>
+static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreValue base,
+        const char* method_name, const QoreTypeParamInstantiation* explicit_inst, QoreProgram* caller_pgm,
+        uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
+        bool* may_invalidate_external_caches = nullptr) {
+    if (!caller_pgm || inst->pseudo || explicit_inst || !method_name) {
+        return false;
+    }
+
+    QoreObject* self = nullptr;
+    if (base.getType() == NT_OBJECT) {
+        self = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
+    } else if (base.getType() == NT_WEAKREF) {
+        self = base.get<const WeakReferenceNode>()->get();
+        if (!self || !self->isValid()) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED",
+                "cannot call '%s()' on a deleted weak reference", method_name);
+            result = QoreValue();
+            return true;
+        }
+    } else {
+        return false;
+    }
+
+    if (!self->isValid()) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED",
+            "cannot call '%s()' on an object that has already been deleted", method_name);
+        result = QoreValue();
+        return true;
+    }
+
+    int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
+    const QoreClass* object_class = self->getClass();
+    if (state > 0) {
+        if (inst->cached_object_class != object_class || !inst->cached_method) {
+            return false;
+        }
+        if (!inst->cached_method->isPrivate()) {
+            return executeInterpreterInlineIRMethodTarget(inst, inst->cached_method, self, nullptr,
+                state, args, nargs, result, xsink, may_invalidate_external_caches);
+        }
+    }
+
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*object_class, class_ctx)) {
+        class_ctx = nullptr;
+    }
+
+    if (state > 0) {
+        if (inst->cached_class_ctx != class_ctx) {
+            return false;
+        }
+        return executeInterpreterInlineIRMethodTarget(inst, inst->cached_method, self, nullptr,
+            state, args, nargs, result, xsink, may_invalidate_external_caches);
+    }
+    if (state == -1) {
+        return false;
+    }
+
+    const QoreMethod* method = inst->method;
+    const AbstractQoreFunctionVariant* variant = inst->variant;
+    if (method) {
+        if ((inst->qc && object_class != inst->qc) && object_class != method->getClass()) {
+            return false;
+        }
+    } else {
+        if (!strcmp(method_name, "copy")) {
+            inst->inline_ir_state.store(-1, std::memory_order_release);
+            return false;
+        }
+        const qore_class_private* priv = qore_class_private::get(*object_class);
+        method = priv->getMethodForEval(method_name, self->getProgram(), class_ctx, xsink);
+        if (xsink && *xsink) {
+            result = QoreValue();
+            return true;
+        }
+        if (!method) {
+            return false;
+        }
+        variant = getSingleInterpreterMethodVariant(method);
+        if (!variant) {
+            inst->inline_ir_state.store(-1, std::memory_order_release);
+            return false;
+        }
+    }
+
+    inst->cached_object_class = object_class;
+    inst->cached_class_ctx = class_ctx;
+    inst->cached_method = method;
+    state = ensureInterpreterResolvedInlineIRCallState(inst, method, variant, caller_pgm, nargs, true);
+    if (state <= 0) {
+        return false;
+    }
+
+    return executeInterpreterInlineIRMethodTarget(inst, method, self, nullptr,
+        state, args, nargs, result, xsink, may_invalidate_external_caches);
+}
+
+static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInstruction* inst,
+        QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
+        bool* may_invalidate_external_caches = nullptr) {
+    int8_t inline_state = caller_pgm
+        ? ensureInterpreterResolvedInlineIRCallState(inst, inst->method, inst->variant, caller_pgm, nargs, false) : -1;
+    if (inline_state <= 0) {
+        return false;
+    }
+
+    const UserVariantBase* uvb = inst->cached_uvb;
+    if (uvb->hasCachedFunction()) {
+        inst->inline_ir_state.store(-1, std::memory_order_release);
+        return false;
+    }
+
+    const QoreIRFunction* callee_ir = inst->cached_callee_ir;
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned num_params = sig->numParams();
+    ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
+    bool use_direct_params = inline_state == 1;
+    if (!use_direct_params
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
+        result = QoreValue();
+        return true;
+    }
+    std::optional<InterpreterFastCallParamScope> param_scope;
+    if (!use_direct_params) {
+        param_scope.emplace(sig, num_params, xsink);
+        param_scope->activateParams();
+        if (sig->argvid) {
+            param_scope->instantiateEmptyArgv();
+        }
+    }
+
+    QoreValue ir_return_value;
+    IRDirectParams dp{args, nargs};
+    const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
+    bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+        nullptr, uvb->getStatementBlock(), uvb->pgm, false, direct_params);
+    if (param_scope) {
+        param_scope->cleanup();
+    }
+    if (!ok && !(xsink && *xsink)) {
+        ir_return_value.discard(xsink);
+        inst->inline_ir_state.store(-1, std::memory_order_release);
+        return false;
+    }
+
+    if (!(xsink && *xsink)) {
+        acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
+    }
+    if (xsink && *xsink) {
+        ir_return_value.discard(xsink);
+        result = QoreValue();
+    } else {
+        result = ir_return_value;
+    }
+    if (may_invalidate_external_caches) {
+        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches;
+    }
+    return true;
+}
+
+static const QoreIRIncrementLocalIntInstruction* getSimpleClosureIncrementInstruction(
+        const QoreIRFunction* callee_ir) {
+    if (!callee_ir) {
+        return nullptr;
+    }
+    const QoreIRIncrementLocalIntInstruction* inc_inst = nullptr;
+    bool has_return_nothing = false;
+    for (const auto& block : callee_ir->blocks) {
+        if (!block) {
+            continue;
+        }
+        for (const auto& inst_ptr : block->instructions) {
+            if (!inst_ptr) {
+                continue;
+            }
+            switch (inst_ptr->opcode) {
+                case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                    break;
+                case QoreIROpcode::IncrementLocalInt: {
+                    if (inc_inst) {
+                        return nullptr;
+                    }
+                    auto* candidate = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst_ptr.get());
+                    if (!candidate->local || !candidate->local->closureUse() || candidate->ir_only) {
+                        return nullptr;
+                    }
+                    inc_inst = candidate;
+                    break;
+                }
+                case QoreIROpcode::ReturnNothing:
+                    has_return_nothing = true;
+                    break;
+                default:
+                    return nullptr;
+            }
+        }
+    }
+    return inc_inst && has_return_nothing ? inc_inst : nullptr;
+}
+
+static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
+        const QoreIRIncrementLocalIntInstruction* inc_inst, QoreValue& result, ExceptionSink* xsink) {
+    if (!cb || !inc_inst || !inc_inst->local) {
+        return false;
+    }
+    ClosureVarValue* stack_cvv = thread_try_find_closure_var(inc_inst->local->getName());
+    ClosureVarValue* env_cvv = cb->find(inc_inst->local);
+    ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
+        : (env_cvv ? env_cvv : stack_cvv);
+    if (!cv || cv->isReadOnly() || cv->finalized || cv->val.getType() != NT_INT) {
+        return false;
+    }
+    int64_t result_val = cv->val.getAsBigInt() + inc_inst->delta;
+    discard(cv->val.assign(static_cast<int64>(result_val)), xsink);
+    result = QoreValue();
+    return !(xsink && *xsink);
+}
+
+static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
+        uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
+        bool* may_invalidate_external_caches = nullptr) {
+    if (!ref_val.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = ref_val.getInternalNode();
+    if (node->getType() != NT_RUNTIME_CLOSURE) {
+        return false;
+    }
+
+    auto* cb = static_cast<const QoreClosureBase*>(node);
+    auto* uf = static_cast<UserClosureFunction*>(cb->getFunction());
+    if (!uf || !uf->numVariants()) {
+        return false;
+    }
+    if (!caller_pgm) {
+        caller_pgm = getProgram();
+    }
+    if (!caller_pgm) {
+        return false;
+    }
+
+    struct ClosureInlineCache {
+        const AbstractQoreNode* node = nullptr;
+        UserClosureFunction* function = nullptr;
+        QoreProgram* caller_pgm = nullptr;
+        const UserVariantBase* uvb = nullptr;
+        const QoreIRFunction* callee_ir = nullptr;
+        const UserSignature* sig = nullptr;
+        const QoreIRIncrementLocalIntInstruction* simple_increment = nullptr;
+        unsigned num_params = 0;
+        bool direct_params_eligible = false;
+    };
+    static thread_local ClosureInlineCache closure_inline_cache;
+
+    const UserVariantBase* uvb = nullptr;
+    const QoreIRFunction* callee_ir = nullptr;
+    const UserSignature* sig = nullptr;
+    const QoreIRIncrementLocalIntInstruction* simple_increment = nullptr;
+    unsigned num_params = 0;
+    bool use_cached_metadata = closure_inline_cache.node == node
+        && closure_inline_cache.function == uf
+        && closure_inline_cache.caller_pgm == caller_pgm
+        && closure_inline_cache.uvb
+        && closure_inline_cache.callee_ir
+        && closure_inline_cache.sig
+        && ((closure_inline_cache.direct_params_eligible
+                && nargs >= static_cast<int>(closure_inline_cache.num_params))
+            || nargs == static_cast<int>(closure_inline_cache.num_params));
+    if (use_cached_metadata) {
+        uvb = closure_inline_cache.uvb;
+        if (uvb->hasCachedFunction()) {
+            closure_inline_cache = ClosureInlineCache();
+            return false;
+        }
+        callee_ir = closure_inline_cache.callee_ir;
+        sig = closure_inline_cache.sig;
+        simple_increment = closure_inline_cache.simple_increment;
+        num_params = closure_inline_cache.num_params;
+    } else {
+        const AbstractQoreFunctionVariant* variant = uf->first();
+        uvb = variant ? variant->getUserVariantBase() : nullptr;
+        if (!uvb || uvb->pgm != caller_pgm || uvb->hasCachedFunction()
+                || !uvb->isStaticallyFastCallEligible()) {
+            return false;
+        }
+
+        callee_ir = uvb->getCachedIR();
+        sig = uvb->getUserSignature();
+        if (!callee_ir || !sig
+                || sig->needsTypeParameterSubstitution()
+                || !callee_ir->ast_visible_body_locals.empty()
+                || callee_ir->hasTypeSpecialization()
+                || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
+                    && nargs != static_cast<int>(sig->numParams()))) {
+            return false;
+        }
+        num_params = sig->numParams();
+        simple_increment = nargs == 0 ? getSimpleClosureIncrementInstruction(callee_ir) : nullptr;
+        closure_inline_cache = {
+            node,
+            uf,
+            caller_pgm,
+            uvb,
+            callee_ir,
+            sig,
+            simple_increment,
+            num_params,
+            callee_ir->direct_params_eligible,
+        };
+    }
+    if (nargs == 0 && simple_increment
+            && tryExecuteSimpleClosureIncrement(cb, simple_increment, result, xsink)) {
+        if (may_invalidate_external_caches) {
+            *may_invalidate_external_caches = true;
+        }
+        return true;
+    }
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, uvb->pgm);
+    if (xsink && *xsink) {
+        result = QoreValue();
+        return true;
+    }
+    CVecInstantiator cvi(cb->getCvec(), xsink);
+    if (xsink && *xsink) {
+        result = QoreValue();
+        return true;
+    }
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env(cb);
+
+    QoreObject* self = const_cast<QoreObject*>(cb->getObject());
+    std::optional<QoreClosureSelfContextHelper> closure_self_ctx;
+    std::optional<ObjectSubstitutionHelper> object_ctx;
+    if (self) {
+        closure_self_ctx.emplace(self);
+        if (qore_ir_check_closure_self_valid(self, xsink)) {
+            result = QoreValue();
+            return true;
+        }
+        object_ctx.emplace(self, cb->getClassCtx());
+    }
+
+    const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
+    SelfInstantiationHelper self_helper(selfid, self);
+
+    bool use_direct_params = callee_ir->direct_params_eligible
+        && nargs >= static_cast<int>(num_params);
+    if (!use_direct_params
+            && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
+        result = QoreValue();
+        return true;
+    }
+    std::optional<InterpreterFastCallParamScope> param_scope;
+    if (!use_direct_params) {
+        param_scope.emplace(sig, num_params, xsink);
+        param_scope->activateParams();
+        if (sig->argvid) {
+            param_scope->instantiateEmptyArgv();
+        }
+    }
+
+    QoreValue ir_return_value;
+    IRDirectParams dp{args, nargs};
+    const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
+    bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+        nullptr, uvb->getStatementBlock(), uvb->pgm, false, direct_params);
+    if (param_scope) {
+        param_scope->cleanup();
+    }
+    if (!ok && !(xsink && *xsink)) {
+        ir_return_value.discard(xsink);
+        return false;
+    }
+
+    if (!(xsink && *xsink)) {
+        acceptInterpreterIRReturnType(sig, nullptr, nullptr, ir_return_value, xsink);
+    }
+    if (xsink && *xsink) {
+        ir_return_value.discard(xsink);
+        result = QoreValue();
+    } else {
+        result = ir_return_value;
+    }
+    if (may_invalidate_external_caches) {
+        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches;
     }
     return true;
 }
@@ -1533,7 +2632,7 @@ static void countCallArgOccurrences(const IRValueSlots& values,
 static void consumeLastUseCallArgSlots(IRValueSlots& values, std::vector<uint32_t>& cleanup,
         const std::vector<QoreIRValue>& operands, size_t start_index,
         const std::vector<uint32_t>& value_use_counts,
-        const std::unordered_set<uint32_t>* borrowed_slots, ExceptionSink* xsink) {
+        const std::unordered_map<uint32_t, int32_t>* borrowed_slots, ExceptionSink* xsink) {
     std::unordered_map<uint32_t, uint32_t> occurrences;
     countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
     uint32_t checked = 0;
@@ -1550,7 +2649,7 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, std::vector<uint32_
             continue;
         }
         removeAllCleanupEntries(cleanup, id);
-        if (borrowed_slots && borrowed_slots->count(id)) {
+        if (borrowed_slots && borrowed_slots->find(id) != borrowed_slots->end()) {
             slot = QoreValue();
             continue;
         }
@@ -1619,6 +2718,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
     switch (op) {
         // Unary computation opcodes
         case QoreIROpcode::ToBool:
+        case QoreIROpcode::ToInt:
+        case QoreIROpcode::ToFloat:
         case QoreIROpcode::Not:
         case QoreIROpcode::IsNullOrNothing:
         case QoreIROpcode::UnaryPlusAny:
@@ -1659,6 +2760,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     return QoreValue::makeStringValue(sv->c_str(), sv->size(), sv->getEncoding());
                 }
             }
+        }
+        case QoreIROpcode::IterateValue: {
+            QoreValue source = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
+            return QoreIterateOperatorNode::evalIteratorValue(source,
+                QoreIterateOperatorNode::getElementTypeInfo(source, source.getTypeInfo()), xsink);
         }
         // Binary computation opcodes (arithmetic, bitwise, compound assignments, comparisons, etc.)
         case QoreIROpcode::AddInt:
@@ -1882,7 +2988,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     QoreValue lhs_val = getIRValue(values, inv->operands[0]);
                     QoreValue rhs_val = getIRValue(values, inv->operands[1]);
                     return QoreSquareBracketsOperatorNode::doSquareBrackets(
-                        lhs_val, rhs_val, true, xsink);
+                        lhs_val, rhs_val, true, sq->hasStringIndexChar(), sq->hasNegativeOffsets(), xsink);
                 }
                 if (auto* hod = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                         inv->expr.getInternalNode())) {
@@ -2334,10 +3440,20 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 // static_cast + execClosureDirect (no dynamic_cast, no QoreListNode)
                 uint64_t ref_bits = toBits(ref_val);
                 if (nargs == 0) {
+                    QoreValue inline_result;
+                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), nullptr, 0,
+                            inline_result, xsink)) {
+                        return inline_result;
+                    }
                     return fromBits(qore_rt_call_closure_0(ref_bits, xsink));
                 }
                 if (nargs == 1) {
                     uint64_t arg0 = toBits(getIRValue(values, inv->operands[1]));
+                    QoreValue inline_result;
+                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), &arg0, 1,
+                            inline_result, xsink)) {
+                        return inline_result;
+                    }
                     return fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
                 }
                 // N-arg path: use stack buffer for small arg counts
@@ -2347,11 +3463,14 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 for (int i = 0; i < nargs; ++i) {
                     args[i] = toBits(getIRValue(values, inv->operands[i + 1]));
                 }
-                uint64_t result_bits = qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
+                QoreValue inline_result;
+                bool inline_done = tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), args, nargs,
+                    inline_result, xsink);
+                uint64_t result_bits = inline_done ? 0 : qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
                 if (nargs > SMALL_BUF) {
                     delete[] args;
                 }
-                return fromBits(result_bits);
+                return inline_done ? inline_result : fromBits(result_bits);
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
@@ -2688,11 +3807,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& local_load_slots = frame.local_load_slots;
     auto& load_slot_registered = frame.load_slot_registered;
     auto& local_owned_slots = frame.local_owned_slots;
-    std::vector<uint32_t> value_use_counts;
-    std::vector<uint8_t> dot_eval_only_bases;
-    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, xsink)) {
+    if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
     }
+    const std::vector<uint32_t>& value_use_counts = func.interpreter_value_use_counts;
+    const std::vector<uint8_t>& dot_eval_only_bases = func.interpreter_dot_eval_only_bases;
     auto isDotEvalOnlyBase = [&](const QoreIRInstruction* i) -> bool {
         return i && i->result.isValid() && i->result.id < dot_eval_only_bases.size()
             && dot_eval_only_bases[i->result.id];
@@ -2867,8 +3986,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         void** tls_dirty_ptr;
         std::vector<QoreValue>* prev_slot_cache;
         std::vector<bool>* prev_slot_cache_dirty;
+        bool active = false;
 
-        TLSSlotCacheGuard(std::vector<QoreValue>& locals_slot_cache) {
+        TLSSlotCacheGuard(std::vector<QoreValue>& locals_slot_cache, bool enable) {
+            if (!enable) {
+                return;
+            }
+            active = true;
             tls_slot_ptr = qore_rt_get_ir_slot_cache_ptr();
             tls_dirty_ptr = qore_rt_get_ir_slot_cache_dirty_ptr();
             prev_slot_cache = reinterpret_cast<std::vector<QoreValue>*>(*tls_slot_ptr);
@@ -2878,6 +4002,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
 
         ~TLSSlotCacheGuard() {
+            if (!active) {
+                return;
+            }
             if (tls_slot_ptr) {
                 *tls_slot_ptr = reinterpret_cast<void*>(prev_slot_cache);
             }
@@ -2885,32 +4012,27 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 *tls_dirty_ptr = reinterpret_cast<void*>(prev_slot_cache_dirty);
             }
         }
-    } tls_slot_guard(locals_slot_cache);
+    } tls_slot_guard(locals_slot_cache, func.interpreter_needs_slot_cache_tls);
 
     // Precompute bitmask of IR-only local slots.  After function calls (without
     // reference args), only non-IR-only slots need cache invalidation because callees
     // can access non-IR-only locals through the TLS variable stack (Qore's scoping
     // allows inner functions to access outer locals).  IR-only locals exist only in
     // the slot cache and cannot be accessed through TLS, so they stay valid.
-    bool has_non_ir_only_locals = false;
-    for (auto& [lvar, sid] : func.local_var_slots) {
-        if (lvar && sid < local_slot_count) {
-            if (func.ir_only_locals.count(reinterpret_cast<const void*>(lvar))) {
-                locals_ir_only[sid] = true;
-            } else {
-                has_non_ir_only_locals = true;
-            }
-        }
+    bool has_non_ir_only_locals = func.interpreter_has_non_ir_only_locals;
+    if (!func.interpreter_locals_ir_only.empty()) {
+        assert(func.interpreter_locals_ir_only.size() <= locals_ir_only.size());
+        std::copy(func.interpreter_locals_ir_only.begin(), func.interpreter_locals_ir_only.end(),
+            locals_ir_only.begin());
     }
     // Direct params: pre-populate slot cache from caller-provided values,
     // bypassing TLS instantiate/eval/uninstantiate round-trip entirely.
     auto cleanupDirectParamSlots = [&](int last_arg) {
         for (int j = last_arg; j >= 0; --j) {
-            auto cleanup_it = func.param_slot_ids.find(j);
-            if (cleanup_it == func.param_slot_ids.end()) {
+            if (j >= static_cast<int>(func.interpreter_param_slot_ids.size())) {
                 continue;
             }
-            uint32_t cleanup_sid = cleanup_it->second;
+            uint32_t cleanup_sid = func.interpreter_param_slot_ids[static_cast<size_t>(j)];
             if (cleanup_sid < local_slot_count && locals_instantiated[cleanup_sid]) {
                 locals_slot_cache[cleanup_sid].discard(xsink);
                 locals_slot_cache[cleanup_sid] = QoreValue();
@@ -2921,9 +4043,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     if (direct_params && direct_params->nargs > 0) {
         for (int i = 0; i < direct_params->nargs; ++i) {
             // Find the slot_id for this param's LocalVar
-            auto it = func.param_slot_ids.find(i);
-            if (it != func.param_slot_ids.end()) {
-                uint32_t sid = it->second;
+            if (i < static_cast<int>(func.interpreter_param_slot_ids.size())) {
+                uint32_t sid = func.interpreter_param_slot_ids[static_cast<size_t>(i)];
                 if (sid < local_slot_count) {
                     QoreValue val = fromBits(direct_params->args[i]);
                     if (val.hasNode()) {
@@ -2931,11 +4052,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     }
 
                     // Apply type filter like JIT path: match instantiateFastCallParams in JITRuntime.cpp
-                    auto lv_it = func.param_local_vars.find(i);
-                    if (lv_it != func.param_local_vars.end()) {
-                        const LocalVar* lv = lv_it->second;
+                    const LocalVar* lv = i < static_cast<int>(func.interpreter_param_local_vars.size())
+                        ? func.interpreter_param_local_vars[static_cast<size_t>(i)]
+                        : nullptr;
+                    if (lv) {
                         const QoreTypeInfo* paramTypeInfo = lv->getTypeInfo();
-                        if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+                        if (!exactPrimitiveTypeAcceptsValue(paramTypeInfo, val)
+                                && QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
                             QoreTypeInfo::acceptInputParam(paramTypeInfo, i, lv->getName(), val, xsink);
                             if (*xsink) {
                                 val.discard(xsink);
@@ -3282,6 +4405,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
     };
+    auto updateClosureCacheInt = [&](const LocalVar* lv, int64_t value) {
+        if (lv && lv->closureUse()) {
+            auto cit = closures.find(lv);
+            if (cit != closures.end()) {
+                cit->second.discard(xsink);
+                cit->second = QoreValue(value);
+            }
+        }
+    };
     auto invalidateLValuePathClosureCache = [&](const QoreIRLValuePathInstruction* path_inst) {
         if (!path_inst || path_inst->path.empty()) {
             return;
@@ -3343,7 +4475,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 step.name = key_str->c_str();
             } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
                 QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+                step.index = idx_val.getAsBigInt();
             } else if (step.kind == LVPathStepKind::HashKeySlice
                     || step.kind == LVPathStepKind::ListIndexSlice
                     || step.kind == LVPathStepKind::ListRangeSlice) {
@@ -3663,23 +4795,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& ephemeral_weak_ref_slots = frame.ephemeral_weak_ref_slots;
     int last_ephemeral_line = -1;
 
-    std::unordered_map<uint32_t, int> operand_remaining_uses;
-    std::unordered_set<uint32_t> weak_load_temp_slots;
-    size_t operand_scan_count = 0;
-    for (const auto& b : func.blocks) {
-        for (const auto& inst_ptr : b->instructions) {
-            if (((++operand_scan_count % 100) == 0)
-                    && qore_check_cancel(xsink, "IR weak-load use-count build")) {
-                return false;
-            }
-            if (!inst_ptr) {
-                continue;
-            }
-            for (const auto& op : inst_ptr->operands) {
-                operand_remaining_uses[op.id]++;
-            }
-        }
-    }
+    std::unordered_map<uint32_t, int32_t> weak_load_temp_slots;
 
     auto releaseWeakLoadTemp = [&](uint32_t id) {
         if (id >= values.size()) {
@@ -3702,73 +4818,35 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         values[id] = QoreValue();
     };
 
-    auto consumeOperandUse = [&](uint32_t id) {
-        auto uses_it = operand_remaining_uses.find(id);
-        if (uses_it == operand_remaining_uses.end()) {
+    auto trackWeakLoadTemp = [&](uint32_t id) {
+        if (id >= func.interpreter_operand_use_counts.size()) {
             return;
         }
-        --uses_it->second;
-        if (uses_it->second <= 0 && weak_load_temp_slots.count(id)) {
+        int32_t remaining_uses = func.interpreter_operand_use_counts[id];
+        if (remaining_uses > 0) {
+            weak_load_temp_slots[id] = remaining_uses;
+        }
+    };
+
+    auto consumeOperandUse = [&](uint32_t id) {
+        auto it = weak_load_temp_slots.find(id);
+        if (it == weak_load_temp_slots.end()) {
+            return;
+        }
+        if (--it->second <= 0) {
             releaseWeakLoadTemp(id);
         }
     };
 
-    // Pre-scan the function for every Return opcode and collect the set of
-    // slot IDs that are passed as the return value.  These slots must never be
-    // discarded by scope-exit cleanup scans (UninstantiateLocal's "release all
-    // references to local's object" loop, the closure-var release loop, etc.)
-    // because the value at that slot is the function's return value and must
-    // survive until the Return opcode reads it.
-    //
-    // The scan that prompted this fix lives in UninstantiateLocal: when a
-    // pre-instantiated local goes out of scope the IR interpreter walks
-    // values[] and discards every slot whose internal node pointer matches the
-    // local's value (see commit 5b24307df) so the destructor fires
-    // deterministically at scope exit.  That walk uses
-    // valueUsedLaterInCurrentBlock to skip slots still in use — but the check
-    // only sees instructions in the current basic block.  When the function
-    // body is shaped like `try { return obj; } catch { } /* on_exit body */`,
-    // the Return opcode lives in a successor block, so the walk happily
-    // discards the RefSelf result that holds the function's return value.
-    // The first symptom is a `RUNTIME-TYPE-ERROR: <block return> expects type
-    // 'X', but got no value instead: block missing return statement` even
-    // though the source has a syntactic `return obj;`.
-    //
-    // Collecting the set up-front (rather than extending the scan to walk all
-    // successor blocks) avoids the back-edge / dead-block reachability
-    // questions inherent in a CFG-aware scan and is O(function-size) once per
-    // execution.
-    std::unordered_set<uint32_t> return_value_slot_ids;
-    std::unordered_set<uint32_t> return_preserve_slot_ids;
-    if (func.blocks.size() > 0) {
-        for (const auto& blk : func.blocks) {
-            if (!blk) {
-                continue;
-            }
-            for (const auto& inst_up : blk->instructions) {
-                if (!inst_up) {
-                    continue;
-                }
-                if (inst_up->opcode == QoreIROpcode::Return) {
-                    const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_up.get());
-                    if (ret->has_value) {
-                        return_value_slot_ids.insert(ret->value.id);
-                    }
-                } else if (inst_up->opcode == QoreIROpcode::RefSelf && inst_up->result.isValid()) {
-                    // RefSelf is currently emitted only to preserve return values across
-                    // scope cleanup. Protect it directly so object cleanup scans cannot
-                    // release the preserved return before the Return opcode reads it.
-                    return_preserve_slot_ids.insert(inst_up->result.id);
-                }
-            }
-        }
-    }
+    const std::vector<uint8_t>& return_protected_slots = func.interpreter_return_protected_slots;
+    const std::vector<uint32_t>& return_value_slot_ids = func.interpreter_return_value_slot_ids;
+    const std::vector<uint32_t>& return_preserve_slot_ids = func.interpreter_return_preserve_slot_ids;
+    const std::vector<int32_t>& operand_use_counts = func.interpreter_operand_use_counts;
 
-    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink, &return_value_slot_ids,
-            &return_preserve_slot_ids](uint32_t id) -> bool {
+    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink, &return_protected_slots](uint32_t id) -> bool {
         // A slot that is the operand of any Return in the function must stay
         // alive across scope exits regardless of basic-block locality.
-        if (return_value_slot_ids.count(id) || return_preserve_slot_ids.count(id)) {
+        if (id < return_protected_slots.size() && return_protected_slots[id]) {
             return true;
         }
         if (!block) {
@@ -3817,6 +4895,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
         return false;
+    };
+
+    auto resultValueIsNeeded = [&operand_use_counts, &return_protected_slots](QoreIRValue result) -> bool {
+        if (!result.isValid()) {
+            return false;
+        }
+        return (result.id < operand_use_counts.size() && operand_use_counts[result.id] > 0)
+            || (result.id < return_protected_slots.size() && return_protected_slots[result.id]);
     };
 
     while (block) {
@@ -4016,6 +5102,12 @@ next_instruction:
             case QoreIROpcode::ConstBool: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
                 setValueSlotDirect(values, cinst->result.id, QoreValue(cinst->constant.bool_value));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ConstChar: {
+                auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
+                setValueSlotDirect(values, cinst->result.id, QoreValue::makeChar(cinst->constant.char_value));
                 ++ip;
                 break;
             }
@@ -4252,7 +5344,20 @@ next_instruction:
                 QoreValue value = getIRValue(values, inst->operands[1]);
                 QoreListNode* list = list_val.get<QoreListNode>();
                 if (list) {
-                    QoreValue push_val = value.hasNode() ? value.refSelf() : value;
+                    QoreIRValue value_operand = inst->operands[1];
+                    bool transfer_owned_operand = value_operand.isValid()
+                        && value_operand.id < values.size()
+                        && value_operand.id < value_use_counts.size()
+                        && value_use_counts[value_operand.id] == 1
+                        && values[value_operand.id].hasNode()
+                        && removeCleanupEntry(cleanup, value_operand.id);
+                    QoreValue push_val;
+                    if (transfer_owned_operand) {
+                        push_val = values[value_operand.id];
+                        values[value_operand.id] = QoreValue();
+                    } else {
+                        push_val = value.hasNode() ? value.refSelf() : value;
+                    }
                     // Track element type for correct list<T> type info at runtime
                     qore_list_private::get(*list)->setListTypeFromNewElementType(
                         push_val.getFullTypeInfo());
@@ -4428,7 +5533,20 @@ next_instruction:
                 if (list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
                     int64_t index = idx_val.getAsBigInt();
-                    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+                    QoreIRValue value_operand = inst->operands[2];
+                    bool transfer_owned_operand = value_operand.isValid()
+                        && value_operand.id < values.size()
+                        && value_operand.id < value_use_counts.size()
+                        && value_use_counts[value_operand.id] == 1
+                        && values[value_operand.id].hasNode()
+                        && removeCleanupEntry(cleanup, value_operand.id);
+                    QoreValue stored;
+                    if (transfer_owned_operand) {
+                        stored = values[value_operand.id];
+                        values[value_operand.id] = QoreValue();
+                    } else {
+                        stored = val.hasNode() ? val.refSelf() : val;
+                    }
                     qore_list_private* priv = qore_list_private::get(*l);
                     // Track element type for correct list<T> type info at runtime
                     priv->setListTypeFromNewElementType(stored.getTypeInfo());
@@ -4457,15 +5575,26 @@ next_instruction:
                 // operands[0] = closure/callref value, operands[1..n] = args
                 // Fast path: call through qore_rt_call_closure_* which uses
                 // static_cast + execClosureDirect (no dynamic_cast, no QoreListNode)
+                auto* closure_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue ref_val = getIRValue(values, inst->operands[0]);
                 int nargs = static_cast<int>(inst->operands.size()) - 1;
                 uint64_t ref_bits = toBits(ref_val);
                 QoreValue result;
+                bool inline_may_invalidate_external_caches = true;
+                bool used_inline_ir = false;
                 if (nargs == 0) {
-                    result = fromBits(qore_rt_call_closure_0(ref_bits, xsink));
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, nullptr, 0, result, xsink,
+                        &inline_may_invalidate_external_caches);
+                    if (!used_inline_ir) {
+                        result = fromBits(qore_rt_call_closure_0(ref_bits, xsink));
+                    }
                 } else if (nargs == 1) {
                     uint64_t arg0 = toBits(getIRValue(values, inst->operands[1]));
-                    result = fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, &arg0, 1, result, xsink,
+                        &inline_may_invalidate_external_caches);
+                    if (!used_inline_ir) {
+                        result = fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
+                    }
                 } else {
                     constexpr int SMALL_BUF = 8;
                     uint64_t small_buf[SMALL_BUF];
@@ -4473,7 +5602,11 @@ next_instruction:
                     for (int i = 0; i < nargs; ++i) {
                         args[i] = toBits(getIRValue(values, inst->operands[i + 1]));
                     }
-                    result = fromBits(qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, args, nargs, result, xsink,
+                        &inline_may_invalidate_external_caches);
+                    if (!used_inline_ir) {
+                        result = fromBits(qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
+                    }
                     if (nargs > SMALL_BUF) {
                         delete[] args;
                     }
@@ -4489,12 +5622,18 @@ next_instruction:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Closure/callref execution runs in its own frame and cannot modify
-                // the caller's local variables, so only invalidate external caches
-                invalidateExternalCaches();
-                setValueSlot(values, inst->result.id, result, xsink);
-                if (result.hasNode()) {
-                    cleanup.push_back(inst->result.id);
+                if (closure_inst->has_ref_args) {
+                    cleanupLocalCaches();
+                } else if (!used_inline_ir || inline_may_invalidate_external_caches) {
+                    invalidateExternalCaches();
+                }
+                if (resultValueIsNeeded(inst->result)) {
+                    setValueSlot(values, inst->result.id, result, xsink);
+                    if (result.hasNode()) {
+                        cleanup.push_back(inst->result.id);
+                    }
+                } else {
+                    result.discard(xsink);
                 }
                 ++ip;
                 break;
@@ -4684,6 +5823,24 @@ next_instruction:
                 // modified globals, thread-locals, or closure variables.
                 invalidateExternalCaches();
 
+                // Calls with reference-capable arguments can write through to
+                // caller locals, so the lighter external-cache invalidation is
+                // not enough.
+                if (inv->has_ref_args) {
+                    switch (inv->invoke_opcode) {
+                        case QoreIROpcode::Call:
+                        case QoreIROpcode::CallDirect:
+                        case QoreIROpcode::CallIndirect:
+                        case QoreIROpcode::CallMethod:
+                        case QoreIROpcode::CallStatic:
+                        case QoreIROpcode::CallStaticDirect:
+                        case QoreIROpcode::CallClosureDirect:
+                            cleanupLocalCaches();
+                            break;
+                        default:
+                            break;
+                    }
+                }
                 // For reference write-through assignments via StoreLValue invoke, flush all local
                 // caches — writing through a reference can modify any arbitrary local variable.
                 if (inv->invoke_opcode == QoreIROpcode::StoreLValue && inv_base_var
@@ -5108,7 +6265,7 @@ load_local_done:
                     clearSlotForOverwrite(local_inst->result.id);
                     setValueSlotDirect(values, local_inst->result.id, out);
                     if (weak_ref_load && out.hasNode()) {
-                        weak_load_temp_slots.insert(local_inst->result.id);
+                        trackWeakLoadTemp(local_inst->result.id);
                     }
                 }
                 // Mark as local-owned for DGC container scan
@@ -5254,7 +6411,7 @@ load_local_done:
                     clearSlotForOverwrite(local_inst->result.id);
                     setValueSlotDirect(values, local_inst->result.id, out);
                     if (is_weak_ref_local && out.hasNode()) {
-                        weak_load_temp_slots.insert(local_inst->result.id);
+                        trackWeakLoadTemp(local_inst->result.id);
                     }
                 }
                 if (result_slot_owned && out.hasNode() && local_inst->auto_ref) {
@@ -5858,6 +7015,12 @@ load_local_done:
                     if (fused_inst->target->closureUse()) {
                         // Closure-use variable: write through cvstack, not lvstack
                         assignClosureVarValue(fused_inst->target, QoreValue(result_val), xsink);
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        updateClosureCacheInt(fused_inst->target, result_val);
                     } else if (fused_inst->target_slot_id < locals_lvar_cache.size()) {
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->target_slot_id];
@@ -5884,6 +7047,26 @@ load_local_done:
 
             case QoreIROpcode::IncrementLocalInt: {
                 auto* fused_inst = static_cast<QoreIRIncrementLocalIntInstruction*>(inst);
+                if (fused_inst->local && fused_inst->local->closureUse()) {
+                    int64_t result_val = 0;
+                    if (incrementClosureVarIntFast(fused_inst->local, fused_inst->delta, result_val, xsink)) {
+                        if (fused_inst->slot_id < locals_slot_cache.size()) {
+                            locals_slot_cache[fused_inst->slot_id] = QoreValue(result_val);
+                        }
+                        updateClosureCacheInt(fused_inst->local, result_val);
+                        markParentSlotDirty(fused_inst->slot_id);
+                        if (fused_inst->result.isValid()) {
+                            setValueSlot(values, fused_inst->result.id, QoreValue(result_val), xsink);
+                        }
+                        ++ip;
+                        break;
+                    }
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                }
                 // Read local from slot cache (fast path) or eval (cold path)
                 int64_t local_val = 0;
                 if (fused_inst->slot_id < locals_slot_cache.size()
@@ -5920,6 +7103,12 @@ load_local_done:
                     if (fused_inst->local->closureUse()) {
                         // Closure-use variable: write through cvstack, not lvstack
                         assignClosureVarValue(fused_inst->local, QoreValue(result_val), xsink);
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        updateClosureCacheInt(fused_inst->local, result_val);
                     } else if (fused_inst->slot_id < locals_lvar_cache.size()) {
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->slot_id];
@@ -7874,8 +9063,8 @@ load_local_done:
             }
             case QoreIROpcode::Find: {
                 auto* find_inst = static_cast<QoreIRFindInstruction*>(inst);
-                QoreValue result = fromBits(qore_rt_find(toBits(find_inst->exp),
-                    toBits(find_inst->find_exp), toBits(find_inst->where), xsink));
+                QoreValue result = fromBits(qore_rt_find_mode(toBits(find_inst->exp),
+                    toBits(find_inst->find_exp), toBits(find_inst->where), find_inst->mode, xsink));
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -7915,13 +9104,33 @@ load_local_done:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::IteratorCreate: {
+            case QoreIROpcode::IterateValue: {
+                QoreValue source = getIRValue(values, inst->operands[0]);
+                QoreValue res = QoreIterateOperatorNode::evalIteratorValue(source,
+                    QoreIterateOperatorNode::getElementTypeInfo(source, source.getTypeInfo()), xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::IteratorCreate:
+            case QoreIROpcode::IteratorCreateIterate: {
                 auto* iter_inst = static_cast<QoreIRIteratorCreateInstruction*>(inst);
                 QoreValue iterable = getIRValue(values, iter_inst->iterable);
                 FunctionalOperator::FunctionalValueType value_type;
                 FunctionalOperatorInterface* iter = nullptr;
                 if (iter_inst->iterator_func) {
                     iter = iter_inst->iterator_func->getFunctionalIterator(value_type, xsink);
+                } else if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
+                    iter = QoreIterateOperatorNode::getFunctionalIterator(value_type, iterable, nullptr,
+                        "streaming operator expression", xsink);
                 } else {
                     iter = FunctionalOperatorInterface::getFunctionalIterator(value_type, iterable, true,
                         "foreach statement", xsink);
@@ -8206,7 +9415,7 @@ load_local_done:
                     }
                 }
                 while (!weak_load_temp_slots.empty()) {
-                    uint32_t id = *weak_load_temp_slots.begin();
+                    uint32_t id = weak_load_temp_slots.begin()->first;
                     releaseWeakLoadTemp(id);
                 }
                 // Strong refs produced by self/static weak-reference evaluation
@@ -8224,8 +9433,12 @@ load_local_done:
                 if (!scope_stack.empty()) {
                     size_t scope_start = scope_stack.back();
                     scope_stack.pop_back();
+                    if (on_block_exit_handlers.size() <= scope_start) {
+                        ++ip;
+                        break;
+                    }
                     // Skip handler execution if inline_lowered=true; just flush the vector
-                    if (!scope_inst->inline_lowered && on_block_exit_handlers.size() > scope_start) {
+                    if (!scope_inst->inline_lowered) {
                         ExceptionSink obe_xsink;
                         bool error = scope_inst->is_error || (xsink && xsink->isException());
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
@@ -8378,6 +9591,8 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::ToBool:
+            case QoreIROpcode::ToInt:
+            case QoreIROpcode::ToFloat:
             case QoreIROpcode::Not:
             case QoreIROpcode::IsNullOrNothing:
             case QoreIROpcode::UnaryPlusAny:
@@ -8720,6 +9935,13 @@ load_local_done:
                 }
                 QoreValue left_val = getIRValue(values, inst->operands[0]);
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                int32_t string_index_char = 1;
+                if (inst->opcode == QoreIROpcode::ListIndexDynamic && expr_inst->expr.hasNode()) {
+                    if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                            expr_inst->expr.getInternalNode())) {
+                        string_index_char = sq->hasStringIndexChar() ? 1 : 0;
+                    }
+                }
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic
                         && !expr_inst->list_selector_kinds.empty()) {
                     std::vector<uint64_t> selector_bits;
@@ -8730,7 +9952,7 @@ load_local_done:
                     QoreValue res = fromBits(qore_rt_list_index_selectors(toBits(left_val),
                         expr_inst->list_selector_kinds.data(),
                         static_cast<int32_t>(expr_inst->list_selector_kinds.size()),
-                        selector_bits.data(), xsink));
+                        selector_bits.data(), string_index_char, xsink));
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -8744,7 +9966,10 @@ load_local_done:
                     break;
                 }
                 QoreValue right_val = getIRValue(values, inst->operands[1]);
-                QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
+                QoreValue res = inst->opcode == QoreIROpcode::ListIndexDynamic
+                    ? QoreSquareBracketsOperatorNode::doSquareBrackets(left_val, right_val, true,
+                        string_index_char != 0, runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink)
+                    : QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -9250,12 +10475,15 @@ load_local_done:
                         } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
                             lvh.ensureUnique();
                             QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                            size_t idx = static_cast<size_t>(last_step.slot_id);
-                            if (idx < l->size()) {
+                            int64_t idx = last_step.index;
+                            if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS) && idx < 0) {
+                                idx += static_cast<int64_t>(l->size());
+                            }
+                            if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
                                 if (path_inst->unary_op == LVUnaryOp::Remove) {
-                                    res = l->retrieveEntry(idx).refSelf();
+                                    res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
                                 }
-                                l->setEntry(idx, QoreValue(), xsink);
+                                l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                             }
                         } else if (last_step.kind == LVPathStepKind::HashKeySlice
                                 && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
@@ -10219,8 +11447,11 @@ lvalue_path_unary_done:
                 auto* direct_inst = static_cast<QoreIRCallDirectInstruction*>(inst);
                 if (direct_inst->variant) {
                     int nargs = static_cast<int>(direct_inst->operands.size());
-                    if (direct_inst->func && hasLastUseCallArgSlots(values, direct_inst->operands, 0,
-                            value_use_counts)) {
+                    bool has_last_use_args = direct_inst->func && hasLastUseCallArgSlots(values,
+                        direct_inst->operands, 0, value_use_counts);
+                    bool prefer_inline_ir = has_last_use_args
+                        && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0;
+                    if (has_last_use_args && !prefer_inline_ir) {
                         ReferenceHolder<QoreListNode> arg_list(
                             buildArgList(values, direct_inst->operands, 0, xsink), xsink);
                         if (xsink && *xsink) {
@@ -10253,6 +11484,7 @@ lvalue_path_unary_done:
                         ++ip;
                         break;
                     }
+
                     // Build NaN-boxed args array from operands
                     constexpr int SMALL_BUF = 8;
                     uint64_t nb_buf[SMALL_BUF];
@@ -10261,129 +11493,11 @@ lvalue_path_unary_done:
                         nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i]));
                     }
 
-                    // Inline IR-to-IR call: skip qore_rt_call_fast overhead entirely
-                    // when the callee has direct_params_eligible IR.
-                    // QoreIRInterpreter::execute() still performs the callee
-                    // stack guard; this skips the runtime-helper check and the
-                    // ThreadFrameBoundaryHelper, ArgvContextHelper, param TLS
-                    // push/pop, execJITWithDeopt wrapper, and name construction.
-                    int8_t state = direct_inst->inline_ir_state.load(std::memory_order_acquire);
-                    if (state == 0) {
-                        // First call: check eligibility and cache result
-                        const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
-                        if (uvb) {
-                            const QoreIRFunction* callee_ir = uvb->getCachedIR();
-                            const UserSignature* sig = uvb->getUserSignature();
-                            // Don't cache inline IR calls to functions from different programs/modules
-                            // to avoid stale pointers when modules are unloaded (especially dynamically-loaded ones)
-                            // Only inline if caller and callee are in the same program
-                            bool same_program = (uvb->pgm == direct_inst->pgm);
-                            if (same_program && callee_ir && callee_ir->isDirectParamsRuntimeSafe()
-                                    && uvb->isStaticallyFastCallEligible()
-                                    && !uvb->hasCachedFunction()
-                                    && !direct_inst->has_ref_args
-                                    && callee_ir->ast_visible_body_locals.empty()
-                                    && nargs >= static_cast<int>(sig->numParams())) {
-                                direct_inst->cached_callee_ir = callee_ir;
-                                direct_inst->cached_uvb = uvb;
-                                direct_inst->cached_return_type = sig->getReturnTypeInfo();
-                                direct_inst->inline_ir_state.store(1, std::memory_order_release);
-                                state = 1;
-                            } else {
-                                direct_inst->inline_ir_state.store(-1, std::memory_order_release);
-                                state = -1;
-                            }
-                        } else {
-                            direct_inst->inline_ir_state.store(-1, std::memory_order_release);
-                            state = -1;
-                        }
-                    }
-
                     QoreValue res;
-                    if (state == 1) {
-                        // Ultra-fast inline IR-to-IR call path
-                        const QoreIRFunction* callee_ir = direct_inst->cached_callee_ir;
-                        const UserVariantBase* uvb = direct_inst->cached_uvb;
-                        // Re-check: callee may have been promoted to JIT since caching
-                        if (uvb->hasCachedFunction()) {
-                            // JIT promotion: invalidate cache and use standard path
-                            direct_inst->inline_ir_state.store(-1, std::memory_order_release);
-                            res = fromBits(qore_rt_call_fast(
-                                direct_inst->func, direct_inst->variant, direct_inst->pgm,
-                                nanboxed_args, nargs, xsink));
-                        } else {
-                            // Inline IR-to-IR call: must instantiate parameters with type filtering
-                            // before calling execute(), as per instantiateFastCallParams pattern
-                            const UserSignature* sig = uvb->getUserSignature();
-
-                            // Instantiate parameters with type filtering (matching instantiateFastCallParams)
-                            int param_error = 0;
-                            unsigned num_params = sig->numParams();
-                            for (unsigned i = 0; i < num_params; ++i) {
-                                if (i < (unsigned)nargs) {
-                                    QoreValue val = fromBits(nanboxed_args[i]);
-                                    if (val.hasNode()) {
-                                        val.refSelf();
-                                    }
-
-                                    // Apply type filter like instantiateFastCallParams
-                                    const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
-                                    if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
-                                        QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
-                                        if (*xsink) {
-                                            param_error = 1;
-                                            break;
-                                        }
-                                    }
-
-                                    sig->lv[i]->instantiate(val);
-                                } else {
-                                    // No argument provided - parameter remains uninstantiated
-                                    // (will use default value if available, or runtime error)
-                                }
-                            }
-
-                            // Instantiate argvid (always NOTHING for exact-arity calls)
-                            if (!param_error && sig->argvid) {
-                                sig->argvid->instantiate(QoreValue());
-                            }
-
-                            QoreValue ir_return_value;
-                            int ok = 0;
-                            if (!param_error) {
-                                IRDirectParams dp{nanboxed_args, nargs};
-                                ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
-                                    nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-                                    nullptr, uvb->getStatementBlock(), uvb->pgm, false, &dp);
-                            }
-
-                            // Cleanup parameters and argvid
-                            for (unsigned i = 0; i < num_params; ++i) {
-                                sig->lv[i]->uninstantiate(xsink);
-                            }
-                            if (sig->argvid) {
-                                sig->argvid->uninstantiate(xsink);
-                            }
-
-                            if (param_error || (!ok && !(xsink && *xsink))) {
-                                // Error in param instantiation or IR deopt: fall through to standard path
-                                direct_inst->inline_ir_state.store(-1, std::memory_order_release);
-                                res = fromBits(qore_rt_call_fast(
-                                    direct_inst->func, direct_inst->variant, direct_inst->pgm,
-                                    nanboxed_args, nargs, xsink));
-                            } else {
-                                // Apply return type coercion
-                                if (!(xsink && *xsink) && direct_inst->cached_return_type) {
-                                    const QoreTypeInfo* return_type = direct_inst->cached_return_type;
-                                    return_type = qore_substitute_type_params_if_needed(return_type);
-                                    QoreTypeInfo::acceptAssignment(return_type, "<return statement>",
-                                        ir_return_value, xsink);
-                                }
-                                res = ir_return_value;
-                            }
-                        }
-                    } else {
-                        // Standard path through qore_rt_call_fast
+                    bool inline_may_invalidate_external_caches = true;
+                    bool used_inline_ir = tryExecuteInterpreterInlineIRFunction(direct_inst, pgm, nanboxed_args,
+                        nargs, res, xsink, &inline_may_invalidate_external_caches);
+                    if (!used_inline_ir) {
                         res = fromBits(qore_rt_call_fast(
                             direct_inst->func, direct_inst->variant, direct_inst->pgm,
                             nanboxed_args, nargs, xsink));
@@ -10393,10 +11507,17 @@ lvalue_path_unary_done:
                     if (xsink && *xsink) {
                         return returnAfterUnhandledException();
                     }
+                    if (has_last_use_args) {
+                        consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
+                            value_use_counts, &weak_load_temp_slots, xsink);
+                        if (xsink && *xsink) {
+                            return returnAfterUnhandledException();
+                        }
+                    }
                     // If call has reference args, callee may have modified caller's locals
                     if (direct_inst->has_ref_args) {
                         cleanupLocalCaches();
-                    } else {
+                    } else if (!used_inline_ir || inline_may_invalidate_external_caches) {
                         invalidateExternalCaches();
                     }
                     setValueSlot(values, inst->result.id, res, xsink);
@@ -10458,16 +11579,22 @@ lvalue_path_unary_done:
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, static_inst->operands[i]));
                     }
-                    QoreValue res = fromBits(qore_rt_call_static_method_direct(
-                        static_inst->method, static_inst->variant,
-                        nanboxed_args, nargs, xsink));
+                    QoreValue res;
+                    bool inline_may_invalidate_external_caches = true;
+                    bool used_inline_ir = tryExecuteInterpreterInlineIRStaticMethod(static_inst, pgm,
+                        nanboxed_args, nargs, res, xsink, &inline_may_invalidate_external_caches);
+                    if (!used_inline_ir) {
+                        res = fromBits(qore_rt_call_static_method_direct(
+                            static_inst->method, static_inst->variant,
+                            nanboxed_args, nargs, xsink));
+                    }
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
                         return returnAfterUnhandledException();
                     }
                     if (static_inst->has_ref_args) {
                         cleanupLocalCaches();
-                    } else {
+                    } else if (!used_inline_ir || inline_may_invalidate_external_caches) {
                         invalidateExternalCaches();
                     }
                     setValueSlot(values, inst->result.id, res, xsink);
@@ -10510,7 +11637,7 @@ lvalue_path_unary_done:
                         QoreValue lhs_val = getIRValue(values, inst->operands[0]);
                         QoreValue rhs_val = getIRValue(values, inst->operands[1]);
                         res = QoreSquareBracketsOperatorNode::doSquareBrackets(
-                            lhs_val, rhs_val, true, xsink);
+                            lhs_val, rhs_val, true, sq->hasStringIndexChar(), sq->hasNegativeOffsets(), xsink);
                         used_operands = true;
                     } else if (auto* hod = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                             call_expr.getInternalNode())) {
@@ -10665,9 +11792,16 @@ lvalue_path_unary_done:
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i]));
                     }
-                    QoreValue res = fromBits(qore_rt_call_method_fast(
-                        direct_inst->method, direct_inst->variant,
-                        nanboxed_args, nargs, xsink));
+                    QoreObject* self = runtime_get_stack_object();
+                    QoreValue res;
+                    bool inline_may_invalidate_external_caches = true;
+                    bool used_inline_ir = tryExecuteInterpreterInlineIRMethod(direct_inst, self, pgm,
+                        nanboxed_args, nargs, res, xsink, &inline_may_invalidate_external_caches);
+                    if (!used_inline_ir) {
+                        res = fromBits(qore_rt_call_method_fast(
+                            direct_inst->method, direct_inst->variant,
+                            nanboxed_args, nargs, xsink));
+                    }
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
                         return returnAfterUnhandledException();
@@ -10676,7 +11810,8 @@ lvalue_path_unary_done:
                         cleanupLocalCaches();
                     } else {
                         // Skip invalidation for built-in methods without reference arguments
-                        if (!direct_inst->method->isBuiltin()) {
+                        if (!direct_inst->method->isBuiltin()
+                                && (!used_inline_ir || inline_may_invalidate_external_caches)) {
                             invalidateExternalCaches();
                         }
                     }
@@ -10750,9 +11885,16 @@ lvalue_path_unary_done:
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, invoke_inst->operands[i]));
                     }
-                    QoreValue res = fromBits(qore_rt_call_method_fast(
-                        invoke_inst->method, invoke_inst->variant,
-                        nanboxed_args, nargs, xsink));
+                    QoreObject* self = runtime_get_stack_object();
+                    QoreValue res;
+                    bool inline_may_invalidate_external_caches = true;
+                    bool used_inline_ir = tryExecuteInterpreterInlineIRMethod(invoke_inst, self, pgm,
+                        nanboxed_args, nargs, res, xsink, &inline_may_invalidate_external_caches);
+                    if (!used_inline_ir) {
+                        res = fromBits(qore_rt_call_method_fast(
+                            invoke_inst->method, invoke_inst->variant,
+                            nanboxed_args, nargs, xsink));
+                    }
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (invoke_inst->has_ref_args) {
                         cleanupLocalCaches();
@@ -10760,7 +11902,8 @@ lvalue_path_unary_done:
                         // For built-in methods without reference arguments that are known to not
                         // access Qore global state (like Future::isDone(), Counter::dec(), etc.),
                         // skip invalidation to avoid expensive hash map operations on hot paths
-                        if (invoke_inst->method->isBuiltin()) {
+                        if (invoke_inst->method->isBuiltin()
+                                || (used_inline_ir && !inline_may_invalidate_external_caches)) {
                             // Built-in methods are pure C++ and don't access Qore globals
                             // No invalidation needed
                         } else {
@@ -10881,12 +12024,7 @@ lvalue_path_unary_done:
                 for (int i = 0; i < nargs; ++i) {
                     nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i + 1]));
                 }
-                auto* explicit_dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
-                    direct_inst->expr.getInternalNode());
-                const QoreTypeParamInstantiation* explicit_inst = explicit_dot_eval
-                    && explicit_dot_eval->getMethodCall()
-                    ? explicit_dot_eval->getMethodCall()->getExplicitTypeParamInstantiation()
-                    : nullptr;
+                const QoreTypeParamInstantiation* explicit_inst = direct_inst->explicit_type_param_inst;
 
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
@@ -10997,29 +12135,29 @@ lvalue_path_unary_done:
                             nanboxed_args, nargs, xsink));
                     }
                 } else {
-                    called_external = true;
-                    if (direct_inst->method && direct_inst->qc) {
+                    const char* mname = direct_inst->fallback_method_name
+                        ? direct_inst->fallback_method_name
+                        : (direct_inst->method ? direct_inst->method->getName() : nullptr);
+                    bool inline_may_invalidate_external_caches = true;
+                    if (mname && tryExecuteInterpreterInlineIRDotEvalMethod(direct_inst, base, mname,
+                            explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
+                            &inline_may_invalidate_external_caches)) {
+                        // Result produced by the inline IR path.
+                        called_external = inline_may_invalidate_external_caches;
+                    } else if (direct_inst->method && direct_inst->qc) {
+                        called_external = true;
                         res = fromBits(explicit_inst
                             ? qore_rt_dot_eval_method_direct_with_inst(toBits(base), direct_inst->method,
                                 direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, explicit_inst, xsink)
                             : qore_rt_dot_eval_method_direct(toBits(base), direct_inst->method, direct_inst->qc,
                                 direct_inst->variant, nanboxed_args, nargs, xsink));
+                    } else if (mname) {
+                        called_external = true;
+                        res = fromBits(dot_eval_fallback_with_args(base, mname,
+                            nanboxed_args, nargs, xsink, explicit_inst));
                     } else {
-                        // Abstract/unresolved method: use name-based dispatch
-                        auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
-                            direct_inst->expr.getInternalNode());
-                        const char* mname = dot_eval ? dot_eval->getMethodCall()->getName() : nullptr;
-                        // Fallback to stored method name (from AOT deserialization)
-                        if (!mname && direct_inst->fallback_method_name != nullptr) {
-                            mname = direct_inst->fallback_method_name;
-                        }
-                        if (mname) {
-                            res = fromBits(dot_eval_fallback_with_args(base, mname,
-                                nanboxed_args, nargs, xsink, explicit_inst));
-                        } else {
-                            xsink->raiseException("IR-ERROR",
-                                "DotEvalMethodDirect: null method pointer and no method name");
-                        }
+                        xsink->raiseException("IR-ERROR",
+                            "DotEvalMethodDirect: null method pointer and no method name");
                     }
                 }
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
@@ -11056,12 +12194,7 @@ lvalue_path_unary_done:
                 for (int i = 0; i < nargs; ++i) {
                     nanboxed_args[i] = toBits(getIRValue(values, de_invoke_inst->operands[i + 1]));
                 }
-                auto* explicit_dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
-                    de_invoke_inst->expr.getInternalNode());
-                const QoreTypeParamInstantiation* explicit_inst = explicit_dot_eval
-                    && explicit_dot_eval->getMethodCall()
-                    ? explicit_dot_eval->getMethodCall()->getExplicitTypeParamInstantiation()
-                    : nullptr;
+                const QoreTypeParamInstantiation* explicit_inst = de_invoke_inst->explicit_type_param_inst;
 
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
@@ -11172,29 +12305,30 @@ lvalue_path_unary_done:
                             nanboxed_args, nargs, xsink));
                     }
                 } else {
-                    called_external = true;
-                    if (de_invoke_inst->method && de_invoke_inst->qc) {
+                    const char* mname = de_invoke_inst->fallback_method_name
+                        ? de_invoke_inst->fallback_method_name
+                        : (de_invoke_inst->method ? de_invoke_inst->method->getName() : nullptr);
+                    bool inline_may_invalidate_external_caches = true;
+                    if (mname && tryExecuteInterpreterInlineIRDotEvalMethod(de_invoke_inst, base, mname,
+                            explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
+                            &inline_may_invalidate_external_caches)) {
+                        // Result produced by the inline IR path.
+                        called_external = inline_may_invalidate_external_caches;
+                    } else if (de_invoke_inst->method && de_invoke_inst->qc) {
+                        called_external = true;
                         res = fromBits(explicit_inst
                             ? qore_rt_dot_eval_method_direct_with_inst(toBits(base), de_invoke_inst->method,
                                 de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, explicit_inst,
                                 xsink)
                             : qore_rt_dot_eval_method_direct(toBits(base), de_invoke_inst->method,
                                 de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, xsink));
+                    } else if (mname) {
+                        called_external = true;
+                        res = fromBits(dot_eval_fallback_with_args(base, mname,
+                            nanboxed_args, nargs, xsink, explicit_inst));
                     } else {
-                        // Abstract/unresolved method: use name-based dispatch
-                        auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
-                            de_invoke_inst->expr.getInternalNode());
-                        const char* mname = dot_eval ? dot_eval->getMethodCall()->getName() : nullptr;
-                        if (!mname && de_invoke_inst->fallback_method_name != nullptr) {
-                            mname = de_invoke_inst->fallback_method_name;
-                        }
-                        if (mname) {
-                            res = fromBits(dot_eval_fallback_with_args(base, mname,
-                                nanboxed_args, nargs, xsink, explicit_inst));
-                        } else {
-                            xsink->raiseException("IR-ERROR",
-                                "InvokeDotEvalMethodDirect: null method pointer and no method name");
-                        }
+                        xsink->raiseException("IR-ERROR",
+                            "InvokeDotEvalMethodDirect: null method pointer and no method name");
                     }
                 }
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
@@ -11850,8 +12984,10 @@ lvalue_path_unary_done:
                 return false;
         }
 
-        for (const auto& op : inst->operands) {
-            consumeOperandUse(op.id);
+        if (!weak_load_temp_slots.empty()) {
+            for (const auto& op : inst->operands) {
+                consumeOperandUse(op.id);
+            }
         }
 
         // Fast path: if we're still in the same block (no branch occurred),
@@ -11879,6 +13015,10 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
     switch (op) {
         case QoreIROpcode::ToBool:
             return QoreValue(value.getAsBool());
+        case QoreIROpcode::ToInt:
+            return QoreValue(value.getAsBigInt());
+        case QoreIROpcode::ToFloat:
+            return QoreValue(value.getAsFloat());
         case QoreIROpcode::Not:
             return QoreValue(!value.getAsBool());
         case QoreIROpcode::IsNullOrNothing:
@@ -12283,19 +13423,20 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             int64_t result;
             if (right.isNothing()) {
                 if (sz == 0) {
                     return QoreValue();
                 }
-                result = l->retrieveEntry(0).getAsBigInt();
+                result = lp->entry[0].getAsBigInt();
                 start_idx = 1;
             } else {
                 result = right.getAsBigInt();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                result += l->retrieveEntry(i).getAsBigInt();
+                result += lp->entry[i].getAsBigInt();
             }
             return QoreValue(result);
         }
@@ -12306,19 +13447,20 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             double result;
             if (right.isNothing()) {
                 if (sz == 0) {
                     return QoreValue();
                 }
-                result = l->retrieveEntry(0).getAsFloat();
+                result = lp->entry[0].getAsFloat();
                 start_idx = 1;
             } else {
                 result = right.getAsFloat();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                result += l->retrieveEntry(i).getAsFloat();
+                result += lp->entry[i].getAsFloat();
             }
             return QoreValue(result);
         }
@@ -12329,19 +13471,20 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             int64_t result;
             if (right.isNothing()) {
                 if (sz == 0) {
                     return QoreValue();
                 }
-                result = l->retrieveEntry(0).getAsBigInt();
+                result = lp->entry[0].getAsBigInt();
                 start_idx = 1;
             } else {
                 result = right.getAsBigInt();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                result *= l->retrieveEntry(i).getAsBigInt();
+                result *= lp->entry[i].getAsBigInt();
             }
             return QoreValue(result);
         }
@@ -12352,19 +13495,20 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             double result;
             if (right.isNothing()) {
                 if (sz == 0) {
                     return QoreValue();
                 }
-                result = l->retrieveEntry(0).getAsFloat();
+                result = lp->entry[0].getAsFloat();
                 start_idx = 1;
             } else {
                 result = right.getAsFloat();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                result *= l->retrieveEntry(i).getAsFloat();
+                result *= lp->entry[i].getAsFloat();
             }
             return QoreValue(result);
         }
@@ -12375,19 +13519,20 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             int64_t result;
             if (right.isNothing()) {
                 if (sz == 0) {
                     return QoreValue();
                 }
-                result = l->retrieveEntry(0).getAsBigInt();
+                result = lp->entry[0].getAsBigInt();
                 start_idx = 1;
             } else {
                 result = right.getAsBigInt();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                result -= l->retrieveEntry(i).getAsBigInt();
+                result -= lp->entry[i].getAsBigInt();
             }
             return QoreValue(result);
         }
@@ -12398,19 +13543,20 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             const QoreListNode* l = left.get<const QoreListNode>();
             size_t sz = l->size();
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             double result;
             if (right.isNothing()) {
                 if (sz == 0) {
                     return QoreValue();
                 }
-                result = l->retrieveEntry(0).getAsFloat();
+                result = lp->entry[0].getAsFloat();
                 start_idx = 1;
             } else {
                 result = right.getAsFloat();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                result -= l->retrieveEntry(i).getAsFloat();
+                result -= lp->entry[i].getAsFloat();
             }
             return QoreValue(result);
         }
@@ -12424,16 +13570,17 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             int64_t result;
             if (right.isNothing()) {
-                result = l->retrieveEntry(0).getAsBigInt();
+                result = lp->entry[0].getAsBigInt();
                 start_idx = 1;
             } else {
                 result = right.getAsBigInt();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                int64_t val = lp->entry[i].getAsBigInt();
                 if (val < result) {
                     result = val;
                 }
@@ -12450,16 +13597,17 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             double result;
             if (right.isNothing()) {
-                result = l->retrieveEntry(0).getAsFloat();
+                result = lp->entry[0].getAsFloat();
                 start_idx = 1;
             } else {
                 result = right.getAsFloat();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                double val = l->retrieveEntry(i).getAsFloat();
+                double val = lp->entry[i].getAsFloat();
                 if (val < result) {
                     result = val;
                 }
@@ -12476,16 +13624,17 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             int64_t result;
             if (right.isNothing()) {
-                result = l->retrieveEntry(0).getAsBigInt();
+                result = lp->entry[0].getAsBigInt();
                 start_idx = 1;
             } else {
                 result = right.getAsBigInt();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                int64_t val = lp->entry[i].getAsBigInt();
                 if (val > result) {
                     result = val;
                 }
@@ -12502,16 +13651,17 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
+            const qore_list_private* lp = qore_list_private::get(*l);
             size_t start_idx = 0;
             double result;
             if (right.isNothing()) {
-                result = l->retrieveEntry(0).getAsFloat();
+                result = lp->entry[0].getAsFloat();
                 start_idx = 1;
             } else {
                 result = right.getAsFloat();
             }
             for (size_t i = start_idx; i < sz; ++i) {
-                double val = l->retrieveEntry(i).getAsFloat();
+                double val = lp->entry[i].getAsFloat();
                 if (val > result) {
                     result = val;
                 }
@@ -12529,9 +13679,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
+            const qore_list_private* lp = qore_list_private::get(*l);
             int64_t result = right.isNothing() ? 0ll : right.getAsBigInt();
             for (size_t i = 0; i < sz; ++i) {
-                result += l->retrieveEntry(i).getAsBigInt();
+                result += lp->entry[i].getAsBigInt();
             }
             return QoreValue(result);
         }
@@ -12544,9 +13695,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
+            const qore_list_private* lp = qore_list_private::get(*l);
             double result = right.isNothing() ? 0.0 : right.getAsFloat();
             for (size_t i = 0; i < sz; ++i) {
-                result += l->retrieveEntry(i).getAsFloat();
+                result += lp->entry[i].getAsFloat();
             }
             return QoreValue(result);
         }
@@ -12559,9 +13711,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
+            const qore_list_private* lp = qore_list_private::get(*l);
             int64_t result = right.isNothing() ? 1ll : right.getAsBigInt();
             for (size_t i = 0; i < sz; ++i) {
-                result *= l->retrieveEntry(i).getAsBigInt();
+                result *= lp->entry[i].getAsBigInt();
             }
             return QoreValue(result);
         }
@@ -12574,9 +13727,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
+            const qore_list_private* lp = qore_list_private::get(*l);
             double result = right.isNothing() ? 1.0 : right.getAsFloat();
             for (size_t i = 0; i < sz; ++i) {
-                result *= l->retrieveEntry(i).getAsFloat();
+                result *= lp->entry[i].getAsFloat();
             }
             return QoreValue(result);
         }
@@ -12591,9 +13745,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
             // Start from last element and subtract backwards
-            int64_t result = l->retrieveEntry(sz - 1).getAsBigInt();
+            const qore_list_private* lp = qore_list_private::get(*l);
+            int64_t result = lp->entry[sz - 1].getAsBigInt();
             for (size_t i = sz - 1; i > 0; --i) {
-                result -= l->retrieveEntry(i - 1).getAsBigInt();
+                result -= lp->entry[i - 1].getAsBigInt();
             }
             return QoreValue(result);
         }
@@ -12608,9 +13763,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
             // Start from last element and subtract backwards
-            double result = l->retrieveEntry(sz - 1).getAsFloat();
+            const qore_list_private* lp = qore_list_private::get(*l);
+            double result = lp->entry[sz - 1].getAsFloat();
             for (size_t i = sz - 1; i > 0; --i) {
-                result -= l->retrieveEntry(i - 1).getAsFloat();
+                result -= lp->entry[i - 1].getAsFloat();
             }
             return QoreValue(result);
         }
@@ -12623,9 +13779,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
-            int64_t result = l->retrieveEntry(0).getAsBigInt();
+            const qore_list_private* lp = qore_list_private::get(*l);
+            int64_t result = lp->entry[0].getAsBigInt();
             for (size_t i = 1; i < sz; ++i) {
-                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                int64_t val = lp->entry[i].getAsBigInt();
                 if (val < result) {
                     result = val;
                 }
@@ -12641,9 +13798,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
-            double result = l->retrieveEntry(0).getAsFloat();
+            const qore_list_private* lp = qore_list_private::get(*l);
+            double result = lp->entry[0].getAsFloat();
             for (size_t i = 1; i < sz; ++i) {
-                double val = l->retrieveEntry(i).getAsFloat();
+                double val = lp->entry[i].getAsFloat();
                 if (val < result) {
                     result = val;
                 }
@@ -12659,9 +13817,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsBigInt());
             }
-            int64_t result = l->retrieveEntry(0).getAsBigInt();
+            const qore_list_private* lp = qore_list_private::get(*l);
+            int64_t result = lp->entry[0].getAsBigInt();
             for (size_t i = 1; i < sz; ++i) {
-                int64_t val = l->retrieveEntry(i).getAsBigInt();
+                int64_t val = lp->entry[i].getAsBigInt();
                 if (val > result) {
                     result = val;
                 }
@@ -12677,9 +13836,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return right.isNothing() ? QoreValue() : QoreValue(right.getAsFloat());
             }
-            double result = l->retrieveEntry(0).getAsFloat();
+            const qore_list_private* lp = qore_list_private::get(*l);
+            double result = lp->entry[0].getAsFloat();
             for (size_t i = 1; i < sz; ++i) {
-                double val = l->retrieveEntry(i).getAsFloat();
+                double val = lp->entry[i].getAsFloat();
                 if (val > result) {
                     result = val;
                 }
@@ -13288,39 +14448,11 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::ListIndexDynamic: {
             // Dynamic list/container index: container[index]
-            // Must match doSquareBrackets() semantics: negative indices count from end
-            // Multi-index access (e.g. l[3,1,4]): delegate to doSquareBrackets for
-            // correct list/string/binary/hash multi-index handling
-            if (right.getType() == NT_LIST) {
-                return QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, xsink);
-            }
             qore_type_t bt = left.getType();
-            if (bt == NT_LIST) {
-                const QoreListNode* l = left.get<const QoreListNode>();
-                return l->getReferencedEntry(right.getAsBigInt());
-            }
-            if (bt == NT_STRING) {
-                QoreStringNodeValueHelper s(left);
-                return s->substr(static_cast<qore_offset_t>(right.getAsBigInt()), 1, xsink);
-            }
-            if (bt == NT_BINARY) {
-                const BinaryNode* b = left.get<const BinaryNode>();
-                int64 idx = right.getAsBigInt();
-                if (idx < 0) {
-                    idx += static_cast<int64>(b->size());
-                }
-                if (idx >= 0 && idx < static_cast<int64>(b->size())) {
-                    return QoreValue(static_cast<int64>(
-                        static_cast<const unsigned char*>(b->getPtr())[idx]));
-                }
-                return QoreValue();
-            }
-            if (bt == NT_BUFFER) {
-                int64 idx = right.getAsBigInt();
-                if (idx < 0) {
-                    return QoreValue();
-                }
-                return left.get<const QoreBufferNode>()->getReferencedEntry(static_cast<size_t>(idx), xsink);
+            if (bt == NT_LIST || bt == NT_STRING || bt == NT_BINARY || bt == NT_BUFFER
+                    || right.getType() == NT_LIST) {
+                return QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
+                    runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink);
             }
             if (bt == NT_HASH) {
                 // hash[key] is equivalent to hash{key}

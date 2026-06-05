@@ -153,6 +153,7 @@
 #include "qore/intern/QoreIntPostIncrementOperatorNode.h"
 #include "qore/intern/QoreIntPostDecrementOperatorNode.h"
 #include "qore/intern/QoreFoldlOperatorNode.h"
+#include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreImplicitArgumentNode.h"
 #include "qore/intern/QoreImplicitElementNode.h"
 #include "qore/intern/ParseReferenceNode.h"
@@ -163,6 +164,7 @@
 #include "qore/intern/QoreHashMapOperatorNode.h"
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
+#include "qore/intern/QoreStreamingOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -294,6 +296,8 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
     std::unordered_set<std::string>* local_module_names = nullptr,
     std::unordered_map<std::string, std::string>* local_module_paths = nullptr,
     const char* source_label = nullptr);
+static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
+    qore_program_private* pp, const char* cancel_context, const char* skip_feature = nullptr);
 static void filterLoadableLocalModules(std::unordered_set<std::string>& local_module_names,
     const std::unordered_map<std::string, std::string>& local_module_paths,
     const qore_program_private* pp);
@@ -743,6 +747,18 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Complex buffer defaults must preserve whether they came from
     // buffer<T>(), buffer<T>::sized(), or buffer<T>::filled().
     flags |= QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND;
+    // Read-only local/parameter binding metadata must round-trip through
+    // source-stripped AOT so runtime and reflection see the same contract.
+    flags |= QORE_AOT_FEAT_READONLY_LOCALS;
+    // Const method receiver contracts affect overload/override checks and
+    // readonly receiver dispatch in downstream source and AOT consumers.
+    flags |= QORE_AOT_FEAT_CONST_METHODS;
+    // CallClosureDirect and invoke-form closure calls carry whether their
+    // arguments can invalidate caller local caches through reference writes.
+    flags |= QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS;
+    // Phi instructions preserve whether the merged value is a QoreValue or a
+    // native representation such as a loop counter.
+    flags |= QORE_AOT_FEAT_TYPED_PHI;
     return flags;
 }
 
@@ -4647,10 +4663,12 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
     }
 }
 
-//! Extract ALL module dependencies from source (including reexport)
-/** For strip-source mode, we need to serialize all dependencies so they can be loaded
-    at runtime before deserializing the namespace tree.
-    Also extracts which deps have (reexport) flag.
+//! Extract source-level module directives
+/** This raw source scanner is used for directive metadata that is not available
+    from parsed feature lists, such as (reexport) flags and relative-path module
+    discovery. Hard AOT runtime dependencies must be serialized from the parsed
+    program's feature lists instead, so failed %try-module directives are not
+    promoted to hard dependencies.
 */
 static std::vector<std::string> extractAllDependencies(const char* source, int source_len,
         std::vector<std::string>* reexport_deps,
@@ -4754,15 +4772,11 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
             }
         }
 
-        // Check for %try-module directive — source-level optional load.
-        // If the module successfully loaded at qcc compile time, its functions
-        // / classes may have been referenced inside the `%ifndef NoXxx` guarded
-        // block and baked into the AOT binary.  At runtime those references
-        // must resolve, so `%try-module <name>` effectively becomes a runtime
-        // dependency for the compiled binary.  Adding it here is safe: if the
-        // module is unavailable at runtime, qore_aot_module_init_v3 tolerates
-        // dependency load failures (the referenced slots will then fail to
-        // resolve — same as the pre-fix behavior for that branch).
+        // Check for %try-module directive. Successful optional loads appear in
+        // the parsed program's feature lists and become hard AOT dependencies
+        // there; failed optional loads must remain optional. The raw scanner's
+        // returned dependency list is therefore not used for qmod hard-dep
+        // serialization.
         if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
             p += 11;
             // Skip whitespace after %try-module
@@ -6206,11 +6220,16 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         }
         appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source);
 
-        // Serialize ALL dependencies (including reexport) so they can be loaded
-        // at runtime before deserializing the namespace tree
+        // Serialize successfully-loaded dependencies so they can be loaded at
+        // runtime before deserializing the namespace tree. Failed %try-module
+        // directives must not become hard AOT dependencies.
         std::vector<std::string> reexport_mods;
-        std::vector<std::string> all_deps = extractAllDependencies(source_text, source_len, &reexport_mods);
-        serializeDependencies(writer, all_deps);
+        extractAllDependencies(source_text, source_len, &reexport_mods);
+        if (!serializeProgramFeatureDependencies(writer, pp,
+                "AOT module dependency serialization", mod_info.name.c_str())) {
+            error = "operation cancelled during AOT module dependency serialization";
+            return false;
+        }
         serializeReexportModules(writer, reexport_mods);
 
         // Pass module name to filter out items from reexported dependencies
@@ -6679,12 +6698,16 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
             appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source);
 
-            // Serialize ALL dependencies (including reexport) so they can be loaded
-            // at runtime before deserializing the namespace tree
+            // Serialize successfully-loaded dependencies so failed %try-module
+            // directives do not become hard AOT dependencies.
             std::vector<std::string> reexport_mods;
-            std::vector<std::string> all_deps = extractAllDependencies(combined_source.c_str(),
+            extractAllDependencies(combined_source.c_str(),
                 static_cast<int>(combined_source.size()), &reexport_mods);
-            serializeDependencies(writer, all_deps);
+            if (!serializeProgramFeatureDependencies(writer, pp,
+                    "AOT split module dependency serialization", mod_info.name.c_str())) {
+                error = "operation cancelled during AOT split module dependency serialization";
+                return false;
+            }
             serializeReexportModules(writer, reexport_mods);
 
             // Pass module name to filter out items from reexported dependencies
@@ -6981,11 +7004,12 @@ static std::string stripIncludeDirectives(const std::string& src) {
 }
 
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
-        qore_program_private* pp, const char* cancel_context) {
+        qore_program_private* pp, const char* cancel_context, const char* skip_feature) {
     std::vector<std::string> all_deps;
     std::unordered_set<std::string> dep_seen;
     auto add_dep = [&](const std::string& feat) {
-        if (feat != "qore" && dep_seen.insert(feat).second) {
+        if (feat != "qore" && (!skip_feature || feat != skip_feature)
+                && dep_seen.insert(feat).second) {
             all_deps.push_back(feat);
         }
     };
@@ -7701,6 +7725,36 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         // depend on target declarations can resolve cleanly during the later
         // cross-blob pass.
         if (!extracted_frags.empty()) {
+            // Defensive: pre-load each sibling fragment's module dependencies
+            // through the normal parse-time loader before the blob preload
+            // below injects their module-contributed namespaces.  AOT blob
+            // deserialization adds namespaces such as "Json" (from the json
+            // module) directly; if the contributing module is not also
+            // registered with the program's feature tracker, a later load of
+            // the same module -- the target source's own `%requires`, or a
+            // defensive load_module() -- takes the slow path and tries to
+            // re-inject the namespace, raising
+            // "Namespace 'X' already exists in '::Qore'".  parseLoadModule()
+            // is idempotent (an already-loaded module is a no-op), so loading
+            // the deps here keeps the feature tracker consistent and prevents
+            // that collision even if a later phase aborts and the bootstrap is
+            // retried.  Mirrors the runtime batch path
+            // (QoreAOTRuntime.cpp qore_aot_script_end_batch).  Best-effort:
+            // deps that cannot be resolved here are left to the normal target
+            // parse to load and report.
+            for (auto& frag : extracted_frags) {
+                std::vector<std::string> deps;
+                std::string dep_error;
+                if (!readDependencies(frag.bytes.data(),
+                        static_cast<uint32_t>(frag.bytes.size()), deps, dep_error)) {
+                    continue;
+                }
+                for (const std::string& dep : deps) {
+                    SimpleRefHolder<QoreStringNode> derr(
+                        MM.parseLoadModule(dep.c_str(), *qpgm));
+                }
+            }
+
             ExceptionSink pch_xsink;
             ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
             if (pch_xsink.isException()) {
@@ -8366,9 +8420,13 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
-            std::vector<std::string> all_deps = extractAllDependencies(
-                combined_source.c_str(), (int)combined_source.size(), &reexport_mods);
-            serializeDependencies(writer, all_deps);
+            extractAllDependencies(combined_source.c_str(), (int)combined_source.size(),
+                &reexport_mods);
+            if (!serializeProgramFeatureDependencies(writer, pp,
+                    "AOT module-fragment dependency serialization", mod_info.name.c_str())) {
+                error = "operation cancelled during AOT module-fragment dependency serialization";
+                return false;
+            }
             serializeReexportModules(writer, reexport_mods);
 
             // Pass compile_file=target_canon so the metadata blob lists
@@ -8812,9 +8870,13 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
-            std::vector<std::string> all_deps = extractAllDependencies(
-                combined_source.c_str(), (int)combined_source.size(), &reexport_mods);
-            serializeDependencies(writer, all_deps);
+            extractAllDependencies(combined_source.c_str(), (int)combined_source.size(),
+                &reexport_mods);
+            if (!serializeProgramFeatureDependencies(writer, pp,
+                    "AOT aggregated-module dependency serialization", mod_info.name.c_str())) {
+                error = "operation cancelled during AOT aggregated-module dependency serialization";
+                return false;
+            }
             serializeReexportModules(writer, reexport_mods);
 
             std::string ns_error;
@@ -9295,9 +9357,13 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
-            std::vector<std::string> all_deps = extractAllDependencies(
-                combined_source.c_str(), (int)combined_source.size(), &reexport_mods);
-            serializeDependencies(writer, all_deps);
+            extractAllDependencies(combined_source.c_str(), (int)combined_source.size(),
+                &reexport_mods);
+            if (!serializeProgramFeatureDependencies(writer, pp,
+                    "AOT archive dependency serialization", mod_info.name.c_str())) {
+                error = "operation cancelled during AOT archive dependency serialization";
+                return false;
+            }
             serializeReexportModules(writer, reexport_mods);
 
             std::string ns_error;
@@ -12051,6 +12117,18 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreFoldlOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_FOLDL, op->getLeft(), op->getRight());
         }
+        if (auto* op = dynamic_cast<const QoreIterateOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_ITERATE, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STREAMING));
+            writeU8(static_cast<uint8_t>(op->getKind()));
+            writeU16(2);
+            if (!serializeValue(op->getPredicate())) {
+                return false;
+            }
+            return serializeValue(op->getSource());
+        }
 
         // Closure — serialize as expression slot reference
         if (dynamic_cast<const QoreClosureParseNode*>(node)) {
@@ -12912,6 +12990,17 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = v;
         return id;
     }
+    if (dynamic_cast<const QoreIterateOperatorNode*>(node)) {
+        id.kind = AOTExprKind::ITERATE;
+        id.child_expr = v;
+        return id;
+    }
+    if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
+        id.kind = AOTExprKind::STREAMING;
+        id.flags = static_cast<uint32_t>(op->getKind());
+        id.child_expr = v;
+        return id;
+    }
     if (dynamic_cast<const QoreTrimOperatorNode*>(node)) {
         id.kind = AOTExprKind::TRIM;
         id.child_expr = v;
@@ -13513,6 +13602,9 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         if (lv->closureUse()) {
             lid.flags |= 0x02; // is_closure
         }
+        if (lv->isReadOnly()) {
+            lid.flags |= 0x10; // read-only binding
+        }
     }
 
     // Extract global slot identities (slots may have gaps — size by max+1)
@@ -13539,6 +13631,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         blid.name = lv->getName();
         blid.type_path = getSlotTypePath(lv->getTypeInfoForLValue());
         blid.is_closure = lv->closureUse();
+        blid.read_only = lv->isReadOnly();
         auto slot_it = func.local_var_slots.find(lv);
         blid.slot_id = slot_it != func.local_var_slots.end() ? slot_it->second : UINT32_MAX;
         out.body_locals.push_back(std::move(blid));

@@ -38,6 +38,8 @@
 
 class RuntimeConfig;
 
+DLLLOCAL bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionSink* xsink);
+
 class CaseNode {
 private:
     DLLLOCAL virtual bool isCaseNodeImpl() const;

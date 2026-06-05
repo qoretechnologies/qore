@@ -29,6 +29,16 @@ auto sub eval_expr(string exp_name, softlist<auto> args, *hash<auto> rec) {
         <DataProvider::DataProviderExpression>{"exp": exp_name, "args": args});
 }
 
+#! Builds a field reference for expression tests
+hash<DataProviderFieldReference> sub field_ref(string field) {
+    return <DataProviderFieldReference>{"field": field};
+}
+
+#! Builds a nested expression for expression tests
+hash<DataProviderExpression> sub dp_expr(string exp_name, softlist<auto> args) {
+    return <DataProviderExpression>{"exp": exp_name, "args": args};
+}
+
 class DataProviderExpressionsTest inherits QUnit::Test {
     constructor() : Test("DataProviderExpressions", "1.0") {
         addTestCase("arithmetic tests", \arithmeticTests());
@@ -57,6 +67,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("math function tests", \mathTests());
         addTestCase("string function tests (new)", \newStringTests());
         addTestCase("map/hash_map tests", \mapTests());
+        addTestCase("streaming operator tests", \streamingOperatorTests());
         addTestCase("like operator tests", \likeTests());
         set_return_value(main());
     }
@@ -771,6 +782,73 @@ class DataProviderExpressionsTest inherits QUnit::Test {
                 ),
             });
         assertEq((), result);
+    }
+
+    streamingOperatorTests() {
+        foreach string op in ((DP_OP_SELECT, DP_OP_FIRST, DP_OP_ANY, DP_OP_ALL, DP_OP_COUNT,
+                DP_OP_TAKE, DP_OP_DROP, DP_OP_TAKEWHILE, DP_OP_TAKEUNTIL)) {
+            hash<auto> impl = AbstractDataProvider::GenericExpressionImplementations{op};
+            assertEq(DET_Operator, impl.exp.type, sprintf("%s is a DP operator", op));
+            assertEq(op, impl.exp.name, sprintf("%s metadata name", op));
+            assertEq(op, impl.exp.symbol, sprintf("%s DPQL symbol", op));
+        }
+
+        list<hash<auto>> users = (
+            {"name": "Alice", "age": 30, "active": True},
+            {"name": "Bob", "age": 25, "active": False},
+            {"name": "Carol", "age": 35, "active": True},
+        );
+        hash<auto> rec = {"users": users};
+
+        assertEq((users[0], users[2]), eval_expr(DP_OP_SELECT,
+            (field_ref("users"), field_ref("active")), rec));
+        assertEq(users[0], eval_expr(DP_OP_FIRST,
+            (dp_expr(DP_SEARCH_OP_GE, (field_ref("age"), 30)), field_ref("users")), rec));
+        assertEq(users[0], eval_expr(DP_OP_FIRST, (field_ref("users"),), rec));
+        assertEq(NOTHING, eval_expr(DP_OP_FIRST,
+            (dp_expr(DP_SEARCH_OP_GT, (field_ref("age"), 99)), field_ref("users")), rec));
+
+        assertTrue(eval_expr(DP_OP_ANY, (field_ref("active"), field_ref("users")), rec));
+        assertFalse(eval_expr(DP_OP_ANY,
+            (dp_expr(DP_SEARCH_OP_GT, (field_ref("age"), 99)), field_ref("users")), rec));
+        assertTrue(eval_expr(DP_OP_ANY, ((False, True),)));
+        assertFalse(eval_expr(DP_OP_ANY, ((False, NOTHING),)));
+
+        assertTrue(eval_expr(DP_OP_ALL,
+            (dp_expr(DP_SEARCH_OP_GE, (field_ref("age"), 25)), field_ref("users")), rec));
+        assertFalse(eval_expr(DP_OP_ALL, (field_ref("active"), field_ref("users")), rec));
+        assertTrue(eval_expr(DP_OP_ALL, (field_ref("active"), ()), rec));
+
+        assertEq(3, eval_expr(DP_OP_COUNT, (field_ref("users"),), rec));
+        assertEq(2, eval_expr(DP_OP_COUNT, (field_ref("active"), field_ref("users")), rec));
+
+        assertEq((users[0], users[1]), eval_expr(DP_OP_TAKE, (2, field_ref("users")), rec));
+        assertEq((users[1], users[2]), eval_expr(DP_OP_DROP, (1, field_ref("users")), rec));
+        assertEq((users[0], users[1]), eval_expr(DP_OP_TAKEWHILE,
+            (dp_expr(DP_SEARCH_OP_LT, (field_ref("age"), 35)), field_ref("users")), rec));
+        assertEq((users[0], users[1]), eval_expr(DP_OP_TAKEUNTIL,
+            (dp_expr(DP_SEARCH_OP_GE, (field_ref("age"), 35)), field_ref("users")), rec));
+
+        hash<auto> nums_rec = {"nums": (1, 2, 3, 4)};
+        assertEq((3, 4), eval_expr(DP_OP_SELECT,
+            (field_ref("nums"), dp_expr(DP_SEARCH_OP_GT, (field_ref("value"), 2))), nums_rec));
+        assertEq(4, eval_expr(DP_OP_FIRST,
+            (dp_expr(DP_SEARCH_OP_GT, (field_ref("value"), 3)), field_ref("nums")), nums_rec));
+
+        hash<auto> scores = {"a": 1, "b": 2};
+        hash<auto> pair = eval_expr(DP_OP_FIRST,
+            (dp_expr(DP_SEARCH_OP_EQ, (field_ref("key"), "b")), scores));
+        assertEq("b", pair.key);
+        assertEq(2, pair.value);
+        assertEq(1, eval_expr(DP_OP_COUNT,
+            (dp_expr(DP_SEARCH_OP_GT, (field_ref("value"), 1)), scores)));
+
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", sub () {
+            eval_expr(DP_OP_TAKE, (-1, field_ref("users")), rec);
+        });
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", sub () {
+            eval_expr(DP_OP_DROP, (-1, field_ref("users")), rec);
+        });
     }
 
     likeTests() {

@@ -433,27 +433,67 @@ public class AbstractModelRegistryBackend {
         @since QoreModelRegistry 2.2
     */
     static hash<ModelVersionInfo> normalizeVersionInfo(hash<auto> meta) {
-        if (meta.artifact_ref) {
-            meta.artifact_ref = cast<hash<ArtifactRef>>(meta.artifact_ref);
+        *hash<ArtifactRef> artifact_ref;
+        if (exists meta.artifact_ref) {
+            auto raw_artifact_ref = remove meta.artifact_ref;
+            if (raw_artifact_ref) {
+                artifact_ref = cast<hash<ArtifactRef>>(raw_artifact_ref);
+            }
         }
-        if (meta.artifacts) {
-            meta.artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(meta.artifacts);
+        *list<hash<ModelArtifactInfo>> artifacts;
+        bool has_artifacts = False;
+        if (exists meta.artifacts) {
+            artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(remove meta.artifacts);
+            has_artifacts = True;
         }
-        if (meta.optimized_artifacts) {
-            meta.optimized_artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(
-                meta.optimized_artifacts);
+        *list<hash<ModelArtifactInfo>> optimized_artifacts;
+        bool has_optimized_artifacts = False;
+        if (exists meta.optimized_artifacts) {
+            optimized_artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(
+                remove meta.optimized_artifacts);
+            has_optimized_artifacts = True;
         }
-        if (meta.quantized_artifacts) {
-            meta.quantized_artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(
-                meta.quantized_artifacts);
+        *list<hash<ModelArtifactInfo>> quantized_artifacts;
+        bool has_quantized_artifacts = False;
+        if (exists meta.quantized_artifacts) {
+            quantized_artifacts = AbstractModelRegistryBackend::normalizeArtifactInfos(
+                remove meta.quantized_artifacts);
+            has_quantized_artifacts = True;
         }
-        if (meta.execution) {
-            meta.execution = cast<hash<ModelExecutionInfo>>(meta.execution);
+        *hash<ModelExecutionInfo> execution;
+        if (exists meta.execution) {
+            auto raw_execution = remove meta.execution;
+            if (raw_execution) {
+                execution = cast<hash<ModelExecutionInfo>>(raw_execution);
+            }
         }
-        if (meta.tokenizer) {
-            meta.tokenizer = cast<hash<TokenizerArtifactInfo>>(meta.tokenizer);
+        *hash<TokenizerArtifactInfo> tokenizer;
+        if (exists meta.tokenizer) {
+            auto raw_tokenizer = remove meta.tokenizer;
+            if (raw_tokenizer) {
+                tokenizer = cast<hash<TokenizerArtifactInfo>>(raw_tokenizer);
+            }
         }
-        return cast<hash<ModelVersionInfo>>(meta);
+        hash<ModelVersionInfo> rv = cast<hash<ModelVersionInfo>>(meta);
+        if (artifact_ref) {
+            rv.artifact_ref = artifact_ref;
+        }
+        if (has_artifacts) {
+            rv.artifacts = artifacts;
+        }
+        if (has_optimized_artifacts) {
+            rv.optimized_artifacts = optimized_artifacts;
+        }
+        if (has_quantized_artifacts) {
+            rv.quantized_artifacts = quantized_artifacts;
+        }
+        if (execution) {
+            rv.execution = execution;
+        }
+        if (tokenizer) {
+            rv.tokenizer = tokenizer;
+        }
+        return rv;
     }
 
     #! Normalizes artifact metadata after JSON or REST decoding
@@ -481,7 +521,7 @@ public class AbstractModelRegistryBackend {
         list<hash<ModelArtifactInfo>> result();
         foreach auto artifact in (artifacts) {
             push result, AbstractModelRegistryBackend::normalizeArtifactInfo(
-                cast<hash<auto>>(artifact));
+                cast<hash>(artifact));
         }
         return result;
     }

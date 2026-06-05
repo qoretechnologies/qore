@@ -1,18 +1,23 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/WebSocketUtil.qm
-%requires ../../../../qlib/WebSocketHandler.qm
-%requires ../../../../qlib/WebSocketClient.qm
-%requires ../../../../qlib/AsyncSocketIo
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires AsyncSocketIo
 
 %exec-class WebSocketClientCallWrapperTest
 

@@ -265,7 +265,7 @@ hash<auto> plan = QoreOnnxTools::OnnxProcessingSpecs::buildExecutionPlan({
     static hash<auto> buildExecutionPlan(hash<auto> spec) {
         hash<auto> plan = {};
         if (spec.plan) {
-            plan += cast<hash<auto>>(spec.plan);
+            plan += cast<hash>(spec.plan);
         }
 
         string runtime = spec.runtime.val() ? string(spec.runtime) : "metadata-only";
@@ -274,13 +274,13 @@ hash<auto> plan = QoreOnnxTools::OnnxProcessingSpecs::buildExecutionPlan({
             ? string(spec.artifact_name)
             : (spec.entry_artifact.val() ? string(spec.entry_artifact) : NOTHING);
         *hash<auto> input_schema = spec.input_schema
-            ? cast<hash<auto>>(spec.input_schema) : NOTHING;
+            ? cast<hash>(spec.input_schema) : NOTHING;
         *hash<auto> output_schema = spec.output_schema
-            ? cast<hash<auto>>(spec.output_schema) : NOTHING;
+            ? cast<hash>(spec.output_schema) : NOTHING;
         *hash<auto> dynamic_axes = spec.dynamic_axes
-            ? cast<hash<auto>>(spec.dynamic_axes) : NOTHING;
+            ? cast<hash>(spec.dynamic_axes) : NOTHING;
         *hash<auto> tokenizer = normalizeTokenizerContract(spec.tokenizer
-            ? cast<hash<auto>>(spec.tokenizer) : NOTHING);
+            ? cast<hash>(spec.tokenizer) : NOTHING);
         *hash<auto> output_shapes = buildOutputShapeMap(output_schema);
 
         if (!plan.type.val()) {
@@ -431,7 +431,7 @@ hash<auto> plan = QoreOnnxTools::OnnxProcessingSpecs::buildExecutionPlan({
             rv.token_type_ids = "token_type_ids";
         }
         if (ctx && ctx.tokenizer) {
-            hash<auto> tokenizer = cast<hash<auto>>(ctx.tokenizer);
+            hash<auto> tokenizer = cast<hash>(ctx.tokenizer);
             if (tokenizer.artifact_name.val()) {
                 rv.artifact_name = tokenizer.artifact_name;
             }

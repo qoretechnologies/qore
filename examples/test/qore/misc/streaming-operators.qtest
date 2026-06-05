@@ -1,0 +1,399 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StreamingOperatorsTest
+
+class CountingIterator inherits AbstractIterator<int> {
+    private {
+        int max;
+        int pos;
+        int value;
+        int calls;
+        bool valid_flag;
+    }
+
+    constructor(int max) {
+        self.max = max;
+        self.pos = 0;
+        self.calls = 0;
+        self.valid_flag = False;
+    }
+
+    bool next() {
+        ++self.calls;
+        if (self.pos >= self.max) {
+            self.valid_flag = False;
+            return False;
+        }
+
+        self.value = self.pos++;
+        self.valid_flag = True;
+        return True;
+    }
+
+    int getValue() {
+        if (!self.valid_flag) {
+            throw "INVALID-ITERATOR", "iterator is not valid";
+        }
+        return self.value;
+    }
+
+    bool valid() {
+        return self.valid_flag;
+    }
+
+    int getCalls() {
+        return self.calls;
+    }
+}
+
+class MixedIterator inherits AbstractIterator<auto> {
+    private {
+        int pos;
+        auto value;
+        bool valid_flag;
+    }
+
+    bool next() {
+        if (self.pos == 0) {
+            ++self.pos;
+            self.value = 1;
+            self.valid_flag = True;
+            return True;
+        }
+
+        if (self.pos == 1) {
+            ++self.pos;
+            self.value = "x";
+            self.valid_flag = True;
+            return True;
+        }
+
+        self.valid_flag = False;
+        return False;
+    }
+
+    auto getValue() {
+        return self.value;
+    }
+
+    bool valid() {
+        return self.valid_flag;
+    }
+}
+
+int sub first(list<int> values) {
+    return 99;
+}
+
+bool sub any(list<int> values) {
+    return False;
+}
+
+int sub count(list<int> values) {
+    return 77;
+}
+
+class StreamingOperatorsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Streaming operators test", "1.0") {
+        addTestCase("Terminal operators", \testTerminalOperators());
+        addTestCase("Lazy operators", \testLazyOperators());
+        addTestCase("Iterate sources", \testIterateSources());
+        addTestCase("Hard-list iterator materialization", \testHardListIteratorMaterialization());
+        addTestCase("Fused streaming chains", \testFusedStreamingChains());
+        addTestCase("Soft keyword identifiers", \testSoftKeywordIdentifiers());
+        addTestCase("Contextual keyword compatibility", \testContextualKeywordCompatibility());
+        addTestCase("Parse option opt-outs", \testParseOptionOptOuts());
+        set_return_value(main());
+    }
+
+    parseOk(string code, string label) {
+        Program p();
+        p.parse("%modern\n" + code, label);
+    }
+
+    parseFails(string option, string code, string label) {
+        Program p();
+        assertThrows("PARSE-EXCEPTION", \p.parse(), ("%modern\n" + option + "\n" + code, label));
+    }
+
+    testTerminalOperators() {
+        list<int> values = (1, 2, 3, 4);
+
+        assertEq((first values), 1, "first source");
+        assertEq((first (1, 2, 3)), 1, "first source list literal");
+        assertEq((first ()), NOTHING, "first empty source");
+        assertEq((first $1 > 2, values), 3, "first predicate");
+        assertEq((first $1 > 9, values), NOTHING, "first predicate no match");
+
+        bool source_has_values = any values;
+        assertEq(source_has_values, True, "any source");
+        assertEq((any (values)), True, "any parenthesized source");
+        bool has_values = any values;
+        assertEq(has_values, True, "any bare source in modern mode");
+        assertEq((any ()), False, "any empty source");
+        assertEq((any $1 > 2, values), True, "any predicate");
+        assertEq((any greaterThanTwo($1), values), True, "any predicate call");
+        assertEq((any $1 > 9, values), False, "any predicate no match");
+
+        auto saved = values;
+        assertEq(echoAuto(saved), values, "auto is preferred for unrestricted modern declarations");
+
+        assertEq((all $1 > 0, values), True, "all predicate");
+        assertEq((all $1 > 1, values), False, "all predicate no match");
+        assertEq((all $1 > 0, ()), True, "all empty source");
+
+        assertEq((count values), 4, "count source");
+        assertEq((count (1, 2, 3)), 3, "count source list literal");
+        assertEq((count ()), 0, "count empty source");
+        assertEq((count $1 > 1, values), 3, "count predicate");
+        assertEq((count $1 > 9, values), 0, "count predicate no match");
+
+        assertEq(first(values), 99, "first(...) remains a function call");
+        assertEq((first (values)), 1, "first (...) is the streaming operator form");
+        assertEq(any(values), False, "any(...) remains a function call");
+        assertEq((any (values)), True, "any (...) is the streaming operator form");
+        assertEq(count(values), 77, "count(...) remains a function call");
+        assertEq((count (values)), 4, "count (...) is the streaming operator form");
+
+        Program p();
+        p.parse("%modern\nclass C { public { any value; *any maybe; } any get() { return 1; } abstract any getAbstract(); }\nany sub compat(any value) { return value; }\nauto sub closureCompat() { code c = any sub (any a) { return a; }; return c(1); }", "any-type-compat");
+        Program disabled_any();
+        assertThrows("PARSE-EXCEPTION", \disabled_any.parse(),
+            ("%modern\n%no-any-operator\nbool sub t(list<int> values) { return any $1 > 0, values; }",
+                "no-any-operator"));
+    }
+
+    auto echoAuto(auto value) {
+        return value;
+    }
+
+    bool greaterThanTwo(int value) {
+        return value > 2;
+    }
+
+    testLazyOperators() {
+        list<int> values = (1, 2, 3, 4);
+
+        assertEq((take 2, values), (1, 2), "take prefix");
+        assertEq((take 10, values), values, "take beyond end");
+        assertEq((take 0, values), (), "take zero");
+
+        assertEq((drop 2, values), (3, 4), "drop prefix");
+        assertEq((drop 10, values), (), "drop beyond end");
+        assertEq((drop 0, values), values, "drop zero");
+        assertThrows("STREAMING-OPERATOR-ERROR", sub () { auto x = take -1, values; });
+        assertThrows("STREAMING-OPERATOR-ERROR", sub () { auto x = drop -1, values; });
+
+        assertEq((takewhile $1 < 3, values), (1, 2), "takewhile prefix");
+        assertEq((takewhile $1 < 0, values), (), "takewhile none");
+        assertEq((takeuntil $1 == 3, values), (1, 2), "takeuntil prefix");
+        assertEq((takeuntil $1 == 9, values), values, "takeuntil no match");
+
+        assertEq((first (drop 2, values)), 3, "drop feeds first lazily");
+        assertEq((count (take 2, values)), 2, "take feeds count lazily");
+        assertEq((count $1 > 1, (takewhile $1 < 4, values)), 2, "takewhile feeds count predicate");
+    }
+
+    testIterateSources() {
+        assertEq((map $1, (iterate (1, 2, 3))), (1, 2, 3), "iterate list");
+        assertEq((map $1, (iterate 3)), (0, 1, 2), "iterate int range");
+        assertEq((map $1, (iterate xrange(3))), (0, 1, 2), "iterate AbstractIterator");
+
+        binary b = binary("AZ");
+        assertEq((map $1, (iterate b)), (65, 90), "iterate binary bytes");
+        assertEq((first b), 65, "streaming binary source bytes");
+
+        hash<string, int> h = {"a": 1, "b": 2};
+        assertEq((count h), 2, "streaming hash source pairs");
+        assertEq((first $1.key == "a", h).value, 1, "streaming hash source key predicate");
+        assertEq((first $1.value == 2, iterate h).key, "b", "iterate hash pairs");
+
+        assertEq((first 3), 0, "streaming int source range");
+
+        assertEq((map $1.ord(), (iterate "abc")), (97, 98, 99), "iterate string chars");
+
+        int map_count = 0;
+        (map ++map_count, (iterate "abc"));
+        assertEq(map_count, 3, "discarded map still drains string char source");
+
+        int map_select_count = 0;
+        (map ++map_select_count, (iterate "abc"), $1 != c'b');
+        assertEq(map_select_count, 2, "discarded map select still drains selected string char source");
+    }
+
+    testHardListIteratorMaterialization() {
+        list<int> range_list = xrange(3);
+        assertEq(range_list, (0, 1, 2), "hard-list assignment materializes RangeIterator");
+
+        list<int> iterate_list = iterate 4;
+        assertEq(iterate_list, (0, 1, 2, 3), "hard-list assignment materializes iterate int source");
+
+        list<char> char_list = iterate "ab";
+        assertEq(char_list, (c'a', c'b'), "hard-list assignment materializes iterate string chars");
+
+        hash<string, int> h = {"a": 1};
+        list<hash<auto>> pair_list = iterate h;
+        assertEq(pair_list.size(), 1, "hard-list assignment materializes hash pairs");
+        assertEq(pair_list[0].key, "a", "materialized hash pair key");
+        assertEq(pair_list[0].value, 1, "materialized hash pair value");
+
+        CountingIterator i(3);
+        list<int> custom_list = i;
+        assertEq(custom_list, (0, 1, 2), "hard-list assignment materializes custom AbstractIterator");
+        assertEq(i.getCalls(), 4, "hard-list materialization drains iterator to completion");
+
+        *list<int> nullable_list = NOTHING;
+        assertEq(nullable_list, NOTHING, "nullable hard-list still accepts NOTHING");
+        nullable_list = xrange(2);
+        assertEq(nullable_list, (0, 1), "nullable hard-list materializes iterator");
+
+        softlist<object> soft = xrange(2);
+        assertEq(soft.size(), 1, "softlist<object> preserves iterator object as one value");
+        assertTrue(soft[0] instanceof AbstractIterator, "softlist<object> element is still an iterator");
+
+        CountingIterator soft_auto_iter(2);
+        softlist<auto> soft_auto = soft_auto_iter;
+        assertEq(soft_auto.size(), 1, "softlist<auto> preserves iterator object as one value");
+        assertTrue(soft_auto[0] instanceof AbstractIterator, "softlist<auto> element is still an iterator");
+        assertEq(soft_auto_iter.getCalls(), 0, "softlist<auto> assignment does not drain iterator");
+
+        CountingIterator nullable_soft_auto_iter(2);
+        *softlist<auto> nullable_soft_auto = nullable_soft_auto_iter;
+        assertEq(nullable_soft_auto.size(), 1, "*softlist<auto> preserves iterator object as one value");
+        assertTrue(nullable_soft_auto[0] instanceof AbstractIterator, "*softlist<auto> element is still an iterator");
+        assertEq(nullable_soft_auto_iter.getCalls(), 0, "*softlist<auto> assignment does not drain iterator");
+
+        CountingIterator variadic_soft_auto_iter(2);
+        softlist<auto> variadic_soft_auto = echoVariadic(variadic_soft_auto_iter);
+        assertEq(variadic_soft_auto.size(), 1, "*softlist<auto> parameter preserves iterator object as one value");
+        assertTrue(variadic_soft_auto[0] instanceof AbstractIterator,
+            "*softlist<auto> parameter element is still an iterator");
+        assertEq(variadic_soft_auto_iter.getCalls(), 0, "*softlist<auto> parameter does not drain iterator");
+
+        auto preserved = xrange(2);
+        assertTrue(preserved instanceof AbstractIterator, "auto preserves iterator object");
+
+        MixedIterator mixed();
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { list<int> bad = mixed; });
+    }
+
+    softlist<auto> echoVariadic(*softlist<auto> args) {
+        return args;
+    }
+
+    testFusedStreamingChains() {
+        CountingIterator i(5);
+        assertEq((first (drop 2, i)), 2, "drop feeds first result");
+        assertEq(i.getCalls(), 3, "drop feeds first without draining source");
+
+        CountingIterator j(5);
+        assertEq((count (take 2, j)), 2, "take feeds count result");
+        assertEq(j.getCalls(), 2, "take feeds count without reading beyond limit");
+
+        CountingIterator k(5);
+        assertEq((take 2, (drop 1, k)), (1, 2), "drop feeds take result");
+        assertEq(k.getCalls(), 3, "drop feeds take without draining source");
+    }
+
+    testSoftKeywordIdentifiers() {
+        int iterate = 1;
+        int first = 2;
+        int any = 3;
+        int all = 4;
+        int count = 5;
+        int take = 6;
+        int drop = 7;
+        int takewhile = 8;
+        int takeuntil = 9;
+
+        assertEq((iterate, first, any, all, count, take, drop, takewhile, takeuntil),
+            (1, 2, 3, 4, 5, 6, 7, 8, 9), "streaming operator words remain valid local identifiers");
+
+        count++;
+        assertEq(count, 6, "streaming operator word local can be post-incremented");
+
+        count += 2;
+        assertEq(count + take, 14, "streaming operator word local can be used in binary expressions");
+    }
+
+    testContextualKeywordCompatibility() {
+        parseOk("our int iterate; our int first; our int any; our int all; our int count;"
+            "our int take; our int drop; our int takewhile; our int takeuntil;",
+            "streaming words remain valid our variables");
+
+        parseOk("int sub iterate() { return 1; } int sub first() { return 2; }"
+            "int sub any() { return 3; } int sub all() { return 4; }"
+            "int sub count() { return 5; } int sub take() { return 6; }"
+            "int sub drop() { return 7; } int sub takewhile() { return 8; }"
+            "int sub takeuntil() { return 9; }",
+            "streaming words remain valid function names");
+
+        parseOk("class StreamingKeywordClass { public { int iterate; int first; int any;"
+            "int all; int count; int take; int drop; int takewhile; int takeuntil; }"
+            "int iterate() { return 1; } int first() { return 2; }"
+            "int any() { return 3; } int all() { return 4; }"
+            "int count() { return 5; } int take() { return 6; }"
+            "int drop() { return 7; } int takewhile() { return 8; }"
+            "int takeuntil() { return 9; } }",
+            "streaming words remain valid class members and methods");
+
+        parseOk("hashdecl StreamingKeywordHash { int iterate; int first; int any; int all;"
+            "int count; int take; int drop; int takewhile; int takeuntil; }",
+            "streaming words remain valid hashdecl field names");
+
+        parseOk("namespace StreamingKeywordNamespace { our int iterate;"
+            "int sub first() { return 1; } class any { } }",
+            "streaming words remain valid namespace members");
+    }
+
+    testParseOptionOptOuts() {
+        parseFails("%no-iterate",
+            "list sub t(list<int> values) { return map $1, (iterate values); }",
+            "no-iterate disables iterate operator");
+        parseFails("%no-first",
+            "int sub t(list<int> values) { return first $1 > 0, values; }",
+            "no-first disables first operator");
+        parseFails("%no-any-operator",
+            "bool sub t(list<int> values) { return any $1 > 0, values; }",
+            "no-any-operator disables any operator");
+        parseFails("%no-all-operator",
+            "bool sub t(list<int> values) { return all $1 > 0, values; }",
+            "no-all-operator disables all operator");
+        parseFails("%no-count",
+            "int sub t(list<int> values) { return count $1 > 0, values; }",
+            "no-count disables count operator");
+        parseFails("%no-take",
+            "list<int> sub t(list<int> values) { return take 1, values; }",
+            "no-take disables take operator");
+        parseFails("%no-drop",
+            "list<int> sub t(list<int> values) { return drop 1, values; }",
+            "no-drop disables drop operator");
+        parseFails("%no-takewhile",
+            "list<int> sub t(list<int> values) { return takewhile $1 > 0, values; }",
+            "no-takewhile disables takewhile operator");
+        parseFails("%no-takeuntil",
+            "list<int> sub t(list<int> values) { return takeuntil $1 > 0, values; }",
+            "no-takeuntil disables takeuntil operator");
+        parseFails("%no-find-modifiers",
+            "string sub t() { hash q = (\"name\": (\"a\"), \"age\": (1));"
+            "return find first %name in q where (%age == 1); }",
+            "no-find-modifiers disables find first modifier");
+        parseFails("%no-streaming-operators",
+            "bool sub t(list<int> values) { return any $1 > 0, values; }",
+            "no-streaming-operators disables streaming operator keywords");
+        parseFails("%no-streaming-operators",
+            "string sub t() { hash q = (\"name\": (\"a\"), \"age\": (1));"
+            "return find first %name in q where (%age == 1); }",
+            "no-streaming-operators disables find modifiers");
+
+        Program p();
+        p.parse("%new-style\n%streaming-any\nbool sub t(list<int> values) { return any $1 > 0, values; }",
+            "streaming-any enables any operator outside modern mode");
+    }
+}

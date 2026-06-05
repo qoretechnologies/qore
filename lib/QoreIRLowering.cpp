@@ -5,6 +5,7 @@
     Qore Programming Language
 */
 
+#include <algorithm>
 
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRLowering.h>
@@ -71,6 +72,8 @@
 #include <qore/intern/QoreBinaryXorOperatorNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
 #include <qore/intern/QoreMapOperatorNode.h>
+#include <qore/intern/QoreIterateOperatorNode.h>
+#include <qore/intern/QoreStreamingOperatorNode.h>
 #include <qore/intern/QoreBinaryLValueOperatorNode.h>
 #include <qore/intern/QorePlusEqualsOperatorNode.h>
 #include <qore/intern/QoreMinusEqualsOperatorNode.h>
@@ -243,8 +246,140 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
                 return ti;
             }
         }
+        if (auto* parse_node = dynamic_cast<const ParseNode*>(node)) {
+            const QoreParseAnalysis& analysis = parse_node->getParseAnalysis();
+            if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+                return analysis.known_type;
+            }
+        }
     }
     return val.getTypeInfo();
+}
+
+static bool isImmediateCleanupFreeType(const QoreTypeInfo* type_info) {
+    return QoreTypeInfo::isType(type_info, NT_BOOLEAN)
+        || QoreTypeInfo::isType(type_info, NT_INT)
+        || QoreTypeInfo::isType(type_info, NT_FLOAT)
+        || QoreTypeInfo::isType(type_info, NT_CHAR)
+        || QoreTypeInfo::isType(type_info, NT_NOTHING)
+        || QoreTypeInfo::isType(type_info, NT_NULL);
+}
+
+static bool isImmediateCleanupFreeValue(const QoreValue& val) {
+    const QoreTypeInfo* type_info = getExprTypeInfo(val);
+    if (isImmediateCleanupFreeType(type_info)) {
+        return true;
+    }
+    if (val.hasNode()) {
+        return false;
+    }
+    qore_type_t type = val.getType();
+    return type == NT_BOOLEAN || type == NT_INT || type == NT_FLOAT || type == NT_CHAR
+        || type == NT_NOTHING || type == NT_NULL;
+}
+
+static bool expressionMayCreateNodeTemp(const QoreValue& val) {
+    if (!val) {
+        return false;
+    }
+    const AbstractQoreNode* node = val.getInternalNode();
+    if (!node) {
+        return !isImmediateCleanupFreeValue(val);
+    }
+
+    if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
+        return !isImmediateCleanupFreeType(var_ref->getTypeInfo());
+    }
+    if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        if (auto* ce = rt_const->getConstantEntry()) {
+            return !isImmediateCleanupFreeType(ce->typeInfo);
+        }
+        return true;
+    }
+    if (val.isValue()) {
+        return !isImmediateCleanupFreeValue(val);
+    }
+
+    auto argsMayCreateNodeTemp = [](const QoreParseListNode* parse_args, const QoreListNode* args) {
+        if (parse_args) {
+            for (size_t i = 0; i < parse_args->size(); ++i) {
+                if (expressionMayCreateNodeTemp(parse_args->get(i))) {
+                    return true;
+                }
+            }
+        }
+        if (args) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                if (expressionMayCreateNodeTemp(li.getValue())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
+        return argsMayCreateNodeTemp(call->getParseArgs(), call->getArgs())
+            || !isImmediateCleanupFreeType(getExprTypeInfo(val));
+    }
+    if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        return expressionMayCreateNodeTemp(call->getExp())
+            || argsMayCreateNodeTemp(call->getParseArgs(), call->getArgs())
+            || !isImmediateCleanupFreeType(getExprTypeInfo(val));
+    }
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+        return expressionMayCreateNodeTemp(binop->getLeft())
+            || expressionMayCreateNodeTemp(binop->getRight())
+            || !isImmediateCleanupFreeType(getExprTypeInfo(val));
+    }
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
+        return expressionMayCreateNodeTemp(binop->getLeft())
+            || expressionMayCreateNodeTemp(binop->getRight())
+            || !isImmediateCleanupFreeType(getExprTypeInfo(val));
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+        return expressionMayCreateNodeTemp(unop->getExp())
+            || !isImmediateCleanupFreeType(getExprTypeInfo(val));
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+        return expressionMayCreateNodeTemp(unop->getExp())
+            || !isImmediateCleanupFreeType(getExprTypeInfo(val));
+    }
+    if (auto* sub = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return expressionMayCreateNodeTemp(sub->getLeft())
+            || expressionMayCreateNodeTemp(sub->getRight())
+            || !isImmediateCleanupFreeType(getExprTypeInfo(val));
+    }
+    if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        return expressionMayCreateNodeTemp(hd->getLeft())
+            || !isImmediateCleanupFreeType(getExprTypeInfo(val));
+    }
+
+    return true;
+}
+
+static bool statementMayCreateNodeTemp(const AbstractStatement* stmt) {
+    if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
+        return expressionMayCreateNodeTemp(expr_stmt->getExpression());
+    }
+    if (auto* return_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
+        return expressionMayCreateNodeTemp(return_stmt->getExpression());
+    }
+    if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+        return expressionMayCreateNodeTemp(for_stmt->getAssignment())
+            || expressionMayCreateNodeTemp(for_stmt->getIterator());
+    }
+    if (dynamic_cast<const IfStatement*>(stmt) || dynamic_cast<const WhileStatement*>(stmt)
+            || dynamic_cast<const DoWhileStatement*>(stmt)) {
+        return false;
+    }
+    return true;
+}
+
+static bool conditionValueSurvivesDiscardTemps(const QoreValue& val) {
+    const QoreTypeInfo* type_info = getExprTypeInfo(val);
+    return isImmediateCleanupFreeType(type_info) || isImmediateCleanupFreeValue(val);
 }
 
 static QoreIRPluginOperationRef pluginOperationRefFromInfo(const QorePluginResolvedOperationInfo& info,
@@ -423,6 +558,12 @@ QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_par
 // Used for fused integer operations that can only be applied to lvstack locals.
 static bool isLocalNonClosureVar(const VarRefNode* var) {
     return var && var->getType() == VT_LOCAL && var->ref.id && !var->ref.id->closureUse();
+}
+
+// Check if a variable has a LocalVar backing slot, including closure-use locals.
+// Fused interpreter opcodes handle closure write-through explicitly.
+static bool isLocalOrClosureVar(const VarRefNode* var) {
+    return var && (var->getType() == VT_LOCAL || var->getType() == VT_CLOSURE) && var->ref.id;
 }
 
 void QoreIRLowering::setParseContext(QoreParseContext* n_parse_context) {
@@ -805,14 +946,20 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // mutates state.  Otherwise a condition such as `if (!h{k})` can keep
         // `h` referenced while the then-block assigns `h{k}`, forcing COW of
         // the whole hash on every insertion.
-        builder.createPushTempMark(if_stmt->loc);
+        bool condition_needs_cleanup = expressionMayCreateNodeTemp(if_stmt->getCond());
+        if (condition_needs_cleanup) {
+            builder.createPushTempMark(if_stmt->loc);
+        }
         QoreIRValue cond = lowerConditionValue(if_stmt->getCond(), error);
         if (!cond.isValid()) {
             return false;
         }
-        QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond,
-            if_stmt->loc)->result;
-        builder.createDiscardTemps(if_stmt->loc);
+        QoreIRValue cond_bool = !condition_needs_cleanup || conditionValueSurvivesDiscardTemps(if_stmt->getCond())
+            ? cond
+            : builder.createUnaryOp(QoreIROpcode::ToBool, cond, if_stmt->loc)->result;
+        if (condition_needs_cleanup) {
+            builder.createDiscardTemps(if_stmt->loc);
+        }
         QoreIRBasicBlock* then_block = createBlock("if.then");
         QoreIRBasicBlock* merge_block = createBlock("if.merge");
         QoreIRBasicBlock* else_block = if_stmt->getElseCode() ? createBlock("if.else") : merge_block;
@@ -885,15 +1032,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Bracket the condition with PushTempMark/DiscardTemps — see the
         // WhileStatement case below for the rationale (per-iteration node
         // temps from weak-ref LoadLocal in the condition must not persist).
-        builder.createPushTempMark(stmt->loc);
+        bool condition_needs_cleanup = expressionMayCreateNodeTemp(do_stmt->getCond());
+        if (condition_needs_cleanup) {
+            builder.createPushTempMark(stmt->loc);
+        }
         QoreIRValue cond = lowerConditionValue(do_stmt->getCond(), error);
         if (!cond.isValid()) {
             return false;
         }
-        // Convert to scalar bool so cond value survives DiscardTemps.
-        QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond,
-            stmt->loc)->result;
-        builder.createDiscardTemps(stmt->loc);
+        // Convert node values to scalar bool so the branch operand survives DiscardTemps.
+        QoreIRValue cond_bool = !condition_needs_cleanup || conditionValueSurvivesDiscardTemps(do_stmt->getCond())
+            ? cond
+            : builder.createUnaryOp(QoreIROpcode::ToBool, cond, stmt->loc)->result;
+        if (condition_needs_cleanup) {
+            builder.createDiscardTemps(stmt->loc);
+        }
         builder.createBranchIf(cond_bool, body_block, exit_block);
 
         // Move exit_block to end so LLVM lowering processes it after any
@@ -943,15 +1096,22 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // cleanup vector, so it survives DiscardTemps.
         // Try fused BranchIfLtLocalInt for int local < int local conditions
         if (!tryEmitFusedBranchIfLtLocalInt(while_stmt->getCond(), body_block, exit_block)) {
-            builder.createPushTempMark(while_stmt->loc);
+            bool condition_needs_cleanup = expressionMayCreateNodeTemp(while_stmt->getCond());
+            if (condition_needs_cleanup) {
+                builder.createPushTempMark(while_stmt->loc);
+            }
             QoreIRValue cond = lowerConditionValue(while_stmt->getCond(), error);
             if (!cond.isValid()) {
                 return false;
             }
-            // Convert to scalar bool so cond value survives DiscardTemps
-            QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond,
-                while_stmt->loc)->result;
-            builder.createDiscardTemps(while_stmt->loc);
+            // Convert node values to scalar bool so the branch operand survives DiscardTemps.
+            QoreIRValue cond_bool = !condition_needs_cleanup
+                    || conditionValueSurvivesDiscardTemps(while_stmt->getCond())
+                ? cond
+                : builder.createUnaryOp(QoreIROpcode::ToBool, cond, while_stmt->loc)->result;
+            if (condition_needs_cleanup) {
+                builder.createDiscardTemps(while_stmt->loc);
+            }
             builder.createBranchIf(cond_bool, body_block, exit_block);
         }
         // Fused path: int comparisons don't create node temps, no cleanup needed.
@@ -1025,7 +1185,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Bracket the condition with PushTempMark/DiscardTemps — see the
             // WhileStatement case above for the rationale (per-iteration node
             // temps from weak-ref LoadLocal in the condition must not persist).
-            builder.createPushTempMark(stmt->loc);
+            bool condition_needs_cleanup = cond_expr && !cond_expr.isNothing()
+                && expressionMayCreateNodeTemp(cond_expr);
+            if (condition_needs_cleanup) {
+                builder.createPushTempMark(stmt->loc);
+            }
             QoreIRValue cond_value;
             if (!cond_expr || cond_expr.isNothing()) {
                 cond_value = builder.createConstBool(true)->result;
@@ -1035,10 +1199,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     return false;
                 }
             }
-            // Convert to scalar bool so cond value survives DiscardTemps.
-            QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond_value,
-                stmt->loc)->result;
-            builder.createDiscardTemps(stmt->loc);
+            // Convert node values to scalar bool so the branch operand survives DiscardTemps.
+            QoreIRValue cond_bool = (!condition_needs_cleanup
+                    || !cond_expr || cond_expr.isNothing() || conditionValueSurvivesDiscardTemps(cond_expr))
+                ? cond_value
+                : builder.createUnaryOp(QoreIROpcode::ToBool, cond_value, stmt->loc)->result;
+            if (condition_needs_cleanup) {
+                builder.createDiscardTemps(stmt->loc);
+            }
             builder.createBranchIf(cond_bool, body_block, exit_block);
         }
 
@@ -1193,7 +1361,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
             // Header: PHI for index, compare with size
             builder.setBlock(header_block);
-            auto* index_phi = builder.createPhi({}, stmt->loc);
+            auto* index_phi = builder.createPhi({}, stmt->loc, QoreIRPhiValueKind::NativeInt);
             QoreIRValue index_val = index_phi->result;
             QoreIRValue cmp_val = builder.createBinaryOp(QoreIROpcode::LtInt,
                 index_val, size, stmt->loc)->result;
@@ -1353,6 +1521,18 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             return true;
         }
 
+        {
+            QoreValue list_expr = foreach_stmt->getList();
+            std::vector<LazyPipelineStage> source_stages;
+            QoreValue base_source;
+            if (!collectLazyPipelineStages(list_expr, base_source, source_stages, error)) {
+                return false;
+            }
+            if (!source_stages.empty()) {
+                return lowerForeachLazyPipelineFused(foreach_stmt, base_source, source_stages, error);
+            }
+        }
+
         // Evaluate the list expression BEFORE creating loop blocks, so that any
         // blocks created during expression evaluation (e.g., invoke.cont blocks
         // from guarded calls in try-catch) appear before the loop header in the
@@ -1405,7 +1585,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.setBlock(header_block);
 
         // Create PHI for iteration index ($#) - will be completed after body
-        auto* index_phi = builder.createPhi({}, stmt->loc);
+        auto* index_phi = builder.createPhi({}, stmt->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, stmt->loc);
@@ -1712,7 +1892,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         // Header: PHI for index, compare with max_pos.
         builder.setBlock(header_block);
-        auto* index_phi = builder.createPhi({}, stmt->loc);
+        auto* index_phi = builder.createPhi({}, stmt->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
         QoreIRValue cmp = builder.createBinaryOp(QoreIROpcode::LtInt,
             index_val, max_pos, stmt->loc)->result;
@@ -2142,9 +2322,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     return false;
                 }
             } else {
-                // Use SwitchCaseMatch which calls CaseNode::matches() —
-                // this unwraps TAG_ENUM from both sides before isEqualHard(),
-                // matching the AST switch statement behavior
+                // Use SwitchCaseMatch which calls CaseNode::matches(),
+                // matching the AST switch statement behavior.
                 auto* inst = builder.createSwitchCaseMatch(node, switch_val, node->loc);
                 if (!exception_stack.empty()) {
                     inst->exception_target = exception_stack.back();
@@ -2491,7 +2670,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // draining the entire cleanup vector, preserving OUTER-scope temps —
         // critical for e.g. a `foreach` list expression's iterator temp, which
         // lives in the cleanup vector across every body-statement boundary.
-        builder.createPushTempMark((*it)->loc);
+        bool statement_needs_cleanup = statementMayCreateNodeTemp(*it);
+        if (statement_needs_cleanup) {
+            builder.createPushTempMark((*it)->loc);
+        }
         if (!lowerStatement(*it, error)) {
             if (pushed_lvar_exception_target) {
                 exception_stack.pop_back();
@@ -2511,7 +2693,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             terminated = true;
             break;
         }
-        builder.createDiscardTemps((*it)->loc);
+        if (statement_needs_cleanup) {
+            builder.createDiscardTemps((*it)->loc);
+        }
     }
 
     if (pushed_lvar_exception_target) {
@@ -2822,7 +3006,7 @@ static void collectLocalVarsFromExpr(const QoreValue& expr,
     }
 
     // Constants and literals — leaf nodes
-    if (ntype == NT_STRING || ntype == NT_INT || ntype == NT_FLOAT || ntype == NT_BOOLEAN
+    if (ntype == NT_STRING || ntype == NT_INT || ntype == NT_FLOAT || ntype == NT_BOOLEAN || ntype == NT_CHAR
             || ntype == NT_NOTHING || ntype == NT_NULL || ntype == NT_NUMBER
             || ntype == NT_DATE || ntype == NT_BINARY || ntype == NT_HASH
             || ntype == NT_LIST || ntype == NT_BACKQUOTE) {
@@ -4335,7 +4519,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     }
     if (auto* find_node = dynamic_cast<const FindNode*>(node)) {
         auto* inst = builder.createFind(find_node->exp, find_node->find_exp, find_node->where,
-                find_node->loc);
+                static_cast<int32_t>(find_node->getMode()), find_node->loc);
         if (!exception_stack.empty()) {
             inst->exception_target = exception_stack.back();
         }
@@ -4738,6 +4922,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     if (expr.isBool()) {
         return builder.createConstBool(expr.getAsBool())->result;
     }
+    if (expr.isChar()) {
+        return builder.createConstChar(expr.getChar())->result;
+    }
     if (expr.isInt()) {
         return builder.createConstInt(expr.getAsBigInt())->result;
     }
@@ -5098,6 +5285,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             // comment for why closureUse() may be true even for VT_LOCAL.
             if (var->ref.id->closureUse()) {
                 auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                store_inst->initial_assignment = var->isDecl();
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -5112,6 +5300,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             {
                 auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc, weak);
+                store_inst->initial_assignment = var->isDecl();
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -5131,6 +5320,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             {
                 auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                store_inst->initial_assignment = var->isDecl();
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -5151,6 +5341,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             {
                 auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                store_inst->initial_assignment = var->isDecl();
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -6874,9 +7065,8 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
                 && !QoreTypeInfo::isReference(var->getTypeInfo())) {
-            // Fused path: emit single IncrementLocalInt for VT_LOCAL (but not closure-use vars)
-            // Closure-use variables are instantiated on cvstack, not lvstack, so they need the fallback path
-            if (isLocalNonClosureVar(var)) {
+            // Fused path: emit single IncrementLocalInt for lvstack and closure-use locals.
+            if (isLocalOrClosureVar(var)) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, 1, op->loc);
                 if (parse_context) {
                     parse_context->markLocalAssignment(var->ref.id, true,
@@ -7052,9 +7242,8 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
                 && !QoreTypeInfo::isReference(var->getTypeInfo())) {
-            // Fused path: emit single IncrementLocalInt(delta=-1) for VT_LOCAL (but not closure-use vars)
-            // Closure-use variables are instantiated on cvstack, not lvstack, so they need the fallback path
-            if (isLocalNonClosureVar(var)) {
+            // Fused path: emit single IncrementLocalInt(delta=-1) for lvstack and closure-use locals.
+            if (isLocalOrClosureVar(var)) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, -1, op->loc);
                 if (parse_context) {
                     parse_context->markLocalAssignment(var->ref.id, true,
@@ -9417,11 +9606,61 @@ QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& er
     return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
+static bool qore_ir_type_may_require_dot_eval_name_dispatch(const QoreTypeInfo* type_info) {
+    if (!type_info || !QoreTypeInfo::hasType(type_info)) {
+        return true;
+    }
+    for (const QoreReturnSpec& spec : type_info->return_vec) {
+        switch (spec.spec.getType()) {
+            case NT_OBJECT:
+            case NT_HASH:
+            case NT_WEAKREF:
+            case NT_WEAKREF_HASH:
+            case NT_REFERENCE:
+            case NT_ALL:
+                return true;
+            default:
+                break;
+        }
+    }
+    return false;
+}
+
 QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreDotEvalOperatorNode*>(node);
     if (!op) {
         return QoreIRValue();
+    }
+    MethodCallNode* m = op->getMethodCall();
+    const QoreValue& base_expr = op->getExpression();
+    LocalVar* base_local = getLocalVarFromValue(base_expr);
+    bool self_base = base_local && !strcmp(base_local->getName(), "self");
+    if (m && m->getName() && self_base) {
+        const QoreMethod* method = m->getMethod();
+        const QoreClass* qc = m->getClass();
+        const AbstractQoreFunctionVariant* variant = m->getVariant();
+        if (method && qc && qc->isFinal()
+                && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
+                    variant, m->getParseArgs(), m->getArgs())) {
+            std::vector<QoreIRValue> lowered_args;
+            if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
+                if (!exception_stack.empty()) {
+                    QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                    if (!normal_block) {
+                        error = "IR builder failed to create invoke continuation block";
+                        return QoreIRValue();
+                    }
+                    QoreIRBasicBlock* handler = exception_stack.back();
+                    auto* invoke_inst = builder.createInvokeMethodDirect(method, qc, variant, lowered_args,
+                        normal_block, handler, expr, op->loc);
+                    builder.setBlock(normal_block);
+                    return invoke_inst->result;
+                }
+                return builder.createCallMethodDirect(method, qc, variant, lowered_args, expr, op->loc)->result;
+            }
+            error.clear();
+        }
     }
     QoreIRValue base_val = lowerExpression(op->getExpression(), error);
     if (!base_val.isValid()) {
@@ -9436,11 +9675,38 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     // copy() calls have getRawName() == nullptr but DO have method+class resolved.
     // Use getName() which returns "copy" when getRawName() is null, ensuring copy()
     // calls also produce DotEvalMethodDirect instead of falling back to DotEvalAny.
-    MethodCallNode* m = op->getMethodCall();
     if (m->getName()) {
         // Lower arguments
         std::vector<QoreIRValue> lowered_args;
         if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
+            if (m->isPseudo() && lowered_args.empty()) {
+                const QoreMethod* pseudo_method = m->getMethod();
+                const char* method_name = pseudo_method ? pseudo_method->getName() : m->getName();
+                QoreParseAnalysis base_analysis;
+                bool safe_to_bypass_name_dispatch = getAnalysis(base_expr, base_analysis)
+                    && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && !qore_ir_type_may_require_dot_eval_name_dispatch(base_analysis.known_type);
+                if (pseudo_method && pseudo_method->getClass() == QC_PSEUDOVALUE
+                        && method_name && safe_to_bypass_name_dispatch) {
+                    QoreIROpcode conversion_op = QoreIROpcode::ToBool;
+                    bool recognized_conversion = true;
+                    if (!strcmp(method_name, "toInt")) {
+                        conversion_op = QoreIROpcode::ToInt;
+                    } else if (!strcmp(method_name, "toFloat")) {
+                        conversion_op = QoreIROpcode::ToFloat;
+                    } else if (!strcmp(method_name, "toBool")) {
+                        conversion_op = QoreIROpcode::ToBool;
+                    } else {
+                        recognized_conversion = false;
+                    }
+                    if (recognized_conversion) {
+                        QoreIRValue result = builder.createUnaryOp(conversion_op, base_val, op->loc)->result;
+                        never_nothing_values.insert(result.id);
+                        return result;
+                    }
+                }
+            }
+
             // Build operands = [base, arg0, arg1, ...]
             std::vector<QoreIRValue> operands;
             operands.push_back(base_val);
@@ -9468,12 +9734,14 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 auto* inst = builder.createInvokeDotEvalMethodDirect(method, qc, variant, expr, m->isPseudo(),
                     operands, normal_block, handler, op->loc);
                 inst->fallback_method_name = strdup(m->getName());
+                inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
                 builder.setBlock(normal_block);
                 result = inst->result;
             } else {
                 auto* inst = builder.createDotEvalMethodDirect(method, qc, variant, expr, m->isPseudo(),
                     operands, op->loc);
                 inst->fallback_method_name = strdup(m->getName());
+                inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
                 result = inst->result;
             }
             return result;
@@ -9560,9 +9828,36 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
 }
 
 QoreIRValue QoreIRLowering::lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr,
-        const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error) {
+        const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error,
+        bool has_ref_args) {
     // Track AST-delegated instructions for map body optimization
     ++ast_delegate_count;
+
+    bool caller_local_ref_args = has_ref_args;
+    switch (op) {
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallClosureDirect:
+            if (!caller_local_ref_args && expr.hasNode()) {
+                const AbstractQoreNode* node = expr.getInternalNode();
+                if (auto* call = dynamic_cast<const AbstractFunctionCallNode*>(node)) {
+                    caller_local_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
+                } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
+                    caller_local_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
+                } else if (op != QoreIROpcode::CallClosureDirect) {
+                    caller_local_ref_args = true;
+                }
+            } else if (!caller_local_ref_args && op != QoreIROpcode::CallClosureDirect) {
+                caller_local_ref_args = true;
+            }
+            break;
+        default:
+            break;
+    }
 
     QoreIRValue result;
     bool should_invoke = !exception_stack.empty() && expressionCanThrow(expr);
@@ -9575,10 +9870,13 @@ QoreIRValue QoreIRLowering::lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue
         QoreIRBasicBlock* handler = exception_stack.back();
         auto* inst = builder.createInvoke(expr, operands, normal_block, handler, loc);
         inst->invoke_opcode = op;
+        inst->has_ref_args = caller_local_ref_args;
         builder.setBlock(normal_block);
         result = inst->result;
     } else {
-        result = builder.createExprOp(op, expr, operands, loc)->result;
+        auto* inst = builder.createExprOp(op, expr, operands, loc);
+        inst->has_ref_args = caller_local_ref_args;
+        result = inst->result;
     }
     if (opcodeNeverReturnsNothing(op)) {
         never_nothing_values.insert(result.id);
@@ -10030,10 +10328,22 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
         return QoreIRValue();
     }
     const char* func_name = call->getName();
-    if (!func_name || strcmp(func_name, "string") != 0) {
+    if (!func_name) {
         return QoreIRValue();
     }
-    // Match string(expr) with exactly 1 argument and no encoding parameter
+    QoreIROpcode opcode;
+    if (!strcmp(func_name, "string")) {
+        opcode = QoreIROpcode::ToString;
+    } else if (!strcmp(func_name, "int")) {
+        opcode = QoreIROpcode::ToInt;
+    } else if (!strcmp(func_name, "float")) {
+        opcode = QoreIROpcode::ToFloat;
+    } else {
+        return QoreIRValue();
+    }
+    // Match one-argument builtin conversions only. string(expr, enc) still
+    // uses the normal builtin implementation because the encoding parameter
+    // affects semantics.
     const QoreListNode* args = call->getArgs();
     const QoreParseListNode* parse_args = call->getParseArgs();
     size_t nargs = args ? args->size() : (parse_args ? parse_args->size() : 0);
@@ -10045,10 +10355,9 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
     if (!lowerCallArgs(parse_args, args, operands, error)) {
         return QoreIRValue();
     }
-    // ToString never throws — always emit as a plain ExprOp, not Invoke.
+    // These conversions never throw; always emit as plain ExprOps, not Invoke.
     // The argument's call (if any) is already lowered as Invoke by lowerCallArgs.
-    QoreIRValue result = builder.createExprOp(QoreIROpcode::ToString, expr, operands, call->loc)->result;
-    // ToString always returns a string, never NOTHING
+    QoreIRValue result = builder.createExprOp(opcode, expr, operands, call->loc)->result;
     never_nothing_values.insert(result.id);
     return result;
 }
@@ -10079,6 +10388,64 @@ static QoreValue qore_ir_get_call_arg(const QoreParseListNode* parse_args, const
 static bool qore_ir_call_args_have_named_holes(const QoreListNode* args) {
     const qore_list_private* args_priv = qore_list_private::get(args);
     return args_priv && args_priv->callArgEvalMapHasHoles();
+}
+
+bool QoreIRLowering::callArgumentMayPassReference(const QoreValue& arg) const {
+    if (arg.getType() == NT_REFERENCE || arg.getType() == NT_PARSEREFERENCE) {
+        return true;
+    }
+    if (!arg.hasNode()) {
+        return false;
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+    if (!node || !dynamic_cast<const ParseNode*>(node)) {
+        return false;
+    }
+    if (dynamic_cast<const ParseReferenceNode*>(node)) {
+        return true;
+    }
+
+    if (LocalVar* local = getLocalVarFromValue(arg)) {
+        const QoreTypeInfo* ti = local->getTypeInfo();
+        if (ti && QoreTypeInfo::parseReturns(ti, NT_REFERENCE) != QTI_NOT_EQUAL) {
+            return true;
+        }
+    }
+
+    QoreParseAnalysis analysis;
+    bool got_analysis = false;
+    try {
+        got_analysis = getAnalysis(arg, analysis);
+    } catch (...) {
+        got_analysis = false;
+    }
+    if (got_analysis && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
+        return QoreTypeInfo::parseReturns(analysis.known_type, NT_REFERENCE) != QTI_NOT_EQUAL;
+    }
+
+    return true;
+}
+
+bool QoreIRLowering::callArgsMayPassReferences(const QoreParseListNode* parse_args,
+        const QoreListNode* args) const {
+    if (parse_args) {
+        for (size_t i = 0; i < parse_args->size(); ++i) {
+            if (callArgumentMayPassReference(parse_args->get(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (!args) {
+        return false;
+    }
+    for (size_t i = 0; i < args->size(); ++i) {
+        if (callArgumentMayPassReference(args->retrieveEntry(i))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const {
@@ -10204,6 +10571,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* inst = builder.createInvoke(expr, operands, normal_block, handler, call->loc);
             inst->invoke_opcode = QoreIROpcode::CallDirect;
+            inst->has_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
             builder.setBlock(normal_block);
             return inst->result;
         }
@@ -10229,15 +10597,19 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
+    bool has_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
     // Use CallClosureDirect for fast closure/callref invocation
     // This calls qore_rt_call_closure_fast() which directly calls callref->execValue()
     // instead of going through AST node copy and dynamic_cast chain
-    return lowerExprOpOrInvoke(QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error);
+    return lowerExprOpOrInvoke(QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error, has_ref_args);
 }
 
-// Helper function for Phase 3: Check if a callee is eligible for inlining and cache its IR
+// Helper function for Phase 3: cache direct-call target metadata. Runtime
+// eligibility still depends on the caller program, argument count, and whether
+// the callee was promoted to native code, so the interpreter validates before use.
+template <typename DirectCallInst>
 static void tryCacheCalleeIRForInlining(const AbstractQoreFunctionVariant* variant,
-        QoreIRCallMethodDirectInstruction* inst) {
+        DirectCallInst* inst) {
     if (!variant || !inst) {
         return;
     }
@@ -10253,75 +10625,10 @@ static void tryCacheCalleeIRForInlining(const AbstractQoreFunctionVariant* varia
         return;
     }
 
-    // Check inlining thresholds: ≤20 instructions, ≤2 blocks
-    // Count basic blocks and instructions
-    unsigned block_count = 0;
-    unsigned total_instructions = 0;
-
-    for (const auto& block_ptr : callee_ir->blocks) {
-        block_count++;
-        if (block_count > 2) {
-            // Too many blocks, don't inline
-            inst->inline_ir_state = -1;
-            return;
-        }
-        for (const auto& instr : block_ptr->instructions) {
-            total_instructions++;
-            if (total_instructions > 20) {
-                // Too many instructions, don't inline
-                inst->inline_ir_state = -1;
-                return;
-            }
-        }
-    }
-
-    // Callee is eligible for inlining
+    const UserSignature* sig = uvb->getUserSignature();
     inst->cached_callee_ir = callee_ir;
-    inst->inline_ir_state = 1;
-}
-
-// Helper function for static method calls
-static void tryCacheCalleeIRForInlining(const AbstractQoreFunctionVariant* variant,
-        QoreIRCallStaticDirectInstruction* inst) {
-    if (!variant || !inst) {
-        return;
-    }
-
-    const UserVariantBase* uvb = variant->getUserVariantBase();
-    if (!uvb) {
-        return;
-    }
-
-    // Get the cached IR function from the variant
-    const QoreIRFunction* callee_ir = uvb->getCachedIR();
-    if (!callee_ir) {
-        return;
-    }
-
-    // Check inlining thresholds: ≤20 instructions, ≤2 blocks
-    unsigned block_count = 0;
-    unsigned total_instructions = 0;
-
-    for (const auto& block_ptr : callee_ir->blocks) {
-        block_count++;
-        if (block_count > 2) {
-            // Too many blocks, don't inline
-            inst->inline_ir_state = -1;
-            return;
-        }
-        for (const auto& instr : block_ptr->instructions) {
-            total_instructions++;
-            if (total_instructions > 20) {
-                // Too many instructions, don't inline
-                inst->inline_ir_state = -1;
-                return;
-            }
-        }
-    }
-
-    // Callee is eligible for inlining
-    inst->cached_callee_ir = callee_ir;
-    inst->inline_ir_state = 1;
+    inst->cached_uvb = uvb;
+    inst->cached_return_type = sig ? sig->getReturnTypeInfo() : nullptr;
 }
 
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
@@ -10363,10 +10670,7 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
             auto* invoke_inst = builder.createInvokeMethodDirect(method, qc, variant, operands,
                     normal_block, handler, expr, call->loc);
             // Phase 3: Try to cache the callee IR for inlining
-            auto* call_inst = dynamic_cast<QoreIRCallMethodDirectInstruction*>(invoke_inst);
-            if (call_inst) {
-                tryCacheCalleeIRForInlining(variant, call_inst);
-            }
+            tryCacheCalleeIRForInlining(variant, invoke_inst);
             builder.setBlock(normal_block);
             result = invoke_inst->result;
         } else {
@@ -10414,6 +10718,7 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* invoke_inst = builder.createInvoke(expr, lowered_args, normal_block, handler, call->loc);
             invoke_inst->invoke_opcode = QoreIROpcode::CallStaticDirect;
+            invoke_inst->has_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
             // Phase 3: Try to cache the callee IR for inlining
             auto* call_static_inst = dynamic_cast<QoreIRCallStaticDirectInstruction*>(invoke_inst);
             if (call_static_inst) {
@@ -10841,6 +11146,21 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
 
+    {
+        std::vector<LazyPipelineStage> source_stages;
+        QoreValue base_source;
+        if (!collectLazyPipelineStages(foldl->getIteratorExpr(), base_source, source_stages, error)) {
+            return QoreIRValue();
+        }
+        if (!source_stages.empty()) {
+            LazyPipelineRoot root;
+            root.kind = LazyPipelineRoot::Foldl;
+            root.fold_expr = &foldl->getFoldExpression();
+            root.loc = foldl->loc;
+            return lowerLazyPipelineFused(base_source, source_stages, root, error);
+        }
+    }
+
     // Try to detect optimizable pattern first
     const QoreTypeInfo* result_type = nullptr;
     // Get list type info for fallback type detection
@@ -11001,6 +11321,26 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
 
+    {
+        std::vector<LazyPipelineStage> source_stages;
+        QoreValue base_source;
+        if (!collectLazyPipelineStages(foldr->getIteratorExpr(), base_source, source_stages, error)) {
+            return QoreIRValue();
+        }
+        if (!source_stages.empty()) {
+            LazyPipelineRoot root;
+            root.kind = LazyPipelineRoot::List;
+            root.list_element_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(foldr->getIteratorExpr()));
+            root.loc = foldr->loc;
+            root.need_result = true;
+            QoreIRValue list = lowerLazyPipelineFused(base_source, source_stages, root, error);
+            if (!list.isValid()) {
+                return QoreIRValue();
+            }
+            return lowerFoldrNativeValue(foldr, list, error);
+        }
+    }
+
     // Try to detect optimizable pattern (reuse analyzeFoldPattern from foldl)
     const QoreTypeInfo* result_type = nullptr;
     const QoreTypeInfo* list_type = getExprTypeInfo(foldr->getRight());
@@ -11054,6 +11394,23 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
         const QoreTypeInfo* iter_type = getExprTypeInfo(map->getRight());
         if (QoreTypeInfo::isType(iter_type, NT_NOTHING)) {
             return builder.createConstNothing(map->loc)->result;
+        }
+    }
+
+    {
+        std::vector<LazyPipelineStage> source_stages;
+        QoreValue base_source;
+        if (!collectLazyPipelineStages(map->getIteratorExpr(), base_source, source_stages, error)) {
+            return QoreIRValue();
+        }
+        if (!source_stages.empty()) {
+            source_stages.push_back({LazyPipelineStage::Map, &map->getMapExpression(), nullptr, map->loc});
+            LazyPipelineRoot root;
+            root.kind = LazyPipelineRoot::List;
+            root.list_element_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(expr));
+            root.loc = map->loc;
+            root.need_result = map->needsReturnValue();
+            return lowerLazyPipelineFused(base_source, source_stages, root, error);
         }
     }
 
@@ -11269,6 +11626,24 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
         return QoreIRValue();
     }
 
+    {
+        std::vector<LazyPipelineStage> source_stages;
+        QoreValue base_source;
+        if (!collectLazyPipelineStages(select->getSourceExpression(), base_source, source_stages, error)) {
+            return QoreIRValue();
+        }
+        if (!source_stages.empty()) {
+            source_stages.push_back({LazyPipelineStage::Select, &select->getPredicateExpression(), nullptr,
+                select->loc});
+            LazyPipelineRoot root;
+            root.kind = LazyPipelineRoot::List;
+            root.list_element_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(expr));
+            root.loc = select->loc;
+            root.need_result = select->needsReturnValue();
+            return lowerLazyPipelineFused(base_source, source_stages, root, error);
+        }
+    }
+
     // Try pattern analysis for optimized opcodes
     // Syntax: (select list, condition) - getLeft() = list, getRight() = condition
     const QoreTypeInfo* result_type = nullptr;
@@ -11334,6 +11709,24 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
 
+    {
+        std::vector<LazyPipelineStage> source_stages;
+        QoreValue base_source;
+        if (!collectLazyPipelineStages(map_select->getIteratorExpr(), base_source, source_stages, error)) {
+            return QoreIRValue();
+        }
+        if (!source_stages.empty()) {
+            source_stages.push_back({LazyPipelineStage::MapSelect, &map_select->getMapExpression(),
+                &map_select->getSelectExpression(), map_select->loc});
+            LazyPipelineRoot root;
+            root.kind = LazyPipelineRoot::List;
+            root.list_element_type = QoreTypeInfo::getUniqueReturnComplexList(getExprTypeInfo(expr));
+            root.loc = map_select->loc;
+            root.need_result = map_select->needsReturnValue();
+            return lowerLazyPipelineFused(base_source, source_stages, root, error);
+        }
+    }
+
     // Native IR lowering with implicit argument context
     return lowerMapSelectNative(map_select, expr, error);
 }
@@ -11389,6 +11782,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     if (!ensureBuilderContext(error)) {
         return QoreIRValue();
     }
+    bool need_result = map->needsReturnValue();
 
     // Get the element type of the map result list directly from the map expression type
     const QoreTypeInfo* expTypeInfo = map->getMapExpType();
@@ -11403,6 +11797,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     // Check if the input is actually a list or a single value
     const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    const QoreIterateOperatorNode* iterate_right =
+        dynamic_cast<const QoreIterateOperatorNode*>(map->getRight().getInternalNode());
 
     // For nested map/select operators, use returnTypeInfo which provides the definitive
     // return type (set to iteratorTypeInfo for scalar inputs). This is more precise than
@@ -11459,15 +11855,22 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         virtual_implicit.arg1 = QoreIRValue();
         virtual_implicit.element = builder.createConstInt(0, map->loc)->result;
         virtual_implicit.active = true;
+        if (!need_result) {
+            builder.createPushTempMark(map->loc);
+        }
         QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
         virtual_implicit = saved;
+        if (!need_result) {
+            builder.createDiscardTemps(map->loc);
+            return builder.createConstNothing(map->loc)->result;
+        }
         return expr_result;
     }
 
     bool use_direct_index = false;
     bool elem_is_int = false;
     bool elem_is_float = false;
-    if (elem_type) {
+    if (elem_type && !iterate_right) {
         if (QoreTypeInfo::parseReturns(elem_type, NT_INT) == QTI_IDENT) {
             use_direct_index = true;
             elem_is_int = true;
@@ -11486,7 +11889,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     // block list.
 
     // Evaluate the input list (right operand of map)
-    QoreIRValue input_list = lowerExpression(map->getRight(), error);
+    QoreIRValue input_list = iterate_right
+        ? lowerExpression(iterate_right->getExp(), error)
+        : lowerExpression(map->getRight(), error);
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
@@ -11517,7 +11922,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         builder.setBlock(preheader_block);
         QoreIRValue list_size = builder.createListSize(input_list, map->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
-        QoreIRValue result_list = builder.createSizedList(list_size, map->loc, expTypeInfo)->result;
+        QoreIRValue result_list;
+        if (need_result) {
+            result_list = builder.createSizedList(list_size, map->loc, expTypeInfo)->result;
+        }
         {
             auto* br = builder.createBranch(header_block, map->loc);
             setLoopCheckpointExceptionTarget(br, header_block);
@@ -11526,7 +11934,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, map->loc);
+        auto* index_phi = builder.createPhi({}, map->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -11555,6 +11963,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
         // Lower the map expression first - check if any AST delegation occurs
         int saved_ast_count = ast_delegate_count;
+        if (!need_result) {
+            builder.createPushTempMark(map->loc);
+        }
         QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
 
         // Restore virtual context
@@ -11598,8 +12009,12 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
             builder.createPopImplicitElement(old_element, map->loc);
         }
 
-        // Store result directly at index position in pre-sized list
-        builder.createListSetValue(result_list, index_val, expr_result, map->loc);
+        if (need_result) {
+            // Store result directly at index position in pre-sized list
+            builder.createListSetValue(result_list, index_val, expr_result, map->loc);
+        } else {
+            builder.createDiscardTemps(map->loc);
+        }
 
         // Increment index
         QoreIRValue one = builder.createConstInt(1, map->loc)->result;
@@ -11629,11 +12044,14 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         builder.createBranch(final_block, map->loc);
 
         builder.setBlock(final_block);
+        if (!need_result) {
+            return builder.createConstNothing(map->loc)->result;
+        }
+
         std::vector<QoreIRPhiIncoming> result_incoming;
         result_incoming.push_back({result_list, exit_block});
         result_incoming.push_back({nothing_val, nothing_block});
         auto* result_phi = builder.createPhi(result_incoming, map->loc);
-
         return result_phi->result;
     }
 
@@ -11645,7 +12063,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     bool is_known_collection = list_type
         && (QoreTypeInfo::isListType(list_type)
             || QoreTypeInfo::getUniqueReturnClass(list_type) != nullptr);
-    bool needs_runtime_unwrap_check = !is_known_collection;
+    bool needs_runtime_unwrap_check = need_result && !is_known_collection;
 
     QoreIRValue is_collection_val;
     if (needs_runtime_unwrap_check) {
@@ -11654,7 +12072,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     }
 
     // Create iterator from input list
-    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, map->loc);
+    auto* iter_inst = iterate_right
+        ? builder.createIteratorCreateIterate(input_list, map->loc)
+        : builder.createIteratorCreate(input_list, nullptr, map->loc);
     QoreIRValue iter_val = iter_inst->result;
 
     // Create basic blocks for the loop structure AFTER evaluating the input
@@ -11692,7 +12112,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     // Preheader: create empty result list and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_list = builder.createEmptyList(map->loc, expTypeInfo)->result;
+    QoreIRValue result_list;
+    if (need_result) {
+        result_list = builder.createEmptyList(map->loc, expTypeInfo)->result;
+    }
     QoreIRValue init_index = builder.createConstInt(0, map->loc)->result;
     {
         auto* br = builder.createBranch(header_block, map->loc);
@@ -11703,7 +12126,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     builder.setBlock(header_block);
 
     // Create phi for index - will be completed after body block
-    auto* index_phi = builder.createPhi({}, map->loc);
+    auto* index_phi = builder.createPhi({}, map->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator (branches to exit if done, body if has element)
@@ -11722,6 +12145,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     // Lower the map expression first - check if any AST delegation occurs
     int saved_ast_count = ast_delegate_count;
+    if (!need_result) {
+        builder.createPushTempMark(map->loc);
+    }
     QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
 
     // Restore virtual context
@@ -11759,8 +12185,12 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         builder.createPopImplicitElement(old_element_iter, map->loc);
     }
 
-    // Append result to output list
-    builder.createListAppend(result_list, expr_result, map->loc);
+    if (need_result) {
+        // Append result to output list
+        builder.createListAppend(result_list, expr_result, map->loc);
+    } else {
+        builder.createDiscardTemps(map->loc);
+    }
 
     // Increment index for next iteration
     QoreIRValue one = builder.createConstInt(1, map->loc)->result;
@@ -11819,6 +12249,9 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     // Final block: PHI between result_list (from loop) and NOTHING (from null check)
     builder.setBlock(final_block);
+    if (!need_result) {
+        return builder.createConstNothing(map->loc)->result;
+    }
 
     std::vector<QoreIRPhiIncoming> result_incoming;
     result_incoming.push_back({result_list, loop_exit_block}); // Normal loop exit
@@ -11893,7 +12326,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, select->loc);
+        auto* index_phi = builder.createPhi({}, select->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -12074,7 +12507,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     // Header block: create phi for index and check for next value
     builder.setBlock(header_block);
 
-    auto* index_phi = builder.createPhi({}, select->loc);
+    auto* index_phi = builder.createPhi({}, select->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
@@ -12267,7 +12700,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         builder.setBlock(header_block);
 
         // PHI for index
-        auto* index_phi = builder.createPhi({}, foldl->loc);
+        auto* index_phi = builder.createPhi({}, foldl->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         // PHI for accumulator
@@ -12460,13 +12893,22 @@ QoreIRValue QoreIRLowering::lowerFoldrNative(const QoreFoldrOperatorNode* foldr,
         return QoreIRValue();
     }
 
-    // foldr is identical to foldl except with reverse iteration
-
     // Evaluate the input list (right operand of foldr)
     QoreIRValue input_list = lowerExpression(foldr->getRight(), error);
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
+
+    return lowerFoldrNativeValue(foldr, input_list, error);
+}
+
+QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
+        std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    // foldr is identical to foldl except with reverse iteration
 
     // Create reverse iterator from input list
     auto* iter_inst = builder.createIteratorCreateReverse(input_list, foldr->loc);
@@ -12565,13 +13007,16 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     if (!ensureBuilderContext(error)) {
         return QoreIRValue();
     }
+    bool need_result = ms->needsReturnValue();
 
     // e[0] = map expression, e[1] = iterator/input, e[2] = select predicate
 
     // Check if the input list has a known element type for direct-index optimization
     const QoreTypeInfo* list_type = getExprTypeInfo(ms->get(1));
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
-    bool use_direct_index = (elem_type != nullptr);
+    const QoreIterateOperatorNode* iterate_source =
+        dynamic_cast<const QoreIterateOperatorNode*>(ms->get(1).getInternalNode());
+    bool use_direct_index = elem_type && !iterate_source;
     bool elem_is_int = false;
     bool elem_is_float = false;
     if (elem_type) {
@@ -12583,7 +13028,9 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     }
 
     // Evaluate the input list (operand 1)
-    QoreIRValue input_list = lowerExpression(ms->get(1), error);
+    QoreIRValue input_list = iterate_source
+        ? lowerExpression(iterate_source->getExp(), error)
+        : lowerExpression(ms->get(1), error);
     if (!input_list.isValid()) {
         return QoreIRValue();
     }
@@ -12617,7 +13064,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         builder.setBlock(preheader_block);
         QoreIRValue list_size = builder.createListSize(input_list, ms->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, ms->loc)->result;
-        QoreIRValue result_list = builder.createEmptyList(ms->loc)->result;
+        QoreIRValue result_list;
+        if (need_result) {
+            result_list = builder.createEmptyList(ms->loc)->result;
+        }
         {
             auto* br = builder.createBranch(header_block, ms->loc);
             setLoopCheckpointExceptionTarget(br, header_block);
@@ -12626,7 +13076,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, ms->loc);
+        auto* index_phi = builder.createPhi({}, ms->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -12670,6 +13120,9 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         // Append block: evaluate map expression and append to result
         builder.setBlock(append_block);
 
+        if (!need_result) {
+            builder.createPushTempMark(ms->loc);
+        }
         QoreIRValue map_result = lowerExpression(ms->get(0), error);
         if (!map_result.isValid()) {
             virtual_implicit = saved;
@@ -12704,7 +13157,11 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
                 std::move(push_argv));
         }
 
-        builder.createListAppend(result_list, map_result, ms->loc);
+        if (need_result) {
+            builder.createListAppend(result_list, map_result, ms->loc);
+        } else {
+            builder.createDiscardTemps(ms->loc);
+        }
         builder.createBranch(cont_block, ms->loc);
 
         // Continue block: increment index, loop back
@@ -12741,11 +13198,14 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         builder.createBranch(final_block, ms->loc);
 
         builder.setBlock(final_block);
+        if (!need_result) {
+            return builder.createConstNothing(ms->loc)->result;
+        }
+
         std::vector<QoreIRPhiIncoming> result_incoming;
         result_incoming.push_back({result_list, exit_block});
         result_incoming.push_back({nothing_val, nothing_block});
         auto* result_phi = builder.createPhi(result_incoming, ms->loc);
-
         return result_phi->result;
     }
 
@@ -12757,7 +13217,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     bool is_known_collection = list_type
         && (QoreTypeInfo::isListType(list_type)
             || QoreTypeInfo::getUniqueReturnClass(list_type) != nullptr);
-    bool needs_runtime_unwrap_check = !is_known_collection;
+    bool needs_runtime_unwrap_check = need_result && !is_known_collection;
 
     QoreIRValue is_collection_val;
     if (needs_runtime_unwrap_check) {
@@ -12766,7 +13226,9 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     }
 
     // Create iterator from input list
-    auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, ms->loc);
+    auto* iter_inst = iterate_source
+        ? builder.createIteratorCreateIterate(input_list, ms->loc)
+        : builder.createIteratorCreate(input_list, nullptr, ms->loc);
     QoreIRValue iter_val = iter_inst->result;
 
     // Create loop blocks AFTER expression evaluation
@@ -12805,7 +13267,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     // Preheader: create empty result list and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_list = builder.createEmptyList(ms->loc)->result;
+    QoreIRValue result_list;
+    if (need_result) {
+        result_list = builder.createEmptyList(ms->loc)->result;
+    }
     QoreIRValue init_index = builder.createConstInt(0, ms->loc)->result;
     {
         auto* br = builder.createBranch(header_block, ms->loc);
@@ -12815,7 +13280,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     // Header block: create phi for index and check for next value
     builder.setBlock(header_block);
 
-    auto* index_phi = builder.createPhi({}, ms->loc);
+    auto* index_phi = builder.createPhi({}, ms->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
@@ -12849,13 +13314,20 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     // Append block: evaluate map expression and append to result
     builder.setBlock(append_block);
 
+    if (!need_result) {
+        builder.createPushTempMark(ms->loc);
+    }
     QoreIRValue map_result = lowerExpression(ms->get(0), error);
     if (!map_result.isValid()) {
         virtual_implicit = saved;
         return QoreIRValue();
     }
 
-    builder.createListAppend(result_list, map_result, ms->loc);
+    if (need_result) {
+        builder.createListAppend(result_list, map_result, ms->loc);
+    } else {
+        builder.createDiscardTemps(ms->loc);
+    }
     builder.createBranch(cont_block, ms->loc);
 
     // Continue block: increment index, loop back
@@ -12920,6 +13392,9 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     // Final block: PHI between result_list and NOTHING
     builder.setBlock(final_block);
+    if (!need_result) {
+        return builder.createConstNothing(ms->loc)->result;
+    }
 
     std::vector<QoreIRPhiIncoming> result_incoming;
     result_incoming.push_back({result_list, loop_exit_block});
@@ -12993,7 +13468,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, hm->loc);
+        auto* index_phi = builder.createPhi({}, hm->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -13133,7 +13608,7 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // Header block
     builder.setBlock(header_block);
 
-    auto* index_phi = builder.createPhi({}, hm->loc);
+    auto* index_phi = builder.createPhi({}, hm->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
@@ -13300,7 +13775,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         // Header block: check if index < size
         builder.setBlock(header_block);
 
-        auto* index_phi = builder.createPhi({}, hms->loc);
+        auto* index_phi = builder.createPhi({}, hms->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
@@ -13463,7 +13938,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // Header block
     builder.setBlock(header_block);
 
-    auto* index_phi = builder.createPhi({}, hms->loc);
+    auto* index_phi = builder.createPhi({}, hms->loc, QoreIRPhiValueKind::NativeInt);
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
@@ -13577,6 +14052,1623 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     result_incoming.push_back({nothing_val, nothing_block});   // NOTHING input
     auto* result_phi = builder.createPhi(result_incoming, hms->loc);
 
+    return result_phi->result;
+}
+
+QoreIRValue QoreIRLowering::lowerIterate(const QoreValue& expr, std::string& error) {
+    auto* op = dynamic_cast<const QoreIterateOperatorNode*>(expr.getInternalNode());
+    if (!op) {
+        return QoreIRValue();
+    }
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    QoreIRValue source = lowerExpression(op->getExp(), error);
+    if (!source.isValid()) {
+        return QoreIRValue();
+    }
+    return lowerExprOpOrInvoke(QoreIROpcode::IterateValue, expr, {source}, op->loc, error);
+}
+
+QoreIRValue QoreIRLowering::lowerStreaming(const QoreValue& expr, std::string& error) {
+    auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(expr.getInternalNode());
+    if (!op) {
+        return QoreIRValue();
+    }
+    return lowerStreamingNative(op, expr, error);
+}
+
+namespace {
+bool qore_streaming_kind_is_terminal(QoreStreamingOperatorNode::Kind kind) {
+    return kind == QoreStreamingOperatorNode::First || kind == QoreStreamingOperatorNode::Any
+        || kind == QoreStreamingOperatorNode::All || kind == QoreStreamingOperatorNode::Count;
+}
+
+}
+
+QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
+        const std::vector<LazyPipelineStage>& source_stages, const LazyPipelineRoot& root, std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    const QoreProgramLocation* loc = root.loc;
+    const QoreStreamingOperatorNode* op = root.streaming;
+    bool root_streaming = root.kind == LazyPipelineRoot::Streaming;
+    bool root_terminal = root_streaming && qore_streaming_kind_is_terminal(op->getKind());
+    bool root_list = root.kind == LazyPipelineRoot::List || (root_streaming && !root_terminal);
+    bool need_result = root.need_result;
+    bool build_result_list = root_list && need_result;
+    bool root_foldl = root.kind == LazyPipelineRoot::Foldl;
+
+    std::vector<LazyPipelineStage> stages = source_stages;
+    if (root_streaming && !root_terminal) {
+        LazyPipelineStage::Kind kind;
+        switch (op->getKind()) {
+            case QoreStreamingOperatorNode::Take:
+                kind = LazyPipelineStage::StreamTake;
+                break;
+            case QoreStreamingOperatorNode::Drop:
+                kind = LazyPipelineStage::StreamDrop;
+                break;
+            case QoreStreamingOperatorNode::TakeWhile:
+                kind = LazyPipelineStage::StreamTakeWhile;
+                break;
+            case QoreStreamingOperatorNode::TakeUntil:
+                kind = LazyPipelineStage::StreamTakeUntil;
+                break;
+            case QoreStreamingOperatorNode::First:
+            case QoreStreamingOperatorNode::Any:
+            case QoreStreamingOperatorNode::All:
+            case QoreStreamingOperatorNode::Count:
+                assert(false);
+                return QoreIRValue();
+        }
+        stages.push_back({kind, &op->getPredicate(), nullptr, op->loc});
+    }
+
+    QoreIRValue source = lowerExpression(base_source, error);
+    if (!source.isValid()) {
+        return QoreIRValue();
+    }
+
+    bool source_uses_iterate = !stages.empty()
+        && (stages.front().kind == LazyPipelineStage::StreamTake
+            || stages.front().kind == LazyPipelineStage::StreamDrop
+            || stages.front().kind == LazyPipelineStage::StreamTakeWhile
+            || stages.front().kind == LazyPipelineStage::StreamTakeUntil);
+    const QoreTypeInfo* base_source_type = getExprTypeInfo(base_source);
+    bool base_source_known_collection = base_source_type
+        && (QoreTypeInfo::isListType(base_source_type)
+            || QoreTypeInfo::getUniqueReturnClass(base_source_type) != nullptr);
+    bool needs_runtime_unwrap_check = root.kind == LazyPipelineRoot::List
+        && need_result
+        && !source_uses_iterate
+        && !base_source_known_collection;
+    QoreIRValue is_collection_val;
+    if (needs_runtime_unwrap_check) {
+        is_collection_val = builder.createUnaryOp(QoreIROpcode::IsCollectionType, source, loc)->result;
+    }
+    auto* iter_inst = source_uses_iterate
+        ? builder.createIteratorCreateIterate(source, loc)
+        : builder.createIteratorCreate(source, nullptr, loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    auto lower_with_implicit = [&](const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
+            QoreIRValue element_val, QoreIRValue index_val) -> QoreIRValue {
+        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stage_loc)->result;
+        QoreIRValue old_argv = builder.createPushImplicitArg(element_val, stage_loc)->result;
+
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+
+        QoreIRValue result = lowerExpression(stage_expr, error);
+
+        virtual_implicit = saved;
+        builder.createPopImplicitArg(old_argv, stage_loc);
+        builder.createPopImplicitElement(old_element, stage_loc);
+
+        return result;
+    };
+
+    auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
+            QoreIRValue index_val) -> QoreIRValue {
+        if (!pred || !static_cast<bool>(*pred)) {
+            return builder.createConstBool(true, pred_loc)->result;
+        }
+
+        QoreIRValue pred_result = lower_with_implicit(*pred, pred_loc, element_val, index_val);
+        if (!pred_result.isValid()) {
+            return QoreIRValue();
+        }
+        return builder.createUnaryOp(QoreIROpcode::ToBool, pred_result, pred_loc)->result;
+    };
+
+    auto lower_fold_expr = [&](QoreIRValue accum_val, QoreIRValue element_val) -> QoreIRValue {
+        assert(root.fold_expr);
+
+        QoreIRValue argv_list = builder.createEmptyList(loc)->result;
+        builder.createListAppend(argv_list, accum_val, loc);
+        builder.createListAppend(argv_list, element_val, loc);
+        QoreIRValue old_argv = builder.createSetImplicitArgv(argv_list, loc)->result;
+
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = accum_val;
+        virtual_implicit.arg1 = element_val;
+        virtual_implicit.element = QoreIRValue();
+        virtual_implicit.active = true;
+
+        QoreIRValue fold_result = lowerExpression(*root.fold_expr, error);
+
+        virtual_implicit = saved;
+        builder.createPopImplicitArg(old_argv, loc);
+
+        return fold_result;
+    };
+
+    auto emit_negative_limit_throw = [&](const char* name, const QoreProgramLocation* stage_loc) {
+        QoreIRValue err = builder.createConstString("STREAMING-OPERATOR-ERROR", stage_loc)->result;
+        QoreIRValue msg = builder.createConstString(
+            std::string(name) + " requires a non-negative count", stage_loc)->result;
+        QoreIRValue throw_list = builder.createMakeList({err, msg}, stage_loc)->result;
+        QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+        builder.createThrow(throw_list, handler, stage_loc);
+    };
+
+    std::vector<QoreIRValue> limits(stages.size());
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming limit lowering")) {
+            error = "fused streaming limit lowering cancelled";
+            return QoreIRValue();
+        }
+        if (stages[i].kind != LazyPipelineStage::StreamTake && stages[i].kind != LazyPipelineStage::StreamDrop) {
+            continue;
+        }
+
+        assert(stages[i].primary);
+        limits[i] = lowerExpression(*stages[i].primary, error);
+        if (!limits[i].isValid()) {
+            return QoreIRValue();
+        }
+
+        QoreIRBasicBlock* limit_err_block = createBlock("stream.fused.limit.error");
+        QoreIRBasicBlock* limit_ok_block = createBlock("stream.fused.limit.ok");
+        if (!limit_err_block || !limit_ok_block) {
+            error = "IR builder failed to create blocks for fused streaming limit check";
+            return QoreIRValue();
+        }
+
+        QoreIRValue zero = builder.createConstInt(0, stages[i].loc)->result;
+        QoreIRValue is_negative = builder.createBinaryOp(QoreIROpcode::LtInt, limits[i], zero,
+            stages[i].loc)->result;
+        builder.createBranchIf(is_negative, limit_err_block, limit_ok_block, stages[i].loc);
+
+        builder.setBlock(limit_err_block);
+        emit_negative_limit_throw(stages[i].kind == LazyPipelineStage::StreamTake ? "take" : "drop", stages[i].loc);
+
+        builder.setBlock(limit_ok_block);
+    }
+
+    QoreIRBasicBlock* null_block = createBlock("stream.fused.null");
+    QoreIRBasicBlock* preheader_block = createBlock("stream.fused.preheader");
+    QoreIRBasicBlock* header_block = createBlock("stream.fused.header");
+    QoreIRBasicBlock* next_block = createBlock("stream.fused.next");
+    QoreIRBasicBlock* body_block = createBlock("stream.fused.body");
+    QoreIRBasicBlock* exit_block = createBlock("stream.fused.exit");
+    QoreIRBasicBlock* final_block = createBlock("stream.fused.final");
+    if (!null_block || !preheader_block || !header_block || !next_block || !body_block || !exit_block
+            || !final_block) {
+        error = "IR builder failed to create blocks for fused streaming operator";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    QoreIRValue zero = builder.createConstInt(0, loc)->result;
+    QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;
+    builder.createBranchIf(is_null, null_block, preheader_block, loc);
+
+    QoreIRValue fold_initial_accum;
+    QoreIRValue fold_initial_has_accum;
+
+    builder.setBlock(preheader_block);
+    QoreIRValue result_list;
+    if (build_result_list) {
+        const QoreTypeInfo* elem_type = root.list_element_type;
+        if (!elem_type && root_streaming) {
+            const QoreTypeInfo* source_type = getExprTypeInfo(op->getSource());
+            elem_type = QoreTypeInfo::getUniqueReturnComplexList(source_type);
+            if (!elem_type) {
+                elem_type = QoreIterateOperatorNode::getElementTypeInfo(op->getSource(), source_type);
+            }
+        }
+        result_list = builder.createEmptyList(loc, elem_type)->result;
+    }
+    if (root_foldl) {
+        fold_initial_accum = builder.createConstNothing(loc)->result;
+        fold_initial_has_accum = builder.createConstBool(false, loc)->result;
+    }
+    {
+        auto* br = builder.createBranch(header_block, loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
+
+    struct FusedLoopState {
+        std::vector<QoreIRValue> stage_indices;
+        QoreIRValue root_index;
+        QoreIRValue count;
+        QoreIRValue fold_accum;
+        QoreIRValue fold_has_accum;
+    };
+
+    struct FusedContinuePath {
+        QoreIRBasicBlock* block;
+        FusedLoopState state;
+    };
+
+    std::vector<FusedContinuePath> continue_paths;
+    std::vector<QoreIRPhiIncoming> final_incoming;
+
+    auto add_final = [&](QoreIRValue value, const QoreProgramLocation* branch_loc) {
+        QoreIRBasicBlock* block = builder.getBlock();
+        builder.createBranch(final_block, branch_loc);
+        final_incoming.push_back({value, block});
+    };
+
+    auto add_continue = [&](const FusedLoopState& state, const QoreProgramLocation* branch_loc) {
+        QoreIRBasicBlock* block = builder.getBlock();
+        auto* br = builder.createBranch(header_block, branch_loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+        continue_paths.push_back({block, state});
+    };
+
+    builder.setBlock(header_block);
+    std::vector<QoreIRPhiInstruction*> stage_phis;
+    std::vector<QoreIRValue> stage_indices;
+    stage_phis.reserve(stages.size());
+    stage_indices.reserve(stages.size());
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming PHI lowering")) {
+            error = "fused streaming PHI lowering cancelled";
+            return QoreIRValue();
+        }
+        auto* phi = builder.createPhi({}, stages[i].loc, QoreIRPhiValueKind::NativeInt);
+        stage_phis.push_back(phi);
+        stage_indices.push_back(phi->result);
+    }
+
+    QoreIRPhiInstruction* root_index_phi = nullptr;
+    QoreIRPhiInstruction* count_phi = nullptr;
+    QoreIRPhiInstruction* fold_accum_phi = nullptr;
+    QoreIRPhiInstruction* fold_has_accum_phi = nullptr;
+    QoreIRValue root_index;
+    QoreIRValue count_value;
+    if (root_terminal) {
+        root_index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+        root_index = root_index_phi->result;
+        if (op->getKind() == QoreStreamingOperatorNode::Count) {
+            count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+            count_value = count_phi->result;
+        }
+    }
+    QoreIRValue fold_accum;
+    QoreIRValue fold_has_accum;
+    if (root_foldl) {
+        fold_accum_phi = builder.createPhi({}, loc);
+        fold_accum = fold_accum_phi->result;
+        fold_has_accum_phi = builder.createPhi({}, loc);
+        fold_has_accum = fold_has_accum_phi->result;
+    }
+
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming take lowering")) {
+            error = "fused streaming take lowering cancelled";
+            return QoreIRValue();
+        }
+        if (stages[i].kind != LazyPipelineStage::StreamTake) {
+            continue;
+        }
+
+        QoreIRBasicBlock* check_next_block = createBlock("stream.fused.take.check.next");
+        if (!check_next_block) {
+            error = "IR builder failed to create fused streaming take check block";
+            return QoreIRValue();
+        }
+        QoreIRValue at_limit = builder.createBinaryOp(QoreIROpcode::GeInt, stage_indices[i], limits[i],
+            stages[i].loc)->result;
+        builder.createBranchIf(at_limit, exit_block, check_next_block, stages[i].loc);
+        builder.setBlock(check_next_block);
+    }
+
+    builder.createBranch(next_block, loc);
+
+    builder.setBlock(next_block);
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+    QoreIRValue element_val = next_inst->result;
+
+    builder.setBlock(body_block);
+    FusedLoopState state{stage_indices, root_index, count_value, fold_accum, fold_has_accum};
+    QoreIRValue one = builder.createConstInt(1, loc)->result;
+
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming body lowering")) {
+            error = "fused streaming body lowering cancelled";
+            return QoreIRValue();
+        }
+        const LazyPipelineStage& stage = stages[i];
+        switch (stage.kind) {
+            case LazyPipelineStage::StreamTake: {
+                state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
+                    one, stage.loc)->result;
+                break;
+            }
+            case LazyPipelineStage::StreamDrop: {
+                QoreIRValue next_stage_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                    state.stage_indices[i], one, stage.loc)->result;
+                FusedLoopState updated = state;
+                updated.stage_indices[i] = next_stage_index;
+
+                QoreIRBasicBlock* keep_block = createBlock("stream.fused.drop.keep");
+                QoreIRBasicBlock* drop_block = createBlock("stream.fused.drop.skip");
+                if (!keep_block || !drop_block) {
+                    error = "IR builder failed to create fused streaming drop blocks";
+                    return QoreIRValue();
+                }
+                QoreIRValue keep = builder.createBinaryOp(QoreIROpcode::GeInt, state.stage_indices[i], limits[i],
+                    stage.loc)->result;
+                builder.createBranchIf(keep, keep_block, drop_block, stage.loc);
+
+                builder.setBlock(drop_block);
+                add_continue(updated, stage.loc);
+
+                builder.setBlock(keep_block);
+                state = updated;
+                break;
+            }
+            case LazyPipelineStage::StreamTakeWhile:
+            case LazyPipelineStage::StreamTakeUntil: {
+                QoreIRValue pred_bool = lower_predicate(stage.primary, stage.loc, element_val, state.stage_indices[i]);
+                if (!pred_bool.isValid()) {
+                    return QoreIRValue();
+                }
+
+                QoreIRBasicBlock* include_block = createBlock("stream.fused.boundary.include");
+                QoreIRBasicBlock* stop_block = createBlock("stream.fused.boundary.stop");
+                if (!include_block || !stop_block) {
+                    error = "IR builder failed to create fused streaming boundary blocks";
+                    return QoreIRValue();
+                }
+                if (stage.kind == LazyPipelineStage::StreamTakeWhile) {
+                    builder.createBranchIf(pred_bool, include_block, stop_block, stage.loc);
+                } else {
+                    builder.createBranchIf(pred_bool, stop_block, include_block, stage.loc);
+                }
+
+                builder.setBlock(stop_block);
+                builder.createBranch(exit_block, stage.loc);
+
+                builder.setBlock(include_block);
+                state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
+                    one, stage.loc)->result;
+                break;
+            }
+            case LazyPipelineStage::Select: {
+                QoreIRValue pred_bool = lower_predicate(stage.primary, stage.loc, element_val, state.stage_indices[i]);
+                if (!pred_bool.isValid()) {
+                    return QoreIRValue();
+                }
+
+                QoreIRValue next_stage_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                    state.stage_indices[i], one, stage.loc)->result;
+                FusedLoopState updated = state;
+                updated.stage_indices[i] = next_stage_index;
+
+                QoreIRBasicBlock* pass_block = createBlock("stream.fused.select.pass");
+                QoreIRBasicBlock* skip_block = createBlock("stream.fused.select.skip");
+                if (!pass_block || !skip_block) {
+                    error = "IR builder failed to create fused select blocks";
+                    return QoreIRValue();
+                }
+                builder.createBranchIf(pred_bool, pass_block, skip_block, stage.loc);
+
+                builder.setBlock(skip_block);
+                add_continue(updated, stage.loc);
+
+                builder.setBlock(pass_block);
+                state = updated;
+                break;
+            }
+            case LazyPipelineStage::Map: {
+                assert(stage.primary);
+                QoreIRValue map_result = lower_with_implicit(*stage.primary, stage.loc, element_val,
+                    state.stage_indices[i]);
+                if (!map_result.isValid()) {
+                    return QoreIRValue();
+                }
+                element_val = map_result;
+                state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
+                    one, stage.loc)->result;
+                break;
+            }
+            case LazyPipelineStage::MapSelect: {
+                assert(stage.primary);
+                QoreIRValue pred_bool = lower_predicate(stage.secondary, stage.loc, element_val,
+                    state.stage_indices[i]);
+                if (!pred_bool.isValid()) {
+                    return QoreIRValue();
+                }
+
+                QoreIRValue next_stage_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                    state.stage_indices[i], one, stage.loc)->result;
+                FusedLoopState updated = state;
+                updated.stage_indices[i] = next_stage_index;
+
+                QoreIRBasicBlock* map_block = createBlock("stream.fused.mapselect.map");
+                QoreIRBasicBlock* skip_block = createBlock("stream.fused.mapselect.skip");
+                if (!map_block || !skip_block) {
+                    error = "IR builder failed to create fused map-select blocks";
+                    return QoreIRValue();
+                }
+                builder.createBranchIf(pred_bool, map_block, skip_block, stage.loc);
+
+                builder.setBlock(skip_block);
+                add_continue(updated, stage.loc);
+
+                builder.setBlock(map_block);
+                QoreIRValue map_result = lower_with_implicit(*stage.primary, stage.loc, element_val,
+                    state.stage_indices[i]);
+                if (!map_result.isValid()) {
+                    return QoreIRValue();
+                }
+                element_val = map_result;
+                state = updated;
+                break;
+            }
+        }
+    }
+
+    if (root_list) {
+        if (!need_result) {
+            add_continue(state, loc);
+        } else {
+            builder.createListAppend(result_list, element_val, loc);
+            add_continue(state, loc);
+        }
+    } else if (root_foldl) {
+        QoreIRBasicBlock* init_accum_block = createBlock("stream.fused.fold.init");
+        QoreIRBasicBlock* fold_block = createBlock("stream.fused.fold.body");
+        QoreIRBasicBlock* fold_cont_block = createBlock("stream.fused.fold.cont");
+        if (!init_accum_block || !fold_block || !fold_cont_block) {
+            error = "IR builder failed to create fused fold blocks";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(state.fold_has_accum, fold_block, init_accum_block, loc);
+
+        builder.setBlock(init_accum_block);
+        QoreIRValue true_val = builder.createConstBool(true, loc)->result;
+        QoreIRValue init_accum_val = builder.createRefSelf(element_val, loc)->result;
+        QoreIRBasicBlock* init_accum_exit_block = builder.getBlock();
+        builder.createBranch(fold_cont_block, loc);
+
+        builder.setBlock(fold_block);
+        QoreIRValue fold_result = lower_fold_expr(state.fold_accum, element_val);
+        if (!fold_result.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* fold_exit_block = builder.getBlock();
+        builder.createBranch(fold_cont_block, loc);
+
+        builder.setBlock(fold_cont_block);
+        auto* next_accum_phi = builder.createPhi(
+            {{init_accum_val, init_accum_exit_block}, {fold_result, fold_exit_block}}, loc);
+        auto* next_has_phi = builder.createPhi({{true_val, init_accum_exit_block}, {true_val, fold_exit_block}},
+            loc);
+        FusedLoopState next_state = state;
+        next_state.fold_accum = next_accum_phi->result;
+        next_state.fold_has_accum = next_has_phi->result;
+        add_continue(next_state, loc);
+    } else if (op->getKind() == QoreStreamingOperatorNode::Count) {
+        QoreIRValue pred_bool = lower_predicate(op->hasPredicate() ? &op->getPredicate() : nullptr, loc,
+            element_val, state.root_index);
+        if (!pred_bool.isValid()) {
+            return QoreIRValue();
+        }
+
+        QoreIRBasicBlock* inc_block = createBlock("stream.fused.count.inc");
+        QoreIRBasicBlock* cont_block = createBlock("stream.fused.count.cont");
+        if (!inc_block || !cont_block) {
+            error = "IR builder failed to create fused streaming count blocks";
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* predicate_block = builder.getBlock();
+        builder.createBranchIf(pred_bool, inc_block, cont_block, loc);
+
+        builder.setBlock(inc_block);
+        QoreIRValue inc_count = builder.createBinaryOp(QoreIROpcode::AddInt, state.count, one, loc)->result;
+        builder.createBranch(cont_block, loc);
+
+        builder.setBlock(cont_block);
+        auto* next_count_phi = builder.createPhi({{inc_count, inc_block}, {state.count, predicate_block}}, loc,
+            QoreIRPhiValueKind::NativeInt);
+        FusedLoopState next_state = state;
+        next_state.count = next_count_phi->result;
+        next_state.root_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.root_index, one, loc)->result;
+        add_continue(next_state, loc);
+    } else {
+        QoreIRValue pred_bool = lower_predicate(op->hasPredicate() ? &op->getPredicate() : nullptr, loc,
+            element_val, state.root_index);
+        if (!pred_bool.isValid()) {
+            return QoreIRValue();
+        }
+
+        QoreIRBasicBlock* match_block = createBlock("stream.fused.terminal.match");
+        QoreIRBasicBlock* cont_block = createBlock("stream.fused.terminal.cont");
+        if (!match_block || !cont_block) {
+            error = "IR builder failed to create fused streaming terminal blocks";
+            return QoreIRValue();
+        }
+        if (op->getKind() == QoreStreamingOperatorNode::All) {
+            builder.createBranchIf(pred_bool, cont_block, match_block, loc);
+        } else {
+            builder.createBranchIf(pred_bool, match_block, cont_block, loc);
+        }
+
+        builder.setBlock(match_block);
+        QoreIRValue match_result;
+        if (op->getKind() == QoreStreamingOperatorNode::First) {
+            match_result = element_val;
+        } else if (op->getKind() == QoreStreamingOperatorNode::Any) {
+            match_result = builder.createConstBool(true, loc)->result;
+        } else {
+            match_result = builder.createConstBool(false, loc)->result;
+        }
+        add_final(match_result, loc);
+
+        builder.setBlock(cont_block);
+        FusedLoopState next_state = state;
+        next_state.root_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.root_index, one, loc)->result;
+        add_continue(next_state, loc);
+    }
+
+    for (size_t i = 0; i < stage_phis.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming incoming lowering")) {
+            error = "fused streaming incoming lowering cancelled";
+            return QoreIRValue();
+        }
+        stage_phis[i]->incoming.push_back({zero, preheader_block});
+        stage_phis[i]->operands.push_back(zero);
+        size_t path_count = 0;
+        for (const FusedContinuePath& path : continue_paths) {
+            if (++path_count % 100 == 0 && qore_check_cancel(nullptr, "fused streaming PHI incoming lowering")) {
+                error = "fused streaming PHI incoming lowering cancelled";
+                return QoreIRValue();
+            }
+            stage_phis[i]->incoming.push_back({path.state.stage_indices[i], path.block});
+            stage_phis[i]->operands.push_back(path.state.stage_indices[i]);
+        }
+    }
+    if (root_index_phi) {
+        root_index_phi->incoming.push_back({zero, preheader_block});
+        root_index_phi->operands.push_back(zero);
+        size_t path_count = 0;
+        for (const FusedContinuePath& path : continue_paths) {
+            if (++path_count % 100 == 0 && qore_check_cancel(nullptr, "fused streaming root incoming lowering")) {
+                error = "fused streaming root incoming lowering cancelled";
+                return QoreIRValue();
+            }
+            root_index_phi->incoming.push_back({path.state.root_index, path.block});
+            root_index_phi->operands.push_back(path.state.root_index);
+        }
+    }
+    if (count_phi) {
+        count_phi->incoming.push_back({zero, preheader_block});
+        count_phi->operands.push_back(zero);
+        size_t path_count = 0;
+        for (const FusedContinuePath& path : continue_paths) {
+            if (++path_count % 100 == 0 && qore_check_cancel(nullptr, "fused streaming count incoming lowering")) {
+                error = "fused streaming count incoming lowering cancelled";
+                return QoreIRValue();
+            }
+            count_phi->incoming.push_back({path.state.count, path.block});
+            count_phi->operands.push_back(path.state.count);
+        }
+    }
+    if (fold_accum_phi) {
+        fold_accum_phi->incoming.push_back({fold_initial_accum, preheader_block});
+        fold_accum_phi->operands.push_back(fold_initial_accum);
+        size_t path_count = 0;
+        for (const FusedContinuePath& path : continue_paths) {
+            if (++path_count % 100 == 0 && qore_check_cancel(nullptr, "fused fold accumulator incoming lowering")) {
+                error = "fused fold accumulator incoming lowering cancelled";
+                return QoreIRValue();
+            }
+            fold_accum_phi->incoming.push_back({path.state.fold_accum, path.block});
+            fold_accum_phi->operands.push_back(path.state.fold_accum);
+        }
+    }
+    if (fold_has_accum_phi) {
+        fold_has_accum_phi->incoming.push_back({fold_initial_has_accum, preheader_block});
+        fold_has_accum_phi->operands.push_back(fold_initial_has_accum);
+        size_t path_count = 0;
+        for (const FusedContinuePath& path : continue_paths) {
+            if (++path_count % 100 == 0 && qore_check_cancel(nullptr, "fused fold state incoming lowering")) {
+                error = "fused fold state incoming lowering cancelled";
+                return QoreIRValue();
+            }
+            fold_has_accum_phi->incoming.push_back({path.state.fold_has_accum, path.block});
+            fold_has_accum_phi->operands.push_back(path.state.fold_has_accum);
+        }
+    }
+
+    builder.setBlock(null_block);
+    QoreIRValue null_result;
+    if (!root_streaming) {
+        null_result = builder.createConstNothing(loc)->result;
+    } else {
+        switch (op->getKind()) {
+            case QoreStreamingOperatorNode::First:
+                null_result = builder.createConstNothing(loc)->result;
+                break;
+            case QoreStreamingOperatorNode::Any:
+                null_result = builder.createConstBool(false, loc)->result;
+                break;
+            case QoreStreamingOperatorNode::All:
+                null_result = builder.createConstBool(true, loc)->result;
+                break;
+            case QoreStreamingOperatorNode::Count:
+                null_result = zero;
+                break;
+            case QoreStreamingOperatorNode::Take:
+            case QoreStreamingOperatorNode::Drop:
+            case QoreStreamingOperatorNode::TakeWhile:
+            case QoreStreamingOperatorNode::TakeUntil:
+                null_result = builder.createConstNothing(loc)->result;
+                break;
+        }
+    }
+    add_final(null_result, loc);
+
+    builder.setBlock(exit_block);
+    if (root_foldl) {
+        QoreIRBasicBlock* fold_result_block = createBlock("stream.fused.fold.result");
+        QoreIRBasicBlock* fold_empty_block = createBlock("stream.fused.fold.empty");
+        if (!fold_result_block || !fold_empty_block) {
+            error = "IR builder failed to create fused fold exit blocks";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(fold_has_accum_phi->result, fold_result_block, fold_empty_block, loc);
+
+        builder.setBlock(fold_result_block);
+        add_final(fold_accum_phi->result, loc);
+
+        builder.setBlock(fold_empty_block);
+        add_final(builder.createConstNothing(loc)->result, loc);
+    } else if (root_list && needs_runtime_unwrap_check) {
+        QoreIRBasicBlock* list_result_block = createBlock("stream.fused.list.result");
+        QoreIRBasicBlock* unwrap_check_block = createBlock("stream.fused.unwrap.check");
+        QoreIRBasicBlock* unwrap_get_block = createBlock("stream.fused.unwrap.get");
+        QoreIRBasicBlock* unwrap_nothing_block = createBlock("stream.fused.unwrap.nothing");
+        if (!list_result_block || !unwrap_check_block || !unwrap_get_block || !unwrap_nothing_block) {
+            error = "IR builder failed to create fused list unwrap blocks";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(is_collection_val, list_result_block, unwrap_check_block, loc);
+
+        builder.setBlock(list_result_block);
+        add_final(result_list, loc);
+
+        builder.setBlock(unwrap_check_block);
+        QoreIRValue list_size = builder.createListSize(result_list, loc)->result;
+        builder.createBranchIf(list_size, unwrap_get_block, unwrap_nothing_block, loc);
+
+        builder.setBlock(unwrap_get_block);
+        QoreIRValue zero_idx = builder.createConstInt(0, loc)->result;
+        QoreIRValue unwrapped = builder.createBinaryOp(QoreIROpcode::ListGetValue, result_list, zero_idx,
+            loc)->result;
+        add_final(unwrapped, loc);
+
+        builder.setBlock(unwrap_nothing_block);
+        add_final(builder.createConstNothing(loc)->result, loc);
+    } else {
+        QoreIRValue exit_result;
+        if (root_list) {
+            exit_result = need_result ? result_list : builder.createConstNothing(loc)->result;
+        } else {
+            switch (op->getKind()) {
+                case QoreStreamingOperatorNode::First:
+                    exit_result = builder.createConstNothing(loc)->result;
+                    break;
+                case QoreStreamingOperatorNode::Any:
+                    exit_result = builder.createConstBool(false, loc)->result;
+                    break;
+                case QoreStreamingOperatorNode::All:
+                    exit_result = builder.createConstBool(true, loc)->result;
+                    break;
+                case QoreStreamingOperatorNode::Count:
+                    exit_result = count_phi ? count_phi->result : zero;
+                    break;
+                case QoreStreamingOperatorNode::Take:
+                case QoreStreamingOperatorNode::Drop:
+                case QoreStreamingOperatorNode::TakeWhile:
+                case QoreStreamingOperatorNode::TakeUntil:
+                    exit_result = result_list;
+                    break;
+            }
+        }
+        add_final(exit_result, loc);
+    }
+
+    builder.setBlock(final_block);
+    auto* result_phi = builder.createPhi(final_incoming, loc);
+    return result_phi->result;
+}
+
+bool QoreIRLowering::collectLazyPipelineStages(const QoreValue& source, QoreValue& base_source,
+        std::vector<LazyPipelineStage>& source_stages, std::string& error) {
+    base_source = source;
+    size_t source_stage_count = 0;
+    while (true) {
+        const AbstractQoreNode* source_node = base_source.getInternalNode();
+        if (auto* source_op = dynamic_cast<const QoreStreamingOperatorNode*>(source_node)) {
+            if (qore_streaming_kind_is_terminal(source_op->getKind())) {
+                break;
+            }
+            LazyPipelineStage::Kind kind;
+            switch (source_op->getKind()) {
+                case QoreStreamingOperatorNode::Take:
+                    kind = LazyPipelineStage::StreamTake;
+                    break;
+                case QoreStreamingOperatorNode::Drop:
+                    kind = LazyPipelineStage::StreamDrop;
+                    break;
+                case QoreStreamingOperatorNode::TakeWhile:
+                    kind = LazyPipelineStage::StreamTakeWhile;
+                    break;
+                case QoreStreamingOperatorNode::TakeUntil:
+                    kind = LazyPipelineStage::StreamTakeUntil;
+                    break;
+                case QoreStreamingOperatorNode::First:
+                case QoreStreamingOperatorNode::Any:
+                case QoreStreamingOperatorNode::All:
+                case QoreStreamingOperatorNode::Count:
+                    assert(false);
+                    return false;
+            }
+            if (++source_stage_count % 100 == 0 && qore_check_cancel(nullptr, "lazy source-stage lowering")) {
+                error = "lazy source-stage lowering cancelled";
+                return false;
+            }
+            source_stages.push_back({kind, &source_op->getPredicate(), nullptr, source_op->loc});
+            base_source = source_op->getSource();
+            continue;
+        }
+
+        if (auto* map_select = dynamic_cast<const QoreMapSelectOperatorNode*>(source_node)) {
+            if (++source_stage_count % 100 == 0 && qore_check_cancel(nullptr, "lazy source-stage lowering")) {
+                error = "lazy source-stage lowering cancelled";
+                return false;
+            }
+            source_stages.push_back({LazyPipelineStage::MapSelect, &map_select->getMapExpression(),
+                &map_select->getSelectExpression(), map_select->loc});
+            base_source = map_select->getIteratorExpr();
+            continue;
+        }
+
+        if (auto* map = dynamic_cast<const QoreMapOperatorNode*>(source_node)) {
+            if (++source_stage_count % 100 == 0 && qore_check_cancel(nullptr, "lazy source-stage lowering")) {
+                error = "lazy source-stage lowering cancelled";
+                return false;
+            }
+            source_stages.push_back({LazyPipelineStage::Map, &map->getMapExpression(), nullptr, map->loc});
+            base_source = map->getIteratorExpr();
+            continue;
+        }
+
+        if (auto* select = dynamic_cast<const QoreSelectOperatorNode*>(source_node)) {
+            if (++source_stage_count % 100 == 0 && qore_check_cancel(nullptr, "lazy source-stage lowering")) {
+                error = "lazy source-stage lowering cancelled";
+                return false;
+            }
+            source_stages.push_back({LazyPipelineStage::Select, &select->getPredicateExpression(), nullptr,
+                select->loc});
+            base_source = select->getSourceExpression();
+            continue;
+        }
+
+        break;
+    }
+
+    std::reverse(source_stages.begin(), source_stages.end());
+    return true;
+}
+
+QoreIRValue QoreIRLowering::lowerStreamingFused(const QoreStreamingOperatorNode* op,
+        const QoreValue& base_source, const std::vector<LazyPipelineStage>& source_stages, std::string& error) {
+    LazyPipelineRoot root;
+    root.kind = LazyPipelineRoot::Streaming;
+    root.streaming = op;
+    root.loc = op->loc;
+    root.need_result = op->needsReturnValue();
+    return lowerLazyPipelineFused(base_source, source_stages, root, error);
+}
+
+bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* foreach_stmt,
+        const QoreValue& base_source, const std::vector<LazyPipelineStage>& source_stages, std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return false;
+    }
+
+    const QoreProgramLocation* loc = foreach_stmt->loc;
+    std::vector<LazyPipelineStage> stages = source_stages;
+
+    QoreIRValue source = lowerExpression(base_source, error);
+    if (!source.isValid()) {
+        return false;
+    }
+
+    bool source_uses_iterate = !stages.empty()
+        && (stages.front().kind == LazyPipelineStage::StreamTake
+            || stages.front().kind == LazyPipelineStage::StreamDrop
+            || stages.front().kind == LazyPipelineStage::StreamTakeWhile
+            || stages.front().kind == LazyPipelineStage::StreamTakeUntil);
+    auto* iter_inst = source_uses_iterate
+        ? builder.createIteratorCreateIterate(source, loc)
+        : builder.createIteratorCreate(source, nullptr, loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    auto lower_with_implicit = [&](const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
+            QoreIRValue element_val, QoreIRValue index_val) -> QoreIRValue {
+        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stage_loc)->result;
+        QoreIRValue old_argv = builder.createPushImplicitArg(element_val, stage_loc)->result;
+
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+
+        QoreIRValue result = lowerExpression(stage_expr, error);
+
+        virtual_implicit = saved;
+        builder.createPopImplicitArg(old_argv, stage_loc);
+        builder.createPopImplicitElement(old_element, stage_loc);
+
+        return result;
+    };
+
+    auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
+            QoreIRValue index_val) -> QoreIRValue {
+        if (!pred || !static_cast<bool>(*pred)) {
+            return builder.createConstBool(true, pred_loc)->result;
+        }
+
+        QoreIRValue pred_result = lower_with_implicit(*pred, pred_loc, element_val, index_val);
+        if (!pred_result.isValid()) {
+            return QoreIRValue();
+        }
+        return builder.createUnaryOp(QoreIROpcode::ToBool, pred_result, pred_loc)->result;
+    };
+
+    auto emit_negative_limit_throw = [&](const char* name, const QoreProgramLocation* stage_loc) {
+        QoreIRValue err = builder.createConstString("STREAMING-OPERATOR-ERROR", stage_loc)->result;
+        QoreIRValue msg = builder.createConstString(
+            std::string(name) + " requires a non-negative count", stage_loc)->result;
+        QoreIRValue throw_list = builder.createMakeList({err, msg}, stage_loc)->result;
+        QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+        builder.createThrow(throw_list, handler, stage_loc);
+    };
+
+    std::vector<QoreIRValue> limits(stages.size());
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused foreach limit lowering")) {
+            error = "fused foreach limit lowering cancelled";
+            return false;
+        }
+        if (stages[i].kind != LazyPipelineStage::StreamTake && stages[i].kind != LazyPipelineStage::StreamDrop) {
+            continue;
+        }
+
+        assert(stages[i].primary);
+        limits[i] = lowerExpression(*stages[i].primary, error);
+        if (!limits[i].isValid()) {
+            return false;
+        }
+
+        QoreIRBasicBlock* limit_err_block = createBlock("foreach.fused.limit.error");
+        QoreIRBasicBlock* limit_ok_block = createBlock("foreach.fused.limit.ok");
+        if (!limit_err_block || !limit_ok_block) {
+            error = "IR builder failed to create blocks for fused foreach limit check";
+            return false;
+        }
+
+        QoreIRValue zero = builder.createConstInt(0, stages[i].loc)->result;
+        QoreIRValue is_negative = builder.createBinaryOp(QoreIROpcode::LtInt, limits[i], zero,
+            stages[i].loc)->result;
+        builder.createBranchIf(is_negative, limit_err_block, limit_ok_block, stages[i].loc);
+
+        builder.setBlock(limit_err_block);
+        emit_negative_limit_throw(stages[i].kind == LazyPipelineStage::StreamTake ? "take" : "drop", stages[i].loc);
+
+        builder.setBlock(limit_ok_block);
+    }
+
+    QoreIRBasicBlock* exit_block = createBlock("foreach.fused.exit");
+    QoreIRBasicBlock* null_block = createBlock("foreach.fused.null");
+    QoreIRBasicBlock* preheader_block = createBlock("foreach.fused.preheader");
+    QoreIRBasicBlock* header_block = createBlock("foreach.fused.header");
+    QoreIRBasicBlock* next_block = createBlock("foreach.fused.next");
+    QoreIRBasicBlock* body_block = createBlock("foreach.fused.body");
+    QoreIRBasicBlock* latch_block = createBlock("foreach.fused.latch");
+    if (!exit_block || !null_block || !preheader_block || !header_block || !next_block || !body_block
+            || !latch_block) {
+        error = "IR builder failed to create blocks for fused foreach";
+        return false;
+    }
+    header_block->is_loop_header = true;
+
+    QoreIRValue zero = builder.createConstInt(0, loc)->result;
+    QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;
+    builder.createBranchIf(is_null, null_block, preheader_block, loc);
+
+    builder.setBlock(null_block);
+    builder.createBranch(exit_block, loc);
+
+    builder.setBlock(preheader_block);
+    {
+        auto* br = builder.createBranch(header_block, loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
+
+    struct FusedForeachState {
+        std::vector<QoreIRValue> stage_indices;
+        QoreIRValue foreach_index;
+    };
+
+    struct FusedForeachContinuePath {
+        QoreIRBasicBlock* block;
+        FusedForeachState state;
+    };
+
+    std::vector<FusedForeachContinuePath> continue_paths;
+
+    auto add_continue = [&](const FusedForeachState& state, const QoreProgramLocation* branch_loc) {
+        QoreIRBasicBlock* block = builder.getBlock();
+        auto* br = builder.createBranch(header_block, branch_loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+        continue_paths.push_back({block, state});
+    };
+
+    builder.setBlock(header_block);
+    std::vector<QoreIRPhiInstruction*> stage_phis;
+    std::vector<QoreIRValue> stage_indices;
+    stage_phis.reserve(stages.size());
+    stage_indices.reserve(stages.size());
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused foreach PHI lowering")) {
+            error = "fused foreach PHI lowering cancelled";
+            return false;
+        }
+        auto* phi = builder.createPhi({}, stages[i].loc, QoreIRPhiValueKind::NativeInt);
+        stage_phis.push_back(phi);
+        stage_indices.push_back(phi->result);
+    }
+    auto* foreach_index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+    QoreIRValue foreach_index = foreach_index_phi->result;
+
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused foreach take lowering")) {
+            error = "fused foreach take lowering cancelled";
+            return false;
+        }
+        if (stages[i].kind != LazyPipelineStage::StreamTake) {
+            continue;
+        }
+
+        QoreIRBasicBlock* check_next_block = createBlock("foreach.fused.take.check.next");
+        if (!check_next_block) {
+            error = "IR builder failed to create fused foreach take check block";
+            return false;
+        }
+        QoreIRValue at_limit = builder.createBinaryOp(QoreIROpcode::GeInt, stage_indices[i], limits[i],
+            stages[i].loc)->result;
+        builder.createBranchIf(at_limit, exit_block, check_next_block, stages[i].loc);
+        builder.setBlock(check_next_block);
+    }
+
+    builder.createBranch(next_block, loc);
+
+    builder.setBlock(next_block);
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+    QoreIRValue element_val = next_inst->result;
+
+    builder.setBlock(body_block);
+    FusedForeachState state{stage_indices, foreach_index};
+    QoreIRValue one = builder.createConstInt(1, loc)->result;
+
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused foreach body lowering")) {
+            error = "fused foreach body lowering cancelled";
+            return false;
+        }
+        const LazyPipelineStage& stage = stages[i];
+        switch (stage.kind) {
+            case LazyPipelineStage::StreamTake: {
+                state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
+                    one, stage.loc)->result;
+                break;
+            }
+            case LazyPipelineStage::StreamDrop: {
+                QoreIRValue next_stage_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                    state.stage_indices[i], one, stage.loc)->result;
+                FusedForeachState updated = state;
+                updated.stage_indices[i] = next_stage_index;
+
+                QoreIRBasicBlock* keep_block = createBlock("foreach.fused.drop.keep");
+                QoreIRBasicBlock* drop_block = createBlock("foreach.fused.drop.skip");
+                if (!keep_block || !drop_block) {
+                    error = "IR builder failed to create fused foreach drop blocks";
+                    return false;
+                }
+                QoreIRValue keep = builder.createBinaryOp(QoreIROpcode::GeInt, state.stage_indices[i], limits[i],
+                    stage.loc)->result;
+                builder.createBranchIf(keep, keep_block, drop_block, stage.loc);
+
+                builder.setBlock(drop_block);
+                add_continue(updated, stage.loc);
+
+                builder.setBlock(keep_block);
+                state = updated;
+                break;
+            }
+            case LazyPipelineStage::StreamTakeWhile:
+            case LazyPipelineStage::StreamTakeUntil: {
+                QoreIRValue pred_bool = lower_predicate(stage.primary, stage.loc, element_val, state.stage_indices[i]);
+                if (!pred_bool.isValid()) {
+                    return false;
+                }
+
+                QoreIRBasicBlock* include_block = createBlock("foreach.fused.boundary.include");
+                QoreIRBasicBlock* stop_block = createBlock("foreach.fused.boundary.stop");
+                if (!include_block || !stop_block) {
+                    error = "IR builder failed to create fused foreach boundary blocks";
+                    return false;
+                }
+                if (stage.kind == LazyPipelineStage::StreamTakeWhile) {
+                    builder.createBranchIf(pred_bool, include_block, stop_block, stage.loc);
+                } else {
+                    builder.createBranchIf(pred_bool, stop_block, include_block, stage.loc);
+                }
+
+                builder.setBlock(stop_block);
+                builder.createBranch(exit_block, stage.loc);
+
+                builder.setBlock(include_block);
+                state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
+                    one, stage.loc)->result;
+                break;
+            }
+            case LazyPipelineStage::Select: {
+                QoreIRValue pred_bool = lower_predicate(stage.primary, stage.loc, element_val, state.stage_indices[i]);
+                if (!pred_bool.isValid()) {
+                    return false;
+                }
+
+                QoreIRValue next_stage_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                    state.stage_indices[i], one, stage.loc)->result;
+                FusedForeachState updated = state;
+                updated.stage_indices[i] = next_stage_index;
+
+                QoreIRBasicBlock* pass_block = createBlock("foreach.fused.select.pass");
+                QoreIRBasicBlock* skip_block = createBlock("foreach.fused.select.skip");
+                if (!pass_block || !skip_block) {
+                    error = "IR builder failed to create fused foreach select blocks";
+                    return false;
+                }
+                builder.createBranchIf(pred_bool, pass_block, skip_block, stage.loc);
+
+                builder.setBlock(skip_block);
+                add_continue(updated, stage.loc);
+
+                builder.setBlock(pass_block);
+                state = updated;
+                break;
+            }
+            case LazyPipelineStage::Map: {
+                assert(stage.primary);
+                QoreIRValue map_result = lower_with_implicit(*stage.primary, stage.loc, element_val,
+                    state.stage_indices[i]);
+                if (!map_result.isValid()) {
+                    return false;
+                }
+                element_val = map_result;
+                state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
+                    one, stage.loc)->result;
+                break;
+            }
+            case LazyPipelineStage::MapSelect: {
+                assert(stage.primary);
+                QoreIRValue pred_bool = lower_predicate(stage.secondary, stage.loc, element_val,
+                    state.stage_indices[i]);
+                if (!pred_bool.isValid()) {
+                    return false;
+                }
+
+                QoreIRValue next_stage_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                    state.stage_indices[i], one, stage.loc)->result;
+                FusedForeachState updated = state;
+                updated.stage_indices[i] = next_stage_index;
+
+                QoreIRBasicBlock* map_block = createBlock("foreach.fused.mapselect.map");
+                QoreIRBasicBlock* skip_block = createBlock("foreach.fused.mapselect.skip");
+                if (!map_block || !skip_block) {
+                    error = "IR builder failed to create fused foreach map-select blocks";
+                    return false;
+                }
+                builder.createBranchIf(pred_bool, map_block, skip_block, stage.loc);
+
+                builder.setBlock(skip_block);
+                add_continue(updated, stage.loc);
+
+                builder.setBlock(map_block);
+                QoreIRValue map_result = lower_with_implicit(*stage.primary, stage.loc, element_val,
+                    state.stage_indices[i]);
+                if (!map_result.isValid()) {
+                    return false;
+                }
+                element_val = map_result;
+                state = updated;
+                break;
+            }
+        }
+    }
+
+    QoreIRValue old_element = builder.createPushImplicitElement(state.foreach_index, loc)->result;
+
+    QoreValue var_expr = foreach_stmt->getVar();
+    if (var_expr && !var_expr.isNothing()) {
+        const auto* var_node = dynamic_cast<const VarRefNode*>(var_expr.getInternalNode());
+        const QoreTypeInfo* var_type = var_node ? getVarRefTypeInfo(var_node) : nullptr;
+        if (var_node && var_node->getType() != VT_IMMEDIATE
+                && !QoreTypeInfo::isReference(var_type)) {
+            if (!storeVarRef(var_node, element_val, error, "foreach assignment")) {
+                return false;
+            }
+        } else {
+            auto* store_inst = builder.createStoreLValue(var_expr, element_val, loc);
+            if (!exception_stack.empty()) {
+                store_inst->exception_target = exception_stack.back();
+            }
+        }
+    }
+
+    FlowTarget ft;
+    ft.break_target = exit_block;
+    ft.continue_target = latch_block;
+    ft.is_switch = false;
+    ft.catch_cleanup_depth = catch_cleanup_depth;
+    ft.cleanup_stack_depth = cleanup_stack.size();
+    ft.old_implicit_element = old_element;
+    flow_stack.push_back(ft);
+    StatementBlock* body = foreach_stmt->getCode();
+    if (body) {
+        ++loop_depth;
+        if (!lowerStatementBlock(body, error)) {
+            --loop_depth;
+            flow_stack.pop_back();
+            return false;
+        }
+        --loop_depth;
+    }
+    flow_stack.pop_back();
+
+    if (!blockHasTerminator(builder.getBlock())) {
+        builder.createBranch(latch_block, loc);
+    }
+
+    // Stage and body lowering can create pass/skip/continuation blocks after the
+    // placeholder latch block.  Emit the latch after those blocks so LLVM lowering
+    // sees the PushImplicitElement result before the latch PopImplicitElement.
+    builder.getFunction()->moveBlockToEnd(latch_block);
+    builder.setBlock(latch_block);
+    builder.createPopImplicitElement(old_element, loc);
+    QoreIRValue next_foreach_index = builder.createBinaryOp(QoreIROpcode::AddInt, state.foreach_index, one,
+        loc)->result;
+    FusedForeachState next_state = state;
+    next_state.foreach_index = next_foreach_index;
+    QoreIRBasicBlock* latch_exit_block = builder.getBlock();
+    {
+        auto* br = builder.createBranch(header_block, loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
+    continue_paths.push_back({latch_exit_block, next_state});
+
+    for (size_t i = 0; i < stage_phis.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused foreach incoming lowering")) {
+            error = "fused foreach incoming lowering cancelled";
+            return false;
+        }
+        stage_phis[i]->incoming.push_back({zero, preheader_block});
+        stage_phis[i]->operands.push_back(zero);
+        size_t path_count = 0;
+        for (const FusedForeachContinuePath& path : continue_paths) {
+            if (++path_count % 100 == 0 && qore_check_cancel(nullptr, "fused foreach PHI incoming lowering")) {
+                error = "fused foreach PHI incoming lowering cancelled";
+                return false;
+            }
+            stage_phis[i]->incoming.push_back({path.state.stage_indices[i], path.block});
+            stage_phis[i]->operands.push_back(path.state.stage_indices[i]);
+        }
+    }
+
+    foreach_index_phi->incoming.push_back({zero, preheader_block});
+    foreach_index_phi->operands.push_back(zero);
+    size_t path_count = 0;
+    for (const FusedForeachContinuePath& path : continue_paths) {
+        if (++path_count % 100 == 0 && qore_check_cancel(nullptr, "fused foreach index incoming lowering")) {
+            error = "fused foreach index incoming lowering cancelled";
+            return false;
+        }
+        foreach_index_phi->incoming.push_back({path.state.foreach_index, path.block});
+        foreach_index_phi->operands.push_back(path.state.foreach_index);
+    }
+
+    builder.getFunction()->moveBlockToEnd(exit_block);
+    builder.setBlock(exit_block);
+
+    if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
+        for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
+            builder.createUninstantiateLocal(loop_lvars->lv[i], loc);
+        }
+    }
+    return true;
+}
+
+QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode* op, const QoreValue& expr,
+        std::string& error) {
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+
+    const QoreProgramLocation* loc = op->loc;
+    std::vector<LazyPipelineStage> source_stages;
+    QoreValue base_source;
+    if (!collectLazyPipelineStages(op->getSource(), base_source, source_stages, error)) {
+        return QoreIRValue();
+    }
+    if (!source_stages.empty()) {
+        return lowerStreamingFused(op, base_source, source_stages, error);
+    }
+
+    QoreIRValue source = lowerExpression(op->getSource(), error);
+    if (!source.isValid()) {
+        return QoreIRValue();
+    }
+
+    auto* iter_inst = builder.createIteratorCreateIterate(source, loc);
+    QoreIRValue iter_val = iter_inst->result;
+
+    auto lower_predicate = [&](QoreIRValue element_val, QoreIRValue index_val) -> QoreIRValue {
+        if (!op->hasPredicate()) {
+            return builder.createConstBool(true, loc)->result;
+        }
+
+        QoreIRValue old_element = builder.createPushImplicitElement(index_val, loc)->result;
+        QoreIRValue old_argv = builder.createPushImplicitArg(element_val, loc)->result;
+
+        VirtualImplicitContext saved = virtual_implicit;
+        virtual_implicit.arg0 = element_val;
+        virtual_implicit.arg1 = QoreIRValue();
+        virtual_implicit.element = index_val;
+        virtual_implicit.active = true;
+
+        QoreIRValue pred = lowerExpression(op->getPredicate(), error);
+
+        virtual_implicit = saved;
+        builder.createPopImplicitArg(old_argv, loc);
+        builder.createPopImplicitElement(old_element, loc);
+
+        if (!pred.isValid()) {
+            return QoreIRValue();
+        }
+        return builder.createUnaryOp(QoreIROpcode::ToBool, pred, loc)->result;
+    };
+
+    auto emit_negative_limit_throw = [&](const char* name) {
+        QoreIRValue err = builder.createConstString("STREAMING-OPERATOR-ERROR", loc)->result;
+        QoreIRValue msg = builder.createConstString(
+            std::string(name) + " requires a non-negative count", loc)->result;
+        QoreIRValue throw_list = builder.createMakeList({err, msg}, loc)->result;
+        QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+        builder.createThrow(throw_list, handler, loc);
+    };
+
+    switch (op->getKind()) {
+        case QoreStreamingOperatorNode::First:
+        case QoreStreamingOperatorNode::Any:
+        case QoreStreamingOperatorNode::All: {
+            QoreIRBasicBlock* preheader_block = createBlock("stream.terminal.preheader");
+            QoreIRBasicBlock* header_block = createBlock("stream.terminal.header");
+            QoreIRBasicBlock* body_block = createBlock("stream.terminal.body");
+            QoreIRBasicBlock* match_block = createBlock("stream.terminal.match");
+            QoreIRBasicBlock* cont_block = createBlock("stream.terminal.cont");
+            QoreIRBasicBlock* exit_block = createBlock("stream.terminal.exit");
+            QoreIRBasicBlock* final_block = createBlock("stream.terminal.final");
+            if (!preheader_block || !header_block || !body_block || !match_block || !cont_block
+                    || !exit_block || !final_block) {
+                error = "IR builder failed to create blocks for streaming terminal operator";
+                return QoreIRValue();
+            }
+            header_block->is_loop_header = true;
+
+            QoreIRValue zero = builder.createConstInt(0, loc)->result;
+            QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;
+            builder.createBranchIf(is_null, exit_block, preheader_block, loc);
+
+            builder.setBlock(preheader_block);
+            QoreIRValue init_index = builder.createConstInt(0, loc)->result;
+            {
+                auto* br = builder.createBranch(header_block, loc);
+                setLoopCheckpointExceptionTarget(br, header_block);
+            }
+
+            builder.setBlock(header_block);
+            auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+            QoreIRValue index_val = index_phi->result;
+            auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+            QoreIRValue element_val = next_inst->result;
+
+            builder.setBlock(body_block);
+            QoreIRValue pred_bool = lower_predicate(element_val, index_val);
+            if (!pred_bool.isValid()) {
+                return QoreIRValue();
+            }
+            if (op->getKind() == QoreStreamingOperatorNode::All) {
+                builder.createBranchIf(pred_bool, cont_block, match_block, loc);
+            } else {
+                builder.createBranchIf(pred_bool, match_block, cont_block, loc);
+            }
+
+            builder.setBlock(cont_block);
+            QoreIRValue one = builder.createConstInt(1, loc)->result;
+            QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, loc)->result;
+            QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+            {
+                auto* br = builder.createBranch(header_block, loc);
+                setLoopCheckpointExceptionTarget(br, header_block);
+            }
+
+            index_phi->incoming.push_back({init_index, preheader_block});
+            index_phi->incoming.push_back({next_index, cont_exit_block});
+            index_phi->operands.push_back(init_index);
+            index_phi->operands.push_back(next_index);
+
+            builder.setBlock(match_block);
+            QoreIRValue match_result;
+            if (op->getKind() == QoreStreamingOperatorNode::First) {
+                match_result = element_val;
+            } else if (op->getKind() == QoreStreamingOperatorNode::Any) {
+                match_result = builder.createConstBool(true, loc)->result;
+            } else {
+                match_result = builder.createConstBool(false, loc)->result;
+            }
+            builder.createBranch(final_block, loc);
+
+            builder.setBlock(exit_block);
+            QoreIRValue exit_result;
+            if (op->getKind() == QoreStreamingOperatorNode::First) {
+                exit_result = builder.createConstNothing(loc)->result;
+            } else if (op->getKind() == QoreStreamingOperatorNode::Any) {
+                exit_result = builder.createConstBool(false, loc)->result;
+            } else {
+                exit_result = builder.createConstBool(true, loc)->result;
+            }
+            builder.createBranch(final_block, loc);
+
+            builder.setBlock(final_block);
+            auto* result_phi = builder.createPhi({{match_result, match_block}, {exit_result, exit_block}}, loc);
+            return result_phi->result;
+        }
+
+        case QoreStreamingOperatorNode::Count: {
+            QoreIRBasicBlock* preheader_block = createBlock("stream.count.preheader");
+            QoreIRBasicBlock* header_block = createBlock("stream.count.header");
+            QoreIRBasicBlock* body_block = createBlock("stream.count.body");
+            QoreIRBasicBlock* inc_block = createBlock("stream.count.inc");
+            QoreIRBasicBlock* cont_block = createBlock("stream.count.cont");
+            QoreIRBasicBlock* exit_block = createBlock("stream.count.exit");
+            if (!preheader_block || !header_block || !body_block || !inc_block || !cont_block || !exit_block) {
+                error = "IR builder failed to create blocks for streaming count";
+                return QoreIRValue();
+            }
+            header_block->is_loop_header = true;
+
+            QoreIRValue zero = builder.createConstInt(0, loc)->result;
+            QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;
+            QoreIRBasicBlock* iter_check_block = builder.getBlock();
+            builder.createBranchIf(is_null, exit_block, preheader_block, loc);
+
+            builder.setBlock(preheader_block);
+            QoreIRValue one = builder.createConstInt(1, loc)->result;
+            {
+                auto* br = builder.createBranch(header_block, loc);
+                setLoopCheckpointExceptionTarget(br, header_block);
+            }
+
+            builder.setBlock(header_block);
+            auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+            auto* count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+            QoreIRValue index_val = index_phi->result;
+            QoreIRValue count_val = count_phi->result;
+            auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+            QoreIRValue element_val = next_inst->result;
+
+            builder.setBlock(body_block);
+            QoreIRValue pred_bool = lower_predicate(element_val, index_val);
+            if (!pred_bool.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* predicate_block = builder.getBlock();
+            builder.createBranchIf(pred_bool, inc_block, cont_block, loc);
+
+            builder.setBlock(inc_block);
+            QoreIRValue inc_count = builder.createBinaryOp(QoreIROpcode::AddInt, count_val, one, loc)->result;
+            builder.createBranch(cont_block, loc);
+
+            builder.setBlock(cont_block);
+            auto* next_count_phi = builder.createPhi({{inc_count, inc_block}, {count_val, predicate_block}}, loc,
+                QoreIRPhiValueKind::NativeInt);
+            QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, loc)->result;
+            QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+            {
+                auto* br = builder.createBranch(header_block, loc);
+                setLoopCheckpointExceptionTarget(br, header_block);
+            }
+
+            index_phi->incoming.push_back({zero, preheader_block});
+            index_phi->incoming.push_back({next_index, cont_exit_block});
+            index_phi->operands.push_back(zero);
+            index_phi->operands.push_back(next_index);
+
+            count_phi->incoming.push_back({zero, preheader_block});
+            count_phi->incoming.push_back({next_count_phi->result, cont_exit_block});
+            count_phi->operands.push_back(zero);
+            count_phi->operands.push_back(next_count_phi->result);
+
+            builder.setBlock(exit_block);
+            auto* result_phi = builder.createPhi({{zero, iter_check_block}, {count_val, header_block}}, loc,
+                QoreIRPhiValueKind::NativeInt);
+            return result_phi->result;
+        }
+
+        case QoreStreamingOperatorNode::Take:
+        case QoreStreamingOperatorNode::Drop:
+        case QoreStreamingOperatorNode::TakeWhile:
+        case QoreStreamingOperatorNode::TakeUntil:
+            break;
+    }
+
+    QoreIRValue limit_val;
+    QoreIRBasicBlock* limit_ok_block = nullptr;
+    if (op->getKind() == QoreStreamingOperatorNode::Take || op->getKind() == QoreStreamingOperatorNode::Drop) {
+        limit_val = lowerExpression(op->getPredicate(), error);
+        if (!limit_val.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* limit_err_block = createBlock("stream.limit.error");
+        limit_ok_block = createBlock("stream.limit.ok");
+        if (!limit_err_block || !limit_ok_block) {
+            error = "IR builder failed to create blocks for streaming limit check";
+            return QoreIRValue();
+        }
+        QoreIRValue zero = builder.createConstInt(0, loc)->result;
+        QoreIRValue is_negative = builder.createBinaryOp(QoreIROpcode::LtInt, limit_val, zero, loc)->result;
+        builder.createBranchIf(is_negative, limit_err_block, limit_ok_block, loc);
+
+        builder.setBlock(limit_err_block);
+        emit_negative_limit_throw(op->getKind() == QoreStreamingOperatorNode::Take ? "take" : "drop");
+
+        builder.setBlock(limit_ok_block);
+    }
+
+    QoreIRBasicBlock* preheader_block = createBlock("stream.list.preheader");
+    QoreIRBasicBlock* header_block = createBlock("stream.list.header");
+    QoreIRBasicBlock* next_block = createBlock("stream.list.next");
+    QoreIRBasicBlock* body_block = createBlock("stream.list.body");
+    QoreIRBasicBlock* append_block = createBlock("stream.list.append");
+    QoreIRBasicBlock* cont_block = createBlock("stream.list.cont");
+    QoreIRBasicBlock* nothing_block = createBlock("stream.list.nothing");
+    QoreIRBasicBlock* exit_block = createBlock("stream.list.exit");
+    QoreIRBasicBlock* final_block = createBlock("stream.list.final");
+    if (!preheader_block || !header_block || !next_block || !body_block || !append_block || !cont_block
+            || !nothing_block || !exit_block || !final_block) {
+        error = "IR builder failed to create blocks for streaming list operator";
+        return QoreIRValue();
+    }
+    header_block->is_loop_header = true;
+
+    QoreIRValue zero = builder.createConstInt(0, loc)->result;
+    QoreIRValue is_null = builder.createBinaryOp(QoreIROpcode::EqInt, iter_val, zero, loc)->result;
+    builder.createBranchIf(is_null, nothing_block, preheader_block, loc);
+
+    builder.setBlock(preheader_block);
+    const QoreTypeInfo* elem_type = QoreIterateOperatorNode::getElementTypeInfo(op->getSource(),
+        getExprTypeInfo(op->getSource()));
+    QoreIRValue result_list = builder.createEmptyList(loc, elem_type)->result;
+    {
+        auto* br = builder.createBranch(header_block, loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
+
+    builder.setBlock(header_block);
+    auto* index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
+    QoreIRValue index_val = index_phi->result;
+    QoreIRBasicBlock* take_done_block = nullptr;
+    if (op->getKind() == QoreStreamingOperatorNode::Take) {
+        take_done_block = createBlock("stream.take.done");
+        if (!take_done_block) {
+            error = "IR builder failed to create take done block";
+            return QoreIRValue();
+        }
+        QoreIRValue at_limit = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, limit_val, loc)->result;
+        builder.createBranchIf(at_limit, take_done_block, next_block, loc);
+        builder.setBlock(take_done_block);
+        builder.createBranch(exit_block, loc);
+    } else {
+        builder.createBranch(next_block, loc);
+    }
+
+    builder.setBlock(next_block);
+    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, loc);
+    QoreIRValue element_val = next_inst->result;
+
+    builder.setBlock(body_block);
+    if (op->getKind() == QoreStreamingOperatorNode::Take) {
+        builder.createBranch(append_block, loc);
+    } else if (op->getKind() == QoreStreamingOperatorNode::Drop) {
+        QoreIRValue keep = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, limit_val, loc)->result;
+        builder.createBranchIf(keep, append_block, cont_block, loc);
+    } else {
+        QoreIRValue pred_bool = lower_predicate(element_val, index_val);
+        if (!pred_bool.isValid()) {
+            return QoreIRValue();
+        }
+        if (op->getKind() == QoreStreamingOperatorNode::TakeWhile) {
+            builder.createBranchIf(pred_bool, append_block, exit_block, loc);
+        } else {
+            builder.createBranchIf(pred_bool, exit_block, append_block, loc);
+        }
+    }
+
+    builder.setBlock(append_block);
+    builder.createListAppend(result_list, element_val, loc);
+    builder.createBranch(cont_block, loc);
+
+    builder.setBlock(cont_block);
+    QoreIRValue one = builder.createConstInt(1, loc)->result;
+    QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one, loc)->result;
+    QoreIRBasicBlock* cont_exit_block = builder.getBlock();
+    {
+        auto* br = builder.createBranch(header_block, loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
+
+    index_phi->incoming.push_back({zero, preheader_block});
+    index_phi->incoming.push_back({next_index, cont_exit_block});
+    index_phi->operands.push_back(zero);
+    index_phi->operands.push_back(next_index);
+
+    builder.setBlock(nothing_block);
+    QoreIRValue nothing_val = builder.createConstNothing(loc)->result;
+    builder.createBranch(final_block, loc);
+
+    builder.setBlock(exit_block);
+    builder.createBranch(final_block, loc);
+
+    builder.setBlock(final_block);
+    auto* result_phi = builder.createPhi({{result_list, exit_block}, {nothing_val, nothing_block}}, loc);
     return result_phi->result;
 }
 

@@ -1877,5 +1877,27 @@ static QoreValue read_node_EN_FOLDR(AOTExprNodeReadCtx& ctx) {
     return QoreValue(new QoreFoldrOperatorNode(&loc_builtin, left, right));
 }
 
+static QoreValue read_node_EN_ITERATE(AOTExprNodeReadCtx& ctx) {
+    uint16_t num_children = readU16(ctx.ptr, ctx.end);
+    QoreValue source;
+    if (num_children >= 1) {
+        source = ctx.recurse(ctx);
+    }
+    return QoreValue(new QoreIterateOperatorNode(&loc_builtin, source));
+}
+
+static QoreValue read_node_EN_STREAMING(AOTExprNodeReadCtx& ctx) {
+    auto kind = static_cast<QoreStreamingOperatorNode::Kind>(readU8(ctx.ptr, ctx.end));
+    uint16_t num_children = readU16(ctx.ptr, ctx.end);
+    QoreValue predicate, source;
+    if (num_children >= 1) {
+        predicate = ctx.recurse(ctx);
+    }
+    if (num_children >= 2) {
+        source = ctx.recurse(ctx);
+    }
+    return QoreValue(new QoreStreamingOperatorNode(&loc_builtin, kind, predicate, source));
+}
+
 
 } // anonymous namespace

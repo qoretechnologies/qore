@@ -45,7 +45,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 378,
+static_assert(QORE_IR_MAX_OPCODE == 383,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -116,6 +116,7 @@ static constexpr uint64_t TAG_INT48          = 0xFFF9000000000000ULL;
 static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
 static constexpr uint64_t TAG_MASK           = 0xFFFF000000000000ULL;  // Phase 4: NaN-boxing tag extraction
 static constexpr uint64_t TAG_POINTER        = 0xFFFA000000000000ULL;  // Phase 4: Tag for pointer type
+static constexpr uint64_t TAG_CHAR           = 0xFFFC000000000000ULL;
 static constexpr uint64_t DOUBLE_ENCODE_OFFSET = 0x0001000000000000ULL;
 static constexpr uint64_t VAL_NOTHING        = 0;
 static constexpr uint64_t VAL_NULL           = 0xFFFB000000000001ULL;
@@ -539,6 +540,12 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // iterator_create: (i64, ptr, ptr) -> ptr
     module.getOrInsertFunction("qore_rt_iterator_create",
             llvm::FunctionType::get(ptr_type, {i64_type, ptr_type, ptr_type}, false));
+    // iterator_create_iterate: (i64, ptr) -> ptr
+    module.getOrInsertFunction("qore_rt_iterator_create_iterate",
+            llvm::FunctionType::get(ptr_type, {i64_type, ptr_type}, false));
+    // iterate_value: (i64, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_iterate_value",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
     // iterator_next: (ptr, ptr, ptr) -> i64
     module.getOrInsertFunction("qore_rt_iterator_next",
             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
@@ -605,6 +612,13 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_find_throwing",
             llvm::FunctionType::get(i64_type,
                 {i64_type, i64_type, i64_type, ptr_type}, false));
+    // mode-aware find: (i64 exp, i64 source, i64 where, i32 mode, ptr xsink) -> i64
+    module.getOrInsertFunction("qore_rt_find_mode",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_find_mode_throwing",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
 }
 
 llvm::FunctionCallee QoreIRToLLVM::getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft) {
@@ -1600,11 +1614,30 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     }
 }
 
-void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module) {
+void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id) {
     TempCleanupMark mark;
     if (!temp_cleanup_marks.empty()) {
-        mark = temp_cleanup_marks.back();
-        temp_cleanup_marks.pop_back();
+        // Select the matching mark by scope id rather than blindly popping the
+        // stack back.  When short-circuit operators (??, ?:, &&, ||) split a
+        // loop/map body, the body's closing DiscardTemps can be emitted in a
+        // basic block laid out *after* a sibling block that also carries a
+        // DiscardTemps (e.g. a map's direct-final block).  Because the LLVM
+        // emitter visits blocks in layout order rather than control-flow order,
+        // a plain LIFO pop would pair each DiscardTemps with the wrong mark —
+        // freeing an outer-scope temp (e.g. the map source list) once per
+        // iteration.  Matching by id keeps the pairing correct regardless of
+        // block layout, mirroring the IR interpreter's sentinel-stack drain.
+        size_t idx = temp_cleanup_marks.size() - 1;
+        if (scope_id) {
+            for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
+                if (temp_cleanup_marks[i - 1].scope_id == scope_id) {
+                    idx = i - 1;
+                    break;
+                }
+            }
+        }
+        mark = temp_cleanup_marks[idx];
+        temp_cleanup_marks.erase(temp_cleanup_marks.begin() + idx);
     }
 
     auto helper = module.getOrInsertFunction("qore_rt_decref",
@@ -2448,7 +2481,8 @@ bool QoreIRToLLVM::canReloadLocalFromRuntime(const void* key, bool honor_reload_
 
     bool is_entry_local = entry_locals_set.count(key) > 0;
     bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
-    return is_entry_local || is_pre_instantiated;
+    bool is_aot_body_local = aot_mode && aot_body_locals.count(key);
+    return is_entry_local || is_pre_instantiated || is_aot_body_local;
 }
 
 llvm::AllocaInst* QoreIRToLLVM::getOrCreateLocalReloadEpoch(llvm::Function* llvm_func) {
@@ -3695,6 +3729,7 @@ static bool canEmitAotInvokeExprFallback(const QoreIRInstruction* inst) {
     QoreIROpcode op = inst->opcode;
     switch (op) {
         case QoreIROpcode::ConstEnum:
+        case QoreIROpcode::ConstChar:
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
@@ -4881,9 +4916,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 error = "PHI incoming block not found";
                 return false;
             }
-            // Box to i64 if needed (PHI type is i64 for NaN-boxed values)
+            // Match incoming values to the PHI representation. QoreValue PHIs
+            // need boxed i64 operands; native integer PHIs keep loop counters
+            // and indexes out of the QoreValue/reference domain.
             // IMPORTANT: Set builder insert point to BEFORE the terminator of the predecessor block
-            // so that boxing instructions are placed in the correct block, not in whatever
+            // so that conversion instructions are placed in the correct block, not in whatever
             // block the builder was left pointing at (which may already have a terminator)
             if (getenv("QORE_LLVM_DEBUG")) {
                 llvm::BasicBlock* bm_bb = block_map[inc.block];
@@ -4902,7 +4939,26 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             } else {
                 builder->SetInsertPoint(bb);
             }
-            val = boxValue(val, inc.value.id);
+            switch (phi_inst->value_kind) {
+                case QoreIRPhiValueKind::NativeInt:
+                    if (val->getType()->isPointerTy()) {
+                        val = builder->CreatePtrToInt(val, i64_type);
+                    } else if (val->getType() == i64_type) {
+                        val = ensureIntType(val, inc.value.id);
+                    } else if (val->getType()->isIntegerTy()) {
+                        val = builder->CreateSExtOrTrunc(val, i64_type);
+                    } else if (val->getType()->isFloatingPointTy()) {
+                        val = builder->CreateFPToSI(val, i64_type);
+                    } else {
+                        error = "PHI native-int incoming has unsupported LLVM type";
+                        return false;
+                    }
+                    break;
+                case QoreIRPhiValueKind::QoreValue:
+                default:
+                    val = boxValue(val, inc.value.id);
+                    break;
+            }
             phi_node->addIncoming(val, bb);
         }
     }
@@ -5060,6 +5116,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
     auto load_local_int_for_fused = [&](LocalVar* local, const void* key,
             std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
             const char* name) -> llvm::Value* {
+        if (local && local->closureUse()) {
+            llvm::Value* boxed;
+            if (aot_mode) {
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_closure_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                boxed = builder->CreateCall(load_fn,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            } else {
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(local));
+                llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                boxed = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+            }
+
+            auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* rv = builder->CreateCall(to_int, {boxed});
+            auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(decref_fn, {boxed, xsink_arg});
+            return rv;
+        }
+
         bool is_native = native_int_locals.count(key) > 0;
         if (alloca_it != local_allocas.end()) {
             ensureLocalCacheFresh(key, module, llvm_func);
@@ -5100,6 +5182,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
     auto assign_local_int_for_fused = [&](LocalVar* local, const void* key,
             std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
             llvm::Value* result) {
+        if (local && local->closureUse()) {
+            llvm::Value* boxed = boxIntInline(result);
+            if (aot_mode) {
+                auto assign_fn = module.getOrInsertFunction("qore_rt_store_closure_aot",
+                        llvm::FunctionType::get(void_type,
+                                {ptr_type, i32_type, i64_type, ptr_type}, false));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                builder->CreateCall(assign_fn, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg});
+            } else {
+                auto assign_fn = module.getOrInsertFunction("qore_rt_assign_local",
+                        llvm::FunctionType::get(void_type,
+                                {ptr_type, i64_type, ptr_type}, false));
+                llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(local));
+                llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                builder->CreateCall(assign_fn, {var_as_ptr, boxed, xsink_arg});
+            }
+            return;
+        }
+
         bool is_native = native_int_locals.count(key) > 0;
         bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
         llvm::Value* boxed = nullptr;
@@ -5154,6 +5257,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::ConstBool: {
             const auto* cinst = static_cast<const QoreIRConstInstruction*>(inst);
             values[inst->result.id] = llvm::ConstantInt::get(i1_type, cinst->constant.bool_value ? 1 : 0);
+            return true;
+        }
+        case QoreIROpcode::ConstChar: {
+            const auto* cinst = static_cast<const QoreIRConstInstruction*>(inst);
+            values[inst->result.id] = llvm::ConstantInt::get(i64_type, TAG_CHAR | cinst->constant.char_value);
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::ConstNothing: {
@@ -5534,7 +5643,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::UnaryMinusFloat: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
-            values[inst->result.id] = builder->CreateFNeg(val);
+            values[inst->result.id] = builder->CreateFNeg(
+                ensureFloatType(val, inst->operands[0].id, module));
             return true;
         }
 
@@ -5701,6 +5811,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "unsupported type for ToBool lowering";
                 return false;
             }
+            return true;
+        }
+
+        case QoreIROpcode::ToInt: {
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            if (val->getType() == i64_type) {
+                values[inst->result.id] = nanboxed_values.count(inst->operands[0].id)
+                    ? ensureIntTypeInline(val, inst->operands[0].id)
+                    : val;
+            } else if (val->getType() == double_type) {
+                values[inst->result.id] = builder->CreateFPToSI(val, i64_type);
+            } else if (val->getType() == i1_type) {
+                values[inst->result.id] = builder->CreateZExt(val, i64_type);
+            } else if (val->getType()->isIntegerTy()) {
+                values[inst->result.id] = builder->CreateSExtOrTrunc(val, i64_type);
+            } else if (val->getType()->isFloatingPointTy()) {
+                values[inst->result.id] = builder->CreateFPToSI(val, i64_type);
+            } else {
+                error = "unsupported type for ToInt lowering";
+                return false;
+            }
+            return true;
+        }
+
+        case QoreIROpcode::ToFloat: {
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            values[inst->result.id] = ensureFloatType(val, inst->operands[0].id, module);
             return true;
         }
 
@@ -7008,11 +7147,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Phi nodes ===
         case QoreIROpcode::Phi: {
             const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
-            // Phi type: use i64 as the common type for NaN-boxed values.
-            llvm::PHINode* phi_node = builder->CreatePHI(i64_type, phi->incoming.size());
+            llvm::Type* phi_type = i64_type;
+            llvm::PHINode* phi_node = builder->CreatePHI(phi_type, phi->incoming.size());
             values[inst->result.id] = phi_node;
-            // PHI carries NaN-boxed i64 values (incoming values are boxed in fixup pass)
-            nanboxed_values.insert(inst->result.id);
+            if (phi->value_kind == QoreIRPhiValueKind::QoreValue) {
+                // PHI carries NaN-boxed i64 values (incoming values are boxed in fixup pass).
+                nanboxed_values.insert(inst->result.id);
+            }
             // Store for fixup pass after all blocks are lowered (incoming values
             // may not be lowered yet due to forward edges).
             pending_phis.push_back({phi_node, phi});
@@ -8229,8 +8370,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
 
-                // Calls can modify locals through side effects
-                reloadAllLocalsFromRuntime(module, llvm_func);
+                // Calls with reference-capable arguments can mutate locals that
+                // are otherwise reload-exempt in native/AOT code.
+                reloadAllLocalsFromRuntime(module, llvm_func, !inv->has_ref_args);
 
             } else if (inv->invoke_opcode == QoreIROpcode::HashKeyAccess) {
                 // HashKeyAccess invoke: use key name stored on the invoke instruction
@@ -9139,6 +9281,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 result = builder->CreateCall(helper, {state_val, index_unboxed, xsink_arg});
                 // Result is nanboxed — handled by common tail below
 
+            } else if (inv->invoke_opcode == QoreIROpcode::IterateValue
+                    && inv->operands.size() >= 1) {
+                auto* source = getVal(inv->operands[0].id, error);
+                if (!source) { return false; }
+                llvm::Value* source_boxed = boxValue(source, inv->operands[0].id);
+                auto ft = llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_iterate_value", ft);
+                auto helper_throwing = module.getOrInsertFunction("qore_rt_iterate_value_throwing", ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {source_boxed, xsink_arg}, module, llvm_func, inst);
+
             } else if (inv->invoke_opcode == QoreIROpcode::RangeSliceAny
                     || inv->invoke_opcode == QoreIROpcode::RangeSliceInt
                     || inv->invoke_opcode == QoreIROpcode::RangeSliceFloat) {
@@ -9421,10 +9574,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Qore's scoping allows callees to access the caller's non-IR-only
-            // locals through the TLS variable stack, so we must reload after every
-            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Qore's scoping allows callees to access the caller's locals
+            // through the TLS variable stack. Reference-capable arguments can
+            // also mutate locals that normal call invalidation would skip.
+            auto* call_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            reloadAllLocalsFromRuntime(module, llvm_func, !call_inst->has_ref_args);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -9661,10 +9815,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
-            // Qore's scoping allows callees to access the caller's non-IR-only
-            // locals through the TLS variable stack, so we must reload after every
-            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Qore's scoping allows callees to access the caller's locals
+            // through the TLS variable stack. Reference-capable arguments can
+            // also mutate locals that normal call invalidation would skip.
+            reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -9796,10 +9950,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Qore's scoping allows callees to access the caller's non-IR-only
-            // locals through the TLS variable stack, so we must reload after every
-            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Qore's scoping allows callees to access the caller's locals
+            // through the TLS variable stack. Reference-capable arguments can
+            // also mutate locals that normal call invalidation would skip.
+            reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -9931,10 +10085,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Qore's scoping allows callees to access the caller's non-IR-only
-            // locals through the TLS variable stack, so we must reload after every
-            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Qore's scoping allows callees to access the caller's locals
+            // through the TLS variable stack. Reference-capable arguments can
+            // also mutate locals that normal call invalidation would skip.
+            reloadAllLocalsFromRuntime(module, llvm_func, !invoke_inst->has_ref_args);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -10033,10 +10187,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
-            // Qore's scoping allows callees to access the caller's non-IR-only
-            // locals through the TLS variable stack, so we must reload after every
-            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Qore's scoping allows callees to access the caller's locals
+            // through the TLS variable stack. Reference-capable arguments can
+            // also mutate locals that normal call invalidation would skip.
+            reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -10337,10 +10491,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Qore's scoping allows callees to access the caller's non-IR-only
-            // locals through the TLS variable stack, so we must reload after every
-            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Qore's scoping allows callees to access the caller's locals
+            // through the TLS variable stack. Reference-capable arguments can
+            // also mutate locals that normal call invalidation would skip.
+            reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -10642,10 +10796,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Qore's scoping allows callees to access the caller's non-IR-only
-            // locals through the TLS variable stack, so we must reload after every
-            // call.  reloadAllLocalsFromRuntime already skips IR-only locals.
-            reloadAllLocalsFromRuntime(module, llvm_func);
+            // Qore's scoping allows callees to access the caller's locals
+            // through the TLS variable stack. Reference-capable arguments can
+            // also mutate locals that normal call invalidation would skip.
+            reloadAllLocalsFromRuntime(module, llvm_func, !invoke_inst->has_ref_args);
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
@@ -11517,6 +11671,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {ref_boxed, args_array, nargs_val, xsink_arg},
                         module, llvm_func, inst);
             }
+            auto* closure_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            reloadAllLocalsFromRuntime(module, llvm_func, !closure_inst->has_ref_args);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -14655,6 +14811,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
+        // === IterateValue: build an AbstractIterator object from an evaluated source ===
+        case QoreIROpcode::IterateValue: {
+            auto* source = getVal(inst->operands[0].id, error);
+            if (!source) { return false; }
+            llvm::Value* source_boxed = boxValue(source, inst->operands[0].id);
+            auto ft = llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_iterate_value", ft);
+            auto helper_throwing = module.getOrInsertFunction("qore_rt_iterate_value_throwing", ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {source_boxed, xsink_arg}, module, llvm_func, inst);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
         // === InstanceOf: native type check with pre-evaluated operand ===
         case QoreIROpcode::InstanceOfBool: {
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
@@ -15192,12 +15365,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* exp_bits = makeExprBits(finst->exp);
             llvm::Value* find_exp_bits = makeExprBits(finst->find_exp);
             llvm::Value* where_bits = makeExprBits(finst->where);
+            llvm::Value* mode = llvm::ConstantInt::get(i32_type, finst->mode);
             auto find_ft = llvm::FunctionType::get(i64_type,
-                    {i64_type, i64_type, i64_type, ptr_type}, false);
-            auto helper = module.getOrInsertFunction("qore_rt_find", find_ft);
-            auto helper_throwing = module.getOrInsertFunction("qore_rt_find_throwing", find_ft);
+                    {i64_type, i64_type, i64_type, i32_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_find_mode", find_ft);
+            auto helper_throwing = module.getOrInsertFunction("qore_rt_find_mode_throwing", find_ft);
             llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
-                    {exp_bits, find_exp_bits, where_bits, xsink_arg}, module, llvm_func, inst);
+                    {exp_bits, find_exp_bits, where_bits, mode, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -15453,7 +15627,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::PushTempMark: {
             temp_cleanup_marks.push_back({
                 invoke_result_allocas.size(),
-                pending_ssa_cleanup.size()
+                pending_ssa_cleanup.size(),
+                inst->temp_scope_id
             });
             return true;
         }
@@ -15465,7 +15640,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::DiscardTemps: {
-            emitDiscardTemps(module);
+            emitDiscardTemps(module, inst->temp_scope_id);
             return true;
         }
 
@@ -15538,7 +15713,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
 
         // === Iterator operations ===
-        case QoreIROpcode::IteratorCreate: {
+        case QoreIROpcode::IteratorCreate:
+        case QoreIROpcode::IteratorCreateIterate: {
             const auto* iter_inst = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
             // Get the iterable value (NaN-boxed)
             auto* iterable_val = getVal(iter_inst->iterable.id, error);
@@ -15559,7 +15735,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             llvm::Value* result;
-            if (aot_mode) {
+            if (inst->opcode == QoreIROpcode::IteratorCreateIterate) {
+                auto ft = llvm::FunctionType::get(ptr_type, {i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_iterator_create_iterate", ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_iterator_create_iterate_throwing", ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {iterable_boxed, xsink_arg}, module, llvm_func, inst);
+            } else if (aot_mode) {
                 // AOT mode: use slot-based lookup for iterator_func pointer
                 // Use -1 as sentinel when iterator_func is null
                 int32_t slot = -1;
@@ -15929,6 +16112,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic) {
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+                    int32_t string_index_char = 1;
+                    if (expr_inst->expr.hasNode()) {
+                        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                                expr_inst->expr.getInternalNode())) {
+                            string_index_char = sq->hasStringIndexChar() ? 1 : 0;
+                        }
+                    }
                     if (!expr_inst->list_selector_kinds.empty()) {
                         int num_selectors = static_cast<int>(inst->operands.size()) - 1;
                         llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
@@ -15949,12 +16139,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::StringRef(kind_bytes.data(), kind_bytes.size()), "list_selector_kinds");
                         auto helper = module.getOrInsertFunction("qore_rt_list_index_selectors",
                             llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i32_type, ptr_type, ptr_type}, false));
+                                {i64_type, ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
                         llvm::Value* result = builder->CreateCall(helper,
                             {lhs_boxed, kinds_ptr,
                              llvm::ConstantInt::get(i32_type,
                                 static_cast<int32_t>(expr_inst->list_selector_kinds.size())),
-                             selector_array, xsink_arg});
+                             selector_array, llvm::ConstantInt::get(i32_type, string_index_char), xsink_arg});
                         values[inst->result.id] = result;
                         nanboxed_values.insert(inst->result.id);
                         trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -15966,6 +16156,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* rhs = getVal(inst->operands[1].id, error);
                 if (!rhs) { return false; }
                 llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+                if (inst->opcode == QoreIROpcode::ListIndexDynamic) {
+                    const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+                    int32_t string_index_char = 1;
+                    if (expr_inst->expr.hasNode()) {
+                        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                                expr_inst->expr.getInternalNode())) {
+                            string_index_char = sq->hasStringIndexChar() ? 1 : 0;
+                        }
+                    }
+                    auto helper = module.getOrInsertFunction("qore_rt_list_index_dynamic",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
+                    llvm::Value* result = builder->CreateCall(helper,
+                        {lhs_boxed, rhs_boxed, llvm::ConstantInt::get(i32_type, string_index_char), xsink_arg});
+                    values[inst->result.id] = result;
+                    nanboxed_values.insert(inst->result.id);
+                    trackResultForCleanup(result, inst->result.id, llvm_func);
+                    emitExceptionCheck(module, llvm_func, inst);
+                    reloadAllLocalsFromRuntime(module, llvm_func);
+                    return true;
+                }
                 llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
                     static_cast<int>(inst->opcode));
                 auto helper = module.getOrInsertFunction("qore_rt_binary_op",
@@ -16446,9 +16656,10 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
         return false;  // Can't determine index type
     }
 
-    auto helper = module.getOrInsertFunction("qore_rt_list_index_access",
-            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-    values[inst->result.id] = builder->CreateCall(helper, {list_boxed, idx_int, xsink_arg});
+    auto helper = module.getOrInsertFunction("qore_rt_list_index_access_compat",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
+    values[inst->result.id] = builder->CreateCall(helper, {list_boxed, idx_int,
+        llvm::ConstantInt::get(i32_type, sq_brackets->hasStringIndexChar() ? 1 : 0), xsink_arg});
     return true;
 }
 

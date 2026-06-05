@@ -149,6 +149,7 @@ DLLLOCAL QoreClass* initRangeIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStringSplitIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStringRegexSplitIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStringCharIteratorClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initStringIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initScannerClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStreamBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initInputStreamClass(QoreNamespace& ns);
@@ -1535,6 +1536,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initStringSplitIteratorClass(qns));
     qns.addSystemClass(initStringRegexSplitIteratorClass(qns));
     qns.addSystemClass(initStringCharIteratorClass(qns));
+    qns.addSystemClass(initStringIteratorClass(qns));
     qns.addSystemClass(initScannerClass(qns));
     qns.addSystemClass(initTreeMapClass(qns));
     qns.addSystemClass(initSerializableClass(qns));
@@ -2204,7 +2206,8 @@ void qore_root_ns_private::addConstant(qore_ns_private& ns, const char* cname, Q
    cnmap.update(i->first, &ns, i->second);
 }
 
-void qore_root_ns_private::parseAddConstantIntern(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name, QoreValue value, bool cpub) {
+void qore_root_ns_private::parseAddConstantIntern(const QoreProgramLocation* loc, QoreNamespace& ns,
+        const NamedScope& name, QoreValue value, bool cpub, const QoreTypeInfo* typeInfo) {
     ValueHolder vh(value, 0);
 
     QoreNamespace* sns = ns.priv->resolveNameScope(loc, name);
@@ -2212,7 +2215,7 @@ void qore_root_ns_private::parseAddConstantIntern(const QoreProgramLocation* loc
         return;
 
     const char* cname = name.get(name.size() - 1);
-    cnemap_t::iterator i = sns->priv->parseAddConstant(loc, cname, vh.release(), cpub);
+    cnemap_t::iterator i = sns->priv->parseAddConstant(loc, cname, vh.release(), cpub, typeInfo);
     if (i == sns->priv->constant.end())
         return;
 
@@ -3266,7 +3269,7 @@ qore_ns_private* qore_ns_private::parseAddNamespace(QoreNamespace* nns) {
 
 // only called while parsing before addition to namespace tree, no locking needed
 cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* loc, const char* cname,
-        QoreValue value, bool cpub) {
+        QoreValue value, bool cpub, const QoreTypeInfo* typeInfo) {
     ValueHolder vh(value, 0);
 
     if (constant.inList(cname)) {
@@ -3281,19 +3284,19 @@ cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* 
         "constant '%s::%s' is declared public but the enclosing namespace '%s::' is not public", name.c_str(), cname,
         name.c_str());
 
-    return constant.parseAdd(loc, cname, vh.release(), 0, cpub);
+    return constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub);
 }
 
 // only called while parsing before addition to namespace tree, no locking needed
 void qore_ns_private::parseAddConstant(const QoreProgramLocation* loc, const NamedScope& nscope, QoreValue value,
-        bool cpub) {
+        bool cpub, const QoreTypeInfo* typeInfo) {
    ValueHolder vh(value, 0);
 
    QoreNamespace* sns = resolveNameScope(loc, nscope);
    if (!sns)
       return;
 
-   sns->priv->parseAddConstant(loc, nscope[nscope.size() - 1], vh.release(), cpub);
+   sns->priv->parseAddConstant(loc, nscope[nscope.size() - 1], vh.release(), cpub, typeInfo);
 }
 
 // only called while parsing before addition to namespace tree, no locking needed

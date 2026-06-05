@@ -37,8 +37,9 @@
 class QoreParseCastOperatorNode : public QoreSingleExpressionOperatorNode<> {
 friend class QoreCastOperatorNode;
 public:
-    DLLLOCAL QoreParseCastOperatorNode(const QoreProgramLocation* loc, QoreParseTypeInfo* pti, QoreValue exp)
-            : QoreSingleExpressionOperatorNode<>(loc, exp), pti(pti) {
+    DLLLOCAL QoreParseCastOperatorNode(const QoreProgramLocation* loc, QoreParseTypeInfo* pti, QoreValue exp,
+            bool explicit_cast = true)
+            : QoreSingleExpressionOperatorNode<>(loc, exp), pti(pti), explicit_cast(explicit_cast) {
     }
 
     // type is unknown before resolution
@@ -67,6 +68,7 @@ public:
 protected:
     DLLLOCAL static QoreString cast_str;
     QoreParseTypeInfo* pti;
+    bool explicit_cast;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         assert(false);

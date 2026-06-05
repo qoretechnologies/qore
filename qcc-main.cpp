@@ -1316,6 +1316,17 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_CLASS_TYPE_PARAMS, "class-type-params"},
         {QORE_AOT_FEAT_CLASS_PARAM_BASES, "class-param-bases"},
         {QORE_AOT_FEAT_CLASS_RAW_GENERIC, "class-raw-generic"},
+        {QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE, "static-call-receiver-type"},
+        {QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS, "hashdecl-type-params"},
+        {QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS, "type-param-defaults"},
+        {QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS, "hashdecl-param-parents"},
+        {QORE_AOT_FEAT_TYPE_PARAM_BOUNDS, "type-param-bounds"},
+        {QORE_AOT_FEAT_PLUGIN_DISPATCH, "plugin-dispatch"},
+        {QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND, "complex-buffer-init-kind"},
+        {QORE_AOT_FEAT_READONLY_LOCALS, "readonly-locals"},
+        {QORE_AOT_FEAT_CONST_METHODS, "const-methods"},
+        {QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS, "call-closure-ref-args"},
+        {QORE_AOT_FEAT_TYPED_PHI, "typed-phi"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));

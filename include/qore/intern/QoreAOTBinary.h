@@ -94,7 +94,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v3: added timezone metadata for IR date constants
 //! v4: all serialized cast expression kinds carry their inner expression
 //! v5: fixed-offset IR date constants serialize their UTC offset instead of an empty zone name
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 5;
+//! v6: added char value serialization tag
+//! v7: serialized Find instructions include the explicit find mode
+//! v8: serialized Phi instructions include the PHI value representation kind
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 8;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -158,8 +161,12 @@ constexpr uint64_t QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS = 1ULL << 50; //!< hashd
 constexpr uint64_t QORE_AOT_FEAT_TYPE_PARAM_BOUNDS = 1ULL << 51; //!< class/hashdecl type parameter records preserve bound type arguments
 constexpr uint64_t QORE_AOT_FEAT_PLUGIN_DISPATCH = 1ULL << 52; //!< IR debug/AOT records may contain plugin dispatch opcodes
 constexpr uint64_t QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND = 1ULL << 53; //!< complex buffer records/slots preserve sized/filled factory kind
+constexpr uint64_t QORE_AOT_FEAT_READONLY_LOCALS = 1ULL << 54; //!< signatures and local slot metadata preserve read-only local bindings
+constexpr uint64_t QORE_AOT_FEAT_CONST_METHODS = 1ULL << 55; //!< METHODS variant flags preserve const-method receiver contracts
+constexpr uint64_t QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS = 1ULL << 56; //!< Closure-call records preserve caller-cache invalidation metadata
+constexpr uint64_t QORE_AOT_FEAT_TYPED_PHI = 1ULL << 57; //!< Serialized Phi records preserve native/QoreValue representation metadata
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x03FFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -236,6 +243,9 @@ enum class QoreAOTValueTag : uint8_t {
     //! Encoded as import_idx(u16) + local_type_id(u16) + serializer_format_version(u16)
     //! + reserved(u16) + payload_len(u32) + payload bytes.
     VT_PLUGIN_INSTANCE = 20,
+    //! Unicode char value.
+    //! Encoded as codepoint(u32).
+    VT_CHAR = 21,
 };
 
 //! Optional value-container type metadata kind, present in VT_LIST/VT_HASH
@@ -830,6 +840,8 @@ void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::s
     @return true on success, false on failure
 */
 bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error);
+bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
+        std::string& error);
 
 //! Serialize reexported module names into the REEXPORT_MODULES binary section
 /** Writes the list of modules that should be reexported when this module is imported.
@@ -852,6 +864,8 @@ void serializeReexportModules(QoreAOTBinaryWriter& writer, const std::vector<std
     @return true on success, false on failure
 */
 bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::string>& reexport_modules, std::string& error);
+bool readReexportModules(const QoreAOTBinaryReader& reader, std::vector<std::string>& reexport_modules,
+        std::string& error);
 
 //! Serialize the per-Program %prepend-module-path / %append-module-path lists
 //! into MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections (if non-empty).
@@ -933,6 +947,7 @@ void serializeProgramMetadata(QoreAOTBinaryWriter& writer, const char* exec_clas
     @return true on success, false on failure (missing section is not an error)
 */
 bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_class_name, std::string& error);
+bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_class_name, std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).
@@ -1073,6 +1088,8 @@ enum class AOTExprKind : uint8_t {
     LOG_AEQ            = 105, //!< Logical absolute equality operator: left(AOTExprKind) + right(AOTExprKind)
     LOG_ANE            = 106, //!< Logical absolute not-equals operator: left(AOTExprKind) + right(AOTExprKind)
     COMPLEX_BUFFER_NEW = 107, //!< Complex buffer construction: type_path + init kind in expr streams; ref1=type_path, flags=init kind in slot maps
+    ITERATE            = 108, //!< Iterate operator: source expression
+    STREAMING          = 109, //!< Streaming operator: kind byte + predicate/count expression + source expression
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -1230,13 +1247,15 @@ enum class AOTExprNodeKind : uint8_t {
 
     EN_FOLDL         = 164, //!< 2 children: [accumulator_expr, source]
     EN_FOLDR         = 165, //!< 2 children: [accumulator_expr, source]
+    EN_ITERATE       = 166, //!< 1 child: [source]
+    EN_STREAMING     = 167, //!< u8 kind; 2 children: [predicate_or_count, source]
 };
 
 //! Identity for a local variable slot
 struct AOTLocalSlotId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path from QoreTypeInfo::getPath()
-    uint8_t flags = 0;       //!< bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv
+    uint8_t flags = 0;       //!< bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv, bit 4: read-only
     uint16_t param_index = 0;//!< parameter index (valid only if is_param flag set)
     uint32_t body_ordinal = UINT32_MAX; //!< index in all_body_locals when this slot is a body local
     const void* local_var_ptr = nullptr; //!< compile-time only: pointer to LocalVar for identity matching
@@ -1269,6 +1288,7 @@ struct AOTBodyLocalId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path
     bool is_closure = false; //!< true if closure variable
+    bool read_only = false;  //!< true if read-only binding
     uint32_t slot_id = UINT32_MAX; //!< local slot id when available
 };
 
@@ -1453,6 +1473,8 @@ struct AOTInitFuncDescriptor {
     @return true on success (even if section is absent), false on failure
 */
 bool readInitFuncs(const uint8_t* data, uint32_t size,
+    std::vector<AOTInitFuncDescriptor>& init_funcs, std::string& error);
+bool readInitFuncs(const QoreAOTBinaryReader& reader,
     std::vector<AOTInitFuncDescriptor>& init_funcs, std::string& error);
 
 // ---- Namespace Deserialization (Phase 4) ----
@@ -1746,6 +1768,7 @@ private:
     bool deserializeFallbackSources(std::string& error);
     bool commitDeserializedClasses(std::string& error);
     const QoreProgramLocation* getBlobLocation(int16_t start_line = 0, int16_t end_line = 0) const;
+    bool deserializeShellsFromOpenReader(std::string& error);
 
 public:
     //! Phase 4 slice 10: phase-1 entry point — open blob, create type
@@ -1766,6 +1789,8 @@ public:
     */
     bool openAndDeserializeShells(QoreProgram* in_pgm, const uint8_t* data,
             uint32_t size, std::string& error);
+    bool openAndDeserializeShells(QoreProgram* in_pgm, QoreAOTBinaryReader&& open_reader,
+            std::string& error);
 
     //! Swap in a caller-owned type-cache map so this session's
     //! resolver shares lookup results with sibling sessions.
@@ -1965,6 +1990,7 @@ public:
         @return true on success, false on failure
     */
     bool deserializeIntoProgram(QoreProgram* pgm, const uint8_t* data, uint32_t size, std::string& error);
+    bool deserializeIntoProgram(QoreProgram* pgm, QoreAOTBinaryReader&& open_reader, std::string& error);
 
     //! Get the reader for access to header info after deserialization
     const QoreAOTBinaryReader& getReader() const { return reader; }

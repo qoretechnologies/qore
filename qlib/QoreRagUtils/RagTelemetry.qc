@@ -135,7 +135,7 @@ public class RagTelemetry {
             "desc": ex.desc,
         };
         if (ex.arg.typeCode() == NT_HASH) {
-            hash<auto> arg = cast<hash<auto>>(ex.arg);
+            hash<auto> arg = cast<hash>(ex.arg);
             list<string> arg_keys = keys arg;
             foreach string key in (("status_code", "code", "type",
                     "retryable", "backend", "model", "collection")) {

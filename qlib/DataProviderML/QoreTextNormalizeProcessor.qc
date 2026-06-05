@@ -195,7 +195,7 @@ public class QoreTextNormalizeProcessor inherits AbstractDataProviderMLProcessor
     private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
         updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
         *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
-        return exists result ? cast<hash<auto>>(result) : NOTHING;
+        return exists result ? cast<hash>(result) : NOTHING;
     }
 
     #! Processes an explicitly negotiated pipeline shape without row materialization when possible

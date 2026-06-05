@@ -19,16 +19,11 @@ work uniformly across the database backends Qorus runs on (PostgreSQL, Oracle, M
 
 ## Current state
 
-Partition handling in SqlUtil today is fragmentary and read-only:
-
-- **PostgreSQL** — partitioned parent tables (`pg_class.relkind = 'p'`) are now visible to
-  `checkExistenceImpl()` / `describeImpl()` (they query `pg_class`/`pg_namespace` instead of
-  `pg_statio_all_tables`, which omits relations with no physical storage). This is the
-  prerequisite that lets SqlUtil *see* a partitioned table at all; there is no DDL.
-- **Oracle** — a SELECT-time `"partition"` qualifier only
-  (`OracleSqlUtilBase.qm`, `OracleSelectOptions`): `selectRows({"partition": "p1"})`.
-- **MySQL / SQLite / Firebird / MSSQL** — `partition` is at most a reserved word.
-- **No driver** generates add / drop / truncate / detach / exchange-partition DDL.
+SqlUtil now has range-partition lifecycle support for PostgreSQL, Oracle, MySQL/MariaDB, and
+MS SQL Server 2016+. SQLite and Firebird have no native partition support and retain `False`
+capability flags. Oracle still has an additional SELECT-time `"partition"` qualifier
+(`OracleSqlUtilBase.qm`, `OracleSelectOptions`) that is not yet unified as a generic select
+option.
 
 ## Design principles
 
@@ -86,11 +81,11 @@ bool supportsPartitionDetach();
 bool supportsAutoPartitioning();
 ```
 
-| Capability            | PostgreSQL 10+ | Oracle 12c+ | MySQL 5.7+ | SQLite | Firebird | MSSQL (later) |
-|-----------------------|:--------------:|:-----------:|:----------:|:------:|:--------:|:-------------:|
-| `supportsPartitions`        | yes      | yes         | yes        | no     | no       | yes (phase 2) |
-| `supportsPartitionDetach`   | yes      | no¹         | no         | no     | no       | no            |
-| `supportsAutoPartitioning`  | no²      | yes         | no         | no     | no       | no            |
+| Capability            | PostgreSQL 10+ | Oracle 12c+ | MySQL 5.7+ | MSSQL 2016+ | SQLite | Firebird |
+|-----------------------|:--------------:|:-----------:|:----------:|:-----------:|:------:|:--------:|
+| `supportsPartitions`        | yes      | yes         | yes        | yes         | no     | no       |
+| `supportsPartitionDetach`   | yes      | no¹         | no         | no          | no     | no       |
+| `supportsAutoPartitioning`  | no²      | yes         | no         | no          | no     | no       |
 
 ¹ Oracle can approximate detach via `EXCHANGE PARTITION`, but it requires a pre-existing
 target table with an identical shape, so the semantics are not equivalent; left unsupported
@@ -532,12 +527,12 @@ still propagate). This is the deterministic resolution; no retry loop or polling
 
 ### Per-driver mapping of the uniform operations
 
-| Operation                | PostgreSQL                                   | Oracle                              | MySQL                              |
-|--------------------------|----------------------------------------------|-------------------------------------|------------------------------------|
-| `addPartition`           | `CREATE TABLE child PARTITION OF parent FOR VALUES FROM … TO …` | `ALTER TABLE … ADD PARTITION … VALUES LESS THAN …` | `ALTER TABLE … ADD PARTITION (…)` |
-| `dropPartition` (uniform)| verify child belongs to parent, then `DROP TABLE child` | `ALTER TABLE … DROP PARTITION p`    | `ALTER TABLE … DROP PARTITION p`  |
-| `truncatePartition`      | `TRUNCATE TABLE child`                        | `ALTER TABLE … TRUNCATE PARTITION p`| `ALTER TABLE … TRUNCATE PARTITION p` |
-| `detachPartition`        | `ALTER TABLE … DETACH PARTITION child` → standalone table | unsupported (throws)    | unsupported (throws)               |
+| Operation                | PostgreSQL                                   | Oracle                              | MySQL                              | MSSQL |
+|--------------------------|----------------------------------------------|-------------------------------------|------------------------------------|-------|
+| `addPartition`           | `CREATE TABLE child PARTITION OF parent FOR VALUES FROM … TO …` | `ALTER TABLE … ADD PARTITION … VALUES LESS THAN …` | `ALTER TABLE … ADD PARTITION (…)` | `ALTER PARTITION SCHEME … NEXT USED …; ALTER PARTITION FUNCTION … SPLIT RANGE (…)` |
+| `dropPartition` (uniform)| verify child belongs to parent, then `DROP TABLE child` | `ALTER TABLE … DROP PARTITION p`    | `ALTER TABLE … DROP PARTITION p`  | `TRUNCATE TABLE … WITH (PARTITIONS (n)); ALTER PARTITION FUNCTION … MERGE RANGE (…)` |
+| `truncatePartition`      | `TRUNCATE TABLE child`                        | `ALTER TABLE … TRUNCATE PARTITION p`| `ALTER TABLE … TRUNCATE PARTITION p` | `TRUNCATE TABLE … WITH (PARTITIONS (n))` |
+| `detachPartition`        | `ALTER TABLE … DETACH PARTITION child` → standalone table | unsupported (throws)    | unsupported (throws)               | unsupported (throws) |
 
 This is what principle 1 buys: on PostgreSQL `dropPartition()` deliberately uses
 `DROP TABLE child` (data gone), matching Oracle/MySQL `DROP PARTITION`. The detach-and-keep
@@ -546,7 +541,15 @@ behaviour is only reachable through the explicit, capability-gated `detachPartit
 For Oracle/MySQL range partitioning, DDL often declares only the upper bound. The portable
 spec still carries both lower and upper bounds so SqlUtil can identify the partition
 unambiguously, verify that the intended range is contiguous with existing partitions, and
-avoid dropping the wrong driver-generated partition.
+avoid dropping the wrong driver-generated partition. SQL Server has no durable per-partition
+object names; SqlUtil exposes logical finite ranges as `p1`, `p2`, ... and records the native
+physical partition number in `PartitionInfo.driver.mssql.partition_number`, so callers that
+need stable targeting should prefer `findPartitionBySpec()`.
+
+SQL Server duplicate-boundary recovery does not use a savepoint. A live SQL Server 2022 test showed
+that a duplicate `ALTER PARTITION FUNCTION ... SPLIT RANGE` can be re-resolved by metadata after the
+error, while rolling back the helper savepoint is not reliable because SQL Server may no longer have
+a corresponding open transaction.
 
 Default-partition caveat: when a default/catch-all partition exists, `addPartition()` is not a
 pure metadata operation on every backend. PostgreSQL must scan the default partition for rows
@@ -713,7 +716,7 @@ key allow-lists.
 2. **Phase 2 — Oracle + MySQL range partitions.** Implement uniform ops; Oracle adds interval
    `auto` strategy (`supportsAutoPartitioning`); both throw `PARTITION-NOT-SUPPORTED` for
    `detachPartition`.
-3. **Phase 3 and beyond — MSSQL / other backends, list/hash partitioning, partition exchange,
+3. **Phase 3 and beyond — other backends, list/hash partitioning, partition exchange,
    and scalability follow-ups** are tracked in
    [`sqlutil-partitions-deferred.md`](sqlutil-partitions-deferred.md).
 

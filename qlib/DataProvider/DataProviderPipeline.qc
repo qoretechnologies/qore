@@ -444,12 +444,7 @@ class PipelineQueue {
         if (!elems || elems.last().typeCode() == NT_LIST) {
             return False;
         }
-        foreach auto elem in (elems) {
-            if (!(elem instanceof AbstractDataProcessor)) {
-                return False;
-            }
-        }
-        return True;
+        return all $1 instanceof AbstractDataProcessor, elems;
     }
 
     #! Processes data on the caller's thread for synchronous single-queue pipelines

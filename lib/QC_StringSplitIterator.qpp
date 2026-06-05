@@ -36,6 +36,9 @@
 
 StringSplitIterator::StringSplitIterator(const QoreStringNode* s, const QoreString* separator, int m)
         : src(const_cast<QoreStringNode*>(s)),
+          src_buf(s ? s->c_str() : nullptr),
+          src_size(s ? s->size() : 0),
+          ascii_compat(s && s->getEncoding()->isAsciiCompat()),
           sep(separator ? separator->c_str() : "", separator ? separator->size() : 0),
           mode(m) {
     if (src) {
@@ -44,7 +47,12 @@ StringSplitIterator::StringSplitIterator(const QoreStringNode* s, const QoreStri
 }
 
 StringSplitIterator::StringSplitIterator(const StringSplitIterator& old)
-        : src(old.src), sep(old.sep), mode(old.mode) {
+        : src(old.src),
+          src_buf(old.src_buf),
+          src_size(old.src_size),
+          ascii_compat(old.ascii_compat),
+          sep(old.sep),
+          mode(old.mode) {
     // Fresh iterator over the same source + delimiter, positioned at the start.
     // cursor / piece_off / piece_len / m_valid / exhausted default-initialise.
     if (src) {
@@ -68,16 +76,24 @@ bool StringSplitIterator::next(ExceptionSink* xsink) {
         m_valid = false;
         return false;
     }
-    const size_t src_len = src->size();
-
-    // SPLIT_CHARS: yield one character (codepoint) at a time.  getUnicodePointFromBytePos
-    // handles any encoding Qore supports and reports the character's byte width via out-param.
+    // SPLIT_CHARS: yield one character (codepoint) at a time.
     if (mode & SPLIT_CHARS) {
-        if (cursor >= src_len) {
+        if (cursor >= src_size) {
             exhausted = true;
             m_valid = false;
             return false;
         }
+        if (ascii_compat && static_cast<unsigned char>(src_buf[cursor]) < 0x80) {
+            piece_off = cursor;
+            piece_len = 1;
+            ++cursor;
+            if (cursor >= src_size) {
+                exhausted = true;
+            }
+            m_valid = true;
+            return true;
+        }
+
         unsigned clen = 0;
         src->getUnicodePointFromBytePos(cursor, clen, xsink);
         if (xsink && *xsink) {
@@ -92,37 +108,35 @@ bool StringSplitIterator::next(ExceptionSink* xsink) {
         piece_off = cursor;
         piece_len = clen;
         cursor += clen;
-        if (cursor >= src_len) {
+        if (cursor >= src_size) {
             exhausted = true;
         }
         m_valid = true;
         return true;
     }
 
-    const char* src_buf = src->c_str();
-
     // Empty separator: yield the whole string once, then done.
     if (sep.empty()) {
         piece_off = 0;
-        piece_len = src_len;
+        piece_len = src_size;
         exhausted = true;
         m_valid = true;
         return true;
     }
 
     // Search for the next separator starting at cursor.
-    if (cursor > src_len) {
+    if (cursor > src_size) {
         exhausted = true;
         m_valid = false;
         return false;
     }
     const char* hit = nullptr;
-    if (cursor < src_len) {
+    if (cursor < src_size) {
         // q_memmem() is libqore's portable wrapper around memmem(3); it falls
         // back to a hand-rolled scan on platforms where HAVE_MEMMEM is unset.
         // Calling memmem() directly here would break those builds.
         hit = static_cast<const char*>(
-            q_memmem(src_buf + cursor, src_len - cursor, sep.data(), sep.size()));
+            q_memmem(src_buf + cursor, src_size - cursor, sep.data(), sep.size()));
     }
     if (hit) {
         piece_off = cursor;
@@ -132,7 +146,7 @@ bool StringSplitIterator::next(ExceptionSink* xsink) {
         // No more separators — yield the trailing piece (possibly empty if
         // the string ended on a separator) and mark exhausted.
         piece_off = cursor;
-        piece_len = src_len - cursor;
+        piece_len = src_size - cursor;
         exhausted = true;
     }
     m_valid = true;

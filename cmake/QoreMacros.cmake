@@ -13,6 +13,15 @@ endif ()
 if (NOT DEFINED QORE_QJAR_COMMAND)
     set(QORE_QJAR_COMMAND ${QORE_QJAR_EXECUTABLE})
 endif ()
+if (NOT DEFINED QORE_BINARY_MODULE_INSTALL_COMPONENT)
+    set(QORE_BINARY_MODULE_INSTALL_COMPONENT Unspecified)
+endif()
+if (NOT DEFINED QORE_QM_SOURCE_INSTALL_COMPONENT)
+    set(QORE_QM_SOURCE_INSTALL_COMPONENT Unspecified)
+endif()
+if (NOT DEFINED QORE_QMOD_INSTALL_COMPONENT)
+    set(QORE_QMOD_INSTALL_COMPONENT Unspecified)
+endif()
 if (NOT DEFINED QORE_DOC_DEFINES)
     set(_QORE_DOC_DEFINES_LIST QORE_QDX_RUN)
     if (WIN32 OR MSYS OR MINGW)
@@ -278,6 +287,7 @@ MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
         endif()
         set(QORE_QM_METADATA_ENV
             "QORE_MODULE_DIR=${_qore_external_module_path}"
+            "QORE_INCLUDE_DIR="
             "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}")
         unset(_qore_external_module_path)
     endif()
@@ -368,7 +378,9 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-undefined -Wl,dynamic_lookup")
     endif(CMAKE_HOST_APPLE)
 
-    install( TARGETS ${_module_name} DESTINATION ${_mod_target_dir})
+    install(TARGETS ${_module_name}
+        DESTINATION ${_mod_target_dir}
+        COMPONENT ${QORE_BINARY_MODULE_INSTALL_COMPONENT})
 
     if (APPLE)
         # It should allow to use full path in the module reference itself. otool -L /path/to/module.qmod, 1st line.
@@ -466,7 +478,11 @@ MACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH _out_var _base_dir _relative_path)
     string(APPEND ${_out_var} "  \"${_qore_aot_remove_path}\"\n")
 ENDMACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH)
 
-MACRO (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES _name _is_dir _base_dir)
+FUNCTION (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES _name _is_dir _base_dir)
+    set(_qore_aot_remove_component_args "")
+    if (ARGC GREATER 3 AND NOT "${ARGV3}" STREQUAL "")
+        set(_qore_aot_remove_component_args COMPONENT ${ARGV3})
+    endif()
     set(_qore_aot_stale_source_qmods "")
     QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
         _qore_aot_stale_source_qmods "${_base_dir}" "${_name}.qmod")
@@ -478,8 +494,19 @@ MACRO (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES _name _is_dir _base_dir)
         QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
             _qore_aot_stale_source_qmods "${_base_dir}" "${_name}/${_name}.qmod.d")
     endif()
-    install(CODE "file(REMOVE\n${_qore_aot_stale_source_qmods})")
-ENDMACRO (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES)
+    install(CODE "file(REMOVE\n${_qore_aot_stale_source_qmods})"
+        ${_qore_aot_remove_component_args})
+ENDFUNCTION (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES)
+
+MACRO (QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL _name _is_dir)
+    QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(
+        ${_name} ${_is_dir} "${QORE_USER_MODULES_DIR}" ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+    if (DEFINED QORE_AOT_MODULES_DIR
+            AND NOT "${QORE_AOT_MODULES_DIR}" STREQUAL "${QORE_USER_MODULES_DIR}")
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(
+            ${_name} ${_is_dir} "${QORE_AOT_MODULES_DIR}" ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+    endif()
+ENDMACRO (QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL)
 
 # Emit AOT-build rules for a user module producing a .qmod via qcc.
 #
@@ -618,8 +645,9 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # builds) without making qmod rules mtime-dependent on their
     # binaries.  Previously `DEPENDS $<TARGET_FILE:qcc>` triggered all
     # 238 qmod rebuilds on any libqore relink, even for runtime-only
-    # fixes (QoreAOTRuntime.cpp, Function.cpp evalIntern, slot-reg
-    # filtering, etc.) that don't affect qmod output.
+    # fixes that don't affect qmod output.  QoreAOTRuntime.cpp is part of
+    # the stamp because it deserializes and registers slot-map metadata from
+    # qmods; stale qmods can fail at load time if that path changes.
     set(_qmod_probe_dep "")
     if (DEFINED QORE_AOT_PROBE_STAMP)
         set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
@@ -707,6 +735,9 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     if (TARGET qcc-format-version)
         add_dependencies(${_name}-qmod qcc-format-version)
     endif()
+    if (TARGET qcc-format-source-qmod-clean)
+        add_dependencies(${_name}-qmod qcc-format-source-qmod-clean)
+    endif()
     if (DEFINED QORE_AOT_BINARY_MODULE_TARGETS)
         foreach(_qore_aot_binary_module ${QORE_AOT_BINARY_MODULE_TARGETS})
             if (TARGET ${_qore_aot_binary_module})
@@ -735,17 +766,27 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod")
         QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
             _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod.d")
-        install(CODE "file(REMOVE\n${_qmod_stale_install_paths})")
-        install(FILES ${_qmod_out} DESTINATION ${_qmod_install_dir}/${_name})
+        install(CODE "file(REMOVE\n${_qmod_stale_install_paths})"
+            COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+        install(FILES ${_qmod_out}
+            DESTINATION ${_qmod_install_dir}/${_name}
+            COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
         if (_qmod_resource_srcs)
-            install(FILES ${_qmod_resource_srcs} DESTINATION ${_qmod_install_dir}/${_name})
+            install(FILES ${_qmod_resource_srcs}
+                DESTINATION ${_qmod_install_dir}/${_name}
+                COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
         endif()
         if (_qmod_jar_srcs)
-            install(FILES ${_qmod_jar_srcs} DESTINATION ${_qmod_install_dir}/${_name}/jar)
+            install(FILES ${_qmod_jar_srcs}
+                DESTINATION ${_qmod_install_dir}/${_name}/jar
+                COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
         endif()
     else()
-        install(CODE "file(REMOVE\n${_qmod_stale_install_paths})")
-        install(FILES ${_qmod_out} DESTINATION ${_qmod_install_dir})
+        install(CODE "file(REMOVE\n${_qmod_stale_install_paths})"
+            COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+        install(FILES ${_qmod_out}
+            DESTINATION ${_qmod_install_dir}
+            COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
     endif()
 ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 
@@ -902,11 +943,13 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
     endif (DOXYGEN_FOUND)
 
     # install qm file
-    install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
+    install(FILES ${_mod_targets}
+        DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}
+        COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
-        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 1 "${QORE_USER_MODULES_DIR}")
+        QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL(${f} 1)
     else()
-        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 0 "${QORE_USER_MODULES_DIR}")
+        QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL(${f} 0)
     endif()
 
     # extract and install QM metadata (automatic for user modules)
@@ -957,13 +1000,15 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         if(_um_qm_meta_files)
             add_custom_target(qm-metadata-${f} ALL
                 DEPENDS ${_um_qm_meta_files})
+            set_property(GLOBAL APPEND PROPERTY
+                QORE_QM_METADATA_TARGETS qm-metadata-${f})
             if(QORE_QM_METADATA_DEPENDS)
                 add_dependencies(qm-metadata-${f}
                     ${QORE_QM_METADATA_DEPENDS})
             endif()
             install(FILES ${_um_qm_meta_files}
-                    DESTINATION
-                        ${QORE_METADATA_DIR}/${QORE_QM_METADATA_SUBDIR})
+                DESTINATION ${QORE_METADATA_DIR}/${QORE_QM_METADATA_SUBDIR}
+                COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
         endif()
     endif()
 
@@ -1116,14 +1161,18 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     endif (DOXYGEN_FOUND)
 
     # install user module files
-    install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
+    install(FILES ${_mod_targets}
+        DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}
+        COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
-        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 1 "${QORE_USER_MODULES_DIR}")
+        QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL(${f} 1)
     else()
-        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 0 "${QORE_USER_MODULES_DIR}")
+        QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL(${f} 0)
     endif()
     if (_mod_jar_targets)
-        install(FILES ${_mod_jar_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar)
+        install(FILES ${_mod_jar_targets}
+            DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar
+            COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
         message(STATUS "called install for ${_mod_jar_targets} -> ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar")
     endif()
 
@@ -1178,6 +1227,8 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
             endif()
             add_custom_target(qm-metadata-${f} ALL
                 DEPENDS ${_ext_qm_meta_files})
+            set_property(GLOBAL APPEND PROPERTY
+                QORE_QM_METADATA_TARGETS qm-metadata-${f})
             add_dependencies(${_external_module_name}-qm-metadata
                 qm-metadata-${f})
             if(QORE_QM_METADATA_DEPENDS)
@@ -1185,8 +1236,8 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
                     ${QORE_QM_METADATA_DEPENDS})
             endif()
             install(FILES ${_ext_qm_meta_files}
-                    DESTINATION
-                        ${QORE_METADATA_DIR}/${_external_module_name})
+                DESTINATION ${QORE_METADATA_DIR}/${_external_module_name}
+                COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
         endif()
     endif()
 
@@ -1336,7 +1387,9 @@ MACRO (QORE_USER_MODULES _inputs)
             add_dependencies(docs docs-${file})
         endif (xDOXYGEN_FOUND)
         # install qm files
-        install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
+        install(FILES ${_mod_targets}
+            DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}
+            COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
     endforeach(f)
 ENDMACRO (QORE_USER_MODULES)
 
