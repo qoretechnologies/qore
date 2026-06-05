@@ -7,7 +7,7 @@ and the future work is tracked in one place.
 
 ## Implemented baseline (for reference)
 
-Range partitioning is implemented for PostgreSQL, Oracle, and MySQL/MariaDB:
+Range partitioning is implemented for PostgreSQL, Oracle, MySQL/MariaDB, and MS SQL Server 2016+:
 capability flags, hashdecls and table-description keys, `listPartitions()`,
 `findPartitionBySpec()`, the `add` / `ensure` / `drop` / `truncate` / `detach` lifecycle (plus
 `…Commit()` companions), `PARTITION BY` create DDL, `getDescriptionHash()` round-trip,
@@ -44,10 +44,29 @@ rather than overloading the range-oriented fields.
 
 ## 3. Deferred backends and read-side unification
 
-- **MSSQL** partition support (phase 3).
 - **SQLite / Firebird** — no native partitioning; capability flags stay `False`.
 - **Generic select-side `"partition"` option** — unify the existing Oracle read-side
   `"partition"` select qualifier into a driver-generic select option (currently Oracle-only).
+
+## 3a. MS SQL Server caveats
+
+MS SQL Server supports range partitioning through partition functions and partition schemes rather
+than separately named child partition objects. The SqlUtil implementation therefore exposes logical
+finite ranges as canonical names `p1`, `p2`, ... and stores the native physical partition number in
+`PartitionInfo.driver.mssql.partition_number`. These names are recomputed from boundaries and can
+shift after `SPLIT RANGE` / `MERGE RANGE`; callers that need stable targeting should prefer
+`findPartitionBySpec()` over persisting partition names.
+
+The implementation is limited to SQL Server 2016+ because generic `truncatePartition()` and
+`dropPartition()` require native `TRUNCATE TABLE ... WITH (PARTITIONS (...))`. It emits `RANGE RIGHT`
+partition functions so SqlUtil's inclusive-lower / exclusive-upper range model maps directly to SQL
+Server boundaries. Composite partition keys, default partitions, auto-created partitions, and detach
+are unsupported.
+
+Concurrent `ensurePartition()` recovery for duplicate boundaries does not use a savepoint on SQL
+Server. Live SQL Server 2022 testing showed that a duplicate `ALTER PARTITION FUNCTION ... SPLIT
+RANGE` leaves the connection usable for metadata re-resolution, while rolling back the helper
+savepoint can fail because SQL Server has no corresponding open transaction by that point.
 
 ## 4. Scalability / large-data caveats (current behavior; optimizations deferred)
 
@@ -81,8 +100,8 @@ but the following are known limits, deferred for later optimization:
 
 ## 6. Future phasing roadmap
 
-1. **Phase 3 — MSSQL and other backends as needed**, plus the generic select-side `"partition"`
-   qualifier unification (§3).
+1. **Other backends as needed**, plus the generic select-side `"partition"` qualifier unification
+   (§3).
 2. **Future method support** — list / hash partitioning, only after method-specific
    `PartitionSpec` fields, validation rules, and drop/truncate semantics are specified (§1).
 3. **Scalability follow-ups** — `DETACH … CONCURRENTLY`, targeted `findPartitionBySpec` lookup for

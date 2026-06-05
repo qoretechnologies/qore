@@ -141,6 +141,12 @@ sub parse_schema_name(string nname, reference<string> schema, reference<string> 
     }
 }
 
+#! returns the SQL Server major version year, or 0 for non-SQL Server / unknown version strings
+int sub get_mssql_server_major_year(AbstractDatasource ds) {
+    *string ver = (ds.getServerVersion() =~ x/Microsoft SQL Server ([0-9]+)/)[0];
+    return ver ? ver.toInt() : 0;
+}
+
 #! Mssql savepoint helper
 public class MssqlSavepointHelper inherits AbstractSavepointHelper {
     #! Creates the object
@@ -222,9 +228,14 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
             sql += sprintf(" with (%s)", parts.join(", "));
         }
 
-        *string ts = opt.index_filegroup ? opt.index_filegroup : filegroup;
-        if (ts)
-            sql += sprintf(" on %s", ts);
+        if (opt.mssql_partition_scheme && opt.mssql_partition_column) {
+            sql += sprintf(" on %s (%s)", opt.mssql_partition_scheme, opt.mssql_partition_column);
+        } else {
+            *string ts = opt.index_tablespace ? opt.index_tablespace : (opt.index_filegroup ? opt.index_filegroup
+                : filegroup);
+            if (ts)
+                sql += sprintf(" on %s", ts);
+        }
         return sql;
     }
 
@@ -456,6 +467,15 @@ public class MssqlUniqueConstraintCommon inherits SqlUtil::AbstractUniqueConstra
     #! adds index options onto the sql creation string
     getIndexSql(reference<string> sql, string name, *hash opts) {
         sql += sprintf(" (%s)", (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
+        if (opts.mssql_partition_scheme && opts.mssql_partition_column) {
+            sql += sprintf(" on %s (%s)", opts.mssql_partition_scheme, opts.mssql_partition_column);
+        } else {
+            *string ts = opts.index_tablespace ? opts.index_tablespace : (opts.index_filegroup ? opts.index_filegroup
+                : filegroup);
+            if (ts) {
+                sql += sprintf(" on %s", ts);
+            }
+        }
     }
 }
 
@@ -1059,7 +1079,7 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
             return False;
         }
         # set vars for MS SQL Server
-        *softint ver = (ds.getServerVersion() =~ x/Microsoft SQL Server ([0-9]+)/)[0];
+        int ver = get_mssql_server_major_year(ds);
         return ver >= 2012;
     }
 
@@ -1750,7 +1770,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         is_sybase = MssqlDatabase::isSybase(ds);
         # set vars for MS SQL Server
         if (!is_sybase) {
-            *softint ver = (ds.getServerVersion() =~ x/Microsoft SQL Server ([0-9]+)/)[0];
+            int ver = get_mssql_server_major_year(ds);
             if (ver >= 2008) {
                 ss_has_merge = True;
                 if (ver >= 2012) {
@@ -2335,9 +2355,16 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
         sql += "\n)";
 
-        *string ts = opt.data_tablespace ? opt.data_tablespace : filegroup;
-        if (ts)
-            sql += sprintf(" on %s", ts);
+        if (partitionStrategy) {
+            opt.mssql_partition_scheme = getMssqlPartitionSchemeNameUnlocked();
+            opt.mssql_partition_column = getColumnSqlName(partitionStrategy.columns[0]);
+            sql = getMssqlPartitionCreatePrefix(opt) + "\n"
+                + sql + sprintf(" on %s (%s)", opt.mssql_partition_scheme, opt.mssql_partition_column);
+        } else {
+            *string ts = opt.data_tablespace ? opt.data_tablespace : filegroup;
+            if (ts)
+                sql += sprintf(" on %s", ts);
+        }
 
         return sql;
     }
@@ -2414,6 +2441,16 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return (ex.desc =~ /Cannot insert duplicate/);
     }
 
+    #! Returns True if the exception indicates that a partition boundary already exists
+    /** SQL Server adds partitions by splitting a partition function boundary.  A concurrent roll-forward that
+        already added the requested range is detected here and re-resolved by ensurePartition().
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
+        return ex.desc =~ /already.*boundary|boundary.*already|duplicate.*boundary/i;
+    }
+
     private hash getQoreTypeMapImpl() {
         return is_sybase ? SybaseQoreTypeMap : MsQoreTypeMap;
     }
@@ -2463,7 +2500,23 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     private clearImpl() {
     }
 
+    private softlist getDropSqlImpl() {
+        list<auto> l = ();
+        l += sprintf("drop table %s", getSqlName());
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (strategy) {
+            l += sprintf("drop partition scheme %s", getMssqlPartitionSchemeNameUnlocked());
+            l += sprintf("drop partition function %s", getMssqlPartitionFunctionNameUnlocked());
+        }
+
+        return l;
+    }
+
     private setupTableImpl(hash desc, *hash opt) {
+        if (partitionStrategy) {
+            validateMssqlPartitionStrategyUnlocked("DESCRIPTION-ERROR");
+        }
     }
 
     #! returns @ref True "True" if the database links constraints to indexes (ie dropping the constraint drops the index, etc)
@@ -2481,6 +2534,149 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return False;
     }
 
+    #! returns @ref True "True" if this SQL Server version supports the full generic partition lifecycle
+    private bool supportsPartitionsImpl() {
+        return !is_sybase && getMssqlServerMajorYear() >= 2016;
+    }
+
+    #! initial SQL Server partition boundaries are emitted with the table-create DDL batch
+    private bool createPartitionsInCreateTableImpl() {
+        return True;
+    }
+
+    #! SQL Server partition DDL errors leave the connection usable for re-resolution; savepoint rollback is not
+    #! reliable for ALTER PARTITION FUNCTION duplicate-boundary failures.
+    private bool partitionDdlIsTransactionalImpl() {
+        return False;
+    }
+
+    private *hash<PartitionStrategy> getPartitionStrategyImpl() {
+        if (is_sybase) {
+            return;
+        }
+
+        *hash<auto> row = ds.selectRow("select top 1 ps.name partition_scheme, pf.name partition_function, "
+            "pf.boundary_value_on_right, c.name column_name from sys.tables t "
+            "join sys.schemas s on s.schema_id = t.schema_id "
+            "join sys.indexes i on i.object_id = t.object_id and i.index_id in (0, 1) "
+            "join sys.partition_schemes ps on ps.data_space_id = i.data_space_id "
+            "join sys.partition_functions pf on pf.function_id = ps.function_id "
+            "join sys.index_columns ic on ic.object_id = i.object_id and ic.index_id = i.index_id "
+            "and ic.partition_ordinal = 1 "
+            "join sys.columns c on c.object_id = t.object_id and c.column_id = ic.column_id "
+            "where s.name = %v and t.name = %v order by i.index_id desc", schema, name);
+        if (!row || !row.boundary_value_on_right) {
+            return;
+        }
+
+        string col = native_case ? row.column_name : row.column_name.lwr();
+        hash<PartitionStrategy> rv({
+            "method": "range",
+            "columns": (col,),
+            "driver": {
+                "mssql": {
+                    "partition_function": row.partition_function,
+                    "partition_scheme": row.partition_scheme,
+                    "boundary_value_on_right": row.boundary_value_on_right,
+                },
+            },
+        });
+        return rv;
+    }
+
+    private hash<string, PartitionInfo> getPartitionsImpl() {
+        hash<string, PartitionInfo> rv();
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (!strategy) {
+            return rv;
+        }
+        validateMssqlPartitionStrategyUnlocked("PARTITION-ERROR");
+        getColumnsUnlocked();
+
+        *hash<auto> qh = ds.select("select prv.boundary_id, convert(varchar(128), prv.value, 126) value "
+            "from sys.partition_range_values prv "
+            "join sys.partition_functions pf on pf.function_id = prv.function_id where pf.name = %v "
+            "order by prv.boundary_id", getMssqlPartitionFunctionNameUnlocked());
+
+        list<hash<auto>> bounds = ();
+        foreach hash<auto> row in (qh.contextIterator()) {
+            bounds += row;
+        }
+        if (bounds.size() < 2) {
+            return rv;
+        }
+
+        AbstractColumn col = columns{strategy.columns[0]};
+        for (int i = 0; i < bounds.size() - 1; ++i) {
+            auto bound_from = normalizeMssqlPartitionBoundaryValue(bounds[i].value, col);
+            auto bound_to = normalizeMssqlPartitionBoundaryValue(bounds[i + 1].value, col);
+            string pname = sprintf("p%d", i + 1);
+            hash<PartitionInfo> info({
+                "name": pname,
+                "method": strategy.method,
+                "columns": strategy.columns,
+                "ordinal": i,
+                "schema": schema,
+                "relation_name": pname,
+                "sql_name": sprintf("%s partition %d", getSqlName(), i + 2),
+                "is_default": False,
+                "bound_from": bound_from,
+                "bound_to": bound_to,
+                "bound_from_sql": getMssqlPartitionSqlValue(bound_from),
+                "bound_to_sql": getMssqlPartitionSqlValue(bound_to),
+                "bound_sql": sprintf("from (%s) to (%s)", getMssqlPartitionSqlValue(bound_from),
+                    getMssqlPartitionSqlValue(bound_to)),
+                "driver": {
+                    "mssql": {
+                        "partition_number": i + 2,
+                        "lower_boundary_id": bounds[i].boundary_id,
+                        "upper_boundary_id": bounds[i + 1].boundary_id,
+                        "partition_function": getMssqlPartitionFunctionNameUnlocked(),
+                        "partition_scheme": getMssqlPartitionSchemeNameUnlocked(),
+                    },
+                },
+            });
+            rv{pname} = info;
+        }
+
+        return rv;
+    }
+
+    private hash<PartitionInfo> resolveMssqlPartitionInfoUnlocked(string partition_name) {
+        hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+        if (ph.hasKey(partition_name)) {
+            return ph{partition_name};
+        }
+
+        *softint pnum = (partition_name =~ x/^p?([0-9]+)$/)[0];
+        if (exists pnum && ph.hasKey(sprintf("p%d", pnum))) {
+            return ph{sprintf("p%d", pnum)};
+        }
+
+        throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
+    }
+
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+        validateMssqlPartitionSpecUnlocked(spec);
+        auto split_value = getMssqlPartitionSplitValueUnlocked(spec);
+        return sprintf("alter partition scheme %s next used %s;\nalter partition function %s() split range (%s)",
+            getMssqlPartitionSchemeNameUnlocked(), getMssqlPartitionFilegroupSqlName(filegroup ?? "PRIMARY"),
+            getMssqlPartitionFunctionNameUnlocked(), getMssqlPartitionSqlValue(split_value));
+    }
+
+    private string getDropPartitionSqlImpl(string partition_name) {
+        hash<PartitionInfo> info = resolveMssqlPartitionInfoUnlocked(partition_name);
+        return sprintf("truncate table %s with (partitions (%d));\nalter partition function %s() merge range (%s)",
+            getSqlName(), info.driver.mssql.partition_number, getMssqlPartitionFunctionNameUnlocked(),
+            getMssqlPartitionSqlValue(info.bound_to));
+    }
+
+    private string getTruncatePartitionSqlImpl(string partition_name) {
+        hash<PartitionInfo> info = resolveMssqlPartitionInfoUnlocked(partition_name);
+        return sprintf("truncate table %s with (partitions (%d))", getSqlName(), info.driver.mssql.partition_number);
+    }
+
     #! MSSQL accepts non-unique orderby + offset/limit at the SQL level;
     #! the determinism check in AbstractTable is overly strict here.
     /** OFFSET/FETCH NEXT requires ORDER BY but does not require it to be
@@ -2490,6 +2686,232 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     */
     bool requireUniqueOrderByWithOffsetLimit() {
         return False;
+    }
+
+    private int getMssqlServerMajorYear() {
+        return get_mssql_server_major_year(ds);
+    }
+
+    private validateMssqlPartitionStrategyUnlocked(string err) {
+        if (is_sybase) {
+            throw err, sprintf("%s: Sybase does not support SqlUtil table partitioning", getDesc());
+        }
+        if (partitionStrategy.method != "range") {
+            throw err, sprintf("%s: unsupported SQL Server partition method %y", getDesc(),
+                partitionStrategy.method);
+        }
+        if (partitionStrategy.columns.size() != 1) {
+            throw err, sprintf("%s: SQL Server partition functions support exactly one partition key column; got %y",
+                getDesc(), partitionStrategy.columns);
+        }
+        if (partitionStrategy.auto) {
+            throw err, sprintf("%s: SQL Server does not support automatic range partition materialization",
+                getDesc());
+        }
+    }
+
+    private validateMssqlPartitionSpecUnlocked(hash<PartitionSpec> spec) {
+        if (spec.is_default) {
+            throw "PARTITION-ERROR", sprintf("%s: SQL Server does not support generic default partitions",
+                getDesc());
+        }
+        if (!exists spec.bound_from || !exists spec.bound_to) {
+            throw "PARTITION-ERROR", sprintf("%s: SQL Server partition operations require typed range bounds",
+                getDesc());
+        }
+        if (spec.bound_from.typeCode() == NT_LIST || spec.bound_to.typeCode() == NT_LIST) {
+            throw "PARTITION-ERROR", sprintf("%s: SQL Server partition operations support only one key column",
+                getDesc());
+        }
+    }
+
+    private string getMssqlPartitionCreatePrefix(*hash opt) {
+        validateMssqlPartitionStrategyUnlocked("PARTITION-ERROR");
+        getPartitionsUnlocked();
+        if (partitions.empty()) {
+            throw "PARTITION-ERROR", sprintf("%s: SQL Server range-partitioned tables require at least one "
+                "partition definition in the table description", getDesc());
+        }
+
+        list<hash<PartitionInfo>> plist = getMssqlSortedPartitionInfoUnlocked();
+        list<auto> boundaries = getMssqlPartitionBoundariesUnlocked(plist);
+        string pfn = getMssqlPartitionFunctionNameUnlocked();
+        string psn = getMssqlPartitionSchemeNameUnlocked();
+        string fg = getMssqlPartitionFilegroupSqlName(opt.data_tablespace ?? filegroup ?? "PRIMARY");
+        string coltype = columns{partitionStrategy.columns[0]}.getNativeTypeString();
+
+        return sprintf("if exists (select 1 from sys.partition_schemes where name = %s) "
+            "drop partition scheme %s;\n"
+            "if exists (select 1 from sys.partition_functions where name = %s) drop partition function %s;\n"
+            "create partition function %s (%s) as range right for values (%s);\n"
+            "create partition scheme %s as partition %s all to (%s)",
+            getSqlValue(psn), psn, getSqlValue(pfn), pfn, pfn, coltype,
+            (foldl $1 + ", " + $2, map getMssqlPartitionSqlValue($1), boundaries), psn, pfn, fg);
+    }
+
+    private list<hash<PartitionInfo>> getMssqlSortedPartitionInfoUnlocked() {
+        list<hash<PartitionInfo>> plist = ();
+        foreach hash<PartitionInfo> pi in (partitions.iterator()) {
+            validateMssqlPartitionSpecUnlocked(pi);
+            plist += pi;
+        }
+
+        return sort(plist, int sub (hash<PartitionInfo> l, hash<PartitionInfo> r) {
+            return l.bound_from < r.bound_from ? -1 : (l.bound_from > r.bound_from ? 1 : 0);
+        });
+    }
+
+    private list<auto> getMssqlPartitionBoundariesUnlocked(list<hash<PartitionInfo>> plist) {
+        list<auto> boundaries = (plist[0].bound_from,);
+        auto prev_to = plist[0].bound_to;
+        boundaries += prev_to;
+
+        for (int i = 1; i < plist.size(); ++i) {
+            if (plist[i].bound_from != prev_to) {
+                throw "PARTITION-ERROR", sprintf("%s: SQL Server partition %y is not contiguous with the previous "
+                    "partition; expected lower bound %y, got %y", getDesc(), plist[i].name, prev_to,
+                    plist[i].bound_from);
+            }
+            prev_to = plist[i].bound_to;
+            boundaries += prev_to;
+        }
+        return boundaries;
+    }
+
+    private bool mssqlPartitionBoundaryExistsUnlocked(auto value) {
+        foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
+            if (exists pi.bound_from && pi.bound_from == value) {
+                return True;
+            }
+            if (exists pi.bound_to && pi.bound_to == value) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private auto getMssqlPartitionSplitValueUnlocked(hash<PartitionSpec> spec) {
+        bool lower_exists = mssqlPartitionBoundaryExistsUnlocked(spec.bound_from);
+        bool upper_exists = mssqlPartitionBoundaryExistsUnlocked(spec.bound_to);
+        if (lower_exists && !upper_exists) {
+            return spec.bound_to;
+        }
+        if (upper_exists && !lower_exists) {
+            return spec.bound_from;
+        }
+
+        throw "PARTITION-ERROR", sprintf("%s: SQL Server partition %y must be contiguous with the existing "
+            "partition boundaries; got %y to %y", getDesc(), spec.name, spec.bound_from, spec.bound_to);
+    }
+
+    private string getMssqlPartitionFunctionNameUnlocked() {
+        if (partitionStrategy && partitionStrategy.driver && partitionStrategy.driver.mssql.partition_function) {
+            return partitionStrategy.driver.mssql.partition_function;
+        }
+        return getMssqlGeneratedPartitionObjectName("qore_pf");
+    }
+
+    private string getMssqlPartitionSchemeNameUnlocked() {
+        if (partitionStrategy && partitionStrategy.driver && partitionStrategy.driver.mssql.partition_scheme) {
+            return partitionStrategy.driver.mssql.partition_scheme;
+        }
+        return getMssqlGeneratedPartitionObjectName("qore_ps");
+    }
+
+    private string getMssqlGeneratedPartitionObjectName(string prefix) {
+        string base = sprintf("%s_%s_%s", prefix, schema, name);
+        base = regex_subst(base, "[^A-Za-z0-9_]", "_", RE_Global);
+        if (base.size() > 120) {
+            splice base, 120;
+        }
+        return base;
+    }
+
+    private string getMssqlPartitionFilegroupSqlName(string fg) {
+        if (fg =~ /^(\[.*\]|\".*\")$/) {
+            return fg;
+        }
+        fg = replace(fg, "]", "]]");
+        return "[" + fg + "]";
+    }
+
+    private string getMssqlPartitionSqlValue(auto value) {
+        if (value.typeCode() == NT_DATE) {
+            return TimeZone::get().date(value).format("'YYYY-MM-DD HH:mm:SS.us'");
+        }
+        return getSqlValue(value);
+    }
+
+    private auto normalizeMssqlPartitionBoundaryValue(auto value, *AbstractColumn col) {
+        if (value.typeCode() != NT_STRING || !col) {
+            return value;
+        }
+        try {
+            if (col.qore_type) {
+                switch (col.qore_type) {
+                    case Type::Int: {
+                        if (value =~ /^-?\d+$/) {
+                            return value.toInt();
+                        }
+                        break;
+                    }
+                    case Type::Float: {
+                        if (value =~ /^-?\d+(\.\d+)?$/) {
+                            return value.toFloat();
+                        }
+                        break;
+                    }
+                    case Type::Number: {
+                        if (value =~ /^-?\d+(\.\d+)?$/) {
+                            return number(value);
+                        }
+                        break;
+                    }
+                    case Type::Date: {
+                        return parseMssqlPartitionDateBoundary(value);
+                    }
+                }
+            } else if (col.getNativeTypeString().lwr() =~ /date|time/) {
+                return parseMssqlPartitionDateBoundary(value);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return value;
+    }
+
+    private date parseMssqlPartitionDateBoundary(string value) {
+        if (*list<*string> m = (value =~ x/^([A-Za-z]{3})\s+([0-9]{1,2})\s+([0-9]{4})\s+([0-9]{1,2}):([0-9]{2})(AM|PM)$/i)) {
+            int hour = m[3].toInt();
+            string ampm = m[5].upr();
+            if (ampm == "AM") {
+                if (hour == 12) {
+                    hour = 0;
+                }
+            } else if (hour < 12) {
+                hour += 12;
+            }
+            return date(sprintf("%04d-%02d-%02dT%02d:%02d:00", m[2].toInt(), getMssqlMonthNumber(m[0]),
+                m[1].toInt(), hour, m[4].toInt()));
+        }
+        return date(value);
+    }
+
+    private int getMssqlMonthNumber(string mon) {
+        switch (mon.lwr()) {
+            case "jan": return 1;
+            case "feb": return 2;
+            case "mar": return 3;
+            case "apr": return 4;
+            case "may": return 5;
+            case "jun": return 6;
+            case "jul": return 7;
+            case "aug": return 8;
+            case "sep": return 9;
+            case "oct": return 10;
+            case "nov": return 11;
+            case "dec": return 12;
+        }
+        throw "DATE-ERROR", sprintf("unsupported SQL Server month abbreviation: %y", mon);
     }
 
     #! processes a string for use in SQL select statements with "limit" but no "orderby" or "offset"

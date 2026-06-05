@@ -148,9 +148,140 @@ class FreetdsTest inherits SqlTestBase {
             table = (new Table(schema.getDatasource(), "sqlutil_test")).getTable();
 
             addTestCase("analytic/window functions", \testAnalyticFunctions());
+            addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
         }
 
         set_return_value(main());
+    }
+
+    private cleanupRangePartitionLifecycleTest(AbstractDatasource ds) {
+        string schema = ds.selectRow("select schema_name() as \"schema\"").schema;
+        string suffix = regex_subst(schema + "_mssql_partition_test", "[^A-Za-z0-9_]", "_", RE_Global);
+        ds.execRaw(sprintf("if object_id('%s.mssql_partition_test', 'U') is not null "
+            "drop table %s.mssql_partition_test", schema, schema));
+        ds.execRaw(sprintf("if exists (select 1 from sys.partition_schemes where name = 'qore_ps_%s') "
+            "drop partition scheme qore_ps_%s", suffix, suffix));
+        ds.execRaw(sprintf("if exists (select 1 from sys.partition_functions where name = 'qore_pf_%s') "
+            "drop partition function qore_pf_%s", suffix, suffix));
+        ds.commit();
+    }
+
+    private rangePartitionLifecycleTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        AbstractTable probe = AbstractTable::getTable(ds, "mssql_partition_test");
+        if (!probe.supportsPartitions()) {
+            testSkip("SQL Server partition lifecycle support requires SQL Server 2016 or newer");
+        }
+
+        cleanupRangePartitionLifecycleTest(ds);
+        on_exit {
+            try {
+                cleanupRangePartitionLifecycleTest(ds);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        AbstractTable t = AbstractTable::getTable(ds, "mssql_partition_test");
+        t.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"native_type": "datetime2", "notnull": True},
+                "v": {"qore_type": Type::String, "size": 20},
+            },
+            "primary_key": {"name": "mssql_partition_test_pk", "columns": ("id", "d")},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
+                "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
+            },
+        });
+        list<auto> create_sql = t.getCreateSql();
+        assertTrue(create_sql[0] =~ /create partition function/i);
+        assertTrue(create_sql[0] =~ /as range right/i);
+        t.createCommit();
+
+        AbstractTable rt = AbstractTable::getTable(ds, "mssql_partition_test");
+        assertEq(True, rt.supportsPartitions());
+        assertEq(False, rt.supportsPartitionDetach());
+
+        hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
+        assertEq("range", strategy.method);
+        assertEq(1, strategy.columns.size());
+        assertEq("d", strategy.columns[0]);
+
+        hash<string, PartitionInfo> parts = rt.listPartitions();
+        assertEq(2, parts.size());
+        assertEq(2026-02-01, parts.p2.bound_from);
+        assertEq(2026-03-01, parts.p2.bound_to);
+        assertEq(3, parts.p2.driver.mssql.partition_number);
+
+        hash<auto> desc = rt.getDescriptionHash({"with_partitions": True});
+        assertEq(2, desc.partitions.size());
+
+        hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        });
+        assertEq(PartitionLookupStatus::Found, lookup.status);
+        assertEq("p2", lookup.partition.name);
+
+        hash<PartitionEnsureResult> ensure = rt.ensurePartitionCommit({
+            "name": "p3",
+            "bound_from": 2026-03-01,
+            "bound_to": 2026-04-01,
+        });
+        assertEq(True, ensure.created);
+        assertEq(True, ensure.materialized);
+        assertEq(PartitionVerifiedBy::Bounds, ensure.verified_by);
+        assertEq(True, rt.listPartitions().hasKey("p3"));
+
+        ds.execRaw("insert into mssql_partition_test values (3, cast('2026-03-15' as datetime2), 'x')");
+        ds.commit();
+        assertEq(1, ds.selectRow("select count(*) c from mssql_partition_test where d >= cast('2026-03-01' "
+            "as datetime2) and d < cast('2026-04-01' as datetime2)").c);
+        rt.truncatePartitionCommit("p3");
+        assertEq(0, ds.selectRow("select count(*) c from mssql_partition_test where d >= cast('2026-03-01' "
+            "as datetime2) and d < cast('2026-04-01' as datetime2)").c);
+
+        rt.dropPartitionCommit("p3");
+        assertEq(False, rt.listPartitions().hasKey("p3"));
+
+        AbstractTable racer = AbstractTable::getTable(ds, "mssql_partition_test");
+        racer.listPartitions();
+        rt.ensurePartitionCommit({"name": "p3", "bound_from": 2026-03-01, "bound_to": 2026-04-01});
+        hash<PartitionEnsureResult> raced = racer.ensurePartitionCommit({
+            "name": "p3",
+            "bound_from": 2026-03-01,
+            "bound_to": 2026-04-01,
+        });
+        assertEq(False, raced.created, "ensurePartition() race resolves the duplicate without creating");
+        assertEq(True, raced.materialized, "ensurePartition() race resolves to a materialized partition");
+        rt.dropPartitionCommit("p3");
+
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support detaching partitions",
+            sub() {
+                rt.detachPartition("p2");
+            });
+
+        AbstractTable bad = AbstractTable::getTable(ds, "mssql_partition_test_bad");
+        assertThrows("DESCRIPTION-ERROR", "composite partition key",
+            sub() {
+                bad.setupTable({
+                    "columns": {
+                        "id": {"qore_type": Type::Int, "notnull": True},
+                        "d": {"native_type": "datetime2", "notnull": True},
+                    },
+                    "primary_key": {"name": "mssql_partition_test_bad_pk", "columns": ("id", "d")},
+                    "partition_strategy": {"method": "range", "columns": ("id", "d")},
+                    "partitions": {
+                        "p1": {"name": "p1", "bound_from": 1, "bound_to": 2},
+                    },
+                });
+            });
     }
 
     private string getResultSetSql() {
