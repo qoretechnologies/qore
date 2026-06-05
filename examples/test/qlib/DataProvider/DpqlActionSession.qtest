@@ -27,8 +27,71 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires DataProvider
+%requires reflection
 
 %exec-class DpqlActionSessionTest
+
+#! In-memory provider exposing a restricted server-side expression set, for push-down tests
+class PushdownTestProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "PushdownTestProvider",
+            "supports_read": True,
+            "supports_search_expressions": True,
+        };
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() {
+        return "pushdown-test";
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "name": new QoreDataField("name", "Name", AbstractDataProviderType::get(StringType)),
+            "age": new QoreDataField("age", "Age", AbstractDataProviderType::get(IntType)),
+        };
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        # restricted server set: equality and greater-than only (no regex, no like, ...)
+        return <DataProviderInfo>{
+            "type": "PushdownTestProvider",
+            "supports_read": True,
+            "supports_search_expressions": True,
+            "expressions": {
+                DP_SEARCH_OP_EQ: DataProviderGenericExpressions{DP_SEARCH_OP_EQ},
+                DP_SEARCH_OP_GT: DataProviderGenericExpressions{DP_SEARCH_OP_GT},
+            },
+        };
+    }
+}
+
+#! Factory for PushdownTestProvider so it is resolvable via a DPQL provider spec
+class PushdownTestFactory inherits DataProvider::AbstractDataProviderFactory {
+    private {
+        static Class cls = new Class("PushdownTestProvider");
+
+        const FactoryInfo = <DataProviderFactoryInfo>{
+            "name": "pushdown-test",
+            "desc": "push-down test data provider factory",
+        };
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return FactoryInfo;
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return PushdownTestProvider::ProviderInfo;
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}
 
 class DpqlActionSessionTest inherits QUnit::Test {
     constructor() : QUnit::Test("DpqlActionSession", "1.0") {
@@ -48,6 +111,10 @@ class DpqlActionSessionTest inherits QUnit::Test {
         addTestCase("base expressions via setter", \testBaseExpressionsSetter());
         addTestCase("base expressions merged with context", \testBaseExpressionsMergedWithContext());
         addTestCase("signature help action", \testSignatureHelp());
+        addTestCase("dpql-eval local", \testEvalLocal());
+        addTestCase("dpql-eval collection operator", \testEvalCollectionOperator());
+        addTestCase("dpql-eval parse error", \testEvalParseError());
+        addTestCase("dpql-eval push-down", \testEvalPushdown());
 
         set_return_value(main());
     }
@@ -193,6 +260,93 @@ class DpqlActionSessionTest inherits QUnit::Test {
             },
         });
         assertEq('@name == "John"', result.dpql, "Serialized DPQL should match");
+    }
+
+    private DataProvider::DpqlActionSession newEvalSession() {
+        return new DataProvider::DpqlActionSession({"base_expressions": dp_get_all_expression_info()});
+    }
+
+    testEvalLocal() {
+        DataProvider::DpqlActionSession session = newEvalSession();
+        # an expression that evaluates to True against the sample record
+        hash<auto> result = session.handleAction("dpql-eval", {
+            "text": "@age > 18",
+            "fields": getFieldInfo(),
+            "record": {"name": "John", "age": 25},
+        });
+        assertTrue(result.success, "Expression should verify");
+        assertTrue(result.evaluation.executed, "Expression should evaluate locally");
+        assertEq(True, result.evaluation.result, "age 25 > 18 is True");
+
+        # a valid expression that evaluates to False still verifies (it ran correctly)
+        result = session.handleAction("dpql-eval", {
+            "text": "@age > 18",
+            "fields": getFieldInfo(),
+            "record": {"name": "Jane", "age": 10},
+        });
+        assertTrue(result.success, "Valid expression evaluating to False still verifies");
+        assertEq(False, result.evaluation.result, "age 10 > 18 is False");
+    }
+
+    testEvalCollectionOperator() {
+        DataProvider::DpqlActionSession session = newEvalSession();
+        # the streaming/collection "any" operator over a list-valued field
+        hash<auto> result = session.handleAction("dpql-eval", {
+            "text": "any @value >= 90, @scores",
+            "record": {"scores": (80, 95, 70)},
+        });
+        assertTrue(result.success, "Collection-operator expression should verify");
+        assertEq(True, result.evaluation.result, "a score >= 90 exists -> True");
+
+        result = session.handleAction("dpql-eval", {
+            "text": "any @value >= 90, @scores",
+            "record": {"scores": (80, 85, 70)},
+        });
+        assertEq(False, result.evaluation.result, "no score >= 90 -> False");
+    }
+
+    testEvalParseError() {
+        DataProvider::DpqlActionSession session = newEvalSession();
+        hash<auto> result = session.handleAction("dpql-eval", {
+            "text": "@age > ",
+            "record": {"age": 25},
+        });
+        assertFalse(result.success, "Broken expression should not verify");
+        assertTrue(result.diagnostics.size() > 0, "Should return diagnostics");
+    }
+
+    testEvalPushdown() {
+        try {
+            DataProvider::registerFactory(new PushdownTestFactory());
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PROVIDER-ERROR") {
+                rethrow;
+            }
+        }
+        DataProvider::DpqlActionSession session = newEvalSession();
+        session.handleAction("dpql-set-context", {"provider": "pushdown-test{}"});
+        session.setSearchContext(True);
+
+        # an operator the provider supports server-side (>) -> fully pushdownable, verifies
+        hash<auto> r1 = session.handleAction("dpql-eval", {
+            "text": "@age > 18",
+            "record": {"name": "John", "age": 25},
+        });
+        assertTrue(r1.hasKey("pushdown"), "push-down classification present in search context");
+        assertEq(True, r1.pushdown.fully_pushdownable, "'>' is server-supported -> pushdownable");
+        assertTrue(r1.success, "server-supported and evaluates -> verified");
+        assertEq(True, r1.evaluation.result, "25 > 18 -> True");
+
+        # an operator the provider does NOT support server-side (regex) -> not pushdownable,
+        # but still executable client-side, so it verifies with pushdown=False (the caller
+        # learns the operator would be evaluated client-side rather than on the server)
+        hash<auto> r2 = session.handleAction("dpql-eval", {
+            "text": "@name =~ /John/",
+            "record": {"name": "John", "age": 25},
+        });
+        assertEq(False, r2.pushdown.fully_pushdownable, "regex not in server set -> not pushdownable");
+        assertTrue(r2.success, "regex is still evaluable client-side -> verifies");
+        assertEq(True, r2.evaluation.result, "\"John\" matches /John/ -> True");
     }
 
     testSchemaAwareKeyCompletions() {
