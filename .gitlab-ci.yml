@@ -40,7 +40,7 @@ variables:
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
     - amd64
@@ -55,7 +55,7 @@ build-ubuntu-amd64:
 
 build-ubuntu-arm64:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit-arm64
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
   tags:
     - k8s
     - arm64
@@ -70,7 +70,7 @@ build-ubuntu-arm64:
 
 build-alpine-amd64:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit-alpine
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
     - k8s
     - amd64
@@ -85,7 +85,7 @@ build-alpine-amd64:
 
 build-alpine-arm64:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit-alpine-arm64
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
   tags:
     - k8s
     - arm64
@@ -100,7 +100,7 @@ build-alpine-arm64:
 
 build-perf:
   stage: build
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
     - amd64
@@ -119,7 +119,7 @@ test-ubuntu-amd64:
   parallel: 2
   timeout: 75 minutes
   needs: [build-ubuntu-amd64]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
     - amd64
@@ -150,7 +150,7 @@ test-ubuntu-arm64:
   parallel: 2
   timeout: 75 minutes
   needs: [build-ubuntu-arm64]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit-arm64
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
   tags:
     - k8s
     - arm64
@@ -181,7 +181,7 @@ test-alpine-amd64:
   parallel: 2
   timeout: 75 minutes
   needs: [build-alpine-amd64]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit-alpine
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
     - k8s
     - amd64
@@ -212,7 +212,7 @@ test-alpine-arm64:
   parallel: 2
   timeout: 75 minutes
   needs: [build-alpine-arm64]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit-alpine-arm64
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
   tags:
     - k8s
     - arm64
@@ -242,7 +242,7 @@ test-ir-ubuntu-amd64:
   stage: test
   parallel: 2
   needs: [build-ubuntu-amd64]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
     - amd64
@@ -279,7 +279,7 @@ test-jit-ubuntu-amd64:
   stage: test
   parallel: 2
   needs: [build-ubuntu-amd64]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
     - amd64
@@ -316,7 +316,7 @@ test-tiered-ubuntu-amd64:
   stage: test
   parallel: 2
   needs: [build-ubuntu-amd64]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
     - amd64
@@ -387,7 +387,7 @@ test-perf:
   stage: test
   timeout: 75 minutes
   needs: [build-perf]
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
     - amd64
