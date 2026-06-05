@@ -337,6 +337,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("tables populate FK ordering", \tablesPopulateFkOrderingTest());
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("partition enhancements", \partitionEnhancementsTest());
         }
 
         set_return_value(main());
@@ -1146,6 +1147,102 @@ class PgsqlTest inherits SqlTestBase {
         hash<auto> reversed = (new SchemaReverse::TableReverse(ds, parent, {"with_partitions": True})).toQore();
         assertTrue(reversed.hasKey("partition_strategy"), "SchemaReverse includes partition strategy");
         assertTrue(reversed.partitions.hasKey(p1), "SchemaReverse includes partitions with option");
+    }
+
+    partitionEnhancementsTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        on_exit ds.rollback();
+
+        string parent = "pgsql_part_enh";
+        code drop_if_exists = sub (string n) {
+            PgsqlTable t(ds, n);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        };
+        list<string> children = (parent + "_a", parent + "_b", parent + "_c", parent + "_def",
+            parent + "_order", parent + "_race");
+        code cleanup = sub () {
+            map drop_if_exists($1), children;
+            drop_if_exists(parent);
+        };
+        cleanup();
+        on_exit cleanup();
+
+        PgsqlTable tmpl(ds, parent);
+        tmpl.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "val": {"qore_type": Type::Int},
+            },
+            "partition_strategy": {"method": "range", "columns": ("id",)},
+        });
+        tmpl.createCommit();
+
+        PgsqlTable t(ds, parent);
+
+        # --- lower-bound ordering + zero-bound parsing + is_default (created deliberately out of order) ---
+        t.addPartitionCommit({"name": parent + "_b", "bound_from": 200, "bound_to": 300});
+        t.addPartitionCommit({"name": parent + "_a", "bound_from": 0, "bound_to": 100});
+        t.addPartitionCommit({"name": parent + "_c", "bound_from": 100, "bound_to": 200});
+        t.addPartitionCommit({"name": parent + "_def", "is_default": True});
+        t.clear();
+
+        hash<string, PartitionInfo> parts = t.listPartitions();
+        assertEq((parent + "_a", parent + "_c", parent + "_b", parent + "_def"), keys parts,
+            "partitions ordered by ascending lower bound with the default partition last");
+        assertEq(0, parts{parent + "_a"}.bound_from, "zero lower bound parsed (not discarded as false)");
+        assertTrue(parts{parent + "_def"}.is_default, "default partition flagged is_default");
+        assertFalse(parts{parent + "_a"}.is_default, "range partition not flagged is_default");
+
+        # --- detachPartition() returns the standalone table and keeps its data ---
+        ds.execRaw(sprintf("insert into %s (id, val) values (5, 50)", parent));
+        ds.commit();
+        AbstractTable detached = t.detachPartition(parent + "_a");
+        ds.commit();
+        assertEq(parent + "_a", detached.getName(), "detachPartition() returns the detached standalone table");
+        assertEq(1, ds.selectRow(sprintf("select count(1) c from %s", parent + "_a")).c,
+            "detached standalone table keeps its data");
+        t.clear();
+        assertFalse(t.listPartitions().hasKey(parent + "_a"), "detached partition removed from the parent");
+        drop_if_exists(parent + "_a");
+
+        # --- detach callback uses AC_Modify ---
+        int cb_ac = -1;
+        code icb = sub (string str, int ac, *string type, *string nm, *string tbl, *string nn, *string info) {
+            cb_ac = ac;
+        };
+        t.getDetachPartitionSql(parent + "_c", {"info_callback": icb});
+        assertEq(AbstractDatabase::AC_Modify, cb_ac, "detach callback emits the AC_Modify action code");
+
+        # --- reserved-word partition name is quoted in DDL and sql_name ---
+        t.addPartitionCommit({"name": parent + "_order", "bound_from": 300, "bound_to": 350});
+        # a partition whose name is a reserved word requires identifier quoting to be created at all
+        t.addPartitionCommit({"name": "order", "bound_from": 350, "bound_to": 400});
+        t.clear();
+        hash<string, PartitionInfo> rwparts = t.listPartitions();
+        assertTrue(rwparts.hasKey("order"), "reserved-word partition name created and introspected");
+        assertEq('public."order"', rwparts{"order"}.sql_name, "reserved-word partition sql_name is quoted");
+        t.dropPartitionCommit("order");
+
+        # --- ensurePartition() concurrent-create race: prime a stale cache, create the partition out of band
+        #     via a second handle, then ensurePartition must treat the duplicate CREATE as success ---
+        PgsqlTable racer(ds, parent);
+        racer.listPartitions();
+        t.addPartitionCommit({"name": parent + "_race", "bound_from": 400, "bound_to": 500});
+        hash<PartitionEnsureResult> raced = racer.ensurePartition({
+            "name": parent + "_race",
+            "bound_from": 400,
+            "bound_to": 500,
+        });
+        ds.commit();
+        assertFalse(raced.created, "ensurePartition() race resolves the duplicate without creating");
+        assertTrue(raced.materialized, "ensurePartition() race resolves to a materialized partition");
+        assertEq(PartitionVerifiedBy::Bounds, raced.verified_by, "ensurePartition() race resolved by bounds");
     }
 
     private string getResultSetSql() {

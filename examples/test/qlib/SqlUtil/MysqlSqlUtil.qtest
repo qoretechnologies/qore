@@ -310,6 +310,22 @@ class MysqlTest inherits SqlTestBase {
 
         rt.dropPartitionCommit("p3");
         assertEq(False, rt.listPartitions().hasKey("p3"));
+
+        # ensurePartition() concurrent-create race (MySQL/MariaDB auto-commits DDL, so no savepoint is used):
+        # prime a stale cache on a second handle, create the partition out of band, then ensurePartition must
+        # treat the duplicate ADD PARTITION ("Duplicate partition name") as success
+        MysqlTable racer(ds, "mysql_partition_test");
+        racer.listPartitions();
+        rt.ensurePartitionCommit({"name": "p4", "bound_from": 2026-03-01, "bound_to": 2026-04-01});
+        hash<PartitionEnsureResult> raced = racer.ensurePartitionCommit({
+            "name": "p4",
+            "bound_from": 2026-03-01,
+            "bound_to": 2026-04-01,
+        });
+        assertEq(False, raced.created, "ensurePartition() race resolves the duplicate without creating");
+        assertEq(True, raced.materialized, "ensurePartition() race resolves to a materialized partition");
+        rt.dropPartitionCommit("p4");
+
         assertThrows("PARTITION-NOT-SUPPORTED", "does not support detaching partitions",
             sub() {
                 rt.detachPartition("p2");
