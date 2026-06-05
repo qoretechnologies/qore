@@ -4036,12 +4036,12 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
 
     private string getDropPartitionSqlImpl(string partition_name) {
         hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
-        return sprintf("alter table %s drop partition %s", getSqlName(), info.name);
+        return sprintf("alter table %s drop partition %s", getSqlName(), getColumnSqlName(info.name));
     }
 
     private string getTruncatePartitionSqlImpl(string partition_name) {
         hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
-        return sprintf("alter table %s truncate partition %s", getSqlName(), info.name);
+        return sprintf("alter table %s truncate partition %s", getSqlName(), getColumnSqlName(info.name));
     }
 
     private bool partitionAutoStrategyCoversSpecImpl(hash<PartitionSpec> spec) {
@@ -4078,7 +4078,7 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         if (!spec.name) {
             throw "PARTITION-ERROR", sprintf("%s: Oracle partition name is required", getDesc());
         }
-        return sprintf("partition %s %s", spec.name, getOraclePartitionBoundSql(spec));
+        return sprintf("partition %s %s", getColumnSqlName(spec.name), getOraclePartitionBoundSql(spec));
     }
 
     private string getOraclePartitionBoundSql(hash<PartitionSpec> spec) {

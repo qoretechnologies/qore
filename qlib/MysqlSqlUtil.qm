@@ -2713,12 +2713,12 @@ end";
 
         private string getDropPartitionSqlImpl(string partition_name) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
-            return sprintf("alter table %s drop partition %s", getSqlName(), info.name);
+            return sprintf("alter table %s drop partition %s", getSqlName(), getColumnSqlName(info.name));
         }
 
         private string getTruncatePartitionSqlImpl(string partition_name) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
-            return sprintf("alter table %s truncate partition %s", getSqlName(), info.name);
+            return sprintf("alter table %s truncate partition %s", getSqlName(), getColumnSqlName(info.name));
         }
 
         private assertNoMysqlDefaultPartitionForAddUnlocked(hash<PartitionSpec> spec) {
@@ -2737,7 +2737,7 @@ end";
             if (!spec.name) {
                 throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB partition name is required", getDesc());
             }
-            return sprintf("partition %s %s", spec.name, getMysqlPartitionBoundSql(spec));
+            return sprintf("partition %s %s", getColumnSqlName(spec.name), getMysqlPartitionBoundSql(spec));
         }
 
         private string getMysqlPartitionBoundSql(hash<PartitionSpec> spec) {

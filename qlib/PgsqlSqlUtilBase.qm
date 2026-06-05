@@ -4002,7 +4002,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "ordinal": ordinal++,
                 "schema": row.schema,
                 "relation_name": row.relation_name,
-                "sql_name": sprintf("%s.%s", row.schema, row.relation_name),
+                "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
                 "bound_sql": row.bound_sql,
                 "is_default": False,
             });
@@ -4015,6 +4015,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private string getCanonicalPartitionName(string pschema, string pname) {
         return pschema == "public" ? pname : sprintf("%s.%s", pschema, pname);
+    }
+
+    #! returns a schema-qualified, identifier-quoted SQL name for a partition relation
+    /** partition and schema names are identifiers, not SQL fragments; they are quoted through getColumnSqlName()
+        (the table's identifier-quoting helper, which quotes reserved words) so reserved words and special
+        characters are handled safely.  The result is suitable for use as PartitionInfo::sql_name and in generated
+        DDL.
+
+        @since PgsqlSqlUtilBase 1.9
+    */
+    private string getQuotedPartitionSqlName(string pschema, string relation_name) {
+        return sprintf("%s.%s", getColumnSqlName(pschema), getColumnSqlName(relation_name));
     }
 
     private hash<auto> parsePartitionRelationName(string partition_name) {
@@ -4032,11 +4044,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return spec.sql_name;
         }
         if (spec.schema && spec.relation_name) {
-            return sprintf("%s.%s", spec.schema, spec.relation_name);
+            return getQuotedPartitionSqlName(spec.schema, spec.relation_name);
         }
 
         hash<auto> rel = parsePartitionRelationName(spec.name);
-        return sprintf("%s.%s", rel.schema, rel.name);
+        return getQuotedPartitionSqlName(rel.schema, rel.name);
     }
 
     private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
@@ -4062,7 +4074,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "ordinal": 0,
             "schema": row.schema,
             "relation_name": row.relation_name,
-            "sql_name": sprintf("%s.%s", row.schema, row.relation_name),
+            "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
         });
         return info;
     }
