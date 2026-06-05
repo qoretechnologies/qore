@@ -4405,6 +4405,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
     };
+    auto updateClosureCacheInt = [&](const LocalVar* lv, int64_t value) {
+        if (lv && lv->closureUse()) {
+            auto cit = closures.find(lv);
+            if (cit != closures.end()) {
+                cit->second.discard(xsink);
+                cit->second = QoreValue(value);
+            }
+        }
+    };
     auto invalidateLValuePathClosureCache = [&](const QoreIRLValuePathInstruction* path_inst) {
         if (!path_inst || path_inst->path.empty()) {
             return;
@@ -7006,6 +7015,12 @@ load_local_done:
                     if (fused_inst->target->closureUse()) {
                         // Closure-use variable: write through cvstack, not lvstack
                         assignClosureVarValue(fused_inst->target, QoreValue(result_val), xsink);
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        updateClosureCacheInt(fused_inst->target, result_val);
                     } else if (fused_inst->target_slot_id < locals_lvar_cache.size()) {
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->target_slot_id];
@@ -7038,6 +7053,7 @@ load_local_done:
                         if (fused_inst->slot_id < locals_slot_cache.size()) {
                             locals_slot_cache[fused_inst->slot_id] = QoreValue(result_val);
                         }
+                        updateClosureCacheInt(fused_inst->local, result_val);
                         markParentSlotDirty(fused_inst->slot_id);
                         if (fused_inst->result.isValid()) {
                             setValueSlot(values, fused_inst->result.id, QoreValue(result_val), xsink);
@@ -7087,6 +7103,12 @@ load_local_done:
                     if (fused_inst->local->closureUse()) {
                         // Closure-use variable: write through cvstack, not lvstack
                         assignClosureVarValue(fused_inst->local, QoreValue(result_val), xsink);
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        updateClosureCacheInt(fused_inst->local, result_val);
                     } else if (fused_inst->slot_id < locals_lvar_cache.size()) {
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->slot_id];

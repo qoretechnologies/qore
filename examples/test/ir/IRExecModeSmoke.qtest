@@ -154,6 +154,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR closure call smoke", \testIrClosureCallSmoke());
         addTestCase("IR reference argument smoke", \testIrReferenceArgumentSmoke());
         addTestCase("IR reference shift assignment smoke", \testIrReferenceShiftAssignment());
+        addTestCase("IR tiered fused closure increment cache", \testIrTieredFusedClosureIncrementCache());
         addTestCase("IR runtime constant smoke", \testIrRuntimeConstantSmoke());
         addTestCase("IR backquote smoke", \testIrBackquoteSmoke());
         addTestCase("IR typed list construction smoke", \testIrTypedListConstructionSmoke());
@@ -5386,6 +5387,45 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("32\n16\n", stdout_output, "Unexpected IR reference shift assignment output");
+    }
+
+    testIrTieredFusedClosureIncrementCache() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("bool sub touch(reference<int> r) { return False; }\n");
+        script.file.write("int sub f() {\n");
+        script.file.write("    int i = 0;\n");
+        script.file.write("    int first = i;\n");
+        script.file.write("    if (i < -1000) { touch(\\i); }\n");
+        script.file.write("    ++i;\n");
+        script.file.write("    return i;\n");
+        script.file.write("}\n");
+        script.file.write("for (int n = 0; n < 8; ++n) { printf(\"%d\\n\", f()); }\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10 %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "tiered fused closure increment process should exit cleanly");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("1\n1\n1\n1\n1\n1\n1\n1\n", stdout_output,
+            "fused closure increment must update subsequent LoadClosure reads");
     }
 
     testIrRuntimeConstantSmoke() {
