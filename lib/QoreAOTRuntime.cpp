@@ -8547,11 +8547,11 @@ static std::string makeAOTRegistrationFailureMessage(const char* label,
 }
 
 static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
-        const uint8_t* metadata, uint32_t metadata_len,
+        const QoreAOTBinaryReader& reader,
         const char* label, std::string& error) {
     std::vector<AOTModuleCommand> commands;
     std::string read_error;
-    if (!readModuleCommands(metadata, metadata_len, commands, read_error)) {
+    if (!readModuleCommands(reader, commands, read_error)) {
         error = "AOT module-command metadata read error";
         if (label && *label) {
             error += " in ";
@@ -8607,6 +8607,23 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         (int)commands.size(), commands.size() == 1 ? "" : "s",
         label ? label : "<aot>");
     return true;
+}
+
+static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
+        const uint8_t* metadata, uint32_t metadata_len,
+        const char* label, std::string& error) {
+    QoreAOTBinaryReader reader;
+    std::string read_error;
+    if (!reader.open(metadata, metadata_len, read_error)) {
+        error = "AOT module-command metadata read error";
+        if (label && *label) {
+            error += " in ";
+            error += label;
+        }
+        error += ": " + read_error;
+        return false;
+    }
+    return applyAOTModuleCommandsToProgram(pgm, reader, label, error);
 }
 
 //! Decide whether a recorded AOT dependency that failed to load is genuinely unavailable.
@@ -11160,14 +11177,27 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         local_pgm->setScriptPath(module_context_path);
     }
 
+    QoreAOTBinaryReader metadata_reader;
+    {
+        std::string reader_error;
+        if (!metadata_reader.open(metadata, static_cast<uint32_t>(metadata_len), reader_error)) {
+            QoreStringNode* err = new QoreStringNodeMaker(
+                "AOT module metadata read error for module '%s' (%s): %s",
+                mod_name ? mod_name : "<unknown>",
+                (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
+                reader_error.c_str());
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
+    }
+
     // Apply inherited plus compiled-in module path lists BEFORE loading
     // dependencies; source modules inherit the requiring Program's search
     // surface before their own directives are applied.
     {
         std::vector<std::string> prepended, appended;
         std::string mp_error;
-        if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
-                prepended, appended, mp_error)) {
+        if (readModulePathLists(metadata_reader, prepended, appended, mp_error)) {
             inheritAOTModulePathLists(local_pgm, parent_pgm, prepended, appended);
         } else {
             inheritAOTModulePathLists(local_pgm, parent_pgm);
@@ -11176,8 +11206,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     {
         std::string cmd_error;
-        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata,
-                static_cast<uint32_t>(metadata_len), module_context_path, cmd_error)) {
+        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata_reader, module_context_path, cmd_error)) {
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
@@ -11193,7 +11222,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // base classes, types, and other references from dependency modules.
     std::vector<std::string> deps;
     std::string dep_error;
-    if (!readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
+    if (!readDependencies(metadata_reader, deps, dep_error)) {
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
@@ -11206,7 +11235,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // Read reexported module names from metadata
     std::vector<std::string> reexport_deps;
     std::string reexport_error;
-    if (!readReexportModules(metadata, static_cast<uint32_t>(metadata_len), reexport_deps, reexport_error)) {
+    if (!readReexportModules(metadata_reader, reexport_deps, reexport_error)) {
         printd(0, "AOT module v3 '%s': WARNING - failed to read reexport modules: %s\n",
             mod_name, reexport_error.c_str());
         // Non-fatal — continue without reexport info
@@ -11278,7 +11307,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                 xsink.clear();
                 parse_ctx_failed = true;
             } else if (!deserializer.deserializeIntoProgram(local_pgm,
-                    metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
+                    std::move(metadata_reader), deser_error)) {
                 deser_failed = true;
             }
         }
@@ -11408,8 +11437,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     std::vector<AOTInitFuncDescriptor> init_descriptors;
     {
         std::string init_error;
-        if (readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
-                init_descriptors, init_error)) {
+        if (readInitFuncs(deserializer.getReader(), init_descriptors, init_error)) {
             printd(2, "AOT v3 '%s': read %d init descriptors, deferring for ns_init\n",
                 mod_name, (int)init_descriptors.size());
             if (aotInitTraceEnabled()) {

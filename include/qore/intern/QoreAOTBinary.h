@@ -840,6 +840,8 @@ void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::s
     @return true on success, false on failure
 */
 bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error);
+bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
+        std::string& error);
 
 //! Serialize reexported module names into the REEXPORT_MODULES binary section
 /** Writes the list of modules that should be reexported when this module is imported.
@@ -862,6 +864,8 @@ void serializeReexportModules(QoreAOTBinaryWriter& writer, const std::vector<std
     @return true on success, false on failure
 */
 bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::string>& reexport_modules, std::string& error);
+bool readReexportModules(const QoreAOTBinaryReader& reader, std::vector<std::string>& reexport_modules,
+        std::string& error);
 
 //! Serialize the per-Program %prepend-module-path / %append-module-path lists
 //! into MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections (if non-empty).
@@ -943,6 +947,7 @@ void serializeProgramMetadata(QoreAOTBinaryWriter& writer, const char* exec_clas
     @return true on success, false on failure (missing section is not an error)
 */
 bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_class_name, std::string& error);
+bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_class_name, std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).
@@ -1469,6 +1474,8 @@ struct AOTInitFuncDescriptor {
 */
 bool readInitFuncs(const uint8_t* data, uint32_t size,
     std::vector<AOTInitFuncDescriptor>& init_funcs, std::string& error);
+bool readInitFuncs(const QoreAOTBinaryReader& reader,
+    std::vector<AOTInitFuncDescriptor>& init_funcs, std::string& error);
 
 // ---- Namespace Deserialization (Phase 4) ----
 
@@ -1761,6 +1768,7 @@ private:
     bool deserializeFallbackSources(std::string& error);
     bool commitDeserializedClasses(std::string& error);
     const QoreProgramLocation* getBlobLocation(int16_t start_line = 0, int16_t end_line = 0) const;
+    bool deserializeShellsFromOpenReader(std::string& error);
 
 public:
     //! Phase 4 slice 10: phase-1 entry point — open blob, create type
@@ -1781,6 +1789,8 @@ public:
     */
     bool openAndDeserializeShells(QoreProgram* in_pgm, const uint8_t* data,
             uint32_t size, std::string& error);
+    bool openAndDeserializeShells(QoreProgram* in_pgm, QoreAOTBinaryReader&& open_reader,
+            std::string& error);
 
     //! Swap in a caller-owned type-cache map so this session's
     //! resolver shares lookup results with sibling sessions.
@@ -1980,6 +1990,7 @@ public:
         @return true on success, false on failure
     */
     bool deserializeIntoProgram(QoreProgram* pgm, const uint8_t* data, uint32_t size, std::string& error);
+    bool deserializeIntoProgram(QoreProgram* pgm, QoreAOTBinaryReader&& open_reader, std::string& error);
 
     //! Get the reader for access to header info after deserialization
     const QoreAOTBinaryReader& getReader() const { return reader; }

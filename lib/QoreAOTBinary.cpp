@@ -8397,7 +8397,11 @@ bool readInitFuncs(const uint8_t* data, uint32_t size,
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return readInitFuncs(reader, init_funcs, error);
+}
 
+bool readInitFuncs(const QoreAOTBinaryReader& reader,
+        std::vector<AOTInitFuncDescriptor>& init_funcs, std::string& error) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::INIT_FUNCS);
     if (!sec) {
         // No init funcs section — this is OK
@@ -9368,6 +9372,17 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return deserializeShellsFromOpenReader(error);
+}
+
+bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
+        QoreAOTBinaryReader&& open_reader, std::string& error) {
+    pgm = in_pgm;
+    reader = std::move(open_reader);
+    return deserializeShellsFromOpenReader(error);
+}
+
+bool QoreAOTBinaryDeserializer::deserializeShellsFromOpenReader(std::string& error) {
     if (!checkAOTFeatureCompatibility(reader, error)) {
         return false;
     }
@@ -9823,6 +9838,14 @@ bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
 bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm,
         const uint8_t* data, uint32_t size, std::string& error) {
     if (!openAndDeserializeShells(in_pgm, data, size, error)) {
+        return false;
+    }
+    return resolveAll(error);
+}
+
+bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm,
+        QoreAOTBinaryReader&& open_reader, std::string& error) {
+    if (!openAndDeserializeShells(in_pgm, std::move(open_reader), error)) {
         return false;
     }
     return resolveAll(error);
@@ -13969,7 +13992,11 @@ bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::strin
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return readDependencies(reader, dependencies, error);
+}
 
+bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
+        std::string& error) {
     // Find DEPENDENCIES section
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::DEPENDENCIES);
     if (!sec) {
@@ -14022,7 +14049,11 @@ bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::st
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return readReexportModules(reader, reexport_modules, error);
+}
 
+bool readReexportModules(const QoreAOTBinaryReader& reader, std::vector<std::string>& reexport_modules,
+        std::string& error) {
     // Find REEXPORT_MODULES section
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::REEXPORT_MODULES);
     if (!sec) {
@@ -14260,6 +14291,12 @@ bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_c
     if (!reader.open(data, size, error)) {
         return false;
     }
+    return readProgramMetadata(reader, exec_class_name, error);
+}
+
+bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_class_name,
+        std::string& error) {
+    exec_class_name.clear();
 
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::PROGRAM_METADATA);
     if (!sec) {
