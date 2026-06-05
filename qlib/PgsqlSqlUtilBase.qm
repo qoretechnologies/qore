@@ -3992,14 +3992,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
             "where pn.nspname = %v and p.relname = %v order by i.inhseqno, cn.nspname, c.relname", schema, name);
 
-        int ordinal = 0;
+        # build the partition list in the catalog (inhseqno) order first
+        list<hash<PartitionInfo>> all = ();
         foreach hash<auto> row in (qh.contextIterator()) {
             string pname = getCanonicalPartitionName(row.schema, row.relation_name);
             hash<PartitionInfo> info({
                 "name": pname,
                 "method": strategy.method,
                 "columns": strategy.columns,
-                "ordinal": ordinal++,
+                "ordinal": 0,
                 "schema": row.schema,
                 "relation_name": row.relation_name,
                 "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
@@ -4007,6 +4008,27 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "is_default": False,
             });
             populatePgPartitionBounds(\info);
+            all += info;
+        }
+
+        # order range partitions by ascending typed lower bound; partitions without a comparable scalar lower
+        # bound (default/catch-all, or composite or SQL-only bounds) keep their catalog order and sort last
+        list<hash<PartitionInfo>> ranged = ();
+        list<hash<PartitionInfo>> other = ();
+        foreach hash<PartitionInfo> info in (all) {
+            if (!info.is_default && exists info.bound_from && info.bound_from.typeCode() != NT_LIST) {
+                ranged += info;
+            } else {
+                other += info;
+            }
+        }
+        ranged = sort(ranged, int sub (hash<PartitionInfo> l, hash<PartitionInfo> r) {
+            return l.bound_from < r.bound_from ? -1 : (l.bound_from > r.bound_from ? 1 : 0);
+        });
+
+        int ordinal = 0;
+        foreach hash<PartitionInfo> info in (ranged + other) {
+            info.ordinal = ordinal++;
             rv{info.name} = info;
         }
 
@@ -4139,7 +4161,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private populatePgPartitionBounds(reference<hash<PartitionInfo>> info) {
         string bound_sql = info.bound_sql;
-        if (bound_sql =~ x/^default$/i) {
+        # NOTE: use the match operator (=~ //), not the extract operator (=~ x//): the latter has no capture
+        # groups here and returns an empty list, which is false, so the default partition was never flagged
+        if (bound_sql =~ /^default$/i) {
             info.is_default = True;
             return;
         }
