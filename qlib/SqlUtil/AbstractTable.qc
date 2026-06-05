@@ -8427,7 +8427,7 @@ string sql = table.getAlignSqlString(table2);
         validateOptionsIntern("OPTION-ERROR", getConstraintOptions(), \opt);
         l.lock();
         on_exit l.unlock();
-        return getCreateConstraintsSql(opt, cache);
+        return getCreateConstraintsSqlUnlocked(opt, cache);
     }
 
     #! returns a list of SQL strings that could be used to create other table attributes (such as comments, if supported and present) or @ref nothing if there are none

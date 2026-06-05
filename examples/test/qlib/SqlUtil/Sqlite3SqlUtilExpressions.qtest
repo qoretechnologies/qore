@@ -108,6 +108,7 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         addTestCase("create as select", \testCreateAsSelect());
         addTestCase("drop table options", \testDropTableOptions());
         addTestCase("stats preferences unsupported", \testStatsPreferencesUnsupported());
+        addTestCase("create constraints SQL", \testCreateConstraintsSql());
 
         set_return_value(main());
     }
@@ -282,6 +283,13 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
 
         assertThrows("STATS-PREFERENCES-NOT-SUPPORTED", "does not support table statistics preferences",
             \table.getSetStatsPreferencesSql(), {"incremental": True});
+    }
+
+    testCreateConstraintsSql() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *list<auto> sql = table.getCreateConstraintsSql();
+        assertEq(NOTHING, sql);
     }
 
     # --- Pattern matching tests ---
