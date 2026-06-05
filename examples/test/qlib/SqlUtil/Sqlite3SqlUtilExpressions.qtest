@@ -107,6 +107,7 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         # Generic SqlUtil CTAS API
         addTestCase("create as select", \testCreateAsSelect());
         addTestCase("drop table options", \testDropTableOptions());
+        addTestCase("stats preferences unsupported", \testStatsPreferencesUnsupported());
 
         set_return_value(main());
     }
@@ -274,6 +275,13 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         ds.commit();
         Sqlite3Table t2(ds, "sqlite3_drop_options_test");
         assertThrows("OPTION-ERROR", "cascade table drop options", \t2.getDropSql(), {"cascade": True});
+    }
+
+    testStatsPreferencesUnsupported() {
+        if (!table) { testSkip("no DB connection"); }
+
+        assertThrows("STATS-PREFERENCES-NOT-SUPPORTED", "does not support table statistics preferences",
+            \table.getSetStatsPreferencesSql(), {"incremental": True});
     }
 
     # --- Pattern matching tests ---

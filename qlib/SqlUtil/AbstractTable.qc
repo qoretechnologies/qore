@@ -278,6 +278,11 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "force": Type::Boolean,
         );
 
+        #! generic table statistics preference options
+        /** This option is currently identical to @ref AbstractDatabase::CallbackOptions.
+        */
+        const StatsPreferencesOptions = AbstractDatabase::CallbackOptions;
+
         #! generic SQL insert options
         /** In addition to any @ref SqlDataCallbackOptions, the following keys can be set for this option:
             - \c returning: a list having elements of one of the two following types:
@@ -802,6 +807,73 @@ string sql = table.getTruncateSql();
     string getTruncateSql(*hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
         return AbstractDatabase::doCallback(opt, getTruncateSqlImpl(), AbstractDatabase::AC_Truncate, "table", name);
+    }
+
+    #! sets table statistics preferences and commits or rolls back the transaction
+    /** @par Example:
+        @code{.py}
+table.setStatsPreferencesCommit({"incremental": True, "granularity": "AUTO"});
+        @endcode
+
+        @param preferences a hash keyed by statistics preference name
+        @param opt optional callback options; see @ref SqlUtil::AbstractTable::StatsPreferencesOptions for more info
+
+        @return no value
+
+        @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
+        @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
+
+        @since SqlUtil 2.4
+    */
+    setStatsPreferencesCommit(hash<auto> preferences, *hash<auto> opt) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        setStatsPreferences(preferences, opt);
+    }
+
+    #! sets table statistics preferences without transaction management
+    /** @par Example:
+        @code{.py}
+table.setStatsPreferences({"incremental": True, "granularity": "AUTO"});
+        @endcode
+
+        @param preferences a hash keyed by statistics preference name
+        @param opt optional callback options; see @ref SqlUtil::AbstractTable::StatsPreferencesOptions for more info
+
+        @return no value
+
+        @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
+        @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
+
+        @since SqlUtil 2.4
+    */
+    setStatsPreferences(hash<auto> preferences, *hash<auto> opt) {
+        map ds.execRaw($1), getSetStatsPreferencesSql(preferences, opt);
+    }
+
+    #! returns SQL to set table statistics preferences
+    /** @par Example:
+        @code{.py}
+list<auto> sql = table.getSetStatsPreferencesSql({"incremental": True, "granularity": "AUTO"});
+        @endcode
+
+        @param preferences a hash keyed by statistics preference name
+        @param opt optional callback options; see @ref SqlUtil::AbstractTable::StatsPreferencesOptions for more info
+
+        @return a list of SQL strings that can be used to set table statistics preferences
+
+        @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
+        @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
+
+        @since SqlUtil 2.4
+    */
+    list<auto> getSetStatsPreferencesSql(hash<auto> preferences, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getStatsPreferencesOptions(), \opt);
+        if (!preferences) {
+            throw "OPTION-ERROR", sprintf("%s: at least one table statistics preference is required", getDesc());
+        }
+        return AbstractDatabase::doCallback(opt, getSetStatsPreferencesSqlImpl(preferences),
+            AbstractDatabase::AC_Modify, "table statistics preferences", getSqlName());
     }
 
     #! creates the table in the database; releases the transaction lock after creating the table
@@ -8872,6 +8944,13 @@ string sql = table.getAlignSqlString(table2);
         return DropTableOptions;
     }
 
+    #! returns the table statistics preference options for this driver
+    /** override in subclasses to return driver-specific options
+    */
+    private hash<auto> getStatsPreferencesOptions() {
+        return StatsPreferencesOptions;
+    }
+
     #! returns the insert from iterator options for this driver
     /** override in subclasses to return driver-specific options
     */
@@ -9311,6 +9390,11 @@ on_exit printf("SQL> %s\n", sql);
 
     private string getTruncateSqlImpl() {
         return sprintf("truncate table %s", getSqlName());
+    }
+
+    private list<auto> getSetStatsPreferencesSqlImpl(hash<auto> preferences) {
+        throw "STATS-PREFERENCES-NOT-SUPPORTED", sprintf("%s: database driver %y does not support table statistics "
+            "preferences", getDesc(), ds.getDriverName());
     }
 
     #! tries to execute a command so that if an error occurs the current transaction status is not lost

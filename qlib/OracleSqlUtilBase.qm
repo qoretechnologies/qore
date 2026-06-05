@@ -3069,6 +3069,37 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             (opt.force || opt.cascade || opt.cascade_constraints) ? " cascade constraints" : "");
     }
 
+    private list<auto> getSetStatsPreferencesSqlImpl(hash<auto> preferences) {
+        string owner = native_case ? schema : schema.upr();
+        string table_name = native_case ? name : name.upr();
+        string sql = "begin";
+
+        foreach string pref in (preferences.keyIterator()) {
+            sql += sprintf("\n    dbms_stats.set_table_prefs(ownname => %s, tabname => %s, pname => %s, "
+                "pvalue => %s);", getSqlValue(owner), getSqlValue(table_name), getSqlValue(pref.upr()),
+                getOracleStatsPreferenceSqlValue(preferences{pref}));
+        }
+
+        sql += "\nend;";
+        list<auto> rv = ();
+        rv += sql;
+        return rv;
+    }
+
+    private string getOracleStatsPreferenceSqlValue(auto value) {
+        switch (value.typeCode()) {
+            case NT_BOOLEAN:
+                return getSqlValue(value ? "TRUE" : "FALSE");
+
+            case NT_NULL:
+            case NT_NOTHING:
+                return "null";
+
+            default:
+                return getSqlValue(string(value));
+        }
+    }
+
     private setTableInfoIntern() {
         hash<auto> row = (schema.lwr() == ds.getUserName().lwr()) ? setTable() : setSchemaTable();
 

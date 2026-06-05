@@ -39,6 +39,11 @@ or default-partition spec instead of persisting backend-specific partition names
 important for MS SQL Server, where logical names such as `p1` and `p2` can shift after partition
 function split/merge operations.
 
+The table statistics preference follow-up adds `setStatsPreferencesCommit()`,
+`setStatsPreferences()`, and `getSetStatsPreferencesSql()` on `AbstractTable`. Oracle implements
+these APIs with `DBMS_STATS.SET_TABLE_PREFS`; other drivers throw
+`STATS-PREFERENCES-NOT-SUPPORTED` until equivalent semantics are specified.
+
 ## Implementation Plan
 
 1. **Materialized query tables / CTAS** - implemented first because it removes the largest raw-SQL
@@ -59,9 +64,9 @@ function split/merge operations.
 5. **Partition-aware index and primary-key options** - add driver-neutral schema fields for local
    partition indexes where possible, with Oracle-specific `LOCAL` and `USING INDEX` support where
    the generic model cannot be fully portable.
-6. **Partition maintenance preferences** - add a table maintenance API for statistics preferences,
+6. **Partition maintenance preferences** - implemented as table statistics preference APIs,
    starting with Oracle `DBMS_STATS` incremental and granularity preferences and explicit
-   unsupported/no-op behavior on other drivers.
+   unsupported behavior on other drivers.
 7. **Partition exchange / switch** - keep deferred until table-shape
    validation and per-driver semantics are specified. Oracle `EXCHANGE PARTITION` and SQL Server
    `ALTER TABLE ... SWITCH PARTITION` are similar high-throughput primitives but are not identical.
