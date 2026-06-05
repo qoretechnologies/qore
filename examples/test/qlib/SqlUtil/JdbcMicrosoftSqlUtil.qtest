@@ -8,7 +8,8 @@
 %requires Logger
 %requires DataProvider
 %requires SqlUtil
-%requires FreetdsSqlUtil
+%requires MssqlSqlUtilBase
+%requires JdbcMicrosoftSqlUtil
 
 %requires ./SqlUtilTestBase.qm
 
@@ -134,7 +135,7 @@ class FreetdsTest inherits SqlTestBase {
             initTestData(CustomColumns);
 
             { # Make sure the DB is clear before doing the tests.
-                FreetdsTable t = new FreetdsTable(ds, "sqlutil_test");
+                MssqlTable t = new MssqlTable(ds, "sqlutil_test");
                 if (t.checkExistence())
                     t.dropCommit();
             }

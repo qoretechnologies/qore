@@ -8,6 +8,7 @@
 %requires Logger
 %requires DataProvider
 %requires SqlUtil
+%requires MssqlSqlUtilBase
 %requires FreetdsSqlUtil
 
 %requires ./SqlUtilTestBase.qm
