@@ -67,6 +67,8 @@ class CharTypeTest inherits QUnit::Test {
         assertTrue(c'a' < c'b', "char comparison");
         assertTrue(c'A' == "A", "char string equality");
         assertTrue(c'A' == 65, "char integer equality");
+        assertFalse(c'A' !~ /^A$/, "char regex negative match converts to string");
+        assertTrue(c'A' !~ /^B$/, "char regex negative non-match converts to string");
 
         assertThrows("INVALID-CHAR-CONVERSION", sub() { char c = cast<char>("ab"); }, NOTHING,
             "multi-character string cast");

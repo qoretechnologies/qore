@@ -1443,7 +1443,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 break;
             }
             case LVPathStepKind::ListIndex: {
-                int64_t idx = step.slot_id;
+                int64_t idx = step.index;
                 int64_t original_idx = idx;
                 bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
                 if (t == NT_BUFFER) {

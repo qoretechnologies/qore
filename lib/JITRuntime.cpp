@@ -1528,7 +1528,41 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_dynamic(uint64_t left, uint64_t
     return toBits(result);
 }
 
-static QoreValue qore_rt_build_selector_range(QoreValue start, QoreValue stop, ExceptionSink* xsink) {
+static QoreValue qore_rt_build_selector_range_values(int64 start, int64 stop, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), xsink);
+    size_t cancel_i = 0;
+    int64 step = start <= stop ? 1 : -1;
+    for (int64 i = start;; i += step) {
+        rv->push(QoreValue(i), xsink);
+        if (*xsink || i == stop) {
+            break;
+        }
+        if ((++cancel_i & 0x3fff) == 0 && qore_check_cancel(xsink, "range selector slice")) {
+            return QoreValue();
+        }
+    }
+    return *xsink ? QoreValue() : rv.release();
+}
+
+static QoreValue qore_rt_build_selector_range(const QoreValue& seq, QoreValue start, QoreValue stop,
+        bool negative_offsets, ExceptionSink* xsink) {
+    if (negative_offsets
+            && (start.isNothing() || stop.isNothing() || start.getAsBigInt() < 0 || stop.getAsBigInt() < 0)) {
+        int64 effective_start;
+        int64 effective_stop;
+        int64 seq_size;
+        bool has_range = QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, effective_start,
+            effective_stop, seq_size, start, stop,
+            static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (!has_range) {
+            return new QoreListNode(bigIntTypeInfo);
+        }
+        return qore_rt_build_selector_range_values(effective_start, effective_stop, xsink);
+    }
+
     if (start.isNothing()) {
         xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
         return QoreValue();
@@ -1538,32 +1572,9 @@ static QoreValue qore_rt_build_selector_range(QoreValue start, QoreValue stop, E
         return QoreValue();
     }
 
-    int64_t s = start.getAsBigInt();
-    int64_t e = stop.getAsBigInt();
-    ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), xsink);
-    size_t cancel_i = 0;
-    if (s <= e) {
-        for (int64_t i = s; ; ++i) {
-            rv->push(QoreValue(i), xsink);
-            if (*xsink || i == e) {
-                break;
-            }
-            if ((++cancel_i & 0x3fff) == 0 && qore_check_cancel(xsink, "range selector slice")) {
-                return QoreValue();
-            }
-        }
-    } else {
-        for (int64_t i = s; ; --i) {
-            rv->push(QoreValue(i), xsink);
-            if (*xsink || i == e) {
-                break;
-            }
-            if ((++cancel_i & 0x3fff) == 0 && qore_check_cancel(xsink, "range selector slice")) {
-                return QoreValue();
-            }
-        }
-    }
-    return *xsink ? QoreValue() : rv.release();
+    int64 s = start.getAsBigInt();
+    int64 e = stop.getAsBigInt();
+    return qore_rt_build_selector_range_values(s, e, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
@@ -1584,7 +1595,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
             if (is_range) {
                 QoreValue start = fromBits(selector_bits[selector_idx++]);
                 QoreValue stop = fromBits(selector_bits[selector_idx++]);
-                selector = qore_rt_build_selector_range(start, stop, xsink);
+                selector = qore_rt_build_selector_range(left, start, stop, negative_offsets, xsink);
             } else {
                 selector = fromBits(selector_bits[selector_idx++]).refSelf();
             }
@@ -1653,7 +1664,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
             if (is_range) {
                 QoreValue start = fromBits(selector_bits[selector_idx++]);
                 QoreValue stop = fromBits(selector_bits[selector_idx++]);
-                selector = qore_rt_build_selector_range(start, stop, xsink);
+                selector = qore_rt_build_selector_range(left, start, stop, negative_offsets, xsink);
             } else {
                 selector = fromBits(selector_bits[selector_idx++]).refSelf();
             }
@@ -1681,7 +1692,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
             if (is_range) {
                 QoreValue start = fromBits(selector_bits[selector_idx++]);
                 QoreValue stop = fromBits(selector_bits[selector_idx++]);
-                selector = qore_rt_build_selector_range(start, stop, xsink);
+                selector = qore_rt_build_selector_range(left, start, stop, negative_offsets, xsink);
             } else {
                 selector = fromBits(selector_bits[selector_idx++]).refSelf();
             }
@@ -8545,7 +8556,7 @@ static void patchLVPath(std::vector<LVPathStep>& path_copy,
             step.name = key_str->c_str();
         } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
             QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
-            step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+            step.index = idx_val.getAsBigInt();
         } else if (step.kind == LVPathStepKind::HashKeySlice
                 || step.kind == LVPathStepKind::ListIndexSlice
                 || step.kind == LVPathStepKind::ListRangeSlice) {
@@ -9200,12 +9211,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             } else if (last_is_list && ct == NT_LIST) {
                 lvh.ensureUnique();
                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                size_t idx = static_cast<size_t>(last_step.slot_id);
-                if (idx < l->size()) {
+                int64_t idx = last_step.index;
+                if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS) && idx < 0) {
+                    idx += static_cast<int64_t>(l->size());
+                }
+                if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
                     if (inst->unary_op == LVUnaryOp::Remove) {
-                        res = l->retrieveEntry(idx).refSelf();
+                        res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
                     }
-                    l->setEntry(idx, QoreValue(), xsink);
+                    l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                 }
                 handled_multistep_remove = true;
             } else if (last_is_hash_slice && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
@@ -9623,7 +9637,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
             step.name = key_str->c_str();
         } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
             QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
-            step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+            step.index = idx_val.getAsBigInt();
         }
     }
     QoreValue offset_val = fromBits(a_bits);

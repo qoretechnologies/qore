@@ -264,7 +264,8 @@ QoreStringNode* QoreValue::makeCharString(unsigned codepoint, const QoreEncoding
     }
 
     QoreStringNode* rv = new QoreStringNode("", enc ? enc : QCS_UTF8);
-    if (rv->concatUnicode(codepoint, xsink)) {
+    int err = xsink ? rv->concatUnicode(codepoint, xsink) : rv->concatUnicode(codepoint);
+    if (err) {
         rv->deref();
         return nullptr;
     }

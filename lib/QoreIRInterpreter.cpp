@@ -2455,6 +2455,10 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     }
 
     auto* cb = static_cast<const QoreClosureBase*>(node);
+    auto* uf = static_cast<UserClosureFunction*>(cb->getFunction());
+    if (!uf || !uf->numVariants()) {
+        return false;
+    }
     if (!caller_pgm) {
         caller_pgm = getProgram();
     }
@@ -2464,6 +2468,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
 
     struct ClosureInlineCache {
         const AbstractQoreNode* node = nullptr;
+        UserClosureFunction* function = nullptr;
         QoreProgram* caller_pgm = nullptr;
         const UserVariantBase* uvb = nullptr;
         const QoreIRFunction* callee_ir = nullptr;
@@ -2480,6 +2485,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     const QoreIRIncrementLocalIntInstruction* simple_increment = nullptr;
     unsigned num_params = 0;
     bool use_cached_metadata = closure_inline_cache.node == node
+        && closure_inline_cache.function == uf
         && closure_inline_cache.caller_pgm == caller_pgm
         && closure_inline_cache.uvb
         && closure_inline_cache.callee_ir
@@ -2498,10 +2504,6 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         simple_increment = closure_inline_cache.simple_increment;
         num_params = closure_inline_cache.num_params;
     } else {
-        auto* uf = static_cast<UserClosureFunction*>(cb->getFunction());
-        if (!uf || !uf->numVariants()) {
-            return false;
-        }
         const AbstractQoreFunctionVariant* variant = uf->first();
         uvb = variant ? variant->getUserVariantBase() : nullptr;
         if (!uvb || uvb->pgm != caller_pgm || uvb->hasCachedFunction()
@@ -2523,6 +2525,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         simple_increment = nargs == 0 ? getSimpleClosureIncrementInstruction(callee_ir) : nullptr;
         closure_inline_cache = {
             node,
+            uf,
             caller_pgm,
             uvb,
             callee_ir,
@@ -4463,7 +4466,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 step.name = key_str->c_str();
             } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
                 QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+                step.index = idx_val.getAsBigInt();
             } else if (step.kind == LVPathStepKind::HashKeySlice
                     || step.kind == LVPathStepKind::ListIndexSlice
                     || step.kind == LVPathStepKind::ListRangeSlice) {
@@ -10450,12 +10453,15 @@ load_local_done:
                         } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
                             lvh.ensureUnique();
                             QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                            size_t idx = static_cast<size_t>(last_step.slot_id);
-                            if (idx < l->size()) {
+                            int64_t idx = last_step.index;
+                            if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS) && idx < 0) {
+                                idx += static_cast<int64_t>(l->size());
+                            }
+                            if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
                                 if (path_inst->unary_op == LVUnaryOp::Remove) {
-                                    res = l->retrieveEntry(idx).refSelf();
+                                    res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
                                 }
-                                l->setEntry(idx, QoreValue(), xsink);
+                                l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                             }
                         } else if (last_step.kind == LVPathStepKind::HashKeySlice
                                 && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {

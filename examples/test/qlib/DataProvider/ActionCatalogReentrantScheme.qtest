@@ -23,7 +23,7 @@ const ReentrantScheme = "qore-test-reentrant-scheme";
 const ReentrantOuterApp = "QoreTestReentrantOuterApp";
 const ReentrantLoadedApp = "QoreTestReentrantLoadedApp";
 const ReentrantLoadedAction = "loaded-action";
-const ReentrantModule = "ActionCatalogReentrantSchemeModule";
+const ReentrantModuleFile = "ActionCatalogReentrantSchemeModule.qm";
 
 class ActionCatalogReentrantSchemeTest inherits QUnit::Test {
     constructor() : Test("DataProvider action catalog reentrant scheme test", "1.0") {
@@ -57,11 +57,11 @@ class ActionCatalogReentrantSchemeTest inherits QUnit::Test {
         }
 
         ProviderIndexUtil::setEnvironmentVariable(dir);
+        hash<string, bool> modules = {};
+        modules{normalize_dir(get_script_dir()) + DirSep + ReentrantModuleFile} = True;
         ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
             "schememap": {
-                ReentrantScheme: {
-                    ReentrantModule: True,
-                },
+                ReentrantScheme: modules,
             },
         }, 0s, {});
 

@@ -1387,6 +1387,11 @@ struct LVPathStep {
     // References an operand in the instruction's operands vector
     uint32_t operand_idx = UINT32_MAX;
 
+    // Runtime value for ListIndex steps. Keep this separate from slot_id,
+    // which is an unsigned variable/AOT slot id and cannot represent negative
+    // list or buffer indexes.
+    int64_t index = 0;
+
     // For HashKeySlice / ListIndexSlice / ListRangeSlice: SSA ids (compile time) of the N
     // sub-expressions that form the slice selector list.  Consumed by the
     // LLVM emitter / JIT runtime in declared order to read from the boxed
