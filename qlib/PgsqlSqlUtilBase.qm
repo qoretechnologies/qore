@@ -4087,6 +4087,17 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return sprintf("alter table %s detach partition %s", getSqlName(), info.sql_name);
     }
 
+    #! returns the canonical name of the standalone table that the detached partition becomes
+    /** the detached relation keeps the partition's schema and relation name; membership in this table is
+        validated separately by getDetachPartitionSqlImpl() when the detach SQL is generated
+
+        @since PgsqlSqlUtilBase 1.9
+    */
+    private string getDetachedTableNameImpl(string partition_name) {
+        hash<auto> rel = parsePartitionRelationName(partition_name);
+        return getCanonicalPartitionName(rel.schema, rel.name);
+    }
+
     private string getPgPartitionBoundSql(hash<PartitionSpec> spec) {
         if (spec.is_default) {
             return "default";

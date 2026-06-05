@@ -613,7 +613,7 @@ class OracleTest inherits SqlTestBase {
 
         rt.dropPartitionCommit("p3");
         assertEq(False, rt.listPartitions().hasKey("p3"));
-        assertThrows("PARTITION-ERROR", "does not support detaching partitions",
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support detaching partitions",
             sub() {
                 rt.detachPartition("p2");
             });

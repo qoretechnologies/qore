@@ -6506,23 +6506,37 @@ table.clear();
             clearPartitionsUnlocked();
         }
         return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name),
-            AbstractDatabase::AC_Drop, "partition", partition_name, name);
+            AbstractDatabase::AC_Modify, "partition", partition_name, name);
     }
 
     #! detaches a partition without transaction management
-    /** @since SqlUtil 2.4
+    /** Detaches the named partition from this table, turning it into a standalone table with the same name and
+        data, without dropping the data (PostgreSQL @c ALTER @c TABLE @c ... @c DETACH @c PARTITION semantics).
+
+        @param partition_name the name of the partition to detach
+        @param opt an optional hash of @ref alignment-options "alignment options"
+
+        @return the detached relation as a standalone @ref AbstractTable object constructed against the same
+        datasource; it is @b not added to any parent's @ref Tables cache, so the caller owns its lifecycle
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+
+        @since SqlUtil 2.4
     */
-    detachPartition(string partition_name, *hash<auto> opt) {
+    AbstractTable detachPartition(string partition_name, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
 
         string sql;
         bool execute;
+        string detached_name;
 
         {
             l.lock();
             on_exit l.unlock();
 
             assertPartitionDetachSupportUnlocked();
+            # resolve the detached relation's name while the partition still belongs to this table
+            detached_name = getDetachedTableNameImpl(partition_name);
             execute = inDb;
             if (execute) {
                 sql = getDetachPartitionSqlImpl(partition_name);
@@ -6538,15 +6552,22 @@ table.clear();
             on_exit l.unlock();
             clearPartitionsUnlocked();
         }
+
+        # return the detached relation as a standalone table; not added to this table's cache
+        return AbstractTable::getTable(ds, detached_name);
     }
 
     #! detaches a partition and commits the transaction
-    /** @since SqlUtil 2.4
+    /** @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+
+        @since SqlUtil 2.4
     */
-    detachPartitionCommit(string partition_name, *hash<auto> opt) {
+    AbstractTable detachPartitionCommit(string partition_name, *hash<auto> opt) {
         on_exit ds.commit();
         on_error ds.rollback();
-        detachPartition(partition_name, opt);
+        return detachPartition(partition_name, opt);
     }
 
     #! ensures that a partition matching the given specification exists
@@ -6989,7 +7010,7 @@ string sql = table.getCreateTableSql();
 
     private assertPartitionSupportUnlocked() {
         if (!supportsPartitionsImpl()) {
-            throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support table partitioning", getDesc(),
+            throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support table partitioning", getDesc(),
                 ds.getDriverName());
         }
     }
@@ -6997,7 +7018,7 @@ string sql = table.getCreateTableSql();
     private assertPartitionDetachSupportUnlocked() {
         assertPartitionSupportUnlocked();
         if (!supportsPartitionDetachImpl()) {
-            throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support detaching partitions",
+            throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions",
                 getDesc(), ds.getDriverName());
         }
     }
@@ -8961,25 +8982,36 @@ on_exit printf("SQL> %s\n", sql);
 
     #! returns SQL to add a partition
     private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
-        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support adding partitions", getDesc(),
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support adding partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to drop a partition
     private string getDropPartitionSqlImpl(string partition_name) {
-        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support dropping partitions", getDesc(),
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support dropping partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to truncate a partition
     private string getTruncatePartitionSqlImpl(string partition_name) {
-        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support truncating partitions", getDesc(),
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support truncating partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to detach a partition
     private string getDetachPartitionSqlImpl(string partition_name) {
-        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
+            ds.getDriverName());
+    }
+
+    #! returns the name of the standalone table that a detached partition becomes
+    /** detach-capable drivers override this to derive the standalone relation's name from the partition name;
+        used by detachPartition() to construct the returned @ref AbstractTable
+
+        @since SqlUtil 2.4
+    */
+    private string getDetachedTableNameImpl(string partition_name) {
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
             ds.getDriverName());
     }
 
