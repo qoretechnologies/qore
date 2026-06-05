@@ -338,6 +338,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("partition enhancements", \partitionEnhancementsTest());
+            addTestCase("partition child not listed as table", \partitionChildExclusionTest());
         }
 
         set_return_value(main());
@@ -1243,6 +1244,51 @@ class PgsqlTest inherits SqlTestBase {
         assertFalse(raced.created, "ensurePartition() race resolves the duplicate without creating");
         assertTrue(raced.materialized, "ensurePartition() race resolves to a materialized partition");
         assertEq(PartitionVerifiedBy::Bounds, raced.verified_by, "ensurePartition() race resolved by bounds");
+    }
+
+    partitionChildExclusionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        on_exit ds.rollback();
+
+        code drop_if_exists = sub (string n) {
+            PgsqlTable t(ds, n);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        };
+        list<string> names = ("pce_p1", "pce_part", "pce_ci_child", "pce_ci_parent", "pce_normal");
+        code cleanup = sub () { map drop_if_exists($1), names; };
+        cleanup();
+        on_exit cleanup();
+
+        # a partitioned table with a child partition
+        ds.execRaw("create table pce_part (id int not null) partition by range (id)");
+        ds.execRaw("create table pce_p1 partition of pce_part for values from (0) to (100)");
+        # a classic table-inheritance parent/child (NOT partitions) to guard against over-filtering
+        ds.execRaw("create table pce_ci_parent (id int)");
+        ds.execRaw("create table pce_ci_child (extra int) inherits (pce_ci_parent)");
+        # a plain table
+        ds.execRaw("create table pce_normal (id int)");
+        ds.commit();
+
+        hash<auto> listed = map {$1: True}, (new Database(ds)).listTables();
+        # PostgreSQL exposes partitions as relations, but a partition child is not a standalone logical table
+        assertTrue(listed.hasKey("pce_part"), "partitioned parent is listed");
+        assertFalse(listed.hasKey("pce_p1"), "partition child is not listed as a table");
+        # classic inheritance children are not partitions and must still be listed
+        assertTrue(listed.hasKey("pce_ci_parent"), "classic-inheritance parent is listed");
+        assertTrue(listed.hasKey("pce_ci_child"), "classic-inheritance child is still listed (not a partition)");
+        assertTrue(listed.hasKey("pce_normal"), "plain table is listed");
+
+        # the data-schema export represents the child only under the parent's partitions, never as a top table
+        hash<auto> rev = (new SchemaReverse::SchemaReverse(ds, "T", {"with_partitions": True})).toQore();
+        assertTrue(rev.tables.hasKey("pce_part"), "export includes the partitioned parent");
+        assertFalse(rev.tables.hasKey("pce_p1"), "export does not include the partition child as a top-level table");
+        assertTrue(rev.tables.pce_part.partitions.hasKey("pce_p1"), "export lists the child under the parent's partitions");
     }
 
     private string getResultSetSql() {

@@ -1546,8 +1546,19 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns a list of string table names in the database
     private list<string> listTablesImpl() {
-        string sql = "select * from information_schema.tables "
-            "where table_schema not in ('pg_catalog', 'information_schema');";
+        # NOTE: exclude partition child relations. PostgreSQL exposes each declarative partition as its own
+        # relation, but a partition is not a standalone logical table and must not appear in the table list
+        # (Oracle and MySQL already behave this way). A partition child is a pg_inherits child whose parent is a
+        # partitioned table (pg_class.relkind = 'p'). This check is version-safe (on servers without declarative
+        # partitioning the 'p' relkind simply never matches) and does not exclude classic table-inheritance
+        # children, whose parent relkind is 'r'.
+        string sql = "select t.table_schema, t.table_name from information_schema.tables t "
+            "where t.table_schema not in ('pg_catalog', 'information_schema') "
+            "and not exists (select 1 from pg_catalog.pg_inherits inh "
+            "join pg_catalog.pg_class child on child.oid = inh.inhrelid "
+            "join pg_catalog.pg_namespace cn on cn.oid = child.relnamespace "
+            "join pg_catalog.pg_class parent on parent.oid = inh.inhparent "
+            "where cn.nspname = t.table_schema and child.relname = t.table_name and parent.relkind = 'p')";
         return map
             $1.table_schema != 'public' ? sprintf("%s.%s", $1.table_schema, $1.table_name) : $1.table_name,
             ds.select(sql).contextIterator();
