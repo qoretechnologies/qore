@@ -10,9 +10,10 @@ and the future work is tracked in one place.
 Range partitioning is implemented for PostgreSQL, Oracle, MySQL/MariaDB, and MS SQL Server 2016+:
 capability flags, hashdecls and table-description keys, `listPartitions()`,
 `findPartitionBySpec()`, the `add` / `ensure` / `drop` / `truncate` / `detach` lifecycle (plus
-`…Commit()` companions), `PARTITION BY` create DDL, `getDescriptionHash()` round-trip,
-DataSchema/DataSchemaMetaSchema/SchemaReverse integration, `bin/qschema export --with-partitions`,
-and the data-schema `bin/schema-reverse`. Everything below is **not** part of that contract.
+`…Commit()` companions), lifecycle targeting by partition name or by `PartitionSpec`, `PARTITION BY`
+create DDL, `getDescriptionHash()` round-trip, DataSchema/DataSchemaMetaSchema/SchemaReverse
+integration, `bin/qschema export --with-partitions`, and the data-schema `bin/schema-reverse`.
+Everything below is **not** part of that contract.
 
 ---
 
@@ -54,8 +55,9 @@ MS SQL Server supports range partitioning through partition functions and partit
 than separately named child partition objects. The SqlUtil implementation therefore exposes logical
 finite ranges as canonical names `p1`, `p2`, ... and stores the native physical partition number in
 `PartitionInfo.driver.mssql.partition_number`. These names are recomputed from boundaries and can
-shift after `SPLIT RANGE` / `MERGE RANGE`; callers that need stable targeting should prefer
-`findPartitionBySpec()` over persisting partition names.
+shift after `SPLIT RANGE` / `MERGE RANGE`; callers that need stable targeting should prefer the
+`PartitionSpec` overloads of partition lifecycle APIs, or `findPartitionBySpec()` when they need to
+inspect the partition before acting.
 
 The implementation is limited to SQL Server 2016+ because generic `truncatePartition()` and
 `dropPartition()` require native `TRUNCATE TABLE ... WITH (PARTITIONS (...))`. It emits `RANGE RIGHT`

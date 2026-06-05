@@ -346,11 +346,13 @@ class FreetdsTest inherits SqlTestBase {
         ds.commit();
         assertEq(1, ds.selectRow("select count(*) c from mssql_partition_test where d >= cast('2026-03-01' "
             "as datetime2) and d < cast('2026-04-01' as datetime2)").c);
-        rt.truncatePartitionCommit("p3");
+        string truncate_sql = rt.getTruncatePartitionSql({"bound_from": 2026-03-01, "bound_to": 2026-04-01});
+        assertTrue(truncate_sql =~ /with \(partitions \([0-9]+\)\)/i);
+        rt.truncatePartitionCommit({"bound_from": 2026-03-01, "bound_to": 2026-04-01});
         assertEq(0, ds.selectRow("select count(*) c from mssql_partition_test where d >= cast('2026-03-01' "
             "as datetime2) and d < cast('2026-04-01' as datetime2)").c);
 
-        rt.dropPartitionCommit("p3");
+        rt.dropPartitionCommit({"bound_from": 2026-03-01, "bound_to": 2026-04-01});
         assertEq(False, rt.listPartitions().hasKey("p3"));
 
         AbstractTable racer = AbstractTable::getTable(ds, "mssql_partition_test");

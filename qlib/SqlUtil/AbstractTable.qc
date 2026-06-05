@@ -6601,6 +6601,34 @@ table.clear();
             "partition", partition_name, name);
     }
 
+    #! returns SQL to drop a partition matching the given specification
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the SQL string required to drop the resolved partition
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    string getDropPartitionSql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        on_success if (opt.sql_callback_executed) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDropPartitionSqlImpl(partition_name), AbstractDatabase::AC_Drop,
+            "partition", partition_name, name);
+    }
+
     #! drops a partition without transaction management
     /** @since SqlUtil 2.4
     */
@@ -6632,6 +6660,31 @@ table.clear();
         }
     }
 
+    #! drops a partition matching the given specification without transaction management
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    dropPartition(hash<auto> spec, *hash<auto> opt) {
+        string partition_name;
+
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionSupportUnlocked();
+            partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        }
+
+        dropPartition(partition_name, opt);
+    }
+
     #! drops a partition and commits the transaction
     /** @since SqlUtil 2.4
     */
@@ -6639,6 +6692,23 @@ table.clear();
         on_exit ds.commit();
         on_error ds.rollback();
         dropPartition(partition_name, opt);
+    }
+
+    #! drops a partition matching the given specification and commits the transaction
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    dropPartitionCommit(hash<auto> spec, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        dropPartition(spec, opt);
     }
 
     #! returns SQL to truncate a partition
@@ -6655,11 +6725,52 @@ table.clear();
             AbstractDatabase::AC_Truncate, "partition", partition_name, name);
     }
 
+    #! returns SQL to truncate a partition matching the given specification
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the SQL string required to truncate the resolved partition
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    string getTruncatePartitionSql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name),
+            AbstractDatabase::AC_Truncate, "partition", partition_name, name);
+    }
+
     #! truncates a partition without transaction management
     /** @since SqlUtil 2.4
     */
     truncatePartition(string partition_name, *hash<auto> opt) {
         string sql = getTruncatePartitionSql(partition_name, opt);
+        ds.execRaw(sql);
+    }
+
+    #! truncates a partition matching the given specification without transaction management
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    truncatePartition(hash<auto> spec, *hash<auto> opt) {
+        string sql = getTruncatePartitionSql(spec, opt);
         ds.execRaw(sql);
     }
 
@@ -6672,6 +6783,23 @@ table.clear();
         truncatePartition(partition_name, opt);
     }
 
+    #! truncates a partition matching the given specification and commits the transaction
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    truncatePartitionCommit(hash<auto> spec, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        truncatePartition(spec, opt);
+    }
+
     #! returns SQL to detach a partition
     /** @since SqlUtil 2.4
     */
@@ -6682,6 +6810,34 @@ table.clear();
         on_exit l.unlock();
 
         assertPartitionDetachSupportUnlocked();
+        on_success if (opt.sql_callback_executed) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name),
+            AbstractDatabase::AC_Modify, "partition", partition_name, name);
+    }
+
+    #! returns SQL to detach a partition matching the given specification
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the SQL string required to detach the resolved partition
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    string getDetachPartitionSql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionDetachSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
         on_success if (opt.sql_callback_executed) {
             clearPartitionsUnlocked();
         }
@@ -6737,6 +6893,33 @@ table.clear();
         return AbstractTable::getTable(ds, detached_name);
     }
 
+    #! detaches a partition matching the given specification without transaction management
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    AbstractTable detachPartition(hash<auto> spec, *hash<auto> opt) {
+        string partition_name;
+
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionDetachSupportUnlocked();
+            partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        }
+
+        return detachPartition(partition_name, opt);
+    }
+
     #! detaches a partition and commits the transaction
     /** @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
 
@@ -6748,6 +6931,25 @@ table.clear();
         on_exit ds.commit();
         on_error ds.rollback();
         return detachPartition(partition_name, opt);
+    }
+
+    #! detaches a partition matching the given specification and commits the transaction
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param opt optional alignment and callback options
+
+        @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+        @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 2.4
+    */
+    AbstractTable detachPartitionCommit(hash<auto> spec, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        return detachPartition(spec, opt);
     }
 
     #! ensures that a partition matching the given specification exists
@@ -6833,6 +7035,24 @@ table.clear();
         }
 
         return;
+    }
+
+    private string resolvePartitionNameForLifecycleSpecUnlocked(hash<auto> spec, string err) {
+        hash<PartitionSpec> ps = normalizePartitionSpecUnlocked(spec, err);
+        hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
+        if (lookup.status == PartitionLookupStatus::Found) {
+            return lookup.partition.name;
+        }
+
+        if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
+            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            if (ph.hasKey(ps.name)) {
+                return ph{ps.name}.name;
+            }
+        }
+
+        throw err, sprintf("%s: partition matching specification %y was not found%s", getDesc(), spec,
+            lookup.reason ? sprintf(": %s", lookup.reason) : "");
     }
 
     #! ensures that a partition matching the given specification exists and commits the transaction if it was created

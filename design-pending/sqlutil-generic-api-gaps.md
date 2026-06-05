@@ -33,6 +33,12 @@ The second slice adds `AbstractTable::DropTableOptions` for `dropCommit()`, `dro
   non-equivalent drops.
 - MS SQL Server, SQLite, MySQL/MariaDB, and Firebird reject cascade-like options for table drops.
 
+The partition lifecycle follow-up adds `PartitionSpec` overloads for `dropPartition*()`,
+`truncatePartition*()`, and `detachPartition*()` APIs. Callers can now target a partition by bounds
+or default-partition spec instead of persisting backend-specific partition names; this is especially
+important for MS SQL Server, where logical names such as `p1` and `p2` can shift after partition
+function split/merge operations.
+
 ## Implementation Plan
 
 1. **Materialized query tables / CTAS** - implemented first because it removes the largest raw-SQL
@@ -56,7 +62,7 @@ The second slice adds `AbstractTable::DropTableOptions` for `dropCommit()`, `dro
 6. **Partition maintenance preferences** - add a table maintenance API for statistics preferences,
    starting with Oracle `DBMS_STATS` incremental and granularity preferences and explicit
    unsupported/no-op behavior on other drivers.
-7. **Partition exchange / switch** - add a capability-gated lifecycle API only after table-shape
+7. **Partition exchange / switch** - keep deferred until table-shape
    validation and per-driver semantics are specified. Oracle `EXCHANGE PARTITION` and SQL Server
    `ALTER TABLE ... SWITCH PARTITION` are similar high-throughput primitives but are not identical.
 
