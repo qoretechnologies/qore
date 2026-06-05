@@ -3816,6 +3816,25 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return ex.desc =~ /ORA-00001/;
     }
 
+    #! Returns True if the exception indicates that the partition already exists
+    /** Oracle range partitioning is append-only at the high end, so a concurrent roll-forward manifests in one of
+        three ways when the losing instance re-issues its \c ADD \c PARTITION:
+        - ORA-14013 (duplicate partition name) when the name already exists with a higher bound;
+        - ORA-00955 (name is already used by an existing object) for the CREATE/interval partition path;
+        - ORA-14074 (partition bound must collate higher than the last partition) when the winner already extended
+          the range to the requested bound, so the bound is no longer higher than the last partition.
+
+        ORA-14074 is ambiguous (it also indicates a genuinely out-of-order bound), but treating it as a possible
+        concurrent create is safe: ensurePartition() only returns success if the partition then re-resolves by
+        bounds or by canonical name; a real ordering error resolves to neither and is re-raised as a
+        \c PARTITION-ERROR.
+
+        @since OracleSqlUtilBase 1.6
+    */
+    private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
+        return ex.desc =~ /ORA-14013|ORA-00955|ORA-14074/;
+    }
+
     private *list getAlignSqlImpl(AbstractTable t, *hash opt) {
     }
 

@@ -6562,16 +6562,9 @@ table.clear();
             assertPartitionSupportUnlocked();
             ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
 
-            hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
-            if (lookup.status == PartitionLookupStatus::Found) {
-                return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Bounds, lookup.partition);
-            }
-
-            if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
-                hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-                if (ph.hasKey(ps.name)) {
-                    return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Name, ph{ps.name});
-                }
+            *hash<PartitionEnsureResult> existing = resolveExistingPartitionUnlocked(ps);
+            if (existing) {
+                return existing;
             }
 
             if (supportsAutoPartitioningImpl() && partitionAutoStrategyCoversSpecImpl(ps)) {
@@ -6579,8 +6572,66 @@ table.clear();
             }
         }
 
-        hash<PartitionInfo> info = addPartition(ps, opt);
+        # issue: handle the concurrent-create (TOCTOU) race deterministically: if the CREATE fails because the
+        # partition already exists (another instance won the race), treat it as success by re-resolving the
+        # partition by bounds and then by canonical name; any other failure propagates unchanged.  On drivers
+        # where partition DDL is transactional (PostgreSQL), a failed statement aborts the transaction, so the
+        # CREATE is wrapped in a savepoint that is rolled back before re-resolving; no retry loop or polling
+        *AbstractSavepointHelper sp;
+        if (inDb && partitionDdlIsTransactionalImpl()) {
+            sp = getSavepointHelper();
+        }
+
+        hash<PartitionInfo> info;
+        try {
+            info = addPartition(ps, opt);
+        } catch (hash<ExceptionInfo> ex) {
+            # restore a usable transaction (and clear the savepoint so the helper's destructor does not act on it)
+            if (sp) {
+                sp.rollback();
+                delete sp;
+            }
+            if (!isPartitionExistsErrorImpl(ex)) {
+                rethrow;
+            }
+            l.lock();
+            on_exit l.unlock();
+            # the CREATE threw, so addPartition() never invalidated the cache; do it here before re-resolving
+            clearPartitionsUnlocked();
+            *hash<PartitionEnsureResult> raced = resolveExistingPartitionUnlocked(ps);
+            if (raced) {
+                return raced;
+            }
+            throw "PARTITION-ERROR", sprintf("%s: partition %y was reported as already existing but could not "
+                "be resolved by bounds or by canonical name", getDesc(), ps.name);
+        }
+        # success: release the savepoint explicitly (the destructor would otherwise do it when sp goes out of scope)
+        delete sp;
         return makePartitionEnsureResult(True, True, False, PartitionVerifiedBy::Bounds, info);
+    }
+
+    #! resolves an already-existing partition for ensurePartition(), by typed bounds and then by canonical name
+    /** @return the @ref PartitionEnsureResult for an existing partition, or @ref nothing if the partition does
+        not yet exist (neither bounds nor canonical name resolve)
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 2.4
+    */
+    private *hash<PartitionEnsureResult> resolveExistingPartitionUnlocked(hash<PartitionSpec> ps) {
+        hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
+        if (lookup.status == PartitionLookupStatus::Found) {
+            return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Bounds, lookup.partition);
+        }
+
+        if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
+            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            if (ph.hasKey(ps.name)) {
+                return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Name, ph{ps.name});
+            }
+        }
+
+        return;
     }
 
     #! ensures that a partition matching the given specification exists and commits the transaction if it was created
@@ -8930,6 +8981,29 @@ on_exit printf("SQL> %s\n", sql);
     private string getDetachPartitionSqlImpl(string partition_name) {
         throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
             ds.getDriverName());
+    }
+
+    #! returns @ref True "True" if the exception indicates that the partition already exists
+    /** used by ensurePartition() to treat a concurrent duplicate-create race as success; partition-capable
+        drivers override this to recognize the driver-specific "relation/partition already exists" error
+
+        @since SqlUtil 2.4
+    */
+    private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
+        return False;
+    }
+
+    #! returns @ref True "True" if partition DDL participates in the caller's transaction (and therefore a failed
+    #! statement aborts it)
+    /** drivers where partition DDL is transactional (e.g. PostgreSQL) return @ref True so that ensurePartition()
+        wraps the CREATE in a savepoint and can recover from a concurrent-create error by rolling back to it and
+        re-resolving; drivers that auto-commit DDL (Oracle, MySQL) inherit the default @ref False, where a failed
+        statement leaves the transaction usable and no savepoint is needed
+
+        @since SqlUtil 2.4
+    */
+    private bool partitionDdlIsTransactionalImpl() {
+        return False;
     }
 
     #! returns the type for number / numeric columns for the database so that data conversions can be handled properly

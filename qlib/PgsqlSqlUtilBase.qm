@@ -3894,6 +3894,24 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return (ex.desc =~ /duplicate key value/);
     }
 
+    #! Returns True if the exception indicates that the partition (child relation) already exists
+    /** PostgreSQL raises SQLSTATE 42P07 (\c duplicate_table) with a "relation ... already exists" message when a
+        partition is created concurrently by another connection
+
+        @since PgsqlSqlUtilBase 1.9
+    */
+    private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
+        return (ex.desc =~ /already exists/);
+    }
+
+    #! PostgreSQL partition DDL is transactional, so ensurePartition() must use a savepoint to recover from a
+    #! concurrent-create error
+    /** @since PgsqlSqlUtilBase 1.9
+    */
+    private bool partitionDdlIsTransactionalImpl() {
+        return True;
+    }
+
     private hash<auto> getQoreTypeMapImpl() {
         return QoreTypeMap;
     }
@@ -4104,7 +4122,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
 
         (*string bound_from_sql, *string bound_to_sql) = (bound_sql =~ x/^for\s+values\s+from\s*\((.*)\)\s+to\s*\((.*)\)$/i);
-        if (!bound_from_sql || !bound_to_sql) {
+        # NOTE: use "exists" rather than a boolean test; a bound value of "0" (or "") is a valid bound but is
+        # false in a boolean context, so "!bound_from_sql" would incorrectly discard zero/empty bounds
+        if (!exists bound_from_sql || !exists bound_to_sql) {
             return;
         }
 

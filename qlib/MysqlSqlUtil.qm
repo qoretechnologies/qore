@@ -2552,6 +2552,16 @@ end";
             return (ex.desc =~ /^Duplicate entry /);
         }
 
+        #! Returns True if the exception indicates that the partition already exists
+        /** MySQL raises error 1517 with a "Duplicate partition name" message when adding a partition that
+            already exists; ensurePartition() treats this as a successful concurrent create
+
+            @since MysqlSqlUtil 1.5
+        */
+        private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
+            return (ex.desc =~ /Duplicate partition name/);
+        }
+
         private hash getQoreTypeMapImpl() {
             return QoreTypeMap;
         }
