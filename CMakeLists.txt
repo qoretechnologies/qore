@@ -559,6 +559,21 @@ endif()
 # (/usr/lib/llvm-<major>/lib/libLLVM.so) to avoid leaking the development
 # directory into installed RUNPATHs and confusing dpkg-shlibdeps.
 string(REGEX MATCH "^[0-9]+" QORE_LLVM_MAJOR_VERSION "${LLVM_PACKAGE_VERSION}")
+# find_library() below caches QORE_LLVM_SYSTEM_LIBRARY / LLVM_LIBRARIES and will
+# not re-search once they are set.  When LLVM_DIR is repointed at a different
+# LLVM in an existing build tree (e.g. switching llvm-20 -> llvm-21), the cached
+# library would stay pinned to the previous version, silently mixing the new
+# headers with the old runtime library (an ABI mismatch).  Invalidate the cached
+# results whenever the resolved LLVM (cmake dir + version) differs from what they
+# were last resolved for, so find_library re-runs.
+set(_qore_llvm_lib_fingerprint "${LLVM_DIR}|${LLVM_PACKAGE_VERSION}")
+if(DEFINED QORE_LLVM_LIBRARY_FINGERPRINT AND
+        NOT QORE_LLVM_LIBRARY_FINGERPRINT STREQUAL "${_qore_llvm_lib_fingerprint}")
+    unset(QORE_LLVM_SYSTEM_LIBRARY CACHE)
+    unset(LLVM_LIBRARIES CACHE)
+endif()
+set(QORE_LLVM_LIBRARY_FINGERPRINT "${_qore_llvm_lib_fingerprint}"
+    CACHE INTERNAL "LLVM dir+version the cached LLVM library was resolved for")
 set(QORE_LLVM_LIBRARY_NAMES)
 if(QORE_LLVM_MAJOR_VERSION)
     list(APPEND QORE_LLVM_LIBRARY_NAMES LLVM-${QORE_LLVM_MAJOR_VERSION})

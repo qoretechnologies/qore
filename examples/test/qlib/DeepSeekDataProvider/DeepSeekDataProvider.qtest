@@ -112,8 +112,11 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
         assertEq("deepseek-logo.svg", app.logo_file_name);
         assertTrue(app.logo.size() > 0);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("DeepSeek");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("DeepSeek"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("chat-completion", actions[0].action);
         assertEq("/chat-completion", actions[0].path);
@@ -129,7 +132,10 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
         FakeDeepSeekRestClientIo fake();
         DeepSeekDataProvider::DeepSeekDataProvider prov(fake);
         assertEq("deepseek", prov.getName());
-        list<string> children = prov.getChildProviderNames();
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName;
         assertEq(("chat-completion",), children);
         AbstractDataProvider chat = prov.getChildProvider("chat-completion");
         assertTrue(chat instanceof

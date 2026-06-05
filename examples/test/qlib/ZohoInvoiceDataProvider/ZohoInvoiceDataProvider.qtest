@@ -645,9 +645,13 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
     #! Action catalog tests - verify all actions are registered
     actionCatalogTests() {
         checkJson();
-        # Get all actions for the Zoho Invoice app
-        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
-            ZohoInvoiceDataProvider::AppName);
+        # Get all actions for the Zoho Invoice app — filter out the framework-injected
+        # make-api-call action (covered by GenericApiCallAutoInjection.qtest in
+        # RestClientDataProvider) so the count assertion below reflects only this
+        # provider's own actions
+        *list<hash<DataProviderActionInfo>> actions = select
+            DataProviderActionCatalog::getActions(ZohoInvoiceDataProvider::AppName),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertTrue(actions.size() > 0);
 
         # Verify action count (50 CRUD/actions + 6 triggers = 56)

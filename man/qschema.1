@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2019 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QSCHEMA 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.TH QSCHEMA 1 "2026 June 04" "Qore 2.3" "Qore Programming Language"
 .SH NAME
 qschema \- database schema management tool
 .SH SYNOPSIS
@@ -71,6 +71,9 @@ Output file (for export).
 .B \-\-format =\fIformat\fP
 Export format: \fByaml\fP (default) or \fBjson\fP.
 .TP
+.B \-\-with\-partitions
+Include physical table partitions in exported schema files.
+.TP
 .BR \-h ", " \-\-help
 Show help text and exit.
 .TP
@@ -95,6 +98,11 @@ Dry-run alignment:
 Export a database schema:
 .RS
 .B qschema export mydb \-o exported.ysm
+.RE
+.PP
+Export a database schema including physical partitions:
+.RS
+.B qschema export mydb \-o exported.ysm \-\-with\-partitions
 .RE
 .PP
 Validate a schema file:

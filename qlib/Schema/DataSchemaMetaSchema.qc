@@ -256,6 +256,86 @@ public const DataSchemaJsonSchema = {
                 },
             },
         },
+        "partitionStrategy": {
+            "type": "object",
+            "required": ("columns",),
+            "properties": {
+                "method": {
+                    "type": "string",
+                    "enum": ("range",),
+                    "default": "range",
+                    "description": "Partitioning method; Phase 1 supports range partitioning",
+                },
+                "columns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "description": "Partition key columns in declaration order",
+                },
+                "auto": {
+                    "type": "object",
+                    "description": "Driver-specific automatic partitioning strategy",
+                },
+                "driver": {
+                    "type": "object",
+                    "description": "Driver-specific partition strategy overrides",
+                },
+            },
+        },
+        "partitionSpec": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Canonical partition name",
+                },
+                "method": {
+                    "type": "string",
+                    "enum": ("range",),
+                    "default": "range",
+                },
+                "columns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                },
+                "bound_from": {
+                    "description": "Inclusive lower range bound as a typed value",
+                },
+                "bound_to": {
+                    "description": "Exclusive upper range bound as a typed value",
+                },
+                "bound_from_sql": {
+                    "type": "string",
+                    "description": "Inclusive lower range bound as a SQL expression",
+                },
+                "bound_to_sql": {
+                    "type": "string",
+                    "description": "Exclusive upper range bound as a SQL expression",
+                },
+                "bound_sql": {
+                    "type": "string",
+                    "description": "Complete driver-native partition bound SQL",
+                },
+                "is_default": {
+                    "type": "boolean",
+                    "default": False,
+                },
+                "schema": {
+                    "type": "string",
+                },
+                "relation_name": {
+                    "type": "string",
+                },
+                "sql_name": {
+                    "type": "string",
+                },
+                "driver": {
+                    "type": "object",
+                    "description": "Driver-specific partition overrides",
+                },
+            },
+        },
         "tableDefinition": {
             "type": "object",
             "required": ("columns",),
@@ -296,6 +376,15 @@ public const DataSchemaJsonSchema = {
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/$defs/foreignConstraintDefinition",
+                    },
+                },
+                "partition_strategy": {
+                    "$ref": "#/$defs/partitionStrategy",
+                },
+                "partitions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/partitionSpec",
                     },
                 },
                 "auto_triggers": {

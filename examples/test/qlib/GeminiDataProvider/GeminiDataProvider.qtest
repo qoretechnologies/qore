@@ -316,7 +316,11 @@ class GeminiDataProviderTest inherits QUnit::Test {
         };
 
         AbstractDataProvider child = dp.getChildProviderEx("models");
-        *list<string> names = child.getChildProviderNames();
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider); every sub-container
+        # with a discoverable rest member picks it up too
+        *list<string> names = select child.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName;
         assertEq("GET", fake.last_method);
         assertTrue(fake.last_path.find("models") >= 0);
         assertEq(2, names.size());
@@ -333,7 +337,10 @@ class GeminiDataProviderTest inherits QUnit::Test {
         };
 
         AbstractDataProvider child = dp.getChildProviderEx("files");
-        *list<string> names = child.getChildProviderNames();
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        *list<string> names = select child.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName;
         assertEq("GET", fake.last_method);
         assertTrue(fake.last_path.find("files") >= 0);
         assertEq(1, names.size());

@@ -177,6 +177,8 @@ $function$
       results (base class only returns the first row)
     - fixed \c PgsqlTable handling of session temporary tables so unqualified table names and the
       \c pg_temp schema alias resolve to the backend's active temporary schema
+    - implemented PostgreSQL range partition support for %SqlUtil table creation, introspection, lookup, ensure,
+      add, drop, truncate, and detach operations
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -3276,14 +3278,19 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private bool checkExistenceImpl() {
-        *hash<auto> qh = ds.selectRow("select * from pg_catalog.pg_statio_all_tables where schemaname = %v and "
-            "relname = %v", schema, name);
+        # note: cannot use pg_catalog.pg_statio_all_tables here, as it lists only relations with
+        # physical storage and therefore excludes partitioned parent tables (relkind 'p'); query
+        # pg_class directly so that partitioned tables are recognized as well
+        *hash<auto> qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
+            "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
+            "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, name);
         if (qh) {
             return inDb = True;
         }
         if (resolveTemporaryTableSchema(True)) {
-            qh = ds.selectRow("select * from pg_catalog.pg_statio_all_tables where schemaname = %v and "
-                "relname = %v", schema, name);
+            qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
+                "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
+                "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, name);
             if (qh) {
                 return inDb = True;
             }
@@ -3310,15 +3317,19 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private Columns describeImpl() {
-        # get column descriptions
+        # get column descriptions; the relation join uses pg_class/pg_namespace (not
+        # pg_statio_all_tables, which omits partitioned parent tables - relkind 'p' - because
+        # they have no physical storage) so that partitioned tables can be described too
         *hash<auto> qh = ds.select("select column_name, data_type, c.udt_name, "
             "character_maximum_length, "
             "character_octet_length, numeric_precision, numeric_scale, datetime_precision, "
             "pa.atttypmod, is_nullable, "
             "column_default, description from information_schema.columns c "
-            "join pg_catalog.pg_statio_all_tables st on (c.table_schema = st.schemaname and c.table_name = "
-            "st.relname) left join pg_catalog.pg_description pgd on (st.relid = pgd.objoid and pgd.objsubid = "
-            "c.ordinal_position) left join pg_catalog.pg_attribute pa on (st.relid = pa.attrelid and "
+            "join (select rc.oid as relid, rn.nspname as schemaname, rc.relname as relname "
+            "from pg_catalog.pg_class rc join pg_catalog.pg_namespace rn on (rn.oid = rc.relnamespace) "
+            "where rc.relkind in ('r', 'p', 'm', 'f')) st on (c.table_schema = st.schemaname and "
+            "c.table_name = st.relname) left join pg_catalog.pg_description pgd on (st.relid = pgd.objoid "
+            "and pgd.objsubid = c.ordinal_position) left join pg_catalog.pg_attribute pa on (st.relid = pa.attrelid and "
             "pa.attnum = c.ordinal_position and not pa.attisdropped) "
             "where table_schema = %v and table_name = %v order by ordinal_position", schema,
             name);
@@ -3737,6 +3748,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
         sql += "\n)";
 
+        if (partitionStrategy) {
+            if (partitionStrategy.method != "range") {
+                throw "PARTITION-ERROR", sprintf("%s: unsupported PostgreSQL partition method %y", getDesc(),
+                    partitionStrategy.method);
+            }
+            sql += sprintf(" partition by range (%s)", (foldl $1 + ", " + $2,
+                getColumnSqlNames(partitionStrategy.columns)));
+        }
+
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
         if (ts)
             sql += sprintf(" tablespace %s", ts);
@@ -3906,6 +3926,280 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private bool emptyImpl() {
         return triggerFunctions.empty();
+    }
+
+    private bool supportsPartitionsImpl() {
+        return True;
+    }
+
+    private bool supportsPartitionDetachImpl() {
+        return True;
+    }
+
+    private *hash<PartitionStrategy> getPartitionStrategyImpl() {
+        *hash<auto> row = ds.selectRow("select case pt.partstrat when 'r' then 'range' else pt.partstrat::text end "
+            "method, string_agg(a.attname, ',' order by k.ord) columns from pg_catalog.pg_partitioned_table pt "
+            "join pg_catalog.pg_class c on c.oid = pt.partrelid "
+            "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "join unnest(pt.partattrs) with ordinality as k(attnum, ord) on true "
+            "join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum = k.attnum "
+            "where n.nspname = %v and c.relname = %v group by pt.partstrat", schema, name);
+        if (!row) {
+            return;
+        }
+
+        list<string> cols = row.columns.split(",");
+        hash<PartitionStrategy> rv({
+            "method": row.method,
+            "columns": cols,
+        });
+        return rv;
+    }
+
+    private hash<string, PartitionInfo> getPartitionsImpl() {
+        hash<string, PartitionInfo> rv();
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (!strategy) {
+            return rv;
+        }
+        getColumnsUnlocked();
+
+        *hash<auto> qh = ds.select("select cn.nspname as schema, c.relname as relation_name, "
+            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql "
+            "from pg_catalog.pg_inherits i "
+            "join pg_catalog.pg_class p on p.oid = i.inhparent "
+            "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
+            "join pg_catalog.pg_class c on c.oid = i.inhrelid "
+            "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
+            "where pn.nspname = %v and p.relname = %v order by i.inhseqno, cn.nspname, c.relname", schema, name);
+
+        int ordinal = 0;
+        foreach hash<auto> row in (qh.contextIterator()) {
+            string pname = getCanonicalPartitionName(row.schema, row.relation_name);
+            hash<PartitionInfo> info({
+                "name": pname,
+                "method": strategy.method,
+                "columns": strategy.columns,
+                "ordinal": ordinal++,
+                "schema": row.schema,
+                "relation_name": row.relation_name,
+                "sql_name": sprintf("%s.%s", row.schema, row.relation_name),
+                "bound_sql": row.bound_sql,
+                "is_default": False,
+            });
+            populatePgPartitionBounds(\info);
+            rv{info.name} = info;
+        }
+
+        return rv;
+    }
+
+    private string getCanonicalPartitionName(string pschema, string pname) {
+        return pschema == "public" ? pname : sprintf("%s.%s", pschema, pname);
+    }
+
+    private hash<auto> parsePartitionRelationName(string partition_name) {
+        hash<auto> rv;
+        bool explicit_schema = (partition_name =~ x/^(\w+)\.\w+/)[0] ? True : False;
+        parse_schema_name(partition_name, \rv.schema, \rv.name);
+        if (!explicit_schema) {
+            rv.schema = schema;
+        }
+        return rv;
+    }
+
+    private string getPartitionSqlName(hash<PartitionSpec> spec) {
+        if (spec.sql_name) {
+            return spec.sql_name;
+        }
+        if (spec.schema && spec.relation_name) {
+            return sprintf("%s.%s", spec.schema, spec.relation_name);
+        }
+
+        hash<auto> rel = parsePartitionRelationName(spec.name);
+        return sprintf("%s.%s", rel.schema, rel.name);
+    }
+
+    private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
+        hash<auto> rel = parsePartitionRelationName(partition_name);
+        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name "
+            "from pg_catalog.pg_inherits i "
+            "join pg_catalog.pg_class p on p.oid = i.inhparent "
+            "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
+            "join pg_catalog.pg_class c on c.oid = i.inhrelid "
+            "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
+            "where pn.nspname = %v and p.relname = %v and cn.nspname = %v and c.relname = %v",
+            schema, name, rel.schema, rel.name);
+        if (!row) {
+            throw "PARTITION-ERROR", sprintf("%s: relation %y is not a partition of this table", getDesc(),
+                partition_name);
+        }
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        hash<PartitionInfo> info({
+            "name": getCanonicalPartitionName(row.schema, row.relation_name),
+            "method": strategy ? strategy.method : "range",
+            "columns": strategy ? strategy.columns : (),
+            "ordinal": 0,
+            "schema": row.schema,
+            "relation_name": row.relation_name,
+            "sql_name": sprintf("%s.%s", row.schema, row.relation_name),
+        });
+        return info;
+    }
+
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+        return sprintf("create table %s partition of %s %s", getPartitionSqlName(spec), getSqlName(),
+            getPgPartitionBoundSql(spec));
+    }
+
+    private string getDropPartitionSqlImpl(string partition_name) {
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        return sprintf("drop table %s", info.sql_name);
+    }
+
+    private string getTruncatePartitionSqlImpl(string partition_name) {
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        return sprintf("truncate table %s", info.sql_name);
+    }
+
+    private string getDetachPartitionSqlImpl(string partition_name) {
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        return sprintf("alter table %s detach partition %s", getSqlName(), info.sql_name);
+    }
+
+    private string getPgPartitionBoundSql(hash<PartitionSpec> spec) {
+        if (spec.is_default) {
+            return "default";
+        }
+        if (spec.bound_sql) {
+            string sql = spec.bound_sql;
+            trim sql;
+            if (sql =~ x/^(for\s+values|default)\b/i) {
+                return sql;
+            }
+            return "for values " + sql;
+        }
+        if (spec.bound_from_sql) {
+            return sprintf("for values from (%s) to (%s)", spec.bound_from_sql, spec.bound_to_sql);
+        }
+
+        return sprintf("for values from (%s) to (%s)", getPgPartitionBoundValuesSql(spec.bound_from),
+            getPgPartitionBoundValuesSql(spec.bound_to));
+    }
+
+    private string getPgPartitionBoundValuesSql(auto value) {
+        if (value.typeCode() != NT_LIST) {
+            return getSqlValue(value);
+        }
+        return foldl $1 + ", " + $2, (map getSqlValue($1), value);
+    }
+
+    private populatePgPartitionBounds(reference<hash<PartitionInfo>> info) {
+        string bound_sql = info.bound_sql;
+        if (bound_sql =~ x/^default$/i) {
+            info.is_default = True;
+            return;
+        }
+
+        (*string bound_from_sql, *string bound_to_sql) = (bound_sql =~ x/^for\s+values\s+from\s*\((.*)\)\s+to\s*\((.*)\)$/i);
+        if (!bound_from_sql || !bound_to_sql) {
+            return;
+        }
+
+        info.bound_from_sql = bound_from_sql;
+        info.bound_to_sql = bound_to_sql;
+
+        *auto bound_from = parsePgPartitionBoundValues(bound_from_sql, info.columns);
+        *auto bound_to = parsePgPartitionBoundValues(bound_to_sql, info.columns);
+        if (exists bound_from && exists bound_to) {
+            info.bound_from = bound_from;
+            info.bound_to = bound_to;
+        }
+    }
+
+    private *auto parsePgPartitionBoundValues(string sql, softlist<string> pcols) {
+        if (pcols.size() == 1) {
+            return parsePgPartitionBoundValue(sql, columns{pcols[0]});
+        }
+
+        list<string> parts = sql.split(",");
+        if (parts.size() != pcols.size()) {
+            return;
+        }
+
+        list<auto> values = ();
+        foreach string part in (parts) {
+            *auto value = parsePgPartitionBoundValue(part, columns{pcols[$#]});
+            if (!exists value) {
+                return;
+            }
+            values += value;
+        }
+        return values;
+    }
+
+    private *auto parsePgPartitionBoundValue(string sql, *AbstractColumn col) {
+        trim sql;
+        sql =~ s/::.*$//;
+        trim sql;
+
+        *string str = (sql =~ x/^'(.*)'$/)[0];
+        if (exists str) {
+            str =~ s/''/'/g;
+            return parsePgPartitionTypedLiteral(str, col) ?? str;
+        }
+        if (*auto typed = parsePgPartitionTypedLiteral(sql, col)) {
+            return typed;
+        }
+        if (sql =~ /^-?\d+$/) {
+            return sql.toInt();
+        }
+        if (sql =~ /^-?\d+\.\d+$/) {
+            return number(sql);
+        }
+        if (sql =~ /^true$/i) {
+            return True;
+        }
+        if (sql =~ /^false$/i) {
+            return False;
+        }
+    }
+
+    private *auto parsePgPartitionTypedLiteral(string value, *AbstractColumn col) {
+        if (!col || !col.qore_type) {
+            return;
+        }
+        switch (col.qore_type) {
+            case Type::Int: {
+                if (value =~ /^-?\d+$/) {
+                    return value.toInt();
+                }
+                break;
+            }
+            case Type::Number: {
+                if (value =~ /^-?\d+(?:\.\d+)?$/) {
+                    return number(value);
+                }
+                break;
+            }
+            case Type::Float: {
+                if (value =~ /^-?\d+(?:\.\d+)?$/) {
+                    return value.toFloat();
+                }
+                break;
+            }
+            case Type::Boolean: {
+                if (value =~ /^true$/i) {
+                    return True;
+                }
+                if (value =~ /^false$/i) {
+                    return False;
+                }
+                break;
+            }
+        }
     }
 
     #! clears PostgreSQL-specific table information

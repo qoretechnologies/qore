@@ -321,7 +321,10 @@ public class KatanaDataProviderTest inherits QUnit::Test {
 
         assertEq("katana", provider.getName(), "root provider name is 'katana'");
 
-        *list<string> names = provider.getChildProviderNames();
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        *list<string> names = select provider.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName;
         assertTrue(exists names, "child names list is non-empty");
         assertEq(ExpectedChildCount, names.size(),
             sprintf("provider exposes %d children (got %d)",
@@ -373,7 +376,11 @@ public class KatanaDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             testSkip(sprintf("events container not available: %s", ex.err));
         }
-        *list<string> event_names = events.getChildProviderNames();
+        # filter out the framework-injected __call__ child — it's not observable, so
+        # iterating it through getExampleEventData() would throw INVALID-OPERATION
+        # (covered by GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        *list<string> event_names = select events.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName;
         assertTrue(exists event_names && event_names.size() > 0,
             "events container exposes children");
 

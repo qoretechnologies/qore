@@ -4,11 +4,11 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires OracleSqlUtil
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/OracleSqlUtil.qm
 
 %requires ./SqlUtilTestBase.qm
 
@@ -262,6 +262,7 @@ class OracleTest inherits SqlTestBase {
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("custom column operators #2314", \testCustomColumnOperators());
             addTestCase("chained synonyms #2408", \testChainedSynonyms());
+            addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
         }
 
         set_return_value(main());
@@ -532,6 +533,90 @@ class OracleTest inherits SqlTestBase {
 
         Table t(ds, "oracle_test_syn3");
         assertEq("X", t.selectRow().dummy, "dummy must be resolved, returning X");
+    }
+
+    private rangePartitionLifecycleTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        ds.execRaw("begin execute immediate 'drop table oracle_partition_test purge'; exception when others then "
+            "null; end;");
+        ds.commit();
+
+        on_exit {
+            try {
+                ds.execRaw("begin execute immediate 'drop table oracle_partition_test purge'; exception when others "
+                    "then null; end;");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        OracleTable t(ds, "oracle_partition_test");
+        t.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"qore_type": Type::Date, "notnull": True},
+                "v": {"qore_type": Type::String, "size": 20},
+            },
+            "primary_key": {"name": "oracle_partition_test_pk", "columns": ("id", "d")},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
+                "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
+            },
+        });
+        t.createCommit();
+
+        OracleTable rt(ds, "oracle_partition_test");
+        assertEq(True, rt.supportsPartitions());
+        assertEq(False, rt.supportsPartitionDetach());
+
+        hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
+        assertEq("range", strategy.method);
+        assertEq(1, strategy.columns.size());
+        assertEq("d", strategy.columns[0]);
+
+        hash<string, PartitionInfo> parts = rt.listPartitions();
+        assertEq(2, parts.size());
+        assertEq(2026-02-01, parts.p2.bound_from);
+        assertEq(2026-03-01, parts.p2.bound_to);
+
+        hash<auto> desc = rt.getDescriptionHash({"with_partitions": True});
+        assertEq(2, desc.partitions.size());
+        assertTrue(rt.getCreateSql()[0] =~ /partition by range/i);
+
+        hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        });
+        assertEq(PartitionLookupStatus::Found, lookup.status);
+        assertEq("p2", lookup.partition.name);
+
+        hash<PartitionEnsureResult> ensure = rt.ensurePartitionCommit({
+            "name": "p3",
+            "bound_from": 2026-03-01,
+            "bound_to": 2026-04-01,
+        });
+        assertEq(True, ensure.created);
+        assertEq(True, ensure.materialized);
+        assertEq(PartitionVerifiedBy::Bounds, ensure.verified_by);
+        assertEq(True, rt.listPartitions().hasKey("p3"));
+
+        ds.execRaw("insert into oracle_partition_test values (3, timestamp '2026-03-15 00:00:00', 'x')");
+        ds.commit();
+        assertEq(1, ds.selectRow("select count(*) c from oracle_partition_test partition (p3)").c);
+        rt.truncatePartitionCommit("p3");
+        assertEq(0, ds.selectRow("select count(*) c from oracle_partition_test partition (p3)").c);
+
+        rt.dropPartitionCommit("p3");
+        assertEq(False, rt.listPartitions().hasKey("p3"));
+        assertThrows("PARTITION-ERROR", "does not support detaching partitions",
+            sub() {
+                rt.detachPartition("p2");
+            });
     }
 
     private string getResultSetSql() {

@@ -77,8 +77,11 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getApp("UnstructuredIo");
         assertEq("UnstructuredIo", app.name);
         assertEq("unstructured", app.scheme);
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("UnstructuredIo");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("UnstructuredIo"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("partition-text", actions[0].action);
     }

@@ -557,6 +557,22 @@ public class DataProviderActionCatalog {
         */
         static *code<hash<DataProviderActionInfo>(hash<DataProviderAppInfo>)> cb_build_generic_api_call_action;
 
+        #! Name of the module that registers the generic @c make-api-call action builder
+        /** Loaded on demand by @ref registerApp() when a REST-capable app is registered before the
+            builder has been set — i.e. when the embedding application skipped
+            @ref DataProvider::registerKnownFactories() (typically because it loaded the data-provider
+            index from disk, so the persisted index advertises @c make-api-call but the live catalog
+            never receives it). Loading this module runs its init block, which calls
+            @ref setGenericApiCallActionBuilder() and drains the pending-app backlog.
+
+            This is a runtime (string) load, not a @c %requires dependency, so it does not create a
+            module cycle (@c RestClientDataProvider already @c %requires(reexport) @c DataProvider). The
+            same name-based indirection to this module is used by @c DataProvider::FactoryMap.
+
+            @since DataProvider 3.5
+        */
+        const GenericApiCallBuilderModule = "RestClientDataProvider";
+
         #! Late-bound scheme lookup hook — set by @c ConnectionProvider at init time
         /** Signature: <tt>*hash<auto> sub (string scheme)</tt>. Returns the
             @c ConnectionSchemeInfo hash (with @c cls) for the given scheme, or @ref NOTHING /
@@ -693,6 +709,7 @@ public class DataProviderActionCatalog {
         }
 
         bool should_auto_register_generic_call = False;
+        bool should_load_generic_api_call_builder = False;
         bool app_is_rest_scheme = !app.disable_generic_api_call
             && DataProviderActionCatalog::isRestScheme(app.scheme);
         {
@@ -795,16 +812,32 @@ public class DataProviderActionCatalog {
                     should_auto_register_generic_call = True;
                 } else {
                     # builder is not yet set — queue the app for retroactive registration when
-                    # setGenericApiCallActionBuilder() is eventually called
+                    # setGenericApiCallActionBuilder() is eventually called, and arrange (after the
+                    # lock is released) to load the module that provides the builder, so the backlog is
+                    # drained promptly instead of waiting for an external trigger that may never come
                     pending_generic_api_call_apps{app.name} = True;
+                    should_load_generic_api_call_builder = True;
                 }
             }
         }
 
-        # auto-register the framework-injected "Make an API call" action outside the lock; registerAction()
-        # will re-acquire the lock cleanly. Swallow errors via the helper to avoid breaking app registration
-        # when the builder produces invalid action info.
+        # register the framework-injected "Make an API call" action outside the lock; registerAction()
+        # (and the builder-provider module load below) re-acquire the lock cleanly, so this must run
+        # unlocked. Errors are swallowed by the helpers to avoid breaking app registration.
         if (should_auto_register_generic_call) {
+            # the builder was already available when this app was registered
+            DataProviderActionCatalog::registerGenericApiCallActionForApp(app);
+        } else if (should_load_generic_api_call_builder) {
+            # the app qualifies for the make-api-call action but the builder has not been registered,
+            # which means the module that provides it (GenericApiCallBuilderModule) is not loaded in
+            # this process. This is the normal case when the embedding application loaded the
+            # data-provider index from disk and therefore skipped DataProvider::registerKnownFactories()
+            # at startup: the persisted index still advertises make-api-call, but the live catalog would
+            # never receive it and action lookups would 404. Load the builder-provider module
+            # (idempotent); its init registers the builder and drains the pending backlog. Then register
+            # this app explicitly: it is a no-op if the drain already covered it, and it closes the race
+            # where a concurrent registration drained the backlog before this app was queued.
+            DataProviderActionCatalog::loadGenericApiCallBuilder(app);
             DataProviderActionCatalog::registerGenericApiCallActionForApp(app);
         }
     }
@@ -896,6 +929,39 @@ public class DataProviderActionCatalog {
             # log but do not fail the surrounding registration
             stderr.printf("DataProviderActionCatalog: failed to auto-register generic API call action for "
                 "app %y: %s: %s\n", app.name, ex.err, ex.desc);
+        }
+    }
+
+    #! Loads the module that provides the generic @c make-api-call action builder, on demand
+    /** Called from @ref registerApp() when a REST-capable app is registered before the builder has been
+        set — e.g. the embedding application loaded the provider index from disk and skipped
+        @ref DataProvider::registerKnownFactories(), so @ref GenericApiCallBuilderModule was never
+        loaded. Loading it runs its init block, which calls @ref setGenericApiCallActionBuilder() and
+        drains the pending-app backlog, so the live catalog gains the @c make-api-call action for the
+        queued REST apps and stops diverging from the persisted index.
+
+        The load is idempotent (so it runs effectively once per process — only apps registered before
+        the first load reach this path) and is bracketed in a module-init savepoint so a failed or
+        partial load rolls back cleanly, mirroring @ref DataProvider::tryLoad(). Must be called with no
+        catalog lock held, because draining the backlog re-acquires the lock through registerAction().
+
+        @param app the REST-capable app whose registration triggered the load (used for diagnostics)
+
+        @since DataProvider 3.5
+    */
+    private:internal static loadGenericApiCallBuilder(hash<DataProviderAppInfo> app) {
+        int sp = ImplicitModuleTransaction::savepoint();
+        try {
+            load_module(GenericApiCallBuilderModule);
+            ImplicitModuleTransaction::commit(sp);
+        } catch (hash<ExceptionInfo> ex) {
+            # roll back any partial registrations from the failed load, then warn loudly: a REST app
+            # will silently lack its make-api-call action otherwise
+            ImplicitModuleTransaction::rollback(sp);
+            stderr.printf("DataProviderActionCatalog: REST app %y qualifies for the framework-injected "
+                "%y action, but the builder-provider module %y could not be loaded; the action will be "
+                "missing from this app: %s: %s\n", app.name, AbstractDataProvider::GenericApiCallActionName,
+                GenericApiCallBuilderModule, ex.err, ex.desc);
         }
     }
 

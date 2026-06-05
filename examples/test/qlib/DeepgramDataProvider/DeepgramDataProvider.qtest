@@ -94,8 +94,11 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         assertEq("Deepgram", app.name);
         assertEq("deepgram", app.scheme);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("Deepgram");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("Deepgram"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(2, actions.size());
 
         list<string> action_codes = sort(map $1.action, actions);

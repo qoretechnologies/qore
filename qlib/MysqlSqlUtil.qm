@@ -90,6 +90,8 @@ module MysqlSqlUtil {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
+    - implemented MySQL/MariaDB range-partitioned table DDL, introspection, and lifecycle operations through the
+      generic @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - fixed the prepend and append column operators
       (<a href="https://github.com/qoretechnologies/qore/issues/4548">issue 4548</a>)
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
@@ -2352,7 +2354,45 @@ end";
                 }
             }
 
+            sql += getMysqlPartitionCreateClause();
+
             return sql;
+        }
+
+        private string getMysqlPartitionCreateClause() {
+            if (!partitionStrategy) {
+                return "";
+            }
+            if (partitionStrategy.method != "range") {
+                throw "PARTITION-ERROR", sprintf("%s: unsupported MySQL/MariaDB partition method %y", getDesc(),
+                    partitionStrategy.method);
+            }
+
+            getPartitionsUnlocked();
+            if (partitions.empty()) {
+                throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB range-partitioned tables require at least one "
+                    "partition definition in the table description", getDesc());
+            }
+            validateMysqlPartitionColumnsUnlocked();
+
+            list<string> defs = ();
+            foreach hash<PartitionInfo> pi in (partitions.iterator()) {
+                defs += "  " + getMysqlPartitionDefinitionSql(pi);
+            }
+
+            return sprintf(" partition by range columns (%s) (\n%s\n)",
+                (foldl $1 + ", " + $2, getColumnSqlNames(partitionStrategy.columns)),
+                (foldl $1 + ",\n" + $2, defs));
+        }
+
+        private validateMysqlPartitionColumnsUnlocked() {
+            foreach string col in (partitionStrategy.columns) {
+                if (columns{col}.native_type == "timestamp") {
+                    throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB does not allow %y columns in "
+                        "RANGE COLUMNS partition keys; use a partitionable native type such as %y or %y",
+                        getDesc(), "timestamp", "datetime", "date");
+                }
+            }
         }
 
         #! returns @ref False "False" because the mysql driver does not support array binds / bulk DML operations
@@ -2560,6 +2600,254 @@ end";
         #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word
         list getColumnSqlNames(softlist cols) {
             return map getColumnSqlName($1), cols;
+        }
+
+        private bool supportsPartitionsImpl() {
+            return True;
+        }
+
+        private bool createPartitionsInCreateTableImpl() {
+            return True;
+        }
+
+        private *hash<PartitionStrategy> getPartitionStrategyImpl() {
+            *hash<auto> row = ds.selectRow("select partition_method, partition_expression from "
+                "information_schema.partitions where table_schema = %v and table_name = %v "
+                "and partition_name is not null order by partition_ordinal_position limit 1", schema, name);
+            if (!row) {
+                return;
+            }
+            if (!(row.partition_method =~ /^RANGE/i)) {
+                return;
+            }
+
+            hash<PartitionStrategy> rv({
+                "method": "range",
+                "columns": parseMysqlPartitionColumns(row.partition_expression),
+            });
+            return rv;
+        }
+
+        private hash<string, PartitionInfo> getPartitionsImpl() {
+            hash<string, PartitionInfo> rv();
+
+            *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+            if (!strategy) {
+                return rv;
+            }
+            getColumnsUnlocked();
+
+            *hash<auto> qh = ds.select("select partition_name, partition_description, "
+                "partition_ordinal_position from information_schema.partitions where table_schema = %v "
+                "and table_name = %v and partition_name is not null order by partition_ordinal_position",
+                schema, name);
+
+            *string prev_bound_sql;
+            *auto prev_bound;
+            foreach hash<auto> row in (qh.contextIterator()) {
+                string pname = row.partition_name;
+                string pdesc = row.partition_description;
+                trim pdesc;
+
+                hash<PartitionInfo> info({
+                    "name": pname,
+                    "method": strategy.method,
+                    "columns": strategy.columns,
+                    "ordinal": row.partition_ordinal_position - 1,
+                    "schema": schema,
+                    "relation_name": pname,
+                    "sql_name": sprintf("%s partition (%s)", getSqlName(), pname),
+                    "is_default": pdesc =~ /^MAXVALUE$/i,
+                });
+
+                if (!info.is_default) {
+                    info.bound_to_sql = pdesc;
+                    if (exists prev_bound_sql) {
+                        info.bound_from_sql = prev_bound_sql;
+                    }
+
+                    *auto bound_to = parseMysqlPartitionBoundValues(pdesc, info.columns);
+                    if (exists bound_to) {
+                        info.bound_to = bound_to;
+                    }
+                    if (exists prev_bound) {
+                        info.bound_from = prev_bound;
+                    }
+
+                    prev_bound_sql = pdesc;
+                    if (exists bound_to) {
+                        prev_bound = bound_to;
+                    } else {
+                        delete prev_bound;
+                    }
+                }
+
+                rv{info.name} = info;
+            }
+
+            return rv;
+        }
+
+        private hash<PartitionInfo> resolveMysqlPartitionInfoUnlocked(string partition_name) {
+            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            if (!ph.hasKey(partition_name)) {
+                throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
+            }
+            return ph{partition_name};
+        }
+
+        private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+            assertNoMysqlDefaultPartitionForAddUnlocked(spec);
+            return sprintf("alter table %s add partition (%s)", getSqlName(), getMysqlPartitionDefinitionSql(spec));
+        }
+
+        private string getDropPartitionSqlImpl(string partition_name) {
+            hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
+            return sprintf("alter table %s drop partition %s", getSqlName(), info.name);
+        }
+
+        private string getTruncatePartitionSqlImpl(string partition_name) {
+            hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
+            return sprintf("alter table %s truncate partition %s", getSqlName(), info.name);
+        }
+
+        private assertNoMysqlDefaultPartitionForAddUnlocked(hash<PartitionSpec> spec) {
+            if (spec.is_default) {
+                return;
+            }
+            foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
+                if (pi.is_default) {
+                    throw "PARTITION-ERROR", sprintf("%s: cannot add partition %y after catch-all partition %y; "
+                        "reorganize the catch-all partition explicitly", getDesc(), spec.name, pi.name);
+                }
+            }
+        }
+
+        private string getMysqlPartitionDefinitionSql(hash<PartitionSpec> spec) {
+            if (!spec.name) {
+                throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB partition name is required", getDesc());
+            }
+            return sprintf("partition %s %s", spec.name, getMysqlPartitionBoundSql(spec));
+        }
+
+        private string getMysqlPartitionBoundSql(hash<PartitionSpec> spec) {
+            if (spec.is_default) {
+                return "values less than (maxvalue)";
+            }
+            if (spec.bound_sql) {
+                string sql = spec.bound_sql;
+                trim sql;
+                if (sql =~ x/^values\s+less\s+than\b/i) {
+                    return sql;
+                }
+                return "values less than (" + sql + ")";
+            }
+            if (spec.bound_to_sql) {
+                return sprintf("values less than (%s)", spec.bound_to_sql);
+            }
+            return sprintf("values less than (%s)", getMysqlPartitionBoundValuesSql(spec.bound_to));
+        }
+
+        private string getMysqlPartitionBoundValuesSql(auto value) {
+            if (value.typeCode() != NT_LIST) {
+                return getMysqlPartitionBoundValueSql(value);
+            }
+            return foldl $1 + ", " + $2, (map getMysqlPartitionBoundValueSql($1), value);
+        }
+
+        private string getMysqlPartitionBoundValueSql(auto value) {
+            if (value.typeCode() == NT_DATE) {
+                TimeZone tz = TimeZone::get();
+                value = tz.date(value);
+                return value.format("'YYYY-MM-DD HH:mm:SS.us'");
+            }
+            return getSqlValue(value);
+        }
+
+        private list<string> parseMysqlPartitionColumns(string expr) {
+            list<string> cols = ();
+            foreach string col in (expr.split(",")) {
+                trim col;
+                col =~ s/^`//;
+                col =~ s/`$//;
+                cols += col;
+            }
+            return cols;
+        }
+
+        private *auto parseMysqlPartitionBoundValues(string sql, softlist<string> pcols) {
+            if (pcols.size() == 1) {
+                return parseMysqlPartitionBoundValue(sql, columns{pcols[0]});
+            }
+
+            list<string> parts = sql.split(",");
+            if (parts.size() != pcols.size()) {
+                return;
+            }
+
+            list<auto> values = ();
+            foreach string part in (parts) {
+                *auto value = parseMysqlPartitionBoundValue(part, columns{pcols[$#]});
+                if (!exists value) {
+                    return;
+                }
+                values += value;
+            }
+            return values;
+        }
+
+        private *auto parseMysqlPartitionBoundValue(string sql, *AbstractColumn col) {
+            trim sql;
+            if (sql =~ /^MAXVALUE$/i) {
+                return;
+            }
+
+            *string value = (sql =~ x/^'(.*)'$/)[0];
+            if (exists value) {
+                value =~ s/''/'/g;
+                return parseMysqlPartitionTypedLiteral(value, col) ?? value;
+            }
+            if (*auto typed = parseMysqlPartitionTypedLiteral(sql, col)) {
+                return typed;
+            }
+            if (sql =~ /^-?\d+$/) {
+                return sql.toInt();
+            }
+            if (sql =~ /^-?\d+\.\d+$/) {
+                return number(sql);
+            }
+        }
+
+        private *auto parseMysqlPartitionTypedLiteral(string value, *AbstractColumn col) {
+            if (!col || !col.qore_type) {
+                return;
+            }
+            try {
+                switch (col.qore_type) {
+                    case Type::Int: {
+                        if (value =~ /^-?\d+$/) {
+                            return value.toInt();
+                        }
+                        break;
+                    }
+                    case Type::Float: {
+                        if (value =~ /^-?\d+(\.\d+)?$/) {
+                            return value.toFloat();
+                        }
+                        break;
+                    }
+                    case Type::Number: {
+                        if (value =~ /^-?\d+(\.\d+)?$/) {
+                            return number(value);
+                        }
+                        break;
+                    }
+                    case Type::Date: {
+                        return date(value);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
         }
 
         #! returns a string for use in SQL queries representing the DB-specific value of the argument

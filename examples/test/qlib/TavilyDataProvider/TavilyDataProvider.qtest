@@ -97,8 +97,11 @@ public class TavilyDataProviderTest inherits QUnit::Test {
         assertEq("tavily-logo.svg", app.logo_file_name);
         assertTrue(app.logo.size() > 0);
 
-        list<hash<DataProviderActionInfo>> actions =
-            DataProvider::DataProviderActionCatalog::getActions("Tavily");
+        # filter out the framework-injected make-api-call action (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions("Tavily"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(4, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(("crawl", "extract", "map", "search"), action_names);
@@ -108,7 +111,10 @@ public class TavilyDataProviderTest inherits QUnit::Test {
         FakeTavilyRestClientIo fake();
         TavilyDataProvider::TavilyDataProvider prov(fake);
         assertEq("tavily", prov.getName());
-        list<string> children = sort(prov.getChildProviderNames());
+        # filter out the framework-injected __call__ child (covered by
+        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = sort(select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName);
         assertEq(("crawl", "extract", "map", "search"), children);
         AbstractDataProvider s = prov.getChildProvider("search");
         assertTrue(s instanceof TavilyDataProvider::TavilySearchDataProvider);

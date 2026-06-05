@@ -208,8 +208,10 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        # Check all expected child providers exist
-        list<string> children = prov.getChildProviderNames();
+        # Check all expected child providers exist — filter out the framework-injected
+        # __call__ child (covered by GenericApiCallAutoInjection.qtest in RestClientDataProvider)
+        list<string> children = select prov.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName;
         assertEq(15, children.size());
 
         foreach string childName in (ExpectedChildren) {
@@ -574,8 +576,12 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         assertEq("Firecrawl", appInfo.name);
         assertEq("firecrawlrest", appInfo.scheme);
 
-        # Verify all 15 actions are registered
-        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Firecrawl");
+        # Verify all 15 actions are registered — filter out the framework-injected
+        # make-api-call action (covered by GenericApiCallAutoInjection.qtest in
+        # RestClientDataProvider)
+        *list<hash<DataProviderActionInfo>> actions = select
+            DataProviderActionCatalog::getActions("Firecrawl"),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         hash<string, bool> actionMap;
         map actionMap{$1.action} = True, actions;
 

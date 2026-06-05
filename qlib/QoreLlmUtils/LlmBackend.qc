@@ -887,25 +887,30 @@ llm.chatStream(
             forced_tool_name, tools);
         if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
-                forced_tool_name);
+                forced_tool_name,
+                "The previous forced function-call response was malformed.");
             if (retry) {
                 if (openAiResponseHasToolCall(retry)) {
                     return attachForcedToolRetryDiagnostics(retry, rv, retry,
-                        True, True);
+                        True, True, "malformed_function_call");
                 }
                 if (openAiResponseHasMessageContent(retry)) {
                     return attachForcedToolRetryDiagnostics(retry, rv, retry,
-                        True, False);
+                        True, False, "malformed_function_call");
                 }
                 rv = attachForcedToolRetryDiagnostics(rv, rv, retry, False,
-                    False);
+                    False, "malformed_function_call");
             }
         }
         if (shouldRetryRequiredToolNoOutput(rv, body, tools)) {
             *hash<auto> retry = retryRequiredToolNoOutput(messages, tools,
-                options, forced_tool_name);
-            if (retry && openAiResponseHasToolCall(retry)) {
-                return retry;
+                options, forced_tool_name, rv);
+            if (retry) {
+                if (openAiResponseHasToolCall(retry)
+                        || openAiResponseHasMessageContent(retry)) {
+                    return retry;
+                }
+                rv = retry;
             }
         }
         # Never return NOTHING (see chatCompletionsStream): coalesce to an
@@ -948,16 +953,30 @@ llm.chatStream(
         *string forced_tool_name = getForcedOpenAiToolName(body, tools);
         if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
-                forced_tool_name);
-            if (retry && openAiResponseHasToolCall(retry)) {
-                return retry;
+                forced_tool_name,
+                "The previous forced function-call response was malformed.");
+            if (retry) {
+                if (openAiResponseHasToolCall(retry)) {
+                    return attachForcedToolRetryDiagnostics(retry, rv, retry,
+                        True, True, "malformed_function_call");
+                }
+                if (openAiResponseHasMessageContent(retry)) {
+                    return attachForcedToolRetryDiagnostics(retry, rv, retry,
+                        True, False, "malformed_function_call");
+                }
+                rv = attachForcedToolRetryDiagnostics(rv, rv, retry, False,
+                    False, "malformed_function_call");
             }
         }
         if (shouldRetryRequiredToolNoOutput(rv, body, tools)) {
             *hash<auto> retry = retryRequiredToolNoOutput(messages, tools,
-                options, forced_tool_name);
-            if (retry && openAiResponseHasToolCall(retry)) {
-                return retry;
+                options, forced_tool_name, rv);
+            if (retry) {
+                if (openAiResponseHasToolCall(retry)
+                        || openAiResponseHasMessageContent(retry)) {
+                    return retry;
+                }
+                rv = retry;
             }
         }
         # Never return NOTHING: if the upstream produced no usable response
@@ -1360,7 +1379,8 @@ llm.chatStream(
     private *hash<auto> retryForcedToolAsJson(
             list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools,
-            hash<LlmRequestOptions> options, *string forced_tool_name) {
+            hash<LlmRequestOptions> options, *string forced_tool_name,
+            string failure_description) {
         if (!forced_tool_name.val()) {
             return NOTHING;
         }
@@ -1373,15 +1393,13 @@ llm.chatStream(
         list<hash<ChatMessage>> retry_messages = messages;
         push retry_messages, <ChatMessage>{
             "role": "system",
-            "content": "The previous forced function-call response was "
-                "malformed. Return only a JSON object matching the requested "
-                "function arguments schema; do not call a tool.",
+            "content": failure_description + " Return only a JSON object "
+                "matching the requested function arguments schema; do not "
+                "call a tool.",
         };
 
-        hash<LlmRequestOptions> retry_options = options;
-        retry_options.output_schema = forced_tool.parameters;
-        retry_options.body_options = stripForcedToolBodyOptions(
-            options.body_options);
+        hash<LlmRequestOptions> retry_options =
+            makeForcedToolJsonRetryOptions(options, forced_tool.parameters);
 
         hash<ChatResponse> retry_response = chat(retry_messages, NOTHING,
             retry_options);
@@ -1393,9 +1411,31 @@ llm.chatStream(
     private *hash<auto> retryRequiredToolNoOutput(
             list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools,
-            hash<LlmRequestOptions> options, *string forced_tool_name) {
+            hash<LlmRequestOptions> options, *string forced_tool_name,
+            hash<auto> original_response) {
         if (!tools) {
             return NOTHING;
+        }
+        if (forced_tool_name.val()) {
+            *hash<auto> retry = retryForcedToolAsJson(messages, tools,
+                options, forced_tool_name,
+                "The previous response returned no content and no function "
+                    "call even though a tool call was required.");
+            if (retry) {
+                if (openAiResponseHasToolCall(retry)) {
+                    return attachForcedToolRetryDiagnostics(retry,
+                        original_response, retry, True, True,
+                        "required_tool_no_output");
+                }
+                if (openAiResponseHasMessageContent(retry)) {
+                    return attachForcedToolRetryDiagnostics(retry,
+                        original_response, retry, True, False,
+                        "required_tool_no_output");
+                }
+                return attachForcedToolRetryDiagnostics(original_response,
+                    original_response, retry, False, False,
+                    "required_tool_no_output");
+            }
         }
         list<hash<ChatMessage>> retry_messages = messages;
         push retry_messages, <ChatMessage>{
@@ -1435,6 +1475,27 @@ llm.chatStream(
         hash<LlmStructuredRepairResult> result =
             LlmStructuredRepair::coerceBySchema(args, tool.parameters);
         return result.valid ? cast<hash>(result.value) : args;
+    }
+
+    private static hash<LlmRequestOptions> makeForcedToolJsonRetryOptions(
+            hash<LlmRequestOptions> options, hash<auto> output_schema) {
+        hash<LlmRequestOptions> retry_options = <LlmRequestOptions>{};
+        foreach string key in (("model", "max_tokens",
+                "max_output_tokens", "reasoning_token_budget",
+                "temperature", "telemetry_observer",
+                "telemetry_context")) {
+            if (exists options{key}
+                    && options{key}.typeCode() != NT_NOTHING) {
+                retry_options{key} = options{key};
+            }
+        }
+        retry_options.output_schema = output_schema;
+        *hash<auto> retry_body_options = stripForcedToolBodyOptions(
+            options.body_options);
+        if (retry_body_options) {
+            retry_options.body_options = retry_body_options;
+        }
+        return retry_options;
     }
 
     private static *hash<auto> stripForcedToolBodyOptions(
@@ -1526,7 +1587,7 @@ llm.chatStream(
     private static hash<auto> attachForcedToolRetryDiagnostics(
             hash<auto> response, hash<auto> original_response,
             hash<auto> retry_response, bool returned_retry_response,
-            bool recovered_tool_call) {
+            bool recovered_tool_call, string reason) {
         hash<auto!> rv;
         rv += response;
 
@@ -1537,7 +1598,7 @@ llm.chatStream(
 
         hash<auto!> retry_diagnostics = {
             "attempted": True,
-            "reason": "malformed_function_call",
+            "reason": reason,
             "returned_retry_response": returned_retry_response,
             "recovered_tool_call": recovered_tool_call,
         };

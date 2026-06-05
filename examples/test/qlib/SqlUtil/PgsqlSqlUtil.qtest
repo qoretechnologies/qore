@@ -336,6 +336,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("populate column backfill", \populateColumnTest());
             addTestCase("tables populate FK ordering", \tablesPopulateFkOrderingTest());
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
+            addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
         }
 
         set_return_value(main());
@@ -1026,6 +1027,125 @@ class PgsqlTest inherits SqlTestBase {
             assertTrue(joined =~ /legacy/i, "alignment SQL drops legacy column on parent");
             assertTrue(joined =~ /display/i, "alignment SQL adds display column on parent");
         }
+    }
+
+    rangePartitionLifecycleTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        on_exit ds.rollback();
+
+        string parent = "pgsql_partition_test";
+        string p1 = parent + "_p1";
+        string p2 = parent + "_p2";
+        string p3 = parent + "_p3";
+
+        code drop_if_exists = sub (string n) {
+            PgsqlTable t(ds, n);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        };
+
+        drop_if_exists(p3);
+        drop_if_exists(parent);
+        on_exit {
+            drop_if_exists(p3);
+            drop_if_exists(parent);
+        }
+
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "name": {"qore_type": SqlUtil::VARCHAR, "size": 80},
+            },
+            "primary_key": {"name": "pk_" + parent, "columns": ("id",)},
+            "partition_strategy": {"method": "range", "columns": ("name",),
+                "driver": {"pgsql": {"columns": ("id",)}}},
+            "partitions": {
+                (p1): {"bound_from": -10, "bound_to": -1,
+                    "driver": {"pgsql": {"bound_from": 0, "bound_to": 10}}},
+                (p2): {"bound_from": 10, "bound_to": 999,
+                    "driver": {"pgsql": {"bound_to": 20}}},
+            },
+        };
+
+        PgsqlTable tmpl(ds, parent);
+        tmpl.setupTable(desc);
+        string create_sql = tmpl.getCreateSqlString();
+        assertTrue(create_sql =~ /partition by range \(id\)/i, "parent DDL contains partition strategy");
+        assertTrue(create_sql =~ /partition of public\.pgsql_partition_test/i, "child DDL references parent");
+        tmpl.createCommit();
+
+        PgsqlTable t(ds, parent);
+        assertTrue(t.supportsPartitions(), "pgsql supports partitions");
+        assertTrue(t.supportsPartitionDetach(), "pgsql supports partition detach");
+
+        *hash<PartitionStrategy> strategy = t.getPartitionStrategy();
+        assertTrue(exists strategy, "partition strategy introspected");
+        assertEq("range", strategy.method, "partition method");
+        assertEq(("id",), strategy.columns, "partition key columns");
+
+        hash<string, PartitionInfo> partitions = t.listPartitions();
+        assertEq(2, partitions.size(), "initial partition count");
+        assertTrue(partitions.hasKey(p1), "partition p1 introspected");
+        assertEq(0, partitions{p1}.bound_from, "p1 lower bound parsed");
+        assertEq(10, partitions{p1}.bound_to, "p1 upper bound parsed");
+        assertEq(20, partitions{p2}.bound_to, "partition driver override applied");
+
+        hash<auto> desc_no_parts = t.getDescriptionHash();
+        assertTrue(desc_no_parts.hasKey("partition_strategy"), "description includes strategy");
+        assertFalse(desc_no_parts.hasKey("partitions"), "description omits partitions by default");
+        hash<auto> desc_parts = t.getDescriptionHash({"with_partitions": True});
+        assertTrue(desc_parts.partitions.hasKey(p1), "description includes partitions when requested");
+
+        hash<PartitionLookupResult> lookup = t.findPartitionBySpec({"bound_from": 0, "bound_to": 10});
+        assertEq(PartitionLookupStatus::Found, lookup.status, "find partition by typed bounds");
+        assertEq(p1, lookup.partition.name, "lookup returned p1");
+
+        hash<PartitionEnsureResult> ensure_existing = t.ensurePartition({
+            "name": p1,
+            "bound_from": 0,
+            "bound_to": 10,
+        });
+        assertFalse(ensure_existing.created, "ensure existing does not create");
+        assertTrue(ensure_existing.materialized, "ensure existing is materialized");
+        assertTrue(ensure_existing.bounds_verified, "ensure existing verified by bounds");
+
+        hash<PartitionEnsureResult> ensure_created = t.ensurePartition({
+            "name": p3,
+            "bound_from": 20,
+            "bound_to": 30,
+        });
+        assertTrue(ensure_created.created, "ensure new creates");
+        assertTrue(ensure_created.materialized, "ensure new is materialized");
+        ds.commit();
+
+        t.clear();
+        partitions = t.listPartitions();
+        assertTrue(partitions.hasKey(p3), "new partition introspected after cache clear");
+
+        t.insert({"id": 21, "name": "to truncate"});
+        assertEq(1, ds.selectRow("select count(*) c from " + p3).c, "row routed to p3");
+        t.truncatePartition(p3);
+        assertEq(0, ds.selectRow("select count(*) c from " + p3).c, "partition truncate removes rows");
+
+        t.detachPartition(p3);
+        ds.commit();
+        t.clear();
+        assertFalse(t.listPartitions().hasKey(p3), "detached partition removed from parent list");
+        drop_if_exists(p3);
+
+        t.dropPartition(p2);
+        ds.commit();
+        t.clear();
+        assertFalse(t.listPartitions().hasKey(p2), "dropped partition removed from parent list");
+
+        hash<auto> reversed = (new SchemaReverse::TableReverse(ds, parent, {"with_partitions": True})).toQore();
+        assertTrue(reversed.hasKey("partition_strategy"), "SchemaReverse includes partition strategy");
+        assertTrue(reversed.partitions.hasKey(p1), "SchemaReverse includes partitions with option");
     }
 
     private string getResultSetSql() {

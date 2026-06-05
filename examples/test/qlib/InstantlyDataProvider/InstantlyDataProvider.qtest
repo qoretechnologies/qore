@@ -358,9 +358,12 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         assertEq("Instantly", app.display_name);
         assertEq("instantly", app.scheme);
 
-        # Verify actions exist
-        list<hash<auto>> actions = DataProviderActionCatalog::getActionsEx(
-            InstantlyDataProvider::AppName);
+        # Verify actions exist — filter out the framework-injected make-api-call action
+        # (covered by GenericApiCallAutoInjection.qtest in RestClientDataProvider) so the
+        # count assertion below reflects only the provider's own actions
+        list<hash<auto>> actions = select
+            DataProviderActionCatalog::getActionsEx(InstantlyDataProvider::AppName),
+            $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertTrue(actions.size() > 0, "Instantly has registered actions");
 
         # Build action name map
