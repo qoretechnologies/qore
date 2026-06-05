@@ -1,5 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# @file schema-reverse reverse-engineer a database schema to the data-schema format (.ysm/.jsm)
+
+#  schema-reverse Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -8,151 +11,170 @@
 %requires SchemaReverse
 %requires SqlUtil
 %requires DatasourceProvider
+%requires Util
 
-const VERSION = "0.1";
+%try-module yaml
+%define NoYaml
+%endtry
 
-const OBJECT_OPTIONS = (
-        "sequences"     : "q,seq:s",
-        "tables"        : "t,table:s",
-        "types"         : "y,type:s",
-        "views"         : "v,view:s",
-        "mviews"        : "m,mview:s",
-        "procedures"    : "p,proc:s",
-        "functions"     : "f,func:s",
-        "packages"      : "g,pkg:s",
-    );
+%try-module json
+%define NoJson
+%endtry
 
-const OPTIONS = (
-        "help" : "help,h",
-        "version" : "version,V",
-        "verbose" : "verbose",
-        "schema" : "schema,s=s",
-    ) + OBJECT_OPTIONS;
+const VERSION = "2.0";
 
-sub help(int exitCode) {
-    printf("Usage:
-%s <options> <connection_string>
+# map of CLI object-type option -> GetOpt specification; the hash key is also the data-schema top-level key
+# NOTE: plain (non-materialized) views have no representation in the data-schema format and are not exportable
+const OBJECT_TYPES = {
+    "tables":             "t,table:s",
+    "sequences":          "q,seq:s",
+    "types":              "y,type:s",
+    "materialized_views": "m,mview:s",
+    "procedures":         "p,proc:s",
+    "functions":          "f,func:s",
+    "packages":           "g,pkg:s",
+};
 
-Options:
- -h --help          Display help and exits
- -V --version       Show version of this script
-    --verbose       Show additional verbose info
- -s --schema=<name> Export full (supported objects) DB schema.
-                    The class will be named <name>
- -t --table=<val>   Export specified table(s). See <val> section below.
- -q --seq=<val>     Export specified sequence(s). See <val> section below.
- -y --type=<val>    Export specified type(s). See <val> section below.
- -v --view=<val>    Export specified view(s). See <val> section below.
- -m --mview=<val>   Export specified materialized view(s). See <val> section below.
- -p --proc=<val>    Export specified procedure(s). See <val> section below.
- -f --func=<val>    Export specified function(s). See <val> section below.
- -g --pkg=<val>     Export specified package(s). See <val> section below.
-
-Object <val> filtering:
-    Any <val> can be exact name of the object, a list (separated by ','),
-    or a regular expression to match object name.
-
-Note:
-    --schema and (--tables or --sequences or --types) cannot be
-    used together
-
-Example:
-    %s -s=OmqXbox oracle:omq/omq@xbox
-        export full OMQ schema
-
-    %s -t=\"workflows,.*step.*\" oracle:omq/omq@xbox
-        export only tables whch matches exact table name 'workflows',
-        and any of tables with 'step' in name
-
-",
-    get_script_name(), get_script_name(), get_script_name()
-    );
-    exit(exitCode);
-}
+const OPTIONS = {
+    "help":            "help,h",
+    "version":         "version,V",
+    "verbose":         "verbose",
+    "nocolor":         "C,no-color",
+    "schema":          "schema,s=s",
+    "output":          "output,o=s",
+    "format":          "format=s",
+    "with_partitions": "with-partitions",
+} + OBJECT_TYPES;
 
 class Main {
     private {
-        hash m_opts;
-        Datasource m_ds;
+        hash<auto> opts;
+        TerminalColor color;
     }
 
     constructor() {
         GetOpt go(OPTIONS);
-        m_opts = go.parse2(\ARGV);
+        opts = go.parse2(\ARGV);
+        color = new TerminalColor(!opts.nocolor);
 
-        if (m_opts.help) {
-            help(0);
+        if (opts.help) {
+            usage(0);
         }
-
-        if (m_opts.version) {
-            printf(VERSION + "\n");
+        if (opts.version) {
+            printf("%s\n", VERSION);
             exit(0);
         }
 
-        bool userObjects = False;
-        foreach string i in (OBJECT_OPTIONS.keyIterator()) {
-            if (m_opts{i}.typeCode() == NT_BOOLEAN && m_opts{i}) {
-                m_opts{i} = ".*";
-            }
-            if (m_opts{i}.size()) {
-                userObjects = True;
-            }
+        string format = opts.format ?? "yaml";
+        if (format != "yaml" && format != "json") {
+            error("OPTION-ERROR", sprintf("--format must be %y or %y, not %y", "yaml", "json", format));
         }
-
-        if (!m_opts.schema && !userObjects) {
-            error("NOT-ALLOWED-OPTS", sprintf("At least one option must be set: \"schema\" or %y", OBJECT_OPTIONS.keys()));
+%ifdef NoYaml
+        if (format == "yaml") {
+            error("MODULE-ERROR", "the \"yaml\" module is required for YAML output but is not available");
         }
-
-        if (m_opts.schema && userObjects) {
-            error("NOT-ALLOWED-OPTS", sprintf("Cannot combine \"schema\" and %y together", OBJECT_OPTIONS.keys()));
+%endif
+%ifdef NoJson
+        if (format == "json") {
+            error("MODULE-ERROR", "the \"json\" module is required for JSON output but is not available");
         }
+%endif
 
         *string connstr = shift ARGV;
         if (!connstr) {
-            error("NO-CONNECTION-STRING", "Please specify qore DB connection string");
+            error("NO-CONNECTION-STRING", "missing database connection string argument; see --help");
         }
 
-        m_ds = new Datasource(get_ds_string(connstr));
-
-        if (m_opts.schema) {
-            cout("Exporting full schema: %s", m_opts.schema);
-            SchemaReverse sr(m_ds, m_opts.schema);
-            printf("%s\n", sr.toString());
-        }
-        else {
-            HashIterator it(OBJECT_OPTIONS);
-            while (it.next()) {
-                string key = it.getKey();
-                if (exists m_opts{key}) {
-                    exportObjects(m_opts{key}, key);
-                }
+        # collect the object-type filter; a bare flag (boolean True) means "all objects of that type"
+        *hash<auto> filter;
+        foreach string key in (keys OBJECT_TYPES) {
+            if (exists opts{key}) {
+                filter{key} = opts{key}.typeCode() == NT_BOOLEAN ? ".*" : makeRxString(opts{key});
             }
         }
-    } # constructor
 
-    private string makeRxString(string val) {
-        list ret = val.split(",");
-        ret = map trim($1), ret;
-        return ret.join("|");
+        Datasource ds(get_ds_string(connstr));
+        on_exit ds.rollback();
+
+        string sname = opts.schema ?? "ExportedSchema";
+        *hash<auto> rev_opts;
+        if (opts.with_partitions) {
+            rev_opts.with_partitions = True;
+        }
+
+        cout("reverse-engineering %s to data-schema %s (%s)%s", color.value(ds.getDriverName()),
+            color.type(format), color.key(sname),
+            filter ? sprintf(", objects: %s", color.key((keys filter).join(", "))) : "");
+
+        SchemaReverse rev(ds, sname, rev_opts);
+        string output = format == "yaml" ? rev.toYaml(filter) : rev.toJson(filter);
+
+        if (opts.output) {
+            File f();
+            f.open2(opts.output, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(output);
+            stderr.printf("%s data schema to %s (%s)\n", color.success("Exported"), color.key(opts.output),
+                color.type(format));
+        } else {
+            # the schema payload is never colorized so it stays valid YAML/JSON
+            print(output);
+        }
     }
 
-    private exportObjects(string input, string objectType) {
-        cout("Exporting objects: %s, for: %s", objectType, input);
-        AbstractReverseObject o = SchemaReverse::get_object(objectType, m_ds, input);
-        printf("%s\n", o.toString());
+    # converts a comma-separated list of names into an alternation regular expression
+    private string makeRxString(string val) {
+        return (map trim($1), val.split(",")).join("|");
     }
 
     private cout(string msg) {
-        if (!m_opts.verbose) {
+        if (!opts.verbose) {
             return;
         }
-
-        printf("# %s\n", vsprintf(msg, argv));
+        # status output goes to stderr so the schema payload on stdout stays clean
+        stderr.printf("%s %s\n", color.dim("#"), vsprintf(msg, argv));
     }
 
-    static error(string errcode, string msg) {
-        stderr.printf("%s: %s\n", errcode, msg);
+    private usage(int rc) {
+        printf("%s v%s - reverse-engineer a database schema to the data-schema format (.ysm/.jsm)\n\n",
+            color.bold("schema-reverse"), VERSION);
+        printf("%s\n  %s %s %s\n\n", color.bold("Usage:"), get_script_name(),
+            color.dim("[options]"), color.dim("<connection>"));
+        printf("%s\n", color.bold("Connection:"));
+        printf("  %s   Direct connection string\n", color.dim("pgsql:user/pass@db%host"));
+        printf("  %s             Named connection from DatasourceProvider\n\n", color.dim("mydb"));
+        printf("%s\n", color.bold("Options:"));
+        printf("  %s   Schema name in the output (default: %s)\n", color.key("-s, --schema <name>"),
+            color.dim("ExportedSchema"));
+        printf("  %s   Output file (default: stdout)\n", color.key("-o, --output <file>"));
+        printf("  %s     Output format %s (default: %s)\n", color.key("    --format <fmt>"),
+            color.dim("yaml|json"), color.dim("yaml"));
+        printf("  %s   Include physical partitions in the export\n", color.key("    --with-partitions"));
+        printf("  %s            Disable colorized output\n", color.key("-C, --no-color"));
+        printf("  %s              Verbose status output (to stderr)\n", color.key("    --verbose"));
+        printf("  %s              Show version and exit\n", color.key("-V, --version"));
+        printf("  %s                 Show this help and exit\n\n", color.key("-h, --help"));
+        printf("%s\n", color.bold("Object selection (default: the whole schema):"));
+        printf("  %s    Export only the given table(s)\n", color.key("-t, --table <val>"));
+        printf("  %s      Export only the given sequence(s)\n", color.key("-q, --seq <val>"));
+        printf("  %s     Export only the given type(s)\n", color.key("-y, --type <val>"));
+        printf("  %s    Export only the given materialized view(s)\n", color.key("-m, --mview <val>"));
+        printf("  %s     Export only the given procedure(s)\n", color.key("-p, --proc <val>"));
+        printf("  %s     Export only the given function(s)\n", color.key("-f, --func <val>"));
+        printf("  %s      Export only the given package(s)\n", color.key("-g, --pkg <val>"));
+        printf("\n  %s each %s is an exact name, a comma-separated list, or a regular expression;\n",
+            color.dim("Note:"), color.dim("<val>"));
+        printf("  a bare flag (no value) selects all objects of that type. Multiple object\n");
+        printf("  options can be combined; the result is always a complete data-schema document.\n\n");
+        printf("%s\n", color.bold("Examples:"));
+        printf("  %s\n", color.dim("schema-reverse -s MySchema pgsql:user/pass@db -o myschema.ysm"));
+        printf("  %s\n", color.dim("schema-reverse --with-partitions oracle:user/pass@tns"));
+        printf("  %s\n", color.dim("schema-reverse --table='workflows,.*step.*' --format json mydb"));
+        exit(rc);
+    }
+
+    static error(string err, string msg) {
+        TerminalColor color(True);
+        stderr.printf("%s %s: %s\n", color.error("ERROR:"), err, msg);
         exit(1);
     }
-
-} # class Main
+}

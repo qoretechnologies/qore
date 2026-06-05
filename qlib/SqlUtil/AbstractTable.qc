@@ -6501,23 +6501,37 @@ table.clear();
             clearPartitionsUnlocked();
         }
         return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name),
-            AbstractDatabase::AC_Drop, "partition", partition_name, name);
+            AbstractDatabase::AC_Modify, "partition", partition_name, name);
     }
 
     #! detaches a partition without transaction management
-    /** @since SqlUtil 2.4
+    /** Detaches the named partition from this table, turning it into a standalone table with the same name and
+        data, without dropping the data (PostgreSQL @c ALTER @c TABLE @c ... @c DETACH @c PARTITION semantics).
+
+        @param partition_name the name of the partition to detach
+        @param opt an optional hash of @ref alignment-options "alignment options"
+
+        @return the detached relation as a standalone @ref AbstractTable object constructed against the same
+        datasource; it is @b not added to any parent's @ref Tables cache, so the caller owns its lifecycle
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+
+        @since SqlUtil 2.4
     */
-    detachPartition(string partition_name, *hash<auto> opt) {
+    AbstractTable detachPartition(string partition_name, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
 
         string sql;
         bool execute;
+        string detached_name;
 
         {
             l.lock();
             on_exit l.unlock();
 
             assertPartitionDetachSupportUnlocked();
+            # resolve the detached relation's name while the partition still belongs to this table
+            detached_name = getDetachedTableNameImpl(partition_name);
             execute = inDb;
             if (execute) {
                 sql = getDetachPartitionSqlImpl(partition_name);
@@ -6533,15 +6547,22 @@ table.clear();
             on_exit l.unlock();
             clearPartitionsUnlocked();
         }
+
+        # return the detached relation as a standalone table; not added to this table's cache
+        return AbstractTable::getTable(ds, detached_name);
     }
 
     #! detaches a partition and commits the transaction
-    /** @since SqlUtil 2.4
+    /** @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
+
+        @since SqlUtil 2.4
     */
-    detachPartitionCommit(string partition_name, *hash<auto> opt) {
+    AbstractTable detachPartitionCommit(string partition_name, *hash<auto> opt) {
         on_exit ds.commit();
         on_error ds.rollback();
-        detachPartition(partition_name, opt);
+        return detachPartition(partition_name, opt);
     }
 
     #! ensures that a partition matching the given specification exists
@@ -6557,16 +6578,9 @@ table.clear();
             assertPartitionSupportUnlocked();
             ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
 
-            hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
-            if (lookup.status == PartitionLookupStatus::Found) {
-                return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Bounds, lookup.partition);
-            }
-
-            if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
-                hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-                if (ph.hasKey(ps.name)) {
-                    return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Name, ph{ps.name});
-                }
+            *hash<PartitionEnsureResult> existing = resolveExistingPartitionUnlocked(ps);
+            if (existing) {
+                return existing;
             }
 
             if (supportsAutoPartitioningImpl() && partitionAutoStrategyCoversSpecImpl(ps)) {
@@ -6574,8 +6588,66 @@ table.clear();
             }
         }
 
-        hash<PartitionInfo> info = addPartition(ps, opt);
+        # issue: handle the concurrent-create (TOCTOU) race deterministically: if the CREATE fails because the
+        # partition already exists (another instance won the race), treat it as success by re-resolving the
+        # partition by bounds and then by canonical name; any other failure propagates unchanged.  On drivers
+        # where partition DDL is transactional (PostgreSQL), a failed statement aborts the transaction, so the
+        # CREATE is wrapped in a savepoint that is rolled back before re-resolving; no retry loop or polling
+        *AbstractSavepointHelper sp;
+        if (inDb && partitionDdlIsTransactionalImpl()) {
+            sp = getSavepointHelper();
+        }
+
+        hash<PartitionInfo> info;
+        try {
+            info = addPartition(ps, opt);
+        } catch (hash<ExceptionInfo> ex) {
+            # restore a usable transaction (and clear the savepoint so the helper's destructor does not act on it)
+            if (sp) {
+                sp.rollback();
+                delete sp;
+            }
+            if (!isPartitionExistsErrorImpl(ex)) {
+                rethrow;
+            }
+            l.lock();
+            on_exit l.unlock();
+            # the CREATE threw, so addPartition() never invalidated the cache; do it here before re-resolving
+            clearPartitionsUnlocked();
+            *hash<PartitionEnsureResult> raced = resolveExistingPartitionUnlocked(ps);
+            if (raced) {
+                return raced;
+            }
+            throw "PARTITION-ERROR", sprintf("%s: partition %y was reported as already existing but could not "
+                "be resolved by bounds or by canonical name", getDesc(), ps.name);
+        }
+        # success: release the savepoint explicitly (the destructor would otherwise do it when sp goes out of scope)
+        delete sp;
         return makePartitionEnsureResult(True, True, False, PartitionVerifiedBy::Bounds, info);
+    }
+
+    #! resolves an already-existing partition for ensurePartition(), by typed bounds and then by canonical name
+    /** @return the @ref PartitionEnsureResult for an existing partition, or @ref nothing if the partition does
+        not yet exist (neither bounds nor canonical name resolve)
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 2.4
+    */
+    private *hash<PartitionEnsureResult> resolveExistingPartitionUnlocked(hash<PartitionSpec> ps) {
+        hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
+        if (lookup.status == PartitionLookupStatus::Found) {
+            return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Bounds, lookup.partition);
+        }
+
+        if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
+            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            if (ph.hasKey(ps.name)) {
+                return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Name, ph{ps.name});
+            }
+        }
+
+        return;
     }
 
     #! ensures that a partition matching the given specification exists and commits the transaction if it was created
@@ -6933,7 +7005,7 @@ string sql = table.getCreateTableSql();
 
     private assertPartitionSupportUnlocked() {
         if (!supportsPartitionsImpl()) {
-            throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support table partitioning", getDesc(),
+            throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support table partitioning", getDesc(),
                 ds.getDriverName());
         }
     }
@@ -6941,7 +7013,7 @@ string sql = table.getCreateTableSql();
     private assertPartitionDetachSupportUnlocked() {
         assertPartitionSupportUnlocked();
         if (!supportsPartitionDetachImpl()) {
-            throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support detaching partitions",
+            throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions",
                 getDesc(), ds.getDriverName());
         }
     }
@@ -8905,26 +8977,60 @@ on_exit printf("SQL> %s\n", sql);
 
     #! returns SQL to add a partition
     private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
-        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support adding partitions", getDesc(),
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support adding partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to drop a partition
     private string getDropPartitionSqlImpl(string partition_name) {
-        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support dropping partitions", getDesc(),
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support dropping partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to truncate a partition
     private string getTruncatePartitionSqlImpl(string partition_name) {
-        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support truncating partitions", getDesc(),
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support truncating partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to detach a partition
     private string getDetachPartitionSqlImpl(string partition_name) {
-        throw "PARTITION-ERROR", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
             ds.getDriverName());
+    }
+
+    #! returns the name of the standalone table that a detached partition becomes
+    /** detach-capable drivers override this to derive the standalone relation's name from the partition name;
+        used by detachPartition() to construct the returned @ref AbstractTable
+
+        @since SqlUtil 2.4
+    */
+    private string getDetachedTableNameImpl(string partition_name) {
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
+            ds.getDriverName());
+    }
+
+    #! returns @ref True "True" if the exception indicates that the partition already exists
+    /** used by ensurePartition() to treat a concurrent duplicate-create race as success; partition-capable
+        drivers override this to recognize the driver-specific "relation/partition already exists" error
+
+        @since SqlUtil 2.4
+    */
+    private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
+        return False;
+    }
+
+    #! returns @ref True "True" if partition DDL participates in the caller's transaction (and therefore a failed
+    #! statement aborts it)
+    /** drivers where partition DDL is transactional (e.g. PostgreSQL) return @ref True so that ensurePartition()
+        wraps the CREATE in a savepoint and can recover from a concurrent-create error by rolling back to it and
+        re-resolving; drivers that auto-commit DDL (Oracle, MySQL) inherit the default @ref False, where a failed
+        statement leaves the transaction usable and no savepoint is needed
+
+        @since SqlUtil 2.4
+    */
+    private bool partitionDdlIsTransactionalImpl() {
+        return False;
     }
 
     #! returns the type for number / numeric columns for the database so that data conversions can be handled properly

@@ -47,6 +47,7 @@ class Main inherits QUnit::Test {
         addTestCase("schema reverse - toYaml", \testSchemaReverseToYaml());
         addTestCase("schema reverse - toJson", \testSchemaReverseToJson());
         addTestCase("schema reverse - full toQore", \testSchemaReverseFullToQore());
+        addTestCase("schema reverse - filtered toQore", \testSchemaReverseFilteredToQore());
 
         set_return_value(main());
     }
@@ -221,5 +222,28 @@ class Main inherits QUnit::Test {
         assertTrue(table_data.columns.hasKey("id"), "table has id column");
         assertTrue(table_data.columns.hasKey("foo"), "table has foo column");
         assertTrue(table_data.columns.hasKey("bar"), "table has bar column");
+    }
+
+    testSchemaReverseFilteredToQore() {
+        if (!m_ds) {
+            testSkip("no DB connection");
+        }
+
+        SchemaReverse rev(m_ds, "TestSchema");
+
+        # filtering to a single object type yields a complete data-schema document with only that type
+        hash<auto> only_tables = rev.toQore({"tables": ".*"});
+        assertTrue(only_tables.hasKey("schema"), "filtered export keeps schema metadata");
+        assertTrue(only_tables.hasKey("tables"), "filtered export includes the requested object type");
+        assertFalse(only_tables.hasKey("sequences"), "filtered export omits unrequested object types");
+        assertTrue(only_tables.tables.hasKey("schema_reverse_t1"), "filtered tables include the test table");
+
+        # an object-name mask restricts which objects of that type are exported
+        hash<auto> masked = rev.toQore({"sequences": "schema_reverse_seq"});
+        assertFalse(masked.hasKey("tables"), "mask export omits tables");
+        assertTrue(masked.sequences.hasKey("schema_reverse_seq"), "mask export includes the matching sequence");
+
+        # an empty filter is equivalent to a full export
+        assertEq(rev.toQore().tables, rev.toQore({}).tables, "empty filter equals a full export");
     }
 } # class Main

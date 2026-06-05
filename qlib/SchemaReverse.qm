@@ -960,89 +960,116 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             return ret;
         }
 
-        #! Returns a hash with all schema objects suitable for YAML/JSON serialization
-        /** @return a hash with keys: \c schema, \c tables, \c sequences, \c types, \c functions,
-            \c procedures, \c packages, \c materialized_views
+        #! Returns a hash with schema objects suitable for YAML/JSON serialization (data-schema format)
+        /** @param filter an optional set of data-schema object-type keys to include, each mapped to an optional
+            name mask (a regular expression); when @ref nothing or empty, the full schema is returned. Valid keys
+            are \c tables, \c sequences, \c types, \c functions, \c procedures, \c packages, and
+            \c materialized_views. This lets callers export only selected object types as a complete, valid
+            data-schema document without re-implementing the driver-specific object wrapping.
+
+            @return a hash with a \c schema metadata key plus the requested object-type keys (\c tables,
+            \c sequences, \c types, \c functions, \c procedures, \c packages, \c materialized_views)
 
             @since SchemaReverse 1.2
         */
-        hash<auto> toQore() {
-            hash<auto> result = {
-                "schema": {
-                    "name": m_class_name,
-                    "version": "1.0",
-                },
-                "tables": new TablesReverse(m_ds, ".*", m_options).toQore(),
-                "sequences": new SequencesReverse(m_ds).toQore(),
+        hash<auto> toQore(*hash<auto> filter) {
+            bool all = !filter;
+            code want = bool sub (string key) { return all || filter.hasKey(key); };
+            code mask = string sub (string key) { return filter{key} ?? ".*"; };
+
+            # build incrementally with an empty hash<auto> to avoid value-type narrowing from the initializer
+            hash<auto> result();
+            result.schema = {
+                "name": m_class_name,
+                "version": "1.0",
             };
 
+            if (want("tables")) {
+                result.tables = new TablesReverse(m_ds, mask("tables"), m_options).toQore();
+            }
+            if (want("sequences")) {
+                result.sequences = new SequencesReverse(m_ds, mask("sequences")).toQore();
+            }
+
             # Add types if supported
-            if (new Database(m_ds).supportsTypes()) {
-                result.types = new TypesReverse(m_ds).toQore();
+            if (want("types") && new Database(m_ds).supportsTypes()) {
+                result.types = new TypesReverse(m_ds, mask("types")).toQore();
             }
 
             # Add driver-specific objects
             string drv = m_ds.getDriverName();
-            hash<auto> functions = new FunctionsReverse(m_ds).toQore();
-            if (functions) {
-                if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("functions")) {
-                    result.functions = functions;
-                } else {
-                    result.functions = {"driver": {drv: functions}};
+            if (want("functions")) {
+                hash<auto> functions = new FunctionsReverse(m_ds, mask("functions")).toQore();
+                if (functions) {
+                    if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("functions")) {
+                        result.functions = functions;
+                    } else {
+                        result.functions = {"driver": {drv: functions}};
+                    }
                 }
             }
 
-            hash<auto> procedures = new ProceduresReverse(m_ds).toQore();
-            if (procedures) {
-                if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("procedures")) {
-                    result.procedures = procedures;
-                } else {
-                    result.procedures = {"driver": {drv: procedures}};
+            if (want("procedures")) {
+                hash<auto> procedures = new ProceduresReverse(m_ds, mask("procedures")).toQore();
+                if (procedures) {
+                    if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("procedures")) {
+                        result.procedures = procedures;
+                    } else {
+                        result.procedures = {"driver": {drv: procedures}};
+                    }
                 }
             }
 
-            hash<auto> mviews = new MViewsReverse(m_ds).toQore();
-            if (mviews) {
-                result.materialized_views = mviews;
+            if (want("materialized_views")) {
+                hash<auto> mviews = new MViewsReverse(m_ds, mask("materialized_views")).toQore();
+                if (mviews) {
+                    result.materialized_views = mviews;
+                }
             }
 
-            hash<auto> packages = new PackagesReverse(m_ds).toQore();
-            if (packages) {
-                if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("packages")) {
-                    result.packages = packages;
-                } else {
-                    result.packages = {"driver": {drv: packages}};
+            if (want("packages")) {
+                hash<auto> packages = new PackagesReverse(m_ds, mask("packages")).toQore();
+                if (packages) {
+                    if (SqlUtil::AbstractDatabase::SchemaDescriptionOptions.hasKey("packages")) {
+                        result.packages = packages;
+                    } else {
+                        result.packages = {"driver": {drv: packages}};
+                    }
                 }
             }
 
             return result;
         }
 
-        #! Returns the complete schema as a YAML string
-        /** @return a YAML string representation of the schema
+        #! Returns the schema as a YAML string in the data-schema format
+        /** @param filter an optional object-type filter; see toQore()
+
+            @return a YAML string representation of the schema
 
             @throw SCHEMA-REVERSE-ERROR if the yaml module is not available
 
             @since SchemaReverse 1.2
         */
-        string toYaml() {
+        string toYaml(*hash<auto> filter) {
 %ifndef NoYaml
-            return make_yaml(toQore(), BlockStyle);
+            return make_yaml(toQore(filter), BlockStyle);
 %else
             throw "SCHEMA-REVERSE-ERROR", "the yaml module is required for YAML output but is not available";
 %endif
         }
 
-        #! Returns the complete schema as a JSON string
-        /** @return a JSON string representation of the schema
+        #! Returns the schema as a JSON string in the data-schema format
+        /** @param filter an optional object-type filter; see toQore()
+
+            @return a JSON string representation of the schema
 
             @throw SCHEMA-REVERSE-ERROR if the json module is not available
 
             @since SchemaReverse 1.2
         */
-        string toJson() {
+        string toJson(*hash<auto> filter) {
 %ifndef NoJson
-            return make_json(toQore(), JGF_ADD_FORMATTING);
+            return make_json(toQore(filter), JGF_ADD_FORMATTING);
 %else
             throw "SCHEMA-REVERSE-ERROR", "the json module is required for JSON output but is not available";
 %endif

@@ -1546,8 +1546,19 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns a list of string table names in the database
     private list<string> listTablesImpl() {
-        string sql = "select * from information_schema.tables "
-            "where table_schema not in ('pg_catalog', 'information_schema');";
+        # NOTE: exclude partition child relations. PostgreSQL exposes each declarative partition as its own
+        # relation, but a partition is not a standalone logical table and must not appear in the table list
+        # (Oracle and MySQL already behave this way). A partition child is a pg_inherits child whose parent is a
+        # partitioned table (pg_class.relkind = 'p'). This check is version-safe (on servers without declarative
+        # partitioning the 'p' relkind simply never matches) and does not exclude classic table-inheritance
+        # children, whose parent relkind is 'r'.
+        string sql = "select t.table_schema, t.table_name from information_schema.tables t "
+            "where t.table_schema not in ('pg_catalog', 'information_schema') "
+            "and not exists (select 1 from pg_catalog.pg_inherits inh "
+            "join pg_catalog.pg_class child on child.oid = inh.inhrelid "
+            "join pg_catalog.pg_namespace cn on cn.oid = child.relnamespace "
+            "join pg_catalog.pg_class parent on parent.oid = inh.inhparent "
+            "where cn.nspname = t.table_schema and child.relname = t.table_name and parent.relkind = 'p')";
         return map
             $1.table_schema != 'public' ? sprintf("%s.%s", $1.table_schema, $1.table_name) : $1.table_name,
             ds.select(sql).contextIterator();
@@ -3894,6 +3905,24 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return (ex.desc =~ /duplicate key value/);
     }
 
+    #! Returns True if the exception indicates that the partition (child relation) already exists
+    /** PostgreSQL raises SQLSTATE 42P07 (\c duplicate_table) with a "relation ... already exists" message when a
+        partition is created concurrently by another connection
+
+        @since PgsqlSqlUtilBase 1.9
+    */
+    private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
+        return (ex.desc =~ /already exists/);
+    }
+
+    #! PostgreSQL partition DDL is transactional, so ensurePartition() must use a savepoint to recover from a
+    #! concurrent-create error
+    /** @since PgsqlSqlUtilBase 1.9
+    */
+    private bool partitionDdlIsTransactionalImpl() {
+        return True;
+    }
+
     private hash<auto> getQoreTypeMapImpl() {
         return QoreTypeMap;
     }
@@ -3929,11 +3958,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private bool supportsPartitionsImpl() {
-        return True;
+        # declarative table partitioning was introduced in PostgreSQL 10
+        getServerVersion();
+        return server_version_major >= 10;
     }
 
     private bool supportsPartitionDetachImpl() {
-        return True;
+        # ALTER TABLE ... DETACH PARTITION was introduced in PostgreSQL 10
+        getServerVersion();
+        return server_version_major >= 10;
     }
 
     private *hash<PartitionStrategy> getPartitionStrategyImpl() {
@@ -3974,21 +4007,43 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
             "where pn.nspname = %v and p.relname = %v order by i.inhseqno, cn.nspname, c.relname", schema, name);
 
-        int ordinal = 0;
+        # build the partition list in the catalog (inhseqno) order first
+        list<hash<PartitionInfo>> all = ();
         foreach hash<auto> row in (qh.contextIterator()) {
             string pname = getCanonicalPartitionName(row.schema, row.relation_name);
             hash<PartitionInfo> info({
                 "name": pname,
                 "method": strategy.method,
                 "columns": strategy.columns,
-                "ordinal": ordinal++,
+                "ordinal": 0,
                 "schema": row.schema,
                 "relation_name": row.relation_name,
-                "sql_name": sprintf("%s.%s", row.schema, row.relation_name),
+                "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
                 "bound_sql": row.bound_sql,
                 "is_default": False,
             });
             populatePgPartitionBounds(\info);
+            all += info;
+        }
+
+        # order range partitions by ascending typed lower bound; partitions without a comparable scalar lower
+        # bound (default/catch-all, or composite or SQL-only bounds) keep their catalog order and sort last
+        list<hash<PartitionInfo>> ranged = ();
+        list<hash<PartitionInfo>> other = ();
+        foreach hash<PartitionInfo> info in (all) {
+            if (!info.is_default && exists info.bound_from && info.bound_from.typeCode() != NT_LIST) {
+                ranged += info;
+            } else {
+                other += info;
+            }
+        }
+        ranged = sort(ranged, int sub (hash<PartitionInfo> l, hash<PartitionInfo> r) {
+            return l.bound_from < r.bound_from ? -1 : (l.bound_from > r.bound_from ? 1 : 0);
+        });
+
+        int ordinal = 0;
+        foreach hash<PartitionInfo> info in (ranged + other) {
+            info.ordinal = ordinal++;
             rv{info.name} = info;
         }
 
@@ -3997,6 +4052,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private string getCanonicalPartitionName(string pschema, string pname) {
         return pschema == "public" ? pname : sprintf("%s.%s", pschema, pname);
+    }
+
+    #! returns a schema-qualified, identifier-quoted SQL name for a partition relation
+    /** partition and schema names are identifiers, not SQL fragments; they are quoted through getColumnSqlName()
+        (the table's identifier-quoting helper, which quotes reserved words) so reserved words and special
+        characters are handled safely.  The result is suitable for use as PartitionInfo::sql_name and in generated
+        DDL.
+
+        @since PgsqlSqlUtilBase 1.9
+    */
+    private string getQuotedPartitionSqlName(string pschema, string relation_name) {
+        return sprintf("%s.%s", getColumnSqlName(pschema), getColumnSqlName(relation_name));
     }
 
     private hash<auto> parsePartitionRelationName(string partition_name) {
@@ -4014,11 +4081,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return spec.sql_name;
         }
         if (spec.schema && spec.relation_name) {
-            return sprintf("%s.%s", spec.schema, spec.relation_name);
+            return getQuotedPartitionSqlName(spec.schema, spec.relation_name);
         }
 
         hash<auto> rel = parsePartitionRelationName(spec.name);
-        return sprintf("%s.%s", rel.schema, rel.name);
+        return getQuotedPartitionSqlName(rel.schema, rel.name);
     }
 
     private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
@@ -4044,7 +4111,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "ordinal": 0,
             "schema": row.schema,
             "relation_name": row.relation_name,
-            "sql_name": sprintf("%s.%s", row.schema, row.relation_name),
+            "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
         });
         return info;
     }
@@ -4067,6 +4134,17 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private string getDetachPartitionSqlImpl(string partition_name) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s detach partition %s", getSqlName(), info.sql_name);
+    }
+
+    #! returns the canonical name of the standalone table that the detached partition becomes
+    /** the detached relation keeps the partition's schema and relation name; membership in this table is
+        validated separately by getDetachPartitionSqlImpl() when the detach SQL is generated
+
+        @since PgsqlSqlUtilBase 1.9
+    */
+    private string getDetachedTableNameImpl(string partition_name) {
+        hash<auto> rel = parsePartitionRelationName(partition_name);
+        return getCanonicalPartitionName(rel.schema, rel.name);
     }
 
     private string getPgPartitionBoundSql(hash<PartitionSpec> spec) {
@@ -4098,13 +4176,17 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private populatePgPartitionBounds(reference<hash<PartitionInfo>> info) {
         string bound_sql = info.bound_sql;
-        if (bound_sql =~ x/^default$/i) {
+        # NOTE: use the match operator (=~ //), not the extract operator (=~ x//): the latter has no capture
+        # groups here and returns an empty list, which is false, so the default partition was never flagged
+        if (bound_sql =~ /^default$/i) {
             info.is_default = True;
             return;
         }
 
         (*string bound_from_sql, *string bound_to_sql) = (bound_sql =~ x/^for\s+values\s+from\s*\((.*)\)\s+to\s*\((.*)\)$/i);
-        if (!bound_from_sql || !bound_to_sql) {
+        # NOTE: use "exists" rather than a boolean test; a bound value of "0" (or "") is a valid bound but is
+        # false in a boolean context, so "!bound_from_sql" would incorrectly discard zero/empty bounds
+        if (!exists bound_from_sql || !exists bound_to_sql) {
             return;
         }
 

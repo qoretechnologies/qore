@@ -2552,6 +2552,16 @@ end";
             return (ex.desc =~ /^Duplicate entry /);
         }
 
+        #! Returns True if the exception indicates that the partition already exists
+        /** MySQL raises error 1517 with a "Duplicate partition name" message when adding a partition that
+            already exists; ensurePartition() treats this as a successful concurrent create
+
+            @since MysqlSqlUtil 1.5
+        */
+        private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
+            return (ex.desc =~ /Duplicate partition name/);
+        }
+
         private hash getQoreTypeMapImpl() {
             return QoreTypeMap;
         }
@@ -2603,7 +2613,9 @@ end";
         }
 
         private bool supportsPartitionsImpl() {
-            return True;
+            # native table partitioning is gated at MySQL 5.7+ per the SqlUtil partition design; the server
+            # version integer is encoded as major*10000 + minor*100 + patch (so 5.7 == 50700)
+            return ds.getServerVersion() >= 50700;
         }
 
         private bool createPartitionsInCreateTableImpl() {
@@ -2703,12 +2715,12 @@ end";
 
         private string getDropPartitionSqlImpl(string partition_name) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
-            return sprintf("alter table %s drop partition %s", getSqlName(), info.name);
+            return sprintf("alter table %s drop partition %s", getSqlName(), getColumnSqlName(info.name));
         }
 
         private string getTruncatePartitionSqlImpl(string partition_name) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
-            return sprintf("alter table %s truncate partition %s", getSqlName(), info.name);
+            return sprintf("alter table %s truncate partition %s", getSqlName(), getColumnSqlName(info.name));
         }
 
         private assertNoMysqlDefaultPartitionForAddUnlocked(hash<PartitionSpec> spec) {
@@ -2727,7 +2739,7 @@ end";
             if (!spec.name) {
                 throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB partition name is required", getDesc());
             }
-            return sprintf("partition %s %s", spec.name, getMysqlPartitionBoundSql(spec));
+            return sprintf("partition %s %s", getColumnSqlName(spec.name), getMysqlPartitionBoundSql(spec));
         }
 
         private string getMysqlPartitionBoundSql(hash<PartitionSpec> spec) {
