@@ -64,9 +64,10 @@ Phase 1 supports only range partitions:
 - optional default / catch-all range partition where the driver supports it;
 - optional auto-create strategy for drivers with native interval partitioning.
 
-List partitions, hash partitions, composite sub-partitioning, partition exchange, and
-non-equivalent detach emulations are deferred. Future work should add method-specific spec
-hashdecls rather than overloading the range-oriented fields below.
+List/hash partitions, composite sub-partitioning, partition exchange, and non-equivalent detach
+emulations are deferred — see [`sqlutil-partitions-deferred.md`](sqlutil-partitions-deferred.md).
+Future work should add method-specific spec hashdecls rather than overloading the range-oriented
+fields below.
 
 ## Capability flags
 
@@ -712,10 +713,9 @@ key allow-lists.
 2. **Phase 2 — Oracle + MySQL range partitions.** Implement uniform ops; Oracle adds interval
    `auto` strategy (`supportsAutoPartitioning`); both throw `PARTITION-NOT-SUPPORTED` for
    `detachPartition`.
-3. **Phase 3 — MSSQL / others as needed**, plus optional unification of the existing Oracle
-   read-side `"partition"` select qualifier into a generic select option.
-4. **Future method support.** Add list/hash partitioning only after method-specific
-   `PartitionSpec` fields, validation rules, and drop/truncate semantics are specified.
+3. **Phase 3 and beyond — MSSQL / other backends, list/hash partitioning, partition exchange,
+   and scalability follow-ups** are tracked in
+   [`sqlutil-partitions-deferred.md`](sqlutil-partitions-deferred.md).
 
 ## Tests
 
@@ -772,7 +772,6 @@ Phase 1 tests should cover:
 
 ## Open items
 
-- Whether `detachPartition()` should expose PostgreSQL `DETACH … CONCURRENTLY` (cannot run in
-  a transaction) as an option — deferred; phase 1 uses the transactional form.
-- Whether future list/hash support should use separate hashdecls or a discriminated
-  `PartitionSpec` family.
+Open design questions and all deferred / future scope (additional methods, backends, partition
+exchange, `DETACH … CONCURRENTLY`, and scalability follow-ups) are collected in
+[`sqlutil-partitions-deferred.md`](sqlutil-partitions-deferred.md).
