@@ -3912,11 +3912,20 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
     }
 
     private bool supportsPartitionsImpl() {
-        return True;
+        # Oracle table partitioning is enabled from 12c onwards (per the SqlUtil partition design)
+        return getOracleServerMajorVersion() >= 12;
     }
 
     private bool supportsAutoPartitioningImpl() {
-        return True;
+        # Oracle interval (auto-create) range partitioning, enabled from 12c onwards
+        return getOracleServerMajorVersion() >= 12;
+    }
+
+    #! returns the Oracle server major version (e.g. 12, 19, 23)
+    /** @since OracleSqlUtilBase 1.6
+    */
+    private int getOracleServerMajorVersion() {
+        return (ds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
     }
 
     private bool createPartitionsInCreateTableImpl() {

@@ -2613,7 +2613,9 @@ end";
         }
 
         private bool supportsPartitionsImpl() {
-            return True;
+            # native table partitioning is gated at MySQL 5.7+ per the SqlUtil partition design; the server
+            # version integer is encoded as major*10000 + minor*100 + patch (so 5.7 == 50700)
+            return ds.getServerVersion() >= 50700;
         }
 
         private bool createPartitionsInCreateTableImpl() {

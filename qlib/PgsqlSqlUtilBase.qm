@@ -3947,11 +3947,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private bool supportsPartitionsImpl() {
-        return True;
+        # declarative table partitioning was introduced in PostgreSQL 10
+        getServerVersion();
+        return server_version_major >= 10;
     }
 
     private bool supportsPartitionDetachImpl() {
-        return True;
+        # ALTER TABLE ... DETACH PARTITION was introduced in PostgreSQL 10
+        getServerVersion();
+        return server_version_major >= 10;
     }
 
     private *hash<PartitionStrategy> getPartitionStrategyImpl() {
