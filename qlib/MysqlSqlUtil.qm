@@ -2112,6 +2112,14 @@ end";
             return False;
         }
 
+        private softlist<auto> getDropSqlImpl(*hash<auto> opt) {
+            if (opt.force || opt.cascade || opt.cascade_constraints) {
+                throw "OPTION-ERROR", sprintf("%s: cascade table drop options are not supported by database driver %y",
+                    getDesc(), ds.getDriverName());
+            }
+            return sprintf("drop table%s %s", opt.if_exists ? " if exists" : "", getSqlName());
+        }
+
         private Columns describeImpl() {
             # get column descriptions
             *hash qh = ds.select("select * from information_schema.columns where table_name = %v and table_schema = %v order by ordinal_position", name, schema);

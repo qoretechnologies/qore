@@ -262,6 +262,22 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         */
         const CreateAsSelectOptions = AbstractDatabase::CreationOptions + SqlDataCallbackOptions;
 
+        #! generic SQL table drop options
+        /** This option is comprised of @ref AbstractDatabase::CallbackOptions plus the following keys:
+            - \c if_exists: (\c bool_type) if @ref True "True" then a missing table is ignored
+            - \c cascade: (\c bool_type) if @ref True "True" and supported by the underlying database driver,
+              dependent objects are dropped with the table
+            - \c cascade_constraints: (\c bool_type) if @ref True "True" and supported by the underlying database
+              driver, dependent constraints are dropped with the table
+            - \c force: (\c bool_type) legacy alias for the strongest driver-supported table drop behavior
+        */
+        const DropTableOptions = AbstractDatabase::CallbackOptions + (
+            "if_exists": Type::Boolean,
+            "cascade": Type::Boolean,
+            "cascade_constraints": Type::Boolean,
+            "force": Type::Boolean,
+        );
+
         #! generic SQL insert options
         /** In addition to any @ref SqlDataCallbackOptions, the following keys can be set for this option:
             - \c returning: a list having elements of one of the two following types:
@@ -618,7 +634,7 @@ map printf("unique constraint %s\n", $1.getName()), table.getUniqueConstraintIte
 table.dropCommit();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional drop options; see @ref SqlUtil::AbstractTable::DropTableOptions for more info
 
         @throw OPTION-ERROR invalid or unknown callback option
 
@@ -637,7 +653,7 @@ table.dropCommit();
 table.drop();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional drop options; see @ref SqlUtil::AbstractTable::DropTableOptions for more info
 
         @throw OPTION-ERROR invalid or unknown callback option
 
@@ -709,7 +725,7 @@ t.tryExecRaw("drop table tmp_table");
 list l = table.getDropSql();
         @endcode
 
-        @param opt optional callback options; see @ref AbstractDatabase::CallbackOptions for more info
+        @param opt optional drop options; see @ref SqlUtil::AbstractTable::DropTableOptions for more info
 
         @return a list of strings that can be used to drop the table and any other objects assocatied with the table
         (for example: PostgreSQL table trigger function(s))
@@ -717,8 +733,14 @@ list l = table.getDropSql();
         @throw OPTION-ERROR invalid or unknown callback option
     */
     softlist<auto> getDropSql(*hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDropTableOptions(), \opt);
+        if (opt.if_exists && !checkExistence()) {
+            AbstractDatabase::doOkCallback(opt, AbstractDatabase::AC_NotFound, "table", getSqlName());
+            return ();
+        }
         cache();
-        return AbstractDatabase::doCallback(opt, getDropSqlImpl(), AbstractDatabase::AC_Drop, "table", getSqlName());
+        return AbstractDatabase::doCallback(opt, getDropSqlImpl(opt), AbstractDatabase::AC_Drop, "table",
+            getSqlName());
     }
 
     #! truncates all the table data; releases the transaction lock after executing
@@ -8623,6 +8645,13 @@ string sql = table.getAlignSqlString(table2);
         return CreateAsSelectOptions;
     }
 
+    #! returns the table drop options for this driver
+    /** override in subclasses to return driver-specific options
+    */
+    private hash<auto> getDropTableOptions() {
+        return DropTableOptions;
+    }
+
     #! returns the insert from iterator options for this driver
     /** override in subclasses to return driver-specific options
     */
@@ -9052,7 +9081,11 @@ on_exit printf("SQL> %s\n", sql);
         return True;
     }
 
-    private softlist<auto> getDropSqlImpl() {
+    private softlist<auto> getDropSqlImpl(*hash<auto> opt) {
+        if (opt.force || opt.cascade || opt.cascade_constraints) {
+            throw "OPTION-ERROR", sprintf("%s: cascade table drop options are not supported by database driver %y",
+                getDesc(), ds.getDriverName());
+        }
         return sprintf("drop table %s", getSqlName());
     }
 

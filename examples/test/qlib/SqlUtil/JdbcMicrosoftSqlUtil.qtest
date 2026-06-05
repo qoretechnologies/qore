@@ -150,9 +150,57 @@ class FreetdsTest inherits SqlTestBase {
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("create as select", \createAsSelectTest());
+            addTestCase("drop table options", \dropTableOptionsTest());
         }
 
         set_return_value(main());
+    }
+
+    private cleanupDropOptionsTest(AbstractDatasource ds) {
+        string schema = ds.selectRow("select schema_name() as \"schema\"").schema;
+        ds.execRaw(sprintf("if object_id('%s.mssql_drop_options_test', 'U') is not null "
+            "drop table %s.mssql_drop_options_test", schema, schema));
+        ds.commit();
+    }
+
+    private dropTableOptionsTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        if ((new MssqlTable(ds, "mssql_drop_options_probe")).is_sybase) {
+            testSkip("SQL Server DROP TABLE IF EXISTS test is not supported on Sybase");
+        }
+
+        cleanupDropOptionsTest(ds);
+        on_exit {
+            try {
+                cleanupDropOptionsTest(ds);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        ds.execRaw("create table mssql_drop_options_test (id int not null)");
+        ds.commit();
+
+        MssqlTable t(ds, "mssql_drop_options_test");
+        softlist<auto> sql = t.getDropSql({"if_exists": True});
+        assertEq(1, sql.size());
+        assertTrue(sql[0] =~ /^drop table if exists .*mssql_drop_options_test$/i);
+        t.dropCommit({"if_exists": True});
+        assertEq(False, t.checkExistence());
+
+        assertEq((), t.getDropSql({"if_exists": True}));
+        t.dropCommit({"if_exists": True});
+
+        ds.execRaw("create table mssql_drop_options_test (id int not null)");
+        ds.commit();
+        MssqlTable t2(ds, "mssql_drop_options_test");
+        assertThrows("OPTION-ERROR", "cascade table drop options",
+            sub() {
+                t2.getDropSql({"cascade": True});
+            });
     }
 
     private cleanupCreateAsSelectTest(AbstractDatasource ds) {

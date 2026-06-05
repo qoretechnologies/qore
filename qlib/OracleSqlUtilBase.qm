@@ -3064,6 +3064,11 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         return True;
     }
 
+    private softlist<auto> getDropSqlImpl(*hash<auto> opt) {
+        return sprintf("drop table %s%s", getSqlName(),
+            (opt.force || opt.cascade || opt.cascade_constraints) ? " cascade constraints" : "");
+    }
+
     private setTableInfoIntern() {
         hash<auto> row = (schema.lwr() == ds.getUserName().lwr()) ? setTable() : setSchemaTable();
 

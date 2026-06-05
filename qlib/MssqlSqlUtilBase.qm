@@ -2519,9 +2519,13 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     private clearImpl() {
     }
 
-    private softlist getDropSqlImpl() {
+    private softlist getDropSqlImpl(*hash<auto> opt) {
+        if (opt.force || opt.cascade || opt.cascade_constraints) {
+            throw "OPTION-ERROR", sprintf("%s: cascade table drop options are not supported by database driver %y",
+                getDesc(), ds.getDriverName());
+        }
         list<auto> l = ();
-        l += sprintf("drop table %s", getSqlName());
+        l += sprintf("drop table%s %s", opt.if_exists && !is_sybase ? " if exists" : "", getSqlName());
 
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
         if (strategy) {

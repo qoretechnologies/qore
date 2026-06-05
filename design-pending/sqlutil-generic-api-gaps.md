@@ -22,16 +22,27 @@ The API intentionally follows the existing `insertFromSelect()` contract: source
 are expected to use the same datasource, and the operation is executed entirely inside the database
 server.
 
+The second slice adds `AbstractTable::DropTableOptions` for `dropCommit()`, `drop()`, and
+`getDropSql()`:
+
+- `if_exists` is generic and returns no SQL for a missing table before attempting table
+  introspection; drivers with native syntax may also emit `DROP TABLE IF EXISTS`.
+- `cascade` and `force` are supported where the driver has equivalent semantics: PostgreSQL emits
+  `CASCADE`; Oracle emits `CASCADE CONSTRAINTS`.
+- `cascade_constraints` is supported on Oracle and rejected elsewhere so callers do not get silent,
+  non-equivalent drops.
+- MS SQL Server, SQLite, MySQL/MariaDB, and Firebird reject cascade-like options for table drops.
+
 ## Implementation Plan
 
 1. **Materialized query tables / CTAS** - implemented first because it removes the largest raw-SQL
    shape from archive conversion map creation. The current API covers table creation from a
    structured SqlUtil select hash, bind arguments, SQL/data callbacks, commit and no-commit
    variants, and SQL/result metadata via `SqlResultInfo`.
-2. **Drop-for-replacement options** - extend `drop()` / `dropCommit()` with explicit options such as
-   `if_exists`, `cascade`, and `cascade_constraints`, plus driver-managed FK-check suspension where
-   a backend has no equivalent cascade DDL. This must be a separate slice because it can destroy
-   dependent data or metadata.
+2. **Drop-for-replacement options** - implemented for `if_exists`, `cascade`,
+   `cascade_constraints`, and `force` where equivalent backend semantics are available.
+   Driver-managed FK-check suspension remains deferred because it needs an execution API that can
+   guarantee restoration after errors, not just a generated SQL list.
 3. **Set-wise insert-select improvements** - evolve `insertFromSelect()` into a richer
    `insertSelect()`-style API that supports target column mapping, joins, computed expressions,
    external bind values, and reliable affected-row metadata. This should reuse the same structured

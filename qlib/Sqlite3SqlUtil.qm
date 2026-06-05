@@ -933,6 +933,14 @@ auto v = c.name;
             return False;
         }
 
+        private softlist<auto> getDropSqlImpl(*hash<auto> opt) {
+            if (opt.force || opt.cascade || opt.cascade_constraints) {
+                throw "OPTION-ERROR", sprintf("%s: cascade table drop options are not supported by database driver %y",
+                    getDesc(), ds.getDriverName());
+            }
+            return sprintf("drop table%s %s", opt.if_exists ? " if exists" : "", getSqlName());
+        }
+
         private Columns describeImpl() {
             /*
             string sql = ds.selectRow("select sql from sqlite_master where type = 'table' and tbl_name = %v",
