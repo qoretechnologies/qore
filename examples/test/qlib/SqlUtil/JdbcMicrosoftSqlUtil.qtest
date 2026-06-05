@@ -149,9 +149,64 @@ class FreetdsTest inherits SqlTestBase {
 
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("create as select", \createAsSelectTest());
         }
 
         set_return_value(main());
+    }
+
+    private cleanupCreateAsSelectTest(AbstractDatasource ds) {
+        string schema = ds.selectRow("select schema_name() as \"schema\"").schema;
+        foreach string name in (("mssql_ctas_dst", "mssql_ctas_src")) {
+            ds.execRaw(sprintf("if object_id('%s.%s', 'U') is not null drop table %s.%s",
+                schema, name, schema, name));
+        }
+        ds.commit();
+    }
+
+    private createAsSelectTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        if ((new MssqlTable(ds, "mssql_ctas_probe")).is_sybase) {
+            testSkip("SQL Server SELECT INTO CTAS test is not supported on Sybase");
+        }
+
+        cleanupCreateAsSelectTest(ds);
+        on_exit {
+            try {
+                cleanupCreateAsSelectTest(ds);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        ds.execRaw("create table mssql_ctas_src (id int not null, name varchar(100) not null, amount int not null)");
+        ds.execRaw("insert into mssql_ctas_src values (1, 'a', 10), (2, 'b', 20), (3, 'c', 30)");
+        ds.commit();
+
+        AbstractTable source = AbstractTable::getTable(ds, "mssql_ctas_src");
+        AbstractTable target = AbstractTable::getTable(ds, "mssql_ctas_dst");
+        hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {
+            "columns": ("id", "name"),
+            "where": {"amount": op_gt(10)},
+        });
+        assertTrue(info.sql =~ /^select .* into .*mssql_ctas_dst from /i);
+        assertEq(1, info.args.size());
+        assertEq(10, info.args[0]);
+
+        info = target.createAsSelectWithInfo(source, {
+            "columns": ("id", "name"),
+            "where": {"amount": op_gt(10)},
+        });
+        assertTrue(info.sql =~ /^select .* into .*mssql_ctas_dst from /i);
+
+        AbstractTable materialized = AbstractTable::getTable(ds, "mssql_ctas_dst");
+        assertEq(2, materialized.rowCount());
+        hash<auto> rows = materialized.select({"columns": ("id", "name"), "orderby": "id"});
+        assertEq((2, 3), rows.id);
+        assertEq(("b", "c"), rows.name);
     }
 
     private cleanupRangePartitionLifecycleTest(AbstractDatasource ds) {

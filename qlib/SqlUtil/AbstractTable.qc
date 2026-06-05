@@ -256,6 +256,12 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "tablecode": "code",
         };
 
+        #! generic SQL create-as-select options
+        /** This option is comprised of @ref AbstractDatabase::CreationOptions plus
+            @ref SqlUtil::AbstractTable::SqlDataCallbackOptions.
+        */
+        const CreateAsSelectOptions = AbstractDatabase::CreationOptions + SqlDataCallbackOptions;
+
         #! generic SQL insert options
         /** In addition to any @ref SqlDataCallbackOptions, the following keys can be set for this option:
             - \c returning: a list having elements of one of the two following types:
@@ -820,6 +826,163 @@ table.create();
     #! A legacy wrapper for create()
     deprecated createNoCommit(*hash<auto> opt) {
         create(opt);
+    }
+
+    #! creates the table from a select statement and commits or rolls back the transaction
+    /** @par Example:
+        @code{.py}
+target.createAsSelectCommit(source, {
+    "columns": ("id", "name"),
+    "where": {"type": "CUSTOMER"},
+});
+        @endcode
+
+        @param source the source table for the select statement; this table must use the same datasource as the
+        current target table
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return the return value from the underlying datasource execution call
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    auto createAsSelectCommit(AbstractTable source, *hash<auto> select_hash, *hash<auto> opt) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return createAsSelect(source, select_hash, opt);
+    }
+
+    #! creates the table from a select statement without transaction management
+    /** @par Example:
+        @code{.py}
+target.createAsSelect(source, {"columns": ("id", "name")});
+        @endcode
+
+        @param source the source table for the select statement; this table must use the same datasource as the
+        current target table
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return the return value from the underlying datasource execution call
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    auto createAsSelect(AbstractTable source, *hash<auto> select_hash, *hash<auto> opt) {
+        hash<SqlResultInfo> info = getCreateAsSelectSqlWithInfo(source, select_hash, opt);
+        on_success {
+            inDb = True;
+            manual = False;
+        }
+        return ds.vexec(info.sql, info.args);
+    }
+
+    #! creates the table from a select statement and returns execution metadata
+    /** @par Example:
+        @code{.py}
+hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("id", "name")});
+        @endcode
+
+        @param source the source table for the select statement; this table must use the same datasource as the
+        current target table
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return a hash giving the result of the operation, the SQL used for it, and bind arguments; the \c result key
+        will hold the return value from the underlying datasource execution call
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    hash<SqlResultInfo> createAsSelectWithInfo(AbstractTable source, *hash<auto> select_hash, *hash<auto> opt) {
+        hash<SqlResultInfo> rv = getCreateAsSelectSqlWithInfo(source, select_hash, opt);
+        on_success {
+            inDb = True;
+            manual = False;
+        }
+        rv.result = ds.vexec(rv.sql, rv.args);
+        return rv;
+    }
+
+    #! returns the SQL required to create the table from a select statement
+    /** @par Example:
+        @code{.py}
+list<auto> args;
+string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \args);
+        @endcode
+
+        @param source the source table for the select statement
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param args an optional reference to a list for any bind arguments
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return the SQL string that can be used to create the target table from the source select statement
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    string getCreateAsSelectSql(AbstractTable source, *hash<auto> select_hash, *reference<list<auto>> args,
+            *hash<auto> opt) {
+        return getCreateAsSelectSqlIntern(source, select_hash, \args, opt);
+    }
+
+    #! @ref SqlUtil::AbstractTable::getCreateAsSelectSql() variant
+    string getCreateAsSelectSql(AbstractTable source, *hash<auto> select_hash, *reference<list<auto>> args) {
+        return getCreateAsSelectSqlIntern(source, select_hash, \args, NOTHING);
+    }
+
+    #! @ref SqlUtil::AbstractTable::getCreateAsSelectSql() variant
+    string getCreateAsSelectSql(AbstractTable source, *hash<auto> select_hash, *hash<auto> opt) {
+        list<auto> args;
+        return getCreateAsSelectSqlIntern(source, select_hash, \args, opt);
+    }
+
+    #! returns the SQL and bind arguments required to create the table from a select statement
+    /** @par Example:
+        @code{.py}
+hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns": ("id", "name")});
+        @endcode
+
+        @param source the source table for the select statement
+        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
+        hash" for information about this argument
+        @param opt optional creation and data callback options; see
+        @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
+
+        @return a hash giving the SQL used for the operation and bind arguments
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 1.10
+    */
+    hash<SqlResultInfo> getCreateAsSelectSqlWithInfo(AbstractTable source, *hash<auto> select_hash,
+            *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.sql = getCreateAsSelectSqlIntern(source, select_hash, \rv.args, opt);
+        return rv;
     }
 
     #! renames the table
@@ -8453,6 +8616,13 @@ string sql = table.getAlignSqlString(table2);
         return InsertOptions;
     }
 
+    #! returns the create-as-select options for this driver
+    /** override in subclasses to return driver-specific options
+    */
+    private hash<auto> getCreateAsSelectOptions() {
+        return CreateAsSelectOptions;
+    }
+
     #! returns the insert from iterator options for this driver
     /** override in subclasses to return driver-specific options
     */
@@ -8571,6 +8741,24 @@ on_exit printf("SQL> %s\n", sql);
     private string getCreateTableSqlUnlocked(*hash<auto> opt) {
         getColumnsUnlocked();
         return AbstractDatabase::doCallback(opt, getCreateTableSqlImpl(opt), AbstractDatabase::AC_Create, "table", name);
+    }
+
+    private string getCreateAsSelectSqlIntern(AbstractTable source, *hash<auto> select_hash,
+            reference<list<auto>> args, *hash<auto> opt) {
+        if (inDb) {
+            throw "CREATE-TABLE-ERROR", sprintf("%s has already been read from or created in the database",
+                getDesc());
+        }
+        validateOptionsIntern("OPTION-ERROR", getCreateAsSelectOptions(), \opt);
+
+        args = ();
+        string select_sql = source.getSelectSql(select_hash, \args);
+        string sql = AbstractDatabase::doCallback(opt, getCreateAsSelectSqlImpl(select_sql, opt),
+            AbstractDatabase::AC_Create, "table", name);
+        if (opt.sqlarg_callback) {
+            opt.sqlarg_callback(sql, args);
+        }
+        return sql;
     }
 
     private *list<auto> getCreateIndexesSqlUnlocked(*hash<auto> opt, bool cache = True) {
@@ -9031,6 +9219,15 @@ on_exit printf("SQL> %s\n", sql);
     */
     private bool partitionDdlIsTransactionalImpl() {
         return False;
+    }
+
+    #! Reimplement in subclasses to provide driver-specific create-as-select SQL
+    private string getCreateAsSelectSqlImpl(string select_sql, *hash<auto> opt) {
+        if (opt.replace) {
+            throw "OPTION-ERROR", sprintf("%s: create-as-select option %y is not supported by database driver %y",
+                getDesc(), "replace", ds.getDriverName());
+        }
+        return sprintf("create table %s as %s", getSqlName(), select_sql);
     }
 
     #! returns the type for number / numeric columns for the database so that data conversions can be handled properly

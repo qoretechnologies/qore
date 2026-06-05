@@ -2375,6 +2375,25 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     private *list getAlignSqlImpl(AbstractTable table, *hash opt) {
     }
 
+    private string getCreateAsSelectSqlImpl(string select_sql, *hash<auto> opt) {
+        if (is_sybase) {
+            throw "OPTION-ERROR", sprintf("%s: create-as-select is not supported by database driver %y",
+                getDesc(), ds.getDriverName());
+        }
+        if (opt.replace) {
+            throw "OPTION-ERROR", sprintf("%s: create-as-select option %y is not supported by database driver %y",
+                getDesc(), "replace", ds.getDriverName());
+        }
+
+        int i = select_sql.find(" from ");
+        if (i == -1) {
+            throw "CREATE-TABLE-ERROR", sprintf("%s: cannot convert select statement to SQL Server SELECT INTO "
+                "syntax: %s", getDesc(), select_sql);
+        }
+
+        return select_sql.substr(0, i) + " into " + getSqlName() + select_sql.substr(i);
+    }
+
     #! returns a string that can be used to create the table in the database
     private string getCreateSqlImpl(list l) {
         return MssqlDatabase::getCreateSql(l);
