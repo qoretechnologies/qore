@@ -117,6 +117,7 @@ public class QdrantVectorStoreTest inherits QUnit::Test {
         addTestCase("offline upsert + id encoding", \offlineUpsertTest());
         addTestCase("offline deleteByIds", \offlineDeleteTest());
         addTestCase("offline search + filter pass-through", \offlineSearchTest());
+        addTestCase("offline search + portable payload equality filter", \offlinePayloadEqFilterTest());
         addTestCase("offline dimension probe", \offlineDimensionProbeTest());
         addTestCase("offline dimension mismatch is rejected", \offlineDimensionMismatchTest());
         addTestCase("live upsert -> search -> delete", \liveRoundTripTest());
@@ -244,6 +245,41 @@ public class QdrantVectorStoreTest inherits QUnit::Test {
         assertEq("first", hits[0].payload.text);
         assertEq("abc", hits[1].id);
         assertEq(0.80, hits[1].score);
+    }
+
+    #! Portable payload_eq filters must translate to Qdrant must/match clauses
+    private offlinePayloadEqFilterTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        QdrantDataProvider::QdrantVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": "search-test",
+                "options": {"dimension": 4},
+            }, fake);
+
+        store.search((0.1, 0.2, 0.3, 0.4), 5, {
+            "native_filter": {
+                "must": ({"key": "source", "match": {"value": "logs"}},),
+            },
+            "payload_eq": {
+                "group_namespace": 1001,
+                "index_id": "log-errors",
+            },
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq("/collections/search-test/points/query", fake.last_path);
+        assertEq(3, fake.last_body.filter.must.size());
+        hash<auto> must_values = {};
+        foreach hash<auto> clause in (fake.last_body.filter.must) {
+            must_values{clause.key} = clause.match.value;
+        }
+        assertEq("logs", must_values.source);
+        assertEq(1001, must_values.group_namespace);
+        assertEq("log-errors", must_values.index_id);
+        assertFalse(exists fake.last_body.filter.payload_eq);
+        assertFalse(exists fake.last_body.filter.native_filter);
     }
 
     #! When options.dimension is omitted, getDimension() probes /collections/{name}

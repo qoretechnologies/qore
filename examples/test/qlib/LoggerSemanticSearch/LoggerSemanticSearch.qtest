@@ -197,6 +197,28 @@ public class LoggerSemanticSearchTest inherits QUnit::Test {
         assertEq(1, store.size());
         assertEq("database writer connection redacted differently", store.getRecord("tenant-a-log-1").payload.text);
 
+        index.indexEntries((
+            {
+                "record_id": "tenant-b-log-1",
+                "rendered": "database writer rejected the connection in another namespace",
+                "message": "database writer rejected the connection in another namespace",
+                "source_ref": "file:2",
+                "line_hash": "raw-hash-tenant-b",
+                "group_namespace": 2002,
+                "index_id": "log-errors",
+            },
+        ), {
+            "payload_fields": ("group_namespace", "index_id"),
+        });
+        hash<auto> search_res = index.search({
+            "text": "database writer",
+            "limit": 10,
+            "filter": {"payload_eq": {"group_namespace": 2002}},
+        });
+        assertEq(1, search_res.result_count);
+        assertEq("tenant-b-log-1", search_res.entries[0].id);
+        assertEq(2002, search_res.entries[0].payload.group_namespace);
+
         res = index.indexEntries((
             {
                 "rendered": "payment gateway timeout while posting request",
@@ -300,6 +322,18 @@ public class MemoryVectorStore inherits QoreRagUtils::AbstractVectorStore {
             hash<auto> payload = rec{"payload"} ?? {};
             if (filter && filter.level && payload.level != filter.level) {
                 continue;
+            }
+            if (filter && filter.payload_eq) {
+                bool matches = True;
+                foreach string key in (keys filter.payload_eq) {
+                    if (!exists payload{key} || payload{key} != filter.payload_eq{key}) {
+                        matches = False;
+                        break;
+                    }
+                }
+                if (!matches) {
+                    continue;
+                }
             }
             push hits, <QoreRagUtils::VectorSearchResult>{
                 "id": rec{"id"},

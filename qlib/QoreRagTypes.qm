@@ -840,7 +840,13 @@ public class AbstractVectorStore {
     #! Searches for the K most similar vectors to a query vector
     /** @param query_vector the query embedding
         @param k how many results to return
-        @param filter optional backend-specific filter (e.g. payload predicates)
+        @param filter optional payload filter.  Implementations should support
+            the portable \c payload_eq form, for example:
+            @code{.py}
+{"payload_eq": {"group_namespace": 123, "index_id": "log-errors"}}
+            @endcode
+            Backend-native filters remain supported by concrete providers for
+            advanced callers.
 
         @return list of @ref VectorSearchResult hashes ordered by descending similarity
     */

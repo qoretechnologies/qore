@@ -147,6 +147,8 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
             \searchTest());
         addTestCase("search includes pass-through WHERE fragment",
             \searchFilterTest());
+        addTestCase("search translates portable payload equality filter",
+            \payloadEqFilterTest());
         addTestCase("getDimension probes vector_dims when not cached",
             \dimensionProbeTest());
         addTestCase("score conversion differs by distance metric",
@@ -324,11 +326,39 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
 
         list<hash<auto>> calls = ds.getSelectCalls();
         # filter merged into query
-        assertTrue(calls[0].sql =~ /WHERE payload->>'tag' = \$2/);
+        assertTrue(calls[0].sql.find("WHERE (payload->>'tag' = $2)") >= 0);
         # the vector literal is first bind arg, the filter arg follows
         # (vselect spreads the bind list, so args has 2 entries)
         assertEq(2, calls[0].args.size());
         assertEq("x", calls[0].args[1]);
+    }
+
+    private payloadEqFilterTest() {
+        FakePgsqlDatasource ds();
+        ds.select_response = {
+            "id": ("doc1",),
+            "payload": ('{"group_namespace":1001,"index_id":"log-errors"}',),
+            "dist": (0.05,),
+        };
+        QoreRagUtils::PgVectorRagProvider store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds, "dimension": 3},
+        });
+        store.search((0.1, 0.2, 0.3), 10, {
+            "payload_eq": {
+                "group_namespace": 1001,
+                "index_id": "log-errors",
+            },
+        });
+
+        list<hash<auto>> calls = ds.getSelectCalls();
+        assertTrue(calls[0].sql.find("payload @> %v::jsonb") >= 0);
+        assertFalse(calls[0].sql =~ /group_namespace/);
+        assertFalse(calls[0].sql =~ /log-errors/);
+        assertEq(2, calls[0].args.size());
+        assertTrue(calls[0].args[1] =~ /group_namespace/);
+        assertTrue(calls[0].args[1] =~ /log-errors/);
     }
 
     private dimensionProbeTest() {
