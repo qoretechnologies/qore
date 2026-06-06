@@ -205,7 +205,7 @@ public namespace ElasticSearchLoggerAppender {
         });
     @endcode
 */
-public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout {
+public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout, Logger::LoggerSearchableAppender {
     public {
         #! Default batch size
         const DefaultBatchSize = 100;
@@ -385,6 +385,71 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
     */
     public auto serializeImpl(Logger::LoggerEvent event) {
         return createDocument(event);
+    }
+
+    #! Returns rendered-history search capabilities for this appender
+    /** @return backend-neutral search capability information for documents written by this appender */
+    public hash<auto> getSearchCapabilities() {
+        return {
+            "searchable": True,
+            "supports_search": True,
+            "source": {
+                "kind": "elasticsearch",
+                "appender": getName(),
+                "class": get_class_name(self),
+                "index": indexPattern,
+            },
+            "rendered_lines": False,
+            "time_filter": True,
+            "cursor": True,
+            "levels": True,
+            "regex": False,
+            "context": False,
+            "structured_fields": True,
+            "max_limit": Logger::LoggerSearchUtil::MaxSearchLimit,
+            "default_limit": Logger::LoggerSearchUtil::DefaultSearchLimit,
+        };
+    }
+
+    #! Searches documents written by this appender using the generic rendered-event search request
+    /** The request uses the generic fields documented by @ref Logger::LoggerSearchableAppender.  Raw backend query
+        syntax is intentionally not accepted here; request fields are translated into a bounded query internally.
+
+        @param request generic rendered-event search request
+        @return generic search result hash with normalized entries and continuation metadata
+    */
+    public hash<auto> searchRenderedEvents(hash<auto> request) {
+        hash<auto> caps = getSearchCapabilities();
+        *string index;
+
+        try {
+            int limit = Logger::LoggerSearchUtil::normalizeLimit(request.limit);
+            int offset = parseSearchCursor(request.cursor);
+            hash<auto> query = makeSearchQuery(request, limit, offset);
+            index = request.index ?? resolveIndexName();
+            hash<auto> response = normalizeSearchResponse(rest.post(index + "/_search", query));
+            list<hash<auto>> hits = response.hits.hits ?? ();
+            list<hash<auto>> entries = ();
+            foreach hash<auto> hit in (hits) {
+                push entries, makeSearchEntry(hit);
+            }
+
+            int total = getSearchTotal(response, entries.size());
+            *string next_cursor = offset + entries.size() < total ? string(offset + entries.size()) : NOTHING;
+            return {
+                "status": next_cursor ? "partial" : "ok",
+                "source": caps.source + {"resolved_index": index},
+                "capabilities": caps,
+                "entries": entries,
+                "result_count": entries.size(),
+                "next_cursor": next_cursor,
+                "scanned_bytes": 0,
+                "scanned_events": entries.size(),
+                "truncated": next_cursor ? True : False,
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            return makeUnavailableSearchResult(caps, index, ex.err + ": " + ex.desc);
+        }
     }
 
     #! Opens the appender and starts the flush timer
@@ -568,6 +633,239 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
     #! Resolves the index name by applying date formatting
     private string resolveIndexName() {
         return format_date(indexPattern, now_us());
+    }
+
+    private int parseSearchCursor(auto cursor) {
+        if (!cursor) {
+            return 0;
+        }
+        if (cursor instanceof hash) {
+            return int(cursor.offset ?? 0);
+        }
+        int offset = int(cursor);
+        return offset < 0 ? 0 : offset;
+    }
+
+    private hash<auto> makeSearchQuery(hash<auto> request, int limit, int offset) {
+        list<hash<auto>> must = ();
+        list<hash<auto>> filter = ();
+
+        addTextClauses(\must, request);
+        addLevelClauses(\filter, request);
+        addTimeClauses(\filter, request);
+
+        hash<auto> body = {
+            "from": offset,
+            "size": limit,
+            "sort": ({"@timestamp": {"order": request.direction == "forward" ? "asc" : "desc"}},),
+        };
+
+        if (must.size() || filter.size()) {
+            body.query = {"bool": {}};
+            if (must.size()) {
+                body.query.bool.must = must;
+            }
+            if (filter.size()) {
+                body.query.bool.filter = filter;
+            }
+        } else {
+            body.query = {"match_all": {}};
+        }
+
+        return body;
+    }
+
+    private addTextClauses(reference<list<hash<auto>>> must, hash<auto> request) {
+        list<string> terms = getSearchTerms(request);
+        if (!terms.size()) {
+            return;
+        }
+
+        string match = request.match ?? "phrase";
+        if (match == "any") {
+            list<hash<auto>> should = ();
+            foreach string term in (terms) {
+                push should, makeTextClause(term, request);
+            }
+            push must, {"bool": {"should": should, "minimum_should_match": 1}};
+            return;
+        }
+
+        foreach string term in (terms) {
+            push must, makeTextClause(term, request);
+            if (match == "phrase") {
+                return;
+            }
+        }
+    }
+
+    private hash<auto> makeTextClause(string term, hash<auto> request) {
+        list<string> fields = getSearchFields(request);
+        if ((request.match ?? "phrase") == "phrase") {
+            return {
+                "multi_match": {
+                    "query": term,
+                    "type": "phrase",
+                    "fields": fields,
+                },
+            };
+        }
+
+        return {
+            "multi_match": {
+                "query": term,
+                "fields": fields,
+                "operator": "and",
+            },
+        };
+    }
+
+    private list<string> getSearchFields(hash<auto> request) {
+        if (request.fields instanceof list && request.fields.size()) {
+            return map string($1), request.fields;
+        }
+        return ("message", "logger", "level");
+    }
+
+    private list<string> getSearchTerms(hash<auto> request) {
+        list<string> terms = ();
+        if (request.text) {
+            push terms, string(request.text);
+        } else if (request.query) {
+            push terms, string(request.query);
+        }
+
+        if (request.terms) {
+            if (request.terms instanceof list) {
+                foreach auto term in (request.terms) {
+                    if (exists term && string(term) != "") {
+                        push terms, string(term);
+                    }
+                }
+            } else if (string(request.terms) != "") {
+                push terms, string(request.terms);
+            }
+        }
+
+        return terms;
+    }
+
+    private addLevelClauses(reference<list<hash<auto>>> filter, hash<auto> request) {
+        if (request.level) {
+            list<string> levels = ();
+            if (request.level instanceof list) {
+                levels = map string($1).upr(), request.level;
+            } else {
+                push levels, string(request.level).upr();
+            }
+            if (levels.size()) {
+                push filter, {"terms": {"level": levels}};
+            }
+        }
+
+        if (request.level_min) {
+            push filter, {"range": {"level_value": {"gte": getLevelValue(string(request.level_min))}}};
+        }
+    }
+
+    private addTimeClauses(reference<list<hash<auto>>> filter, hash<auto> request) {
+        hash<auto> range = {};
+        if (request.since) {
+            range.gte = formatSearchDate(request.since);
+        }
+        if (request.until) {
+            range.lte = formatSearchDate(request.until);
+        }
+        if (range.size()) {
+            push filter, {"range": {"@timestamp": range}};
+        }
+    }
+
+    private string formatSearchDate(auto value) {
+        if (value instanceof date) {
+            return format_date("YYYY-MM-DDTHH:mm:ss.xxZ", value);
+        }
+        return string(value);
+    }
+
+    private int getLevelValue(string level) {
+        switch (level.upr()) {
+            case "TRACE": return 5000;
+            case "DEBUG": return 10000;
+            case "DETAIL": return 15000;
+            case "INFO": return 20000;
+            case "WARN": return 30000;
+            case "WARNING": return 30000;
+            case "ERROR": return 40000;
+            case "FATAL": return 50000;
+        }
+        throw "ELASTICSEARCH-APPENDER-ERROR", sprintf("unsupported log level %y", level);
+    }
+
+    private hash<auto> normalizeSearchResponse(auto response) {
+        if (response.typeCode() == NT_HASH && response.body) {
+            return response.body;
+        }
+        if (response.typeCode() == NT_HASH) {
+            return response;
+        }
+%ifndef NoJson
+        if (response.typeCode() == NT_STRING) {
+            return parse_json(response);
+        }
+%endif
+        throw "ELASTICSEARCH-APPENDER-ERROR", "unsupported search response type";
+    }
+
+    private int getSearchTotal(hash<auto> response, int fallback) {
+        if (!response.hits || !response.hits.total) {
+            return fallback;
+        }
+        if (response.hits.total instanceof hash) {
+            return response.hits.total.value ?? fallback;
+        }
+        return int(response.hits.total);
+    }
+
+    private hash<auto> makeSearchEntry(hash<auto> hit) {
+        hash<auto> src = hit."_source" ?? {};
+        string message = string(src.message ?? "");
+        return {
+            "timestamp": src."@timestamp",
+            "level": src.level,
+            "logger": src.logger,
+            "thread": src.thread_id,
+            "message": message,
+            "rendered": message,
+            "source_ref": hit."_id",
+            "line_hash": has_digest("sha256") ? digest("sha256", message).toHex() : NOTHING,
+            "metadata": {
+                "index": hit."_index",
+                "score": hit."_score",
+                "location": src.location,
+                "exception": src.exception,
+                "host": src.host,
+            },
+        };
+    }
+
+    private hash<auto> makeUnavailableSearchResult(hash<auto> caps, *string index, string reason) {
+        hash<auto> source = caps.source;
+        if (index) {
+            source.resolved_index = index;
+        }
+
+        return {
+            "status": "unavailable",
+            "source": source,
+            "capabilities": caps,
+            "entries": (),
+            "result_count": 0,
+            "scanned_bytes": 0,
+            "scanned_events": 0,
+            "truncated": False,
+            "reason": reason,
+        };
     }
 
     #! Creates an ElasticSearch document from a log event

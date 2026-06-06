@@ -38,6 +38,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
     constructor() : Test("ElasticSearchLoggerAppender Test", "1.0") {
         addTestCase("constructorTest", \constructorTest());
         addTestCase("documentCreationTest", \documentCreationTest());
+        addTestCase("searchCapabilityTest", \searchCapabilityTest());
         addTestCase("batchingTest", \batchingTest());
         addTestCase("negativeTests", \negativeTests());
 
@@ -131,6 +132,32 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
         assertEq(gettid(), doc.thread_id);
         assertTrue(doc.hasKey("host"));
         assertTrue(doc.host.hasKey("name"));
+    }
+
+    #! Test rendered-event search capabilities
+    private searchCapabilityTest() {
+        checkModule(self);
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs-%Y.%m.%d",
+            }
+        );
+
+        hash<auto> caps = appender.getSearchCapabilities();
+        assertTrue(caps.searchable);
+        assertTrue(caps.supports_search);
+        assertEq("elasticsearch", caps.source.kind);
+        assertEq("test", caps.source.appender);
+        assertEq("test-logs-%Y.%m.%d", caps.source.index);
+        assertTrue(caps.time_filter);
+        assertTrue(caps.levels);
+        assertTrue(caps.structured_fields);
+        assertEq(Logger::LoggerSearchUtil::MaxSearchLimit, caps.max_limit);
+
+        assertEq(caps, Logger::LoggerSearchUtil::getAppenderSearchCapabilities(appender));
     }
 
     #! Test batching behavior

@@ -35,6 +35,7 @@ class Test inherits QUnit::Test {
         addTestCase("LoggerAppenderFileRing", \testLoggerAppenderFileRing());
         addTestCase("LoggerAppenderFileArchive", \testLoggerAppenderFileArchive());
         addTestCase("LoggerAppenderFile lifecycle markers", \testLifecycleMarkers());
+        addTestCase("LoggerSearchUtil", \testLoggerSearchUtil());
         addTestCase("Logger", \testLogger());
         set_return_value(main());
     }
@@ -962,6 +963,83 @@ class Test inherits QUnit::Test {
             la = new LoggerAppenderFileArchive("TEST", new LoggerLayoutPattern("%m"), fn, patt);
             assertThrows("LOGGER-ERROR", errs{patt}, \la.archive());
         }
+    }
+
+    testLoggerSearchUtil() {
+        LoggerAppenderNull null_appender("null");
+        hash<auto> caps = LoggerSearchUtil::getAppenderSearchCapabilities(null_appender);
+        assertFalse(caps.searchable);
+        hash<auto> unavailable = LoggerSearchUtil::searchRenderedEvents(null_appender, {"text": "needle"});
+        assertEq("unavailable", unavailable.status);
+
+        string fn = tmp_location() + DirSep + UNIQUE_NAME + "-search.log";
+        unlink(fn);
+        on_exit unlink(fn);
+
+        LoggerAppenderFile la("SEARCH", new LoggerLayoutPattern("%m%n"), fn);
+        Logger logger("SearchTest", LoggerLevel::getLevelDebug());
+        logger.addAppender(la);
+        la.open();
+        logger.info("first line");
+        logger.error("needle older");
+        logger.warn("middle");
+        logger.error("needle newest");
+        la.close();
+
+        caps = LoggerSearchUtil::getAppenderSearchCapabilities(la);
+        assertTrue(caps.searchable);
+        assertEq("file", caps.source.kind);
+
+        hash<auto> res = LoggerSearchUtil::searchRenderedEvents(la, {"text": "needle", "limit": 1});
+        assertEq("partial", res.status);
+        assertEq(1, res.result_count);
+        assertEq("needle newest", res.entries[0].message);
+        assertTrue(res.next_cursor instanceof string);
+
+        res = LoggerSearchUtil::searchRenderedEvents(la, {"text": "needle", "limit": 1, "cursor": res.next_cursor});
+        assertEq(1, res.result_count);
+        assertEq("needle older", res.entries[0].message);
+
+        res = LoggerSearchUtil::searchRenderedEvents(la, {"terms": ("needle", "older"), "match": "all"});
+        assertEq(1, res.result_count);
+        assertEq("needle older", res.entries[0].message);
+
+        res = LoggerSearchUtil::searchRenderedEvents(la,
+            {"text": "needle older", "direction": "forward", "limit": 1, "context_before": 1, "context_after": 1});
+        assertEq("partial", res.status);
+        assertEq(3, res.result_count);
+        assertEq("first line", res.entries[0].message);
+        assertEq("before", res.entries[0].context);
+        assertEq("needle older", res.entries[1].message);
+        assertEq("match", res.entries[1].context);
+        assertEq("middle", res.entries[2].message);
+        assertEq("after", res.entries[2].context);
+
+        string rfn = tmp_location() + DirSep + UNIQUE_NAME + "-search-rotate.log";
+        LoggerAppenderFileRotate rotate("SEARCHROT", new LoggerLayoutPattern("%m%n"), rfn, 2);
+        unlink(rfn);
+        for (int i = 1; i <= rotate.getCount(); ++i) {
+            unlink(rotate.getArchiveFileName(i));
+        }
+        on_exit {
+            unlink(rfn);
+            for (int i = 1; i <= rotate.getCount(); ++i) {
+                unlink(rotate.getArchiveFileName(i));
+            }
+        }
+
+        Logger rotate_logger("SearchRotateTest", LoggerLevel::getLevelDebug());
+        rotate_logger.addAppender(rotate);
+        rotate.open();
+        rotate_logger.error("rotated needle");
+        rotate.rotate();
+        rotate_logger.error("active needle");
+        rotate.close();
+
+        res = LoggerSearchUtil::searchRenderedEvents(rotate, {"text": "needle", "limit": 10});
+        list<string> messages = map $1.message, res.entries;
+        assertTrue(inlist("active needle", messages));
+        assertTrue(inlist("rotated needle", messages));
     }
 
     testLogger() {
