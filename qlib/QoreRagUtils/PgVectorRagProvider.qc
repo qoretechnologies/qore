@@ -54,6 +54,9 @@ public namespace QoreRagUtils {
 
     Advanced callers can still pass raw SQL with \c where_sql and
     \c where_args; portable and raw predicates are combined with \c AND.
+    The \c where_sql fragment must use Qore \c %v bind placeholders (not
+    native \c $N), supplied positionally in \c where_args; the raw fragment
+    is bound before \c payload_eq so its placeholders keep stable positions.
 
     @par Example:
     @code{.py}
@@ -194,17 +197,21 @@ public class PgVectorRagProvider inherits AbstractVectorStore {
         list<auto> bind_args = (vec_lit,);
         if (filter) {
             list<string> where_clauses = ();
-            if (filter.payload_eq && filter.payload_eq.typeCode() == NT_HASH && filter.payload_eq.size()) {
-                push where_clauses, "payload @> %v::jsonb";
-                push bind_args, call_function_args("make_json", (filter.payload_eq,));
-            }
+            # Bind the raw pass-through WHERE fragment first so its `%v` placeholders keep stable
+            # positions (immediately after the vector literal) regardless of whether `payload_eq`
+            # is also supplied; `payload_eq`'s bind is always appended last.
             if (exists filter.where_sql && filter.where_sql.typeCode() == NT_STRING) {
                 # Pass-through raw WHERE fragment for users who want full SQL
-                # filter expressivity; bind args appended to `where_args` list
+                # filter expressivity; placeholders use Qore `%v` binds supplied
+                # positionally in the `where_args` list
                 push where_clauses, "(" + filter.where_sql + ")";
                 if (filter.where_args && filter.where_args.typeCode() == NT_LIST) {
                     bind_args += filter.where_args;
                 }
+            }
+            if (filter.payload_eq && filter.payload_eq.typeCode() == NT_HASH && filter.payload_eq.size()) {
+                push where_clauses, "payload @> %v::jsonb";
+                push bind_args, call_function_args("make_json", (filter.payload_eq,));
             }
             if (where_clauses) {
                 sql += " WHERE " + where_clauses.join(" AND ");

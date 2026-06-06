@@ -32,7 +32,7 @@ public namespace OpenSearchDataProvider {
     @note The scroll context is automatically cleaned up when the iterator is destroyed or when
     all results have been consumed.
 
-    @see https://www.elastic.co/guide/en/opensearch/reference/current/scroll-api.html
+    @see https://opensearch.org/docs/latest/api-reference/scroll/
 */
 public class OpenSearchScrollRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private:internal {
