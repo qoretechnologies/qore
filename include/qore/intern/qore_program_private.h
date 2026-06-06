@@ -695,6 +695,7 @@ public:
         // Apply parse-option implications once pwo.parse_options is fully populated
         // (setParent may OR in inherited restrictions from the parent Program).
         applyParseOptionImplications();
+        applyDefaultExecMode();
 
         // initialize global vars
         // check if PO_NO_EXTERNAL_INFO is set - if so, provide empty values for ARGV, QORE_ARGV, and ENV
@@ -758,6 +759,32 @@ public:
             pwo.parse_options |= QoreParseOptions::STREAMING_ANY;
             pwo.parse_options |= PO_NEGATIVE_OFFSETS;
         }
+    }
+
+    DLLLOCAL bool hasModernParseOptions() const {
+        return (pwo.parse_options & PO_MODERN) == PO_MODERN;
+    }
+
+    DLLLOCAL void applyDefaultExecMode() {
+        if (user_requested_exec_mode) {
+            return;
+        }
+
+        exec_mode = hasModernParseOptions() ? QEM_TIERED : QEM_AST;
+    }
+
+    static const char* getExecModeName(qore_exec_mode_t mode) {
+        switch (mode) {
+            case QEM_AST:
+                return "AST";
+            case QEM_IR:
+                return "IR";
+            case QEM_JIT:
+                return "JIT";
+            case QEM_TIERED:
+                return "tiered";
+        }
+        return "unknown";
     }
 
     // Decide whether a filename should auto-enable %modern during parseFile().
@@ -1338,9 +1365,9 @@ public:
         if ((priv->exec_mode == QEM_IR || priv->exec_mode == QEM_JIT || priv->exec_mode == QEM_TIERED)
             && (priv->pwo.parse_options & PO_MODERN) != PO_MODERN) {
 
-            // If user explicitly requested IR or JIT mode, that's an error condition
-            if (priv->user_requested_exec_mode && priv->exec_mode != QEM_TIERED) {
-                const char* mode_str = priv->exec_mode == QEM_IR ? "IR" : "JIT";
+            // If the user explicitly requested an optimized mode, that's an error condition.
+            if (priv->user_requested_exec_mode) {
+                const char* mode_str = getExecModeName(priv->exec_mode);
                 if (xsink) {
                     xsink->raiseException("EXEC-MODE-ERROR", "Cannot execute in %s mode: code must use %%modern "
                         "(requires %%new-style, %%require-types, %%strict-args, and %%strong-encapsulation). "
@@ -1349,7 +1376,7 @@ public:
                 return;
             }
 
-            // For tiered (default) or if not explicitly requested, silently degrade
+            // If a non-explicit optimized mode reaches non-modern code, silently degrade.
             if (!priv->ir_fallback_warned) {
                 printd(5, "IR exec fallback to AST: requires %%modern (PO_MODERN)\n");
                 priv->ir_fallback_warned = true;

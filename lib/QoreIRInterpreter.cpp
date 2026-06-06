@@ -1266,7 +1266,8 @@ static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
 // ClosureVarValue so that changes are visible outside the IR interpreter.
 static ClosureVarValue* findClosureVarValueForIR(LocalVar* var);
 
-static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
+static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink,
+        bool initial_assignment = false) {
     if (!var) {
         return;
     }
@@ -1276,7 +1277,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
         // This happens when a function has closureUse() variables but executes
         // in its own body context (not as a closure).
         LValueHelper helper(xsink);
-        if (var->getLValue(helper, false, false)) {
+        if (var->getLValue(helper, false, initial_assignment)) {
             return;
         }
         QoreValue stored = value.hasNode() ? value.refSelf() : value;
@@ -1284,7 +1285,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
         return;
     }
     LValueHelper helper(xsink);
-    if (cv->getLValue(helper, false)) {
+    if (cv->getLValue(helper, false, initial_assignment)) {
         return;
     }
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
@@ -8634,7 +8635,7 @@ load_local_done:
                 storeValue(closures, local_inst->local, val, xsink);
                 // Write-through: update the actual closure variable so changes
                 // are visible outside the IR interpreter's local cache.
-                assignClosureVarValue(local_inst->local, val, xsink);
+                assignClosureVarValue(local_inst->local, val, xsink, local_inst->initial_assignment);
                 if (local_inst->result.isValid()) {
                     QoreValue res = val.hasNode() ? val.refSelf() : val;
                     setValueSlot(values, local_inst->result.id, res, xsink);

@@ -936,7 +936,7 @@ const PO_NO_ENUM = PO_NO_ENUM;
     - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
     - @ref EM_IR: Bytecode interpreter (good balance of startup time and speed)
     - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
-    - @ref EM_TIERED: Adaptive compilation (starts with AST, promotes hot code to IR/JIT)
+    - @ref EM_TIERED: Adaptive compilation for modern code (starts with cached IR, promotes hot code to JIT)
 
     @see Program::setExecMode()
     @see Program::getExecMode()
@@ -950,7 +950,7 @@ enum Qore::ExecMode : int {
     EM_IR = QEM_IR,
     //! JIT execution mode - compile to native code via LLVM; fastest execution but has compilation overhead
     EM_JIT = QEM_JIT,
-    //! Tiered execution mode - adaptive compilation; auto-promotes hot functions from AST to IR to JIT
+    //! Tiered execution mode - adaptive compilation for modern code; starts with cached IR and promotes hot functions to JIT
     EM_TIERED = QEM_TIERED,
 };
 
@@ -2209,7 +2209,7 @@ if (sm) {
     - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
     - @ref EM_IR: Bytecode interpreter (good balance of startup time and speed)
     - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
-    - @ref EM_TIERED: Adaptive compilation (starts with AST, promotes hot code to IR/JIT)
+    - @ref EM_TIERED: Adaptive compilation for modern code (starts with cached IR, promotes hot code to JIT)
 
     @param mode The execution mode to set
 
@@ -2222,15 +2222,14 @@ pgm.setExecMode(EM_JIT);
     @note The execution mode must be set before parsing code. Setting it after parsing
     has no effect on already-parsed code.
 
-    @note JIT and IR modes require @ref PO_MODERN "%modern" parse options. If the program
-    does not have @ref PO_MODERN set, the mode will automatically fall back to AST.
+    @note IR, JIT, and tiered modes require @ref PO_MODERN "%modern" parse options.
 
     @see Program::getExecMode()
 
     @since %Qore 2.3
  */
 nothing Program::setExecMode(enum<ExecMode> mode) [flags=NAMED_ARGS] {
-   p->setExecMode(static_cast<qore_exec_mode_t>(mode));
+   p->setExecMode(static_cast<qore_exec_mode_t>(mode), true);
 }
 
 //! Returns the current execution mode for the Program object

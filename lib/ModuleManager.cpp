@@ -1576,7 +1576,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     // inherit execution mode from parent program
     if (p) {
-        mpgm->setExecMode(p->getExecMode());
+        qore_program_private* ppriv = qore_program_private::get(*p);
+        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
     }
     // issue #3592: must add feature first
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -2011,7 +2012,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
     // inherit execution mode from parent program
     if (p) {
-        mpgm->setExecMode(p->getExecMode());
+        qore_program_private* ppriv = qore_program_private::get(*p);
+        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -2114,7 +2116,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     }
     // inherit execution mode from parent program
     if (p) {
-        mpgm->setExecMode(p->getExecMode());
+        qore_program_private* ppriv = qore_program_private::get(*p);
+        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {

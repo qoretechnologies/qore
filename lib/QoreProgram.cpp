@@ -754,6 +754,7 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 
     // inherit parent's execution mode so sub-programs respect --exec-mode=ast
     exec_mode = p_pgm->priv->exec_mode;
+    user_requested_exec_mode = p_pgm->priv->user_requested_exec_mode;
 
     // copy parent feature list
     for (auto& i : p_pgm->priv->featureList) {
@@ -1156,6 +1157,11 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // update high water marks for atomic rollback support
             str_vec_hwm = str_vec.size();
             pgmloc_hwm = pgmloc.size();
+
+            // After directives and extension-based defaults are known, choose
+            // the implicit execution mode.  Modern code defaults to tiered,
+            // which also validates the %modern IR-lowerability guarantee below.
+            applyDefaultExecMode();
 
             // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified.
             // Gate on PO_MODERN: `ensureIrExecMode` in parseCommit runs

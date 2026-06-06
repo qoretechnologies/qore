@@ -769,9 +769,11 @@ int echoed = child.echo(value);
     @par LLVM-backed Execution and AOT Compilation
     @parblock
     %Qore now uses a shared IR pipeline for the IR interpreter, LLVM JIT,
-    tiered execution, and AOT compilation.  The default execution mode is
-    @ref exec_mode_tiered "tiered", which starts quickly and promotes hot
-    functions through IR and JIT tiers.
+    tiered execution, and AOT compilation.  @ref modern "%modern" code
+    defaults to @ref exec_mode_tiered "tiered", which validates IR
+    lowerability during parsing, starts quickly with cached IR, and can
+    promote hot functions to JIT. Legacy non-modern code defaults to AST
+    execution for compatibility.
 
     The new @ref qcc_tool "qcc" compiler provides the full AOT workflow:
     script executables, binary user modules (\c .qmod), relocatable Qore

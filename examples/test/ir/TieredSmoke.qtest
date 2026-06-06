@@ -6,8 +6,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class TieredSmokeTest
@@ -22,9 +22,9 @@ class TieredSmokeTest inherits QUnit::Test {
         addTestCase("tiered basic correctness", \testTieredBasicCorrectness());
         addTestCase("tiered low-threshold promotion to IR", \testTieredIRPromotion());
         addTestCase("tiered low-threshold promotion to JIT", \testTieredJITPromotion());
-        addTestCase("tiered stays on AST below threshold", \testTieredBelowThreshold());
-        addTestCase("tiered non-modern stays on AST", \testTieredNonModernFallback());
-        addTestCase("tiered IR lowering failure stays on AST", \testTieredIRFailureStaysAST());
+        addTestCase("tiered stays in cached IR below JIT threshold", \testTieredBelowThreshold());
+        addTestCase("tiered non-modern reports exec-mode error", \testTieredNonModernError());
+        addTestCase("tiered modern lowering coverage", \testTieredModernLoweringCoverage());
         addTestCase("tiered concurrent calls correctness", \testTieredConcurrentCalls());
         addTestCase("tiered threshold options", \testTieredThresholdOptions());
         addTestCase("tiered correctness across all modes", \testTieredCorrectnessAllModes());
@@ -120,7 +120,7 @@ printf(\"%d\\n\", sum);
     }
 
     testTieredBelowThreshold() {
-        # With a high threshold, function should stay on AST and still work
+        # With a high JIT threshold, function should stay in cached IR and still work
         string code = "%modern
 int sub double_it(int n) {
     return n * 2;
@@ -129,11 +129,11 @@ int result = double_it(21);
 printf(\"%d\\n\", result);
 ";
         string result = trim(runScript(code, "tiered", "--jit-ir-threshold=1000000"));
-        assertEq("42", result, "below threshold: function stays on AST");
+        assertEq("42", result, "below threshold: function stays below JIT tier");
     }
 
-    testTieredNonModernFallback() {
-        # Non-%modern code should always stay on AST in tiered mode
+    testTieredNonModernError() {
+        # Explicit tiered mode requires %modern
         string code = "
 sub compute($n) {
     return $n + 1;
@@ -141,15 +141,14 @@ sub compute($n) {
 printf(\"%d\\n\", compute(41));
 ";
         string result = runScript(code, "tiered", NOTHING, ".q");
-        assertRegex("42", result, "non-modern: stays on AST, correct output");
+        assertRegex("EXEC-MODE-ERROR", result, "non-modern: explicit tiered reports exec-mode error");
+        assertRegex("%modern", result, "non-modern: error mentions %modern requirement");
     }
 
-    testTieredIRFailureStaysAST() {
-        # Code with operations that can't be lowered to IR should stay on AST
-        # and still produce correct results (graceful failure)
+    testTieredModernLoweringCoverage() {
+        # Modern tiered mode should lower successfully and produce correct results
         string code = "%modern
 auto sub complex_op() {
-    # Use operations likely not supported in IR lowering
     hash<auto> h = {\"a\": 1, \"b\": 2};
     auto result = h.a + h.b;
     return result;
@@ -161,7 +160,7 @@ for (int i = 0; i < 20; i++) {
 printf(\"%d\\n\", sum);
 ";
         string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5"));
-        assertEq("60", result, "IR failure: graceful fallback, correct result");
+        assertEq("60", result, "modern lowering: correct result");
     }
 
     testTieredConcurrentCalls() {
@@ -683,7 +682,7 @@ printf(\"%s\\n\", results.join(\",\"));
     }
 
     testTieredClosureDefaults() {
-        # Closure with default args called enough times to trigger AST->IR->JIT promotion
+        # Closure with default args called enough times to trigger JIT promotion
         string code = "%modern
 code fn = int sub (int x, int y = 10, string s = \"abc\") {
     return x + y + s.length();

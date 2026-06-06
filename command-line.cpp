@@ -199,13 +199,13 @@ static const char helpstr[] =
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
    "  -e, --exec=arg               execute program given on command-line\n"
-   "      --exec-mode=arg          execution mode: ast (default), ir, jit, or tiered\n"
-   "                               (tiered auto-promotes AST->IR->JIT per function)\n"
+   "      --exec-mode=arg          execution mode: ast, ir, jit, or tiered\n"
+   "                               (default: tiered for %modern, ast otherwise)\n"
    "      --ir-dump                dump IR representation before execution\n"
    "      --ir-fallback-warn       warn on stderr when IR falls back to AST\n"
    "      --ir-fallback-report     print IR fallback counts by category at exit\n"
-   "      --jit-ir-threshold=N     tiered mode: calls before IR promotion (default:\n"
-   "                               100)\n"
+   "      --jit-ir-threshold=N     tiered mode: calls before AST-tier IR\n"
+   "                               promotion (default: 100)\n"
    "      --jit-jit-threshold=N    tiered mode: calls before JIT promotion (default:\n"
    "                               1000)\n"
    "  -g, --disable-gc             disable the garbage collector\n"
@@ -1102,7 +1102,7 @@ static void set_exec(const char* arg) {
 
 static void set_exec_mode(const char* arg) {
     if (!arg || !*arg) {
-        printe("error: --exec-mode requires a value (ast, ir, or jit)\n");
+        printe("error: --exec-mode requires a value (ast, ir, jit, or tiered)\n");
         opt_errors++;
         return;
     }
