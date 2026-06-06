@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchDocumentUpdateDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "update",
             "desc": "OpenSearch document update API data provider",
             "type": "OpenSearchDocumentUpdateDataProvider",
@@ -39,18 +39,18 @@ public class OpenSearchDocumentUpdateDataProvider inherits OpenSearchDataProvide
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchDocumentUpdateRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchDocumentUpdateRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchDocumentUpdateResponseDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchDocumentUpdateResponseDataType();
 
         #! Query args
-        const QueryArgs = ("if_seq_no", "if_primary_term", "lang", "require_alias", "refresh", "retry_on_conflict",
+        const list<string> QueryArgs = ("if_seq_no", "if_primary_term", "lang", "require_alias", "refresh", "retry_on_conflict",
             "routing", "_source", "_source_excludes", "_source_includes", "timeout", "wait_for_active_shards");
     }
 
@@ -122,7 +122,7 @@ public class OpenSearchDocumentUpdateDataProvider inherits OpenSearchDataProvide
 public class OpenSearchDocumentUpdateRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -292,7 +292,7 @@ public class OpenSearchDocumentUpdateRequestDataType inherits DataProvider::Hash
 public class OpenSearchDocumentUpdateResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "_index": {
                 "type": StringType,
                 "display_name": "Index",

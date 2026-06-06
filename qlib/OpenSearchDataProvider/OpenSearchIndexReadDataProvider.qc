@@ -33,7 +33,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchIndexReadDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "read",
             "desc": "OpenSearch index read API data provider",
             "type": "OpenSearchIndexReadDataProvider",
@@ -42,18 +42,18 @@ public class OpenSearchIndexReadDataProvider inherits OpenSearchDataProviderBase
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchIndexReadRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchIndexReadRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchIndexReadResponseDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchIndexReadResponseDataType();
 
         #! Query args
-        const QueryArgs = ("allow_no_indices", "expand_wildcards", "features", "flat_settings", "include_defaults",
+        const list<string> QueryArgs = ("allow_no_indices", "expand_wildcards", "features", "flat_settings", "include_defaults",
             "ignore_unavailable", "local", "master_timeout");
     }
 
@@ -125,7 +125,7 @@ public class OpenSearchIndexReadDataProvider inherits OpenSearchDataProviderBase
 public class OpenSearchIndexReadRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -138,7 +138,7 @@ public class OpenSearchIndexReadRequestDataType inherits DataProvider::HashDataT
                 "type": SoftBoolStringType,
                 "display_name": "Allow No Indices?",
                 "short_desc": "Allow no matching indices",
-                "desc": "f `false`, the request returns an error if any wildcard expression, index alias, or `_all` "
+                "desc": "If `false`, the request returns an error if any wildcard expression, index alias, or `_all` "
                     "value targets only missing or closed indices. This behavior applies even if the request targets "
                     "other open indices. For example, a request targeting `foo*,bar*` returns an error if an index "
                     "starts with `foo` but no index starts with `bar`",

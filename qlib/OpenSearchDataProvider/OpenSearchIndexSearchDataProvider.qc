@@ -32,7 +32,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchIndexSearchDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "search",
             "desc": "OpenSearch index search API data provider",
             "type": "OpenSearchIndexSearchDataProvider",
@@ -41,18 +41,18 @@ public class OpenSearchIndexSearchDataProvider inherits OpenSearchDataProviderBa
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchIndexSearchRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchIndexSearchRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchIndexSearchResponseDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchIndexSearchResponseDataType();
 
         #! Query args
-        const QueryArgs = ("name", "allow_no_indices", "allow_partial_search_results", "analyzer", "analyze_wildcard",
+        const list<string> QueryArgs = ("name", "allow_no_indices", "allow_partial_search_results", "analyzer", "analyze_wildcard",
             "batched_reduce_size", "ccs_minimize_roundtrips", "default_operator", "df", "docvalue_fields",
             "expand_wildcards", "explain", "from", "ignore_throttled", "ignore_unavailable", "lenient",
             "max_concurrent_shard_requests", "pre_filter_shard_size", "preference", "q", "request_cache",
@@ -133,7 +133,7 @@ public class OpenSearchIndexSearchDataProvider inherits OpenSearchDataProviderBa
 public class OpenSearchIndexSearchRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "index": {
                 "type": StringType,

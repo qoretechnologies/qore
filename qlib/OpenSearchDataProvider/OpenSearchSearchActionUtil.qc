@@ -25,7 +25,7 @@
 #! Contains all public definitions in the OpenSearchDataProvider module
 public namespace OpenSearchDataProvider {
 #! Common top-level search request fields for OpenSearch search actions
-public const SearchTopLevelFields = {
+public const hash<string, AbstractDataField> SearchTopLevelFields = {
     "from": {
         "type": IntOrNothingType,
         "display_name": "From",
@@ -82,7 +82,7 @@ public const SearchTopLevelFields = {
 public class OpenSearchSearchActionUtil {
     private {
         #! Fields that are emitted in the JSON search body instead of the URI query string
-        const SearchBodyArgs = ("from", "size", "_source", "track_total_hits");
+        const list<string> SearchBodyArgs = ("from", "size", "_source", "track_total_hits");
     }
 
     #! Moves the given key from the source hash to the target hash if it exists

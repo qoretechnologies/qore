@@ -954,7 +954,7 @@ public class AbstractChunkerFactory {
 public class RagProviderRegistry {
     public {
         #! Map of embedder backend names to providing modules
-        const EmbedderModuleMap = {
+        const hash<string, string> EmbedderModuleMap = {
             "openai":     "OpenAiRestClient",
             "gemini":     "GeminiRestClient",
             "voyage":     "VoyageRestClient",
@@ -972,7 +972,7 @@ public class RagProviderRegistry {
         };
 
         #! Map of reranker backend names to providing modules
-        const RerankerModuleMap = {
+        const hash<string, string> RerankerModuleMap = {
             "voyage":       "VoyageRestClient",
             "local-onnx":   "QoreRagUtils",
             "http-gateway": "QoreRagUtils",
@@ -985,7 +985,7 @@ public class RagProviderRegistry {
             supplies the matching factory.  Additional vector stores can be
             registered at runtime via @ref registerVectorStoreFactory().
         */
-        const VectorStoreModuleMap = {
+        const hash<string, string> VectorStoreModuleMap = {
             "chroma":      "ChromaRestClient",
             "milvus":      "MilvusRestClient",
             "mongo-atlas": "MongoDbDataProvider",
@@ -1001,7 +1001,7 @@ public class RagProviderRegistry {
             supplies the matching factory.  Additional chunkers can be
             registered at runtime via @ref registerChunkerFactory().
         */
-        const ChunkerModuleMap = {
+        const hash<string, string> ChunkerModuleMap = {
             "structured":   "QoreRagUtils",
             "fixed":        "QoreRagUtils",
             "llama-parse":  "LlamaParseRestClient",

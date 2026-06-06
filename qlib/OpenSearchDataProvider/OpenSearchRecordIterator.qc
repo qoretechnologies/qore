@@ -46,7 +46,7 @@ public class OpenSearchRecordIterator inherits DataProvider::AbstractDataProvide
         Qore::ListHashIterator i;
 
         #! Query match options
-        const MatchOptions = ("operator",);
+        const list<string> MatchOptions = ("operator",);
     }
 
     #! creates the iterator

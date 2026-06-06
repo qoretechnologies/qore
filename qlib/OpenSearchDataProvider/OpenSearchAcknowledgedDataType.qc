@@ -28,7 +28,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchAcknowledgedDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "acknowledged": {
                 "type": BoolType,
                 "display_name": "Acknowledged?",
@@ -46,5 +46,5 @@ public class OpenSearchAcknowledgedDataType inherits DataProvider::HashDataType 
 }
 
 #! A constant for the acknowledged response type
-public const OpenSearchAcknowledgedDataType = new OpenSearchAcknowledgedDataType();
+public const AbstractDataProviderType OpenSearchAcknowledgedDataType = new OpenSearchAcknowledgedDataType();
 }

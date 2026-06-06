@@ -28,7 +28,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchPipelineDataTypeBase inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # body parameters
             "description": {
                 "type": StringOrNothingType,

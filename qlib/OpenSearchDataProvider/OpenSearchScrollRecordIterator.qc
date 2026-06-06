@@ -67,7 +67,7 @@ public class OpenSearchScrollRecordIterator inherits DataProvider::AbstractDataP
         int batch_size;
 
         #! Query match options
-        const MatchOptions = ("operator",);
+        const list<string> MatchOptions = ("operator",);
     }
 
     #! Creates the scroll iterator

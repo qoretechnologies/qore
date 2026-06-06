@@ -28,7 +28,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchVectorIndexDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "vector-index",
             "desc": "OpenSearch vector index data provider",
             "type": "OpenSearchVectorIndexDataProvider",
@@ -38,13 +38,13 @@ public class OpenSearchVectorIndexDataProvider inherits OpenSearchDataProviderBa
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
     }
 
     private {
-        const ChildMap = {
+        const hash<string, Qore::Reflection::Class> ChildMap = {
             "create": Class::forName("OpenSearchDataProvider::OpenSearchVectorIndexCreateDataProvider"),
         };
     }
@@ -104,7 +104,7 @@ public class OpenSearchVectorIndexDataProvider inherits OpenSearchDataProviderBa
 public class OpenSearchVectorIndexCreateDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "create",
             "desc": "OpenSearch vector index create API data provider",
             "type": "OpenSearchVectorIndexCreateDataProvider",
@@ -113,18 +113,18 @@ public class OpenSearchVectorIndexCreateDataProvider inherits OpenSearchDataProv
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchVectorIndexCreateRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchVectorIndexCreateRequestDataType();
 
         #! Response type
-        const ResponseType = OpenSearchIndexCreateDataProvider::ResponseType;
+        const AbstractDataProviderType ResponseType = OpenSearchIndexCreateDataProvider::ResponseType;
 
         #! Query args
-        const QueryArgs = ("wait_for_active_shards", "master_timeout", "timeout");
+        const list<string> QueryArgs = ("wait_for_active_shards", "master_timeout", "timeout");
     }
 
     #! Creates the object from constructor options
@@ -239,7 +239,7 @@ public class OpenSearchVectorIndexCreateDataProvider inherits OpenSearchDataProv
 public class OpenSearchVectorIndexCreateRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "index": {
                 "type": StringType,
                 "display_name": "Index",

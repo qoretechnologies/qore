@@ -25,7 +25,7 @@
 #! Contains all public definitions in the OpenSearchDataProvider module
 public namespace OpenSearchDataProvider {
 #! OpenSearch app name
-const AppName = "OpenSearch";
+const string AppName = "OpenSearch";
 
 #! The OpenSearch data provider class
 public class OpenSearchDataProvider inherits OpenSearchDataProviderBase {
@@ -37,7 +37,7 @@ public class OpenSearchDataProvider inherits OpenSearchDataProviderBase {
         string display_name;
 
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "OpenSearchDataProvider",
             "supports_read": False,
             "supports_create": False,
@@ -60,11 +60,11 @@ public class OpenSearchDataProvider inherits OpenSearchDataProviderBase {
         };
 
         #! Constructor options
-        const ConstructorOptions = SearchIndexDataProvider::getRestConstructorOptions("OpenSearch");
+        const hash<auto> ConstructorOptions = SearchIndexDataProvider::getRestConstructorOptions("OpenSearch");
     }
 
     private {
-        const ChildMap = {
+        const hash<string, Qore::Reflection::Class> ChildMap = {
             "document": Class::forName("OpenSearchDataProvider::OpenSearchDocumentDataProvider"),
             "index": Class::forName("OpenSearchDataProvider::OpenSearchIndexDataProvider"),
             "pipeline": Class::forName("OpenSearchDataProvider::OpenSearchPipelineDataProvider"),
@@ -130,8 +130,8 @@ public class OpenSearchDataProvider inherits OpenSearchDataProviderBase {
 }
 
 #! Boolean string type for query parameters
-public const SoftBoolStringType = SearchIndexDataProvider::SoftBoolStringType;
+public const Qore::Reflection::Type SoftBoolStringType = SearchIndexDataProvider::SoftBoolStringType;
 
 #! Boolean data provider string type for query parameters
-public const SoftBoolDataProviderStringType = SearchIndexDataProvider::SoftBoolDataProviderStringType;
+public const AbstractDataProviderType SoftBoolDataProviderStringType = SearchIndexDataProvider::SoftBoolDataProviderStringType;
 }

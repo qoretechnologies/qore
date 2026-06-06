@@ -44,8 +44,8 @@ public class OpenSearchIndexTableDataProvider inherits OpenSearchDataProviderBas
         hash<auto> index;
 
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
-            "desc": "OpenSearch index table data provider; provdes table-like access to an OpenSearch index; "
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
+            "desc": "OpenSearch index table data provider; provides table-like access to an OpenSearch index; "
                 "fields returned in searches are document properties, plus the special `_id` (document ID) and "
                 "`_score` (query match score) values, which are read-only.\n\n"
                 "Updating and deleting can be performed, but the 'where clause hash` must contain only a single "
@@ -310,12 +310,12 @@ public class OpenSearchIndexTableDataProvider inherits OpenSearchDataProviderBas
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! OpenSearch property types to data types
-        const TypeMap = {
+        const hash<string, AbstractDataProviderType> TypeMap = {
             "binary": AbstractDataProviderTypeMap."base64binary",
 
             "boolean": AbstractDataProviderTypeMap."boolean",
@@ -354,7 +354,7 @@ public class OpenSearchIndexTableDataProvider inherits OpenSearchDataProviderBas
         };
 
         #! Search query options
-        const SearchQueryOptions = ("timeout",);
+        const list<string> SearchQueryOptions = ("timeout",);
     }
 
     private {

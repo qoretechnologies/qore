@@ -208,10 +208,10 @@ public namespace OpenSearchLoggerAppender {
 public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout, Logger::LoggerSearchableAppender {
     public {
         #! Default batch size
-        const DefaultBatchSize = 100;
+        const int DefaultBatchSize = 100;
 
         #! Default flush interval in milliseconds
-        const DefaultFlushIntervalMs = 5000;
+        const int DefaultFlushIntervalMs = 5000;
     }
 
     private:internal {

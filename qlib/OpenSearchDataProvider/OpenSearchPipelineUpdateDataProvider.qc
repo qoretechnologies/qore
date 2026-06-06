@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchPipelineUpdateDataProvider inherits OpenSearchPipelineCreateDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "update",
             "desc": "OpenSearch pipeline update API data provider",
             "type": "OpenSearchPipelineUpdateDataProvider",
@@ -39,7 +39,7 @@ public class OpenSearchPipelineUpdateDataProvider inherits OpenSearchPipelineCre
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProvider::DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProvider::DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProvider::DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
     }

@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchIndexReadAllDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "read-all",
             "desc": "OpenSearch index read-all API data provider",
             "type": "OpenSearchIndexReadAllDataProvider",
@@ -39,18 +39,18 @@ public class OpenSearchIndexReadAllDataProvider inherits OpenSearchDataProviderB
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchIndexReadAllRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchIndexReadAllRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchIndexReadResponseDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchIndexReadResponseDataType();
 
         #! Query args
-        const QueryArgs = OpenSearchIndexReadDataProvider::QueryArgs;
+        const list<string> QueryArgs = OpenSearchIndexReadDataProvider::QueryArgs;
     }
 
     #! Creates the object from constructor options
@@ -121,7 +121,7 @@ public class OpenSearchIndexReadAllDataProvider inherits OpenSearchDataProviderB
 public class OpenSearchIndexReadAllRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = OpenSearchIndexReadRequestDataType::Fields - "name";
+        const hash<string, AbstractDataField> Fields = OpenSearchIndexReadRequestDataType::Fields - "index";
     }
 
     #! Creates the object

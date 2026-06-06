@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchPipelineDeleteDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "delete",
             "desc": "OpenSearch pipeline delete API data provider",
             "type": "OpenSearchPipelineDeleteDataProvider",
@@ -39,18 +39,18 @@ public class OpenSearchPipelineDeleteDataProvider inherits OpenSearchDataProvide
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchPipelineDeleteRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchPipelineDeleteRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchAcknowledgedDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchAcknowledgedDataType();
 
         #! Query args
-        const QueryArgs = ("master_timeout", "timeout");
+        const list<string> QueryArgs = ("master_timeout", "timeout");
     }
 
     #! Creates the object from constructor options
@@ -121,7 +121,7 @@ public class OpenSearchPipelineDeleteDataProvider inherits OpenSearchDataProvide
 public class OpenSearchPipelineDeleteRequestDataType inherits HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "pipeline": {
                 "type": StringType,

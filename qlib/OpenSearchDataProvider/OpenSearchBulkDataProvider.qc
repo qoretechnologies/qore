@@ -38,7 +38,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchBulkDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "bulk",
             "desc": "OpenSearch bulk API data provider for batch document operations",
             "type": "OpenSearchBulkDataProvider",
@@ -47,18 +47,18 @@ public class OpenSearchBulkDataProvider inherits OpenSearchDataProviderBase {
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchBulkRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchBulkRequestDataType();
 
         #! Response type
-        const ResponseType = OpenSearchBulkResponseType;
+        const AbstractDataProviderType ResponseType = OpenSearchBulkResponseType;
 
         #! Query args
-        const QueryArgs = ("pipeline", "refresh", "routing", "timeout", "wait_for_active_shards", "require_alias");
+        const list<string> QueryArgs = ("pipeline", "refresh", "routing", "timeout", "wait_for_active_shards", "require_alias");
     }
 
     #! Creates the object from constructor options
@@ -152,7 +152,7 @@ public class OpenSearchBulkDataProvider inherits OpenSearchDataProviderBase {
 public class OpenSearchBulkOperationItemDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "action": {
                 "type": StringType,
                 "display_name": "Action",
@@ -243,7 +243,7 @@ public class OpenSearchBulkOperationItemDataType inherits DataProvider::HashData
 public class OpenSearchBulkRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "operations": {
                 "type": new ListDataType("BulkOperationsList", new OpenSearchBulkOperationItemDataType(), True),
                 "display_name": "Operations",

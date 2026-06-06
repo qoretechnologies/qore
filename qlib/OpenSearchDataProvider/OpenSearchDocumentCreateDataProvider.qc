@@ -32,7 +32,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchDocumentCreateDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "create",
             "desc": "OpenSearch document create API data provider",
             "type": "OpenSearchDocumentCreateDataProvider",
@@ -41,18 +41,18 @@ public class OpenSearchDocumentCreateDataProvider inherits OpenSearchDataProvide
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchDocumentCreateRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchDocumentCreateRequestDataType();
 
         #! Response type
-        const ResponseType = OpenSearchDocumentCreateResponseDataType;
+        const AbstractDataProviderType ResponseType = OpenSearchDocumentCreateResponseDataType;
 
         #! Query args
-        const QueryArgs = ("if_seq_no", "if_primary_term", "op_type", "pipeline", "refresh", "routing", "timeout",
+        const list<string> QueryArgs = ("if_seq_no", "if_primary_term", "op_type", "pipeline", "refresh", "routing", "timeout",
             "version", "version_type", "wait_for_active_shards", "require_alias");
     }
 
@@ -124,7 +124,7 @@ public class OpenSearchDocumentCreateDataProvider inherits OpenSearchDataProvide
 public class OpenSearchDocumentCreateRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -238,7 +238,7 @@ public class OpenSearchDocumentCreateRequestDataType inherits DataProvider::Hash
 public class OpenSearchDocumentCreateShardsDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "total": {
                 "type": IntType,
                 "display_name": "Total Shards",
@@ -279,7 +279,7 @@ public class OpenSearchDocumentCreateShardsDataType inherits DataProvider::HashD
 public class OpenSearchDocumentCreateResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "_index": {
                 "type": StringType,
                 "display_name": "Index",
@@ -346,5 +346,5 @@ public class OpenSearchDocumentCreateResponseDataType inherits DataProvider::Has
 }
 
 #! Document create API response type constant
-public const OpenSearchDocumentCreateResponseDataType = new OpenSearchDocumentCreateResponseDataType();
+public const AbstractDataProviderType OpenSearchDocumentCreateResponseDataType = new OpenSearchDocumentCreateResponseDataType();
 }

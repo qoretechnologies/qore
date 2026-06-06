@@ -124,21 +124,21 @@ public namespace LoggerSemanticSearch {
 public class LoggerSemanticSearchIndex {
     public {
         #! Default number of source log entries requested per indexing page
-        const DefaultIndexPageSize = 100;
+        const int DefaultIndexPageSize = 100;
         #! Maximum source log entries requested per indexing page
-        const MaxIndexPageSize = 200;
+        const int MaxIndexPageSize = 200;
         #! Default maximum entries indexed from one appender call
-        const DefaultMaxIndexEntries = 1000;
+        const int DefaultMaxIndexEntries = 1000;
         #! Hard maximum entries indexed from one appender call
-        const MaxIndexEntries = 10000;
+        const int MaxIndexEntries = 10000;
         #! Default embedding batch size
-        const DefaultEmbeddingBatchSize = 64;
+        const int DefaultEmbeddingBatchSize = 64;
         #! Default maximum pages read from an appender in one indexing call
-        const DefaultMaxIndexPages = 100;
+        const int DefaultMaxIndexPages = 100;
         #! Default semantic search result count
-        const DefaultSearchLimit = 10;
+        const int DefaultSearchLimit = 10;
         #! Maximum semantic search result count
-        const MaxSearchLimit = 200;
+        const int MaxSearchLimit = 200;
     }
 
     private {

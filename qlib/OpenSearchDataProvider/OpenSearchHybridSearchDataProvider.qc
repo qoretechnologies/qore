@@ -28,7 +28,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchHybridSearchDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "hybrid-search",
             "desc": "OpenSearch hybrid search API data provider",
             "type": "OpenSearchHybridSearchDataProvider",
@@ -37,18 +37,18 @@ public class OpenSearchHybridSearchDataProvider inherits OpenSearchDataProviderB
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchHybridSearchRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchHybridSearchRequestDataType();
 
         #! Response type
-        const ResponseType = OpenSearchIndexSearchDataProvider::ResponseType;
+        const AbstractDataProviderType ResponseType = OpenSearchIndexSearchDataProvider::ResponseType;
 
         #! Query args
-        const QueryArgs = ("search_pipeline", "preference", "routing");
+        const list<string> QueryArgs = ("search_pipeline", "preference", "routing");
     }
 
     #! Creates the object from constructor options
@@ -119,7 +119,7 @@ public class OpenSearchHybridSearchDataProvider inherits OpenSearchDataProviderB
 public class OpenSearchHybridSearchRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = SearchTopLevelFields + {
+        const hash<string, AbstractDataField> Fields = SearchTopLevelFields + {
             "index": {
                 "type": StringType,
                 "display_name": "Index",

@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchPipelineReadAllDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "read-all",
             "desc": "OpenSearch pipeline read all API data provider",
             "type": "OpenSearchPipelineReadAllDataProvider",
@@ -39,18 +39,18 @@ public class OpenSearchPipelineReadAllDataProvider inherits OpenSearchDataProvid
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchPipelineReadAllRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchPipelineReadAllRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchPipelineReadResponseDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchPipelineReadResponseDataType();
 
         #! Query args
-        const QueryArgs = ("master_timeout");
+        const list<string> QueryArgs = ("master_timeout",);
     }
 
     #! Creates the object from constructor options
@@ -121,7 +121,7 @@ public class OpenSearchPipelineReadAllDataProvider inherits OpenSearchDataProvid
 public class OpenSearchPipelineReadAllRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "master_timeout": {
                 "type": StringOrNothingType,

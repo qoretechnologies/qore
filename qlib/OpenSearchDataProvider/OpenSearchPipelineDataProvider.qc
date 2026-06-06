@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchPipelineDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "pipeline",
             "desc": "OpenSearch pipeline data provider; provides access to operations on OpenSearch pipelines",
             "type": "OpenSearchPipelineDataProvider",
@@ -40,13 +40,13 @@ public class OpenSearchPipelineDataProvider inherits OpenSearchDataProviderBase 
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
     }
 
     private {
-        const ChildMap = {
+        const hash<string, Qore::Reflection::Class> ChildMap = {
             # CRUD operations
             "create": Class::forName("OpenSearchDataProvider::OpenSearchPipelineCreateDataProvider"),
             "read": Class::forName("OpenSearchDataProvider::OpenSearchPipelineReadDataProvider"),

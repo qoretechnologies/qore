@@ -68,13 +68,13 @@ module HttpClientStreamingIo {
 public namespace HttpClientStreamingIo {
 
 #! SSE data event constant
-public const EVENT_SSE_DATA = "sse-data-event";
+public const string EVENT_SSE_DATA = "sse-data-event";
 
 #! SSE connection closed event constant
-public const EVENT_SSE_CLOSED = "sse-closed-event";
+public const string EVENT_SSE_CLOSED = "sse-closed-event";
 
 #! SSE connected event constant
-public const EVENT_SSE_CONNECTED = "sse-connected-event";
+public const string EVENT_SSE_CONNECTED = "sse-connected-event";
 
 #! SSE heartbeat event constant (emitted for comment-only SSE messages like \c ":hb\\n\\n")
 /** Heartbeat events indicate that the server is alive but has no data to send.
@@ -83,6 +83,6 @@ public const EVENT_SSE_CONNECTED = "sse-connected-event";
 
     @since %HttpClientStreamingIo 1.0.1
 */
-public const EVENT_SSE_HEARTBEAT = "sse-heartbeat-event";
+public const string EVENT_SSE_HEARTBEAT = "sse-heartbeat-event";
 
 }

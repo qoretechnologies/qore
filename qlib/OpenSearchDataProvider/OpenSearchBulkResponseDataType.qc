@@ -28,7 +28,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchBulkErrorDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "type": {
                 "type": StringType,
                 "display_name": "Error Type",
@@ -83,7 +83,7 @@ public class OpenSearchBulkErrorDataType inherits DataProvider::HashDataType {
 public class OpenSearchBulkItemShardsDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "total": {
                 "type": IntType,
                 "display_name": "Total Shards",
@@ -118,7 +118,7 @@ public class OpenSearchBulkItemShardsDataType inherits DataProvider::HashDataTyp
 public class OpenSearchBulkItemResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "_index": {
                 "type": StringType,
                 "display_name": "Index",
@@ -200,7 +200,7 @@ public class OpenSearchBulkItemResponseDataType inherits DataProvider::HashDataT
 public class OpenSearchBulkItemWrapperDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "index": {
                 "type": new OpenSearchBulkItemResponseDataType(),
                 "display_name": "Index Response",
@@ -238,7 +238,7 @@ public class OpenSearchBulkItemWrapperDataType inherits DataProvider::HashDataTy
 public class OpenSearchBulkResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "took": {
                 "type": IntType,
                 "display_name": "Time Taken",
@@ -269,5 +269,5 @@ public class OpenSearchBulkResponseDataType inherits DataProvider::HashDataType 
 }
 
 #! Type constant for the bulk response
-public const OpenSearchBulkResponseType = new OpenSearchBulkResponseDataType();
+public const AbstractDataProviderType OpenSearchBulkResponseType = new OpenSearchBulkResponseDataType();
 }

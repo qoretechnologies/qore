@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchDocumentDeleteDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "delete",
             "desc": "OpenSearch document delete API data provider",
             "type": "OpenSearchDocumentDeleteDataProvider",
@@ -39,18 +39,18 @@ public class OpenSearchDocumentDeleteDataProvider inherits OpenSearchDataProvide
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchDocumentDeleteRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchDocumentDeleteRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchDocumentDeleteResponseDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchDocumentDeleteResponseDataType();
 
         #! Query args
-        const QueryArgs = ("if_seq_no", "if_primary_term", "refresh", "routing", "timeout",
+        const list<string> QueryArgs = ("if_seq_no", "if_primary_term", "refresh", "routing", "timeout",
             "version", "version_type", "wait_for_active_shards");
     }
 
@@ -122,7 +122,7 @@ public class OpenSearchDocumentDeleteDataProvider inherits OpenSearchDataProvide
 public class OpenSearchDocumentDeleteRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -214,7 +214,7 @@ public class OpenSearchDocumentDeleteRequestDataType inherits DataProvider::Hash
 public class OpenSearchDocumentDeleteResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "_index": {
                 "type": StringType,
                 "display_name": "Index",

@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchIndexCreateDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "create",
             "desc": "OpenSearch index create API data provider",
             "type": "OpenSearchIndexCreateDataProvider",
@@ -39,18 +39,18 @@ public class OpenSearchIndexCreateDataProvider inherits OpenSearchDataProviderBa
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchIndexCreateRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchIndexCreateRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchIndexCreateResponseDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchIndexCreateResponseDataType();
 
         #! Query args
-        const QueryArgs = ("wait_for_active_shards", "master_timeout", "timeout");
+        const list<string> QueryArgs = ("wait_for_active_shards", "master_timeout", "timeout");
     }
 
     #! Creates the object from constructor options
@@ -128,7 +128,7 @@ public class OpenSearchIndexAliasesDataType inherits DataProvider::HashDataType 
 public class OpenSearchIndexCreateRequestDataType inherits OpenSearchIndexDataTypeBase {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -200,7 +200,7 @@ public class OpenSearchIndexCreateRequestDataType inherits OpenSearchIndexDataTy
 public class OpenSearchIndexCreateResponseDataType inherits OpenSearchAcknowledgedDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "shards_acknowledged": {
                 "type": BoolType,
                 "display_name": "Shards Acknowledged?",

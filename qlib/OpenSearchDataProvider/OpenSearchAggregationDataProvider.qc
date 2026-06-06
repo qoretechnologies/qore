@@ -54,7 +54,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchAggregationDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "aggregate",
             "desc": "OpenSearch aggregation API data provider for computing analytics over search results",
             "type": "OpenSearchAggregationDataProvider",
@@ -63,18 +63,18 @@ public class OpenSearchAggregationDataProvider inherits OpenSearchDataProviderBa
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchAggregationRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchAggregationRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchAggregationResponseDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchAggregationResponseDataType();
 
         #! Query args
-        const QueryArgs = ("routing", "preference", "timeout", "request_cache", "ignore_unavailable",
+        const list<string> QueryArgs = ("routing", "preference", "timeout", "request_cache", "ignore_unavailable",
             "allow_no_indices", "expand_wildcards");
     }
 
@@ -172,7 +172,7 @@ public class OpenSearchAggregationDataProvider inherits OpenSearchDataProviderBa
 public class OpenSearchAggregationRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "index": {
                 "type": StringType,
                 "display_name": "Index Name",
@@ -281,7 +281,7 @@ public class OpenSearchAggregationRequestDataType inherits DataProvider::HashDat
 #! Aggregation shards response data type
 public class OpenSearchAggregationShardsDataType inherits DataProvider::HashDataType {
     private {
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "total": {
                 "type": IntType,
                 "display_name": "Total Shards",
@@ -322,7 +322,7 @@ public class OpenSearchAggregationShardsDataType inherits DataProvider::HashData
 public class OpenSearchAggregationResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             "took": {
                 "type": IntType,
                 "display_name": "Time Taken",

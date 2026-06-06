@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchIndexDeleteDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "delete",
             "desc": "OpenSearch index delete API data provider",
             "type": "OpenSearchIndexDeleteDataProvider",
@@ -39,18 +39,18 @@ public class OpenSearchIndexDeleteDataProvider inherits OpenSearchDataProviderBa
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchIndexDeleteRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchIndexDeleteRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchAcknowledgedDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchAcknowledgedDataType();
 
         #! Query args
-        const QueryArgs = ("allow_no_indices", "expand_wildcards", "ignore_unavailable", "master_timeout", "timeout");
+        const list<string> QueryArgs = ("allow_no_indices", "expand_wildcards", "ignore_unavailable", "master_timeout", "timeout");
     }
 
     #! Creates the object from constructor options
@@ -121,7 +121,7 @@ public class OpenSearchIndexDeleteDataProvider inherits OpenSearchDataProviderBa
 public class OpenSearchIndexDeleteRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -160,7 +160,7 @@ public class OpenSearchIndexDeleteRequestDataType inherits DataProvider::HashDat
                 "type": SoftBoolStringType,
                 "display_name": "Ignore Unavailable?",
                 "short_desc": "Ignore missing indices",
-                "desc": "If `false, the request returns an error if it targets a missing or closed "
+                "desc": "If `false`, the request returns an error if it targets a missing or closed "
                     "index. Defaults to `false`",
                 "example_value": False,
             },

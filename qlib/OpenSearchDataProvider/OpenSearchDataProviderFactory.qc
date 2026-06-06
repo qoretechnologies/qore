@@ -31,7 +31,7 @@ public class OpenSearchDataProviderFactory inherits DataProvider::AbstractDataPr
         static Class cls = new Class("OpenSearchDataProvider");
 
         #! Factory info
-        const FactoryInfo = <DataProviderFactoryInfo>{
+        const hash<DataProviderFactoryInfo> FactoryInfo = <DataProviderFactoryInfo>{
             "name": "opensearch",
             "desc": "OpenSearch API data provider factory",
             "children_can_support_apis": True,

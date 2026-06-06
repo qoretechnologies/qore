@@ -427,5 +427,5 @@ module OpenSearchDataProvider {
 #! Contains all public definitions in the OpenSearchDataProvider module
 public namespace OpenSearchDataProvider {
 #! OpenSearch logo
-public const OpenSearchLogo = File::readTextFile(get_script_dir() + "/opensearch-logo.svg");
+public const string OpenSearchLogo = File::readTextFile(get_script_dir() + "/opensearch-logo.svg");
 }

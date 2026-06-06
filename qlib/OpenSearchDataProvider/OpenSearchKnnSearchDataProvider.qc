@@ -28,7 +28,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchKnnSearchDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "knn-search",
             "desc": "OpenSearch k-NN vector search API data provider",
             "type": "OpenSearchKnnSearchDataProvider",
@@ -37,18 +37,18 @@ public class OpenSearchKnnSearchDataProvider inherits OpenSearchDataProviderBase
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchKnnSearchRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchKnnSearchRequestDataType();
 
         #! Response type
-        const ResponseType = OpenSearchIndexSearchDataProvider::ResponseType;
+        const AbstractDataProviderType ResponseType = OpenSearchIndexSearchDataProvider::ResponseType;
 
         #! Query args
-        const QueryArgs = ("search_pipeline", "preference", "routing");
+        const list<string> QueryArgs = ("search_pipeline", "preference", "routing");
     }
 
     #! Creates the object from constructor options
@@ -131,7 +131,7 @@ public class OpenSearchKnnSearchDataProvider inherits OpenSearchDataProviderBase
 public class OpenSearchKnnSearchRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = SearchTopLevelFields + {
+        const hash<string, AbstractDataField> Fields = SearchTopLevelFields + {
             "index": {
                 "type": StringType,
                 "display_name": "Index",

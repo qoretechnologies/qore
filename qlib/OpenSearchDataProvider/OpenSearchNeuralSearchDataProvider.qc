@@ -28,7 +28,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchNeuralSearchDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "neural-search",
             "desc": "OpenSearch neural search API data provider",
             "type": "OpenSearchNeuralSearchDataProvider",
@@ -37,18 +37,18 @@ public class OpenSearchNeuralSearchDataProvider inherits OpenSearchDataProviderB
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchNeuralSearchRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchNeuralSearchRequestDataType();
 
         #! Response type
-        const ResponseType = OpenSearchIndexSearchDataProvider::ResponseType;
+        const AbstractDataProviderType ResponseType = OpenSearchIndexSearchDataProvider::ResponseType;
 
         #! Query args
-        const QueryArgs = ("search_pipeline", "preference", "routing");
+        const list<string> QueryArgs = ("search_pipeline", "preference", "routing");
     }
 
     #! Creates the object from constructor options
@@ -136,7 +136,7 @@ public class OpenSearchNeuralSearchDataProvider inherits OpenSearchDataProviderB
 public class OpenSearchNeuralSearchRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const Fields = SearchTopLevelFields + {
+        const hash<string, AbstractDataField> Fields = SearchTopLevelFields + {
             "index": {
                 "type": StringType,
                 "display_name": "Index",

@@ -28,9 +28,9 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchIndexesDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "indexes",
-            "desc": "OpenSearch indexes data provider; provdes table-like access to OpenSearch indices",
+            "desc": "OpenSearch indexes data provider; provides table-like access to OpenSearch indices",
             "type": "OpenSearchIndexesDataProvider",
             "constructor_options": OpenSearchDataProvider::ConstructorOptions,
             "supports_children": True,
@@ -39,7 +39,7 @@ public class OpenSearchIndexesDataProvider inherits OpenSearchDataProviderBase {
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
     }

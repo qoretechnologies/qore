@@ -159,10 +159,10 @@ public class SearchIndexSoftBoolStringType inherits Qore::Reflection::Type {
 }
 
 #! Boolean string type instance for REST query parameters
-public const SoftBoolStringType = new SearchIndexSoftBoolStringType();
+public const SearchIndexSoftBoolStringType SoftBoolStringType = new SearchIndexSoftBoolStringType();
 
 #! Boolean data provider string type for REST query parameters
-public const SoftBoolDataProviderStringType = AbstractDataProviderType::get(SoftBoolStringType);
+public const AbstractDataProviderType SoftBoolDataProviderStringType = AbstractDataProviderType::get(SoftBoolStringType);
 
 #! Common NDJSON helpers for search-index bulk APIs
 public class SearchIndexBulkUtil {

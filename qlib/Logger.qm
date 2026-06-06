@@ -409,10 +409,10 @@ public class LoggerSearchableAppender {
 */
 public class LoggerSearchUtil {
     public {
-        const DefaultSearchLimit = 50;
-        const MaxSearchLimit = 200;
-        const DefaultMaxScannedBytes = 1024 * 1024;
-        const UnlimitedScannedBytes = -1;
+        const int DefaultSearchLimit = 50;
+        const int MaxSearchLimit = 200;
+        const int DefaultMaxScannedBytes = 1024 * 1024;
+        const int UnlimitedScannedBytes = -1;
     }
 
     #! Returns generic search capabilities for an appender

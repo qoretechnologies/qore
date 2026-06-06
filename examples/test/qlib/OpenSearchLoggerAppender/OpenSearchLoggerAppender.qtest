@@ -22,11 +22,11 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
         RestClient rest;
 
         # command-line options
-        const MyOpts = Opts + {
+        const hash<auto> MyOpts = Opts + {
             "url": "u,url=s",
         };
 
-        const OptionColumn = 22;
+        const int OptionColumn = 22;
     }
 
     static checkModule(Test test) {

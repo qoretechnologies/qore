@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchPipelineCreateDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "create",
             "desc": "OpenSearch pipeline create API data provider",
             "type": "OpenSearchPipelineCreateDataProvider",
@@ -39,18 +39,18 @@ public class OpenSearchPipelineCreateDataProvider inherits OpenSearchDataProvide
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
         #! Request type
-        const RequestType = new OpenSearchPipelineCreateRequestDataType();
+        const AbstractDataProviderType RequestType = new OpenSearchPipelineCreateRequestDataType();
 
         #! Response type
-        const ResponseType = new OpenSearchAcknowledgedDataType();
+        const AbstractDataProviderType ResponseType = new OpenSearchAcknowledgedDataType();
 
         #! Query args
-        const QueryArgs = ("if_version", "master_timeout", "timeout");
+        const list<string> QueryArgs = ("if_version", "master_timeout", "timeout");
     }
 
     #! Creates the object from constructor options
@@ -121,7 +121,7 @@ public class OpenSearchPipelineCreateDataProvider inherits OpenSearchDataProvide
 public class OpenSearchPipelineCreateRequestDataType inherits OpenSearchPipelineDataTypeBase {
     public {
         #! Field descriptions
-        const Fields = {
+        const hash<string, AbstractDataField> Fields = {
             # query parameters
             "pipeline": {
                 "type": StringType,

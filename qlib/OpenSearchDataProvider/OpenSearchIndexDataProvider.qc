@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchIndexDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "index",
             "desc": "OpenSearch index data provider; provides access to operations on OpenSearch indices",
             "type": "OpenSearchIndexDataProvider",
@@ -40,13 +40,13 @@ public class OpenSearchIndexDataProvider inherits OpenSearchDataProviderBase {
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
     }
 
     private {
-        const ChildMap = {
+        const hash<string, Qore::Reflection::Class> ChildMap = {
             "aggregate": Class::forName("OpenSearchDataProvider::OpenSearchAggregationDataProvider"),
             "create": Class::forName("OpenSearchDataProvider::OpenSearchIndexCreateDataProvider"),
             "delete": Class::forName("OpenSearchDataProvider::OpenSearchIndexDeleteDataProvider"),

@@ -818,7 +818,7 @@ public:
     //! sets the execution mode for this program
     //! @param mode the execution mode to set
     //! @param user_requested true if the user explicitly requested this mode (e.g. via --exec-mode)
-    DLLEXPORT void setExecMode(qore_exec_mode_t mode, bool user_requested = true);
+    DLLEXPORT void setExecMode(qore_exec_mode_t mode, bool user_requested = false);
 
     //! gets the current execution mode for this program
     DLLEXPORT qore_exec_mode_t getExecMode() const;

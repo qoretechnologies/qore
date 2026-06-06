@@ -30,7 +30,7 @@ public namespace OpenSearchDataProvider {
 public class OpenSearchDocumentDataProvider inherits OpenSearchDataProviderBase {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "name": "document",
             "desc": "OpenSearch document data provider; provides access to operations on OpenSearch documents",
             "type": "OpenSearchDocumentDataProvider",
@@ -40,13 +40,13 @@ public class OpenSearchDocumentDataProvider inherits OpenSearchDataProviderBase 
         };
 
         #! Provider summary info
-        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+        const hash<DataProviderSummaryInfo> ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
     }
 
     private {
-        const ChildMap = {
+        const hash<string, Qore::Reflection::Class> ChildMap = {
             "create": Class::forName("OpenSearchDataProvider::OpenSearchDocumentCreateDataProvider"),
             "read": Class::forName("OpenSearchDataProvider::OpenSearchDocumentReadDataProvider"),
             "update": Class::forName("OpenSearchDataProvider::OpenSearchDocumentUpdateDataProvider"),
