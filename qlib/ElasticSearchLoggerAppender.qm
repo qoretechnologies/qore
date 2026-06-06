@@ -28,8 +28,8 @@
 # requires the Logger module
 %requires Logger
 
-# requires the RestClient module
-%requires RestClient
+# requires the RestClientIo module
+%requires RestClientIo
 
 # assume local var scope, do not use "$" for vars, members, and method calls
 %modern
@@ -116,6 +116,7 @@ module ElasticSearchLoggerAppender {
     |\c batch_size|int|No|Maximum number of log events per batch before flushing (default: 100)
     |\c flush_interval_ms|int|No|Maximum time in milliseconds between flushes (default: 5000)
     |\c pipeline|string|No|ElasticSearch ingest pipeline name for document processing
+    |\c allow_search_index_override|bool|No|Allow trusted search callers to override the configured index
     |\c connect_timeout|int|No|Connection timeout in milliseconds
     |\c timeout|int|No|Request timeout in milliseconds
 
@@ -144,7 +145,8 @@ module ElasticSearchLoggerAppender {
     @par Using an Existing REST Client
     @code{.py}
     # Use a pre-configured REST client (useful for authentication, custom headers, etc.)
-    RestClient rest({"url": "http://elasticsearch:9200", "headers": {"Authorization": "Bearer token"}});
+    RestClientIo::RestClientIo rest({"url": "http://elasticsearch:9200",
+        "headers": {"Authorization": "Bearer token"}});
     ElasticSearchLoggerAppender appender("es", layout, rest, {
         "index": "secure-logs",
     });
@@ -216,13 +218,16 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
 
     private:internal {
         #! REST client for ElasticSearch communication
-        RestClient::RestClient rest;
+        RestClientIo::RestClientIo rest;
 
         #! Index name pattern (may contain date format placeholders like %Y, %m, %d)
         string indexPattern;
 
         #! Ingest pipeline (optional)
         *string pipeline;
+
+        #! Whether trusted callers may override the configured search index
+        bool allowSearchIndexOverride = False;
 
         #! Buffer for batched events
         list<hash<auto>> eventBuffer = ();
@@ -261,6 +266,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             - \c batch_size: Maximum events per batch (default: 100)
             - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
             - \c pipeline: Ingest pipeline name (optional)
+            - \c allow_search_index_override: allow trusted search callers to override \c index (default: False)
             - \c connect_timeout: Connection timeout in milliseconds (optional)
             - \c timeout: Request timeout in milliseconds (optional)
     */
@@ -273,22 +279,14 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             throw "ELASTICSEARCH-APPENDER-ERROR", "Missing required option 'index'";
         }
 
-        # Create REST client (connection is delayed until first use)
-        hash<auto> rest_opts = {
-            "url": options.url,
-        };
-        if (options.connect_timeout) {
-            rest_opts.connect_timeout = options.connect_timeout;
-        }
-        if (options.timeout) {
-            rest_opts.timeout = options.timeout;
-        }
-        rest = new RestClient::RestClient(rest_opts, True);
+        hash<auto> rest_opts = getRestClientOptions(options);
+        rest = new RestClientIo::RestClientIo(rest_opts);
 
         indexPattern = options.index;
         batchSize = options.batch_size ?? DefaultBatchSize;
         flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
         pipeline = options.pipeline;
+        allowSearchIndexOverride = options.allow_search_index_override ?? False;
     }
 
     #! Creates the ElasticSearch logger appender with an existing REST client
@@ -300,8 +298,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             - \c batch_size: Maximum events per batch (default: 100)
             - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
             - \c pipeline: Ingest pipeline name (optional)
+            - \c allow_search_index_override: allow trusted search callers to override \c index (default: False)
     */
-    constructor(*string name, Logger::LoggerLayout layout, RestClient::RestClient rest, hash<auto> options)
+    constructor(*string name, Logger::LoggerLayout layout, RestClientIo::RestClientIo rest, hash<auto> options)
             : LoggerAppenderWithLayout(name, layout) {
         if (!options.index) {
             throw "ELASTICSEARCH-APPENDER-ERROR", "Missing required option 'index'";
@@ -312,6 +311,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         batchSize = options.batch_size ?? DefaultBatchSize;
         flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
         pipeline = options.pipeline;
+        allowSearchIndexOverride = options.allow_search_index_override ?? False;
     }
 
     #! Destructor - ensures cleanup
@@ -342,7 +342,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
     }
 
     #! Returns the REST client
-    public RestClient::RestClient getRestClient() {
+    public RestClientIo::RestClientIo getRestClient() {
         return rest;
     }
 
@@ -423,11 +423,15 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         *string index;
 
         try {
+            *string invalid_reason = getInvalidSearchRequestReason(request);
+            if (invalid_reason) {
+                return makeInvalidSearchResult(caps, invalid_reason);
+            }
             int limit = Logger::LoggerSearchUtil::normalizeLimit(request.limit);
             int offset = parseSearchCursor(request.cursor);
             hash<auto> query = makeSearchQuery(request, limit, offset);
             index = request.index ?? resolveIndexName();
-            hash<auto> response = normalizeSearchResponse(rest.post(index + "/_search", query));
+            hash<auto> response = normalizeSearchResponse(rest.restPost(index + "/_search", query).body);
             list<hash<auto>> hits = response.hits.hits ?? ();
             list<hash<auto>> entries = ();
             foreach hash<auto> hit in (hits) {
@@ -625,6 +629,52 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
     #! Resolves the index name by applying date formatting
     private string resolveIndexName() {
         return Logger::LoggerSearchUtil::formatLogIndexPattern(indexPattern);
+    }
+
+    private hash<auto> getRestClientOptions(hash<auto> options) {
+        hash<auto> rest_opts = options - ("index", "batch_size", "flush_interval_ms", "pipeline",
+            "allow_search_index_override");
+        if (!exists rest_opts.data) {
+            rest_opts.data = "json";
+        }
+        return rest_opts;
+    }
+
+    private *string getInvalidSearchRequestReason(hash<auto> request) {
+        if (request.regex) {
+            return "unsupported-regex";
+        }
+        if (request.case_sensitive) {
+            return "unsupported-case-sensitive";
+        }
+        if (request.index && !allowSearchIndexOverride) {
+            return "unsupported-index-override";
+        }
+        if (request.direction && request.direction != "backward" && request.direction != "forward") {
+            return "invalid-direction";
+        }
+        if (request.match && request.match != "phrase" && request.match != "all" && request.match != "any") {
+            return "invalid-match";
+        }
+
+        try {
+            if (request.level) {
+                if (request.level instanceof list) {
+                    foreach auto level in (request.level) {
+                        getLevelValue(string(level));
+                    }
+                } else {
+                    getLevelValue(string(request.level));
+                }
+            }
+            if (request.level_min) {
+                getLevelValue(string(request.level_min));
+            }
+        } catch () {
+            return "invalid-level";
+        }
+
+        return NOTHING;
     }
 
     private int parseSearchCursor(auto cursor) {
@@ -850,6 +900,20 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         return {
             "status": "unavailable",
             "source": source,
+            "capabilities": caps,
+            "entries": (),
+            "result_count": 0,
+            "scanned_bytes": 0,
+            "scanned_events": 0,
+            "truncated": False,
+            "reason": reason,
+        };
+    }
+
+    private hash<auto> makeInvalidSearchResult(hash<auto> caps, string reason) {
+        return {
+            "status": "invalid",
+            "source": caps.source,
             "capabilities": caps,
             "entries": (),
             "result_count": 0,
