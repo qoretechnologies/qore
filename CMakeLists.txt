@@ -3312,6 +3312,7 @@ qore_user_module("qlib/RedisDataProvider" "DataProvider;ConnectionProvider" "red
 
 # base 8 modules
 qore_user_module("qlib/ElasticSearchLoggerAppender.qm" "Logger;RestClient;ElasticSearchDataProvider")
+qore_user_module("qlib/OpenSearchLoggerAppender" "Logger;RestClient;OpenSearchDataProvider" "opensearch-logo.svg")
 qore_user_module("qlib/SalesforceRestDataProvider" "RestClient;SalesforceRestClient;DataProvider" "salesforce-logo.svg")
 qore_user_module("qlib/AwsRestClientDataProvider" "RestClient;DataProvider;RestClientDataProvider")
 qore_user_module("qlib/GoogleDataProvider" "GoogleRestClient;RestClient;DataProvider")

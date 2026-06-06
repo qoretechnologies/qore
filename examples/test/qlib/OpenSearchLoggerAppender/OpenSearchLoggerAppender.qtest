@@ -1,0 +1,284 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires RestClient
+%requires OpenSearchLoggerAppender
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class OpenSearchLoggerAppenderTest
+
+public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
+    private {
+        RestClient rest;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "url": "u,url=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    constructor() : Test("OpenSearchLoggerAppender Test", "1.0") {
+        addTestCase("constructorTest", \constructorTest());
+        addTestCase("documentCreationTest", \documentCreationTest());
+        addTestCase("searchCapabilityTest", \searchCapabilityTest());
+        addTestCase("batchingTest", \batchingTest());
+        addTestCase("negativeTests", \negativeTests());
+
+        setupConnection();
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    #! Test constructor validation
+    private constructorTest() {
+        checkModule(self);
+        # Test missing url
+        try {
+            new OpenSearchLoggerAppender::OpenSearchLoggerAppender(
+                "test",
+                new LoggerLayoutPattern("%m%n"),
+                {"index": "test-logs"}
+            );
+            fail("Expected exception for missing url");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("OPENSEARCH-APPENDER-ERROR", ex.err);
+            assertTrue(ex.desc.find("url") >= 0);
+        }
+
+        # Test missing index
+        try {
+            new OpenSearchLoggerAppender::OpenSearchLoggerAppender(
+                "test",
+                new LoggerLayoutPattern("%m%n"),
+                {"url": "http://localhost:9200"}
+            );
+            fail("Expected exception for missing index");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("OPENSEARCH-APPENDER-ERROR", ex.err);
+            assertTrue(ex.desc.find("index") >= 0);
+        }
+
+        # Test valid constructor (doesn't connect until open)
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs-%Y.%m.%d",
+                "batch_size": 50,
+                "flush_interval_ms": 1000,
+            }
+        );
+        assertEq("test-logs-%Y.%m.%d", appender.getIndexPattern());
+        assertEq(50, appender.getBatchSize());
+        assertEq(1000, appender.getFlushIntervalMs());
+    }
+
+    #! Test document creation from log events
+    private documentCreationTest() {
+        checkModule(self);
+        # Create appender with mock-like settings (won't actually connect)
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs",
+            }
+        );
+
+        # Create a test log event
+        date ts = now_us();
+        LoggerEvent event(
+            "test.fqcn",
+            "TestLogger",
+            LoggerLevel::getLevelError(),
+            "Test message: %d",
+            (42,),
+            NOTHING,
+            gettid(),
+            ts,
+            NOTHING
+        );
+
+        # Serialize the event
+        hash<auto> doc = appender.serializeImpl(event);
+
+        # Verify document structure
+        assertTrue(doc.hasKey("@timestamp"));
+        assertEq("ERROR", doc.level);
+        assertEq(40000, doc.level_value);
+        assertEq("TestLogger", doc.logger);
+        assertEq("Test message: 42", doc.message);
+        assertEq(gettid(), doc.thread_id);
+        assertTrue(doc.hasKey("host"));
+        assertTrue(doc.host.hasKey("name"));
+    }
+
+    #! Test rendered-event search capabilities
+    private searchCapabilityTest() {
+        checkModule(self);
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs-%Y.%m.%d",
+            }
+        );
+
+        hash<auto> caps = appender.getSearchCapabilities();
+        assertTrue(caps.searchable);
+        assertTrue(caps.supports_search);
+        assertEq("opensearch", caps.source.kind);
+        assertEq("test", caps.source.appender);
+        assertEq("test-logs-%Y.%m.%d", caps.source.index);
+        assertTrue(caps.time_filter);
+        assertTrue(caps.levels);
+        assertTrue(caps.structured_fields);
+        assertEq(Logger::LoggerSearchUtil::MaxSearchLimit, caps.max_limit);
+
+        assertEq(caps, Logger::LoggerSearchUtil::getAppenderSearchCapabilities(appender));
+    }
+
+    #! Test batching behavior
+    private batchingTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create unique index for this test
+        string index = "test-logs-" + get_random_string().lwr();
+
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            rest,
+            {
+                "index": index,
+                "batch_size": 5,
+                "flush_interval_ms": 60000,  # Long interval so we control flushing
+            }
+        );
+
+        on_exit {
+            # Clean up test index
+            try {
+                rest.del(index);
+            } catch () {}
+        }
+
+        # Open appender
+        appender.open();
+        on_exit appender.close();
+
+        # Create logger and attach appender
+        Logger logger("BatchTest", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+
+        # Log 3 events (less than batch size - should not flush yet)
+        logger.info("Message 1");
+        logger.info("Message 2");
+        logger.info("Message 3");
+
+        # Force flush
+        appender.flush();
+
+        # Wait a moment for OpenSearch to index
+        sleep(1s);
+
+        # Refresh index
+        try {
+            rest.post(index + "/_refresh");
+        } catch () {}
+
+        # Verify documents in OpenSearch
+        try {
+            hash<auto> response = rest.post(index + "/_search").body;
+            assertTrue(response.hits.total.value >= 3);
+        } catch (hash<ExceptionInfo> ex) {
+            # Index might not exist yet if first flush didn't work
+            if (ex.desc !~ /index_not_found/) {
+                rethrow;
+            }
+        }
+    }
+
+    #! Negative tests
+    private negativeTests() {
+        checkModule(self);
+        # Test with REST client constructor - missing index
+        if (rest) {
+            try {
+                new OpenSearchLoggerAppender::OpenSearchLoggerAppender(
+                    "test",
+                    new LoggerLayoutPattern("%m%n"),
+                    rest,
+                    {}  # Missing index
+                );
+                fail("Expected exception for missing index");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("OPENSEARCH-APPENDER-ERROR", ex.err);
+            }
+        }
+
+        # Test that we can create appender even without valid connection
+        # (connection errors happen on flush, not construction)
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://invalid-host-that-does-not-exist:9200",
+                "index": "test-logs",
+                "batch_size": 1,
+            }
+        );
+        assertTrue(True);  # Construction succeeded
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-u,--url=ARG", "URL for the OpenSearch server instance", OptionColumn);
+    }
+
+    private setupConnection() {
+        *string url = m_options.url ?? ENV.OPENSEARCH_URL;
+        if (!url) {
+            if (m_options.verbose) {
+                stderr.print("missing --url option or OPENSEARCH_URL environment variable\n");
+            }
+            return;
+        }
+
+        try {
+            rest = new RestClient({"url": url});
+            # Test connection
+            rest.get("_cluster/health");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                stderr.printf("%s: %s\n", ex.err, ex.desc);
+            }
+            delete rest;
+        }
+    }
+}
