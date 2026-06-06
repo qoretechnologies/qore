@@ -4,6 +4,7 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
 %requires QUnit
 
 %exec-class SeparatedModuleShadowTest
@@ -11,6 +12,8 @@
 class SeparatedModuleShadowTest inherits QUnit::Test {
     constructor() : QUnit::Test("Separated module shadow test", "1.0") {
         addTestCase("invalid separated-module directory is skipped", \testInvalidSeparatedDirectoryIsSkipped());
+        addTestCase("separated qmod falls back to source with warning",
+            \testSeparatedQmodSourceFallbackWarn());
         set_return_value(main());
     }
 
@@ -28,5 +31,56 @@ class SeparatedModuleShadowTest inherits QUnit::Test {
         );
 
         assertEq(5164, p.callFunction("get_value"));
+    }
+
+    testSeparatedQmodSourceFallbackWarn() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string module_dir = tmp_dir + "/SeparatedFallbackWarn";
+        mkdir(module_dir, 0755);
+
+        string qm_path = module_dir + "/SeparatedFallbackWarn.qm";
+        string qmod_path = module_dir + "/SeparatedFallbackWarn.qmod";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module SeparatedFallbackWarn {
+    version = \"1.0\";
+    desc = \"separated qmod source fallback test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace SeparatedFallbackWarnTest {
+    public int sub value() {
+        return 5166;
+    }
+}
+");
+        f.close();
+
+        f.open2(qmod_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("not a qmod\n");
+        f.close();
+
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE, True);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.parse(
+            "%prepend-module-path \"" + tmp_dir + "\"\n"
+            "int sub separated_qmod_source_fallback_setup() { return 1; }\n",
+            "separated-qmod-source-fallback-setup");
+
+        hash<ExceptionInfo> warning = p.loadModuleWarn("SeparatedFallbackWarn", WARN_MODULES);
+        assertEq("BINARY-MODULE-SOURCE-FALLBACK", warning.err);
+        assertRegex("SeparatedFallbackWarn/SeparatedFallbackWarn\\.qmod", warning.desc);
+        assertRegex("SeparatedFallbackWarn/SeparatedFallbackWarn\\.qm", warning.desc);
+
+        p.parse("int sub get_value() { return SeparatedFallbackWarnTest::value(); }\n",
+            "separated-qmod-source-fallback");
+
+        assertEq(5166, p.callFunction("get_value"));
     }
 }

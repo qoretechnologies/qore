@@ -13,11 +13,16 @@
 
 class ExplicitQmodFallbackTest inherits QUnit::Test {
     constructor() : QUnit::Test("Explicit qmod fallback test", "1.0") {
-        addTestCase("explicit qmod path falls back to sibling source", \testExplicitQmodPathFallback());
+        addTestCase("explicit qmod path falls back to sibling source with warning",
+            \testExplicitQmodPathFallbackWarn());
+        addTestCase("explicit qmod path fallback does not fail loadModule",
+            \testExplicitQmodPathFallbackLoadModule());
+        addTestCase("explicit qmod path fallback works from requires",
+            \testExplicitQmodPathFallbackRequires());
         set_return_value(main());
     }
 
-    testExplicitQmodPathFallback() {
+    testExplicitQmodPathFallbackWarn() {
         string tmp_dir = make_tmp_dir();
         on_exit remove_tree(tmp_dir);
 
@@ -49,12 +54,93 @@ public namespace ExplicitFallbackTest {
 
         Program p(PO_NEW_STYLE);
         p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
-        p.parse(
-            "%requires " + qmod_path + "\n"
-            "int sub get_value() { return ExplicitFallbackTest::value(); }\n",
-            "explicit-qmod-fallback"
-        );
+        hash<ExceptionInfo> warning = p.loadModuleWarn(qmod_path, WARN_MODULES);
+        assertEq("BINARY-MODULE-SOURCE-FALLBACK", warning.err);
+        assertRegex("ExplicitFallback\\.qmod", warning.desc);
+        assertRegex("ExplicitFallback\\.qm", warning.desc);
+
+        p.parse("int sub get_value() { return ExplicitFallbackTest::value(); }\n", "explicit-qmod-fallback");
 
         assertEq(5164, p.callFunction("get_value"));
+    }
+
+    testExplicitQmodPathFallbackLoadModule() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/ExplicitFallbackLoadModule.qm";
+        string qmod_path = tmp_dir + "/ExplicitFallbackLoadModule.qmod";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module ExplicitFallbackLoadModule {
+    version = \"1.0\";
+    desc = \"explicit qmod fallback loadModule test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ExplicitFallbackLoadModuleTest {
+    public int sub value() {
+        return 5165;
+    }
+}
+");
+        f.close();
+
+        f.open2(qmod_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("not a qmod\n");
+        f.close();
+
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.loadModule(qmod_path, WARN_MODULES);
+        p.parse("int sub get_value() { return ExplicitFallbackLoadModuleTest::value(); }\n",
+            "explicit-qmod-fallback-load-module");
+
+        assertEq(5165, p.callFunction("get_value"));
+    }
+
+    testExplicitQmodPathFallbackRequires() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/ExplicitFallbackRequires.qm";
+        string qmod_path = tmp_dir + "/ExplicitFallbackRequires.qmod";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module ExplicitFallbackRequires {
+    version = \"1.0\";
+    desc = \"explicit qmod fallback requires test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ExplicitFallbackRequiresTest {
+    public int sub value() {
+        return 5167;
+    }
+}
+");
+        f.close();
+
+        f.open2(qmod_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("not a qmod\n");
+        f.close();
+
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.parse(
+            "%requires " + qmod_path + "\n"
+            "int sub get_value() { return ExplicitFallbackRequiresTest::value(); }\n",
+            "explicit-qmod-fallback-requires"
+        );
+
+        assertEq(5167, p.callFunction("get_value"));
     }
 }
