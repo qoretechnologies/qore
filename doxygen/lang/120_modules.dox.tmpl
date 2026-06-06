@@ -208,6 +208,8 @@ ModuleName/
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for DeepSeek AI services
     |user|<a href="../../modules/DeepSeekRestClient/html/index.html#deepseekrestclientintro">DeepSeekRestClient</a>|providing APIs for \
         communicating with DeepSeek REST APIs (registers an LlmProvider for mode `deepseek` and a `deepseek://` connection scheme)
+    |user|<a href="../../modules/Diff/html/index.html#diffintro">Diff</a>|Provides functionality for finding \
+        differences between various data
     |user|<a href="../../modules/DiscordDataProvider/html/index.html#discorddataproviderintro">DiscordDataProvider</a>|provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for communicating with Discord APIs
     |user|<a href="../../modules/DiscordRestClient/html/index.html#discordrestclientintro">DiscordRestClient</a>|providing APIs for \
@@ -330,6 +332,10 @@ ModuleName/
     |user|<a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a>|Provides unified HTTP/2 and \
         HTTP/3 multiplexed client I/O with protocol auto-selection, connection pooling, and \
         abstract base classes for both protocols
+    |user|<a href="../../modules/HttpClientStreamingIo/html/index.html#httpclientstreamingiointro">HttpClientStreamingIo</a>|Provides \
+        application-level streaming utilities for the \
+        <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a> module: Server-Sent Events \
+        (SSE) event reading, a push-based SSE observable, and stream decompression across HTTP/1.x, HTTP/2, and HTTP/3
     |user|<a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a>|Provides a multi-threaded HTTP server \
         and request handler APIs; provides the infrastructure for server-side HTTP services
     |user|<a href="../../modules/HttpServerAsyncIo/html/index.html#httpserverasynciointro">HttpServerAsyncIo</a>|Provides async I/O support \
@@ -414,6 +420,8 @@ ModuleName/
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Linear issue tracking services
     |user|<a href="../../modules/LinearRestClient/html/index.html#linearrestclientintro">LinearRestClient</a>|Provides APIs for \
         communicating with Linear's GraphQL API
+    |user|<a href="../../modules/LineCoverage/html/index.html#linecoverageintro">LineCoverage</a>|Provides an API for \
+        collecting %Qore Program line coverage information
     |binary|<a href="../../modules/linenoise/html/index.html#linenoiseintro">linenoise</a>|Provides a readline-like API \
         to %Qore under a permissive license; used by \
         @ref qorereplintro "QoreRepl", @ref qorehistoryintro "QoreHistory", and \c qdp for interactive line editing
@@ -621,12 +629,17 @@ ModuleName/
         automatically-generating %Qore code from data
     |user|<a href="../../modules/QUnit/html/index.html#qunitintro">QUnit</a>|Provides an API for defining and executing tests \
         and reporting results in various formats
+    |user|<a href="../../modules/RedisDataProvider/html/index.html#redisdataproviderintro">RedisDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Redis servers
     |binary|<a href="../../modules/reflection/html/index.html#reflectionintro">reflection</a>|Provides a reflection API to %Qore
     |user|<a href="../../modules/RestClient/html/index.html#restclientintro">RestClient</a>|Provides a simple API for communicating \
         with HTTP servers implementing \
         <a href="http://en.wikipedia.org/wiki/Representational_state_transfer">REST</a> services
     |user|<a href="../../modules/RestClientDataProvider/html/index.html#restclientdataproviderintro">RestClientDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for REST servers
+    |user|<a href="../../modules/RestClientIo/html/index.html#restclientio_intro">RestClientIo</a>|Provides a REST client over \
+        HTTP/1.1, HTTP/2, and HTTP/3 connections with synchronous and asynchronous (Future-returning) APIs and \
+        connection pooling
     |user|<a href="../../modules/RestHandler/html/index.html#resthandlerintro">RestHandler</a>|Provides an easy to use interface to \
         the %Qore <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module for implementing \
         server-side <a href="http://en.wikipedia.org/wiki/Representational_state_transfer">REST</a> services
@@ -647,6 +660,8 @@ ModuleName/
     |user|<a href="../../modules/Schema/html/index.html#schemaintro">Schema</a>|Provides automatic schema management \
         functionality as a meta-layer for <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a>'s medium and \
         low-level schema management functionality
+    |user|<a href="../../modules/SchemaReverse/html/index.html#schemareverseintro">SchemaReverse</a>|Provides an API for \
+        reverse engineering database SQL schemas
     |user|<a href="../../modules/SearchIndexDataProvider/html/index.html#searchindexdataproviderintro">SearchIndexDataProvider</a>|Provides \
         common data provider helpers for REST document-search index backends
     |user|<a href="../../modules/SegmentDataProvider/html/index.html#segmentdataproviderintro">SegmentDataProvider</a>|Provides a \
@@ -775,6 +790,8 @@ ModuleName/
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Voyage AI embedding and reranking services
     |user|<a href="../../modules/VoyageRestClient/html/index.html#voyagerestclientintro">VoyageRestClient</a>|providing APIs for \
         communicating with Voyage AI REST APIs
+    |user|<a href="../../modules/VscDebugAdapter/html/index.html#vscdebugadapterintro">VscDebugAdapter</a>|Implements the \
+        Visual Studio Code Debug Adapter protocol for %Qore
     |user|<a href="../../modules/WaveDataProvider/html/index.html#wavedataproviderintro">WaveDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Wave accounting and invoicing services
     |user|<a href="../../modules/WaveRestClient/html/index.html#waverestclientintro">WaveRestClient</a>|Provides APIs for \

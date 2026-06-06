@@ -2941,6 +2941,13 @@ foreach string module_name in (registry.getProcessModules()) {
       - pending stream reservation tracking to limit blast radius of handshake failures
       - all I/O driven by the @ref asyncsocketiointro "AsyncSocketIo" event loop
 
+    - @ref httpclientstreamingiointro "HttpClientStreamingIo" module
+      - new module providing application-level streaming utilities for the @ref httpclientiointro "HttpClientIo"
+        module across HTTP/1.x, HTTP/2, and HTTP/3
+      - Server-Sent Events (SSE) event reading via @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader"
+      - push-based SSE event delivery via @ref HttpClientStreamingIo::SseObservable "SseObservable"
+      - stream decompression via @ref HttpClientStreamingIo::StreamDecompressor "StreamDecompressor"
+
     - @ref httpserverasynciointro "HttpServerAsyncIo" module
       - new module providing async I/O support classes for the @ref httpserverintro "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
@@ -3111,6 +3118,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://linear.app/">Linear</a>'s GraphQL API
       - supports API key and OAuth2 authentication
       - provides LinearRestConnection for connection management with \c linear:// URL scheme
+
+    - @ref linecoverageintro "LineCoverage" module
+      - new module providing an API for collecting %Qore Program line coverage information
 
     - @ref llamaparsedataproviderintro "LlamaParseDataProvider" module
       - new module providing a data provider API for <a href="https://docs.cloud.llamaindex.ai/llamaparse/getting_started">LlamaParse</a> document extraction
@@ -3541,6 +3551,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing multimodal LLM vision extraction
       - VisionLlmClient: image description, table extraction, and text extraction
       - supports OpenAI and Anthropic multimodal APIs with base64 image content blocks
+
+    - @ref redisdataproviderintro "RedisDataProvider" module
+      - new module providing a data provider API for <a href="https://redis.io/">Redis</a> servers
 
     - @ref restclientio_intro "RestClientIo" module
       - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections

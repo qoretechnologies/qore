@@ -42,6 +42,12 @@ module HttpClientStreamingIo {
 
     @tableofcontents
 
+    @section httpclientstreamingiointro Introduction
+
+    The %HttpClientStreamingIo module provides application-level streaming utilities for the
+    @ref httpclientiointro "HttpClientIo" module: Server-Sent Events (SSE) event reading, a push-based
+    SSE observable, and stream decompression across HTTP/1.x, HTTP/2, and HTTP/3.
+
     @section httpclientstreamingioreleasenotes Release Notes
 
     @subsection httpclientstreamingio_v1_0 HttpClientStreamingIo v1.0
