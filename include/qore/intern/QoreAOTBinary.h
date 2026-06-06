@@ -809,6 +809,9 @@ private:
            provided, only items whose AST declaration location matches
            the given file path are serialized — used for per-file
            `.qo` metadata fragments
+    @param compile_files optional multi-file filter; when provided, only
+           items whose AST declaration location appears in the set are
+           serialized — used for aggregate script metadata
     @param error optional output diagnostic; set on failure with enough
            owner/source/expression context to fix the unsupported lowering
     @return true on success, false if serialization failed
@@ -817,7 +820,8 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     const char* module_name = nullptr,
     const std::unordered_set<std::string>* keep_modules = nullptr,
     const char* compile_file = nullptr,
-    std::string* error = nullptr);
+    std::string* error = nullptr,
+    const std::unordered_set<std::string>* compile_files = nullptr);
 
 //! Serialize module dependencies into the DEPENDENCIES binary section
 /** Writes all module dependencies (including reexport) so they can be loaded

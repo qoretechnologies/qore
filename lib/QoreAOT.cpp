@@ -469,7 +469,8 @@ struct AOTCompiledFunc {
 static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
         std::vector<AOTCompiledFuncWithSlots>& func_slots,
         std::string& error,
-        const char* file_filter = nullptr) {
+        const char* file_filter = nullptr,
+        const std::unordered_set<std::string>* file_filter_set = nullptr) {
     if (!pgm || func_slots.empty()) {
         return true;
     }
@@ -491,6 +492,10 @@ static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
         }
         const char* file = loc->getFileValue();
         if (file_filter && strcmp(file, file_filter)) {
+            continue;
+        }
+        if (file_filter_set && !file_filter_set->empty()
+                && file_filter_set->find(file) == file_filter_set->end()) {
             continue;
         }
         const char* source = loc->getSourceValue();
@@ -2091,14 +2096,26 @@ static inline bool shouldSkipModuleItem(const char* item_module, const char* com
     Items without a usable file location are kept (conservative: better to
     over-include than to silently drop unattributed items).
 */
-static inline bool shouldSkipByFile(const char* item_file, const char* compile_file) {
-    if (!compile_file) {
+static inline bool hasCompileFileFilter(const char* compile_file,
+        const std::unordered_set<std::string>* compile_files = nullptr) {
+    return compile_file || (compile_files && !compile_files->empty());
+}
+
+static inline bool shouldSkipByFile(const char* item_file, const char* compile_file,
+        const std::unordered_set<std::string>* compile_files = nullptr) {
+    if (!hasCompileFileFilter(compile_file, compile_files)) {
         return false;
     }
     if (!item_file) {
         return false;
     }
-    return strcmp(item_file, compile_file) != 0;
+    if (compile_file && !strcmp(item_file, compile_file)) {
+        return false;
+    }
+    if (compile_files && compile_files->find(item_file) != compile_files->end()) {
+        return false;
+    }
+    return true;
 }
 
 //! Recursively walk namespace tree and build reverse map from constant value pointers
@@ -2346,7 +2363,8 @@ static AOTConstantReverseMap buildPendingSafeConstantReverseMap(qore_ns_private*
 static void collectPendingInitConstantFQNs(qore_ns_private* ns,
         std::unordered_set<std::string>& pending_fqns,
         const char* compile_module, const char* compile_file,
-        const std::unordered_set<std::string>* keep_modules = nullptr) {
+        const std::unordered_set<std::string>* keep_modules = nullptr,
+        const std::unordered_set<std::string>* compile_files = nullptr) {
     if (!ns) {
         return;
     }
@@ -2363,7 +2381,8 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
         if (shouldSkipModuleItem(ce->getModuleName(), compile_module, keep_modules)) {
             continue;
         }
-        if (compile_file && ce->loc && shouldSkipByFile(ce->loc->getFile(), compile_file)) {
+        if (shouldSkipByFile(ce->loc ? ce->loc->getFile() : nullptr,
+                compile_file, compile_files)) {
             continue;
         }
         if (!ce->getInitExpr().isNothing()) {
@@ -2389,7 +2408,8 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
         if (shouldSkipModuleItem(qcp->getModuleName(), compile_module, keep_modules)) {
             continue;
         }
-        if (compile_file && qcp->loc && shouldSkipByFile(qcp->loc->getFile(), compile_file)) {
+        if (shouldSkipByFile(qcp->loc ? qcp->loc->getFile() : nullptr,
+                compile_file, compile_files)) {
             continue;
         }
 
@@ -2421,7 +2441,7 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
     for (auto& ni : ns->nsl.nsmap) {
         if (ni.second) {
             collectPendingInitConstantFQNs(qore_ns_private::get(*ni.second), pending_fqns,
-                compile_module, compile_file, keep_modules);
+                compile_module, compile_file, keep_modules, compile_files);
         }
     }
 }
@@ -2500,7 +2520,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         const std::unordered_set<std::string>* pending_init_constant_fqns = nullptr,
         const AOTConstantReverseMap* init_base_const_reverse_map = nullptr,
         std::string* fatal_error = nullptr,
-        const std::unordered_set<std::string>* keep_modules = nullptr) {
+        const std::unordered_set<std::string>* keep_modules = nullptr,
+        const std::unordered_set<std::string>* compile_files = nullptr) {
     if (fatal_error && !fatal_error->empty()) {
         return;
     }
@@ -2515,7 +2536,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     std::unordered_set<std::string> local_pending_init_constant_fqns;
     if (!pending_init_constant_fqns) {
         collectPendingInitConstantFQNs(ns, local_pending_init_constant_fqns,
-            compile_module, compile_file, keep_modules);
+            compile_module, compile_file, keep_modules, compile_files);
         pending_init_constant_fqns = &local_pending_init_constant_fqns;
     }
 
@@ -2597,10 +2618,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             // declaration file. Different variants of the same function
             // name can live in different files under %strong-encapsulation
             // (though unusual), so the filter is applied per-variant.
-            if (compile_file) {
+            if (hasCompileFileFilter(compile_file, compile_files)) {
                 const UserSignature* sig = uvb->getUserSignature();
                 const QoreProgramLocation* vloc = sig ? sig->getParseLocation() : nullptr;
-                if (vloc && shouldSkipByFile(vloc->getFile(), compile_file)) {
+                if (shouldSkipByFile(vloc ? vloc->getFile() : nullptr,
+                        compile_file, compile_files)) {
                     continue;
                 }
             }
@@ -2889,8 +2911,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         // self-contained under %strong-encapsulation, so a class belongs
         // to exactly one file (qcp->loc). Skip the entire class (all
         // methods) when the declaration file doesn't match.
-        if (compile_file && qcp->loc
-                && shouldSkipByFile(qcp->loc->getFile(), compile_file)) {
+        if (shouldSkipByFile(qcp->loc ? qcp->loc->getFile() : nullptr,
+                compile_file, compile_files)) {
             continue;
         }
         // Use namespace-qualified class path for unique LLVM symbol names
@@ -3366,8 +3388,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             if (shouldSkipModuleItem(ce->getModuleName(), compile_module, keep_modules)) {
                 continue;
             }
-            if (compile_file && ce->loc
-                    && shouldSkipByFile(ce->loc->getFile(), compile_file)) {
+            if (shouldSkipByFile(ce->loc ? ce->loc->getFile() : nullptr,
+                    compile_file, compile_files)) {
                 continue;
             }
             if (ce->getInitExpr().isNothing()) {
@@ -3388,8 +3410,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             if (shouldSkipModuleItem(qcp->getModuleName(), compile_module, keep_modules)) {
                 continue;
             }
-            if (compile_file && qcp->loc
-                    && shouldSkipByFile(qcp->loc->getFile(), compile_file)) {
+            if (shouldSkipByFile(qcp->loc ? qcp->loc->getFile() : nullptr,
+                    compile_file, compile_files)) {
                 continue;
             }
             const char* class_path = qc->getPath();
@@ -3429,8 +3451,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             if (shouldSkipModuleItem(ce->getModuleName(), compile_module, keep_modules)) {
                 continue;
             }
-            if (compile_file && ce->loc
-                    && shouldSkipByFile(ce->loc->getFile(), compile_file)) {
+            if (shouldSkipByFile(ce->loc ? ce->loc->getFile() : nullptr,
+                    compile_file, compile_files)) {
                 continue;
             }
             QoreValue init_expr = ce->getInitExpr();
@@ -3458,8 +3480,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             if (shouldSkipModuleItem(qcp->getModuleName(), compile_module, keep_modules)) {
                 continue;
             }
-            if (compile_file && qcp->loc
-                    && shouldSkipByFile(qcp->loc->getFile(), compile_file)) {
+            if (shouldSkipByFile(qcp->loc ? qcp->loc->getFile() : nullptr,
+                    compile_file, compile_files)) {
                 continue;
             }
 
@@ -3515,7 +3537,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
                 failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
                 compile_module, compile_file, metadata_only, pending_init_constant_fqns,
-                init_base_const_reverse_map, fatal_error, keep_modules);
+                init_base_const_reverse_map, fatal_error, keep_modules, compile_files);
             if (fatal_error && !fatal_error->empty()) {
                 return;
             }
@@ -5468,7 +5490,9 @@ static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
         llvm::Module& module, const std::string& mod_name,
         const std::string& file_basename_san,
         llvm::GlobalVariable* blob_gv, size_t blob_size,
-        const std::vector<AOTCompiledFunc>& compiled_funcs) {
+        const std::vector<AOTCompiledFunc>& compiled_funcs,
+        const char* register_fn_name = nullptr,
+        const char* register_label = nullptr) {
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
     auto* ptr_type = llvm::PointerType::get(ctx, 0);
@@ -5544,7 +5568,7 @@ static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
 
     // Private label string for diagnostics.
     auto* label_data = llvm::ConstantDataArray::getString(ctx,
-        file_basename_san, true);
+        register_label ? register_label : file_basename_san.c_str(), true);
     auto* label_gv = new llvm::GlobalVariable(module, label_data->getType(),
         true, llvm::GlobalValue::PrivateLinkage, label_data,
         "qore_aot_script_label_" + file_basename_san);
@@ -5552,7 +5576,7 @@ static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
     // Build the register function.
     auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
     auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
-        prefix_public + "_script_register", module);
+        register_fn_name ? register_fn_name : prefix_public + "_script_register", module);
     fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
 
     auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
@@ -7441,7 +7465,12 @@ bool QoreAOT::compileScriptFilesBatch(
     };
     std::vector<SrcEntry> entries;
     entries.reserve(target_files.size());
+    size_t input_i = 0;
     for (const std::string& f : target_files) {
+        if (input_i && !(input_i % 100) && qore_check_cancel(nullptr, "AOT batch input collection")) {
+            error = "operation cancelled during AOT batch input collection";
+            return false;
+        }
         char* r = realpath(f.c_str(), nullptr);
         if (!r) {
             error = std::string("cannot resolve target file: ") + f;
@@ -7458,6 +7487,7 @@ bool QoreAOT::compileScriptFilesBatch(
         e.source = stripIncludeDirectives(e.source);
         e.out_path = out_dir + "/" + scriptBatchSourceId(e.canon) + ".qo";
         entries.push_back(std::move(e));
+        ++input_i;
     }
 
     // Single shared QoreProgram — parse every source into it.
@@ -7570,6 +7600,366 @@ bool QoreAOT::compileScriptFilesBatch(
     if (compiled_count_out) {
         *compiled_count_out = total_compiled_count;
     }
+
+    return true;
+}
+
+bool QoreAOT::compileScriptAggregate(
+        const std::vector<std::string>& target_files,
+        const std::string& output_path,
+        const std::string& aggregate_symbol,
+        const QoreParseOptions& parse_options,
+        std::string& error,
+        int opt_level,
+        const char* target_triple,
+        bool include_source,
+        const std::vector<std::string>& require_modules,
+        const std::vector<std::string>& stub_files,
+        const std::vector<std::string>& parse_defines,
+        const std::vector<std::string>& parse_option_flags,
+        int* compiled_count_out) {
+    if (target_files.empty()) {
+        error = "compileScriptAggregate: target_files is empty";
+        return false;
+    }
+    if (output_path.empty()) {
+        error = "compileScriptAggregate: output_path is empty";
+        return false;
+    }
+    if (aggregate_symbol.empty()) {
+        error = "compileScriptAggregate: aggregate_symbol is empty";
+        return false;
+    }
+
+    std::string aggregate_san = sanitizeCIdentifier(aggregate_symbol);
+    if (aggregate_san.empty()) {
+        error = "compileScriptAggregate: aggregate_symbol is invalid";
+        return false;
+    }
+
+    struct SrcEntry {
+        std::string canon;
+        std::string source;
+    };
+
+    std::vector<SrcEntry> entries;
+    entries.reserve(target_files.size());
+    std::unordered_set<std::string> target_set;
+    std::string combined_source;
+    uint64_t aggregate_hash = 0;
+    size_t aggregate_input_i = 0;
+    for (const std::string& f : target_files) {
+        if (aggregate_input_i && !(aggregate_input_i % 100)
+                && qore_check_cancel(nullptr, "AOT aggregate input collection")) {
+            error = "operation cancelled during AOT aggregate input collection";
+            return false;
+        }
+        char* r = realpath(f.c_str(), nullptr);
+        if (!r) {
+            error = std::string("cannot resolve target file: ") + f;
+            return false;
+        }
+        SrcEntry e;
+        e.canon = r;
+        free(r);
+        e.source = QoreDir::get_file_content(e.canon.c_str());
+        if (e.source.empty()) {
+            error = "target source file is empty or unreadable: " + e.canon;
+            return false;
+        }
+        e.source = stripIncludeDirectives(e.source);
+        if (!combined_source.empty()) {
+            combined_source.push_back('\n');
+        }
+        combined_source += e.source;
+        aggregate_hash = XXH64(e.canon.data(), e.canon.size(), aggregate_hash);
+        aggregate_hash = XXH64(e.source.data(), e.source.size(), aggregate_hash);
+        target_set.insert(e.canon);
+        entries.push_back(std::move(e));
+        ++aggregate_input_i;
+    }
+
+    QoreParseOptions po = parse_options;
+    size_t flag_i = 0;
+    for (const std::string& flag : parse_option_flags) {
+        if (flag_i && !(flag_i % 100) && qore_check_cancel(nullptr, "AOT aggregate parse-option processing")) {
+            error = "operation cancelled during AOT aggregate parse-option processing";
+            return false;
+        }
+        QoreParseOptions add;
+        if (!resolveParseOptionFlag(flag, add)) {
+            error = "unknown --parse-option name: '" + flag + "'";
+            return false;
+        }
+        po |= add;
+        ++flag_i;
+    }
+
+    ExceptionSink xsink;
+    ExceptionSink wsink;
+    QoreProgramHelper qpgm(po, xsink);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "failed to create QoreProgram for script aggregate compile";
+        return false;
+    }
+    qpgm->setScriptPath(entries.front().canon.c_str());
+
+    apply_parse_defines(*qpgm, parse_defines);
+
+    if (!loadRequireModules(*qpgm, require_modules, error)) {
+        return false;
+    }
+    if (!parseStubFiles(*qpgm, stub_files, error)) {
+        return false;
+    }
+
+    for (size_t i = 0; i < entries.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT aggregate source parsing")) {
+            error = "operation cancelled during AOT aggregate source parsing";
+            return false;
+        }
+        const SrcEntry& e = entries[i];
+        qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+            &xsink, &wsink, QP_WARN_DEFAULT);
+        if (xsink.isException()) {
+            xsink.handleExceptions();
+            error = "parse error in target file: " + e.canon;
+            return false;
+        }
+    }
+    qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "parse commit failed in aggregate compile";
+        return false;
+    }
+    if (wsink.isException()) {
+        wsink.handleWarnings();
+    }
+
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+
+    llvm::LLVMContext ctx;
+    auto module = std::make_unique<llvm::Module>(
+        "qore_aot_script_aggregate_" + aggregate_san, ctx);
+
+    std::vector<AOTCompiledFunc> compiled_funcs;
+    std::vector<AOTCompiledInitFunc> compiled_init_funcs;
+    int total_funcs = 0;
+    int compiled_count = 0;
+    int failed_count = 0;
+    size_t total_ir_insts_all = 0;
+
+    llvm::DIBuilder di_builder(*module);
+    auto* di_file = di_builder.createFile("<aot>", ".");
+    auto* di_cu = di_builder.createCompileUnit(
+        llvm::dwarf::DW_LANG_lo_user, di_file, "Qore AOT", false, "", 0);
+    if (!module->getModuleFlag("Dwarf Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+    }
+    if (!module->getModuleFlag("Debug Info Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+            llvm::DEBUG_METADATA_VERSION);
+    }
+
+    qore_program_private* pp = qore_program_private::get(**qpgm);
+    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+
+    std::string fatal_lowering_error;
+    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
+        failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
+        /*compile_module=*/nullptr, /*compile_file=*/nullptr,
+        /*metadata_only=*/true, nullptr, nullptr, &fatal_lowering_error,
+        nullptr, &target_set);
+    if (!fatal_lowering_error.empty()) {
+        error = fatal_lowering_error;
+        return false;
+    }
+
+    reportAOTCompileStats("script aggregate (metadata-only)",
+        compiled_count, total_funcs, failed_count, compiled_funcs, target_triple, true);
+
+    std::vector<uint8_t> metadata;
+    {
+        QoreAOTBinaryWriter writer;
+        QoreAOTBinaryHeader hdr{};
+        hdr.magic = QORE_AOT_BINARY_MAGIC;
+        hdr.version = QORE_AOT_BINARY_VERSION;
+        hdr.flags = 0;
+        const QoreParseOptions& final_po = qpgm->getParseOptions();
+        hdr.parse_options_lo = final_po.getLo();
+        hdr.parse_options_hi = final_po.getHi();
+        hdr.label_offset = writer.strings.add(aggregate_san.c_str());
+        hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+        hdr.qore_version_major = QORE_VERSION_MAJOR;
+        hdr.qore_version_minor = QORE_VERSION_MINOR;
+        hdr.qore_version_patch = QORE_VERSION_PATCH;
+        hdr.source_hash = aggregate_hash;
+        hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        writer.feature_flags = hdr.feature_flags;
+        if (!appendModulePathListSections(writer, *qpgm, hdr.feature_flags)) {
+            error = "operation cancelled during AOT module command serialization";
+            return false;
+        }
+        appendBuildInfoSection(writer, "script-aggregate", target_triple, opt_level, include_source);
+
+        if (!serializeProgramFeatureDependencies(writer, pp,
+                "AOT script aggregate dependency serialization")) {
+            error = "operation cancelled during AOT script aggregate dependency serialization";
+            return false;
+        }
+
+        std::string ns_error;
+        if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
+                nullptr, &ns_error, &target_set)) {
+            error = "failed to serialize script aggregate namespace tree";
+            if (!ns_error.empty()) {
+                error += ": " + ns_error;
+            }
+            return false;
+        }
+
+        std::vector<AOTCompiledFuncWithSlots> func_slots;
+        size_t func_i = 0;
+        for (auto& cf : compiled_funcs) {
+            if (func_i && !(func_i % 100) && qore_check_cancel(nullptr, "AOT aggregate slot-map collection")) {
+                error = "operation cancelled during AOT aggregate slot-map collection";
+                return false;
+            }
+            AOTCompiledFuncWithSlots fws;
+            fws.name = cf.name;
+            fws.num_locals = cf.num_locals;
+            fws.num_globals = cf.num_globals;
+            fws.num_exprs = cf.num_exprs;
+            fws.num_stmts = cf.num_stmts;
+            fws.num_regex_cases = cf.num_regex_cases;
+            fws.num_lv_path_insts = cf.num_lv_path_insts;
+            fws.slot_ids = cf.slot_ids;
+            for (auto& hir : cf.handler_irs) {
+                fws.handler_irs.push_back(hir);
+            }
+            fws.aot_locs = cf.aot_locs;
+            fws.debug_ir = cf.debug_ir.get();
+            func_slots.push_back(std::move(fws));
+            ++func_i;
+        }
+        size_t init_slot_i = 0;
+        for (auto& cif : compiled_init_funcs) {
+            if (init_slot_i && !(init_slot_i % 100)
+                    && qore_check_cancel(nullptr, "AOT aggregate init slot-map collection")) {
+                error = "operation cancelled during AOT aggregate init slot-map collection";
+                return false;
+            }
+            AOTCompiledFuncWithSlots fws;
+            fws.name = cif.name;
+            fws.num_locals = cif.num_locals;
+            fws.num_globals = cif.num_globals;
+            fws.num_exprs = cif.num_exprs;
+            fws.num_stmts = cif.num_stmts;
+            fws.num_regex_cases = cif.num_regex_cases;
+            fws.num_lv_path_insts = cif.num_lv_path_insts;
+            fws.slot_ids = cif.slot_ids;
+            setAOTInitFuncConstantExclusions(fws, cif);
+            func_slots.push_back(std::move(fws));
+            ++init_slot_i;
+        }
+        if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, nullptr, &target_set)) {
+            return false;
+        }
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            return false;
+        }
+        if (!compiled_init_funcs.empty()) {
+            serializeInitFuncs(writer, compiled_init_funcs);
+        }
+        {
+            if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                return false;
+            }
+            if (include_source) {
+                serializeFallbackSources(writer, func_slots,
+                    combined_source.c_str(), (int)combined_source.size());
+            }
+        }
+
+        hdr.section_count = 0;
+        if (!writer.finalize(hdr, metadata)) {
+            error = "failed to finalize script aggregate metadata";
+            return false;
+        }
+
+        bool report_metadata = qccReportMetadataSizeStart("script aggregate metadata", metadata.size());
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
+    }
+
+    size_t init_func_i = 0;
+    for (auto& cif : compiled_init_funcs) {
+        if (init_func_i && !(init_func_i % 100)
+                && qore_check_cancel(nullptr, "AOT aggregate init function table collection")) {
+            error = "operation cancelled during AOT aggregate init function table collection";
+            return false;
+        }
+        AOTCompiledFunc cf;
+        cf.name = cif.name;
+        cf.llvm_symbol = cif.llvm_symbol;
+        cf.num_locals = cif.num_locals;
+        cf.num_globals = cif.num_globals;
+        cf.num_exprs = cif.num_exprs;
+        cf.num_stmts = cif.num_stmts;
+        cf.num_regex_cases = cif.num_regex_cases;
+        cf.slot_ids = cif.slot_ids;
+        cf.feature_flags = cif.feature_flags;
+        compiled_funcs.push_back(std::move(cf));
+        ++init_func_i;
+    }
+
+    emitFragmentSymbols(ctx, *module, aggregate_san, aggregate_san, metadata,
+        /*fragment_order=*/0);
+
+    {
+        const std::string blob_name = "qore_aot_" + sanitizeCIdentifier(aggregate_san)
+            + "_" + aggregate_san + "_fragment_blob";
+        llvm::GlobalVariable* blob_gv = module->getNamedGlobal(blob_name);
+        if (!blob_gv) {
+            error = "internal: aggregate fragment blob global '" + blob_name
+                + "' not found after emitFragmentSymbols";
+            return false;
+        }
+        std::string register_fn = "init_" + aggregate_san + "_qo";
+        emitScriptRegisterSymbols(ctx, *module, aggregate_san, aggregate_san,
+            blob_gv, metadata.size(), compiled_funcs,
+            register_fn.c_str(), aggregate_san.c_str());
+    }
+
+    di_builder.finalize();
+
+    std::string verify_error;
+    llvm::raw_string_ostream verify_os(verify_error);
+    if (llvm::verifyModule(*module, &verify_os)) {
+        verify_os.flush();
+        error = "LLVM module verification failed for script aggregate "
+            + aggregate_san + ": " + verify_error;
+        return false;
+    }
+
+    if (getenv("QORE_DUMP_LLVM_IR")) {
+        module->print(llvm::errs(), nullptr);
+    }
+
+    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
+        return false;
+    }
+
+    if (compiled_count_out) {
+        *compiled_count_out = compiled_count;
+    }
+    reportAOTArtifactStats("script aggregate .qo", opt_level, include_source,
+        compiled_count, total_funcs, failed_count, target_triple, output_path, true);
 
     return true;
 }
