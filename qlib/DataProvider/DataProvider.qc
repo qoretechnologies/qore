@@ -128,6 +128,7 @@ public class DataProvider {
             "easypost": "EasyPostDataProvider",
             "elasticsearch": "ElasticSearchDataProvider",
             "elevenlabs": "ElevenLabsDataProvider",
+            "opensearch": "OpenSearchDataProvider",
             "empathicbuilding": "EmpathicBuildingDataProvider",
 
             # provided by the jni module

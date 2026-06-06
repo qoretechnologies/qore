@@ -55,6 +55,28 @@ static bool columnar_decimal_metadata_is_supported(int32_t precision, int32_t sc
     return precision > 0 && precision <= 38 && scale >= 0 && scale <= precision;
 }
 
+//! Returns true if a scale-0 numeric/decimal of the given precision always fits losslessly in int64.
+/** \c NUMERIC(p,0) spans [-(10^p - 1), 10^p - 1]; this is contained in signed int64
+    ([-2^63, 2^63 - 1], where 2^63 - 1 ≈ 9.22e18) for all values iff \c p <= 18
+    (max 10^18 - 1 < 2^63 - 1).  \c p >= 19 can overflow, so such columns must remain
+    decimal128.  Narrowing here keeps the columnar fetch path type-consistent with the
+    scalar/row paths (Datasource::selectRow(), Table::select(), fetchColumns()), which
+    already return such values as Qore \c integer.
+*/
+static bool columnar_decimal_narrows_to_int64(int32_t precision, int32_t scale) {
+    return scale == 0 && precision >= 1 && precision <= 18;
+}
+
+static void columnar_shape_set_int64(ColumnarShape& shape) {
+    shape.column_type = QoreColumnarColumnType::Int;
+    shape.buffer_type = QoreBufferElementType::Int64;
+    shape.kind = QoreColumnarTypeKind::Int;
+    shape.element_type = bigIntTypeInfo;
+    shape.dense = true;
+    shape.decimal_precision = 0;
+    shape.decimal_scale = 0;
+}
+
 static void columnar_shape_set_decimal128(ColumnarShape& shape, int32_t precision, int32_t scale) {
     shape.column_type = QoreColumnarColumnType::Number;
     shape.buffer_type = QoreBufferElementType::Decimal128;
@@ -63,6 +85,20 @@ static void columnar_shape_set_decimal128(ColumnarShape& shape, int32_t precisio
     shape.dense = true;
     shape.decimal_precision = precision > 0 ? precision : 38;
     shape.decimal_scale = scale >= 0 ? scale : 0;
+}
+
+//! Sets a dense numeric/decimal column shape, narrowing scale-0 precision<=18 columns to int64.
+/** This is the single policy point for columnar numeric/decimal narrowing: every path that
+    knows a column's precision and scale (native-type parsing, DBI \c desc metadata, recursive
+    schema, and serialized buffers) routes its decimal shape decision through here so the
+    narrowing is driver-agnostic and applied uniformly.
+*/
+static void columnar_shape_set_decimal(ColumnarShape& shape, int32_t precision, int32_t scale) {
+    if (columnar_decimal_narrows_to_int64(precision, scale)) {
+        columnar_shape_set_int64(shape);
+        return;
+    }
+    columnar_shape_set_decimal128(shape, precision, scale);
 }
 
 static void columnar_shape_set_temporal(ColumnarShape& shape, QoreColumnarTypeKind kind,
@@ -212,8 +248,7 @@ static bool columnar_shape_from_native_type(const std::string& native_type, int6
         int32_t scale = 0;
         if (columnar_parse_decimal_metadata(native_type, precision, scale)
                 && columnar_decimal_metadata_is_supported(precision, scale)) {
-            shape = {QoreColumnarColumnType::Number, QoreBufferElementType::Decimal128, numberTypeInfo, false, true,
-                precision, scale};
+            columnar_shape_set_decimal(shape, precision, scale);
             return true;
         }
         shape = {QoreColumnarColumnType::Number, QoreBufferElementType::Invalid, numberTypeInfo, false, false};
@@ -279,7 +314,7 @@ static bool columnar_shape_from_desc(const QoreHashNode* desc, ColumnarShape& sh
         int32_t scale = static_cast<int32_t>(columnar_get_desc_int(desc, "scale", shape.decimal_scale));
         if (shape.column_type == QoreColumnarColumnType::Number
                 && columnar_decimal_metadata_is_supported(precision, scale)) {
-            columnar_shape_set_decimal128(shape, precision, scale);
+            columnar_shape_set_decimal(shape, precision, scale);
         }
         return true;
     }
@@ -490,6 +525,32 @@ static QoreValue columnar_make_column_value(const QoreListNode* source, const Co
         if (shape.buffer_type == QoreBufferElementType::Decimal128) {
             return new QoreBufferNode(shape.buffer_type, shape.nullable, source, xsink,
                 shape.decimal_precision > 0 ? shape.decimal_precision : 38, shape.decimal_scale);
+        }
+        if (shape.column_type == QoreColumnarColumnType::Int && source) {
+            // a scale-0, precision<=18 numeric/decimal column narrows to int64 (see
+            // columnar_decimal_narrows_to_int64()); its source list still carries the driver's
+            // number/float values, so coerce each non-null element to int while building the
+            // dense int64 buffer to match the scalar/row fetch paths
+            ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(shape.buffer_type, shape.nullable,
+                source->size()), xsink);
+            ConstListIterator i(source);
+            while (i.next()) {
+                if (i.index() && !(i.index() % 100) && qore_check_cancel(xsink,
+                        "dense integer column conversion")) {
+                    return QoreValue();
+                }
+                QoreValue value = i.getValue();
+                if (value.isNothing() || value.getType() == NT_NULL) {
+                    if (rv->setEntry(i.index(), QoreValue(), xsink)) {
+                        return QoreValue();
+                    }
+                    continue;
+                }
+                if (rv->setEntry(i.index(), QoreValue(value.getAsBigInt()), xsink)) {
+                    return QoreValue();
+                }
+            }
+            return rv.release();
         }
         return new QoreBufferNode(shape.buffer_type, shape.nullable, source, xsink);
     }
@@ -1711,7 +1772,7 @@ static QoreValue columnar_deserialize_column_data(const QoreHashNode* h, Excepti
 static void columnar_shape_apply_schema(ColumnarShape& shape, const QoreColumnarTypeDescriptor& schema) {
     if (schema.kind == QoreColumnarTypeKind::Decimal128
             || schema.buffer_type == QoreBufferElementType::Decimal128) {
-        columnar_shape_set_decimal128(shape, schema.precision > 0 ? schema.precision : 38,
+        columnar_shape_set_decimal(shape, schema.precision > 0 ? schema.precision : 38,
             schema.scale >= 0 ? schema.scale : 0);
     } else if (schema.kind == QoreColumnarTypeKind::Date || schema.kind == QoreColumnarTypeKind::Timestamp
             || schema.kind == QoreColumnarTypeKind::Duration) {
@@ -1741,7 +1802,7 @@ static bool columnar_dense_shape_from_schema(const QoreColumnarTypeDescriptor& s
             }
         } else if (schema.kind == QoreColumnarTypeKind::Decimal128
                 || schema.buffer_type == QoreBufferElementType::Decimal128) {
-            columnar_shape_set_decimal128(shape, schema.precision > 0 ? schema.precision : 38,
+            columnar_shape_set_decimal(shape, schema.precision > 0 ? schema.precision : 38,
                 schema.scale >= 0 ? schema.scale : 0);
             shape.nullable = shape.nullable || schema.nullable;
         }
@@ -1759,7 +1820,7 @@ static bool columnar_dense_shape_from_schema(const QoreColumnarTypeDescriptor& s
 
     if (schema.kind == QoreColumnarTypeKind::Decimal128
             || schema.buffer_type == QoreBufferElementType::Decimal128) {
-        columnar_shape_set_decimal128(shape, schema.precision > 0 ? schema.precision : 38,
+        columnar_shape_set_decimal(shape, schema.precision > 0 ? schema.precision : 38,
             schema.scale >= 0 ? schema.scale : 0);
         shape.nullable = schema.nullable;
         return true;

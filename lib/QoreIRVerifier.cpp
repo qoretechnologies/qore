@@ -858,6 +858,13 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     unknown_node_found = true;
 }
 
+static void collectLocalsFromFindInstruction(const QoreIRFindInstruction* find_inst,
+        std::unordered_set<const void*>& ast_locals, bool& unknown_node_found) {
+    collectLocalsFromExpr(find_inst->exp, ast_locals, unknown_node_found);
+    collectLocalsFromExpr(find_inst->find_exp, ast_locals, unknown_node_found);
+    collectLocalsFromExpr(find_inst->where, ast_locals, unknown_node_found);
+}
+
 //! Recursively walk an expression in source order and collect LocalVar* slots
 //! needed to serialize embedded AST expression trees.
 static void collectLocalSlotsFromExpr(const QoreValue& expr,
@@ -1421,6 +1428,12 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
                 collectLocalsFromExpr(*expr, ast_locals, unknown_node_found);
             }
 
+            if (inst->opcode == QoreIROpcode::Find) {
+                collectLocalsFromFindInstruction(
+                    static_cast<const QoreIRFindInstruction*>(inst.get()),
+                    ast_locals, unknown_node_found);
+            }
+
             if (inst->opcode == QoreIROpcode::Context) {
                 collect_context_exprs(static_cast<const QoreIRContextInstruction*>(inst.get()));
             }
@@ -1574,6 +1587,12 @@ void QoreIRFunction::computeIROnlyLocals() {
             if (const QoreValue* expr = getInstructionExpr(inst.get())) {
                 collectLocalsFromExpr(*expr, ast_referenced_locals,
                         unknown_node_found);
+            }
+
+            if (inst->opcode == QoreIROpcode::Find) {
+                collectLocalsFromFindInstruction(
+                    static_cast<const QoreIRFindInstruction*>(inst.get()),
+                    ast_referenced_locals, unknown_node_found);
             }
 
             // ContextInit evaluates its context data, where, and sort
@@ -1817,6 +1836,12 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             }
             if (const QoreValue* expr = getSerializationOnlyInstructionExpr(inst.get())) {
                 assign_expr_slots(*expr);
+            }
+            if (inst->opcode == QoreIROpcode::Find) {
+                const auto* find_inst = static_cast<const QoreIRFindInstruction*>(inst.get());
+                assign_expr_slots(find_inst->exp);
+                assign_expr_slots(find_inst->find_exp);
+                assign_expr_slots(find_inst->where);
             }
         }
     }

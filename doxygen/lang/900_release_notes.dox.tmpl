@@ -42,6 +42,22 @@
       reflection, QoreApiMetadata, qpp metadata, astparser, and QoreCodeFormat
     @endparblock
 
+    @par New User Modules
+    @parblock
+    - @ref loggersemanticsearchintro "LoggerSemanticSearch" module
+      - new module providing backend-neutral semantic indexing and search APIs for searchable logger appenders
+        using QoreRagTypes embedders and vector stores
+    - @ref opensearchdataproviderintro "OpenSearchDataProvider" module
+      - new module providing document, index, pipeline, bulk, aggregation, scroll search, k-NN search, neural
+        search, hybrid search, vector-index creation, a QoreRagTypes `opensearch` vector-store backend, and
+        search app-action support for OpenSearch servers
+    - @ref opensearchloggerappenderintro "OpenSearchLoggerAppender" module
+      - new module providing batched OpenSearch Bulk API log appending and generic rendered-event search support
+    - @ref searchindexdataproviderintro "SearchIndexDataProvider" module
+      - new module providing common REST search-index data-provider helpers for backend-specific document search
+        modules
+    @endparblock
+
     @section qore_2_3_0 Qore 2.3.0
 
     @par Release Summary
@@ -769,9 +785,11 @@ int echoed = child.echo(value);
     @par LLVM-backed Execution and AOT Compilation
     @parblock
     %Qore now uses a shared IR pipeline for the IR interpreter, LLVM JIT,
-    tiered execution, and AOT compilation.  The default execution mode is
-    @ref exec_mode_tiered "tiered", which starts quickly and promotes hot
-    functions through IR and JIT tiers.
+    tiered execution, and AOT compilation.  @ref modern "%modern" code
+    defaults to @ref exec_mode_tiered "tiered", which validates IR
+    lowerability during parsing, starts quickly with cached IR, and can
+    promote hot functions to JIT. Legacy non-modern code defaults to AST
+    execution for compatibility.
 
     The new @ref qcc_tool "qcc" compiler provides the full AOT workflow:
     script executables, binary user modules (\c .qmod), relocatable Qore
@@ -2923,6 +2941,13 @@ foreach string module_name in (registry.getProcessModules()) {
       - pending stream reservation tracking to limit blast radius of handshake failures
       - all I/O driven by the @ref asyncsocketiointro "AsyncSocketIo" event loop
 
+    - @ref httpclientstreamingiointro "HttpClientStreamingIo" module
+      - new module providing application-level streaming utilities for the @ref httpclientiointro "HttpClientIo"
+        module across HTTP/1.x, HTTP/2, and HTTP/3
+      - Server-Sent Events (SSE) event reading via @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader"
+      - push-based SSE event delivery via @ref HttpClientStreamingIo::SseObservable "SseObservable"
+      - stream decompression via @ref HttpClientStreamingIo::StreamDecompressor "StreamDecompressor"
+
     - @ref httpserverasynciointro "HttpServerAsyncIo" module
       - new module providing async I/O support classes for the @ref httpserverintro "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
@@ -3093,6 +3118,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://linear.app/">Linear</a>'s GraphQL API
       - supports API key and OAuth2 authentication
       - provides LinearRestConnection for connection management with \c linear:// URL scheme
+
+    - @ref linecoverageintro "LineCoverage" module
+      - new module providing an API for collecting %Qore Program line coverage information
 
     - @ref llamaparsedataproviderintro "LlamaParseDataProvider" module
       - new module providing a data provider API for <a href="https://docs.cloud.llamaindex.ai/llamaparse/getting_started">LlamaParse</a> document extraction
@@ -3523,6 +3551,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing multimodal LLM vision extraction
       - VisionLlmClient: image description, table extraction, and text extraction
       - supports OpenAI and Anthropic multimodal APIs with base64 image content blocks
+
+    - @ref redisdataproviderintro "RedisDataProvider" module
+      - new module providing a data provider API for <a href="https://redis.io/">Redis</a> servers
 
     - @ref restclientio_intro "RestClientIo" module
       - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections

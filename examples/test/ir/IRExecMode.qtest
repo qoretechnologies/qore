@@ -4,8 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class IRExecModeTest
@@ -14,8 +14,11 @@ class IRExecModeTest inherits QUnit::Test {
     constructor() : QUnit::Test("IRExecModeTest", "1.0", \ARGV) {
         addTestCase("IR exec mode error without %modern", \testIrExecModeError());
         addTestCase("JIT exec mode error without %modern", \testJitExecModeError());
-        addTestCase("Tiered mode silently demotes without %modern", \testTieredSilentDemotion());
+        addTestCase("Tiered exec mode error without %modern", \testTieredExecModeError());
         addTestCase("AST mode no error", \testAstModeExitsClean());
+        addTestCase("Program default exec mode", \testProgramDefaultExecMode());
+        addTestCase("Program explicit AST overrides modern default", \testProgramExplicitAstOverride());
+        addTestCase("Child Program exec mode follows parse options", \testChildProgramExecModeFollowsParseOptions());
         set_return_value(main());
     }
 
@@ -73,7 +76,7 @@ class IRExecModeTest inherits QUnit::Test {
         assertTrue(output =~ /%modern/, "Error message should mention %modern");
     }
 
-    testTieredSilentDemotion() {
+    testTieredExecModeError() {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
@@ -95,8 +98,9 @@ class IRExecModeTest inherits QUnit::Test {
             testSkip("exec-mode option not supported by test qore binary");
             return;
         }
-        assertEq(0, rc, "Tiered mode without %modern should exit cleanly (silent demotion)");
-        # No error expected for tiered mode (it's the default and must be safe)
+        assertNeq(0, rc, "Tiered exec mode without %modern should fail");
+        assertTrue(output =~ /EXEC-MODE-ERROR/, "EXEC-MODE-ERROR missing");
+        assertTrue(output =~ /%modern/, "Error message should mention %modern");
     }
 
     testAstModeExitsClean() {
@@ -123,5 +127,64 @@ class IRExecModeTest inherits QUnit::Test {
             return;
         }
         assertEq(0, rc, "AST exec mode should exit cleanly");
+    }
+
+    testProgramDefaultExecMode() {
+        Program legacy();
+        assertEq(EM_AST, legacy.getExecMode(), "plain Program defaults to AST before parsing");
+        legacy.parse("sub t() { return 1; }", "legacy-code");
+        assertEq(EM_AST, legacy.getExecMode(), "non-modern Program stays AST after parsing");
+
+        Program modern(PO_MODERN);
+        assertEq(EM_TIERED, modern.getExecMode(), "PO_MODERN Program defaults to tiered");
+        modern.parse("int sub t() { return 1; }", "modern-code");
+        assertEq(EM_TIERED, modern.getExecMode(), "PO_MODERN Program stays tiered after parsing");
+
+        Program directive();
+        assertEq(EM_AST, directive.getExecMode(), "non-modern Program starts AST");
+        directive.parse("%modern\nint sub t() { return 1; }", "directive-code");
+        assertEq(EM_TIERED, directive.getExecMode(), "%modern directive switches implicit default to tiered");
+    }
+
+    testProgramExplicitAstOverride() {
+        Program pgm(PO_MODERN);
+        pgm.setExecMode(EM_AST);
+        pgm.parse("int sub t() { return 1; }", "explicit-ast-code");
+        assertEq(EM_AST, pgm.getExecMode(), "explicit AST overrides PO_MODERN tiered default");
+        assertEq(1, pgm.callFunction("t"));
+    }
+
+    testChildProgramExecModeFollowsParseOptions() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("Program child();\n");
+        script.file.write("child.disableParseOptions(PO_NEW_STYLE);\n");
+        script.file.write("printf(\"mode=%d\\n\", child.getExecMode());\n");
+        script.file.write("child.parse(\"int sub t() { return 1; }\", \"legacy-child\");\n");
+        script.file.write("printf(\"rv=%y\\n\", child.callFunction(\"t\"));\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=tiered %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string output = ReadOnlyFile::readTextFile(out.path);
+        string errors = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && errors =~ /exec-mode/ && errors =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "child Program with changed parse options should run in AST mode");
+        assertEq("mode=0\nrv=1\n", output, "child Program exec mode/output");
+        assertEq("", errors, "child Program stderr");
     }
 }

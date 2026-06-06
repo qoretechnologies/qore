@@ -12,17 +12,17 @@
     @section exec_mode_overview Execution Mode Overview
 
     |!Mode|!How to select|!Primary use
-    |@ref exec_mode_ast "AST"|Default or <tt>--exec-mode=ast</tt>|Legacy code, maximum compatibility, and predictable baseline performance
+    |@ref exec_mode_ast "AST"|Default for non-modern code or <tt>--exec-mode=ast</tt>|Legacy code, maximum compatibility, and predictable baseline performance
     |@ref exec_mode_ir "IR"|<tt>--exec-mode=ir</tt>|Predictable bytecode execution for modern code
     |@ref exec_mode_jit "JIT"|<tt>--exec-mode=jit</tt>|Eager native compilation for long-running code
-    |@ref exec_mode_tiered "Tiered"|<tt>--exec-mode=tiered</tt>|Adaptive production execution for workloads that benefit from promotion
+    |@ref exec_mode_tiered "Tiered"|Default for @ref modern "%modern" code or <tt>--exec-mode=tiered</tt>|Adaptive production execution for modern workloads
     |@ref exec_mode_aot "AOT"|<tt>qcc</tt>|Precompiled executables, modules, and objects
 
     @section exec_mode_ast AST Execution Mode
 
-    AST mode is the traditional tree-walking interpreter. It supports legacy
-    non-@ref modern "%modern" code and remains the fallback mode for programs
-    that cannot use IR semantics.
+    AST mode is the traditional tree-walking interpreter. It is the default for
+    legacy non-@ref modern "%modern" code and remains available for modern
+    programs when selected explicitly.
 
     @code{.sh}
 qore --exec-mode=ast oldstyle.q
@@ -78,10 +78,13 @@ $ gdb --args qore --exec-mode=jit script.qr
 
     @section exec_mode_tiered Tiered Execution Mode
 
-    Tiered mode is selected explicitly with <tt>--exec-mode=tiered</tt>. Functions begin on the
-    AST interpreter and are promoted by call count:
+    Tiered mode is the default for @ref modern "%modern" code and can also be
+    selected explicitly with <tt>--exec-mode=tiered</tt>. Modern code is
+    validated for IR lowerability when parsing is committed; lowering gaps are
+    reported as parse-time errors because \c %%modern is the contract for
+    optimized execution. Function bodies start with cached IR and can promote to
+    JIT:
 
-    - AST -> IR after <tt>--jit-ir-threshold=N</tt> calls, default \c 100
     - IR -> JIT after <tt>--jit-jit-threshold=N</tt> calls, default \c 1000
 
     @code{.sh}
@@ -89,8 +92,9 @@ qore --exec-mode=tiered script.qr
 qore --exec-mode=tiered --jit-ir-threshold=50 --jit-jit-threshold=500 script.qr
     @endcode
 
-    If lowering or native compilation fails for a function variant, that variant
-    remains at its current tier instead of repeatedly retrying.
+    If native compilation fails for a function variant, that variant remains at
+    IR instead of repeatedly retrying. IR lowering failures in modern code are
+    treated as implementation bugs and reported during parse commit.
 
     @section exec_mode_aot AOT Compilation
 
@@ -229,7 +233,7 @@ int result = pgm.callFunction("compute");
 
     @section exec_mode_requirements Requirements
 
-    IR, JIT, tiered promotion, and AOT require @ref modern "%modern" code.
+    IR, JIT, tiered execution, and AOT require @ref modern "%modern" code.
     Files whose extension is not \c .q, including \c .qr, enable modern mode by
     default; \c .q remains legacy by default for compatibility.
 

@@ -372,6 +372,663 @@ public class LoggerEventParameter {
     }
 }
 
+#! Abstract interface for appenders that can search historical rendered events
+/** This interface is intentionally backend-neutral.  It does not define access-control, redaction, or persistence
+    policy; callers that expose search results outside a trusted boundary must apply those concerns themselves.
+
+    The request hash accepted by @ref searchRenderedEvents() is expected to use generic fields such as:
+    - \c text: a phrase to find in rendered log output
+    - \c terms: a string or list of strings to find
+    - \c match: \c "phrase", \c "all", or \c "any"
+    - \c case_sensitive: whether matching is case-sensitive (default: @ref False)
+    - \c regex: whether \c text is a regular expression
+    - \c limit: maximum number of matched entries
+    - \c cursor: an appender-specific continuation token returned by an earlier search
+    - \c direction: \c "backward" (default) or \c "forward"
+    - \c max_scanned_bytes: backend scan cap when applicable
+
+    Implementations return a hash with stable generic fields including \c status, \c source, \c capabilities,
+    \c entries, \c next_cursor, \c scanned_bytes, \c scanned_events, \c truncated, and optionally \c reason.
+*/
+public class LoggerSearchableAppender {
+    #! Returns backend-neutral search capabilities for this appender
+    /** @return a hash describing whether search is supported and which generic request fields are meaningful */
+    public abstract hash<auto> getSearchCapabilities();
+
+    #! Searches historical rendered events for this appender
+    /** @param request generic rendered-event search request
+        @return generic search result hash with \c status, \c source, \c capabilities, and \c entries fields
+    */
+    public abstract hash<auto> searchRenderedEvents(hash<auto> request);
+}
+
+#! Utility methods for appender-neutral rendered log search
+/** This class contains a generic search facade and shared file-backed rendered-line search helpers.  It is suitable
+    for trusted callers that already have permission to inspect an appender.  The rendered entries returned here are
+    not redacted.
+*/
+public class LoggerSearchUtil {
+    public {
+        const int DefaultSearchLimit = 50;
+        const int MaxSearchLimit = 200;
+        const int DefaultMaxScannedBytes = 1024 * 1024;
+        const int UnlimitedScannedBytes = -1;
+    }
+
+    #! Returns generic search capabilities for an appender
+    /** @param appender the logger appender to inspect
+        @return backend-neutral search capability information
+    */
+    static public hash<auto> getAppenderSearchCapabilities(LoggerAppender appender) {
+        if (appender instanceof LoggerSearchableAppender) {
+            return cast<LoggerSearchableAppender>(appender).getSearchCapabilities();
+        }
+
+        if (appender instanceof LoggerAppenderFileRotate) {
+            return getFileSearchCapabilities(appender, "file-rotate", True, False);
+        }
+
+        if (appender instanceof LoggerAppenderFileRing) {
+            return getFileSearchCapabilities(appender, "file-ring", True, False)
+                + {"source_enumeration": "pattern-derived"};
+        }
+
+        if (appender instanceof LoggerAppenderFileArchive) {
+            return getFileSearchCapabilities(appender, "file-archive", False, False)
+                + {"archive_search": False};
+        }
+
+        if (appender instanceof LoggerAppenderFile) {
+            return getFileSearchCapabilities(appender, "file", False, False);
+        }
+
+        return getUnsupportedSearchCapabilities(appender, "historical-search-not-available");
+    }
+
+    #! Searches an appender using the generic rendered-event request format
+    /** @param appender the logger appender to search
+        @param request generic rendered-event search request
+        @return generic search result hash; unsupported appenders return \c status \c "unavailable"
+    */
+    static public hash<auto> searchRenderedEvents(LoggerAppender appender, hash<auto> request) {
+        if (appender instanceof LoggerSearchableAppender) {
+            return cast<LoggerSearchableAppender>(appender).searchRenderedEvents(request);
+        }
+
+        if (appender instanceof LoggerAppenderFileRotate) {
+            return searchFileAppender(cast<LoggerAppenderFile>(appender), request, "file-rotate");
+        }
+
+        if (appender instanceof LoggerAppenderFileRing) {
+            return searchFileAppender(cast<LoggerAppenderFile>(appender), request, "file-ring");
+        }
+
+        if (appender instanceof LoggerAppenderFileArchive) {
+            return searchFileAppender(cast<LoggerAppenderFile>(appender), request, "file-archive");
+        }
+
+        if (appender instanceof LoggerAppenderFile) {
+            return searchFileAppender(cast<LoggerAppenderFile>(appender), request, "file");
+        }
+
+        hash<auto> caps = getUnsupportedSearchCapabilities(appender, "historical-search-not-available");
+        return {
+            "status": "unavailable",
+            "source": caps.source,
+            "capabilities": caps,
+            "entries": (),
+            "result_count": 0,
+            "scanned_bytes": 0,
+            "scanned_events": 0,
+            "truncated": False,
+            "reason": caps.reason,
+        };
+    }
+
+    #! Returns normalized capabilities for non-searchable appenders
+    private static hash<auto> getUnsupportedSearchCapabilities(LoggerAppender appender, string reason) {
+        return {
+            "searchable": False,
+            "supports_search": False,
+            "source": {
+                "kind": "unsupported",
+                "appender": appender.getName(),
+                "class": get_class_name(appender),
+            },
+            "rendered_lines": False,
+            "time_filter": False,
+            "cursor": False,
+            "levels": False,
+            "regex": False,
+            "context": False,
+            "structured_fields": False,
+            "reason": reason,
+        };
+    }
+
+    #! Returns normalized capabilities for file-backed appenders
+    private static hash<auto> getFileSearchCapabilities(LoggerAppender appender, string source_kind,
+            bool include_rotated, bool include_archived) {
+        return {
+            "searchable": True,
+            "supports_search": True,
+            "source": {
+                "kind": source_kind,
+                "appender": appender.getName(),
+                "class": get_class_name(appender),
+            },
+            "rendered_lines": True,
+            "time_filter": False,
+            "cursor": True,
+            "levels": False,
+            "regex": True,
+            "context": True,
+            "structured_fields": False,
+            "include_rotated": include_rotated,
+            "include_archived": include_archived,
+            "max_limit": MaxSearchLimit,
+            "default_limit": DefaultSearchLimit,
+            "default_max_scanned_bytes": DefaultMaxScannedBytes,
+        };
+    }
+
+    #! Clamps a requested result limit to the supported range
+    /** @param value requested limit; \c NOTHING, non-positive values, and oversized values are normalized
+        @return normalized limit in the supported range
+    */
+    static public int normalizeLimit(auto value) {
+        int limit = value ?? DefaultSearchLimit;
+        if (limit <= 0) {
+            return DefaultSearchLimit;
+        }
+        return limit > MaxSearchLimit ? MaxSearchLimit : limit;
+    }
+
+    #! Formats a logger search-index pattern using common percent-prefixed date placeholders
+    /** Literal text is preserved.  Supported placeholders include common strftime-compatible values such as
+        \c %Y, \c %y, \c %m, \c %-m, \c %d, \c %-d, \c %H, \c %-H, \c %M, \c %-M, \c %S, \c %-S, \c %F, \c %T,
+        \c %j, \c %V, \c %G, \c %z, \c %Z, and \c %%.
+
+        @param pattern index name or date-expanded index pattern
+        @return resolved index name for the current timestamp
+    */
+    static public string formatLogIndexPattern(string pattern) {
+        return formatLogIndexPattern(pattern, now_us());
+    }
+
+    #! Formats a logger search-index pattern using common percent-prefixed date placeholders
+    /** @param pattern index name or date-expanded index pattern
+        @param timestamp date/time value used for placeholder expansion
+        @return resolved index name
+    */
+    static public string formatLogIndexPattern(string pattern, date timestamp) {
+        string result;
+        for (int i = 0; i < pattern.length(); ++i) {
+            string ch = pattern.substr(i, 1);
+            if (ch != "%" || i + 1 >= pattern.length()) {
+                result += ch;
+                continue;
+            }
+
+            string token = pattern.substr(++i, 1);
+            if (token == "-" && i + 1 < pattern.length()) {
+                token += pattern.substr(++i, 1);
+            }
+            result += formatLogIndexPatternToken(token, timestamp);
+        }
+        return result;
+    }
+
+    #! Searches rendered lines in a file-backed appender
+    private static hash<auto> searchFileAppender(LoggerAppenderFile appender, hash<auto> request, string source_kind) {
+        hash<auto> caps = getAppenderSearchCapabilities(appender);
+        hash<auto> req = normalizeRequest(request);
+        if (req.status) {
+            return getInvalidResult(caps, req.reason);
+        }
+
+        list<hash<auto>> sources = getFileSources(appender, source_kind, request);
+        if (!sources.size()) {
+            return {
+                "status": "unavailable",
+                "source": caps.source,
+                "capabilities": caps,
+                "entries": (),
+                "result_count": 0,
+                "scanned_bytes": 0,
+                "scanned_events": 0,
+                "truncated": False,
+                "reason": "no-readable-sources",
+            };
+        }
+
+        return searchFileSources(sources, caps, req);
+    }
+
+    private static hash<auto> normalizeRequest(hash<auto> request) {
+        hash<auto> req = {
+            "limit": normalizeLimit(request.limit),
+            "direction": request.direction ?? "backward",
+            "case_sensitive": request.case_sensitive ?? False,
+            "regex": request.regex ?? False,
+            "match": request.match ?? "phrase",
+            "context_before": int(request.context_before ?? 0),
+            "context_after": int(request.context_after ?? 0),
+            "max_scanned_bytes": int(request.max_scanned_bytes ?? DefaultMaxScannedBytes),
+            "terms": getSearchTerms(request),
+            "cursor": request.cursor,
+        };
+
+        if (req.direction != "backward" && req.direction != "forward") {
+            return {"status": "invalid", "reason": "invalid-direction"};
+        }
+
+        if (req.match != "phrase" && req.match != "all" && req.match != "any") {
+            return {"status": "invalid", "reason": "invalid-match"};
+        }
+
+        if (req.regex && req.terms.size()) {
+            int flags = req.case_sensitive ? 0 : RE_Caseless;
+            try {
+                bool regex_valid = regex("", req.terms[0], flags);
+            } catch () {
+                return {"status": "invalid", "reason": "invalid-regex"};
+            }
+        }
+
+        if (req.context_before < 0) {
+            req.context_before = 0;
+        }
+        if (req.context_after < 0) {
+            req.context_after = 0;
+        }
+
+        if (req.context_before > 20) {
+            req.context_before = 20;
+        }
+        if (req.context_after > 20) {
+            req.context_after = 20;
+        }
+
+        return req;
+    }
+
+    private static string formatLogIndexPatternToken(string token, date timestamp) {
+        switch (token) {
+            case "%": return "%";
+            case "Y": return format_date("YYYY", timestamp);
+            case "y": return format_date("YY", timestamp);
+            case "m": return format_date("MM", timestamp);
+            case "-m": return format_date("M", timestamp);
+            case "d": return format_date("DD", timestamp);
+            case "-d": return format_date("D", timestamp);
+            case "H": return format_date("HH", timestamp);
+            case "-H": return format_date("H", timestamp);
+            case "M": return format_date("mm", timestamp);
+            case "-M": return format_date("m", timestamp);
+            case "S": return format_date("SS", timestamp);
+            case "-S": return format_date("S", timestamp);
+            case "F": return format_date("YYYY-MM-DD", timestamp);
+            case "T": return format_date("HH:mm:SS", timestamp);
+            case "j": return format_date("DN", timestamp);
+            case "V": return format_date("IW", timestamp);
+            case "G": return format_date("IY", timestamp);
+            case "z": return format_date("Z", timestamp);
+            case "Z": return format_date("z", timestamp);
+            case "f": return format_date("xx", timestamp);
+        }
+        return "%" + token;
+    }
+
+    private static list<string> getSearchTerms(hash<auto> request) {
+        list<string> terms = ();
+
+        if (request.text) {
+            push terms, string(request.text);
+        } else if (request.query) {
+            push terms, string(request.query);
+        }
+
+        if (request.terms) {
+            if (request.terms instanceof list) {
+                foreach auto term in (request.terms) {
+                    if (exists term && string(term) != "") {
+                        push terms, string(term);
+                    }
+                }
+            } else if (string(request.terms) != "") {
+                push terms, string(request.terms);
+            }
+        }
+
+        return terms;
+    }
+
+    private static list<hash<auto>> getFileSources(LoggerAppenderFile appender, string source_kind,
+            hash<auto> request) {
+        list<hash<auto>> sources = ();
+        bool backward = (request.direction ?? "backward") == "backward";
+
+        if (backward) {
+            addActiveFileSource(\sources, appender, source_kind);
+            addSecondaryFileSources(\sources, appender, source_kind, request);
+        } else {
+            list<hash<auto>> secondary = ();
+            addSecondaryFileSources(\secondary, appender, source_kind, request);
+            for (int i = secondary.size() - 1; i >= 0; --i) {
+                push sources, secondary[i];
+            }
+            addActiveFileSource(\sources, appender, source_kind);
+        }
+
+        return sources;
+    }
+
+    private static addActiveFileSource(reference<list<hash<auto>>> sources, LoggerAppenderFile appender,
+            string source_kind) {
+        string filename = appender.getFileName();
+        if (filename && is_file(filename)) {
+            push sources, {
+                "id": "active",
+                "kind": source_kind,
+                "path": filename,
+                "active": True,
+            };
+        }
+    }
+
+    private static addSecondaryFileSources(reference<list<hash<auto>>> sources, LoggerAppenderFile appender,
+            string source_kind, hash<auto> request) {
+        if (appender instanceof LoggerAppenderFileRotate && (request.include_rotated ?? True)) {
+            LoggerAppenderFileRotate rot = cast<LoggerAppenderFileRotate>(appender);
+            for (int i = 1; i <= rot.getCount(); ++i) {
+                string filename = rot.getArchiveFileName(i);
+                if (filename && is_file(filename)) {
+                    push sources, {
+                        "id": sprintf("rotated-%d", i),
+                        "kind": "file-rotate",
+                        "path": filename,
+                        "active": False,
+                        "rotation_index": i,
+                    };
+                }
+            }
+        } else if (appender instanceof LoggerAppenderFileRing && (request.include_rotated ?? True)) {
+            LoggerAppenderFileRing ring = cast<LoggerAppenderFileRing>(appender);
+            for (int i = 0; i < ring.getCount(); ++i) {
+                string filename = ring.getFileNameForIndex(i);
+                if (filename && filename != ring.getFileName() && is_file(filename)) {
+                    push sources, {
+                        "id": sprintf("ring-%d", i),
+                        "kind": "file-ring",
+                        "path": filename,
+                        "active": False,
+                        "ring_index": i,
+                    };
+                }
+            }
+        }
+    }
+
+    private static hash<auto> searchFileSources(list<hash<auto>> sources, hash<auto> caps, hash<auto> req) {
+        list<hash<auto>> entries = ();
+        int scanned_bytes = 0;
+        int scanned_events = 0;
+        int matched_events = 0;
+        bool truncated = False;
+        *string reason;
+        *string next_cursor;
+
+        hash<auto> cursor = parseCursor(req.cursor);
+        if (cursor.status) {
+            return getInvalidResult(caps, cursor.reason);
+        }
+
+        int source_start = cursor.source_index ?? 0;
+        *int cursor_line = cursor.line_index;
+        if (source_start < 0 || source_start >= sources.size()) {
+            return getInvalidResult(caps, cursor.source_signature ? "stale-cursor" : "invalid-cursor");
+        }
+
+        if (cursor.direction && cursor.direction != req.direction) {
+            return getInvalidResult(caps, "invalid-cursor");
+        }
+
+        if (cursor.source_signature
+                && cursor.source_signature != getSourceSignature(sources[source_start])) {
+            return getInvalidResult(caps, "stale-cursor");
+        }
+
+        int step = req.direction == "backward" ? -1 : 1;
+        for (int source_idx = source_start; source_idx < sources.size(); ++source_idx) {
+            hash<auto> source = sources[source_idx];
+            *hash<StatInfo> stat = hstat(source.path);
+            if (!stat || !stat.size) {
+                continue;
+            }
+
+            if (req.max_scanned_bytes != UnlimitedScannedBytes
+                    && scanned_bytes + stat.size > req.max_scanned_bytes) {
+                truncated = True;
+                reason = "max-scanned-bytes";
+                next_cursor = makeCursor(sources, source_idx, req.direction == "backward" ? -1 : 0,
+                    req.direction);
+                break;
+            }
+
+            string content = ReadOnlyFile::readTextFile(source.path);
+            scanned_bytes += content.size();
+            list<string> lines = content.split("\n");
+            int line_idx = getInitialLineIndex(lines, req.direction, source_idx == source_start ? cursor_line : NOTHING);
+
+            while (line_idx >= 0 && line_idx < lines.size()) {
+                ++scanned_events;
+                bool matched;
+                try {
+                    matched = matchesRenderedLine(lines[line_idx], req);
+                } catch () {
+                    return getInvalidResult(caps, "invalid-regex");
+                }
+                if (matched) {
+                    foreach hash<auto> entry in (makeMatchEntries(lines, source, line_idx, req)) {
+                        push entries, entry;
+                    }
+                    ++matched_events;
+                    if (matched_events >= req.limit) {
+                        truncated = True;
+                        int next_line = line_idx + step;
+                        next_cursor = makeCursorForNextPosition(sources, source_idx, next_line, req.direction);
+                        return makeSearchResult("partial", caps, entries, next_cursor, scanned_bytes, scanned_events,
+                            truncated, "limit");
+                    }
+                }
+                line_idx += step;
+            }
+        }
+
+        string status = truncated ? "partial" : "ok";
+        return makeSearchResult(status, caps, entries, next_cursor, scanned_bytes, scanned_events, truncated, reason);
+    }
+
+    private static int getInitialLineIndex(list<string> lines, string direction, *int cursor_line) {
+        if (direction == "backward") {
+            if (exists cursor_line && cursor_line >= 0) {
+                return cursor_line < lines.size() ? cursor_line : lines.size() - 1;
+            }
+            return lines.size() - 1;
+        }
+
+        if (exists cursor_line && cursor_line >= 0) {
+            return cursor_line;
+        }
+        return 0;
+    }
+
+    private static bool matchesRenderedLine(string line, hash<auto> req) {
+        if (!req.terms.size()) {
+            return True;
+        }
+
+        if (req.regex) {
+            int flags = req.case_sensitive ? 0 : RE_Caseless;
+            return regex(line, req.terms[0], flags);
+        }
+
+        string haystack = req.case_sensitive ? line : line.lwr();
+        list<string> terms = req.case_sensitive ? req.terms : map $1.lwr(), req.terms;
+
+        if (req.match == "any") {
+            return any haystack.find($1) >= 0, terms;
+        }
+
+        if (req.match == "all") {
+            return all haystack.find($1) >= 0, terms;
+        }
+
+        return haystack.find(terms[0]) >= 0;
+    }
+
+    private static list<hash<auto>> makeMatchEntries(list<string> lines, hash<auto> source, int line_idx,
+            hash<auto> req) {
+        list<hash<auto>> entries = ();
+        int first = line_idx - req.context_before;
+        int last = line_idx + req.context_after;
+
+        if (first < 0) {
+            first = 0;
+        }
+        if (last >= lines.size()) {
+            last = lines.size() - 1;
+        }
+
+        for (int i = first; i <= last; ++i) {
+            string context_type = i == line_idx ? "match" : (i < line_idx ? "before" : "after");
+            push entries, makeLineEntry(lines[i], source, i, context_type);
+        }
+
+        return entries;
+    }
+
+    private static hash<auto> makeLineEntry(string line, hash<auto> source, int line_idx, string context_type) {
+        return {
+            "message": line,
+            "rendered": line,
+            "source": {
+                "id": source.id,
+                "kind": source.kind,
+                "path": source.path,
+                "active": source.active,
+            },
+            "source_ref": sprintf("%s:%d", source.id, line_idx + 1),
+            "line": line_idx + 1,
+            "sequence": line_idx,
+            "line_hash": has_digest("sha256") ? digest("sha256", line).toHex() : NOTHING,
+            "context": context_type,
+            "metadata": {},
+        };
+    }
+
+    private static hash<auto> parseCursor(auto cursor) {
+        if (!cursor) {
+            return {"source_index": 0};
+        }
+
+        if (cursor instanceof hash) {
+            return {
+                "source_index": int(cursor.source_index ?? 0),
+                "line_index": exists cursor.line_index ? int(cursor.line_index) : NOTHING,
+            };
+        }
+
+        list<string> parts = string(cursor).split(":");
+        if (parts.size() == 5 && parts[0] == "v2") {
+            return {
+                "source_index": int(parts[1]),
+                "line_index": int(parts[2]),
+                "direction": parts[3],
+                "source_signature": parts[4],
+            };
+        }
+
+        if (parts.size() != 2) {
+            return {"status": "invalid", "reason": "invalid-cursor"};
+        }
+
+        return {
+            "source_index": int(parts[0]),
+            "line_index": int(parts[1]),
+        };
+    }
+
+    private static *string makeCursorForNextPosition(list<hash<auto>> sources, int source_idx, int line_idx,
+            string direction) {
+        if (direction == "backward") {
+            if (line_idx >= 0) {
+                return makeCursor(sources, source_idx, line_idx, direction);
+            }
+            if (source_idx + 1 < sources.size()) {
+                return makeCursor(sources, source_idx + 1, -1, direction);
+            }
+            return NOTHING;
+        }
+
+        return makeCursor(sources, source_idx, line_idx, direction);
+    }
+
+    private static string makeCursor(list<hash<auto>> sources, int source_idx, int line_idx, string direction) {
+        return sprintf("v2:%d:%d:%s:%s", source_idx, line_idx, direction,
+            getSourceSignature(sources[source_idx]));
+    }
+
+    private static string getSourceSignature(hash<auto> source) {
+        *hash<StatInfo> stat = hstat(source.path);
+        string base = sprintf("%s|%s|%s|%y",
+            source.id,
+            source.kind,
+            source.path,
+            stat ? stat.inode : NOTHING);
+        if (!source.active || source.kind == "file-ring") {
+            base += sprintf("|%y|%y", stat ? stat.size : NOTHING, stat ? stat.mtime : NOTHING);
+        }
+        return has_digest("sha256") ? digest("sha256", base).toHex() : base;
+    }
+
+    private static hash<auto> getInvalidResult(hash<auto> caps, string reason) {
+        return {
+            "status": "invalid",
+            "source": caps.source,
+            "capabilities": caps,
+            "entries": (),
+            "result_count": 0,
+            "scanned_bytes": 0,
+            "scanned_events": 0,
+            "truncated": False,
+            "reason": reason,
+        };
+    }
+
+    private static hash<auto> makeSearchResult(string status, hash<auto> caps, list<hash<auto>> entries,
+            *string next_cursor, int scanned_bytes, int scanned_events, bool truncated, *string reason) {
+        hash<auto> result = {
+            "status": status,
+            "source": caps.source,
+            "capabilities": caps,
+            "entries": entries,
+            "result_count": entries.size(),
+            "next_cursor": next_cursor,
+            "scanned_bytes": scanned_bytes,
+            "scanned_events": scanned_events,
+            "truncated": truncated,
+        };
+
+        if (reason) {
+            result.reason = reason;
+        }
+
+        return result;
+    }
+}
+
 #! Handles the processing for asynchronous appender events in multiple threads
 /**
     Async events are removed from the event queue in a single thread which balances processing
@@ -1060,6 +1717,19 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
     #! Returns current ring index being used for logging
     public int getCurrentIndex() {
         return patternData.index;
+    }
+
+    #! Returns the filename for the given ring index using the current pattern state
+    /** This is intended for diagnostics and rendered-history search.  If the configured pattern includes dynamic
+        timestamp fields, only filenames derivable from the current pattern timestamp can be enumerated.
+
+        @param idx ring index to format
+        @return filename for the given ring index
+    */
+    public string getFileNameForIndex(int idx) {
+        hash<auto> pd = patternData;
+        pd.index = idx;
+        return format(pd);
     }
 }
 

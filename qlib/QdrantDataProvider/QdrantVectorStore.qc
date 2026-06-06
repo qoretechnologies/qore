@@ -52,13 +52,16 @@ public namespace QdrantDataProvider {
 
     @par Filter syntax
 
-    The optional \c filter argument to @ref search() is passed through to
-    Qdrant verbatim — use Qdrant's native filter dialect with \c must /
-    \c should / \c must_not clauses.  Documented as the reference dialect
-    for the @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore"
-    abstraction; alternative vector-store implementations may either accept
-    the same shape directly or translate from a portable shape passed via
-    \c filter.native_filter.
+    The optional \c filter argument to @ref search() accepts either Qdrant's
+    native filter dialect with \c must / \c should / \c must_not clauses or
+    the provider-neutral \c payload_eq form:
+    @code{.py}
+{"payload_eq": {"group_namespace": 123, "index_id": "log-errors"}}
+    @endcode
+
+    When \c payload_eq is present, it is translated to Qdrant \c must /
+    \c match.value predicates.  Native filters can still be passed directly
+    or under \c native_filter and are merged with the portable predicates.
 
     @par Point IDs
 
@@ -183,7 +186,7 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
             "with_payload": True,
         };
         if (filter) {
-            body.filter = filter;
+            body.filter = QdrantVectorStore::normalizeSearchFilter(filter);
         }
         hash<auto> resp = rest.restPost(pointsPath("/query"), body).body.result;
         list<hash<auto>> raw_points = resp.points ?? ();
@@ -300,6 +303,29 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
             "score": p.score,
             "payload": p.payload,
         };
+    }
+
+    #! Converts provider-neutral payload filters to Qdrant filter syntax
+    private:internal static hash<auto> normalizeSearchFilter(hash<auto> filter) {
+        auto payload_eq = filter.payload_eq;
+        if (!(payload_eq instanceof hash) || payload_eq.empty()) {
+            return filter.native_filter ?? (exists filter{"payload_eq"} ? filter - ("payload_eq",) : filter);
+        }
+
+        hash<auto> qfilter = filter.native_filter ?? (filter - ("payload_eq",));
+        list<auto> must = ();
+        if (qfilter.must) {
+            must = qfilter.must instanceof list ? qfilter.must : (qfilter.must,);
+        }
+
+        foreach string key in (keys payload_eq) {
+            push must, {
+                "key": key,
+                "match": {"value": payload_eq{key}},
+            };
+        }
+        qfilter.must = must;
+        return qfilter;
     }
 }
 }

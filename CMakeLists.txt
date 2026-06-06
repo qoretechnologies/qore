@@ -3055,6 +3055,7 @@ qore_user_module("qlib/QLS" "modules/astparser/astparser;QoreCodeCompletion;Qore
 qore_user_module("qlib/FileLocationHandler" "Util")
 qore_user_module("qlib/Diff.qm" "Util")
 qore_user_module("qlib/Logger.qm" "Util;modules/logger_bin/logger_bin")
+qore_user_module("qlib/LoggerSemanticSearch" "Logger;QoreRagTypes")
 qore_user_module("qlib/ProviderIndexUtil" "Logger;Util;reflection")
 qore_user_module("qlib/Krb5Util" "Logger;modules/krb5/krb5")
 qore_user_module("qlib/Mime.qm" "Util")
@@ -3300,7 +3301,9 @@ qore_user_module("qlib/GorgiasDataProvider" "GorgiasRestClient;RestClient;RestCl
 qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider" "dynamics-logo.svg;business-central-logo.svg")
 qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider" "servicenow-logo-white.svg;servicenow-logo-black.svg")
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
+qore_user_module("qlib/SearchIndexDataProvider" "RestClient;RestClientIo;DataProvider;ConnectionProvider;NdjsonDataProvider")
 qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;RestClientIo;DataProvider;ConnectionProvider;NdjsonDataProvider" "elastic-logo.svg")
+qore_user_module("qlib/OpenSearchDataProvider" "SearchIndexDataProvider;RestClient;RestClientIo;DataProvider;ConnectionProvider;NdjsonDataProvider;QoreRagTypes" "opensearch-logo.svg")
 qore_user_module("qlib/QdrantDataProvider" "RestClient;DataProvider" "qdrant-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;RestClientIo;DataProvider" "Haltian-EmpathicBuilding.svg")
 qore_user_module("qlib/GeneratorDataProvider" "DataProvider" "generator-logo.svg")
@@ -3310,6 +3313,7 @@ qore_user_module("qlib/RedisDataProvider" "DataProvider;ConnectionProvider" "red
 
 # base 8 modules
 qore_user_module("qlib/ElasticSearchLoggerAppender.qm" "Logger;RestClient;ElasticSearchDataProvider")
+qore_user_module("qlib/OpenSearchLoggerAppender" "Logger;RestClient;OpenSearchDataProvider" "opensearch-logo.svg")
 qore_user_module("qlib/SalesforceRestDataProvider" "RestClient;SalesforceRestClient;DataProvider" "salesforce-logo.svg")
 qore_user_module("qlib/AwsRestClientDataProvider" "RestClient;DataProvider;RestClientDataProvider")
 qore_user_module("qlib/GoogleDataProvider" "GoogleRestClient;RestClient;DataProvider")

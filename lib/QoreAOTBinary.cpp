@@ -4387,14 +4387,26 @@ static inline bool shouldSkipReexportedItem(const char* item_module, const char*
 
 //! Phase 4 slice 4: per-file filter helper — skip items whose AST
 //! declaration location does not match the target source file.
-static inline bool shouldSkipByCompileFile(const char* item_file, const char* compile_file) {
-    if (!compile_file) {
+static inline bool hasAOTBinaryCompileFileFilter(const char* compile_file,
+        const std::unordered_set<std::string>* compile_files = nullptr) {
+    return compile_file || (compile_files && !compile_files->empty());
+}
+
+static inline bool shouldSkipByCompileFile(const char* item_file, const char* compile_file,
+        const std::unordered_set<std::string>* compile_files = nullptr) {
+    if (!hasAOTBinaryCompileFileFilter(compile_file, compile_files)) {
         return false;
     }
     if (!item_file) {
         return false;  // conservative: include unattributed items
     }
-    return strcmp(item_file, compile_file) != 0;
+    if (compile_file && !strcmp(item_file, compile_file)) {
+        return false;
+    }
+    if (compile_files && compile_files->find(item_file) != compile_files->end()) {
+        return false;
+    }
+    return true;
 }
 
 //! Returns true for user variants that should be emitted for this method.
@@ -4533,10 +4545,13 @@ static bool hasInheritedConcreteMethodVariant(QoreClass* qc, const char* method_
     @param compile_file optional per-file filter (Phase 4 slice 4); when
            provided, items whose AST declaration file doesn't match are
            skipped (used for per-file `.qo` metadata emission)
+    @param compile_files optional multi-file filter used for aggregate
+           script metadata
 */
 static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t parent_idx,
         const char* current_module, const std::unordered_set<std::string>* keep_modules = nullptr,
-        const char* compile_file = nullptr) {
+        const char* compile_file = nullptr,
+        const std::unordered_set<std::string>* compile_files = nullptr) {
     uint32_t ns_idx = static_cast<uint32_t>(state.namespaces.size());
     state.namespaces.push_back({ns, parent_idx});
 
@@ -4556,8 +4571,8 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 if (shouldSkipReexportedItem(class_module, current_module, keep_modules)) {
                     continue;
                 }
-                if (compile_file && priv->loc
-                        && shouldSkipByCompileFile(priv->loc->getFile(), compile_file)) {
+                if (shouldSkipByCompileFile(priv->loc ? priv->loc->getFile() : nullptr,
+                        compile_file, compile_files)) {
                     continue;
                 }
 
@@ -4596,10 +4611,11 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 if (shouldSkipReexportedItem(hd_module, current_module, keep_modules)) {
                     continue;
                 }
-                if (compile_file) {
+                if (hasAOTBinaryCompileFileFilter(compile_file, compile_files)) {
                     const QoreProgramLocation* hd_loc =
                         typed_hash_decl_private::get(*hd)->getParseLocation();
-                    if (hd_loc && shouldSkipByCompileFile(hd_loc->getFile(), compile_file)) {
+                    if (shouldSkipByCompileFile(hd_loc ? hd_loc->getFile() : nullptr,
+                            compile_file, compile_files)) {
                         continue;
                     }
                 }
@@ -4625,10 +4641,11 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 if (shouldSkipReexportedItem(ed_module, current_module, keep_modules)) {
                     continue;
                 }
-                if (compile_file) {
+                if (hasAOTBinaryCompileFileFilter(compile_file, compile_files)) {
                     const QoreProgramLocation* ed_loc =
                         qore_enum_decl_private::get(*ed)->getParseLocation();
-                    if (ed_loc && shouldSkipByCompileFile(ed_loc->getFile(), compile_file)) {
+                    if (shouldSkipByCompileFile(ed_loc ? ed_loc->getFile() : nullptr,
+                            compile_file, compile_files)) {
                         continue;
                     }
                 }
@@ -4651,8 +4668,8 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             if (shouldSkipReexportedItem(td_module, current_module, keep_modules)) {
                 continue;
             }
-            if (compile_file && ti.second->loc
-                    && shouldSkipByCompileFile(ti.second->loc->getFile(), compile_file)) {
+            if (shouldSkipByCompileFile(ti.second->loc ? ti.second->loc->getFile() : nullptr,
+                    compile_file, compile_files)) {
                 continue;
             }
             std::string key = makeNamespaceItemKey(ns, ti.first.c_str());
@@ -4673,8 +4690,8 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 if (shouldSkipReexportedItem(const_module, current_module, keep_modules)) {
                     continue;
                 }
-                if (compile_file && ce->loc
-                        && shouldSkipByCompileFile(ce->loc->getFile(), compile_file)) {
+                if (shouldSkipByCompileFile(ce->loc ? ce->loc->getFile() : nullptr,
+                        compile_file, compile_files)) {
                     continue;
                 }
                 std::string key = makeNamespaceItemKey(ns, ce->getName());
@@ -4700,9 +4717,10 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             if (shouldSkipReexportedItem(var_module, current_module, keep_modules)) {
                 continue;
             }
-            if (compile_file) {
+            if (hasAOTBinaryCompileFileFilter(compile_file, compile_files)) {
                 const QoreProgramLocation* v_loc = var->getParseLocation();
-                if (v_loc && shouldSkipByCompileFile(v_loc->getFile(), compile_file)) {
+                if (shouldSkipByCompileFile(v_loc ? v_loc->getFile() : nullptr,
+                        compile_file, compile_files)) {
                     continue;
                 }
             }
@@ -4728,7 +4746,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             // target. Overloaded variants can live in different files
             // (unusual but legal); per-variant filtering at codegen time
             // ensures only matching variants produce native code.
-            if (compile_file) {
+            if (hasAOTBinaryCompileFileFilter(compile_file, compile_files)) {
                 bool any_in_file = false;
                 QoreFunctionIterator vit(*func);
                 while (vit.next()) {
@@ -4740,7 +4758,8 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                     }
                     const UserSignature* sig = uvb->getUserSignature();
                     const QoreProgramLocation* vloc = sig ? sig->getParseLocation() : nullptr;
-                    if (!vloc || !shouldSkipByCompileFile(vloc->getFile(), compile_file)) {
+                    if (!shouldSkipByCompileFile(vloc ? vloc->getFile() : nullptr,
+                            compile_file, compile_files)) {
                         any_in_file = true;
                         break;
                     }
@@ -4776,7 +4795,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             // catch real cross-module items using each item's own
             // `getModuleName()`, which IS accurate.  Matching fix on
             // the compile-walker side in QoreAOT.cpp.
-            collectItems(state, child_priv, ns_idx, current_module, keep_modules, compile_file);
+            collectItems(state, child_priv, ns_idx, current_module, keep_modules, compile_file, compile_files);
         }
     }
 }
@@ -13525,20 +13544,22 @@ bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
 
 bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         const char* module_name, const std::unordered_set<std::string>* keep_modules,
-        const char* compile_file, std::string* error) {
+        const char* compile_file, std::string* error,
+        const std::unordered_set<std::string>* compile_files) {
     // Phase 1: Collect all user-defined items into indexed vectors
     // When module_name is provided, filter out items from reexported dependencies
     // When keep_modules is provided, items from those modules are always included
     // When compile_file is provided (Phase 4 slice 4), items whose AST
     // declaration file doesn't match are skipped so the emitted metadata
     // describes only the contributions of one source file.
-    printd(5, "serializeNamespaceTree: module_name='%s' compile_file='%s' root_ns='%s'\n",
+    printd(5, "serializeNamespaceTree: module_name='%s' compile_file='%s' compile_files=%zu root_ns='%s'\n",
         module_name ? module_name : "n/a",
         compile_file ? compile_file : "n/a",
+        compile_files ? compile_files->size() : 0,
         root_ns->ns->getName());
     AOTSerializeState state;
     state.root_ns = root_ns;  // Store root namespace for program-wide CRM building
-    collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules, compile_file);
+    collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules, compile_file, compile_files);
 
     std::vector<qore_ns_private*> extra_roots;
     bool debug_local_modules = getenv("QORE_AOT_DEBUG_LOCAL_MODULES") != nullptr;
@@ -13549,7 +13570,8 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
             fprintf(stderr, "AOT local module metadata: keep '%s'\n", mod.c_str());
         }
     }
-    if (module_name && !*module_name && keep_modules && !compile_file) {
+    if (module_name && !*module_name && keep_modules
+            && !hasAOTBinaryCompileFileFilter(compile_file, compile_files)) {
         for (const std::string& mod : *keep_modules) {
             QoreProgram* module_pgm = MM.findUserModuleProgram(mod.c_str());
             if (debug_local_modules) {
@@ -13568,7 +13590,7 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
                 size_t before_classes = state.classes.size();
                 size_t before_methods = state.methods.size();
                 extra_roots.push_back(module_root_priv);
-                collectItems(state, module_root_priv, UINT32_MAX, mod.c_str(), nullptr, nullptr);
+                collectItems(state, module_root_priv, UINT32_MAX, mod.c_str(), nullptr, nullptr, nullptr);
                 if (debug_local_modules) {
                     fprintf(stderr,
                         "AOT local module metadata: collected '%s' root='%s' classes +%zu methods +%zu\n",

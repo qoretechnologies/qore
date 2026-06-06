@@ -1,0 +1,431 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore OpenSearchDataProvider module definition
+
+/*  OpenSearchDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) ConnectionProvider
+%requires(reexport) DataProvider
+%requires(reexport) RestClientIo
+%requires(reexport) QoreRagTypes
+%requires(reexport) SearchIndexDataProvider
+
+%try-module json >= 1.11
+%define NoJson
+%endtry
+
+%ifdef NoJson
+# Stub function when json module is not available or older than 1.11 (pre-NDJSON)
+auto sub make_json(auto val) {
+    throw "JSON-ERROR", "the json module >= 1.11 is required for this operation";
+}
+%else
+# json >= 1.11 ships NdjsonDataProvider — used by the bulk API to stream NDJSON
+# request bodies via NdjsonStringWriter (O(n) streaming buffer) instead of
+# hand-rolled O(n²) string concatenation
+%requires NdjsonDataProvider
+%endif
+
+module OpenSearchDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for OpenSearch instances";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the connection scheme
+        ConnectionSchemeCache::registerScheme("osrest", OpenSearchRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("osrests", OpenSearchRestConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new OpenSearchDataProviderFactory());
+
+        # register the RAG vector-store factory
+        QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
+            new OpenSearchDataProvider::OpenSearchVectorStoreFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": OpenSearchDataProvider::AppName,
+            "display_name": "OpenSearch Server",
+            "short_desc": "OpenSearch search and analytics server",
+            "desc": "OpenSearch is an Apache 2.0-licensed search, analytics, and observability platform.\n\n"
+                "Use this app to work with:\n"
+                "- **Document indexes** for search and analytics workloads\n"
+                "- **Bulk ingestion** for high-volume document writes\n"
+                "- **Pipelines** for document ingestion and search result processing\n"
+                "- **Vector, neural, and hybrid search** when the OpenSearch cluster is configured with the "
+                    "required plugins and models",
+            "scheme": "osrest",
+            "logo": OpenSearchLogo,
+            "logo_file_name": "opensearch-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Databases,),
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/index/search",
+            "action": "search-index",
+            "display_name": "Search Index",
+            "short_desc": "Search for data in an OpenSearch index",
+            "desc": "Search an OpenSearch index with the query DSL and optional query-string parameters. Use this "
+                "action for precise document lookup, log search, analytics inputs, and pagination through ordinary "
+                "search results.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchIndexSearchRequestDataType::Fields{"index",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchIndexSearchRequestDataType::Fields - ("index",)
+            ),
+            "output_type": OpenSearchIndexSearchDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/index/knn-search",
+            "action": "knn-search",
+            "display_name": "k-NN Search",
+            "short_desc": "Search an OpenSearch index with a query vector",
+            "desc": "Search an OpenSearch index with a raw query vector against a `knn_vector` field. Use optional "
+                "filters, method parameters, or radial-search thresholds when supported by the target index and "
+                "OpenSearch version.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchKnnSearchRequestDataType::Fields{"index", "field", "vector"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchKnnSearchRequestDataType::Fields - ("index", "field", "vector")
+            ),
+            "output_type": OpenSearchKnnSearchDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/index/neural-search",
+            "action": "neural-search",
+            "display_name": "Neural Search",
+            "short_desc": "Search an OpenSearch index with text or sparse tokens",
+            "desc": "Search an OpenSearch vector or semantic field with OpenSearch neural search. Use this action "
+                "when the cluster is configured with the required model, semantic field, or neural-search plugin "
+                "support.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchNeuralSearchRequestDataType::Fields{"index", "field", "query_text"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchNeuralSearchRequestDataType::Fields - ("index", "field", "query_text")
+            ),
+            "output_type": OpenSearchNeuralSearchDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/index/hybrid-search",
+            "action": "hybrid-search",
+            "display_name": "Hybrid Search",
+            "short_desc": "Combine multiple OpenSearch query clauses",
+            "desc": "Search an OpenSearch index with a hybrid query that combines keyword, vector, neural, or "
+                "other OpenSearch query clauses. Use a search pipeline when score normalization or rank fusion is "
+                "needed.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchHybridSearchRequestDataType::Fields{"index", "queries"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchHybridSearchRequestDataType::Fields - ("index", "queries")
+            ),
+            "output_type": OpenSearchHybridSearchDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/index/vector-index/create",
+            "action": "create-vector-index",
+            "display_name": "Create Vector Index",
+            "short_desc": "Create an OpenSearch vector index",
+            "desc": "Create an OpenSearch index with `index.knn` enabled and a `knn_vector` field mapping. Add "
+                "optional text and keyword metadata fields for combined lexical, structured, and vector search.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchVectorIndexCreateRequestDataType::Fields{"index", "vector_field", "dimension"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchVectorIndexCreateRequestDataType::Fields - ("index", "vector_field", "dimension")
+            ),
+            "output_type": OpenSearchVectorIndexCreateDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/document/create",
+            "action": "create-document",
+            "display_name": "Add Document",
+            "short_desc": "Add a document to OpenSearch",
+            "desc": "Create or index a document in OpenSearch. Use optional pipeline and refresh controls when "
+                "ingested data must be transformed or made immediately visible to search.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchDocumentCreateRequestDataType::Fields{"index",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchDocumentCreateRequestDataType::Fields - ("index",)
+            ),
+            "output_type": OpenSearchDocumentCreateResponseDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/document/bulk",
+            "action": "bulk-operations",
+            "display_name": "Bulk Operations",
+            "short_desc": "Perform bulk document operations",
+            "desc": "Perform bulk `index`, `create`, `update`, and `delete` operations with OpenSearch's NDJSON "
+                "bulk API. Use this action for high-throughput ingestion and batch maintenance workloads.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchBulkRequestDataType::Fields{"operations",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchBulkRequestDataType::Fields - ("operations",)
+            ),
+            "output_type": OpenSearchBulkResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/index/scroll-search",
+            "action": "scroll-search",
+            "display_name": "Scroll Search",
+            "short_desc": "Search with scroll API for large result sets",
+            "desc": "Search an OpenSearch index using the Scroll API for efficient iteration over large result sets. "
+                "Use this action when ordinary `from` and `size` pagination is not appropriate.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchScrollSearchRequestDataType::Fields{"index",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchScrollSearchRequestDataType::Fields - ("index",)
+            ),
+            "output_type": OpenSearchScrollSearchDataProvider::ResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenSearchDataProvider::AppName,
+            "path": "/index/aggregate",
+            "action": "aggregate",
+            "display_name": "Aggregations",
+            "short_desc": "Compute aggregations over search results",
+            "desc": "Compute analytics and aggregations over OpenSearch search results, including terms, histogram, "
+                "and metric aggregations. Use this action when the output is grouped or summarized data rather "
+                "than individual hits.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchAggregationRequestDataType::Fields{"index",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenSearchAggregationRequestDataType::Fields - ("index",)
+            ),
+            "output_type": OpenSearchAggregationDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage OpenSearchDataProvider Module
+
+    @tableofcontents
+
+    @section opensearchdataproviderintro Introduction to the OpenSearchDataProvider Module
+
+    @htmlonly
+    <div class="image">
+      <img src="opensearch-logo.svg" alt="OpenSearch Logo" style="width:40%;">
+    </div>
+    @endhtmlonly
+
+    The %OpenSearchDataProvider module provides a @ref dataproviderintro "data provider" API for OpenSearch
+    instances and data.  It provides introspection into the configuration and document attributes as well as APIs and
+    a record-based data provider to use OpenSearch indices as DB table-like objects as well.
+
+    This data provider provides OpenSearch API access to:
+    - documents: <b><tt>document/{@ref OpenSearchDataProvider::OpenSearchDocumentCreateDataProvider "create",
+      @ref OpenSearchDataProvider::OpenSearchDocumentReadDataProvider "read",
+      @ref OpenSearchDataProvider::OpenSearchDocumentUpdateDataProvider "update",
+      @ref OpenSearchDataProvider::OpenSearchDocumentDeleteDataProvider "delete"}</tt></b>
+    - indexes: <b><tt>index/{@ref OpenSearchDataProvider::OpenSearchIndexCreateDataProvider "create",
+      @ref OpenSearchDataProvider::OpenSearchIndexReadDataProvider "read",
+      @ref OpenSearchDataProvider::OpenSearchIndexReadAllDataProvider "read-all",
+      @ref OpenSearchDataProvider::OpenSearchIndexDeleteDataProvider "delete",
+      @ref OpenSearchDataProvider::OpenSearchIndexSearchDataProvider "search",
+      @ref OpenSearchDataProvider::OpenSearchScrollSearchDataProvider "scroll-search",
+      @ref OpenSearchDataProvider::OpenSearchAggregationDataProvider "aggregate",
+      @ref OpenSearchDataProvider::OpenSearchKnnSearchDataProvider "knn-search",
+      @ref OpenSearchDataProvider::OpenSearchNeuralSearchDataProvider "neural-search",
+      @ref OpenSearchDataProvider::OpenSearchHybridSearchDataProvider "hybrid-search",
+      @ref OpenSearchDataProvider::OpenSearchVectorIndexCreateDataProvider "vector-index/create"}</tt></b>
+    - pipelines: <b><tt>pipeline/{@ref OpenSearchDataProvider::OpenSearchPipelineCreateDataProvider "create",
+      @ref OpenSearchDataProvider::OpenSearchPipelineReadDataProvider "read",
+      @ref OpenSearchDataProvider::OpenSearchPipelineReadAllDataProvider "read-all",
+      @ref OpenSearchDataProvider::OpenSearchPipelineUpdateDataProvider "update",
+      @ref OpenSearchDataProvider::OpenSearchPipelineDeleteDataProvider "delete"}</tt></b>
+
+    Furthermore it provides a record interface to OpenSearch indexes supporting record creating, searching,
+    updating, and deleting documents (where an OpenSearch document is treated as a record) through the following
+    path:
+    - <b><tt>indexes/</tt><i>@ref OpenSearchDataProvider::OpenSearchIndexTableDataProvider "index_name"</i></b>
+
+    The module also registers the \c opensearch vector-store backend for
+    @ref QoreRagUtils::RagProviderRegistry "RagProviderRegistry"; this allows
+    callers using @ref QoreRagUtils::VectorStoreConfig "VectorStoreConfig" to
+    persist and search vectors in OpenSearch \c knn_vector indexes through the
+    provider-neutral @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore"
+    API.
+
+    These data provides represent a single index with a record-like interface; each document (record) will be returned
+    with read-only \c _id and \c _score fields as well.  Searches are performed with \c match; for flexible search
+    criteria, use the API-driven search
+    (@ref OpenSearchDataProvider::OpenSearchIndexSearchDataProvider "OpenSearchIndexSearchDataProvider")
+
+    In this way OpenSearch can be used for easy data integration and searches as well as for the manipulation of
+    document content and pipelines from the Data Provider API.
+
+    @section opensearchdataprovider_factory OpenSearch Data Provider Factory
+
+    The name of the OpenSearch data provider factory is <b><tt>opensearch</tt></b>.
+
+    @section opensearchdataprovider_examples OpenSearch Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par API Example: List All Pipelines
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/pipeline/read-all'
+    @endverbatim
+
+    @par API Example: Create a Pipeline
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/pipeline/create' \
+      pipeline=my-pipeline,description="my pipeline",processors='{html_strip={field=content}}'
+    @endverbatim
+
+    @par API Example: Delete a Pipeline
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/pipeline/delete' pipeline=my-pipeline
+    @endverbatim
+
+    @par API Example: List All Indices
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/index/read-all'
+    @endverbatim
+
+    @par API Example: Create an Index
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/index/create' \
+      index=my-index,mappings={properties={content={type=text}}}'
+    @endverbatim
+
+    @par API Example: Delete an Index
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/index/delete' index=my-index
+    @endverbatim
+
+    @par API Example: Search an Index
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/index/search' \
+      index=my-index,'query={match={content=target-string}}'
+    @endverbatim
+
+    @par API Example: Create a Vector Index
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/index/vector-index/create' \
+      index=my-vector-index,vector_field=embedding,dimension=384,text_fields='(message)'
+    @endverbatim
+
+    @par API Example: k-NN Search
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/index/knn-search' \
+      index=my-vector-index,field=embedding,vector='(0.12,0.34,0.56)',k=10
+    @endverbatim
+
+    @par API Example: Create a Document / Ingest Content
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/document/create' \
+      index=my-index,pipeline=my-pipeline,content="<h2>my HTML content</h2>",refresh=true
+    @endverbatim
+
+    @par API Example: Delete a Document
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/document/delete' \
+      index=my-index,id=oE1jYokB_lAyoyNWRDP9
+    @endverbatim
+
+    @par Record-Based Example: Search an Index
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/indexes/my-index' \
+      content=target-string
+    @endverbatim
+
+    @par Record-Based Example: Create a Document / Ingest Content
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/indexes/my-index' create \
+      content="<h2>my HTML content</h2>" pipeline=my-pipeline,refresh=true
+    @endverbatim
+
+    @par Record-Based Example: Delete a Document
+    @verbatim qdp 'opensearch{url=https://my-server.local:9200}/indexes/my-index' delete \
+      _id=oE1jYokB_lAyoyNWRDP9
+    @endverbatim
+
+    @section opensearchdataprovider_relnotes Release Notes
+
+    @subsection opensearchdataprovider_v1_0 OpenSearchDataProvider v1.0
+    - initial release of the module
+*/
+
+#! Contains all public definitions in the OpenSearchDataProvider module
+public namespace OpenSearchDataProvider {
+#! OpenSearch logo
+public const string OpenSearchLogo = File::readTextFile(get_script_dir() + "/opensearch-logo.svg");
+}

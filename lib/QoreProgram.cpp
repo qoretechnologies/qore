@@ -752,8 +752,22 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     }
     QoreNS = RootNS->rootGetQoreNamespace();
 
-    // inherit parent's execution mode so sub-programs respect --exec-mode=ast
-    exec_mode = p_pgm->priv->exec_mode;
+    // Inherit an explicit parent execution mode only while the child has the
+    // same effective parse options.  Otherwise the child must select its
+    // automatic mode from its own parse options (modern -> tiered, legacy ->
+    // AST), even if the parent was started with an explicit optimized mode.
+    applyParseOptionImplications();
+    if (p_pgm->priv->user_requested_exec_mode
+        && pwo.parse_options == p_pgm->priv->pwo.parse_options) {
+        exec_mode = p_pgm->priv->exec_mode;
+        user_requested_exec_mode = true;
+        inherited_user_requested_exec_mode = true;
+        inherited_exec_mode_parse_options = pwo.parse_options;
+    } else {
+        inherited_user_requested_exec_mode = false;
+        user_requested_exec_mode = false;
+        applyDefaultExecMode();
+    }
 
     // copy parent feature list
     for (auto& i : p_pgm->priv->featureList) {
@@ -1156,6 +1170,11 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // update high water marks for atomic rollback support
             str_vec_hwm = str_vec.size();
             pgmloc_hwm = pgmloc.size();
+
+            // After directives and extension-based defaults are known, choose
+            // the implicit execution mode.  Modern code defaults to tiered,
+            // which also validates the %modern IR-lowerability guarantee below.
+            applyDefaultExecMode();
 
             // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified.
             // Gate on PO_MODERN: `ensureIrExecMode` in parseCommit runs
@@ -2433,6 +2452,7 @@ int QoreProgram::parseRollback(ExceptionSink* xsink) {
 void QoreProgram::setExecMode(qore_exec_mode_t mode, bool user_requested) {
     priv->exec_mode = mode;
     priv->user_requested_exec_mode = user_requested;
+    priv->inherited_user_requested_exec_mode = false;
 }
 
 qore_exec_mode_t QoreProgram::getExecMode() const {

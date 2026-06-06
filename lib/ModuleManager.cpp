@@ -126,6 +126,38 @@ static bool qore_binary_load_error_can_fallback_to_source(ExceptionSink& xsink) 
     return true;
 }
 
+static void qore_warn_binary_module_source_fallback(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
+        const char* name, const char* binary_path, const char* source_path, ExceptionSink& binary_xsink) {
+    if (!warning_mask) {
+        return;
+    }
+
+    QoreStringValueHelper err(binary_xsink.getExceptionErr());
+    QoreStringValueHelper desc(binary_xsink.getExceptionDesc());
+
+    QoreStringNode* warn_desc = new QoreStringNodeMaker("binary module '%s' for feature '%s' failed to load; "
+        "loading source module '%s' instead", binary_path, name, source_path);
+
+    const char* err_str = err->c_str();
+    const char* desc_str = desc->c_str();
+    if (err_str && *err_str) {
+        warn_desc->sprintf(": %s", err_str);
+        if (desc_str && *desc_str) {
+            warn_desc->sprintf(": %s", desc_str);
+        }
+    } else if (desc_str && *desc_str) {
+        warn_desc->sprintf(": %s", desc_str);
+    }
+
+    if (&xsink == &wsink) {
+        printe("warning: %s\n", warn_desc->c_str());
+        warn_desc->deref();
+        return;
+    }
+
+    wsink.raiseExceptionArg("BINARY-MODULE-SOURCE-FALLBACK", new QoreStringNode(name), warn_desc);
+}
+
 static bool qore_find_user_module_source(const std::string& dir, const char* name, QoreString& source_path,
         bool& separated) {
     struct stat sb;
@@ -1277,9 +1309,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 QoreString source_path;
                 if (qore_binary_load_error_can_fallback_to_source(binary_xsink)
                         && qore_find_explicit_qmod_source(raw_path, source_path)) {
-                    binary_xsink.clear();
                     mi = loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, nullptr,
                         load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                    if (mi && !xsink) {
+                        qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name, raw_path,
+                            source_path.c_str(), binary_xsink);
+                    }
+                    binary_xsink.clear();
                     if (!mi && !xsink) {
                         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
                             "fallback after binary module '%s' failed", name, raw_path);
@@ -1328,7 +1364,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         }
     }
 
-    auto load_user_module_source = [&](const std::string& dir, bool& found) -> QoreAbstractModule* {
+    auto load_user_module_source = [&](const std::string& dir, bool& found,
+            QoreString* found_source_path = nullptr) -> QoreAbstractModule* {
         QoreString source_path;
         bool separated = false;
         if (!qore_find_user_module_source(dir, name, source_path, separated)) {
@@ -1342,8 +1379,15 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         }
 
         if (separated) {
+            if (found_source_path) {
+                *found_source_path = source_path;
+                found_source_path->sprintf(QORE_DIR_SEP_STR "%s.qm", name);
+            }
             return loadSeparatedModule(xsink, wsink, source_path.c_str(), name, pgm, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+        }
+        if (found_source_path) {
+            *found_source_path = source_path;
         }
         return loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, pholder.release(),
             load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
@@ -1396,8 +1440,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
-                        mi = load_user_module_source(dir, source_found);
+                        QoreString source_path;
+                        mi = load_user_module_source(dir, source_found, &source_path);
                         if (source_found) {
+                            if (mi && !xsink) {
+                                qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name,
+                                    str.c_str(), source_path.c_str(), binary_xsink);
+                            }
                             binary_xsink.clear();
                             if (!mi && !xsink) {
                                 xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
@@ -1444,8 +1493,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
-                        mi = load_user_module_source(dir, source_found);
+                        QoreString source_path;
+                        mi = load_user_module_source(dir, source_found, &source_path);
                         if (source_found) {
+                            if (mi && !xsink) {
+                                qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name,
+                                    str.c_str(), source_path.c_str(), binary_xsink);
+                            }
                             binary_xsink.clear();
                             if (!mi && !xsink) {
                                 xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
@@ -1576,7 +1630,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     // inherit execution mode from parent program
     if (p) {
-        mpgm->setExecMode(p->getExecMode());
+        qore_program_private* ppriv = qore_program_private::get(*p);
+        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
     }
     // issue #3592: must add feature first
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -2011,7 +2066,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
     // inherit execution mode from parent program
     if (p) {
-        mpgm->setExecMode(p->getExecMode());
+        qore_program_private* ppriv = qore_program_private::get(*p);
+        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -2114,7 +2170,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     }
     // inherit execution mode from parent program
     if (p) {
-        mpgm->setExecMode(p->getExecMode());
+        qore_program_private* ppriv = qore_program_private::get(*p);
+        mpgm->setExecMode(ppriv->exec_mode, ppriv->user_requested_exec_mode);
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {

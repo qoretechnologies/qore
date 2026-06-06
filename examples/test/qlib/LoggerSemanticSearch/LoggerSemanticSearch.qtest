@@ -1,0 +1,380 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires LoggerSemanticSearch
+
+%exec-class LoggerSemanticSearchTest
+
+public class LoggerSemanticSearchTest inherits QUnit::Test {
+    constructor() : Test("LoggerSemanticSearch Test", "1.0") {
+        addTestCase("directEntryIndexAndSearch", \directEntryIndexAndSearch());
+        addTestCase("appenderIndexing", \appenderIndexing());
+        addTestCase("entryTransformRedaction", \entryTransformRedaction());
+        addTestCase("payloadFieldsAndStableRecordIds", \payloadFieldsAndStableRecordIds());
+        addTestCase("negativeSearch", \negativeSearch());
+
+        set_return_value(main());
+    }
+
+    private directEntryIndexAndSearch() {
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        hash<auto> res = index.indexEntries((
+            {
+                "rendered": "database writer rejected the connection",
+                "message": "database writer rejected the connection",
+                "source_ref": "file:1",
+                "level": "ERROR",
+                "logger": "test.database",
+            },
+            {
+                "rendered": "payment gateway timeout while posting request",
+                "message": "payment gateway timeout while posting request",
+                "source_ref": "file:2",
+                "level": "WARN",
+                "logger": "test.payment",
+            },
+            {
+                "rendered": "user login completed successfully",
+                "message": "user login completed successfully",
+                "source_ref": "file:3",
+                "level": "INFO",
+                "logger": "test.auth",
+            },
+        ));
+
+        assertEq("ok", res.status);
+        assertEq(3, res.indexed_count);
+        assertEq(3, store.size());
+
+        res = index.search({"text": "database query failed", "limit": 2});
+        assertEq("ok", res.status);
+        assertEq(2, res.result_count);
+        assertEq("database writer rejected the connection", res.entries[0].message);
+        assertEq("ERROR", res.entries[0].level);
+        assertTrue(res.entries[0].score >= res.entries[1].score);
+
+        res = index.search({"text": "database query failed", "limit": 3, "filter": {"level": "ERROR"}});
+        assertEq(1, res.result_count);
+        assertEq("ERROR", res.entries[0].level);
+
+        index.deleteByIds((res.entries[0].id,));
+        assertEq(2, store.size());
+    }
+
+    private appenderIndexing() {
+        string fn = tmp_location() + DirSep + "logger-semantic-" + get_random_string() + ".log";
+        unlink(fn);
+        on_exit unlink(fn);
+
+        LoggerAppenderFile appender("SEMANTIC", new LoggerLayoutPattern("%m%n"), fn);
+        Logger logger("SemanticAppenderTest", LoggerLevel::getLevelDebug());
+        logger.addAppender(appender);
+        appender.open();
+        logger.error("database replica lag is above threshold");
+        logger.warn("payment gateway timeout on settlement request");
+        logger.info("background cleanup completed");
+        appender.close();
+
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        hash<auto> res = index.indexAppender(appender, {
+            "direction": "forward",
+            "max_entries": 10,
+        });
+        assertEq("ok", res.status);
+        assertEq(3, res.indexed_count);
+        assertEq(3, store.size());
+
+        res = index.search({"text": "database problem", "limit": 1});
+        assertEq(1, res.result_count);
+        assertEq("database replica lag is above threshold", res.entries[0].message);
+        assertTrue(res.entries[0].source_ref != "");
+
+        hash<auto> caps = index.getSemanticSearchCapabilities();
+        assertTrue(caps.searchable);
+        assertTrue(caps.supports_semantic_search);
+        assertEq("semantic-index", caps.source.kind);
+        assertEq("semantic-log-test", caps.source.collection);
+        assertEq(3, caps.source.dimension);
+    }
+
+    private entryTransformRedaction() {
+        string fn = tmp_location() + DirSep + "logger-semantic-redact-" + get_random_string() + ".log";
+        unlink(fn);
+        on_exit unlink(fn);
+
+        LoggerAppenderFile appender("SEMANTIC-REDACT", new LoggerLayoutPattern("%m%n"), fn);
+        Logger logger("SemanticRedactionTest", LoggerLevel::getLevelDebug());
+        logger.addAppender(appender);
+        appender.open();
+        logger.error("api token secret-12345 leaked");
+        appender.close();
+
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        code<hash<auto>(hash<auto>)> redact = hash<auto> sub (hash<auto> entry) {
+            string redacted = entry.rendered;
+            redacted =~ s/secret-[0-9]+/[REDACTED]/g;
+            entry.rendered = redacted;
+            entry.message = redacted;
+            entry.text = redacted;
+            entry.line_hash = "raw-line-hash";
+            return entry;
+        };
+
+        hash<auto> res = index.indexAppender(appender, {
+            "direction": "forward",
+            "entry_transform": redact,
+        });
+        assertEq("ok", res.status);
+        assertEq(1, res.indexed_count);
+        assertEq(1, embedder.documentTexts().size());
+        assertEq("api token [REDACTED] leaked", embedder.documentTexts()[0]);
+
+        hash<auto> payload = store.firstPayload();
+        assertEq("api token [REDACTED] leaked", payload.text);
+        assertEq("api token [REDACTED] leaked", payload.rendered);
+        assertEq("api token [REDACTED] leaked", payload.message);
+        assertEq("raw-line-hash", payload.line_hash);
+        assertFalse(payload.text =~ /secret-12345/);
+    }
+
+    private payloadFieldsAndStableRecordIds() {
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        hash<auto> res = index.indexEntries((
+            {
+                "record_id": "tenant-a-log-1",
+                "rendered": "database writer rejected the connection",
+                "message": "database writer rejected the connection",
+                "source_ref": "file:1",
+                "line_hash": "raw-hash-1",
+                "group_namespace": 1001,
+                "index_id": "log-errors",
+                "appender": "es-main",
+                "source_object": "service-a",
+            },
+        ), {
+            "payload_fields": ("group_namespace", "index_id", "appender", "source_object"),
+        });
+        assertEq("ok", res.status);
+        assertEq(("tenant-a-log-1",), res.record_ids);
+        assertEq(1, store.size());
+
+        hash<auto> payload = store.getRecord("tenant-a-log-1").payload;
+        assertEq(1001, payload.group_namespace);
+        assertEq("log-errors", payload.index_id);
+        assertEq("es-main", payload.appender);
+        assertEq("service-a", payload.source_object);
+        assertEq("raw-hash-1", payload.line_hash);
+
+        res = index.indexEntries((
+            {
+                "record_id": "tenant-a-log-1",
+                "rendered": "database writer connection redacted differently",
+                "message": "database writer connection redacted differently",
+                "source_ref": "file:1",
+                "line_hash": "raw-hash-1",
+            },
+        ));
+        assertEq(("tenant-a-log-1",), res.record_ids);
+        assertEq(1, store.size());
+        assertEq("database writer connection redacted differently", store.getRecord("tenant-a-log-1").payload.text);
+
+        index.indexEntries((
+            {
+                "record_id": "tenant-b-log-1",
+                "rendered": "database writer rejected the connection in another namespace",
+                "message": "database writer rejected the connection in another namespace",
+                "source_ref": "file:2",
+                "line_hash": "raw-hash-tenant-b",
+                "group_namespace": 2002,
+                "index_id": "log-errors",
+            },
+        ), {
+            "payload_fields": ("group_namespace", "index_id"),
+        });
+        hash<auto> search_res = index.search({
+            "text": "database writer",
+            "limit": 10,
+            "filter": {"payload_eq": {"group_namespace": 2002}},
+        });
+        assertEq(1, search_res.result_count);
+        assertEq("tenant-b-log-1", search_res.entries[0].id);
+        assertEq(2002, search_res.entries[0].payload.group_namespace);
+
+        res = index.indexEntries((
+            {
+                "rendered": "payment gateway timeout while posting request",
+                "message": "payment gateway timeout while posting request",
+                "source_ref": "file:2",
+                "line_hash": "raw-hash-2",
+            },
+        ));
+        string generated_id = res.record_ids[0];
+        res = index.indexEntries((
+            {
+                "rendered": "payment gateway timeout while posting request",
+                "message": "payment gateway timeout while posting request",
+                "source_ref": "file:2",
+                "line_hash": "raw-hash-2",
+            },
+        ));
+        assertEq(generated_id, res.record_ids[0]);
+    }
+
+    private negativeSearch() {
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        assertThrows("LOGGER-SEMANTIC-SEARCH-ERROR", "semantic search requires", sub () {
+            index.search({});
+        });
+    }
+}
+
+public class FakeEmbedder inherits QoreRagUtils::AbstractEmbedder {
+    private {
+        list<string> document_texts = ();
+    }
+
+    list<float> encode(string text, *hash<auto> opts) {
+        return vectorFor(text);
+    }
+
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        document_texts += texts;
+        return map vectorFor($1), texts;
+    }
+
+    int getDimension() {
+        return 3;
+    }
+
+    list<string> documentTexts() {
+        return document_texts;
+    }
+
+    private static list<float> vectorFor(string text) {
+        string s = text.lwr();
+        if (s.find("database") >= 0 || s.find("query") >= 0 || s.find("replica") >= 0) {
+            return (1.0, 0.0, 0.0);
+        }
+        if (s.find("timeout") >= 0 || s.find("payment") >= 0 || s.find("gateway") >= 0) {
+            return (0.0, 1.0, 0.0);
+        }
+        if (s.find("login") >= 0 || s.find("user") >= 0 || s.find("auth") >= 0) {
+            return (0.0, 0.0, 1.0);
+        }
+        return (0.2, 0.2, 0.2);
+    }
+}
+
+public class MemoryVectorStore inherits QoreRagUtils::AbstractVectorStore {
+    private {
+        string collection;
+        int dimension;
+        hash<auto> records = {};
+    }
+
+    constructor(string collection, int dimension) {
+        self.collection = collection;
+        self.dimension = dimension;
+    }
+
+    upsert(list<hash<QoreRagUtils::VectorRecord>> records) {
+        foreach hash<QoreRagUtils::VectorRecord> rec in (records) {
+            hash<auto> stored = {};
+            stored{"id"} = rec{"id"};
+            stored{"vector"} = rec{"vector"};
+            stored{"payload"} = rec{"payload"};
+            self.records{rec{"id"}} = stored;
+        }
+    }
+
+    deleteByIds(list<string> ids) {
+        foreach string id in (ids) {
+            remove records{id};
+        }
+    }
+
+    list<hash<QoreRagUtils::VectorSearchResult>> search(list<float> query_vector,
+            int k, *hash<auto> filter) {
+        list<hash<QoreRagUtils::VectorSearchResult>> hits = ();
+        foreach hash<auto> rec in (records.values()) {
+            hash<auto> payload = rec{"payload"} ?? {};
+            if (filter && filter.level && payload.level != filter.level) {
+                continue;
+            }
+            if (filter && filter.payload_eq) {
+                bool matches = True;
+                foreach string key in (keys filter.payload_eq) {
+                    if (!exists payload{key} || payload{key} != filter.payload_eq{key}) {
+                        matches = False;
+                        break;
+                    }
+                }
+                if (!matches) {
+                    continue;
+                }
+            }
+            push hits, <QoreRagUtils::VectorSearchResult>{
+                "id": rec{"id"},
+                "score": dot(query_vector, rec{"vector"}),
+                "payload": payload,
+            };
+        }
+
+        hits = sort(hits, int sub(hash<QoreRagUtils::VectorSearchResult> a,
+                hash<QoreRagUtils::VectorSearchResult> b) {
+            return b.score <=> a.score;
+        });
+
+        return hits ? hits[0..(min(k, hits.size()) - 1)] : ();
+    }
+
+    string getCollection() {
+        return collection;
+    }
+
+    int getDimension() {
+        return dimension;
+    }
+
+    int size() {
+        return records.size();
+    }
+
+    hash<auto> getRecord(string id) {
+        return records{id};
+    }
+
+    hash<auto> firstPayload() {
+        return records.values()[0].payload;
+    }
+
+    private static float dot(list<float> a, list<float> b) {
+        float score = 0.0;
+        for (int i = 0; i < min(a.size(), b.size()); ++i) {
+            score += a[i] * b[i];
+        }
+        return score;
+    }
+}

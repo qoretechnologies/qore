@@ -8,7 +8,7 @@
 %requires Util
 %requires QUnit
 %requires Logger
-%requires RestClient
+%requires RestClientIo
 %requires ElasticSearchLoggerAppender
 
 %try-module json
@@ -17,16 +17,102 @@
 
 %exec-class ElasticSearchLoggerAppenderTest
 
+class FakeElasticSearchRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        string last_method = "";
+        string last_path = "";
+        *auto last_body;
+        *hash<auto> last_headers;
+        bool throw_on_search = False;
+        hash<auto> search_response = {
+            "hits": {
+                "total": {"value": 10},
+                "hits": (
+                    {
+                        "_id": "doc-1",
+                        "_index": "test-logs",
+                        "_score": 1.5,
+                        "_source": {
+                            "@timestamp": "2026-06-06T10:11:12.000Z",
+                            "level": "ERROR",
+                            "level_value": 40000,
+                            "logger": "test.logger",
+                            "thread_id": 123,
+                            "message": "database outage detected",
+                            "location": {"file": "svc.q", "line": 42},
+                            "host": {"name": "host-a"},
+                        },
+                    },
+                    {
+                        "_id": "doc-2",
+                        "_index": "test-logs",
+                        "_score": 1.1,
+                        "_source": {
+                            "@timestamp": "2026-06-06T10:12:12.000Z",
+                            "level": "WARN",
+                            "level_value": 30000,
+                            "logger": "test.logger",
+                            "thread_id": 124,
+                            "message": "payment retry queued",
+                        },
+                    },
+                ),
+            },
+        };
+    }
+
+    constructor() : RestClientIo::RestClientIo({"url": "http://localhost:9200", "data": "json"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        record(method, path, body, hdr);
+        if (throw_on_search && path =~ /_search$/) {
+            throw "REST-RESPONSE-ERROR", "index_not_found_exception";
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": path =~ /_search$/ ? search_response : {"acknowledged": True},
+            "status_code": 200,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
+        record(method, path, body, hdr);
+        return <RestClient::RestResponseInfo>{
+            "body": {"errors": False, "items": ()},
+            "status_code": 200,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    private record(string method, string path, auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_body = body;
+        last_headers = hdr;
+    }
+}
+
 public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
     private {
-        RestClient rest;
+        RestClientIo::RestClientIo rest;
 
         # command-line options
-        const MyOpts = Opts + {
+        const hash<auto> MyOpts = Opts + {
             "url": "u,url=s",
         };
 
-        const OptionColumn = 22;
+        const int OptionColumn = 22;
     }
 
     static checkModule(Test test) {
@@ -38,6 +124,9 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
     constructor() : Test("ElasticSearchLoggerAppender Test", "1.0") {
         addTestCase("constructorTest", \constructorTest());
         addTestCase("documentCreationTest", \documentCreationTest());
+        addTestCase("searchCapabilityTest", \searchCapabilityTest());
+        addTestCase("searchQueryTranslationTest", \searchQueryTranslationTest());
+        addTestCase("searchValidationTest", \searchValidationTest());
         addTestCase("batchingTest", \batchingTest());
         addTestCase("negativeTests", \negativeTests());
 
@@ -133,6 +222,153 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
         assertTrue(doc.host.hasKey("name"));
     }
 
+    #! Test rendered-event search capabilities
+    private searchCapabilityTest() {
+        checkModule(self);
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs-%Y.%m.%d",
+            }
+        );
+
+        hash<auto> caps = appender.getSearchCapabilities();
+        assertTrue(caps.searchable);
+        assertTrue(caps.supports_search);
+        assertEq("elasticsearch", caps.source.kind);
+        assertEq("test", caps.source.appender);
+        assertEq("test-logs-%Y.%m.%d", caps.source.index);
+        assertTrue(caps.time_filter);
+        assertTrue(caps.levels);
+        assertTrue(caps.structured_fields);
+        assertEq(Logger::LoggerSearchUtil::MaxSearchLimit, caps.max_limit);
+
+        assertEq(caps, Logger::LoggerSearchUtil::getAppenderSearchCapabilities(appender));
+    }
+
+    #! Test rendered-event search query translation and normalized results without a live cluster
+    private searchQueryTranslationTest() {
+        checkModule(self);
+        FakeElasticSearchRestClientIo fake();
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            fake,
+            {"index": "test-logs"}
+        );
+
+        hash<auto> res = appender.searchRenderedEvents({
+            "text": "database outage",
+            "match": "phrase",
+            "limit": 2,
+        });
+        assertEq("partial", res.status);
+        assertEq("POST", fake.last_method);
+        assertEq("test-logs/_search", fake.last_path);
+        assertEq(0, fake.last_body.from);
+        assertEq(2, fake.last_body.size);
+        assertEq("phrase", fake.last_body.query.bool.must[0].multi_match.type);
+        assertEq("database outage", fake.last_body.query.bool.must[0].multi_match.query);
+        assertEq("database outage detected", res.entries[0].message);
+        assertEq("ERROR", res.entries[0].level);
+        assertTrue(res.entries[0].line_hash != "");
+        assertEq("doc-1", res.entries[0].source_ref);
+        assertEq("test-logs", res.entries[0].metadata.index);
+        assertEq("2", res.next_cursor);
+
+        res = appender.searchRenderedEvents({
+            "terms": ("database", "payment"),
+            "match": "any",
+            "direction": "forward",
+            "cursor": "3",
+            "limit": 7,
+        });
+        assertEq(3, fake.last_body.from);
+        assertEq(7, fake.last_body.size);
+        assertEq("asc", fake.last_body.sort[0]."@timestamp".order);
+        assertEq(2, fake.last_body.query.bool.must[0].bool.should.size());
+        assertEq(1, fake.last_body.query.bool.must[0].bool.minimum_should_match);
+        assertEq("5", res.next_cursor);
+
+        appender.searchRenderedEvents({
+            "query": "database",
+            "terms": ("tenant-a", "api"),
+            "match": "all",
+            "level": ("ERROR", "WARN"),
+            "level_min": "WARN",
+            "since": "2026-06-01T00:00:00Z",
+            "until": "2026-06-07T00:00:00Z",
+        });
+        assertEq(3, fake.last_body.query.bool.must.size());
+        assertEq("and", fake.last_body.query.bool.must[0].multi_match.operator);
+        assertEq(("ERROR", "WARN"), fake.last_body.query.bool.filter[0].terms.level);
+        assertEq(30000, fake.last_body.query.bool.filter[1].range.level_value.gte);
+        assertEq("2026-06-01T00:00:00Z", fake.last_body.query.bool.filter[2].range."@timestamp".gte);
+        assertEq("2026-06-07T00:00:00Z", fake.last_body.query.bool.filter[2].range."@timestamp".lte);
+
+        FakeElasticSearchRestClientIo override_fake();
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender override_appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            override_fake,
+            {"index": "configured-logs", "allow_search_index_override": True}
+        );
+        res = override_appender.searchRenderedEvents({"index": "tenant-logs", "text": "database"});
+        assertEq("tenant-logs/_search", override_fake.last_path);
+        assertEq("tenant-logs", res.source.resolved_index);
+
+        FakeElasticSearchRestClientIo unavailable_fake();
+        unavailable_fake.throw_on_search = True;
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender unavailable_appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            unavailable_fake,
+            {"index": "missing-logs"}
+        );
+        res = unavailable_appender.searchRenderedEvents({"text": "database"});
+        assertEq("unavailable", res.status);
+        assertTrue(res.reason =~ /index_not_found/);
+    }
+
+    #! Test unsupported and invalid search fields are reported instead of silently ignored
+    private searchValidationTest() {
+        checkModule(self);
+        FakeElasticSearchRestClientIo fake();
+        ElasticSearchLoggerAppender::ElasticSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            fake,
+            {"index": "test-logs"}
+        );
+
+        hash<auto> res = appender.searchRenderedEvents({"text": "secret", "regex": True});
+        assertEq("invalid", res.status);
+        assertEq("unsupported-regex", res.reason);
+        assertEq("", fake.last_method);
+
+        res = appender.searchRenderedEvents({"text": "secret", "case_sensitive": True});
+        assertEq("invalid", res.status);
+        assertEq("unsupported-case-sensitive", res.reason);
+
+        res = appender.searchRenderedEvents({"text": "secret", "index": "other-logs"});
+        assertEq("invalid", res.status);
+        assertEq("unsupported-index-override", res.reason);
+
+        res = appender.searchRenderedEvents({"text": "secret", "direction": "sideways"});
+        assertEq("invalid", res.status);
+        assertEq("invalid-direction", res.reason);
+
+        res = appender.searchRenderedEvents({"text": "secret", "match": "none"});
+        assertEq("invalid", res.status);
+        assertEq("invalid-match", res.reason);
+
+        res = appender.searchRenderedEvents({"text": "secret", "level_min": "BOGUS"});
+        assertEq("invalid", res.status);
+        assertEq("invalid-level", res.reason);
+    }
+
     #! Test batching behavior
     private batchingTest() {
         checkModule(self);
@@ -157,7 +393,7 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
         on_exit {
             # Clean up test index
             try {
-                rest.del(index);
+                rest.restDel(index, NOTHING);
             } catch () {}
         }
 
@@ -182,12 +418,12 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
 
         # Refresh index
         try {
-            rest.post(index + "/_refresh");
+            rest.restPost(index + "/_refresh", {});
         } catch () {}
 
         # Verify documents in ES
         try {
-            hash<auto> response = rest.post(index + "/_search").body;
+            hash<auto> response = rest.restPost(index + "/_search", {}).body;
             assertTrue(response.hits.total.value >= 3);
         } catch (hash<ExceptionInfo> ex) {
             # Index might not exist yet if first flush didn't work
@@ -244,9 +480,9 @@ public class ElasticSearchLoggerAppenderTest inherits QUnit::Test {
         }
 
         try {
-            rest = new RestClient({"url": url});
+            rest = new RestClientIo::RestClientIo({"url": url, "data": "json"});
             # Test connection
-            rest.get("_cluster/health");
+            rest.restGet("_cluster/health");
         } catch (hash<ExceptionInfo> ex) {
             if (m_options.verbose) {
                 stderr.printf("%s: %s\n", ex.err, ex.desc);

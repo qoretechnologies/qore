@@ -260,7 +260,7 @@ public hashdecl TokenizerRequirement {
 }
 
 #! Resolves a @ref TokenizerRequirement to a parsed \c tokenizer.json
-/** Pluggable contract implemented by consumers (e.g. Qorus), which know where
+/** Pluggable contract implemented by consumers, which know where
     tokenizers are installed/bundled.  The core performs no network or filesystem
     installation; an implementation may consult pre-installed/bundled tokenizers
     and (optionally, on its own terms) retrieve missing ones.
@@ -840,7 +840,13 @@ public class AbstractVectorStore {
     #! Searches for the K most similar vectors to a query vector
     /** @param query_vector the query embedding
         @param k how many results to return
-        @param filter optional backend-specific filter (e.g. payload predicates)
+        @param filter optional payload filter.  Implementations should support
+            the portable \c payload_eq form, for example:
+            @code{.py}
+{"payload_eq": {"group_namespace": 123, "index_id": "log-errors"}}
+            @endcode
+            Backend-native filters remain supported by concrete providers for
+            advanced callers.
 
         @return list of @ref VectorSearchResult hashes ordered by descending similarity
     */
@@ -954,7 +960,7 @@ public class AbstractChunkerFactory {
 public class RagProviderRegistry {
     public {
         #! Map of embedder backend names to providing modules
-        const EmbedderModuleMap = {
+        const hash<string, string> EmbedderModuleMap = {
             "openai":     "OpenAiRestClient",
             "gemini":     "GeminiRestClient",
             "voyage":     "VoyageRestClient",
@@ -972,7 +978,7 @@ public class RagProviderRegistry {
         };
 
         #! Map of reranker backend names to providing modules
-        const RerankerModuleMap = {
+        const hash<string, string> RerankerModuleMap = {
             "voyage":       "VoyageRestClient",
             "local-onnx":   "QoreRagUtils",
             "http-gateway": "QoreRagUtils",
@@ -985,14 +991,15 @@ public class RagProviderRegistry {
             supplies the matching factory.  Additional vector stores can be
             registered at runtime via @ref registerVectorStoreFactory().
         */
-        const VectorStoreModuleMap = {
-            "qdrant":      "QdrantDataProvider",
-            "pgvector":    "QoreRagUtils",
+        const hash<string, string> VectorStoreModuleMap = {
             "chroma":      "ChromaRestClient",
-            "mongo-atlas": "MongoDbDataProvider",
-            "pinecone":    "PineconeRestClient",
-            "weaviate":    "WeaviateRestClient",
             "milvus":      "MilvusRestClient",
+            "mongo-atlas": "MongoDbDataProvider",
+            "opensearch":  "OpenSearchDataProvider",
+            "pgvector":    "QoreRagUtils",
+            "pinecone":    "PineconeRestClient",
+            "qdrant":      "QdrantDataProvider",
+            "weaviate":    "WeaviateRestClient",
         };
 
         #! Map of chunker strategy names to providing modules
@@ -1000,7 +1007,7 @@ public class RagProviderRegistry {
             supplies the matching factory.  Additional chunkers can be
             registered at runtime via @ref registerChunkerFactory().
         */
-        const ChunkerModuleMap = {
+        const hash<string, string> ChunkerModuleMap = {
             "structured":   "QoreRagUtils",
             "fixed":        "QoreRagUtils",
             "llama-parse":  "LlamaParseRestClient",

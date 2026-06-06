@@ -14,6 +14,7 @@ class ColumnarResultTest inherits QUnit::Test {
         addTestCase("mixed buffer round trip", \mixedBufferRoundTrip());
         addTestCase("sliced buffer round trip", \slicedBufferRoundTrip());
         addTestCase("row result round trip", \rowResultRoundTrip());
+        addTestCase("scale-0 numeric narrowing", \scaleZeroNumericNarrowing());
         set_return_value(main());
     }
 
@@ -43,6 +44,34 @@ class ColumnarResultTest inherits QUnit::Test {
 
         ColumnarResult copy = roundTrip(result);
         assertColumnarEq(result, copy);
+    }
+
+    private scaleZeroNumericNarrowing() {
+        # a scale-0 numeric/decimal column with precision <= 18 must narrow to a dense
+        # buffer<int64> (Qore integer) to match the scalar/row fetch paths; scale > 0 or
+        # precision >= 19 must remain buffer<decimal128> (Qore number); driver-agnostic, applied
+        # in the shared libqore columnar layer
+        ColumnarResult result = ColumnarResult::fromColumnHash({
+            "n15_0": (2n, 3n, NOTHING),
+            "n18_0": (2n, 3n, NOTHING),
+            "n15_2": (2.50n, 3.25n, NOTHING),
+            "n20_0": (2n, 3n, NOTHING),
+        }, {
+            "n15_0": {"native_type": "numeric(15,0)", "nullable": True},
+            "n18_0": {"native_type": "numeric(18,0)", "nullable": True},
+            "n15_2": {"native_type": "numeric(15,2)", "nullable": True},
+            "n20_0": {"native_type": "numeric(20,0)", "nullable": True},
+        });
+
+        hash<auto> columns = result.toColumnHash();
+        # scale-0, precision <= 18 -> integer
+        assertEq("buffer<*int64>", columns.n15_0.fullType(), "n15_0 narrows to int64");
+        assertEq("buffer<*int64>", columns.n18_0.fullType(), "n18_0 narrows to int64");
+        assertEq((2, 3, NOTHING), columns.n15_0.toList(), "n15_0 values");
+        # scale > 0 -> number
+        assertEq("buffer<*decimal128>", columns.n15_2.fullType(), "n15_2 stays decimal128");
+        # precision >= 19 -> number
+        assertEq("buffer<*decimal128>", columns.n20_0.fullType(), "n20_0 stays decimal128");
     }
 
     private ColumnarResult makeMixedResult() {

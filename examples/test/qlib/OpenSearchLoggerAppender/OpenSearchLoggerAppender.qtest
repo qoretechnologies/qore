@@ -1,0 +1,493 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires RestClientIo
+%requires OpenSearchLoggerAppender
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class OpenSearchLoggerAppenderTest
+
+class FakeOpenSearchRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        string last_method = "";
+        string last_path = "";
+        *auto last_body;
+        *hash<auto> last_headers;
+        bool throw_on_search = False;
+        hash<auto> search_response = {
+            "hits": {
+                "total": {"value": 10},
+                "hits": (
+                    {
+                        "_id": "doc-1",
+                        "_index": "test-logs",
+                        "_score": 1.5,
+                        "_source": {
+                            "@timestamp": "2026-06-06T10:11:12.000Z",
+                            "level": "ERROR",
+                            "level_value": 40000,
+                            "logger": "test.logger",
+                            "thread_id": 123,
+                            "message": "database outage detected",
+                            "location": {"file": "svc.q", "line": 42},
+                            "host": {"name": "host-a"},
+                        },
+                    },
+                    {
+                        "_id": "doc-2",
+                        "_index": "test-logs",
+                        "_score": 1.1,
+                        "_source": {
+                            "@timestamp": "2026-06-06T10:12:12.000Z",
+                            "level": "WARN",
+                            "level_value": 30000,
+                            "logger": "test.logger",
+                            "thread_id": 124,
+                            "message": "payment retry queued",
+                        },
+                    },
+                ),
+            },
+        };
+    }
+
+    constructor() : RestClientIo::RestClientIo({"url": "http://localhost:9200", "data": "json"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        record(method, path, body, hdr);
+        if (throw_on_search && path =~ /_search$/) {
+            throw "REST-RESPONSE-ERROR", "index_not_found_exception";
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": path =~ /_search$/ ? search_response : {"acknowledged": True},
+            "status_code": 200,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
+        record(method, path, body, hdr);
+        return <RestClient::RestResponseInfo>{
+            "body": {"errors": False, "items": ()},
+            "status_code": 200,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    private record(string method, string path, auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_body = body;
+        last_headers = hdr;
+    }
+}
+
+public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
+    private {
+        RestClientIo::RestClientIo rest;
+
+        # command-line options
+        const hash<auto> MyOpts = Opts + {
+            "url": "u,url=s",
+        };
+
+        const int OptionColumn = 22;
+    }
+
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    constructor() : Test("OpenSearchLoggerAppender Test", "1.0") {
+        addTestCase("constructorTest", \constructorTest());
+        addTestCase("documentCreationTest", \documentCreationTest());
+        addTestCase("searchCapabilityTest", \searchCapabilityTest());
+        addTestCase("searchQueryTranslationTest", \searchQueryTranslationTest());
+        addTestCase("searchValidationTest", \searchValidationTest());
+        addTestCase("batchingTest", \batchingTest());
+        addTestCase("negativeTests", \negativeTests());
+
+        setupConnection();
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    #! Test constructor validation
+    private constructorTest() {
+        checkModule(self);
+        # Test missing url
+        try {
+            new OpenSearchLoggerAppender::OpenSearchLoggerAppender(
+                "test",
+                new LoggerLayoutPattern("%m%n"),
+                {"index": "test-logs"}
+            );
+            fail("Expected exception for missing url");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("OPENSEARCH-APPENDER-ERROR", ex.err);
+            assertTrue(ex.desc.find("url") >= 0);
+        }
+
+        # Test missing index
+        try {
+            new OpenSearchLoggerAppender::OpenSearchLoggerAppender(
+                "test",
+                new LoggerLayoutPattern("%m%n"),
+                {"url": "http://localhost:9200"}
+            );
+            fail("Expected exception for missing index");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("OPENSEARCH-APPENDER-ERROR", ex.err);
+            assertTrue(ex.desc.find("index") >= 0);
+        }
+
+        # Test valid constructor (doesn't connect until open)
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs-%Y.%m.%d",
+                "batch_size": 50,
+                "flush_interval_ms": 1000,
+            }
+        );
+        assertEq("test-logs-%Y.%m.%d", appender.getIndexPattern());
+        assertEq(50, appender.getBatchSize());
+        assertEq(1000, appender.getFlushIntervalMs());
+    }
+
+    #! Test document creation from log events
+    private documentCreationTest() {
+        checkModule(self);
+        # Create appender with mock-like settings (won't actually connect)
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs",
+            }
+        );
+
+        # Create a test log event
+        date ts = now_us();
+        LoggerEvent event(
+            "test.fqcn",
+            "TestLogger",
+            LoggerLevel::getLevelError(),
+            "Test message: %d",
+            (42,),
+            NOTHING,
+            gettid(),
+            ts,
+            NOTHING
+        );
+
+        # Serialize the event
+        hash<auto> doc = appender.serializeImpl(event);
+
+        # Verify document structure
+        assertTrue(doc.hasKey("@timestamp"));
+        assertEq("ERROR", doc.level);
+        assertEq(40000, doc.level_value);
+        assertEq("TestLogger", doc.logger);
+        assertEq("Test message: 42", doc.message);
+        assertEq(gettid(), doc.thread_id);
+        assertTrue(doc.hasKey("host"));
+        assertTrue(doc.host.hasKey("name"));
+    }
+
+    #! Test rendered-event search capabilities
+    private searchCapabilityTest() {
+        checkModule(self);
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://localhost:9200",
+                "index": "test-logs-%Y.%m.%d",
+            }
+        );
+
+        hash<auto> caps = appender.getSearchCapabilities();
+        assertTrue(caps.searchable);
+        assertTrue(caps.supports_search);
+        assertEq("opensearch", caps.source.kind);
+        assertEq("test", caps.source.appender);
+        assertEq("test-logs-%Y.%m.%d", caps.source.index);
+        assertTrue(caps.time_filter);
+        assertTrue(caps.levels);
+        assertTrue(caps.structured_fields);
+        assertEq(Logger::LoggerSearchUtil::MaxSearchLimit, caps.max_limit);
+
+        assertEq(caps, Logger::LoggerSearchUtil::getAppenderSearchCapabilities(appender));
+    }
+
+    #! Test rendered-event search query translation and normalized results without a live cluster
+    private searchQueryTranslationTest() {
+        checkModule(self);
+        FakeOpenSearchRestClientIo fake();
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            fake,
+            {"index": "test-logs"}
+        );
+
+        hash<auto> res = appender.searchRenderedEvents({
+            "text": "database outage",
+            "match": "phrase",
+            "limit": 2,
+        });
+        assertEq("partial", res.status);
+        assertEq("POST", fake.last_method);
+        assertEq("test-logs/_search", fake.last_path);
+        assertEq(0, fake.last_body.from);
+        assertEq(2, fake.last_body.size);
+        assertEq("phrase", fake.last_body.query.bool.must[0].multi_match.type);
+        assertEq("database outage", fake.last_body.query.bool.must[0].multi_match.query);
+        assertEq("database outage detected", res.entries[0].message);
+        assertEq("ERROR", res.entries[0].level);
+        assertTrue(res.entries[0].line_hash != "");
+        assertEq("doc-1", res.entries[0].source_ref);
+        assertEq("test-logs", res.entries[0].metadata.index);
+        assertEq("2", res.next_cursor);
+
+        res = appender.searchRenderedEvents({
+            "terms": ("database", "payment"),
+            "match": "any",
+            "direction": "forward",
+            "cursor": "3",
+            "limit": 7,
+        });
+        assertEq(3, fake.last_body.from);
+        assertEq(7, fake.last_body.size);
+        assertEq("asc", fake.last_body.sort[0]."@timestamp".order);
+        assertEq(2, fake.last_body.query.bool.must[0].bool.should.size());
+        assertEq(1, fake.last_body.query.bool.must[0].bool.minimum_should_match);
+        assertEq("5", res.next_cursor);
+
+        appender.searchRenderedEvents({
+            "query": "database",
+            "terms": ("tenant-a", "api"),
+            "match": "all",
+            "level": ("ERROR", "WARN"),
+            "level_min": "WARN",
+            "since": "2026-06-01T00:00:00Z",
+            "until": "2026-06-07T00:00:00Z",
+        });
+        assertEq(3, fake.last_body.query.bool.must.size());
+        assertEq("and", fake.last_body.query.bool.must[0].multi_match.operator);
+        assertEq(("ERROR", "WARN"), fake.last_body.query.bool.filter[0].terms.level);
+        assertEq(30000, fake.last_body.query.bool.filter[1].range.level_value.gte);
+        assertEq("2026-06-01T00:00:00Z", fake.last_body.query.bool.filter[2].range."@timestamp".gte);
+        assertEq("2026-06-07T00:00:00Z", fake.last_body.query.bool.filter[2].range."@timestamp".lte);
+
+        FakeOpenSearchRestClientIo override_fake();
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender override_appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            override_fake,
+            {"index": "configured-logs", "allow_search_index_override": True}
+        );
+        res = override_appender.searchRenderedEvents({"index": "tenant-logs", "text": "database"});
+        assertEq("tenant-logs/_search", override_fake.last_path);
+        assertEq("tenant-logs", res.source.resolved_index);
+
+        FakeOpenSearchRestClientIo unavailable_fake();
+        unavailable_fake.throw_on_search = True;
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender unavailable_appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            unavailable_fake,
+            {"index": "missing-logs"}
+        );
+        res = unavailable_appender.searchRenderedEvents({"text": "database"});
+        assertEq("unavailable", res.status);
+        assertTrue(res.reason =~ /index_not_found/);
+    }
+
+    #! Test unsupported and invalid search fields are reported instead of silently ignored
+    private searchValidationTest() {
+        checkModule(self);
+        FakeOpenSearchRestClientIo fake();
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            fake,
+            {"index": "test-logs"}
+        );
+
+        hash<auto> res = appender.searchRenderedEvents({"text": "secret", "regex": True});
+        assertEq("invalid", res.status);
+        assertEq("unsupported-regex", res.reason);
+        assertEq("", fake.last_method);
+
+        res = appender.searchRenderedEvents({"text": "secret", "case_sensitive": True});
+        assertEq("invalid", res.status);
+        assertEq("unsupported-case-sensitive", res.reason);
+
+        res = appender.searchRenderedEvents({"text": "secret", "index": "other-logs"});
+        assertEq("invalid", res.status);
+        assertEq("unsupported-index-override", res.reason);
+
+        res = appender.searchRenderedEvents({"text": "secret", "direction": "sideways"});
+        assertEq("invalid", res.status);
+        assertEq("invalid-direction", res.reason);
+
+        res = appender.searchRenderedEvents({"text": "secret", "match": "none"});
+        assertEq("invalid", res.status);
+        assertEq("invalid-match", res.reason);
+
+        res = appender.searchRenderedEvents({"text": "secret", "level_min": "BOGUS"});
+        assertEq("invalid", res.status);
+        assertEq("invalid-level", res.reason);
+    }
+
+    #! Test batching behavior
+    private batchingTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create unique index for this test
+        string index = "test-logs-" + string(clock_getmicros());
+
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            rest,
+            {
+                "index": index,
+                "batch_size": 5,
+                "flush_interval_ms": 60000,  # Long interval so we control flushing
+            }
+        );
+
+        on_exit {
+            # Clean up test index
+            try {
+                rest.restDel(index, NOTHING);
+            } catch () {}
+        }
+
+        # Open appender
+        appender.open();
+        on_exit appender.close();
+
+        # Create logger and attach appender
+        Logger logger("BatchTest", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+
+        # Log 3 events (less than batch size - should not flush yet)
+        logger.info("Message 1");
+        logger.info("Message 2");
+        logger.info("Message 3");
+
+        # Force flush
+        appender.flush();
+
+        # Wait a moment for OpenSearch to index
+        sleep(1s);
+
+        # Refresh index
+        try {
+            rest.restPost(index + "/_refresh", {});
+        } catch () {}
+
+        # Verify documents in OpenSearch
+        try {
+            hash<auto> response = rest.restPost(index + "/_search", {}).body;
+            assertTrue(response.hits.total.value >= 3);
+        } catch (hash<ExceptionInfo> ex) {
+            # Index might not exist yet if first flush didn't work
+            if (ex.desc !~ /index_not_found/) {
+                rethrow;
+            }
+        }
+    }
+
+    #! Negative tests
+    private negativeTests() {
+        checkModule(self);
+        # Test with REST client constructor - missing index
+        if (rest) {
+            try {
+                new OpenSearchLoggerAppender::OpenSearchLoggerAppender(
+                    "test",
+                    new LoggerLayoutPattern("%m%n"),
+                    rest,
+                    {}  # Missing index
+                );
+                fail("Expected exception for missing index");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("OPENSEARCH-APPENDER-ERROR", ex.err);
+            }
+        }
+
+        # Test that we can create appender even without valid connection
+        # (connection errors happen on flush, not construction)
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
+            "test",
+            new LoggerLayoutPattern("%m%n"),
+            {
+                "url": "http://invalid-host-that-does-not-exist:9200",
+                "index": "test-logs",
+                "batch_size": 1,
+            }
+        );
+        assertTrue(True);  # Construction succeeded
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-u,--url=ARG", "URL for the OpenSearch server instance", OptionColumn);
+    }
+
+    private setupConnection() {
+        *string url = m_options.url ?? ENV.OPENSEARCH_URL;
+        if (!url) {
+            if (m_options.verbose) {
+                stderr.print("missing --url option or OPENSEARCH_URL environment variable\n");
+            }
+            return;
+        }
+
+        try {
+            rest = new RestClientIo::RestClientIo({"url": url, "data": "json"});
+            # Test connection
+            rest.restGet("_cluster/health");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                stderr.printf("%s: %s\n", ex.err, ex.desc);
+            }
+            delete rest;
+        }
+    }
+}

@@ -1,0 +1,528 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LoggerSemanticSearch.qm Generic semantic search support for Logger appenders
+
+/*  LoggerSemanticSearch.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires Logger
+%requires(reexport) QoreRagTypes
+
+module LoggerSemanticSearch {
+    version = "1.0";
+    desc = "user module providing generic semantic log search APIs";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage LoggerSemanticSearch Module
+
+    @tableofcontents
+
+    @section loggersemanticsearchintro Introduction to the LoggerSemanticSearch Module
+
+    The %LoggerSemanticSearch module connects the generic rendered-event search
+    API in @ref loggerintro "Logger" with the provider-neutral vector-store and
+    embedder contracts from @ref qoreragtypesintro "QoreRagTypes".
+
+    It allows any searchable logger appender to be indexed into a separate
+    semantic store.  This is especially useful for file-backed appenders: the
+    original log files remain the authoritative rendered log history while a
+    separate vector index stores embeddings and metadata for similarity search.
+
+    @par Important Security Note
+
+    This module does not redact log content.  It is a generic trusted API that
+    persists rendered log text and metadata into the configured vector store.
+    Callers exposing results across a trust boundary must apply their own access
+    control, redaction, retention, and evidence-persistence policy.
+
+    @par Example
+
+    @code{.py}
+%requires Logger
+%requires LoggerSemanticSearch
+%requires OpenSearchDataProvider
+%requires OpenAiRestClient
+
+hash<EmbedderConfig> embedder_cfg = {
+    "backend": "openai",
+    "model": "text-embedding-3-small",
+    "api_key": ENV.OPENAI_API_KEY,
+};
+
+hash<VectorStoreConfig> store_cfg = {
+    "backend": "opensearch",
+    "collection": "log-semantic-index",
+    "url": "http://localhost:9200",
+    "options": {
+        "vector_field": "embedding",
+        "dimension": 1536,
+    },
+};
+
+LoggerSemanticSearchIndex semantic_index(embedder_cfg, store_cfg);
+
+# Index searchable rendered history from any Logger appender.
+semantic_index.indexAppender(file_appender, {
+    "direction": "forward",
+    "include_rotated": True,
+    "max_entries": 1000,
+});
+
+hash<auto> result = semantic_index.search({
+    "text": "database connection refused during order processing",
+    "limit": 5,
+});
+    @endcode
+
+    @section loggersemanticsearchrelnotes Release Notes
+
+    @subsection loggersemanticsearchv10 LoggerSemanticSearch v1.0
+    - Initial release with appender indexing, direct-entry indexing, and
+      backend-neutral semantic search over QoreRagTypes vector stores.
+*/
+
+#! Public namespace for generic semantic Logger search
+public namespace LoggerSemanticSearch {
+#! Backend-neutral semantic index for rendered Logger entries
+/** This class composes an @ref QoreRagUtils::AbstractEmbedder and an
+    @ref QoreRagUtils::AbstractVectorStore.  It can index rendered entries
+    returned by @ref Qore::Logger::LoggerSearchUtil "LoggerSearchUtil" or
+    caller-supplied entry hashes, then query the vector store by semantic
+    similarity.
+
+    @par Entry Payload
+
+    Indexed records store the rendered text plus source metadata in the vector
+    payload.  The vector store remains backend-specific; this class only uses
+    the provider-neutral @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore"
+    methods.
+*/
+public class LoggerSemanticSearchIndex {
+    public {
+        #! Default number of source log entries requested per indexing page
+        const int DefaultIndexPageSize = 100;
+        #! Maximum source log entries requested per indexing page
+        const int MaxIndexPageSize = 200;
+        #! Default maximum entries indexed from one appender call
+        const int DefaultMaxIndexEntries = 1000;
+        #! Hard maximum entries indexed from one appender call
+        const int MaxIndexEntries = 10000;
+        #! Default embedding batch size
+        const int DefaultEmbeddingBatchSize = 64;
+        #! Default maximum pages read from an appender in one indexing call
+        const int DefaultMaxIndexPages = 100;
+        #! Default semantic search result count
+        const int DefaultSearchLimit = 10;
+        #! Maximum semantic search result count
+        const int MaxSearchLimit = 200;
+    }
+
+    private {
+        #! Embedder used to produce query and document vectors
+        QoreRagUtils::AbstractEmbedder embedder;
+        #! Vector store that persists semantic log records
+        QoreRagUtils::AbstractVectorStore vector_store;
+        #! Stable source id prefix used in generated record ids
+        string id_prefix = "logger-semantic";
+    }
+
+    #! Creates the semantic index from concrete component objects
+    /** @param embedder embedder used for document and query vectors
+        @param vector_store vector store used to persist and search records
+        @param options optional settings:
+            - \c id_prefix: stable prefix for generated deterministic record ids
+    */
+    constructor(QoreRagUtils::AbstractEmbedder embedder,
+            QoreRagUtils::AbstractVectorStore vector_store,
+            *hash<auto> options) {
+        self.embedder = embedder;
+        self.vector_store = vector_store;
+        if (options.id_prefix) {
+            id_prefix = string(options.id_prefix);
+        }
+    }
+
+    #! Creates the semantic index from provider registry configuration hashes
+    /** @param embedder_config provider-neutral embedder configuration
+        @param vector_store_config provider-neutral vector-store configuration
+        @param options optional settings; see the concrete-object constructor
+
+        @throw RAG-CONFIG-ERROR an embedder or vector-store backend is unknown
+    */
+    constructor(hash<QoreRagUtils::EmbedderConfig> embedder_config,
+            hash<QoreRagUtils::VectorStoreConfig> vector_store_config,
+            *hash<auto> options) {
+        embedder = QoreRagUtils::RagProviderRegistry::createEmbedder(embedder_config);
+        vector_store = QoreRagUtils::RagProviderRegistry::createVectorStore(vector_store_config);
+        if (options.id_prefix) {
+            id_prefix = string(options.id_prefix);
+        }
+    }
+
+    #! Returns generic semantic-search capabilities
+    /** @return capability metadata for the configured semantic index */
+    public hash<auto> getSemanticSearchCapabilities() {
+        hash<auto> source = {};
+        source{"kind"} = "semantic-index";
+        source{"collection"} = vector_store.getCollection();
+        source{"vector_store_class"} = get_class_name(vector_store);
+        source{"embedder_class"} = get_class_name(embedder);
+
+        try {
+            source{"dimension"} = vector_store.getDimension();
+        } catch () {}
+
+        return {
+            "searchable": True,
+            "supports_semantic_search": True,
+            "supports_indexing": True,
+            "source": source,
+            "payload_contains_rendered_text": True,
+            "redacted": False,
+            "default_limit": DefaultSearchLimit,
+            "max_limit": MaxSearchLimit,
+        };
+    }
+
+    #! Returns the embedder used by this index
+    /** @return the configured embedder */
+    public QoreRagUtils::AbstractEmbedder getEmbedder() {
+        return embedder;
+    }
+
+    #! Returns the vector store used by this index
+    /** @return the configured vector store */
+    public QoreRagUtils::AbstractVectorStore getVectorStore() {
+        return vector_store;
+    }
+
+    #! Indexes rendered history from a searchable Logger appender
+    /** This method calls @ref Qore::Logger::LoggerSearchUtil::searchRenderedEvents()
+        one or more times, embeds returned rendered entries, and upserts them
+        to the configured vector store.
+
+        @param appender logger appender to index
+        @param request generic rendered-event search request plus optional
+            indexing controls:
+            - \c max_entries: maximum number of matched entries to index
+            - \c page_limit: search page size
+            - \c max_pages: maximum search pages to request
+            - \c id_prefix: override id prefix for this call
+            - \c embed_options: per-call embedder options
+            - \c entry_transform: callback receiving each raw search entry and returning the entry to index
+            - \c payload_fields: list of entry field names copied to top-level vector payloads
+        @return indexing summary with counts, source metadata, and continuation cursor
+    */
+    public hash<auto> indexAppender(Logger::LoggerAppender appender, *hash<auto> request) {
+        hash<auto> req = request ?? {};
+        int max_entries = normalizeBoundedInt(req.max_entries, DefaultMaxIndexEntries, MaxIndexEntries);
+        int page_limit = normalizeBoundedInt(req.page_limit ?? req.limit, DefaultIndexPageSize, MaxIndexPageSize);
+        int max_pages = normalizeBoundedInt(req.max_pages, DefaultMaxIndexPages, DefaultMaxIndexPages);
+        int indexed = 0;
+        int scanned_events = 0;
+        int scanned_bytes = 0;
+        int pages = 0;
+        *string next_cursor = req.cursor;
+        *string reason;
+        hash<auto> last_result;
+        list<string> record_ids = ();
+
+        hash<auto> search_req;
+        if (req.search_request) {
+            search_req += req.search_request;
+        } else {
+            search_req += req;
+        }
+        remove search_req.max_entries;
+        remove search_req.page_limit;
+        remove search_req.max_pages;
+        remove search_req.id_prefix;
+        remove search_req.embed_options;
+        remove search_req.embedding_batch_size;
+        remove search_req.entry_transform;
+        remove search_req.payload_fields;
+
+        while (indexed < max_entries && pages < max_pages) {
+            search_req.limit = min(page_limit, max_entries - indexed);
+            if (next_cursor) {
+                search_req.cursor = next_cursor;
+            } else {
+                remove search_req.cursor;
+            }
+
+            last_result = Logger::LoggerSearchUtil::searchRenderedEvents(appender, search_req);
+            if (last_result.status == "invalid" || last_result.status == "unavailable") {
+                return {
+                    "status": last_result.status,
+                    "source": last_result.source,
+                    "capabilities": getSemanticSearchCapabilities(),
+                    "indexed_count": indexed,
+                    "record_ids": record_ids,
+                    "scanned_events": scanned_events,
+                    "scanned_bytes": scanned_bytes,
+                    "reason": last_result.reason,
+                };
+            }
+
+            scanned_events += int(last_result.scanned_events ?? 0);
+            scanned_bytes += int(last_result.scanned_bytes ?? 0);
+
+            hash<auto> index_result = indexEntries(last_result.entries, req);
+            indexed += int(index_result.indexed_count ?? 0);
+            record_ids += index_result.record_ids ?? ();
+            ++pages;
+
+            next_cursor = last_result.next_cursor;
+            if (!next_cursor || !(last_result.entries ?? ()).size()) {
+                break;
+            }
+        }
+
+        if (pages >= max_pages && next_cursor) {
+            reason = "max-pages";
+        }
+
+        string status = next_cursor ? "partial" : "ok";
+        return {
+            "status": status,
+            "source": last_result.source,
+            "capabilities": getSemanticSearchCapabilities(),
+            "indexed_count": indexed,
+            "record_ids": record_ids,
+            "next_cursor": next_cursor,
+            "scanned_events": scanned_events,
+            "scanned_bytes": scanned_bytes,
+            "truncated": next_cursor ? True : False,
+            "reason": reason,
+        };
+    }
+
+    #! Indexes caller-supplied rendered log entries
+    /** @param entries list of entry hashes; each entry should contain
+            \c rendered, \c message, or \c text
+        @param options optional settings:
+            - \c id_prefix: stable prefix for generated ids
+            - \c embed_options: per-call embedder options
+            - \c embedding_batch_size: number of entries to embed per batch
+            - \c entry_transform: callback receiving each entry and returning the entry to index
+            - \c payload_fields: list of entry field names copied to top-level vector payloads
+        @return indexing summary with generated record ids
+    */
+    public hash<auto> indexEntries(list<hash<auto>> entries, *hash<auto> options) {
+        hash<auto> opts = options ?? {};
+        *code<hash<auto>(hash<auto>)> entry_transform = opts.entry_transform;
+        list<hash<auto>> pending_entries = ();
+        list<string> texts = ();
+        list<string> record_ids = ();
+        int batch_size = normalizeBoundedInt(opts.embedding_batch_size, DefaultEmbeddingBatchSize,
+            DefaultIndexPageSize);
+
+        foreach hash<auto> entry in (entries) {
+            if (entry_transform) {
+                entry = entry_transform(entry);
+            }
+            string text = getEntryText(entry);
+            if (!text.val()) {
+                continue;
+            }
+            push pending_entries, entry;
+            push texts, text;
+        }
+
+        for (int start = 0; start < pending_entries.size(); start += batch_size) {
+            int last = min(start + batch_size - 1, pending_entries.size() - 1);
+            list<string> batch_texts = texts[start..last];
+            list<list<float>> vectors = embedder.encodeDocuments(batch_texts, opts.embed_options);
+            list<hash<QoreRagUtils::VectorRecord>> records = ();
+
+            for (int i = 0; i < vectors.size(); ++i) {
+                hash<auto> entry = pending_entries[start + i];
+                string record_id = makeRecordId(entry, opts.id_prefix);
+                push record_ids, record_id;
+                push records, <QoreRagUtils::VectorRecord>{
+                    "id": record_id,
+                    "vector": vectors[i],
+                    "payload": makePayload(entry, batch_texts[i], opts),
+                };
+            }
+
+            vector_store.upsert(records);
+        }
+
+        return {
+            "status": "ok",
+            "source": getSemanticSearchCapabilities().source,
+            "indexed_count": record_ids.size(),
+            "record_ids": record_ids,
+        };
+    }
+
+    #! Deletes semantic records by id
+    /** @param ids record ids to delete from the vector store */
+    public deleteByIds(list<string> ids) {
+        vector_store.deleteByIds(ids);
+    }
+
+    #! Searches the semantic index
+    /** @param request semantic search request:
+            - \c text or \c query: query text to embed
+            - \c vector: optional pre-computed query vector
+            - \c limit or \c k: maximum result count
+            - \c filter: backend-specific vector-store filter
+            - \c min_score: optional minimum score threshold
+            - \c embed_options: per-call embedder options
+        @return normalized semantic log search result
+
+        @throw LOGGER-SEMANTIC-SEARCH-ERROR neither query text nor a query
+            vector is provided
+    */
+    public hash<auto> search(hash<auto> request) {
+        int k = normalizeBoundedInt(request.limit ?? request.k, DefaultSearchLimit, MaxSearchLimit);
+        string query = string(request.text ?? request.query ?? "");
+        list<float> query_vector;
+
+        if (request.vector) {
+            query_vector = request.vector;
+        } else {
+            if (!query.val()) {
+                throw "LOGGER-SEMANTIC-SEARCH-ERROR", "semantic search requires 'text', 'query', or 'vector'";
+            }
+            query_vector = embedder.encodeQuery(query, request.embed_options);
+        }
+
+        list<hash<QoreRagUtils::VectorSearchResult>> hits = vector_store.search(query_vector, k, request.filter);
+        list<hash<auto>> entries = ();
+        *float min_score = request.min_score;
+        foreach hash<QoreRagUtils::VectorSearchResult> hit in (hits) {
+            if (exists min_score && hit.score < min_score) {
+                continue;
+            }
+            push entries, makeSearchEntry(hit);
+        }
+
+        return {
+            "status": "ok",
+            "source": getSemanticSearchCapabilities().source,
+            "capabilities": getSemanticSearchCapabilities(),
+            "entries": entries,
+            "result_count": entries.size(),
+            "query": query.val() ? query : NOTHING,
+            "limit": k,
+            "truncated": entries.size() >= k,
+        };
+    }
+
+    private static int normalizeBoundedInt(auto value, int def, int max_value) {
+        int i = int(value ?? def);
+        if (i <= 0) {
+            return def;
+        }
+        return i > max_value ? max_value : i;
+    }
+
+    private string makeRecordId(hash<auto> entry, *string override_prefix) {
+        if (entry.record_id) {
+            return string(entry.record_id);
+        }
+        if (entry.id) {
+            return string(entry.id);
+        }
+
+        string base = sprintf("%s|%y|%y|%y|%y",
+            override_prefix ?? id_prefix,
+            entry.source_ref,
+            entry.line_hash,
+            entry.source,
+            getEntryText(entry));
+        string h = digest("sha256", base).toHex();
+        return sprintf("%s-%s-%s-%s-%s", h[0..7], h[8..11], h[12..15], h[16..19], h[20..31]);
+    }
+
+    private static string getEntryText(hash<auto> entry) {
+        return string(entry.rendered ?? entry.message ?? entry.text ?? "");
+    }
+
+    private static hash<auto> makePayload(hash<auto> entry, string text, hash<auto> opts) {
+        hash<auto> payload = {
+            "text": text,
+            "rendered": entry.rendered ?? text,
+            "message": entry.message ?? text,
+            "source_ref": entry.source_ref,
+            "line_hash": entry.line_hash,
+            "source": entry.source,
+            "metadata": entry.metadata ?? {},
+        };
+
+        copyIfExists(\payload, entry, "timestamp");
+        copyIfExists(\payload, entry, "level");
+        copyIfExists(\payload, entry, "logger");
+        copyIfExists(\payload, entry, "thread");
+        copyIfExists(\payload, entry, "line");
+        copyIfExists(\payload, entry, "sequence");
+        copyIfExists(\payload, entry, "context");
+
+        if (opts.payload_fields) {
+            list<auto> payload_fields = opts.payload_fields instanceof list
+                ? opts.payload_fields
+                : (opts.payload_fields,);
+            foreach auto field in (payload_fields) {
+                copyIfExists(\payload, entry, string(field));
+            }
+        }
+
+        return payload;
+    }
+
+    private static copyIfExists(reference<hash<auto>> target, hash<auto> source, string key) {
+        if (exists source{key}) {
+            target{key} = source{key};
+        }
+    }
+
+    private static hash<auto> makeSearchEntry(hash<QoreRagUtils::VectorSearchResult> hit) {
+        hash<auto> payload = hit.payload ?? {};
+        return {
+            "id": hit.id,
+            "score": hit.score,
+            "timestamp": payload.timestamp,
+            "level": payload.level,
+            "logger": payload.logger,
+            "thread": payload.thread,
+            "message": payload.message ?? payload.text,
+            "rendered": payload.rendered ?? payload.text,
+            "source_ref": payload.source_ref,
+            "line_hash": payload.line_hash,
+            "line": payload.line,
+            "sequence": payload.sequence,
+            "context": payload.context,
+            "source": payload.source,
+            "metadata": payload.metadata ?? {},
+            "payload": payload,
+        };
+    }
+}
+}

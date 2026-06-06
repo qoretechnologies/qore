@@ -1,0 +1,966 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file OpenSearchLoggerAppender.qm Qore OpenSearch Logger Appender Module
+
+/** OpenSearchLoggerAppender.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# requires the Logger module
+%requires Logger
+
+# requires the RestClientIo module
+%requires RestClientIo
+
+# assume local var scope, do not use "$" for vars, members, and method calls
+%modern
+
+# requires json module for make_json()
+%try-module json
+%define NoJson
+%endtry
+
+%ifdef NoJson
+# Stub functions when json module is not available
+auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required for this operation"; }
+auto sub parse_json(string val) { throw "JSON-ERROR", "the json module is required for this operation"; }
+%endif
+
+module OpenSearchLoggerAppender {
+    version = "1.0";
+    desc = "OpenSearch Logger Appender Module";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage OpenSearchLoggerAppender Module
+
+    @tableofcontents
+
+    @section opensearchloggerappenderintro Introduction to the OpenSearchLoggerAppender Module
+
+    @htmlonly
+    <div class="image">
+      <img src="opensearch-logo.svg" alt="OpenSearch Logo" style="width:40%;">
+    </div>
+    @endhtmlonly
+
+    The %OpenSearchLoggerAppender module provides a logger appender that sends log events to OpenSearch
+    using the bulk API for efficient batch logging.
+
+    @section opensearchloggerappenderfeatures Features
+
+    - Batched logging using OpenSearch Bulk API for high throughput
+    - Configurable batch size and flush interval
+    - Support for date-based index patterns (e.g., \c logs-%Y.%m.%d)
+    - Structured JSON documents with standard log fields
+    - Thread-safe buffer management
+    - Automatic flush on close
+
+    @section opensearchloggerappenderusage Usage Example
+
+    @code{.py}
+    %requires Logger
+    %requires OpenSearchLoggerAppender
+
+    Logger logger("MyApp", LoggerLevel::getLevelInfo());
+
+    OpenSearchLoggerAppender appender("os-appender",
+        new LoggerLayoutPattern("%d [%p] %c - %m%n"),
+        {
+            "url": "http://localhost:9200",
+            "index": "app-logs-%Y.%m.%d",
+            "batch_size": 100,
+            "flush_interval_ms": 5000,
+        });
+
+    logger.addAppender(appender);
+    appender.open();
+
+    logger.info("Application started");
+    logger.error("Something went wrong");
+
+    # Ensure all logs are flushed
+    appender.close();
+    @endcode
+
+    @section opensearchloggerappenderopts Constructor Options
+
+    The @ref OpenSearchLoggerAppender::OpenSearchLoggerAppender "OpenSearchLoggerAppender" class accepts
+    the following options in the constructor:
+
+    |!Option|!Type|!Required|!Description
+    |\c url|string|Yes|The OpenSearch server URL (e.g., \c "http://localhost:9200")
+    |\c index|string|Yes|Index name pattern; supports date format placeholders like \c %Y, \c %m, \c %d \
+        (e.g., \c "app-logs-%Y.%m.%d" creates daily indices)
+    |\c batch_size|int|No|Maximum number of log events per batch before flushing (default: 100)
+    |\c flush_interval_ms|int|No|Maximum time in milliseconds between flushes (default: 5000)
+    |\c pipeline|string|No|OpenSearch ingest pipeline name for document processing
+    |\c allow_search_index_override|bool|No|Allow trusted search callers to override the configured index
+    |\c connect_timeout|int|No|Connection timeout in milliseconds
+    |\c timeout|int|No|Request timeout in milliseconds
+
+    @subsection opensearchloggerappenderexamples Additional Examples
+
+    @par Using with Date-Based Indices
+    @code{.py}
+    # Creates indices like "myapp-2024.01.15", "myapp-2024.01.16", etc.
+    OpenSearchLoggerAppender appender("os", layout, {
+        "url": "http://opensearch:9200",
+        "index": "myapp-%Y.%m.%d",
+    });
+    @endcode
+
+    @par High-Throughput Configuration
+    @code{.py}
+    # Larger batches and shorter flush intervals for high-volume logging
+    OpenSearchLoggerAppender appender("os", layout, {
+        "url": "http://opensearch:9200",
+        "index": "high-volume-logs",
+        "batch_size": 500,
+        "flush_interval_ms": 1000,
+    });
+    @endcode
+
+    @par Using an Existing REST Client
+    @code{.py}
+    # Use a pre-configured REST client (useful for authentication, custom headers, etc.)
+    RestClientIo::RestClientIo rest({"url": "http://opensearch:9200",
+        "headers": {"Authorization": "Bearer <token>"}});
+    OpenSearchLoggerAppender appender("os", layout, rest, {
+        "index": "secure-logs",
+    });
+    @endcode
+
+    @section opensearchloggerappenderdoc Document Structure
+
+    Each log event is converted to an OpenSearch document with the following structure:
+
+    @code{.json}
+    {
+        "@timestamp": "2024-01-15T10:30:45.123456+00:00",
+        "level": "ERROR",
+        "level_value": 40000,
+        "logger": "MyApp.Service",
+        "message": "Connection failed",
+        "thread_id": 12345,
+        "location": {
+            "file": "Service.q",
+            "line": 142,
+            "function": "connect"
+        },
+        "exception": {
+            "type": "SOCKET-ERROR",
+            "message": "Connection refused"
+        },
+        "host": {
+            "name": "server01.example.com"
+        }
+    }
+    @endcode
+
+    @section opensearchloggerappenderrelnotes Release Notes
+
+    @subsection opensearchloggerappenderv10 v1.0
+    - Initial release with batching support
+*/
+
+#! Main namespace for the OpenSearchLoggerAppender module
+public namespace OpenSearchLoggerAppender {
+#! OpenSearch Logger Appender with batching support
+/** This appender sends log events to OpenSearch using the Bulk API for efficient batch logging.
+
+    Events are buffered and sent in batches when either:
+    - The batch size is reached
+    - The flush interval timer expires
+    - The appender is closed
+
+    @par Example:
+    @code{.py}
+    OpenSearchLoggerAppender appender("os-appender",
+        new LoggerLayoutPattern("%d [%p] %c - %m%n"),
+        {
+            "url": "http://localhost:9200",
+            "index": "app-logs-%Y.%m.%d",
+            "batch_size": 100,
+            "flush_interval_ms": 5000,
+        });
+    @endcode
+*/
+public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout, Logger::LoggerSearchableAppender {
+    public {
+        #! Default batch size
+        const int DefaultBatchSize = 100;
+
+        #! Default flush interval in milliseconds
+        const int DefaultFlushIntervalMs = 5000;
+    }
+
+    private:internal {
+        #! REST client for OpenSearch communication
+        RestClientIo::RestClientIo rest;
+
+        #! Index name pattern (may contain date format placeholders like %Y, %m, %d)
+        string indexPattern;
+
+        #! Ingest pipeline (optional)
+        *string pipeline;
+
+        #! Whether trusted callers may override the configured search index
+        bool allowSearchIndexOverride = False;
+
+        #! Buffer for batched events
+        list<hash<auto>> eventBuffer = ();
+
+        #! Maximum batch size
+        int batchSize;
+
+        #! Flush interval in milliseconds
+        int flushIntervalMs;
+
+        #! Mutex for thread-safe buffer access
+        Mutex bufferMutex();
+
+        #! Mutex for timer thread synchronization
+        Mutex timerMutex();
+
+        #! Timer thread ID for periodic flushing
+        *int timerTid;
+
+        #! Flag to signal timer thread to stop
+        bool stopTimer = False;
+
+        #! WaitGroup for tracking active flush operations
+        WaitGroup flushCounter();
+
+        #! Whether the appender is open
+        bool isOpened = False;
+    }
+
+    #! Creates the OpenSearch logger appender
+    /** @param name the name of the appender
+        @param layout the layout for formatting log events
+        @param options configuration options:
+            - \c url (required): OpenSearch URL (e.g., "http://localhost:9200")
+            - \c index (required): Index name pattern (e.g., "logs-%Y.%m.%d")
+            - \c batch_size: Maximum events per batch (default: 100)
+            - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
+            - \c pipeline: Ingest pipeline name (optional)
+            - \c allow_search_index_override: allow trusted search callers to override \c index (default: False)
+            - \c connect_timeout: Connection timeout in milliseconds (optional)
+            - \c timeout: Request timeout in milliseconds (optional)
+    */
+    constructor(*string name, Logger::LoggerLayout layout, hash<auto> options)
+            : LoggerAppenderWithLayout(name, layout) {
+        if (!options.url) {
+            throw "OPENSEARCH-APPENDER-ERROR", "Missing required option 'url'";
+        }
+        if (!options.index) {
+            throw "OPENSEARCH-APPENDER-ERROR", "Missing required option 'index'";
+        }
+
+        hash<auto> rest_opts = getRestClientOptions(options);
+        rest = new RestClientIo::RestClientIo(rest_opts);
+
+        indexPattern = options.index;
+        batchSize = options.batch_size ?? DefaultBatchSize;
+        flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
+        pipeline = options.pipeline;
+        allowSearchIndexOverride = options.allow_search_index_override ?? False;
+    }
+
+    #! Creates the OpenSearch logger appender with an existing REST client
+    /** @param name the name of the appender
+        @param layout the layout for formatting log events
+        @param rest existing REST client for OpenSearch
+        @param options configuration options:
+            - \c index (required): Index name pattern
+            - \c batch_size: Maximum events per batch (default: 100)
+            - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
+            - \c pipeline: Ingest pipeline name (optional)
+            - \c allow_search_index_override: allow trusted search callers to override \c index (default: False)
+    */
+    constructor(*string name, Logger::LoggerLayout layout, RestClientIo::RestClientIo rest, hash<auto> options)
+            : LoggerAppenderWithLayout(name, layout) {
+        if (!options.index) {
+            throw "OPENSEARCH-APPENDER-ERROR", "Missing required option 'index'";
+        }
+
+        self.rest = rest;
+        indexPattern = options.index;
+        batchSize = options.batch_size ?? DefaultBatchSize;
+        flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
+        pipeline = options.pipeline;
+        allowSearchIndexOverride = options.allow_search_index_override ?? False;
+    }
+
+    #! Destructor - ensures cleanup
+    destructor() {
+        if (isOpened) {
+            try {
+                closeImpl();
+            } catch (hash<ExceptionInfo> ex) {
+                # Log to stderr; exceptions must not propagate from a destructor
+                stderr.printf("OpenSearchLoggerAppender: error during cleanup (some log events may be lost): "
+                    "%s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Flushes any buffered events immediately
+    public flush() {
+        list<hash<auto>> toFlush;
+        {
+            AutoLock al(bufferMutex);
+            if (!eventBuffer.size()) {
+                return;
+            }
+            toFlush = eventBuffer;
+            eventBuffer = ();
+        }
+        flushBatch(toFlush);
+    }
+
+    #! Returns the REST client
+    public RestClientIo::RestClientIo getRestClient() {
+        return rest;
+    }
+
+    #! Returns the index pattern
+    public string getIndexPattern() {
+        return indexPattern;
+    }
+
+    #! Returns the current batch size setting
+    public int getBatchSize() {
+        return batchSize;
+    }
+
+    #! Returns the current flush interval in milliseconds
+    public int getFlushIntervalMs() {
+        return flushIntervalMs;
+    }
+
+    #! Processes log events
+    /** @param type the event type (EVENT_OPEN, EVENT_LOG, EVENT_CLOSE)
+        @param params the event parameters (serialized event for EVENT_LOG)
+    */
+    public processEventImpl(int type, auto params) {
+        switch (type) {
+            case LoggerAppender::EVENT_OPEN:
+                openImpl();
+                break;
+            case LoggerAppender::EVENT_LOG:
+                addToBuffer(params);
+                break;
+            case LoggerAppender::EVENT_CLOSE:
+                closeImpl();
+                break;
+        }
+    }
+
+    #! Serializes a log event into a document hash
+    /** @param event the log event to serialize
+        @return a hash suitable for indexing in OpenSearch
+    */
+    public auto serializeImpl(Logger::LoggerEvent event) {
+        return createDocument(event);
+    }
+
+    #! Returns rendered-history search capabilities for this appender
+    /** @return backend-neutral search capability information for documents written by this appender */
+    public hash<auto> getSearchCapabilities() {
+        return {
+            "searchable": True,
+            "supports_search": True,
+            "source": {
+                "kind": "opensearch",
+                "appender": getName(),
+                "class": get_class_name(self),
+                "index": indexPattern,
+            },
+            "rendered_lines": False,
+            "time_filter": True,
+            "cursor": True,
+            "levels": True,
+            "regex": False,
+            "context": False,
+            "structured_fields": True,
+            "max_limit": Logger::LoggerSearchUtil::MaxSearchLimit,
+            "default_limit": Logger::LoggerSearchUtil::DefaultSearchLimit,
+        };
+    }
+
+    #! Searches documents written by this appender using the generic rendered-event search request
+    /** The request uses the generic fields documented by @ref Logger::LoggerSearchableAppender.  Raw backend query
+        syntax is intentionally not accepted here; request fields are translated into a bounded query internally.
+
+        @param request generic rendered-event search request
+        @return generic search result hash with normalized entries and continuation metadata
+    */
+    public hash<auto> searchRenderedEvents(hash<auto> request) {
+        hash<auto> caps = getSearchCapabilities();
+        *string index;
+
+        try {
+            *string invalid_reason = getInvalidSearchRequestReason(request);
+            if (invalid_reason) {
+                return makeInvalidSearchResult(caps, invalid_reason);
+            }
+            int limit = Logger::LoggerSearchUtil::normalizeLimit(request.limit);
+            int offset = parseSearchCursor(request.cursor);
+            hash<auto> query = makeSearchQuery(request, limit, offset);
+            index = request.index ?? resolveIndexName();
+            hash<auto> response = normalizeSearchResponse(rest.restPost(index + "/_search", query).body);
+            list<hash<auto>> hits = response.hits.hits ?? ();
+            list<hash<auto>> entries = ();
+            foreach hash<auto> hit in (hits) {
+                push entries, makeSearchEntry(hit);
+            }
+
+            int total = getSearchTotal(response, entries.size());
+            *string next_cursor = offset + entries.size() < total ? string(offset + entries.size()) : NOTHING;
+            return {
+                "status": next_cursor ? "partial" : "ok",
+                "source": caps.source + {"resolved_index": index},
+                "capabilities": caps,
+                "entries": entries,
+                "result_count": entries.size(),
+                "next_cursor": next_cursor,
+                "scanned_bytes": 0,
+                "scanned_events": entries.size(),
+                "truncated": next_cursor ? True : False,
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            return makeUnavailableSearchResult(caps, index, ex.err + ": " + ex.desc);
+        }
+    }
+
+    #! Opens the appender and starts the flush timer
+    private openImpl() {
+        if (isOpened) {
+            return;
+        }
+        isOpened = True;
+        startFlushTimer();
+    }
+
+    #! Closes the appender, flushes remaining events, and stops the timer
+    private closeImpl() {
+        if (!isOpened) {
+            return;
+        }
+
+        # Stop timer first
+        stopFlushTimer();
+
+        # Flush remaining events
+        flush();
+
+        # Wait for any in-progress flushes
+        flushCounter.wait();
+
+        isOpened = False;
+    }
+
+    #! Adds a serialized event to the buffer
+    private addToBuffer(auto serializedEvent) {
+        if (serializedEvent.typeCode() != NT_HASH) {
+            # If not a hash (e.g., formatted string from layout), wrap it
+            serializedEvent = {
+                "@timestamp": format_date("YYYY-MM-DDTHH:mm:ss.xxZ", now_us()),
+                "message": string(serializedEvent),
+            };
+        }
+
+        list<hash<auto>> toFlush;
+        {
+            AutoLock al(bufferMutex);
+            push eventBuffer, serializedEvent;
+            if (eventBuffer.size() >= batchSize) {
+                toFlush = eventBuffer;
+                eventBuffer = ();
+            }
+        }
+
+        if (toFlush) {
+            flushBatch(toFlush);
+        }
+    }
+
+    #! Starts the background flush timer
+    private startFlushTimer() {
+        {
+            AutoLock al(timerMutex);
+            stopTimer = False;
+            timerTid = background timerLoop();
+        }
+    }
+
+    #! Stops the background flush timer
+    private stopFlushTimer() {
+        {
+            AutoLock al(timerMutex);
+            stopTimer = True;
+        }
+        # Wait for the timer thread to exit
+        int waited = 0;
+        while (waited < flushIntervalMs + 1000) {
+            {
+                AutoLock al(timerMutex);
+                if (!timerTid) {
+                    break;
+                }
+            }
+            usleep(100000);  # 100ms
+            waited += 100;
+        }
+    }
+
+    #! Background timer loop for periodic flushing
+    private timerLoop() {
+        on_exit {
+            AutoLock al(timerMutex);
+            delete timerTid;
+        }
+
+        while (!stopTimer) {
+            # Sleep in small increments to check stopTimer more often
+            int slept = 0;
+            while (!stopTimer && slept < flushIntervalMs) {
+                usleep(100000);  # 100ms
+                slept += 100;
+            }
+
+            if (!stopTimer) {
+                try {
+                    flush();
+                } catch () {
+                    # Ignore errors in timer thread
+                }
+            }
+        }
+    }
+
+    #! Flushes a batch of events to OpenSearch
+    private flushBatch(list<hash<auto>> batch) {
+        if (!batch.size()) {
+            return;
+        }
+
+        flushCounter.add();
+        on_exit flushCounter.done();
+
+        string indexName = resolveIndexName();
+        string bulkBody = "";
+
+        foreach hash<auto> doc in (batch) {
+            # Action line
+            hash<auto> action = {"index": {"_index": indexName}};
+            if (pipeline) {
+                action.index.pipeline = pipeline;
+            }
+%ifndef NoJson
+            bulkBody += make_json(action) + "\n";
+            # Document line
+            bulkBody += make_json(doc) + "\n";
+%endif
+        }
+
+        try {
+            hash<auto> response = rest.restDoRawRequest("POST", "_bulk", bulkBody, {
+                "Content-Type": "application/x-ndjson",
+            }).body;
+            handleBulkResponse(response, batch.size());
+        } catch (hash<ExceptionInfo> ex) {
+            handleError(ex, batch);
+        }
+    }
+
+    #! Handles the bulk API response
+    private handleBulkResponse(hash<auto> response, int batchSize) {
+        if (!response.errors) {
+            return;  # All successful
+        }
+
+        # Extract failed items
+        int failCount = 0;
+        foreach hash<auto> item in (response.items) {
+            hash<auto> result = item.index ?? item.create ?? item.firstValue();
+            if (result.error) {
+                ++failCount;
+            }
+        }
+
+        if (failCount) {
+            # Log to stderr to avoid recursion
+            stderr.printf("OpenSearchLoggerAppender: %d of %d documents failed to index\n",
+                failCount, batchSize);
+        }
+    }
+
+    #! Handles errors during bulk operations
+    private handleError(hash<ExceptionInfo> ex, list<hash<auto>> batch) {
+        # Log to stderr to avoid recursion
+        stderr.printf("OpenSearchLoggerAppender error: %s: %s (%d events lost)\n",
+            ex.err, ex.desc, batch.size());
+    }
+
+    #! Resolves the index name by applying date formatting
+    private string resolveIndexName() {
+        return Logger::LoggerSearchUtil::formatLogIndexPattern(indexPattern);
+    }
+
+    private hash<auto> getRestClientOptions(hash<auto> options) {
+        hash<auto> rest_opts = options - ("index", "batch_size", "flush_interval_ms", "pipeline",
+            "allow_search_index_override");
+        if (!exists rest_opts.data) {
+            rest_opts.data = "json";
+        }
+        return rest_opts;
+    }
+
+    private *string getInvalidSearchRequestReason(hash<auto> request) {
+        if (request.regex) {
+            return "unsupported-regex";
+        }
+        if (request.case_sensitive) {
+            return "unsupported-case-sensitive";
+        }
+        if (request.index && !allowSearchIndexOverride) {
+            return "unsupported-index-override";
+        }
+        if (request.direction && request.direction != "backward" && request.direction != "forward") {
+            return "invalid-direction";
+        }
+        if (request.match && request.match != "phrase" && request.match != "all" && request.match != "any") {
+            return "invalid-match";
+        }
+
+        try {
+            if (request.level) {
+                if (request.level instanceof list) {
+                    foreach auto level in (request.level) {
+                        getLevelValue(string(level));
+                    }
+                } else {
+                    getLevelValue(string(request.level));
+                }
+            }
+            if (request.level_min) {
+                getLevelValue(string(request.level_min));
+            }
+        } catch () {
+            return "invalid-level";
+        }
+
+        return NOTHING;
+    }
+
+    private int parseSearchCursor(auto cursor) {
+        if (!cursor) {
+            return 0;
+        }
+        if (cursor instanceof hash) {
+            return int(cursor.offset ?? 0);
+        }
+        int offset = int(cursor);
+        return offset < 0 ? 0 : offset;
+    }
+
+    private hash<auto> makeSearchQuery(hash<auto> request, int limit, int offset) {
+        list<hash<auto>> must = ();
+        list<hash<auto>> filter = ();
+
+        addTextClauses(\must, request);
+        addLevelClauses(\filter, request);
+        addTimeClauses(\filter, request);
+
+        hash<auto> body = {
+            "from": offset,
+            "size": limit,
+            "sort": ({"@timestamp": {"order": request.direction == "forward" ? "asc" : "desc"}},),
+        };
+
+        if (must.size() || filter.size()) {
+            body.query = {"bool": {}};
+            if (must.size()) {
+                body.query.bool.must = must;
+            }
+            if (filter.size()) {
+                body.query.bool.filter = filter;
+            }
+        } else {
+            body.query = {"match_all": {}};
+        }
+
+        return body;
+    }
+
+    private addTextClauses(reference<list<hash<auto>>> must, hash<auto> request) {
+        list<string> terms = getSearchTerms(request);
+        if (!terms.size()) {
+            return;
+        }
+
+        string match = request.match ?? "phrase";
+        if (match == "any") {
+            list<hash<auto>> should = ();
+            foreach string term in (terms) {
+                push should, makeTextClause(term, request);
+            }
+            push must, {"bool": {"should": should, "minimum_should_match": 1}};
+            return;
+        }
+
+        foreach string term in (terms) {
+            push must, makeTextClause(term, request);
+            if (match == "phrase") {
+                return;
+            }
+        }
+    }
+
+    private hash<auto> makeTextClause(string term, hash<auto> request) {
+        list<string> fields = getSearchFields(request);
+        if ((request.match ?? "phrase") == "phrase") {
+            return {
+                "multi_match": {
+                    "query": term,
+                    "type": "phrase",
+                    "fields": fields,
+                },
+            };
+        }
+
+        return {
+            "multi_match": {
+                "query": term,
+                "fields": fields,
+                "operator": "and",
+            },
+        };
+    }
+
+    private list<string> getSearchFields(hash<auto> request) {
+        if (request.fields instanceof list && request.fields.size()) {
+            return map string($1), request.fields;
+        }
+        return ("message", "logger", "level");
+    }
+
+    private list<string> getSearchTerms(hash<auto> request) {
+        list<string> terms = ();
+        if (request.text) {
+            push terms, string(request.text);
+        } else if (request.query) {
+            push terms, string(request.query);
+        }
+
+        if (request.terms) {
+            if (request.terms instanceof list) {
+                foreach auto term in (request.terms) {
+                    if (exists term && string(term) != "") {
+                        push terms, string(term);
+                    }
+                }
+            } else if (string(request.terms) != "") {
+                push terms, string(request.terms);
+            }
+        }
+
+        return terms;
+    }
+
+    private addLevelClauses(reference<list<hash<auto>>> filter, hash<auto> request) {
+        if (request.level) {
+            list<string> levels = ();
+            if (request.level instanceof list) {
+                levels = map string($1).upr(), request.level;
+            } else {
+                push levels, string(request.level).upr();
+            }
+            if (levels.size()) {
+                push filter, {"terms": {"level": levels}};
+            }
+        }
+
+        if (request.level_min) {
+            push filter, {"range": {"level_value": {"gte": getLevelValue(string(request.level_min))}}};
+        }
+    }
+
+    private addTimeClauses(reference<list<hash<auto>>> filter, hash<auto> request) {
+        hash<auto> range = {};
+        if (request.since) {
+            range.gte = formatSearchDate(request.since);
+        }
+        if (request.until) {
+            range.lte = formatSearchDate(request.until);
+        }
+        if (range.size()) {
+            push filter, {"range": {"@timestamp": range}};
+        }
+    }
+
+    private string formatSearchDate(auto value) {
+        if (value instanceof date) {
+            return format_date("YYYY-MM-DDTHH:mm:ss.xxZ", value);
+        }
+        return string(value);
+    }
+
+    private int getLevelValue(string level) {
+        switch (level.upr()) {
+            case "TRACE": return 5000;
+            case "DEBUG": return 10000;
+            case "DETAIL": return 15000;
+            case "INFO": return 20000;
+            case "WARN": return 30000;
+            case "WARNING": return 30000;
+            case "ERROR": return 40000;
+            case "FATAL": return 50000;
+        }
+        throw "OPENSEARCH-APPENDER-ERROR", sprintf("unsupported log level %y", level);
+    }
+
+    private hash<auto> normalizeSearchResponse(auto response) {
+        if (response.typeCode() == NT_HASH && response.body) {
+            return response.body;
+        }
+        if (response.typeCode() == NT_HASH) {
+            return response;
+        }
+%ifndef NoJson
+        if (response.typeCode() == NT_STRING) {
+            return parse_json(response);
+        }
+%endif
+        throw "OPENSEARCH-APPENDER-ERROR", "unsupported search response type";
+    }
+
+    private int getSearchTotal(hash<auto> response, int fallback) {
+        if (!response.hits || !response.hits.total) {
+            return fallback;
+        }
+        if (response.hits.total instanceof hash) {
+            return response.hits.total.value ?? fallback;
+        }
+        return int(response.hits.total);
+    }
+
+    private hash<auto> makeSearchEntry(hash<auto> hit) {
+        hash<auto> src = hit."_source" ?? {};
+        string message = string(src.message ?? "");
+        return {
+            "timestamp": src."@timestamp",
+            "level": src.level,
+            "logger": src.logger,
+            "thread": src.thread_id,
+            "message": message,
+            "rendered": message,
+            "source_ref": hit."_id",
+            "line_hash": has_digest("sha256") ? digest("sha256", message).toHex() : NOTHING,
+            "metadata": {
+                "index": hit."_index",
+                "score": hit."_score",
+                "location": src.location,
+                "exception": src.exception,
+                "host": src.host,
+            },
+        };
+    }
+
+    private hash<auto> makeUnavailableSearchResult(hash<auto> caps, *string index, string reason) {
+        hash<auto> source = caps.source;
+        if (index) {
+            source.resolved_index = index;
+        }
+
+        return {
+            "status": "unavailable",
+            "source": source,
+            "capabilities": caps,
+            "entries": (),
+            "result_count": 0,
+            "scanned_bytes": 0,
+            "scanned_events": 0,
+            "truncated": False,
+            "reason": reason,
+        };
+    }
+
+    private hash<auto> makeInvalidSearchResult(hash<auto> caps, string reason) {
+        return {
+            "status": "invalid",
+            "source": caps.source,
+            "capabilities": caps,
+            "entries": (),
+            "result_count": 0,
+            "scanned_bytes": 0,
+            "scanned_events": 0,
+            "truncated": False,
+            "reason": reason,
+        };
+    }
+
+    #! Creates an OpenSearch document from a log event
+    private hash<auto> createDocument(Logger::LoggerEvent event) {
+        hash<auto> doc = {
+            "@timestamp": format_date("YYYY-MM-DDTHH:mm:ss.xxZ", event.getTimeStamp() ?? now_us()),
+            "level": event.getLevel().getStr(),
+            "level_value": event.getLevel().getValue(),
+            "logger": event.getCategoryName(),
+            "message": event.getMessage(),
+            "thread_id": event.getThreadId(),
+        };
+
+        # Add location info if available
+        *hash<CallStackInfo> loc = event.getLocationInfo();
+        if (loc) {
+            doc.location = {
+                "file": loc.file,
+                "line": loc.line,
+                "function": loc.function,
+            };
+        }
+
+        # Add exception info if available
+        *hash<ExceptionInfo> ex = event.getThrowableInfo();
+        if (ex) {
+            doc.exception = {
+                "type": ex.err,
+                "message": ex.desc,
+            };
+            if (ex.arg) {
+                doc.exception.arg = ex.arg;
+            }
+        }
+
+        # Add host info
+        doc.host = {"name": gethostname()};
+
+        return doc;
+    }
+}
+}

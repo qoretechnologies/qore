@@ -1,0 +1,70 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore SearchIndexDataProvider module definition
+
+/*  SearchIndexDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) ConnectionProvider
+%requires(reexport) DataProvider
+%requires(reexport) RestClientIo
+
+%try-module json >= 1.11
+%define NoJson
+%endtry
+
+%ifndef NoJson
+%requires NdjsonDataProvider
+%endif
+
+module SearchIndexDataProvider {
+    version = "1.0";
+    desc = "user module providing common data provider helpers for REST search-index backends";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage SearchIndexDataProvider Module
+
+    @tableofcontents
+
+    @section searchindexdataproviderintro SearchIndexDataProvider Introduction
+
+    The %SearchIndexDataProvider module provides common implementation helpers for REST data-provider modules that
+    expose document-oriented search indexes.  It does not register a data provider factory by itself; concrete
+    modules use it to keep backend-neutral behavior consistent while preserving backend-specific public factory
+    names, connection schemes, logos, and API dialects.
+
+    Shared behavior includes:
+    - REST client construction from a `restclient`, `url`, or `restclient_options` constructor option
+    - common logger propagation for REST-backed data providers
+    - query-string option handling for request hashes
+    - boolean string coercion for REST query parameters
+    - O(n) newline-delimited JSON formatting for bulk document operations
+
+    @section searchindexdataprovider_relnotes Release Notes
+
+    @subsection searchindexdataprovider_v1_0 SearchIndexDataProvider v1.0
+    - the initial version of the %SearchIndexDataProvider module
+*/

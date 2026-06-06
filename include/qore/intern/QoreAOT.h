@@ -761,6 +761,57 @@ public:
             int* compiled_count_out = nullptr,
             bool report_artifacts = true);
 
+    //! Compile aggregate script metadata for a list of already-compiled
+    //! script-context `.qo` objects.
+    /**
+        Parses @p target_files with the same script-context options used by
+        `compileScriptFilesBatch`, then emits one relocatable object at
+        @p output_path containing:
+
+        - one aggregate AOT metadata blob for all target-file declarations;
+        - a function table with external references to the native bodies in
+          the corresponding per-file `.qo` objects;
+        - an exported `init_<aggregate_symbol>_qo(QoreProgram*)` register
+          function that calls `qore_aot_script_register()` once.
+
+        The aggregate object is linked alongside the per-file `.qo` objects.
+        Missing native symbols therefore fail in the normal link phase, while
+        runtime startup sees one metadata deserialization session instead of
+        one session per source file.
+
+        @param target_files source files represented by the linked `.qo` set
+        @param output_path path for the aggregate relocatable object
+        @param aggregate_symbol C-identifier tail used in
+                `init_<aggregate_symbol>_qo`
+        @param parse_options parse options to seed the compile program
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation
+                (nullptr = native)
+        @param include_source embed source text in metadata
+        @param require_modules modules to require while parsing the aggregate
+        @param stub_files source files that provide declarations only
+        @param parse_defines parse-time defines to apply to every target
+        @param parse_option_flags parse-option flag names to apply to every target
+        @param compiled_count_out optional output for the total number of
+                emitted Qore code variants
+        @return true on success, false on failure
+    */
+    static bool compileScriptAggregate(
+            const std::vector<std::string>& target_files,
+            const std::string& output_path,
+            const std::string& aggregate_symbol,
+            const QoreParseOptions& parse_options,
+            std::string& error,
+            int opt_level = 2,
+            const char* target_triple = nullptr,
+            bool include_source = false,
+            const std::vector<std::string>& require_modules = {},
+            const std::vector<std::string>& stub_files = {},
+            const std::vector<std::string>& parse_defines = {},
+            const std::vector<std::string>& parse_option_flags = {},
+            int* compiled_count_out = nullptr);
+
     //! Compile one file of a Qore application to a
     //! `.qo` in script-context mode (no module wrapper, no `.qm`).
     /**
