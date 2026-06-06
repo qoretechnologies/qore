@@ -306,9 +306,11 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         *auto raw_block = raw_bulk.getShapedValue();
         hash<auto> raw_rows = AbstractDataProcessor::convertShape(raw_block, DataProviderShape::BufferColumns,
             DataProviderShape::HashOfLists)[0];
-        assertEq((11n, 12n, 13n), raw_rows.id, "raw DB provider shaped bulk read preserves ids");
+        # scale-0 NUMERIC(15,0) columns narrow to int64 in the columnar fetch path, matching the
+        # scalar/row fetch paths (see columnar_decimal_narrows_to_int64() in lib/QoreColumnarResult.cpp)
+        assertEq((11, 12, 13), raw_rows.id, "raw DB provider shaped bulk read preserves ids");
         assertEq(("delta", "echo", "foxtrot"), raw_rows.name, "raw DB provider shaped bulk read preserves names");
-        assertEq((1100n, 1200n, 1300n), raw_rows.value, "raw DB provider shaped bulk read preserves values");
+        assertEq((1100, 1200, 1300), raw_rows.value, "raw DB provider shaped bulk read preserves values");
 
         ColumnarResult upsert_columns = ColumnarResult::fromColumnHash({
             "id": new buffer<int64>((12, 13, 14)),
