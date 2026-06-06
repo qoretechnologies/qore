@@ -2673,7 +2673,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 // Check for self-recursive Approach B eligibility
                 std::string fast_entry_name;
                 bool self_rec_eligible = isAOTSelfRecursiveEligible(ir_func, uvb);
-                if (self_rec_eligible) {
+                if (!metadata_only && self_rec_eligible) {
                     fast_entry_name = ir_func->name + "_fast";
                     const UserSignature* sig = uvb->getUserSignature();
                     unsigned num_params = sig->numParams();
