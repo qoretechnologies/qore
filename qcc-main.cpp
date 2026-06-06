@@ -481,6 +481,7 @@ static bool from_objects = false;
 // static linkage into a C++ host (e.g. qorus-core).
 static bool archive_mode = false;
 static bool include_source = false;
+static const char* metadata_compression = nullptr;
 static bool verbose = false;
 static bool show_help = false;
 static bool show_version = false;
@@ -650,6 +651,9 @@ static void print_usage(const char* prog) {
     printf("      --show-targets     Show supported target architectures and quit\n");
     printf("      --include-source   Embed source text in AOT metadata\n");
     printf("      --strip-source     Strip source text (default)\n");
+    printf("      --aot-metadata-compression=MODE\n"
+           "                         Metadata compression policy: auto, none, zlib\n"
+           "                         (default: auto)\n");
     printf("      --strip-debug-info Strip DWARF debug info (faster compile, no debugger)\n");
     printf("  -g                     Emit DWARF debug info (default)\n");
     printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
@@ -721,6 +725,7 @@ static struct option long_options[] = {
     {"dump-symbols",      no_argument,       nullptr, 0x106},
     {"dump-sections",     no_argument,       nullptr, 0x107},
     {"save-temps",        no_argument,       nullptr, 0x108},
+    {"aot-metadata-compression", required_argument, nullptr, 0x109},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -820,6 +825,14 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x108:  // --save-temps
                 save_temps = true;
+                break;
+            case 0x109:  // --aot-metadata-compression
+                if (strcmp(optarg, "auto") && strcmp(optarg, "none") && strcmp(optarg, "zlib")) {
+                    fprintf(stderr, "error: invalid --aot-metadata-compression value '%s' "
+                        "(must be auto, none, or zlib)\n", optarg);
+                    return 1;
+                }
+                metadata_compression = optarg;
                 break;
             case 'F':
                 from_objects = true;
@@ -3165,6 +3178,9 @@ int main(int argc, char** argv) {
     }
     if (verbose) {
         setenv("QORE_AOT_VERBOSE", "1", 1);
+    }
+    if (metadata_compression) {
+        setenv("QORE_AOT_METADATA_COMPRESSION", metadata_compression, 1);
     }
     // Propagate the CLI flag's value to QORE_AOT_BIG_FN_THRESHOLD so
     // the IR-to-LLVM lowerer picks it up.  Overwrite the env only when

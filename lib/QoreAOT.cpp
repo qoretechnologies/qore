@@ -878,6 +878,68 @@ static bool qccReportMetadataSizeStart(const char* label, size_t size) {
     return true;
 }
 
+enum class AOTMetadataCompressionPolicy {
+    Auto,
+    None,
+    Zlib,
+};
+
+static AOTMetadataCompressionPolicy getAOTMetadataCompressionPolicy() {
+    const char* mode = getenv("QORE_AOT_METADATA_COMPRESSION");
+    if (!mode || !*mode || !strcmp(mode, "auto")) {
+        return AOTMetadataCompressionPolicy::Auto;
+    }
+    if (!strcmp(mode, "none") || !strcmp(mode, "off") || !strcmp(mode, "0")) {
+        return AOTMetadataCompressionPolicy::None;
+    }
+    if (!strcmp(mode, "zlib") || !strcmp(mode, "on") || !strcmp(mode, "1")) {
+        return AOTMetadataCompressionPolicy::Zlib;
+    }
+
+    if (qccAOTVerbose()) {
+        printf("%signoring invalid QORE_AOT_METADATA_COMPRESSION=%s (expected auto, none, zlib)\n",
+            QCC_LOG_PREFIX, mode);
+    }
+    return AOTMetadataCompressionPolicy::Auto;
+}
+
+static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool include_source,
+        bool report_metadata) {
+    static constexpr uint32_t AOT_HEADER_BYTES = 60;
+    static constexpr size_t AOT_HEADER_COMPRESSION_OFFSET = 34;
+
+    AOTMetadataCompressionPolicy policy = getAOTMetadataCompressionPolicy();
+    bool should_compress = !include_source
+        && policy != AOTMetadataCompressionPolicy::None
+        && metadata.size() > AOT_HEADER_BYTES;
+    if (!should_compress) {
+        if (report_metadata) {
+            if (policy == AOTMetadataCompressionPolicy::None) {
+                printf(" (uncompressed)\n");
+            } else {
+                printf("\n");
+            }
+        }
+        return;
+    }
+
+    std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
+    std::vector<uint8_t> compressed_post;
+    std::string compress_error;
+    if (compressMetadata(post_header, compressed_post, compress_error)) {
+        int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
+        if (report_metadata) {
+            printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                100.0 * compressed_total / (int)metadata.size());
+        }
+        metadata[AOT_HEADER_COMPRESSION_OFFSET] = 1;
+        metadata.resize(AOT_HEADER_BYTES);
+        metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
+    } else if (report_metadata) {
+        printf("\n");
+    }
+}
+
 static std::string qccCompileModeSuffix(int opt_level, bool include_source) {
     std::string rv = " (-O" + std::to_string(opt_level);
     if (include_source) {
@@ -4383,31 +4445,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         }
 
         bool report_metadata = qccReportMetadataSizeStart("compilation metadata", metadata.size());
-
-        // Compress only the post-header data to keep magic/header readable
-        // Skip compression for include-source binaries to preserve source code searchability
-        const uint32_t AOT_HEADER_BYTES = 60;
-        if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
-            std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
-            std::vector<uint8_t> compressed_post;
-            std::string compress_error;
-            if (compressMetadata(post_header, compressed_post, compress_error)) {
-                int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
-                if (report_metadata) {
-                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                        100.0 * compressed_total / (int)metadata.size());
-                }
-                // Patch compression byte in header (byte 34)
-                metadata[34] = 1;
-                // Replace post-header data with compressed version
-                metadata.resize(AOT_HEADER_BYTES);
-                metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
-            } else if (report_metadata) {
-                printf("\n");
-            }
-        } else if (report_metadata) {
-            printf("\n");
-        }
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
             compiled_init_funcs);
     }
@@ -6302,32 +6340,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         }
 
         bool report_metadata = qccReportMetadataSizeStart("module metadata", metadata.size());
-
-        // Compress only the post-header data (skip compression for include-source to preserve source searchability)
-        const uint32_t AOT_HEADER_BYTES = 60;
-        std::vector<uint8_t>* use_metadata = &metadata;
-        if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
-            std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
-            std::vector<uint8_t> compressed_post;
-            std::string compress_error;
-            if (compressMetadata(post_header, compressed_post, compress_error)) {
-                int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
-                if (report_metadata) {
-                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                        100.0 * compressed_total / (int)metadata.size());
-                }
-                // Patch compression byte in header (byte 34)
-                metadata[34] = 1;
-                // Replace post-header data with compressed version
-                metadata.resize(AOT_HEADER_BYTES);
-                metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
-            } else if (report_metadata) {
-                printf("\n");
-            }
-        } else if (report_metadata) {
-            printf("\n");
-        }
-        hdr.compression = include_source ? 0 : (use_metadata != &metadata ? 1 : 0);
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
 
         // Add init functions to the function table so they're available at runtime
         for (auto& cif : compiled_init_funcs) {
@@ -6346,7 +6359,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // Pass the program's FINAL parse options (after parsing) so %modern /
         // %new-style / %require-types / etc added by the source are preserved
         // at module load time.  mod_po is only the initial seed.
-        generateModuleABIV2(ctx, *module, *use_metadata, label, qpgm->getParseOptions(),
+        generateModuleABIV2(ctx, *module, metadata, label, qpgm->getParseOptions(),
             mod_info, compiled_funcs, compile_only);
     }
 
@@ -6780,32 +6793,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("split module metadata", metadata.size());
-
-            // Compress only the post-header data (skip compression for include-source to preserve source searchability)
-            const uint32_t AOT_HEADER_BYTES = 60;
-            std::vector<uint8_t>* use_metadata = &metadata;
-            if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
-                std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
-                std::vector<uint8_t> compressed_post;
-                std::string compress_error;
-                if (compressMetadata(post_header, compressed_post, compress_error)) {
-                    int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
-                    if (report_metadata) {
-                        printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                            100.0 * compressed_total / (int)metadata.size());
-                    }
-                    // Patch compression byte in header (byte 34)
-                    metadata[34] = 1;
-                    // Replace post-header data with compressed version
-                    metadata.resize(AOT_HEADER_BYTES);
-                    metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
-                } else if (report_metadata) {
-                    printf("\n");
-                }
-            } else if (report_metadata) {
-                printf("\n");
-            }
-            hdr.compression = include_source ? 0 : (use_metadata != &metadata ? 1 : 0);
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
 
             // Add init functions to the function table so they're available at runtime
             for (auto& cif : compiled_init_funcs) {
@@ -6823,7 +6811,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
             // Pass the program's final parse options — see comment in the
             // single-file module path.
-            generateModuleABIV2(ctx, *module, *use_metadata, qm_path.c_str(),
+            generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only);
         }
 
@@ -8947,29 +8935,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("aggregated metadata", metadata.size());
-            const uint32_t AOT_HEADER_BYTES = 60;
-            if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
-                std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES,
-                    metadata.end());
-                std::vector<uint8_t> compressed_post;
-                std::string compress_error;
-                if (compressMetadata(post_header, compressed_post, compress_error)) {
-                    int compressed_total = AOT_HEADER_BYTES
-                        + (int)compressed_post.size();
-                    if (report_metadata) {
-                        printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                            100.0 * compressed_total / (int)metadata.size());
-                    }
-                    metadata[34] = 1;
-                    metadata.resize(AOT_HEADER_BYTES);
-                    metadata.insert(metadata.end(), compressed_post.begin(),
-                        compressed_post.end());
-                } else if (report_metadata) {
-                    printf("\n");
-                }
-            } else if (report_metadata) {
-                printf("\n");
-            }
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
 
             for (auto& cif : compiled_init_funcs) {
                 AOTCompiledFunc cf;
@@ -9434,29 +9400,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("archive metadata", metadata.size());
-            const uint32_t AOT_HEADER_BYTES = 60;
-            if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
-                std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES,
-                    metadata.end());
-                std::vector<uint8_t> compressed_post;
-                std::string compress_error;
-                if (compressMetadata(post_header, compressed_post, compress_error)) {
-                    int compressed_total = AOT_HEADER_BYTES
-                        + (int)compressed_post.size();
-                    if (report_metadata) {
-                        printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                            100.0 * compressed_total / (int)metadata.size());
-                    }
-                    metadata[34] = 1;
-                    metadata.resize(AOT_HEADER_BYTES);
-                    metadata.insert(metadata.end(), compressed_post.begin(),
-                        compressed_post.end());
-                } else if (report_metadata) {
-                    printf("\n");
-                }
-            } else if (report_metadata) {
-                printf("\n");
-            }
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
 
             for (auto& cif : compiled_init_funcs) {
                 AOTCompiledFunc cf;
