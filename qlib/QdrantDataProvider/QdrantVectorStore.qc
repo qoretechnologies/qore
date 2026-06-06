@@ -307,8 +307,9 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
 
     #! Converts provider-neutral payload filters to Qdrant filter syntax
     private:internal static hash<auto> normalizeSearchFilter(hash<auto> filter) {
-        if (!filter.payload_eq) {
-            return filter.native_filter ?? filter;
+        auto payload_eq = filter.payload_eq;
+        if (!(payload_eq instanceof hash) || payload_eq.empty()) {
+            return filter.native_filter ?? (exists filter{"payload_eq"} ? filter - ("payload_eq",) : filter);
         }
 
         hash<auto> qfilter = filter.native_filter ?? (filter - ("payload_eq",));
@@ -317,10 +318,10 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
             must = qfilter.must instanceof list ? qfilter.must : (qfilter.must,);
         }
 
-        foreach string key in (keys filter.payload_eq) {
+        foreach string key in (keys payload_eq) {
             push must, {
                 "key": key,
-                "match": {"value": filter.payload_eq{key}},
+                "match": {"value": payload_eq{key}},
             };
         }
         qfilter.must = must;

@@ -3,15 +3,16 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QdrantDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires ConnectionProvider
+%requires QoreRagTypes
+%requires QdrantDataProvider
 
 %try-module json >= 1.5
 %define NoJson
@@ -118,6 +119,7 @@ public class QdrantVectorStoreTest inherits QUnit::Test {
         addTestCase("offline deleteByIds", \offlineDeleteTest());
         addTestCase("offline search + filter pass-through", \offlineSearchTest());
         addTestCase("offline search + portable payload equality filter", \offlinePayloadEqFilterTest());
+        addTestCase("offline search + invalid portable payload equality filter", \offlineInvalidPayloadEqFilterTest());
         addTestCase("offline dimension probe", \offlineDimensionProbeTest());
         addTestCase("offline dimension mismatch is rejected", \offlineDimensionMismatchTest());
         addTestCase("live upsert -> search -> delete", \liveRoundTripTest());
@@ -280,6 +282,36 @@ public class QdrantVectorStoreTest inherits QUnit::Test {
         assertEq("log-errors", must_values.index_id);
         assertFalse(exists fake.last_body.filter.payload_eq);
         assertFalse(exists fake.last_body.filter.native_filter);
+    }
+
+    #! Invalid payload_eq values must not throw or leak into Qdrant filters
+    private offlineInvalidPayloadEqFilterTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        QdrantDataProvider::QdrantVectorStore store(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": "search-test",
+                "options": {"dimension": 4},
+            }, fake);
+
+        hash<auto> native_filter = {
+            "must": ({"key": "source", "match": {"value": "logs"}},),
+        };
+        store.search((0.1, 0.2, 0.3, 0.4), 5, {
+            "native_filter": native_filter,
+            "payload_eq": {},
+        });
+        assertEq(native_filter, fake.last_body.filter);
+        assertFalse(exists fake.last_body.filter.payload_eq);
+
+        store.search((0.1, 0.2, 0.3, 0.4), 5, {
+            "must": ({"key": "source", "match": {"value": "logs"}},),
+            "payload_eq": "bad-filter",
+        });
+        assertEq(1, fake.last_body.filter.must.size());
+        assertEq("source", fake.last_body.filter.must[0].key);
+        assertFalse(exists fake.last_body.filter.payload_eq);
     }
 
     #! When options.dimension is omitted, getDimension() probes /collections/{name}
