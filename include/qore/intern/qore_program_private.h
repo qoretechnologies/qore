@@ -530,6 +530,8 @@ public:
 
     qore_exec_mode_t exec_mode = QEM_AST;
     bool user_requested_exec_mode = false;
+    bool inherited_user_requested_exec_mode = false;
+    QoreParseOptions inherited_exec_mode_parse_options;
     bool ir_dump = false;
     bool ir_fallback_warn = false;
     bool ir_fallback_warned = false;
@@ -695,7 +697,7 @@ public:
         // Apply parse-option implications once pwo.parse_options is fully populated
         // (setParent may OR in inherited restrictions from the parent Program).
         applyParseOptionImplications();
-        applyDefaultExecMode();
+        syncExecModeWithParseOptions();
 
         // initialize global vars
         // check if PO_NO_EXTERNAL_INFO is set - if so, provide empty values for ARGV, QORE_ARGV, and ENV
@@ -773,6 +775,16 @@ public:
         exec_mode = hasModernParseOptions() ? QEM_TIERED : QEM_AST;
     }
 
+    DLLLOCAL void syncExecModeWithParseOptions() {
+        if (inherited_user_requested_exec_mode
+            && pwo.parse_options != inherited_exec_mode_parse_options) {
+            inherited_user_requested_exec_mode = false;
+            user_requested_exec_mode = false;
+        }
+
+        applyDefaultExecMode();
+    }
+
     static const char* getExecModeName(qore_exec_mode_t mode) {
         switch (mode) {
             case QEM_AST:
@@ -811,6 +823,7 @@ public:
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options = po;
         applyParseOptionImplications();
+        syncExecModeWithParseOptions();
     }
 
     DLLLOCAL bool checkSetParseOptions(const QoreParseOptions& po) {
@@ -822,6 +835,7 @@ public:
     DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options |= po;
         applyParseOptionImplications();
+        syncExecModeWithParseOptions();
     }
 
     DLLLOCAL void addParseModule(const char* mod) {
@@ -1943,6 +1957,8 @@ public:
 
     DLLLOCAL void disableParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options &= ~po;
+        applyParseOptionImplications();
+        syncExecModeWithParseOptions();
     }
 
     DLLLOCAL int setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {

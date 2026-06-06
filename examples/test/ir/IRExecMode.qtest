@@ -18,6 +18,7 @@ class IRExecModeTest inherits QUnit::Test {
         addTestCase("AST mode no error", \testAstModeExitsClean());
         addTestCase("Program default exec mode", \testProgramDefaultExecMode());
         addTestCase("Program explicit AST overrides modern default", \testProgramExplicitAstOverride());
+        addTestCase("Child Program exec mode follows parse options", \testChildProgramExecModeFollowsParseOptions());
         set_return_value(main());
     }
 
@@ -151,5 +152,39 @@ class IRExecModeTest inherits QUnit::Test {
         pgm.parse("int sub t() { return 1; }", "explicit-ast-code");
         assertEq(EM_AST, pgm.getExecMode(), "explicit AST overrides PO_MODERN tiered default");
         assertEq(1, pgm.callFunction("t"));
+    }
+
+    testChildProgramExecModeFollowsParseOptions() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("Program child();\n");
+        script.file.write("child.disableParseOptions(PO_NEW_STYLE);\n");
+        script.file.write("printf(\"mode=%d\\n\", child.getExecMode());\n");
+        script.file.write("child.parse(\"int sub t() { return 1; }\", \"legacy-child\");\n");
+        script.file.write("printf(\"rv=%y\\n\", child.callFunction(\"t\"));\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=tiered %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = system(cmd);
+        string output = ReadOnlyFile::readTextFile(out.path);
+        string errors = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && errors =~ /exec-mode/ && errors =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "child Program with changed parse options should run in AST mode");
+        assertEq("mode=0\nrv=1\n", output, "child Program exec mode/output");
+        assertEq("", errors, "child Program stderr");
     }
 }
