@@ -1,0 +1,575 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClient
+%requires OpenSearchDataProvider
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class OpenSearchDataProviderTest
+
+public class OpenSearchDataProviderTest inherits QUnit::Test {
+    private {
+        RestClient rest;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "url": "u,url=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    # checkModule helper
+    static checkModule(Test test) {
+%ifdef NoJson
+        test.testSkip("no json module");
+%endif
+    }
+
+    constructor() : Test("OpenSearchDataProvider Test", "1.0") {
+        addTestCase("mainTest", \mainTest());
+        addTestCase("bulkApiTest", \bulkApiTest());
+        addTestCase("scrollApiTest", \scrollApiTest());
+        addTestCase("aggregationTest", \aggregationTest());
+        addTestCase("bulkOperationTest", \bulkOperationTest());
+        addTestCase("negativeTests", \negativeTests());
+        addTestCase("action data dependent options", \testActionDataDependentOptions());
+        addTestCase("semantic action metadata", \semanticActionMetadataTest());
+
+        setupConnection();
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    private mainTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string pipeline = get_random_string();
+        AbstractDataProvider prov = new OpenSearchPipelineCreateDataProvider(rest);
+        hash<auto> p = {
+            "pipeline": pipeline,
+            "description": "my pipeline",
+            "processors": ({
+                "html_strip": {
+                    "field": "content",
+                }
+            },),
+        };
+        hash<auto> h = prov.doRequest(p);
+        assertTrue(h.acknowledged);
+
+        OpenSearchPipelineDeleteDataProvider delpipe(rest);
+        on_exit {
+            h = delpipe.doRequest({
+                "pipeline": pipeline,
+            });
+            assertTrue(h.acknowledged);
+        }
+
+        prov = new OpenSearchPipelineReadDataProvider(rest);
+        h = prov.doRequest({
+            "pipeline": pipeline,
+        });
+        assertTrue(h.hasKey(pipeline));
+        assertEq(p - "pipeline", h{pipeline});
+
+        prov = new OpenSearchPipelineReadAllDataProvider(rest);
+        h = prov.doRequest();
+        assertTrue(h.hasKey(pipeline));
+        assertEq(p - "pipeline", h{pipeline});
+
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        prov = new OpenSearchIndexCreateDataProvider(rest);
+        h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "content": {
+                        "type": "text",
+                    },
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        OpenSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({
+                "index": index,
+            });
+            assertTrue(h.acknowledged);
+        }
+
+        prov = new OpenSearchIndexReadDataProvider(rest);
+        h = prov.doRequest({
+            "index": index,
+        });
+        assertTrue(h.hasKey(index));
+        hash<auto> index_hash = h{index};
+
+        prov = new OpenSearchDocumentCreateDataProvider(rest);
+        h = prov.doRequest({
+            "index": index,
+            "pipeline": pipeline,
+            "content": "<h2>test</h2>",
+            # NOTE: without "refresh=true", the document will not be found in the search below
+            "refresh": "true",
+        });
+        assertEq("created", h.result);
+        string docid = h._id;
+
+        OpenSearchDocumentDeleteDataProvider deldoc(rest);
+        on_exit {
+            h = deldoc.doRequest({
+                "index": index,
+                "id": docid,
+            });
+            assertEq("deleted", h.result);
+        }
+
+        prov = new OpenSearchDocumentReadDataProvider(rest);
+        h = prov.doRequest({
+            "index": index,
+            "id": docid,
+        });
+        assertEq("\ntest\n", h._source.content);
+
+        prov = new OpenSearchIndexSearchDataProvider(rest);
+        h = prov.doRequest({
+            "index": index,
+        });
+        assertEq(1, h.hits.total.value);
+
+        prov = new OpenSearchIndexTableDataProvider(rest, index, index_hash);
+        auto res = map $1, prov.searchRecords();
+        assertEq(Type::List, res.type());
+        assertEq(1, res.size());
+        assertEq(Type::Hash, res[0].type());
+        assertEq(3, res[0].size());
+        assertEq(1.0, res[0]._score);
+        assertEq("\ntest\n", res[0].content);
+
+        # NOTE: without "refresh=true", the document will not be found in the search below
+        assertEq(1, prov.updateRecords({"content": "test2"}, {"_id": docid}, {"refresh": "true"}));
+        res = prov.searchSingleRecord({"_id": docid});
+        assertEq(Type::Hash, res.type());
+        assertEq(3, res.size());
+        assertEq(1.0, res._score);
+        assertEq("test2", res.content);
+
+        # NOTE: without "refresh=true", the document will not be found in the search below
+        string newid = prov.createRecord({"content": "new data"}, {"refresh": "true"})._id;
+        res = prov.searchSingleRecord({"_id": newid});
+        assertEq(Type::Hash, res.type());
+        assertEq(3, res.size());
+        assertEq(1.0, res._score);
+        assertEq("new data", res.content);
+
+        assertEq(1, prov.deleteRecords({"_id": newid}, {"refresh": "true"}));
+        res = prov.searchSingleRecord({"_id": newid});
+        assertNothing(res);
+    }
+
+    #! Test bulk API operations
+    private bulkApiTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create test index
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        AbstractDataProvider prov = new OpenSearchIndexCreateDataProvider(rest);
+        hash<auto> h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "title": {"type": "text"},
+                    "count": {"type": "integer"},
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        OpenSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({"index": index});
+        }
+
+        # Test bulk create
+        OpenSearchBulkDataProvider bulk(rest);
+        h = bulk.doRequest({
+            "operations": (
+                {"action": "index", "_index": index, "doc": {"title": "doc1", "count": 1}},
+                {"action": "index", "_index": index, "doc": {"title": "doc2", "count": 2}},
+                {"action": "index", "_index": index, "doc": {"title": "doc3", "count": 3}},
+            ),
+            "refresh": "true",
+        });
+        assertFalse(h.errors);
+        assertEq(3, h.items.size());
+
+        # Verify documents were created
+        prov = new OpenSearchIndexSearchDataProvider(rest);
+        h = prov.doRequest({"index": index});
+        assertEq(3, h.hits.total.value);
+
+        # Test bulk update
+        string id1 = h.hits.hits[0]._id;
+        h = bulk.doRequest({
+            "operations": (
+                {"action": "update", "_index": index, "_id": id1, "doc": {"count": 100}},
+            ),
+            "refresh": "true",
+        });
+        assertFalse(h.errors);
+
+        # Verify update
+        OpenSearchDocumentReadDataProvider docread(rest);
+        h = docread.doRequest({"index": index, "id": id1});
+        assertEq(100, h._source.count);
+
+        # Test bulk delete
+        h = bulk.doRequest({
+            "operations": (
+                {"action": "delete", "_index": index, "_id": id1},
+            ),
+            "refresh": "true",
+        });
+        assertFalse(h.errors);
+
+        # Verify deletion
+        prov = new OpenSearchIndexSearchDataProvider(rest);
+        h = prov.doRequest({"index": index});
+        assertEq(2, h.hits.total.value);
+    }
+
+    #! Test scroll API operations
+    private scrollApiTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create test index with multiple documents
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        AbstractDataProvider prov = new OpenSearchIndexCreateDataProvider(rest);
+        hash<auto> h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "num": {"type": "integer"},
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        OpenSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({"index": index});
+        }
+
+        # Create 25 documents for scroll testing
+        OpenSearchBulkDataProvider bulk(rest);
+        list<hash<auto>> ops = ();
+        for (int i = 0; i < 25; i++) {
+            push ops, {"action": "index", "_index": index, "doc": {"num": i}};
+        }
+        h = bulk.doRequest({"operations": ops, "refresh": "true"});
+        assertFalse(h.errors);
+
+        # Test scroll search - initial request
+        OpenSearchScrollSearchDataProvider scroll(rest);
+        h = scroll.doRequest({
+            "index": index,
+            "scroll": "1m",
+            "size": 10,
+        });
+        assertTrue(h._scroll_id.val());
+        assertEq(10, h.hits.hits.size());
+        string scroll_id = h._scroll_id;
+
+        # Continue scrolling
+        h = scroll.doRequest({
+            "scroll_id": scroll_id,
+            "scroll": "1m",
+        });
+        assertTrue(h._scroll_id.val());
+        assertEq(10, h.hits.hits.size());
+        scroll_id = h._scroll_id;
+
+        # Get remaining documents
+        h = scroll.doRequest({
+            "scroll_id": scroll_id,
+            "scroll": "1m",
+        });
+        assertEq(5, h.hits.hits.size());
+        scroll_id = h._scroll_id;
+
+        # Clear scroll context
+        h = scroll.doRequest({
+            "scroll_id": scroll_id,
+            "clear": True,
+        });
+        assertTrue(h.succeeded);
+    }
+
+    #! Test aggregation API
+    private aggregationTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create test index with data for aggregation
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        AbstractDataProvider prov = new OpenSearchIndexCreateDataProvider(rest);
+        hash<auto> h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "category": {"type": "keyword"},
+                    "price": {"type": "float"},
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        OpenSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({"index": index});
+        }
+
+        # Create test documents
+        OpenSearchBulkDataProvider bulk(rest);
+        h = bulk.doRequest({
+            "operations": (
+                {"action": "index", "_index": index, "doc": {"category": "A", "price": 10.0}},
+                {"action": "index", "_index": index, "doc": {"category": "A", "price": 20.0}},
+                {"action": "index", "_index": index, "doc": {"category": "B", "price": 30.0}},
+                {"action": "index", "_index": index, "doc": {"category": "B", "price": 40.0}},
+                {"action": "index", "_index": index, "doc": {"category": "B", "price": 50.0}},
+            ),
+            "refresh": "true",
+        });
+        assertFalse(h.errors);
+
+        # Test aggregations
+        OpenSearchAggregationDataProvider agg(rest);
+
+        # Test terms aggregation
+        h = agg.doRequest({
+            "index": index,
+            "aggs": {
+                "by_category": {
+                    "terms": {"field": "category"},
+                },
+            },
+        });
+        assertTrue(h.aggregations.hasKey("by_category"));
+        assertEq(2, h.aggregations.by_category.buckets.size());
+
+        # Find bucket counts
+        hash<auto> buckets = map {$1.key: $1.doc_count}, h.aggregations.by_category.buckets;
+        assertEq(2, buckets.A);
+        assertEq(3, buckets.B);
+
+        # Test metrics aggregations
+        h = agg.doRequest({
+            "index": index,
+            "aggs": {
+                "avg_price": {"avg": {"field": "price"}},
+                "sum_price": {"sum": {"field": "price"}},
+                "min_price": {"min": {"field": "price"}},
+                "max_price": {"max": {"field": "price"}},
+            },
+        });
+        assertEq(30.0, h.aggregations.avg_price.value);
+        assertEq(150.0, h.aggregations.sum_price.value);
+        assertEq(10.0, h.aggregations.min_price.value);
+        assertEq(50.0, h.aggregations.max_price.value);
+
+        # Test nested aggregation (terms + avg)
+        h = agg.doRequest({
+            "index": index,
+            "aggs": {
+                "by_category": {
+                    "terms": {"field": "category"},
+                    "aggs": {
+                        "avg_price": {"avg": {"field": "price"}},
+                    },
+                },
+            },
+        });
+        assertTrue(h.aggregations.by_category.buckets[0].hasKey("avg_price"));
+    }
+
+    #! Test bulk operation class (record-based bulk insert)
+    private bulkOperationTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        # Create test index
+        string index = get_random_string();
+        index =~ tr/A-Z/a-z/;
+        AbstractDataProvider prov = new OpenSearchIndexCreateDataProvider(rest);
+        hash<auto> h = prov.doRequest({
+            "index": index,
+            "mappings": {
+                "properties": {
+                    "name": {"type": "text"},
+                    "value": {"type": "integer"},
+                },
+            },
+        });
+        assertTrue(h.acknowledged);
+
+        OpenSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            h = delindex.doRequest({"index": index});
+        }
+
+        # Get index info for table provider
+        OpenSearchIndexReadDataProvider idxread(rest);
+        hash<auto> index_hash = idxread.doRequest({"index": index}){index};
+
+        # Test bulk inserter
+        OpenSearchIndexTableDataProvider tableProv(rest, index, index_hash);
+        AbstractDataProviderBulkOperation bulkOp = tableProv.getBulkInserter(5);
+
+        # Queue 12 records (should flush twice at block_size=5, then flush remaining 2)
+        for (int i = 0; i < 12; i++) {
+            bulkOp.queueData({"name": "item" + string(i), "value": i});
+        }
+        bulkOp.flush();
+
+        # Verify all records were inserted
+        # Need to refresh before search
+        rest.post(index + "/_refresh");
+        prov = new OpenSearchIndexSearchDataProvider(rest);
+        h = prov.doRequest({"index": index, "size": 20});
+        assertEq(12, h.hits.total.value);
+    }
+
+    #! Negative tests - test error handling
+    private negativeTests() {
+        checkModule(self);
+        # Test bulk API with invalid action type
+        if (rest) {
+            OpenSearchBulkDataProvider bulk(rest);
+            try {
+                bulk.doRequest({
+                    "operations": (
+                        {"action": "invalid_action", "_index": "test", "doc": {"x": 1}},
+                    ),
+                });
+                fail("Expected exception for invalid action type");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("OPENSEARCH-BULK-ERROR", ex.err);
+                assertTrue(ex.desc.find("Invalid action type") >= 0);
+            }
+        }
+
+        # Test scroll search request type validation
+        OpenSearchScrollSearchRequestDataType scrollReq();
+        assertTrue(scrollReq.getField("index").val());
+        assertTrue(scrollReq.getField("scroll").val());
+        assertTrue(scrollReq.getField("scroll_id").val());
+        assertTrue(scrollReq.getField("clear").val());
+
+        # Test aggregation request type validation
+        OpenSearchAggregationRequestDataType aggReq();
+        assertTrue(aggReq.getField("index").val());
+        assertTrue(aggReq.getField("query").val());
+        assertTrue(aggReq.getField("aggs").val());
+        assertTrue(aggReq.getField("aggregations").val());
+
+        # Test bulk response types
+        OpenSearchBulkResponseDataType bulkResp();
+        assertTrue(bulkResp.getField("took").val());
+        assertTrue(bulkResp.getField("errors").val());
+        assertTrue(bulkResp.getField("items").val());
+
+        # Test bulk error data type
+        OpenSearchBulkErrorDataType errType();
+        assertTrue(errType.getField("type").val());
+        assertTrue(errType.getField("reason").val());
+    }
+
+    testActionDataDependentOptions() {
+        list<string> expected_actions = (
+            "aggregate", "bulk-operations", "create-document", "create-vector-index",
+            "hybrid-search", "knn-search", "neural-search", "scroll-search",
+            "search-index",
+        );
+
+        list<hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActions("OpenSearch");
+        hash<string, bool> found;
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<DataProviderActionInfo> action = actions[i];
+            assertTrue(action.data_dependent_options,
+                sprintf("action %y has data_dependent_options", action.action));
+            assertTrue(action.options.size() > 0, sprintf("action %y has options", action.action));
+            assertTrue(action.output_type.typeCode() != NT_NOTHING || action.get_output_type.typeCode() != NT_NOTHING,
+                sprintf("action %y has output type metadata", action.action));
+            found{action.action} = True;
+        }
+        for (int i = 0; i < expected_actions.size(); ++i) {
+            assertTrue(found{expected_actions[i]},
+                sprintf("action %y is registered", expected_actions[i]));
+        }
+    }
+
+    semanticActionMetadataTest() {
+        assertTrue(OpenSearchKnnSearchRequestDataType::Fields.hasKey("vector"));
+        assertTrue(OpenSearchKnnSearchRequestDataType::Fields.hasKey("method_parameters"));
+        assertTrue(OpenSearchNeuralSearchRequestDataType::Fields.hasKey("query_text"));
+        assertTrue(OpenSearchNeuralSearchRequestDataType::Fields.hasKey("query_tokens"));
+        assertTrue(OpenSearchHybridSearchRequestDataType::Fields.hasKey("queries"));
+        assertTrue(OpenSearchHybridSearchRequestDataType::Fields.hasKey("search_pipeline"));
+        assertTrue(OpenSearchVectorIndexCreateRequestDataType::Fields.hasKey("vector_field"));
+        assertTrue(OpenSearchVectorIndexCreateRequestDataType::Fields.hasKey("dimension"));
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-u,--url=ARG", "URL for the OpenSearch server instance", OptionColumn);
+    }
+
+    private setupConnection() {
+        *string url = m_options.url ?? ENV.OPENSEARCH_URL;
+        if (!url) {
+            return;
+        }
+
+        try {
+            rest = new RestClient({"url": url});
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                stderr.printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+}

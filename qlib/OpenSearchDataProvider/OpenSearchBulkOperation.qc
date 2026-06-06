@@ -1,0 +1,145 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore OpenSearchDataProvider module definition
+
+/** OpenSearchBulkOperation.qc Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! Contains all public definitions in the OpenSearchDataProvider module
+public namespace OpenSearchDataProvider {
+#! Bulk insert/upsert operation for OpenSearch
+/** This class implements the AbstractDataProviderBulkOperation interface for OpenSearch bulk operations
+*/
+public class OpenSearchBulkOperation inherits DataProvider::AbstractDataProviderBulkOperation {
+    private {
+        #! The REST client for OpenSearch — any @ref RestClient::AbstractRestClient subclass
+        RestClient::AbstractRestClient rest;
+
+        #! The index name
+        string index;
+
+        #! The operation type: "index", "create", "update", or "delete"
+        string optype;
+
+        #! Optional pipeline for document processing
+        *string pipeline;
+
+        #! Optional routing value
+        *string routing;
+
+        #! Refresh setting: "true", "false", or "wait_for"
+        *string refresh;
+    }
+
+    #! Creates the bulk operation object
+    /** @param provider the data provider for the operation
+        @param rest the REST client for OpenSearch
+        @param index the index name for the bulk operations
+        @param optype the operation type: "index", "create", "update", or "delete"
+        @param block_size the block size for bulk operations (default: 1000)
+        @param options additional options: pipeline, routing, refresh
+    */
+    constructor(DataProvider::AbstractDataProvider provider, RestClient::AbstractRestClient rest, string index,
+            string optype, *int block_size, *hash<auto> options)
+            : AbstractDataProviderBulkOperation(provider, optype, block_size ?? DefaultBlockSize) {
+        self.rest = rest;
+        self.index = index;
+        self.optype = optype;
+        self.pipeline = options.pipeline;
+        self.routing = options.routing;
+        self.refresh = options.refresh;
+    }
+
+    #! Flushes queued data to OpenSearch using the bulk API
+    private flushImpl() {
+        # Build NDJSON payload
+        string ndjson = formatNDJSON();
+        if (!ndjson) {
+            return;
+        }
+
+        # Build URI with optional parameters
+        string uri = "_bulk";
+        list<string> params = ();
+        if (pipeline) {
+            push params, sprintf("pipeline=%s", encode_url(pipeline, True));
+        }
+        if (routing) {
+            push params, sprintf("routing=%s", encode_url(routing, True));
+        }
+        if (refresh) {
+            push params, sprintf("refresh=%s", encode_url(refresh, True));
+        }
+        if (params) {
+            uri += "?" + params.join("&");
+        }
+
+        # Send bulk request — use restDoRawRequest to bypass the validator's JSON
+        # serialization step (OpenSearch's bulk API rejects wrapped/reencoded ndjson)
+        *hash<auto> response = rest.restDoRawRequest("POST", uri, ndjson,
+            {"Content-Type": "application/x-ndjson"}).body;
+
+        # Handle partial failures
+        if (response.errors) {
+            handleBulkErrors(response);
+        }
+    }
+
+    #! Formats the buffered records as NDJSON for the bulk API
+    /** @return the NDJSON string for the bulk request
+
+        @note uses @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" — backed
+            by a @ref Qore::StringOutputStream "StringOutputStream" with geometric-growth
+            buffering — so building the bulk body is O(n) in the number of queued records
+            rather than the O(n²) cost of repeated `string += make_json(x) + "\n"`
+            concatenation
+    */
+    private string formatNDJSON() {
+        return SearchIndexDataProvider::SearchIndexBulkUtil::formatRecordBuffer(buf, index, optype,
+            "OPENSEARCH-BULK-ERROR");
+    }
+
+    #! Handles errors from a bulk response
+    /** @param response the bulk API response body
+    */
+    private handleBulkErrors(*hash<auto> response) {
+        list<hash<auto>> failures = ();
+        int i = 0;
+        foreach hash<auto> item in (response.items) {
+            # Get the operation result (index, create, update, or delete)
+            hash<auto> op_result = item{optype} ?? item.firstValue();
+            if (op_result.error) {
+                push failures, {
+                    "index": i,
+                    "id": op_result._id,
+                    "error_type": op_result.error.type,
+                    "reason": op_result.error.reason,
+                };
+            }
+            ++i;
+        }
+
+        if (failures) {
+            throw "OPENSEARCH-BULK-ERROR", sprintf("%d of %d operations failed in bulk request",
+                failures.size(), response.items.size()), failures;
+        }
+    }
+}
+}
