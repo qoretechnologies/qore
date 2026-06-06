@@ -584,17 +584,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         }
 
         try {
-            # Note: We need to parse the response as JSON because RestClient doesn't auto-parse
-            # when using application/x-ndjson content-type for the request
-            auto raw_response = rest.post("_bulk", bulkBody, {"Content-Type": "application/x-ndjson"});
-            hash<auto> response;
-            if (raw_response.typeCode() == NT_STRING) {
-%ifndef NoJson
-                response = parse_json(raw_response);
-%endif
-            } else {
-                response = raw_response.body ?? {};
-            }
+            hash<auto> response = rest.restDoRawRequest("POST", "_bulk", bulkBody, {
+                "Content-Type": "application/x-ndjson",
+            }).body;
             handleBulkResponse(response, batch.size());
         } catch (hash<ExceptionInfo> ex) {
             handleError(ex, batch);
@@ -632,7 +624,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
 
     #! Resolves the index name by applying date formatting
     private string resolveIndexName() {
-        return format_date(indexPattern, now_us());
+        return Logger::LoggerSearchUtil::formatLogIndexPattern(indexPattern);
     }
 
     private int parseSearchCursor(auto cursor) {

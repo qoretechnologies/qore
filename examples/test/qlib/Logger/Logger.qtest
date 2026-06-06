@@ -966,6 +966,18 @@ class Test inherits QUnit::Test {
     }
 
     testLoggerSearchUtil() {
+        date pattern_date = 2026-06-06T11:22:33;
+        assertEq("test-logs-abc123z",
+            LoggerSearchUtil::formatLogIndexPattern("test-logs-abc123z", pattern_date));
+        assertEq("logs-2026.06.06",
+            LoggerSearchUtil::formatLogIndexPattern("logs-%Y.%m.%d", pattern_date));
+        assertEq("logs-2026-6-6-11-22-33",
+            LoggerSearchUtil::formatLogIndexPattern("logs-%Y-%-m-%-d-%-H-%-M-%-S", pattern_date));
+        assertEq("logs-%Y",
+            LoggerSearchUtil::formatLogIndexPattern("logs-%%Y", pattern_date));
+        assertEq("logs-%Q",
+            LoggerSearchUtil::formatLogIndexPattern("logs-%Q", pattern_date));
+
         LoggerAppenderNull null_appender("null");
         hash<auto> caps = LoggerSearchUtil::getAppenderSearchCapabilities(null_appender);
         assertFalse(caps.searchable);

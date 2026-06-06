@@ -544,6 +544,41 @@ public class LoggerSearchUtil {
         return limit > MaxSearchLimit ? MaxSearchLimit : limit;
     }
 
+    #! Formats a logger search-index pattern using common percent-prefixed date placeholders
+    /** Literal text is preserved.  Supported placeholders include common strftime-compatible values such as
+        \c %Y, \c %y, \c %m, \c %-m, \c %d, \c %-d, \c %H, \c %-H, \c %M, \c %-M, \c %S, \c %-S, \c %F, \c %T,
+        \c %j, \c %V, \c %G, \c %z, \c %Z, and \c %%.
+
+        @param pattern index name or date-expanded index pattern
+        @return resolved index name for the current timestamp
+    */
+    static public string formatLogIndexPattern(string pattern) {
+        return formatLogIndexPattern(pattern, now_us());
+    }
+
+    #! Formats a logger search-index pattern using common percent-prefixed date placeholders
+    /** @param pattern index name or date-expanded index pattern
+        @param timestamp date/time value used for placeholder expansion
+        @return resolved index name
+    */
+    static public string formatLogIndexPattern(string pattern, date timestamp) {
+        string result;
+        for (int i = 0; i < pattern.length(); ++i) {
+            string ch = pattern.substr(i, 1);
+            if (ch != "%" || i + 1 >= pattern.length()) {
+                result += ch;
+                continue;
+            }
+
+            string token = pattern.substr(++i, 1);
+            if (token == "-" && i + 1 < pattern.length()) {
+                token += pattern.substr(++i, 1);
+            }
+            result += formatLogIndexPatternToken(token, timestamp);
+        }
+        return result;
+    }
+
     #! Searches rendered lines in a file-backed appender
     private static hash<auto> searchFileAppender(LoggerAppenderFile appender, hash<auto> request, string source_kind) {
         hash<auto> caps = getAppenderSearchCapabilities(appender);
@@ -607,6 +642,33 @@ public class LoggerSearchUtil {
         }
 
         return req;
+    }
+
+    private static string formatLogIndexPatternToken(string token, date timestamp) {
+        switch (token) {
+            case "%": return "%";
+            case "Y": return format_date("YYYY", timestamp);
+            case "y": return format_date("YY", timestamp);
+            case "m": return format_date("MM", timestamp);
+            case "-m": return format_date("M", timestamp);
+            case "d": return format_date("DD", timestamp);
+            case "-d": return format_date("D", timestamp);
+            case "H": return format_date("HH", timestamp);
+            case "-H": return format_date("H", timestamp);
+            case "M": return format_date("mm", timestamp);
+            case "-M": return format_date("m", timestamp);
+            case "S": return format_date("SS", timestamp);
+            case "-S": return format_date("S", timestamp);
+            case "F": return format_date("YYYY-MM-DD", timestamp);
+            case "T": return format_date("HH:mm:SS", timestamp);
+            case "j": return format_date("DN", timestamp);
+            case "V": return format_date("IW", timestamp);
+            case "G": return format_date("IY", timestamp);
+            case "z": return format_date("Z", timestamp);
+            case "Z": return format_date("z", timestamp);
+            case "f": return format_date("xx", timestamp);
+        }
+        return "%" + token;
     }
 
     private static list<string> getSearchTerms(hash<auto> request) {

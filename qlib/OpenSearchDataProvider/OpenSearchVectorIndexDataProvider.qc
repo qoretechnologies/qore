@@ -157,23 +157,20 @@ public class OpenSearchVectorIndexCreateDataProvider inherits OpenSearchDataProv
         string index = remove req.index;
         string uri = SearchIndexDataProvider::SearchIndexRestUtil::moveQueryOptions(index, \req, QueryArgs);
 
-        hash<auto> settings = remove req.settings ?? {};
-        if (!settings.index) {
-            settings.index = {};
-        }
-        settings.index.knn = True;
+        hash<auto!> settings = cast<hash<auto!>>(remove req.settings ?? {});
+        hash<auto!> index_settings = cast<hash<auto!>>(settings{"index"} ?? {});
+        index_settings.knn = True;
 
         if (exists req{"ef_search"}) {
-            settings.index{"knn.algo_param.ef_search"} = remove req.ef_search;
+            index_settings{"knn.algo_param.ef_search"} = remove req.ef_search;
         }
+        settings{"index"} = index_settings;
 
-        hash<auto> mappings = remove req.mappings ?? {};
-        if (!mappings.properties) {
-            mappings.properties = {};
-        }
+        hash<auto!> mappings = cast<hash<auto!>>(remove req.mappings ?? {});
+        hash<auto!> properties = cast<hash<auto!>>(mappings.properties ?? {});
 
         string vector_field = remove req.vector_field;
-        hash<auto> field_mapping = {
+        hash<auto!> field_mapping = {
             "type": "knn_vector",
             "dimension": remove req.dimension,
         };
@@ -182,12 +179,12 @@ public class OpenSearchVectorIndexCreateDataProvider inherits OpenSearchDataProv
         bool method_requested = exists req{"method_name"} || exists req{"engine"} || exists req{"m"}
             || exists req{"ef_construction"};
         if (method_requested) {
-            hash<auto> method = {
+            hash<auto!> method = {
                 "name": remove req.method_name ?? "hnsw",
                 "engine": remove req.engine ?? "lucene",
                 "space_type": space_type,
             };
-            hash<auto> parameters = {};
+            hash<auto!> parameters = {};
             OpenSearchSearchActionUtil::moveIfExists(\parameters, \req, "m");
             OpenSearchSearchActionUtil::moveIfExists(\parameters, \req, "ef_construction");
             if (parameters) {
@@ -198,21 +195,22 @@ public class OpenSearchVectorIndexCreateDataProvider inherits OpenSearchDataProv
             field_mapping.space_type = space_type;
         }
 
-        mappings.properties{vector_field} = field_mapping;
+        properties{vector_field} = field_mapping;
 
         foreach string field in (remove req.text_fields ?? ()) {
-            if (!mappings.properties{field}) {
-                mappings.properties{field} = {"type": "text"};
+            if (!properties{field}) {
+                properties{field} = {"type": "text"};
             }
         }
 
         foreach string field in (remove req.metadata_fields ?? ()) {
-            if (!mappings.properties{field}) {
-                mappings.properties{field} = {"type": "keyword"};
+            if (!properties{field}) {
+                properties{field} = {"type": "keyword"};
             }
         }
+        mappings.properties = properties;
 
-        hash<auto> body = {
+        hash<auto!> body = {
             "settings": settings,
             "mappings": mappings,
         };
@@ -270,6 +268,14 @@ public class OpenSearchVectorIndexCreateRequestDataType inherits DataProvider::H
                 "desc": "Vector space type, such as `l2`, `cosinesimil`, or `innerproduct`",
                 "default_value": "l2",
                 "example_value": "cosinesimil",
+                "allowed_values_creatable": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "l2", "display_name": "L2"},
+                    <AllowedValueInfo>{"value": "cosinesimil", "display_name": "Cosine Similarity"},
+                    <AllowedValueInfo>{"value": "innerproduct", "display_name": "Inner Product"},
+                    <AllowedValueInfo>{"value": "l1", "display_name": "L1"},
+                    <AllowedValueInfo>{"value": "linf", "display_name": "L-Infinity"},
+                ),
             },
             "method_name": {
                 "type": StringOrNothingType,
@@ -277,6 +283,12 @@ public class OpenSearchVectorIndexCreateRequestDataType inherits DataProvider::H
                 "short_desc": "ANN method",
                 "desc": "Optional approximate nearest-neighbor method name, such as `hnsw`, `ivf`, or `flat`",
                 "example_value": "hnsw",
+                "allowed_values_creatable": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "hnsw", "display_name": "HNSW"},
+                    <AllowedValueInfo>{"value": "ivf", "display_name": "IVF"},
+                    <AllowedValueInfo>{"value": "flat", "display_name": "Flat"},
+                ),
             },
             "engine": {
                 "type": StringOrNothingType,
@@ -284,6 +296,12 @@ public class OpenSearchVectorIndexCreateRequestDataType inherits DataProvider::H
                 "short_desc": "ANN engine",
                 "desc": "Optional approximate nearest-neighbor engine, such as `lucene`, `faiss`, or `nmslib`",
                 "example_value": "lucene",
+                "allowed_values_creatable": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "lucene", "display_name": "Lucene"},
+                    <AllowedValueInfo>{"value": "faiss", "display_name": "Faiss"},
+                    <AllowedValueInfo>{"value": "nmslib", "display_name": "NMSLIB"},
+                ),
             },
             "m": {
                 "type": IntOrNothingType,

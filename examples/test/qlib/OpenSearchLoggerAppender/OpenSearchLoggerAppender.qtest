@@ -168,7 +168,7 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
         }
 
         # Create unique index for this test
-        string index = "test-logs-" + get_random_string().lwr();
+        string index = "test-logs-" + string(clock_getmicros());
 
         OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(
             "test",

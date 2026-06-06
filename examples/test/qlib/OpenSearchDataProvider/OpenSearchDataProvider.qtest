@@ -46,6 +46,7 @@ public class OpenSearchDataProviderTest inherits QUnit::Test {
         addTestCase("negativeTests", \negativeTests());
         addTestCase("action data dependent options", \testActionDataDependentOptions());
         addTestCase("semantic action metadata", \semanticActionMetadataTest());
+        addTestCase("vector store live test", \vectorStoreLiveTest());
 
         setupConnection();
 
@@ -551,6 +552,86 @@ public class OpenSearchDataProviderTest inherits QUnit::Test {
         assertTrue(OpenSearchHybridSearchRequestDataType::Fields.hasKey("search_pipeline"));
         assertTrue(OpenSearchVectorIndexCreateRequestDataType::Fields.hasKey("vector_field"));
         assertTrue(OpenSearchVectorIndexCreateRequestDataType::Fields.hasKey("dimension"));
+    }
+
+    vectorStoreLiveTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string index = "test-vectors-" + string(clock_getmicros());
+        OpenSearchVectorIndexCreateDataProvider create(rest);
+        hash<auto> h = create.doRequest({
+            "index": index,
+            "vector_field": "embedding",
+            "dimension": 3,
+            "space_type": "l2",
+            "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 0,
+            },
+            "text_fields": ("message",),
+            "metadata_fields": ("category",),
+        });
+        assertTrue(h.acknowledged);
+
+        OpenSearchIndexDeleteDataProvider delindex(rest);
+        on_exit {
+            try {
+                delindex.doRequest({"index": index});
+            } catch () {}
+        }
+
+        *QoreRagUtils::AbstractVectorStoreFactory factory =
+            QoreRagUtils::RagProviderRegistry::getVectorStoreFactory("opensearch");
+        assertTrue(exists factory);
+        assertEq("OpenSearch vector store", factory.getDisplayName());
+
+        hash<QoreRagUtils::VectorStoreConfig> config = <QoreRagUtils::VectorStoreConfig>{
+            "backend": "opensearch",
+            "collection": index,
+            "options": {
+                "restclient": rest,
+                "vector_field": "embedding",
+                "dimension": 3,
+                "refresh": "true",
+            },
+        };
+        QoreRagUtils::AbstractVectorStore store =
+            QoreRagUtils::RagProviderRegistry::createVectorStore(config);
+        assertEq(index, store.getCollection());
+        assertEq(3, store.getDimension());
+
+        store.upsert((
+            <QoreRagUtils::VectorRecord>{
+                "id": "log-db",
+                "vector": (1.0, 0.0, 0.0),
+                "payload": {
+                    "message": "database connection refused",
+                    "category": "database",
+                },
+            },
+            <QoreRagUtils::VectorRecord>{
+                "id": "log-cache",
+                "vector": (0.0, 1.0, 0.0),
+                "payload": {
+                    "message": "cache timeout while reading key",
+                    "category": "cache",
+                },
+            },
+        ));
+
+        list<hash<QoreRagUtils::VectorSearchResult>> results = store.search((1.0, 0.0, 0.0), 2, NOTHING);
+        assertEq(2, results.size());
+        assertEq("log-db", results[0].id);
+        assertEq("database", results[0].payload.category);
+        assertFalse(results[0].payload.hasKey("embedding"));
+
+        store.deleteByIds(("log-db",));
+        results = store.search((1.0, 0.0, 0.0), 2, NOTHING);
+        list<string> ids = map $1.id, results;
+        assertFalse(inlist("log-db", ids));
     }
 
     private usageIntern() {

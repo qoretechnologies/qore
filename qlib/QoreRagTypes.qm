@@ -260,7 +260,7 @@ public hashdecl TokenizerRequirement {
 }
 
 #! Resolves a @ref TokenizerRequirement to a parsed \c tokenizer.json
-/** Pluggable contract implemented by consumers (e.g. Qorus), which know where
+/** Pluggable contract implemented by consumers, which know where
     tokenizers are installed/bundled.  The core performs no network or filesystem
     installation; an implementation may consult pre-installed/bundled tokenizers
     and (optionally, on its own terms) retrieve missing ones.
@@ -986,13 +986,14 @@ public class RagProviderRegistry {
             registered at runtime via @ref registerVectorStoreFactory().
         */
         const VectorStoreModuleMap = {
-            "qdrant":      "QdrantDataProvider",
-            "pgvector":    "QoreRagUtils",
             "chroma":      "ChromaRestClient",
-            "mongo-atlas": "MongoDbDataProvider",
-            "pinecone":    "PineconeRestClient",
-            "weaviate":    "WeaviateRestClient",
             "milvus":      "MilvusRestClient",
+            "mongo-atlas": "MongoDbDataProvider",
+            "opensearch":  "OpenSearchDataProvider",
+            "pgvector":    "QoreRagUtils",
+            "pinecone":    "PineconeRestClient",
+            "qdrant":      "QdrantDataProvider",
+            "weaviate":    "WeaviateRestClient",
         };
 
         #! Map of chunker strategy names to providing modules

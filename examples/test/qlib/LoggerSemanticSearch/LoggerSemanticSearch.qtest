@@ -1,0 +1,220 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires LoggerSemanticSearch
+
+%exec-class LoggerSemanticSearchTest
+
+public class LoggerSemanticSearchTest inherits QUnit::Test {
+    constructor() : Test("LoggerSemanticSearch Test", "1.0") {
+        addTestCase("directEntryIndexAndSearch", \directEntryIndexAndSearch());
+        addTestCase("appenderIndexing", \appenderIndexing());
+        addTestCase("negativeSearch", \negativeSearch());
+
+        set_return_value(main());
+    }
+
+    private directEntryIndexAndSearch() {
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        hash<auto> res = index.indexEntries((
+            {
+                "rendered": "database writer rejected the connection",
+                "message": "database writer rejected the connection",
+                "source_ref": "file:1",
+                "level": "ERROR",
+                "logger": "test.database",
+            },
+            {
+                "rendered": "payment gateway timeout while posting request",
+                "message": "payment gateway timeout while posting request",
+                "source_ref": "file:2",
+                "level": "WARN",
+                "logger": "test.payment",
+            },
+            {
+                "rendered": "user login completed successfully",
+                "message": "user login completed successfully",
+                "source_ref": "file:3",
+                "level": "INFO",
+                "logger": "test.auth",
+            },
+        ));
+
+        assertEq("ok", res.status);
+        assertEq(3, res.indexed_count);
+        assertEq(3, store.size());
+
+        res = index.search({"text": "database query failed", "limit": 2});
+        assertEq("ok", res.status);
+        assertEq(2, res.result_count);
+        assertEq("database writer rejected the connection", res.entries[0].message);
+        assertEq("ERROR", res.entries[0].level);
+        assertTrue(res.entries[0].score >= res.entries[1].score);
+
+        res = index.search({"text": "database query failed", "limit": 3, "filter": {"level": "ERROR"}});
+        assertEq(1, res.result_count);
+        assertEq("ERROR", res.entries[0].level);
+
+        index.deleteByIds((res.entries[0].id,));
+        assertEq(2, store.size());
+    }
+
+    private appenderIndexing() {
+        string fn = tmp_location() + DirSep + "logger-semantic-" + get_random_string() + ".log";
+        unlink(fn);
+        on_exit unlink(fn);
+
+        LoggerAppenderFile appender("SEMANTIC", new LoggerLayoutPattern("%m%n"), fn);
+        Logger logger("SemanticAppenderTest", LoggerLevel::getLevelDebug());
+        logger.addAppender(appender);
+        appender.open();
+        logger.error("database replica lag is above threshold");
+        logger.warn("payment gateway timeout on settlement request");
+        logger.info("background cleanup completed");
+        appender.close();
+
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        hash<auto> res = index.indexAppender(appender, {
+            "direction": "forward",
+            "max_entries": 10,
+        });
+        assertEq("ok", res.status);
+        assertEq(3, res.indexed_count);
+        assertEq(3, store.size());
+
+        res = index.search({"text": "database problem", "limit": 1});
+        assertEq(1, res.result_count);
+        assertEq("database replica lag is above threshold", res.entries[0].message);
+        assertTrue(res.entries[0].source_ref != "");
+
+        hash<auto> caps = index.getSemanticSearchCapabilities();
+        assertTrue(caps.searchable);
+        assertTrue(caps.supports_semantic_search);
+        assertEq("semantic-index", caps.source.kind);
+        assertEq("semantic-log-test", caps.source.collection);
+        assertEq(3, caps.source.dimension);
+    }
+
+    private negativeSearch() {
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        assertThrows("LOGGER-SEMANTIC-SEARCH-ERROR", "semantic search requires", sub () {
+            index.search({});
+        });
+    }
+}
+
+public class FakeEmbedder inherits QoreRagUtils::AbstractEmbedder {
+    list<float> encode(string text, *hash<auto> opts) {
+        return vectorFor(text);
+    }
+
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        return map vectorFor($1), texts;
+    }
+
+    int getDimension() {
+        return 3;
+    }
+
+    private static list<float> vectorFor(string text) {
+        string s = text.lwr();
+        if (s.find("database") >= 0 || s.find("query") >= 0 || s.find("replica") >= 0) {
+            return (1.0, 0.0, 0.0);
+        }
+        if (s.find("timeout") >= 0 || s.find("payment") >= 0 || s.find("gateway") >= 0) {
+            return (0.0, 1.0, 0.0);
+        }
+        if (s.find("login") >= 0 || s.find("user") >= 0 || s.find("auth") >= 0) {
+            return (0.0, 0.0, 1.0);
+        }
+        return (0.2, 0.2, 0.2);
+    }
+}
+
+public class MemoryVectorStore inherits QoreRagUtils::AbstractVectorStore {
+    private {
+        string collection;
+        int dimension;
+        hash<auto> records = {};
+    }
+
+    constructor(string collection, int dimension) {
+        self.collection = collection;
+        self.dimension = dimension;
+    }
+
+    upsert(list<hash<QoreRagUtils::VectorRecord>> records) {
+        foreach hash<QoreRagUtils::VectorRecord> rec in (records) {
+            hash<auto> stored = {};
+            stored{"id"} = rec{"id"};
+            stored{"vector"} = rec{"vector"};
+            stored{"payload"} = rec{"payload"};
+            self.records{rec{"id"}} = stored;
+        }
+    }
+
+    deleteByIds(list<string> ids) {
+        foreach string id in (ids) {
+            remove records{id};
+        }
+    }
+
+    list<hash<QoreRagUtils::VectorSearchResult>> search(list<float> query_vector,
+            int k, *hash<auto> filter) {
+        list<hash<QoreRagUtils::VectorSearchResult>> hits = ();
+        foreach hash<auto> rec in (records.values()) {
+            hash<auto> payload = rec{"payload"} ?? {};
+            if (filter && filter.level && payload.level != filter.level) {
+                continue;
+            }
+            push hits, <QoreRagUtils::VectorSearchResult>{
+                "id": rec{"id"},
+                "score": dot(query_vector, rec{"vector"}),
+                "payload": payload,
+            };
+        }
+
+        hits = sort(hits, int sub(hash<QoreRagUtils::VectorSearchResult> a,
+                hash<QoreRagUtils::VectorSearchResult> b) {
+            return b.score <=> a.score;
+        });
+
+        return hits ? hits[0..(min(k, hits.size()) - 1)] : ();
+    }
+
+    string getCollection() {
+        return collection;
+    }
+
+    int getDimension() {
+        return dimension;
+    }
+
+    int size() {
+        return records.size();
+    }
+
+    private static float dot(list<float> a, list<float> b) {
+        float score = 0.0;
+        for (int i = 0; i < min(a.size(), b.size()); ++i) {
+            score += a[i] * b[i];
+        }
+        return score;
+    }
+}

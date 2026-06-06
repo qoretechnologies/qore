@@ -33,6 +33,7 @@
 %requires(reexport) ConnectionProvider
 %requires(reexport) DataProvider
 %requires(reexport) RestClientIo
+%requires(reexport) QoreRagTypes
 %requires(reexport) SearchIndexDataProvider
 
 %try-module json >= 1.11
@@ -64,6 +65,10 @@ module OpenSearchDataProvider {
 
         # register the data provider factory
         DataProvider::registerFactory(new OpenSearchDataProviderFactory());
+
+        # register the RAG vector-store factory
+        QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
+            new OpenSearchDataProvider::OpenSearchVectorStoreFactory());
 
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
@@ -323,6 +328,13 @@ module OpenSearchDataProvider {
     updating, and deleting documents (where an OpenSearch document is treated as a record) through the following
     path:
     - <b><tt>indexes/</tt><i>@ref OpenSearchDataProvider::OpenSearchIndexTableDataProvider "index_name"</i></b>
+
+    The module also registers the \c opensearch vector-store backend for
+    @ref QoreRagUtils::RagProviderRegistry "RagProviderRegistry"; this allows
+    callers using @ref QoreRagUtils::VectorStoreConfig "VectorStoreConfig" to
+    persist and search vectors in OpenSearch \c knn_vector indexes through the
+    provider-neutral @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore"
+    API.
 
     These data provides represent a single index with a record-like interface; each document (record) will be returned
     with read-only \c _id and \c _score fields as well.  Searches are performed with \c match; for flexible search
