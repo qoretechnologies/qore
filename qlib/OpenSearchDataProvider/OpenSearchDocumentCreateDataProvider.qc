@@ -124,7 +124,7 @@ public class OpenSearchDocumentCreateDataProvider inherits OpenSearchDataProvide
 public class OpenSearchDocumentCreateRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -238,7 +238,7 @@ public class OpenSearchDocumentCreateRequestDataType inherits DataProvider::Hash
 public class OpenSearchDocumentCreateShardsDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "total": {
                 "type": IntType,
                 "display_name": "Total Shards",
@@ -279,7 +279,7 @@ public class OpenSearchDocumentCreateShardsDataType inherits DataProvider::HashD
 public class OpenSearchDocumentCreateResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "_index": {
                 "type": StringType,
                 "display_name": "Index",

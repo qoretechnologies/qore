@@ -121,7 +121,7 @@ public class OpenSearchIndexDeleteDataProvider inherits OpenSearchDataProviderBa
 public class OpenSearchIndexDeleteRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             # query parameters
             "index": {
                 "type": StringType,

@@ -25,7 +25,7 @@
 #! Contains all public definitions in the OpenSearchDataProvider module
 public namespace OpenSearchDataProvider {
 #! Common top-level search request fields for OpenSearch search actions
-public const hash<string, AbstractDataField> SearchTopLevelFields = {
+public const SearchTopLevelFields = {
     "from": {
         "type": IntOrNothingType,
         "display_name": "From",

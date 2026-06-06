@@ -124,7 +124,7 @@ public class OpenSearchPipelineReadDataProvider inherits OpenSearchDataProviderB
 public class OpenSearchPipelineReadRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             # query parameters
             "pipeline": {
                 "type": StringType,

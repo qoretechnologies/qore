@@ -159,7 +159,7 @@ public class SearchIndexSoftBoolStringType inherits Qore::Reflection::Type {
 }
 
 #! Boolean string type instance for REST query parameters
-public const SearchIndexSoftBoolStringType SoftBoolStringType = new SearchIndexSoftBoolStringType();
+public const Qore::Reflection::Type SoftBoolStringType = new SearchIndexSoftBoolStringType();
 
 #! Boolean data provider string type for REST query parameters
 public const AbstractDataProviderType SoftBoolDataProviderStringType = AbstractDataProviderType::get(SoftBoolStringType);

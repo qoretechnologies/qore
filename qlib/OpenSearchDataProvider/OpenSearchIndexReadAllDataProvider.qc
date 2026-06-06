@@ -121,7 +121,7 @@ public class OpenSearchIndexReadAllDataProvider inherits OpenSearchDataProviderB
 public class OpenSearchIndexReadAllRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = OpenSearchIndexReadRequestDataType::Fields - "index";
+        const Fields = OpenSearchIndexReadRequestDataType::Fields - "index";
     }
 
     #! Creates the object

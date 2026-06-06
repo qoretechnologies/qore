@@ -122,7 +122,7 @@ public class OpenSearchDocumentReadDataProvider inherits OpenSearchDataProviderB
 public class OpenSearchDocumentReadRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -230,7 +230,7 @@ public class OpenSearchDocumentReadRequestDataType inherits DataProvider::HashDa
 public class OpenSearchDocumentReadResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "_index": {
                 "type": StringType,
                 "display_name": "Index",

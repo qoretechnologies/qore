@@ -133,7 +133,7 @@ public class OpenSearchIndexSearchDataProvider inherits OpenSearchDataProviderBa
 public class OpenSearchIndexSearchRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             # query parameters
             "index": {
                 "type": StringType,

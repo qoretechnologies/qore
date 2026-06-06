@@ -239,7 +239,7 @@ public class OpenSearchVectorIndexCreateDataProvider inherits OpenSearchDataProv
 public class OpenSearchVectorIndexCreateRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "index": {
                 "type": StringType,
                 "display_name": "Index",

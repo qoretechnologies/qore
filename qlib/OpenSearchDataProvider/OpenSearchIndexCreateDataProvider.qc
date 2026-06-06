@@ -128,7 +128,7 @@ public class OpenSearchIndexAliasesDataType inherits DataProvider::HashDataType 
 public class OpenSearchIndexCreateRequestDataType inherits OpenSearchIndexDataTypeBase {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             # query parameters
             "index": {
                 "type": StringType,
@@ -200,7 +200,7 @@ public class OpenSearchIndexCreateRequestDataType inherits OpenSearchIndexDataTy
 public class OpenSearchIndexCreateResponseDataType inherits OpenSearchAcknowledgedDataType {
     private {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "shards_acknowledged": {
                 "type": BoolType,
                 "display_name": "Shards Acknowledged?",

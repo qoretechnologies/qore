@@ -152,7 +152,7 @@ public class OpenSearchBulkDataProvider inherits OpenSearchDataProviderBase {
 public class OpenSearchBulkOperationItemDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "action": {
                 "type": StringType,
                 "display_name": "Action",
@@ -243,7 +243,7 @@ public class OpenSearchBulkOperationItemDataType inherits DataProvider::HashData
 public class OpenSearchBulkRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "operations": {
                 "type": new ListDataType("BulkOperationsList", new OpenSearchBulkOperationItemDataType(), True),
                 "display_name": "Operations",

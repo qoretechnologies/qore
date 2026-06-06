@@ -131,7 +131,7 @@ public class OpenSearchKnnSearchDataProvider inherits OpenSearchDataProviderBase
 public class OpenSearchKnnSearchRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = SearchTopLevelFields + {
+        const Fields = SearchTopLevelFields + {
             "index": {
                 "type": StringType,
                 "display_name": "Index",

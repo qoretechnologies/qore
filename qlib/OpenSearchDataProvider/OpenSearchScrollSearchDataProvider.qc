@@ -181,7 +181,7 @@ public class OpenSearchScrollSearchDataProvider inherits OpenSearchDataProviderB
 public class OpenSearchScrollSearchRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "index": {
                 "type": StringOrNothingType,
                 "display_name": "Index",
@@ -261,7 +261,7 @@ public class OpenSearchScrollSearchRequestDataType inherits DataProvider::HashDa
 #! Scroll search shards response data type
 public class OpenSearchScrollSearchShardsDataType inherits DataProvider::HashDataType {
     private {
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "total": {
                 "type": IntType,
                 "display_name": "Total Shards",
@@ -302,7 +302,7 @@ public class OpenSearchScrollSearchShardsDataType inherits DataProvider::HashDat
 public class OpenSearchScrollSearchResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "_scroll_id": {
                 "type": StringOrNothingType,
                 "display_name": "Scroll ID",

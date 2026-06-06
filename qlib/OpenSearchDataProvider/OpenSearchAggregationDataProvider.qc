@@ -172,7 +172,7 @@ public class OpenSearchAggregationDataProvider inherits OpenSearchDataProviderBa
 public class OpenSearchAggregationRequestDataType inherits DataProvider::HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "index": {
                 "type": StringType,
                 "display_name": "Index Name",
@@ -281,7 +281,7 @@ public class OpenSearchAggregationRequestDataType inherits DataProvider::HashDat
 #! Aggregation shards response data type
 public class OpenSearchAggregationShardsDataType inherits DataProvider::HashDataType {
     private {
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "total": {
                 "type": IntType,
                 "display_name": "Total Shards",
@@ -322,7 +322,7 @@ public class OpenSearchAggregationShardsDataType inherits DataProvider::HashData
 public class OpenSearchAggregationResponseDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             "took": {
                 "type": IntType,
                 "display_name": "Time Taken",

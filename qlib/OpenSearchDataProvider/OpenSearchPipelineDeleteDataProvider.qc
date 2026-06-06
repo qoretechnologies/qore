@@ -121,7 +121,7 @@ public class OpenSearchPipelineDeleteDataProvider inherits OpenSearchDataProvide
 public class OpenSearchPipelineDeleteRequestDataType inherits HashDataType {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             # query parameters
             "pipeline": {
                 "type": StringType,

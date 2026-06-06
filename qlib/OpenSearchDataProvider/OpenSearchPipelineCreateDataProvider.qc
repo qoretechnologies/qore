@@ -121,7 +121,7 @@ public class OpenSearchPipelineCreateDataProvider inherits OpenSearchDataProvide
 public class OpenSearchPipelineCreateRequestDataType inherits OpenSearchPipelineDataTypeBase {
     public {
         #! Field descriptions
-        const hash<string, AbstractDataField> Fields = {
+        const Fields = {
             # query parameters
             "pipeline": {
                 "type": StringType,
