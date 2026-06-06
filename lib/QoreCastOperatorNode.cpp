@@ -168,14 +168,9 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             && !(parse_get_parse_options() & QoreParseOptions::BROKEN_AUTO_CAST)) {
         const char* container = misleading_auto_hash ? "hash" : "list";
         const char* target = QoreParseTypeInfo::getName(pti);
-        const char* plain_target = pti->or_nothing
-            ? (misleading_auto_hash ? "*hash" : "*list")
-            : container;
         parse_error(*loc, "cast<%s>(...) is invalid: %s<auto> is not a coercion; the auto subtype accepts all "
-            "%s values unchanged, making this cast a misleading no-op. Use cast<%s>(...) to assert a %s value "
-            "and strip container type metadata%s",
-            target, container, container, plain_target, container,
-            misleading_auto_hash
+            "%s values unchanged, making this cast a misleading no-op%s",
+            target, container, container, misleading_auto_hash
                 ? "; there is no soft hash type"
                 : "; use cast<softlist<auto>>(...) when scalar-to-list coercion is required");
         parse_context.typeInfo = misleading_auto_hash
