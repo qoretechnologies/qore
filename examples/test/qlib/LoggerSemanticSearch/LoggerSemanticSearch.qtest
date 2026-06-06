@@ -16,6 +16,8 @@ public class LoggerSemanticSearchTest inherits QUnit::Test {
     constructor() : Test("LoggerSemanticSearch Test", "1.0") {
         addTestCase("directEntryIndexAndSearch", \directEntryIndexAndSearch());
         addTestCase("appenderIndexing", \appenderIndexing());
+        addTestCase("entryTransformRedaction", \entryTransformRedaction());
+        addTestCase("payloadFieldsAndStableRecordIds", \payloadFieldsAndStableRecordIds());
         addTestCase("negativeSearch", \negativeSearch());
 
         set_return_value(main());
@@ -108,6 +110,113 @@ public class LoggerSemanticSearchTest inherits QUnit::Test {
         assertEq(3, caps.source.dimension);
     }
 
+    private entryTransformRedaction() {
+        string fn = tmp_location() + DirSep + "logger-semantic-redact-" + get_random_string() + ".log";
+        unlink(fn);
+        on_exit unlink(fn);
+
+        LoggerAppenderFile appender("SEMANTIC-REDACT", new LoggerLayoutPattern("%m%n"), fn);
+        Logger logger("SemanticRedactionTest", LoggerLevel::getLevelDebug());
+        logger.addAppender(appender);
+        appender.open();
+        logger.error("api token secret-12345 leaked");
+        appender.close();
+
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        code<hash<auto>(hash<auto>)> redact = hash<auto> sub (hash<auto> entry) {
+            string redacted = entry.rendered;
+            redacted =~ s/secret-[0-9]+/[REDACTED]/g;
+            entry.rendered = redacted;
+            entry.message = redacted;
+            entry.text = redacted;
+            entry.line_hash = "raw-line-hash";
+            return entry;
+        };
+
+        hash<auto> res = index.indexAppender(appender, {
+            "direction": "forward",
+            "entry_transform": redact,
+        });
+        assertEq("ok", res.status);
+        assertEq(1, res.indexed_count);
+        assertEq(1, embedder.documentTexts().size());
+        assertEq("api token [REDACTED] leaked", embedder.documentTexts()[0]);
+
+        hash<auto> payload = store.firstPayload();
+        assertEq("api token [REDACTED] leaked", payload.text);
+        assertEq("api token [REDACTED] leaked", payload.rendered);
+        assertEq("api token [REDACTED] leaked", payload.message);
+        assertEq("raw-line-hash", payload.line_hash);
+        assertFalse(payload.text =~ /secret-12345/);
+    }
+
+    private payloadFieldsAndStableRecordIds() {
+        FakeEmbedder embedder();
+        MemoryVectorStore store("semantic-log-test", 3);
+        LoggerSemanticSearch::LoggerSemanticSearchIndex index(embedder, store);
+
+        hash<auto> res = index.indexEntries((
+            {
+                "record_id": "tenant-a-log-1",
+                "rendered": "database writer rejected the connection",
+                "message": "database writer rejected the connection",
+                "source_ref": "file:1",
+                "line_hash": "raw-hash-1",
+                "group_namespace": 1001,
+                "index_id": "log-errors",
+                "appender": "es-main",
+                "source_object": "service-a",
+            },
+        ), {
+            "payload_fields": ("group_namespace", "index_id", "appender", "source_object"),
+        });
+        assertEq("ok", res.status);
+        assertEq(("tenant-a-log-1",), res.record_ids);
+        assertEq(1, store.size());
+
+        hash<auto> payload = store.getRecord("tenant-a-log-1").payload;
+        assertEq(1001, payload.group_namespace);
+        assertEq("log-errors", payload.index_id);
+        assertEq("es-main", payload.appender);
+        assertEq("service-a", payload.source_object);
+        assertEq("raw-hash-1", payload.line_hash);
+
+        res = index.indexEntries((
+            {
+                "record_id": "tenant-a-log-1",
+                "rendered": "database writer connection redacted differently",
+                "message": "database writer connection redacted differently",
+                "source_ref": "file:1",
+                "line_hash": "raw-hash-1",
+            },
+        ));
+        assertEq(("tenant-a-log-1",), res.record_ids);
+        assertEq(1, store.size());
+        assertEq("database writer connection redacted differently", store.getRecord("tenant-a-log-1").payload.text);
+
+        res = index.indexEntries((
+            {
+                "rendered": "payment gateway timeout while posting request",
+                "message": "payment gateway timeout while posting request",
+                "source_ref": "file:2",
+                "line_hash": "raw-hash-2",
+            },
+        ));
+        string generated_id = res.record_ids[0];
+        res = index.indexEntries((
+            {
+                "rendered": "payment gateway timeout while posting request",
+                "message": "payment gateway timeout while posting request",
+                "source_ref": "file:2",
+                "line_hash": "raw-hash-2",
+            },
+        ));
+        assertEq(generated_id, res.record_ids[0]);
+    }
+
     private negativeSearch() {
         FakeEmbedder embedder();
         MemoryVectorStore store("semantic-log-test", 3);
@@ -120,16 +229,25 @@ public class LoggerSemanticSearchTest inherits QUnit::Test {
 }
 
 public class FakeEmbedder inherits QoreRagUtils::AbstractEmbedder {
+    private {
+        list<string> document_texts = ();
+    }
+
     list<float> encode(string text, *hash<auto> opts) {
         return vectorFor(text);
     }
 
     list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
+        document_texts += texts;
         return map vectorFor($1), texts;
     }
 
     int getDimension() {
         return 3;
+    }
+
+    list<string> documentTexts() {
+        return document_texts;
     }
 
     private static list<float> vectorFor(string text) {
@@ -208,6 +326,14 @@ public class MemoryVectorStore inherits QoreRagUtils::AbstractVectorStore {
 
     int size() {
         return records.size();
+    }
+
+    hash<auto> getRecord(string id) {
+        return records{id};
+    }
+
+    hash<auto> firstPayload() {
+        return records.values()[0].payload;
     }
 
     private static float dot(list<float> a, list<float> b) {

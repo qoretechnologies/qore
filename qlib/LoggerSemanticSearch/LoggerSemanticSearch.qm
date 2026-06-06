@@ -233,6 +233,8 @@ public class LoggerSemanticSearchIndex {
             - \c max_pages: maximum search pages to request
             - \c id_prefix: override id prefix for this call
             - \c embed_options: per-call embedder options
+            - \c entry_transform: callback receiving each raw search entry and returning the entry to index
+            - \c payload_fields: list of entry field names copied to top-level vector payloads
         @return indexing summary with counts, source metadata, and continuation cursor
     */
     public hash<auto> indexAppender(Logger::LoggerAppender appender, *hash<auto> request) {
@@ -260,6 +262,9 @@ public class LoggerSemanticSearchIndex {
         remove search_req.max_pages;
         remove search_req.id_prefix;
         remove search_req.embed_options;
+        remove search_req.embedding_batch_size;
+        remove search_req.entry_transform;
+        remove search_req.payload_fields;
 
         while (indexed < max_entries && pages < max_pages) {
             search_req.limit = min(page_limit, max_entries - indexed);
@@ -323,10 +328,13 @@ public class LoggerSemanticSearchIndex {
             - \c id_prefix: stable prefix for generated ids
             - \c embed_options: per-call embedder options
             - \c embedding_batch_size: number of entries to embed per batch
+            - \c entry_transform: callback receiving each entry and returning the entry to index
+            - \c payload_fields: list of entry field names copied to top-level vector payloads
         @return indexing summary with generated record ids
     */
     public hash<auto> indexEntries(list<hash<auto>> entries, *hash<auto> options) {
         hash<auto> opts = options ?? {};
+        *code<hash<auto>(hash<auto>)> entry_transform = opts.entry_transform;
         list<hash<auto>> pending_entries = ();
         list<string> texts = ();
         list<string> record_ids = ();
@@ -334,6 +342,9 @@ public class LoggerSemanticSearchIndex {
             DefaultIndexPageSize);
 
         foreach hash<auto> entry in (entries) {
+            if (entry_transform) {
+                entry = entry_transform(entry);
+            }
             string text = getEntryText(entry);
             if (!text.val()) {
                 continue;
@@ -355,7 +366,7 @@ public class LoggerSemanticSearchIndex {
                 push records, <QoreRagUtils::VectorRecord>{
                     "id": record_id,
                     "vector": vectors[i],
-                    "payload": makePayload(entry, batch_texts[i]),
+                    "payload": makePayload(entry, batch_texts[i], opts),
                 };
             }
 
@@ -434,6 +445,13 @@ public class LoggerSemanticSearchIndex {
     }
 
     private string makeRecordId(hash<auto> entry, *string override_prefix) {
+        if (entry.record_id) {
+            return string(entry.record_id);
+        }
+        if (entry.id) {
+            return string(entry.id);
+        }
+
         string base = sprintf("%s|%y|%y|%y|%y",
             override_prefix ?? id_prefix,
             entry.source_ref,
@@ -448,7 +466,7 @@ public class LoggerSemanticSearchIndex {
         return string(entry.rendered ?? entry.message ?? entry.text ?? "");
     }
 
-    private static hash<auto> makePayload(hash<auto> entry, string text) {
+    private static hash<auto> makePayload(hash<auto> entry, string text, hash<auto> opts) {
         hash<auto> payload = {
             "text": text,
             "rendered": entry.rendered ?? text,
@@ -466,6 +484,16 @@ public class LoggerSemanticSearchIndex {
         copyIfExists(\payload, entry, "line");
         copyIfExists(\payload, entry, "sequence");
         copyIfExists(\payload, entry, "context");
+
+        if (opts.payload_fields) {
+            list<auto> payload_fields = opts.payload_fields instanceof list
+                ? opts.payload_fields
+                : (opts.payload_fields,);
+            foreach auto field in (payload_fields) {
+                copyIfExists(\payload, entry, string(field));
+            }
+        }
+
         return payload;
     }
 
