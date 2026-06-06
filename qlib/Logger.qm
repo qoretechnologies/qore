@@ -627,6 +627,15 @@ public class LoggerSearchUtil {
             return {"status": "invalid", "reason": "invalid-match"};
         }
 
+        if (req.regex && req.terms.size()) {
+            int flags = req.case_sensitive ? 0 : RE_Caseless;
+            try {
+                bool regex_valid = regex("", req.terms[0], flags);
+            } catch () {
+                return {"status": "invalid", "reason": "invalid-regex"};
+            }
+        }
+
         if (req.context_before < 0) {
             req.context_before = 0;
         }
@@ -778,7 +787,16 @@ public class LoggerSearchUtil {
         int source_start = cursor.source_index ?? 0;
         *int cursor_line = cursor.line_index;
         if (source_start < 0 || source_start >= sources.size()) {
+            return getInvalidResult(caps, cursor.source_signature ? "stale-cursor" : "invalid-cursor");
+        }
+
+        if (cursor.direction && cursor.direction != req.direction) {
             return getInvalidResult(caps, "invalid-cursor");
+        }
+
+        if (cursor.source_signature
+                && cursor.source_signature != getSourceSignature(sources[source_start])) {
+            return getInvalidResult(caps, "stale-cursor");
         }
 
         int step = req.direction == "backward" ? -1 : 1;
@@ -793,7 +811,8 @@ public class LoggerSearchUtil {
                     && scanned_bytes + stat.size > req.max_scanned_bytes) {
                 truncated = True;
                 reason = "max-scanned-bytes";
-                next_cursor = makeCursor(source_idx, req.direction == "backward" ? -1 : 0);
+                next_cursor = makeCursor(sources, source_idx, req.direction == "backward" ? -1 : 0,
+                    req.direction);
                 break;
             }
 
@@ -804,7 +823,13 @@ public class LoggerSearchUtil {
 
             while (line_idx >= 0 && line_idx < lines.size()) {
                 ++scanned_events;
-                if (matchesRenderedLine(lines[line_idx], req)) {
+                bool matched;
+                try {
+                    matched = matchesRenderedLine(lines[line_idx], req);
+                } catch () {
+                    return getInvalidResult(caps, "invalid-regex");
+                }
+                if (matched) {
                     foreach hash<auto> entry in (makeMatchEntries(lines, source, line_idx, req)) {
                         push entries, entry;
                     }
@@ -812,7 +837,7 @@ public class LoggerSearchUtil {
                     if (matched_events >= req.limit) {
                         truncated = True;
                         int next_line = line_idx + step;
-                        next_cursor = makeCursorForNextPosition(source_idx, next_line, sources.size(), req.direction);
+                        next_cursor = makeCursorForNextPosition(sources, source_idx, next_line, req.direction);
                         return makeSearchResult("partial", caps, entries, next_cursor, scanned_bytes, scanned_events,
                             truncated, "limit");
                     }
@@ -916,6 +941,15 @@ public class LoggerSearchUtil {
         }
 
         list<string> parts = string(cursor).split(":");
+        if (parts.size() == 5 && parts[0] == "v2") {
+            return {
+                "source_index": int(parts[1]),
+                "line_index": int(parts[2]),
+                "direction": parts[3],
+                "source_signature": parts[4],
+            };
+        }
+
         if (parts.size() != 2) {
             return {"status": "invalid", "reason": "invalid-cursor"};
         }
@@ -926,22 +960,37 @@ public class LoggerSearchUtil {
         };
     }
 
-    private static *string makeCursorForNextPosition(int source_idx, int line_idx, int source_count, string direction) {
+    private static *string makeCursorForNextPosition(list<hash<auto>> sources, int source_idx, int line_idx,
+            string direction) {
         if (direction == "backward") {
             if (line_idx >= 0) {
-                return makeCursor(source_idx, line_idx);
+                return makeCursor(sources, source_idx, line_idx, direction);
             }
-            if (source_idx + 1 < source_count) {
-                return makeCursor(source_idx + 1, -1);
+            if (source_idx + 1 < sources.size()) {
+                return makeCursor(sources, source_idx + 1, -1, direction);
             }
             return NOTHING;
         }
 
-        return makeCursor(source_idx, line_idx);
+        return makeCursor(sources, source_idx, line_idx, direction);
     }
 
-    private static string makeCursor(int source_idx, int line_idx) {
-        return sprintf("%d:%d", source_idx, line_idx);
+    private static string makeCursor(list<hash<auto>> sources, int source_idx, int line_idx, string direction) {
+        return sprintf("v2:%d:%d:%s:%s", source_idx, line_idx, direction,
+            getSourceSignature(sources[source_idx]));
+    }
+
+    private static string getSourceSignature(hash<auto> source) {
+        *hash<StatInfo> stat = hstat(source.path);
+        string base = sprintf("%s|%s|%s|%y",
+            source.id,
+            source.kind,
+            source.path,
+            stat ? stat.inode : NOTHING);
+        if (!source.active || source.kind == "file-ring") {
+            base += sprintf("|%y|%y", stat ? stat.size : NOTHING, stat ? stat.mtime : NOTHING);
+        }
+        return has_digest("sha256") ? digest("sha256", base).toHex() : base;
     }
 
     private static hash<auto> getInvalidResult(hash<auto> caps, string reason) {

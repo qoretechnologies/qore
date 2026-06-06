@@ -1027,6 +1027,28 @@ class Test inherits QUnit::Test {
         assertEq("middle", res.entries[2].message);
         assertEq("after", res.entries[2].context);
 
+        res = LoggerSearchUtil::searchRenderedEvents(la, {"text": "[", "regex": True});
+        assertEq("invalid", res.status);
+        assertEq("invalid-regex", res.reason);
+
+        res = LoggerSearchUtil::searchRenderedEvents(la,
+            {"text": "needle older", "regex": True, "direction": "forward", "limit": 1,
+                "context_before": 1, "context_after": 1});
+        assertEq("partial", res.status);
+        assertEq(3, res.result_count);
+        assertEq("before", res.entries[0].context);
+        assertEq("match", res.entries[1].context);
+        assertEq("after", res.entries[2].context);
+        assertTrue(res.next_cursor instanceof string);
+
+        res = LoggerSearchUtil::searchRenderedEvents(la, {
+            "text": "needle.*",
+            "regex": True,
+            "max_scanned_bytes": 1,
+        });
+        assertEq("partial", res.status);
+        assertEq("max-scanned-bytes", res.reason);
+
         string rfn = tmp_location() + DirSep + UNIQUE_NAME + "-search-rotate.log";
         LoggerAppenderFileRotate rotate("SEARCHROT", new LoggerLayoutPattern("%m%n"), rfn, 2);
         unlink(rfn);
@@ -1052,6 +1074,69 @@ class Test inherits QUnit::Test {
         list<string> messages = map $1.message, res.entries;
         assertTrue(inlist("active needle", messages));
         assertTrue(inlist("rotated needle", messages));
+
+        res = LoggerSearchUtil::searchRenderedEvents(rotate, {
+            "text": "needle",
+            "direction": "forward",
+            "limit": 1,
+        });
+        assertEq("partial", res.status);
+        assertEq("rotated needle", res.entries[0].message);
+        string include_rotated_cursor = res.next_cursor;
+        res = LoggerSearchUtil::searchRenderedEvents(rotate, {
+            "text": "needle",
+            "direction": "forward",
+            "cursor": include_rotated_cursor,
+            "include_rotated": False,
+        });
+        assertEq("invalid", res.status);
+        assertEq("stale-cursor", res.reason);
+
+        res = LoggerSearchUtil::searchRenderedEvents(rotate, {"text": "needle", "limit": 1});
+        string stale_cursor = res.next_cursor;
+        rotate.open();
+        rotate.rotate();
+        rotate_logger.error("post-rotate needle");
+        rotate.close();
+
+        res = LoggerSearchUtil::searchRenderedEvents(rotate, {"text": "needle", "cursor": stale_cursor});
+        assertEq("invalid", res.status);
+        assertEq("stale-cursor", res.reason);
+
+        string ring_pattern = tmp_location() + DirSep + UNIQUE_NAME + "-search-ring-%i.log";
+        LoggerAppenderFileRing ring("SEARCHRING", new LoggerLayoutPattern("%m%n"), ring_pattern, 1);
+        unlink(ring.getFileNameForIndex(0));
+        on_exit unlink(ring.getFileNameForIndex(0));
+
+        Logger ring_logger("SearchRingTest", LoggerLevel::getLevelDebug());
+        ring_logger.addAppender(ring);
+        ring.open();
+        ring_logger.error("ring first needle");
+        ring_logger.error("ring second needle");
+        ring.close();
+
+        res = LoggerSearchUtil::searchRenderedEvents(ring, {"text": "needle", "limit": 1});
+        assertEq("partial", res.status);
+        string ring_cursor = res.next_cursor;
+        ring.open();
+        ring.rotate();
+        ring_logger.error("ring overwritten needle");
+        ring.close();
+
+        res = LoggerSearchUtil::searchRenderedEvents(ring, {"text": "needle", "cursor": ring_cursor});
+        assertEq("invalid", res.status);
+        assertEq("stale-cursor", res.reason);
+
+        string afn_search = tmp_location() + DirSep + UNIQUE_NAME + "-search-archive.log";
+        string archive_pattern = tmp_location() + DirSep + UNIQUE_NAME + "-search-archive.%d";
+        LoggerAppenderFileArchive archive("SEARCHARCH", new LoggerLayoutPattern("%m%n"), afn_search,
+            archive_pattern);
+        unlink(afn_search);
+        on_exit unlink(afn_search);
+        hash<auto> archive_caps = LoggerSearchUtil::getAppenderSearchCapabilities(archive);
+        assertEq("file-archive", archive_caps.source.kind);
+        assertFalse(archive_caps.include_archived);
+        assertFalse(archive_caps.archive_search);
     }
 
     testLogger() {
