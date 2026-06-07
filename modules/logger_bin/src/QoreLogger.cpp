@@ -164,9 +164,16 @@ bool QoreLogger::getAdditivity() const {
 
 //! Forwards the given logging event to all linked appenders
 void QoreLogger::callAppenders(ExceptionSink* xsink, const QoreObject* event, QoreLoggerEvent* e) {
-    QoreAutoRWWriteLocker awl(lock);
+    std::vector<AppenderCallInfo> calls;
+    {
+        QoreAutoRWReadLocker arl(lock);
+        calls.reserve(appenders.size());
+        for (auto& i : appenders) {
+            calls.emplace_back(i);
+        }
+    }
 
-    for (auto& i : appenders) {
+    for (auto& i : calls) {
         if (i.a) {
             // make direct optimized call
             i.a->post(xsink, event, e);
@@ -177,8 +184,12 @@ void QoreLogger::callAppenders(ExceptionSink* xsink, const QoreObject* event, Qo
             i.app->evalMethod("post", *args, xsink).discard(xsink);
         }
         if (*xsink) {
-            return;
+            break;
         }
+    }
+
+    for (auto& i : calls) {
+        i.deref(xsink);
     }
 }
 
