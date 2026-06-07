@@ -359,14 +359,16 @@ struct QoreProgramLineLocation {
     int16_t start_line = -1,
         end_line = -1;
 
-    // source columns (1-based); -1 means unknown (e.g. for programmatically-created or
-    // AOT-deserialized locations, which do not carry column information)
+    // source columns (0-based; end_column is exclusive); -1 means unknown (e.g. for programmatically-created
+    // or AOT-deserialized locations, which do not carry column information). 0-based to match the parser's
+    // location tracking (QoreParserLocation::first_col/last_col) and the structured-diagnostics API/tests.
     int16_t start_column = -1,
         end_column = -1;
 
-    // clamps a raw column value to the valid stored range; out-of-range or non-positive -> -1 (unknown)
+    // clamps a raw 0-based column value to the valid stored range; a negative or out-of-range value -> -1
+    // (unknown). Column 0 is a valid first-character position and must be preserved.
     DLLLOCAL static int16_t normalizeColumn(int col) {
-        return (col > 0 && col <= 0x7fff) ? (int16_t)col : (int16_t)-1;
+        return (col >= 0 && col <= 0x7fff) ? (int16_t)col : (int16_t)-1;
     }
 
     // if sline is 0 and eline is > 0 then set sline to 1
@@ -589,8 +591,8 @@ struct QoreDiagnostic {
     std::string source;         //!< source object tag (may be empty)
     int start_line = -1;
     int end_line = -1;
-    int start_column = -1;      //!< 1-based start column, or -1 if unknown
-    int end_column = -1;        //!< 1-based end column, or -1 if unknown
+    int start_column = -1;      //!< 0-based start column, or -1 if unknown
+    int end_column = -1;        //!< 0-based end column (exclusive), or -1 if unknown
     std::string message;        //!< the human-readable diagnostic message
 
     DLLLOCAL QoreDiagnostic(bool error, const char* code, int warn_code, const QoreProgramLocation& loc,

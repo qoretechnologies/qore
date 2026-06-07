@@ -16,8 +16,30 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         addTestCase("structured error with column + suggestion", \testStructuredError());
         addTestCase("structured warning with warning code", \testStructuredWarning());
         addTestCase("accurate error columns", \testErrorColumns());
+        addTestCase("first-column diagnostic preserved", \testFirstColumnPreserved());
         addTestCase("disabling clears diagnostics", \testClearedOnDisable());
         set_return_value(main());
+    }
+
+    testFirstColumnPreserved() {
+        # a diagnostic whose offending token starts at the very first character of the source must report a
+        # 0-based start column of 0 (not -1/unknown); columns are 0-based with an exclusive end column
+        Program p(PO_NEW_STYLE);
+        p.setParseDiagnosticsCollected(True);
+        # a bareword as the first token of the program: the diagnostic begins at column 0
+        try {
+            p.parse("undefinedvar;", "");
+        } catch (hash<ExceptionInfo> ex) {}
+        *hash<ParseDiagnosticInfo> bareword;
+        foreach hash<ParseDiagnosticInfo> d in (p.getParseDiagnostics()) {
+            if (d.message =~ /bareword/) {
+                bareword = d;
+                break;
+            }
+        }
+        assertEq(True, exists bareword, "the column-0 bareword diagnostic was collected");
+        assertEq(0, bareword.startColumn, "first-character diagnostic reports 0-based start column 0");
+        assertEq(12, bareword.endColumn, "end column is exclusive (12-char bareword starting at 0)");
     }
 
     testDisabledByDefault() {
