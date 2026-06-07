@@ -73,7 +73,7 @@ public hashdecl ConnectionSchemeInfo inherits DataProvider::DisplayDescInfo {
 public class ConnectionSchemeCache {
     public {
         #! Map of known connection schemes to modules
-        const SchemeMap = {
+        const hash<string, string> SchemeMap = {
             "aftership": "AftershipRestClient",
 
             "anthropic": "AnthropicRestClient",
@@ -361,7 +361,7 @@ public class ConnectionSchemeCache {
         };
 
         #! Type alias map
-        const TypeMap = {
+        const hash<auto> TypeMap = {
             "int": Type::Int,
             "boolean": Type::Boolean,
             "file-as-string": Type::String,

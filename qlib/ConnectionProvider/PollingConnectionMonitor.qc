@@ -36,7 +36,7 @@ public namespace ConnectionProvider {
 public class PollingConnectionMonitor inherits LoggerWrapper {
     public {
         #! Polling event map
-        const PollEventMap = {
+        const hash<string, string> PollEventMap = {
             SOCK_POLLIN: "read",
             SOCK_POLLOUT: "write",
             SOCK_POLLIN | SOCK_POLLOUT: "read and write",

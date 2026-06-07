@@ -30,7 +30,7 @@ public namespace ConnectionProvider {
 public class RestartableIoHelper inherits LoggerWrapper {
     public {
         #! Retryable I/O errors
-        const RetryableIoErrors = {
+        const hash<string, bool> RetryableIoErrors = {
             "SOCKET-CONNECT-ERROR": True,
             "SOCKET-SSL-ERROR": True,
             "SOCKET-TIMEOUT": True,
