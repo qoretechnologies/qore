@@ -1,7 +1,61 @@
-# Coding-Support Diagnostics — Phased Implementation Plan
+# Coding-Support Diagnostics — Design & Implementation
 
 Branch: `feature/coding_support` (off `develop`)
 Target release: Qore 2.3 (see `project_qore_2_3_target`)
+Status: **delivered** — all phases implemented; core test suite green (276/276),
+valgrind-clean. The per-phase sections below double as the implementation record
+(each carries an "Outcome (implemented)" note where the as-built result differed
+from the original plan).
+
+## As-built summary
+
+A suite of parse-time diagnostic improvements for human developers and AI-driven
+coding tools. Two things are **always on** (they appear in ordinary error/warning
+output, no flag needed):
+
+- **"did you mean …?" near-match suggestions** on identifier-resolution errors —
+  unresolved bareword, undefined class, undefined type, undefined function,
+  undefined hashdecl. Driven by a bounded Damerau-Levenshtein helper
+  (`q_edit_distance`) + `QoreSuggestionList`; suggestions only ever name
+  identifiers that actually exist in scope, and a pure capitalization difference
+  is flagged specially.
+- **`non-exhaustive-switch` warning** (`QP_WARN_NONEXHAUSTIVE_SWITCH`, in the
+  default + module warning masks) — fires when a `switch` over an enum-typed
+  value omits members and has no `default:`; lists the unhandled members; a
+  `default:` silences it.
+
+On top of that, **machine-readable capture** of all parse errors/warnings is
+available three ways (all opt-in, default-off, zero overhead otherwise):
+
+| Channel | How to enable | Output |
+|---|---|---|
+| Per-`Program` API | `Program::setParseDiagnosticsCollected(True)`, then `Program::getParseDiagnostics()` | `list<hash<ParseDiagnosticInfo>>` |
+| CLI JSON | `qore --diag-format=json` / `QORE_DIAG_FORMAT=json` | JSON array on stdout, parse-only, exit 2 on error |
+| CLI code frames | `qore --code-frames` / `QORE_CODE_FRAMES=1` | Rust-style `file:line:col` + source line + caret, parse-only |
+
+`ParseDiagnosticInfo` fields: `severity`, `code`, `*warningCode`, `*file`,
+`*source`, `startLine`/`endLine`, `startColumn`/`endColumn`, `message`. Capture
+is wired at the single chokepoint (`makeParseException` / `makeParseWarning`), so
+**every** parse error/warning — including the always-on suggestions, the enum
+warning, and Qore's existing overload/type errors — flows through it.
+
+**Source columns** are now tracked end-to-end on parse-error / AST-node locations
+(scanner `get_loc` + all grammar `getLocation(@…)` sites) and exposed via
+`SourceLocationInfo`/`ParseDiagnosticInfo`.
+
+Key files: edit-distance + suggestion engine `lib/support.cpp`
+(`include/qore/intern/QoreLibIntern.h`); suggestion call sites
+`lib/QoreNamespace.cpp`, `lib/QoreTypeInfo.cpp`, `lib/FunctionCallNode.cpp`,
+`include/qore/intern/QoreNamespaceIntern.h`; enum warning `lib/SwitchStatement.cpp`
+(`QP_WARN_*` in `include/qore/QoreProgram.h`, string table `lib/QoreProgram.cpp`);
+columns `include/qore/intern/QoreLibIntern.h` + `lib/QoreLib.cpp` + `lib/scanner.lpp`
++ `lib/parser.ypp`; structured API + JSON/frames `lib/QC_Program.qpp` +
+`lib/QoreProgram.cpp` + `command-line.cpp`. Tests: `examples/test/qore/diagnostics/`.
+
+**Known limitation (follow-on):** reflection-of-*declaration* source locations
+(function variants, classes, hashdecls, members) report `column == -1`; they
+build locations from bare line ints in the signature/variant/member constructors
+— a separate plumbing chain the diagnostic features do not depend on. See Phase 4.
 
 ## Goal
 
@@ -71,6 +125,13 @@ coding tools:
   go under 2.3.
 
 ---
+
+## Implementation phases (as delivered)
+
+The phases below are the implementation record, in the order they were built and
+committed on `feature/coding_support`. Each describes what shipped, the risk, and
+its tests; where the as-built result diverged from the original plan, an
+**"Outcome (implemented)"** note records the actual result.
 
 ## Phase 0 — Test scaffolding & baselines
 
