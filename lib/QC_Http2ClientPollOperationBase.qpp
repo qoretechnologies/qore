@@ -1268,11 +1268,8 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
     // hasStreamingData()/takeStreamData() mechanism in continuePoll() to
     // deliver DATA chunks to the Channel as they arrive, instead of waiting
     // for END_STREAM (which never comes for SSE streams).
-    if (action->isStreaming()
-            && sock_obj->setHttp2StreamStreaming(stream_id, xsink)) {
-        release_reserved_stream_slot();
-        action->deref(xsink);
-        return -1;
+    if (action->isStreaming()) {
+        sock_obj->setHttp2StreamStreamingDirect(stream_id);
     }
 
     // Register action (take ownership — action was created with refcount 1 by caller)

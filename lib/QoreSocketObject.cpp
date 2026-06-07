@@ -1491,7 +1491,6 @@ public:
         StreamingResponseWithStream,
         Cleanup,
         Reset,
-        SetStreaming,
     };
 
     DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, Action action,
@@ -1579,7 +1578,7 @@ public:
 
         Http2SessionPtr h2 = qore_socket_object_get_h2_session(sock);
         if (!h2) {
-            if (action == Action::Cleanup || action == Action::Reset || action == Action::SetStreaming) {
+            if (action == Action::Cleanup || action == Action::Reset) {
                 output = 0;
                 done = true;
                 return nullptr;
@@ -1690,11 +1689,6 @@ public:
                 }
                 h2->cleanupStream(stream_id);
                 break;
-
-            case Action::SetStreaming:
-                h2->setStreamStreaming(stream_id);
-                output = 0;
-                break;
         }
 
         if (!*xsink && output >= 0 && wake_controller) {
@@ -1758,7 +1752,6 @@ public:
         Reset,
         Datagram,
         Trailers,
-        SetStreaming,
         RegisterConnectQueue,
         DeregisterConnectQueue,
         RegisterConnectFrameState,
@@ -1805,11 +1798,10 @@ public:
             int64_t session_id, int64_t stream_id = 0)
             : sock(sock), action(action), session_id(session_id), stream_id(stream_id) {
         assert(action == Action::Cancel || action == Action::ShutdownNotice || action == Action::Shutdown
-            || action == Action::Cleanup || action == Action::Reset || action == Action::SetStreaming
+            || action == Action::Cleanup || action == Action::Reset
             || action == Action::DeregisterConnectQueue || action == Action::DeregisterConnectFrameState
             || action == Action::UnregisterDatagramQueue);
         sock->ref();
-        use_first_session = action == Action::SetStreaming;
     }
 
     DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, Action action,
@@ -1948,10 +1940,6 @@ public:
                 output = session->submitTrailers(stream_id, header_map, xsink);
                 break;
 
-            case Action::SetStreaming:
-                session->setStreamStreaming(stream_id);
-                output = 0;
-                break;
 
             case Action::RegisterConnectQueue:
                 session->registerConnectStreamQueue(stream_id, queue);
@@ -2076,7 +2064,6 @@ private:
             case Action::Trailers:
                 return output == 0;
             case Action::Cleanup:
-            case Action::SetStreaming:
             case Action::RegisterConnectQueue:
             case Action::DeregisterConnectQueue:
             case Action::RegisterConnectFrameState:
@@ -5461,27 +5448,11 @@ void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink
         "cancelHttp2Stream", xsink);
 }
 
-void QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id) {
-    ExceptionSink xsink;
-    setHttp2StreamStreaming(stream_id, &xsink);
-    if (xsink) {
-        xsink.clear();
-    }
-}
-
-int QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id, ExceptionSink* xsink) {
-    if (!qore_on_async_io_thread()) {
-        return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
-            new QoreSocketObjectHttp2EnqueuePollOperation(this,
-                QoreSocketObjectHttp2EnqueuePollOperation::Action::SetStreaming, stream_id, false),
-            "setHttp2StreamStreaming", xsink));
-    }
-
+void QoreSocketObject::setHttp2StreamStreamingDirect(int32_t stream_id) {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (h2) {
         h2->setStreamStreaming(stream_id);
     }
-    return 0;
 }
 
 void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
@@ -6274,19 +6245,11 @@ int QoreSocketObject::sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, co
     return session->sendStreamData(stream_id, data, len, end_stream, xsink);
 }
 
-int QoreSocketObject::setQuicClientStreamStreaming(int64_t stream_id, ExceptionSink* xsink) {
-    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
-        std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
-        if (session) {
-            session->setStreamStreaming(stream_id);
-        }
-        return 0;
+void QoreSocketObject::setQuicClientStreamStreamingDirect(int64_t stream_id) {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
+    if (session) {
+        session->setStreamStreaming(stream_id);
     }
-
-    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
-        new QoreSocketObjectQuicEnqueuePollOperation(this,
-            QoreSocketObjectQuicEnqueuePollOperation::Action::SetStreaming, 0, stream_id),
-        "setQuicClientStreamStreaming", xsink));
 }
 
 int QoreSocketObject::submitQuicClientTrailers(int64_t stream_id, const QoreHashNode* trailers,

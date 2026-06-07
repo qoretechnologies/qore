@@ -512,15 +512,11 @@ public:
     DLLEXPORT void cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
 
     //! Mark an HTTP/2 stream for incremental response body delivery
-    /** When set, the stream's body data is delivered incrementally via
-        hasStreamingData()/takeStreamData() instead of waiting for END_STREAM.
-        @param stream_id the stream to mark
-        @since %Qore 2.3
+    /** Internal direct variant for callers that already serialized request submission on the
+    /** async I/O thread; mutates only lock-protected Http2Session bookkeeping (no nghttp2 calls),
+        so it is safe to call from any thread.
     */
-    DLLEXPORT void setHttp2StreamStreaming(int32_t stream_id);
-
-    //! Internal variant of setHttp2StreamStreaming() that reports controller errors
-    DLLLOCAL int setHttp2StreamStreaming(int32_t stream_id, ExceptionSink* xsink);
+    DLLLOCAL void setHttp2StreamStreamingDirect(int32_t stream_id);
 
     //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** @since %Qore 2.3
@@ -830,12 +826,13 @@ public:
         bool end_stream, ExceptionSink* xsink);
 
     //! Mark a client-side HTTP/3 stream for incremental response body delivery
-    /** Internal helper for HTTP/3 client connection code; delegates the
-        QuicSession mutation to the async I/O controller.
+    /** Internal direct variant for callers that already serialized request submission on the
+        async I/O thread; mutates only lock-protected QuicSession bookkeeping (no ngtcp2 calls),
+        so it is safe to call from any thread.
 
         @since %Qore 2.3
     */
-    DLLLOCAL int setQuicClientStreamStreaming(int64_t stream_id, ExceptionSink* xsink);
+    DLLLOCAL void setQuicClientStreamStreamingDirect(int64_t stream_id);
 
     //! Submit trailers on a client-side HTTP/3 streaming request
     /** Internal helper for HTTP/3 client connection code; delegates the

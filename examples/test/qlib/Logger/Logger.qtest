@@ -1090,6 +1090,35 @@ class Test inherits QUnit::Test {
         assertEq("partial", res.status);
         assertEq("max-scanned-bytes", res.reason);
 
+        string lfn = tmp_location() + DirSep + UNIQUE_NAME + "-search-level.log";
+        unlink(lfn);
+        on_exit unlink(lfn);
+
+        LoggerAppenderFile level_appender("SEARCHLEVEL", new LoggerLayoutPattern("[%p]: %m%n"), lfn);
+        Logger level_logger("SearchLevelTest", LoggerLevel::getLevelDebug());
+        level_logger.addAppender(level_appender);
+        level_appender.open();
+        level_logger.debug("debug needle");
+        level_logger.info("info needle");
+        level_logger.error("error needle");
+        level_appender.close();
+
+        caps = LoggerSearchUtil::getAppenderSearchCapabilities(level_appender);
+        assertTrue(caps.levels);
+        res = LoggerSearchUtil::searchRenderedEvents(level_appender, {
+            "text": "needle",
+            "level_min": "INFO",
+            "direction": "forward",
+            "limit": 10,
+        });
+        list<string> messages = map $1.message, res.entries;
+        assertFalse(inlist("[DEBUG]: debug needle", messages));
+        assertTrue(inlist("[INFO]: info needle", messages));
+        assertTrue(inlist("[ERROR]: error needle", messages));
+        res = LoggerSearchUtil::searchRenderedEvents(level_appender, {"level_min": "BOGUS"});
+        assertEq("invalid", res.status);
+        assertEq("invalid-level", res.reason);
+
         string rfn = tmp_location() + DirSep + UNIQUE_NAME + "-search-rotate.log";
         LoggerAppenderFileRotate rotate("SEARCHROT", new LoggerLayoutPattern("%m%n"), rfn, 2);
         unlink(rfn);
@@ -1112,7 +1141,7 @@ class Test inherits QUnit::Test {
         rotate.close();
 
         res = LoggerSearchUtil::searchRenderedEvents(rotate, {"text": "needle", "limit": 10});
-        list<string> messages = map $1.message, res.entries;
+        messages = map $1.message, res.entries;
         assertTrue(inlist("active needle", messages));
         assertTrue(inlist("rotated needle", messages));
         sources = LoggerSearchUtil::getAppenderSearchSources(rotate, {"direction": "forward"});
@@ -1146,6 +1175,53 @@ class Test inherits QUnit::Test {
         res = LoggerSearchUtil::searchRenderedEvents(rotate, {"text": "needle", "cursor": stale_cursor});
         assertEq("invalid", res.status);
         assertEq("stale-cursor", res.reason);
+
+        string crfn = tmp_location() + DirSep + UNIQUE_NAME + "-search-compressed-rotate.log";
+        LoggerAppenderFileRotate crotate("SEARCHCOMPROT", new LoggerLayoutPattern("%m%n"), crfn, 1);
+        unlink(crfn);
+        unlink(crotate.getArchiveFileName(1));
+        unlink(crotate.getArchiveFileName(1) + ".gz");
+        on_exit {
+            unlink(crfn);
+            unlink(crotate.getArchiveFileName(1));
+            unlink(crotate.getArchiveFileName(1) + ".gz");
+        }
+
+        Logger crotate_logger("SearchCompressedRotateTest", LoggerLevel::getLevelDebug());
+        crotate_logger.addAppender(crotate);
+        crotate.open();
+        crotate_logger.error("compressed rotated needle");
+        crotate.rotate();
+        crotate_logger.error("compressed active needle");
+        crotate.close();
+
+        string compressed_archive = crotate.getArchiveFileName(1) + ".gz";
+        File gz_file();
+        gz_file.open(compressed_archive, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        gz_file.write(gzip(ReadOnlyFile::readBinaryFile(crotate.getArchiveFileName(1))));
+        gz_file.close();
+        unlink(crotate.getArchiveFileName(1));
+
+        caps = LoggerSearchUtil::getAppenderSearchCapabilities(crotate);
+        assertTrue(caps.include_compressed_rotated);
+        assertTrue(inlist("gzip", caps.compressed_rotated_encodings));
+        res = LoggerSearchUtil::searchRenderedEvents(crotate, {
+            "text": "compressed rotated",
+            "direction": "forward",
+            "include_compressed_rotated": True,
+        });
+        assertEq("ok", res.status);
+        assertEq(1, res.result_count);
+        assertEq("compressed rotated needle", res.entries[0].message);
+        assertTrue(res.entries[0].source.compressed);
+        assertEq("gzip", res.entries[0].source.compression);
+        assertTrue(res.entries[0].source_fingerprint instanceof string);
+
+        list<hash<auto>> sources = LoggerSearchUtil::getAppenderSearchSources(crotate, {
+            "direction": "forward",
+            "include_compressed_rotated": True,
+        });
+        assertTrue(any $1.compressed && $1.compression == "gzip", sources);
 
         string ring_pattern = tmp_location() + DirSep + UNIQUE_NAME + "-search-ring-%i.log";
         LoggerAppenderFileRing ring("SEARCHRING", new LoggerLayoutPattern("%m%n"), ring_pattern, 1);
