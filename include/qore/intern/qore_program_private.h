@@ -1358,6 +1358,10 @@ public:
     //! list<hash<ParseDiagnosticInfo>> (implemented in QoreProgram.cpp); never returns nullptr
     DLLLOCAL QoreListNode* getParseDiagnosticList() const;
 
+    //! returns the collected structured diagnostics serialized as a JSON array (implemented in QoreProgram.cpp);
+    //! used by the standalone interpreter's --diag-format=json mode for external tooling
+    DLLLOCAL std::string getParseDiagnosticsJSON() const;
+
     DLLLOCAL int checkParse(ExceptionSink* xsink) const {
         // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
         // The calling thread (doing the parsing) is not attached to this Program,
@@ -3500,5 +3504,9 @@ private:
 
 DLLLOCAL TypedHashDecl* init_hashdecl_SourceLocationInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
+
+//! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
+//! exported so the standalone interpreter (--diag-format=json) can emit them
+DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
 
 #endif

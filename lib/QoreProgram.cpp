@@ -387,6 +387,75 @@ QoreListNode* qore_program_private::getParseDiagnosticList() const {
     return l.release();
 }
 
+// appends a JSON-escaped string (without surrounding quotes) to str
+static void json_escape_append(std::string& str, const std::string& s) {
+    for (char c : s) {
+        switch (c) {
+            case '"': str += "\\\""; break;
+            case '\\': str += "\\\\"; break;
+            case '\b': str += "\\b"; break;
+            case '\f': str += "\\f"; break;
+            case '\n': str += "\\n"; break;
+            case '\r': str += "\\r"; break;
+            case '\t': str += "\\t"; break;
+            default:
+                if ((unsigned char)c < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+                    str += buf;
+                } else {
+                    str += c;
+                }
+        }
+    }
+}
+
+std::string qore_program_private::getParseDiagnosticsJSON() const {
+    std::string j = "[";
+    bool first = true;
+    for (auto& d : diagnostics) {
+        if (!first) {
+            j += ",";
+        }
+        first = false;
+        j += "{\"severity\":\"";
+        j += d.error ? "error" : "warning";
+        j += "\",\"code\":\"";
+        json_escape_append(j, d.code);
+        j += "\",\"warningCode\":";
+        j += (d.warn_code >= 0) ? std::to_string(d.warn_code) : std::string("null");
+        j += ",\"file\":";
+        if (d.file.empty()) {
+            j += "null";
+        } else {
+            j += "\"";
+            json_escape_append(j, d.file);
+            j += "\"";
+        }
+        j += ",\"source\":";
+        if (d.source.empty()) {
+            j += "null";
+        } else {
+            j += "\"";
+            json_escape_append(j, d.source);
+            j += "\"";
+        }
+        j += ",\"startLine\":" + std::to_string(d.start_line);
+        j += ",\"endLine\":" + std::to_string(d.end_line);
+        j += ",\"startColumn\":" + std::to_string(d.start_column);
+        j += ",\"endColumn\":" + std::to_string(d.end_column);
+        j += ",\"message\":\"";
+        json_escape_append(j, d.message);
+        j += "\"}";
+    }
+    j += "]";
+    return j;
+}
+
+std::string qore_get_parse_diagnostics_json(QoreProgram& pgm) {
+    return qore_program_private::get(pgm)->getParseDiagnosticsJSON();
+}
+
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline) {
     QoreProgramLocation loc(sline, eline);
 
