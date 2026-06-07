@@ -58,6 +58,17 @@
         modules
     @endparblock
 
+    @par Bug Fixes
+    @parblock
+    - JIT/AOT: generated functions now always maintain the frame-pointer chain
+      (previously the frame pointer was omitted at higher optimization levels).
+      On AArch64 this could leave a Qore frame unwalkable, so an external
+      frame-pointer-based stack unwinder running while a Qore frame was on the
+      stack (e.g. V8/Abseil capturing a backtrace during V8 module init) could
+      follow a broken chain and crash with a segfault; this manifested as an
+      AArch64-only crash in AOT-compiled programs that load the \c v8 module
+    @endparblock
+
     @section qore_2_3_0 Qore 2.3.0
 
     @par Release Summary

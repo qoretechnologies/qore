@@ -3645,6 +3645,35 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     }
     module.setDataLayout(tm->createDataLayout());
 
+    // Force frame-pointer emission for every defined function in the object.
+    //
+    // By default LLVM omits the frame pointer (x29 on AArch64, rbp on x86-64)
+    // for AOT-compiled functions, so the frame-pointer chain is not maintained
+    // (on AArch64 the prologue saves x29/x30 as ordinary callee-saved registers
+    // but never executes `mov x29, sp`, leaving x29 pointing at the caller's
+    // record).  External frame-pointer-based stack unwinders that walk THROUGH
+    // Qore AOT frames then follow a broken chain and crash.  This is not
+    // hypothetical: V8 (pulled in by the TypeScriptActionInterface data-provider
+    // module) uses Abseil, whose AArch64 stack-trace implementation
+    // (absl::GetStackTrace) is frame-pointer based and runs during mutex
+    // deadlock detection at V8 init.  With omitted frame pointers it walks into
+    // an AOT stack slot holding a NaN-boxed QoreValue (tag 0xFFFA) and
+    // dereferences it as a saved frame pointer -> SIGSEGV.  On x86-64 Abseil's
+    // unwinder is more forgiving, which is why this surfaced as an arm64-only
+    // crash.  Reserving the frame pointer everywhere keeps every AOT frame
+    // walkable by external unwinders (Abseil, profilers, crash reporters) at a
+    // negligible cost (one reserved register).  Also request unwind tables so
+    // DWARF-based unwinders have correct CFI for these frames.
+    for (llvm::Function& fn : module) {
+        if (fn.isDeclaration()) {
+            continue;
+        }
+        fn.addFnAttr("frame-pointer", "all");
+        if (!fn.hasUWTable()) {
+            fn.setUWTableKind(llvm::UWTableKind::Default);
+        }
+    }
+
     // Dump IR before optimization if requested
     if (getenv("QORE_DUMP_IR_BEFORE_OPT")) {
         fprintf(stderr, "=== IR BEFORE OPTIMIZATION (O%d) ===\n", opt_level);
