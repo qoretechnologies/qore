@@ -1217,7 +1217,7 @@ class Test inherits QUnit::Test {
         assertEq("gzip", res.entries[0].source.compression);
         assertTrue(res.entries[0].source_fingerprint instanceof string);
 
-        list<hash<auto>> sources = LoggerSearchUtil::getAppenderSearchSources(crotate, {
+        sources = LoggerSearchUtil::getAppenderSearchSources(crotate, {
             "direction": "forward",
             "include_compressed_rotated": True,
         });

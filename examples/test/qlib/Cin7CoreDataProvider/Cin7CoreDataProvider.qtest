@@ -132,9 +132,12 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
                 "apikey": "x",
             });
         } catch (hash<ExceptionInfo> ex) {
+            # the external API may be unreachable, slow, or block TLS/ALPN in CI;
+            # skip gracefully on any connectivity or timeout error rather than failing
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
-                testSkip(sprintf("cannot connect to Cin7Core API: %s", ex.desc));
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT"
+                    || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
+                testSkip(sprintf("cannot connect to Cin7Core API: %s: %s", ex.err, ex.desc));
             }
             rethrow;
         }
@@ -392,9 +395,12 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
             });
             assertTrue(client1.getURL() =~ /inventory\.dearsystems\.com/);
         } catch (hash<ExceptionInfo> ex) {
+            # the external API may be unreachable, slow, or block TLS/ALPN in CI;
+            # skip gracefully on any connectivity or timeout error rather than failing
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
-                testSkip(sprintf("cannot connect to Cin7Core API: %s", ex.desc));
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT"
+                    || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
+                testSkip(sprintf("cannot connect to Cin7Core API: %s: %s", ex.err, ex.desc));
             }
             rethrow;
         }
