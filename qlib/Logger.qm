@@ -414,7 +414,7 @@ public class LoggerSearchUtil {
         const int MaxSearchLimit = 200;
         const int DefaultMaxScannedBytes = 1024 * 1024;
         const int UnlimitedScannedBytes = -1;
-        const SupportedCompressedRotatedEncodings = ("gzip", "bzip2", "zstd");
+        const list<string> SupportedCompressedRotatedEncodings = ("gzip", "bzip2", "zstd");
     }
 
     #! Returns generic search capabilities for an appender
@@ -1533,11 +1533,11 @@ public class LoggerAppenderStdErr inherits LoggerAppenderWithLayout {
 public class AbstractLoggerAppenderFileRotate inherits public LoggerAppenderFile {
     public {
         #! rotate event
-        const EVENT_ROTATE = 10001;
+        const int EVENT_ROTATE = 10001;
         #! reopen event
-        const EVENT_REOPEN = 10002;
+        const int EVENT_REOPEN = 10002;
         #! default value for rotation chain
-        const DEFAULT_ROTATION_COUNT = 10;
+        const int DEFAULT_ROTATION_COUNT = 10;
     }
 
     constructor(*string name, LoggerLayout layout, *string encoding)
@@ -1586,7 +1586,7 @@ public class AbstractLoggerAppenderFileRotate inherits public LoggerAppenderFile
 public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFileRotate, private LoggerPattern {
     public {
         #! default archive pattern
-        const DEFAULT_ARCHIVE_PATTERN = "%p%f.%i";
+        const string DEFAULT_ARCHIVE_PATTERN = "%p%f.%i";
     }
 
     private:internal {
@@ -1766,7 +1766,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
 public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRotate, private LoggerPattern {
     public {
         #! default date format
-        const DEFAULT_DATE_FORMAT = "YYYYMMDDHHmmSS";
+        const string DEFAULT_DATE_FORMAT = "YYYYMMDDHHmmSS";
     }
 
     private:internal {
@@ -1929,11 +1929,11 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
 public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, private LoggerPattern {
     public {
         #! archive event
-        const EVENT_ARCHIVE = 20;
+        const int EVENT_ARCHIVE = 20;
         #! default date format
-        const DEFAULT_DATE_FORMAT = "YYYYMMDDHHmmSS";
+        const string DEFAULT_DATE_FORMAT = "YYYYMMDDHHmmSS";
         #! default archive pattern
-        const DEFAULT_ARCHIVE_PATTERN = "%p%f.%d";
+        const string DEFAULT_ARCHIVE_PATTERN = "%p%f.%d";
     }
 
     #! Creates the object
@@ -2761,10 +2761,10 @@ public class StdoutAppender inherits LoggerAppenderWithLayout {
 public class LoggerUtil {
     public {
         #! Maximum length of string in characters for a summary log message
-        const MaxSummaryLogStringSize = 100;
+        const int MaxSummaryLogStringSize = 100;
 
         #! Maximum number of elements in a hash or list to log in a summary message
-        const MaxSummaryElements = 20;
+        const int MaxSummaryElements = 20;
     }
 
     #! Returns a summary value for debug logging purposes to avoid logging very large amounts of data

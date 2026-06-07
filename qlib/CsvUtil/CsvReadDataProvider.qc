@@ -30,7 +30,7 @@ public namespace CsvUtil {
 public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "CsvReadDataProvider",
             "supports_read": True,
             "has_record": True,
@@ -41,7 +41,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
                 "display_name": "CSV Input Path",
                 "short_desc": "The path to the input file",
@@ -207,7 +207,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
         };
 
         #! CSV iteration option list
-        const CsvIterationOptionList = keys (ConstructorOptions - ("path", "data", "stream"));
+        const list<string> CsvIterationOptionList = keys (ConstructorOptions - ("path", "data", "stream"));
     }
 
     private {

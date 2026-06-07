@@ -67,7 +67,7 @@ public namespace CsvUtil {
     public class AbstractCsvWriter inherits private CsvHelper {
         private {
             #! valid options for the object (a hash for quick lookups of valid keys)
-            const Options = {
+            const hash<string, int> Options = {
                 "block": C_OPT1|C_OPT2,
                 "datamap": C_OPT1,
                 "date_format": C_OPT1|C_OPT2,

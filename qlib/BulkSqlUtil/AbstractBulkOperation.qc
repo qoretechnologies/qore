@@ -77,14 +77,14 @@ on_error ds.rollback();
     public class AbstractBulkOperation {
         public {
             #! option keys for this object
-            const OptionKeys = {
+            const hash<string, string> OptionKeys = {
                 "block_size": sprintf("the row block size used for bulk DML / batch operations; default: %y",
                     OptionDefaults.block_size),
                 "info_log": "a call reference / closure for informational logging",
             };
 
             #! default option values
-            const OptionDefaults = {
+            const hash<string, int> OptionDefaults = {
                 "block_size": 1000,
             };
         }

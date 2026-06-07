@@ -27,10 +27,10 @@
 
 class CsvHelper {
     private {
-        const C_OPT1 = 0x1;
-        const C_OPT2 = 0x2;
+        const int C_OPT1 = 0x1;
+        const int C_OPT2 = 0x2;
         #! supported type codes (hash for quick lookups)
-        const Types = {
+        const hash<string, bool> Types = {
             "bool": True,
             "*bool": True,
             "int": True,
@@ -46,7 +46,7 @@ class CsvHelper {
         };
 
         #! supported field description attribute codes
-        const FieldAttrs = ("type", "format", "timezone", "code", "header");
+        const list<string> FieldAttrs = ("type", "format", "timezone", "code", "header");
 
         #! flag to convert all header names to lower case
         bool tolwr = False;

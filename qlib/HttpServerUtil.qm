@@ -238,26 +238,26 @@ module HttpServerUtil {
  */
 public namespace HttpServer {
 #! version of the HttpServer's implementation
-public const HttpServerVersion = "1.2";
+public const string HttpServerVersion = "1.2";
 
 #! default HTTP server string
-public const HttpServerString = sprintf("Qore-HTTP-Server/%s", HttpServerVersion);
+public const string HttpServerString = sprintf("Qore-HTTP-Server/%s", HttpServerVersion);
 
 #! default timeout in ms
-public const DefaultTimeout = 30s;  # recvs timeout after 30 seconds
+public const date DefaultTimeout = 30s;  # recvs timeout after 30 seconds
 
 #! read timeout in ms
-public const ReadTimeout = DefaultTimeout;
+public const date ReadTimeout = DefaultTimeout;
 
 #! maximum X.509 and private key file length
 /** there is no real maximum size for these files, however an upper limit is used here to ensure that
     huge files are not used for the SSL cert and key files which could cause a crash or memory problems;
     currently set to 1M which is orders of magnitude higher than any real files currently in existence
 */
-public const MaxSslFileLen = 1024 * 1024;
+public const int MaxSslFileLen = 1024 * 1024;
 
 #! map of HTTP result codes and text messages
-public const HttpCodes = {
+public const hash<string, string> HttpCodes = {
     # 100s: Informational
     "100": "Continue",
     "101": "Switching Protocols",
@@ -372,10 +372,10 @@ public const HttpCodes = {
 */
 #/@{
 #! bit for logging argument
-public const LP_LOGPARAMS = 1 << 16;
+public const int LP_LOGPARAMS = 1 << 16;
 
 #! mask for the log level
-public const LP_LEVELMASK = LP_LOGPARAMS - 1;
+public const int LP_LEVELMASK = LP_LOGPARAMS - 1;
 #/@}
 
 #! the return value of HTTP handler methods where any message body has been serialized for sending over the HTTP socket
@@ -2460,13 +2460,13 @@ public class AbstractHttpRequestHandler {
         timeout timeout_ms = HttpServer::DefaultTimeout;
 
         #! thread-local key string for notification callbacks
-        const NotificationThreadKey = "_AHRH_pc";
+        const string NotificationThreadKey = "_AHRH_pc";
 
         #! thread-local key string for the persistent flag
-        const PersistenceThreadKey = "_AHRH_p";
+        const string PersistenceThreadKey = "_AHRH_p";
 
         #! thread-local key string for the handler reference (for cleanup)
-        const PersistenceHandlerKey = "_AHRH_ph";
+        const string PersistenceHandlerKey = "_AHRH_ph";
     }
 
     private {

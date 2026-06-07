@@ -34,7 +34,7 @@ public class FixedLengthBase {
         *hash<auto> m_opts; # encoding, eol, ignore_empty, timezone, etc
 
         #! Translates from global options to data provider options
-        const GlobalOptionMap = {
+        const hash<string, string> GlobalOptionMap = {
             "date_format": "date.format",
             "number_format": "number.format",
             "timezone": "date.input_timezone",

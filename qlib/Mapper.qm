@@ -450,10 +450,10 @@ public hashdecl MapperOptionInfo {
 public class Mapper inherits DataProvider::AbstractDataProcessor {
     public {
         #! field keys that conflict with "constant" and "index"
-        const ConstantConflictList = ("name", "struct", "code", "default");
+        const list<string> ConstantConflictList = ("name", "struct", "code", "default");
 
         #! constructor option keys (can be extended by subclassing and reimplementing optionKeys())
-        const OptionKeys = (map {$1.key: $1.value.desc}, UserOptions.pairIterator()) + {
+        const hash<string, string> OptionKeys = (map {$1.key: $1.value.desc}, UserOptions.pairIterator()) + {
             "date_format": "DEPRECATED: gives the default format for parsing dates from strings; ex: "
                 "\"MM/DD/YYYY HH:mm:SS\"",
             "empty_strings_to_nothing": "DEPRECATED: converts output record's empty strings to NOTHING",
@@ -480,7 +480,7 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         };
 
         #! User options
-        const UserOptions = {
+        const hash<string, hash<MapperOptionInfo>> UserOptions = {
             "allow_dot": <MapperOptionInfo>{
                 "type": "bool",
                 "desc": "a flag to allow dots in input field names instead of interpreting them as field structure "
@@ -602,7 +602,7 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         };
 
         #! default known mapper hash field keys (can be extended by subclassing and reimplementing validKeys())
-        const ValidKeys = (map {$1: True}, keys MapperKeyInfo) + {
+        const hash<string, bool> ValidKeys = (map {$1: True}, keys MapperKeyInfo) + {
             # internal structures
             "struct": True,
             "output_key_path": True,
@@ -618,7 +618,7 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         };
 
         #! output option keys
-        const OutputKeys = {
+        const hash<string, bool> OutputKeys = {
             "desc": True,
             "mand": True,
             "maxlen": True,
@@ -792,7 +792,7 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         bool output_suppress_data_provider;
 
         #! maps standard types to auto types to avoid type stripping
-        const TypeMap = {
+        const hash<string, string> TypeMap = {
             "hash": "hash<auto>",
             "*hash": "*hash<auto>",
             "list": "list<auto>",
@@ -802,7 +802,7 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         };
 
         #! maps deprecated transform options to global tranform options
-        const DeprecatedGlobalTransformOptionMap = {
+        const hash<string, string> DeprecatedGlobalTransformOptionMap = {
             "encoding": "string.encoding",
             "empty_strings_to_nothing": "string.empty_to_nothing",
             "date_format": "date.format",
@@ -812,7 +812,7 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
         };
 
         #! Thread key for mapper thread context while mapping
-        const _Mapper_Thread_Key = "_Mapper_Thread_Key";
+        const string _Mapper_Thread_Key = "_Mapper_Thread_Key";
     }
 
     #! builds the object based on a hash providing field mappings, data constraints, and optionally custom mapping logic
@@ -3264,7 +3264,7 @@ public class MapperIterator inherits Mapper::AbstractMapperIterator<hash<auto>> 
 public class AnythingDataType inherits AbstractDataProviderType {
     private {
         #! supports a max_size_chars option for strings; to be enforced externally
-        const SupportedOptions = {
+        const hash<string, hash<DataProviderTypeOptionInfo>> SupportedOptions = {
             "string.max_size_chars": <DataProviderTypeOptionInfo>{
                 "type": Type::Int,
                 "desc": "the maximum size of strings in chars",
