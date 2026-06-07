@@ -1904,8 +1904,18 @@ TypedHashDecl* qore_root_ns_private::parseFindHashDecl(const QoreProgramLocation
     // if there is no namespace specified, then just find class
     if (nscope.size() == 1) {
         hd = parseFindHashDeclIntern(nscope.ostr);
-        if (!hd)
-            parse_error(*loc, "reference to undefined hashdecl '%s'", nscope.ostr);
+        if (!hd) {
+            QoreSuggestionList sl(nscope.ostr);
+            for (auto& i : thdmap) {
+                sl.add(i.first.c_str());
+            }
+            std::string hint = sl.getHint();
+            if (!hint.empty()) {
+                parse_error(*loc, "reference to undefined hashdecl '%s'; %s", nscope.ostr, hint.c_str());
+            } else {
+                parse_error(*loc, "reference to undefined hashdecl '%s'", nscope.ostr);
+            }
+        }
         return hd;
     }
 

@@ -19,7 +19,27 @@ public class DidYouMeanTest inherits QUnit::Test {
         addTestCase("undefined class typo", \testUndefinedClassTypo());
         addTestCase("no false suggestion", \testNoFalseSuggestion());
         addTestCase("transposition typo", \testTranspositionTypo());
+        addTestCase("undefined type typo", \testUndefinedTypeTypo());
+        addTestCase("undefined function typo", \testUndefinedFunctionTypo());
+        addTestCase("undefined hashdecl type typo", \testUndefinedHashDeclTypo());
         set_return_value(main());
+    }
+
+    #! parses the code and returns the concatenated error text across the whole exception chain (or NOTHING)
+    private *string parseErrText(string code) {
+        Program p(PO_NEW_STYLE);
+        try {
+            p.parse(code, "");
+        } catch (hash<ExceptionInfo> ex) {
+            string txt;
+            *hash<ExceptionInfo> e = ex;
+            while (e) {
+                txt += sprintf("%s: %s\n", e.err, e.desc);
+                e = e.next;
+            }
+            return txt;
+        }
+        return NOTHING;
     }
 
     testConstantTypo() {
@@ -77,5 +97,23 @@ public class DidYouMeanTest inherits QUnit::Test {
         # adjacent transposition (Damerau): 'VALEU' -> 'VALUE' is edit distance 1
         assertThrows("PARSE-EXCEPTION", "did you mean 'VALUE'", \p.parse(),
             ("const VALUE = 42; int sub t() { return VALEU; }", ""));
+    }
+
+    testUndefinedTypeTypo() {
+        *string txt = parseErrText("class MyWidget {} MyWidgett sub t() { return new MyWidget(); }");
+        assertEq(True, exists txt, "parse must fail");
+        assertRegex("reference to undefined type 'MyWidgett'; did you mean 'MyWidget'", txt);
+    }
+
+    testUndefinedFunctionTypo() {
+        *string txt = parseErrText("int sub compute() { return 1; } int sub t() { return computee(); }");
+        assertEq(True, exists txt, "parse must fail");
+        assertRegex("function 'computee\\(\\)' cannot be found; did you mean 'compute'", txt);
+    }
+
+    testUndefinedHashDeclTypo() {
+        *string txt = parseErrText("hashdecl MyData { int a; } hash<MyDataa> sub t() { return new hash<MyData>(); }");
+        assertEq(True, exists txt, "parse must fail");
+        assertRegex("undefined hashdecl 'MyDataa'; did you mean 'MyData'", txt);
     }
 }
