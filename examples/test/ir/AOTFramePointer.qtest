@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTFramePointerTest
+
+#! Regression test for the AArch64 AOT frame-pointer omission crash.
+/** Background: by default LLVM omits the frame pointer at -O1+, so an
+    AOT-compiled function could save x29/x30 only as ordinary callee-saved
+    registers (and even reuse x29 as a scratch GPR holding a NaN-boxed
+    QoreValue) without ever executing `mov x29, sp`.  External frame-pointer
+    based stack unwinders that walk THROUGH a Qore AOT frame then follow a
+    broken chain and crash with SIGSEGV — observed when V8/Abseil (pulled in by
+    the TypeScriptActionInterface data-provider module) captures an AArch64
+    backtrace during V8 init while a Qore AOT frame is on the stack.  The fix
+    forces `"frame-pointer"="all"` on every generated function, so the prologue
+    establishes the frame-pointer chain.
+
+    This test compiles a register-heavy function to a native AOT binary and
+    asserts that the function's prologue establishes the frame pointer
+    (`add/mov x29, sp` on AArch64, `mov %rsp,%rbp` on x86-64).  It skips
+    gracefully when no disassembler is available or the host architecture is not
+    one we know how to check. */
+class AOTFramePointerTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string disasm;          #! disassembler command template ("" = none)
+        string arch;            #! "aarch64", "x86_64", or "" (unknown)
+    }
+
+    constructor() : QUnit::Test("AOTFramePointerTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = dirname(qore_bin) + "/qcc";
+        }
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        # determine host architecture
+        arch = backquote("uname -m 2>/dev/null");
+        trim arch;
+        switch (arch) {
+            case "arm64":
+            case "aarch64": arch = "aarch64"; break;
+            case "x86_64":
+            case "amd64": arch = "x86_64"; break;
+            default: arch = ""; break;
+        }
+
+        # find a disassembler: objdump (ELF) or otool (Mach-O)
+        string od = backquote("command -v objdump 2>/dev/null || true");
+        trim od;
+        string ot = backquote("command -v otool 2>/dev/null || true");
+        trim ot;
+        if (od.val()) {
+            disasm = od + " -d --no-show-raw-insn ";
+        } else if (ot.val()) {
+            disasm = ot + " -tV ";
+        } else {
+            disasm = "";
+        }
+
+        addTestCase("AOT prologue establishes frame pointer", \testFramePointerEstablished());
+        set_return_value(main());
+    }
+
+    #! compile a register-heavy function and return the disassembly of its body
+    private *string compileAndDisassemble(string fname) {
+        # a function with enough live values + calls to create register
+        # pressure, so LLVM would (without the fix) be tempted to reuse x29
+        string code = sprintf("%%modern\n"
+            "int sub %s(int a, int b, int c, int d, int e) {\n"
+            "    int r = a + b;\n"
+            "    r += c * d;\n"
+            "    r -= e;\n"
+            "    list<int> l = (a, b, c, d, e, r);\n"
+            "    int s = 0;\n"
+            "    foreach int x in (l) { s += x * r; }\n"
+            "    hash<auto> h = {\"a\": a, \"s\": s, \"r\": r};\n"
+            "    return s + h.a + h.s + h.r;\n"
+            "}\n"
+            "printf(\"%%d\\n\", %s(1, 2, 3, 4, 5));\n", fname, fname);
+
+        TmpFile src("aot_fp_", ".qr");
+        src.file.write(code);
+        src.file.close();
+        string out = src.path + ".bin";
+        on_exit { unlink(out); }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+            libqore_dir, libqore_dir, qcc_bin, out, src.path);
+        string compile_out = backquote(compile_cmd);
+        if (!is_file(out)) {
+            printf("compile failed: %s\n", compile_out);
+            return;
+        }
+        return backquote(disasm + out + " 2>/dev/null");
+    }
+
+    #! extract the instruction block for the named symbol from a disassembly
+    private string extractSymbol(string disas, string fname) {
+        list<string> lines = disas.split("\n");
+        string body = "";
+        bool in_fn = False;
+        # symbol header lines look like "<fname()>:" / "<fname>:" (objdump) or
+        # "_fname:" / "fname:" (otool); match the symbol name as a whole token
+        string header_pat = sprintf("(^|[<_ ])%s(\\(.*\\))?>?:[[:space:]]*$", fname);
+        foreach string line in (lines) {
+            if (regex(line, header_pat)) {
+                in_fn = True;
+                continue;
+            }
+            if (in_fn) {
+                # a new symbol header (a label line, not an instruction line)
+                # ends the current function's block
+                if (regex(line, ":[[:space:]]*$") && !regex(line, "^[[:space:]]+[0-9a-f]+:")) {
+                    break;
+                }
+                body += line + "\n";
+            }
+        }
+        return body;
+    }
+
+    testFramePointerEstablished() {
+        if (!disasm.val()) {
+            testSkip("no disassembler (objdump/otool) available");
+        }
+        if (!arch.val()) {
+            testSkip(sprintf("unsupported architecture for this check: %y", arch));
+        }
+
+        string fname = "fp_probe_qore_fn";
+        *string disas = compileAndDisassemble(fname);
+        if (!disas.val()) {
+            testSkip("AOT compile/disassemble unavailable in this environment");
+        }
+
+        string body = extractSymbol(disas, fname);
+        assertTrue(body.val(), "found generated function body in disassembly");
+
+        # The prologue must establish the frame-pointer chain.  Pre-fix on
+        # AArch64 the function saved x29/x30 but never set x29, so this match
+        # would fail.
+        if (arch == "aarch64") {
+            assertTrue(body =~ /(add|mov)\s+x29,\s*sp/,
+                "AArch64 prologue establishes frame pointer (sets x29)");
+        } else {
+            # x86-64: classic "mov %rsp,%rbp" frame setup (AT&T or Intel syntax)
+            assertTrue(body =~ /mov\s+(%rsp,\s*%rbp|rbp,\s*rsp)/,
+                "x86-64 prologue establishes frame pointer (sets rbp)");
+        }
+    }
+}

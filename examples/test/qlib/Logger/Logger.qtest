@@ -10,6 +10,31 @@
 
 %exec-class Test
 
+class ReentrantLoggerAppender inherits LoggerAppenderWithLayout {
+    private {
+        Logger m_logger;
+        string m_seen;
+    }
+
+    constructor(Logger logger) : LoggerAppenderWithLayout("reentrant", new LoggerLayoutPattern("%m")) {
+        m_logger = logger;
+        m_seen = "";
+    }
+
+    processEventImpl(int type, auto params) {
+        # Re-enter the owning logger while the appender is being called.  Logger must not hold its appender-list
+        # lock while invoking appender methods.
+        if (m_logger.getLevel().getValue() != LoggerLevel::INFO) {
+            throw "LOGGER-TEST-ERROR", "unexpected logger level during reentrant appender callback";
+        }
+        m_seen += params;
+    }
+
+    string getSeen() {
+        return m_seen;
+    }
+}
+
 class Test inherits QUnit::Test {
     private {
         Counter m_counter();
@@ -29,6 +54,7 @@ class Test inherits QUnit::Test {
         addTestCase("LoggerAppenderQueueBackpressure", \testLoggerAppenderQueueBackpressure());
         addTestCase("LoggerAppenderMultiThread", \testLoggerAppenderMultiThread());
         addTestCase("LoggerAppenderMultiThreadUnassigned", \testLoggerAppenderMultiThreadUnassigned());
+        addTestCase("LoggerAppenderReentrantCallbacks", \testLoggerAppenderReentrantCallbacks());
         addTestCase("LoggerAppenderFile", \testLoggerAppenderFile());
         addTestCase("LoggerAppenderStdErr", \testLoggerAppenderStdErr());
         addTestCase("LoggerAppenderFileRotate", \testLoggerAppenderFileRotate());
@@ -730,6 +756,16 @@ class Test inherits QUnit::Test {
         la.close();
     }
 
+    testLoggerAppenderReentrantCallbacks() {
+        Logger logger("reentrant-lock-test", LoggerLevel::INFO);
+        ReentrantLoggerAppender appender(logger);
+        logger.addAppender(appender);
+        appender.open();
+        on_exit appender.close();
+        logger.info("callback-ok");
+        assertEq("callback-ok", appender.getSeen());
+    }
+
     testLoggerAppenderFile() {
         string fn = tmp_location() + DirSep + UNIQUE_NAME + ".log";
         unlink(fn);
@@ -1001,6 +1037,11 @@ class Test inherits QUnit::Test {
         caps = LoggerSearchUtil::getAppenderSearchCapabilities(la);
         assertTrue(caps.searchable);
         assertEq("file", caps.source.kind);
+        list<hash<auto>> sources = LoggerSearchUtil::getAppenderSearchSources(la, {});
+        assertEq(1, sources.size());
+        assertEq("file", sources[0].kind);
+        assertEq(fn, sources[0].path);
+        assertTrue(sources[0].source_fingerprint instanceof string);
 
         hash<auto> res = LoggerSearchUtil::searchRenderedEvents(la, {"text": "needle", "limit": 1});
         assertEq("partial", res.status);
@@ -1103,6 +1144,9 @@ class Test inherits QUnit::Test {
         messages = map $1.message, res.entries;
         assertTrue(inlist("active needle", messages));
         assertTrue(inlist("rotated needle", messages));
+        sources = LoggerSearchUtil::getAppenderSearchSources(rotate, {"direction": "forward"});
+        assertEq(2, sources.size());
+        assertTrue(all $1.source_fingerprint instanceof string, sources);
 
         res = LoggerSearchUtil::searchRenderedEvents(rotate, {
             "text": "needle",
@@ -1173,7 +1217,7 @@ class Test inherits QUnit::Test {
         assertEq("gzip", res.entries[0].source.compression);
         assertTrue(res.entries[0].source_fingerprint instanceof string);
 
-        list<hash<auto>> sources = LoggerSearchUtil::getAppenderSearchSources(crotate, {
+        sources = LoggerSearchUtil::getAppenderSearchSources(crotate, {
             "direction": "forward",
             "include_compressed_rotated": True,
         });

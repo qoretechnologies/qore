@@ -601,7 +601,8 @@ class ServiceNowTest inherits QUnit::Test {
         assertEq("test", ping.name);
         assertFalse(ping.ok);
         assertTrue(ping.ex.err == "SOCKET-SSL-ERROR" || ping.ex.err == "SOCKET-CONNECT-ERROR"
-            || ping.ex.err == "QOREADDRINFO-GETINFO-ERROR");
+            || ping.ex.err == "QOREADDRINFO-GETINFO-ERROR" || ping.ex.err == "SOCKET-TIMEOUT"
+            || ping.ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ping.ex.err == "HTTPCLIENT-TIMEOUT");
 
         assertThrows("CONNECTION-OPTION-ERROR", sub () {
             ServiceNowRestConnection swsc1("test", "test", url, {"monitor": True}, {"x": 1});

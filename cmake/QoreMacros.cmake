@@ -533,6 +533,37 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         message(FATAL_ERROR "QORE_BUILD_AOT_MODULES=ON requires qcc or QORE_QCC_EXECUTABLE")
     endif()
 
+    # The qcc AOT compile below runs under ${QORE_QM_METADATA_ENV}, whose
+    # QORE_MODULE_DIR must include this build's own modules so that a module
+    # which %requires a sibling built earlier in the SAME tree (e.g. a
+    # provider module requiring its loader module) can resolve it at AOT
+    # parse time.  QORE_EXTERNAL_BINARY_MODULE sets this env, but a pure-Qore
+    # user-module repo (no binary module) never calls it, leaving the env
+    # unset -- qcc then sees only the installed module path, which does not
+    # yet contain the just-built sibling, and fails with LOAD-MODULE-ERROR.
+    # Default the env here (mirroring the binary-module path) so in-tree
+    # siblings resolve via the source qlib dir, where QORE_AOT_LINK_SOURCE_MODULES
+    # drops <name>/<name>.qmod symlinks ahead of dependents (the qmod target
+    # dependency added in QORE_USER_MODULE guarantees the ordering).
+    if (NOT DEFINED QORE_QM_METADATA_ENV)
+        # qlib-qmod is where each sibling's AOT qmod is emitted
+        # (<dir>/<name>/<name>.qmod); the source qlib dir carries the
+        # QORE_AOT_LINK_SOURCE_MODULES symlinks.  Include both so resolution
+        # works whether or not source symlinks are enabled.
+        set(_qore_user_module_path
+            "${CMAKE_SOURCE_DIR}/qlib:${CMAKE_BINARY_DIR}/qlib-qmod:${CMAKE_BINARY_DIR}")
+        if (DEFINED QORE_BUILDTREE_USER_MODULE_PATH
+                AND NOT "${QORE_BUILDTREE_USER_MODULE_PATH}" STREQUAL "")
+            set(_qore_user_module_path
+                "${_qore_user_module_path}:${QORE_BUILDTREE_USER_MODULE_PATH}")
+        endif()
+        set(QORE_QM_METADATA_ENV
+            "QORE_MODULE_DIR=${_qore_user_module_path}"
+            "QORE_INCLUDE_DIR="
+            "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}")
+        unset(_qore_user_module_path)
+    endif()
+
     if (NOT DEFINED QCC_FORMAT_STAMP)
         set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
         add_custom_command(

@@ -4202,6 +4202,21 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         llvm_func->setPersonalityFn(llvm::cast<llvm::Constant>(personality.getCallee()));
     }
 
+    // Always maintain the frame-pointer chain in generated code (JIT and AOT).
+    // LLVM otherwise omits the frame pointer at -O1+, so on AArch64 the prologue
+    // may save x29/x30 only as ordinary callee-saved registers (and even reuse
+    // x29 as a scratch GPR holding a NaN-boxed QoreValue) without ever executing
+    // `mov x29, sp`.  External frame-pointer-based stack unwinders that walk
+    // THROUGH a Qore frame then follow a broken chain and crash — e.g. V8/Abseil
+    // (pulled in by the TypeScriptActionInterface data-provider module) captures
+    // an AArch64 frame-pointer backtrace during mutex deadlock detection at V8
+    // init; with the chain broken it dereferences a spilled QoreValue (tag
+    // 0xFFFA) as a saved frame pointer -> SIGSEGV.  Reserving the frame pointer
+    // keeps every frame walkable at the cost of one register.  AOT object
+    // emission applies the same attribute to its wrapper/glue functions in
+    // emitObjectFile().
+    llvm_func->addFnAttr("frame-pointer", "all");
+
     // Phase 5 experiment: mark huge functions OptimizeNone+NoInline to cut
     // LLVM codegen cost. SelectionDAG scales superlinearly with function
     // size; handleRequest (~500 IR BBs) is 87% of HttpServer.qm compile time.

@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class MixedModeReferenceTest
+
+#! Regression test for mixed %modern / deprecated reference passing.
+/** A %modern Program may legitimately contain deprecated-format (non-%modern)
+    functions parsed with PO_MODERN disabled (e.g. Qorus old-style $-prefixed
+    workflow/step code).  Such functions are only IR-lowerable to the extent
+    the IR interpreter implements legacy semantics; it does NOT implement
+    pass-by-reference into an untyped parameter.  attemptIRLowering() must keep
+    non-%modern variants on the AST tier so that calling them from a %modern
+    (IR) caller preserves the reference write-back.
+
+    Before the fix, eagerlyCompileAllFunctions() IR-lowered the deprecated
+    functions because it gated on the *program's* PO_MODERN, and invoking them
+    from a %modern caller dropped the write-back (the lvalue was passed by
+    value), so `h` came back NOTHING.
+*/
+class MixedModeReferenceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("MixedModeReferenceTest", "1.0", \ARGV) {
+        addTestCase("ref write-back from modern caller into deprecated code", \testModernIntoDeprecatedRef());
+        set_return_value(main());
+    }
+
+    private Program makeProgram() {
+        Program pgm(PO_MODERN | PO_NO_TOP_LEVEL_STATEMENTS | PO_NO_CHILD_PO_RESTRICTIONS);
+
+        # %modern caller (IR-lowered)
+        pgm.parsePending("string sub modern_caller() { return dep_chain(); }", "modern", 0);
+
+        # deprecated old-style functions: PO_MODERN disabled while parsing.
+        # addValue() takes an untyped param and writes through the reference
+        # passed by dep_chain() as `\$h.key` — legacy pass-by-reference.
+        pgm.disableParseOptions(PO_MODERN);
+        pgm.parsePending('sub addValue($d) { if (!exists $d) $d = "V"; return "V"; }
+sub dep_chain() { my $h; addValue(\$h.key); return exists $h ? "SET" : "NOTHING"; }
+sub dep_caller() { return dep_chain(); }', "deprecated", 0);
+        pgm.setParseOptions(PO_MODERN);
+
+        pgm.parseCommit();
+        return pgm;
+    }
+
+    testModernIntoDeprecatedRef() {
+        Program pgm = makeProgram();
+
+        # the regression: reference write-back must survive a %modern (IR) entry frame
+        assertEq("SET", pgm.callFunction("modern_caller"),
+            "reference write-back from %modern caller into deprecated code");
+
+        # control cases that always worked (deprecated entry frame)
+        assertEq("SET", pgm.callFunction("dep_caller"),
+            "reference write-back from deprecated caller");
+        assertEq("SET", pgm.callFunction("dep_chain"),
+            "reference write-back with deprecated entry frame");
+    }
+}

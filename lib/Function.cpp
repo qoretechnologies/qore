@@ -5163,6 +5163,28 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
 }
 
 void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure) const {
+    // Only %modern functions may be IR-lowered.  The eager-compile path
+    // (eagerlyCompileAllFunctions()) and threshold-promotion path both gate on
+    // the *program's* parse options, but a %modern program can legitimately
+    // contain deprecated-format (non-%modern) functions parsed with PO_MODERN
+    // disabled — e.g. Qorus old-style ($-prefixed) workflow/step code loaded via
+    // qorus_load_library() with disableParseOptions(PO_MODERN).  The IR
+    // interpreter implements only %modern semantics; in particular it does not
+    // support legacy pass-by-reference into an untyped parameter (e.g.
+    // `sub f($d) { $d = ...; }` called as `f(\h.k)`), so IR-executing such a
+    // function silently drops the reference write-back.  This only surfaces when
+    // the function is reached from a %modern (IR) caller, since the per-variant
+    // dispatch guard in evalIntern() otherwise keeps non-%modern variants on the
+    // AST tier.  Keep them off the IR tier here too — the AST interpreter fully
+    // supports legacy semantics.  Mirrors the runtime guard in evalIntern().
+    if (pgm
+        && (getParseOptions(pgm->getParseOptions()) & QoreParseOptions(PO_MODERN))
+            != QoreParseOptions(PO_MODERN)) {
+        ir_lower_failed = true;
+        pgm->recordIRFallback("lowering: non-%modern function requires the AST tier");
+        return;
+    }
+
     // Make the IR function name unique per variant to avoid name collisions in the
     // JIT's compiled_functions map.  Multiple closures (or overloaded functions) can
     // share the same display name (e.g. "<anonymous closure>"), but each variant has

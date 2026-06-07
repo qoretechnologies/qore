@@ -487,6 +487,41 @@ public class LoggerSearchUtil {
         };
     }
 
+    #! Returns the current searchable source identities for an appender
+    /** @param appender the logger appender to inspect
+        @param request generic rendered-event search request; source-ordering and inclusion flags follow the same
+            request semantics as @ref searchRenderedEvents()
+        @return list of backend-neutral source hashes.  Every returned source carries a stable
+            \c source_fingerprint value suitable for cache or index reconciliation.
+    */
+    static public list<hash<auto>> getAppenderSearchSources(LoggerAppender appender, hash<auto> request = {}) {
+        if (appender instanceof LoggerSearchableAppender) {
+            hash<auto> caps = cast<LoggerSearchableAppender>(appender).getSearchCapabilities();
+            return getCapabilitySearchSources(caps);
+        }
+
+        if (appender instanceof LoggerAppenderFileRotate) {
+            return finalizeFileSearchSources(getFileSources(cast<LoggerAppenderFile>(appender), "file-rotate",
+                request));
+        }
+
+        if (appender instanceof LoggerAppenderFileRing) {
+            return finalizeFileSearchSources(getFileSources(cast<LoggerAppenderFile>(appender), "file-ring",
+                request));
+        }
+
+        if (appender instanceof LoggerAppenderFileArchive) {
+            return finalizeFileSearchSources(getFileSources(cast<LoggerAppenderFile>(appender), "file-archive",
+                request));
+        }
+
+        if (appender instanceof LoggerAppenderFile) {
+            return finalizeFileSearchSources(getFileSources(cast<LoggerAppenderFile>(appender), "file", request));
+        }
+
+        return ();
+    }
+
     #! Returns normalized capabilities for non-searchable appenders
     private static hash<auto> getUnsupportedSearchCapabilities(LoggerAppender appender, string reason) {
         return {
@@ -764,6 +799,61 @@ public class LoggerSearchUtil {
         }
 
         return sources;
+    }
+
+    private static list<hash<auto>> finalizeFileSearchSources(list<hash<auto>> sources) {
+        list<hash<auto>> rv = ();
+        int source_index = 0;
+        foreach hash<auto> source in (sources) {
+            hash<auto> out = source;
+            out.source_index = source_index++;
+            out.source_fingerprint = getSourceSignature(source);
+            rv += out;
+        }
+        return rv;
+    }
+
+    private static list<hash<auto>> getCapabilitySearchSources(hash<auto> caps) {
+        list<hash<auto>> rv = ();
+        if (caps.sources instanceof list) {
+            int source_index = 0;
+            foreach auto raw in (caps.sources) {
+                if (!(raw instanceof hash)) {
+                    continue;
+                }
+                rv += normalizeCapabilitySearchSource(raw, source_index++);
+            }
+        } else if (caps.source instanceof hash) {
+            rv += normalizeCapabilitySearchSource(caps.source, 0);
+        }
+        return rv;
+    }
+
+    private static hash<auto> normalizeCapabilitySearchSource(hash<auto> source, int source_index) {
+        hash<auto> out = source;
+        out.source_index = source_index;
+        if (!out.id) {
+            out.id = out.appender ?? out.name ?? source_index.toString();
+        }
+        if (!out.kind) {
+            out.kind = "searchable-appender";
+        }
+        if (!out.source_fingerprint) {
+            out.source_fingerprint = getGenericSourceFingerprint(out);
+        }
+        return out;
+    }
+
+    private static string getGenericSourceFingerprint(hash<auto> source) {
+        string base = sprintf("%y|%y|%y|%y|%y|%y|%y",
+            source.id,
+            source.kind,
+            source.appender,
+            source.class,
+            source.path,
+            source.index,
+            source.pattern);
+        return has_digest("sha256") ? digest("sha256", base).toHex() : base;
     }
 
     private static addActiveFileSource(reference<list<hash<auto>>> sources, LoggerAppenderFile appender,

@@ -56,6 +56,43 @@ struct AppenderInfo {
     }
 };
 
+struct AppenderCallInfo {
+    QoreObject* app;
+    QoreLoggerAppender* a;
+
+    DLLLOCAL AppenderCallInfo(const AppenderInfo& ai) : app(ai.app->objectRefSelf()), a(ai.a) {
+        if (a) {
+            a->ref();
+        }
+    }
+
+    DLLLOCAL AppenderCallInfo(AppenderCallInfo&& old) : app(old.app), a(old.a) {
+        old.app = nullptr;
+        old.a = nullptr;
+    }
+
+    DLLLOCAL ~AppenderCallInfo() = default;
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (app) {
+            app->deref(xsink);
+#ifdef DEBUG
+            app = nullptr;
+#endif
+        }
+        if (a) {
+            a->deref(xsink);
+#ifdef DEBUG
+            a = nullptr;
+#endif
+        }
+    }
+
+private:
+    AppenderCallInfo(const AppenderCallInfo&) = delete;
+    AppenderCallInfo& operator=(const AppenderCallInfo&) = delete;
+};
+
 class QoreLogger : public QoreLoggerInterface {
 public:
     //! Logger additivity
