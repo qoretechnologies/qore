@@ -816,22 +816,22 @@ int sub _get_size(string num, number mult) {
 }
 
 # private, non-exported constant hashes for scan_exp() below
-const ParenMap = {
+const hash<string, string> ParenMap = {
     ")": "(",
     "}": "{",
     "]": "[",
 };
-const FwdParenMap = map {$1.value: $1.key}, ParenMap.pairIterator();
+const hash<string, string> FwdParenMap = map {$1.value: $1.key}, ParenMap.pairIterator();
 
 # private, non-exported constants for parsing
-const ET_RawString = 0;
-const ET_QuotedString = 1;
-const ET_BracketString = 2;
-const ET_CurlyBracketString = 3;
-const ET_Eq = 4;
-const ET_Comma = 5;
-const ET_Placeholder = 6;
-const EtMap = {
+const int ET_RawString = 0;
+const int ET_QuotedString = 1;
+const int ET_BracketString = 2;
+const int ET_CurlyBracketString = 3;
+const int ET_Eq = 4;
+const int ET_Comma = 5;
+const int ET_Placeholder = 6;
+const hash<string, string> EtMap = {
     ET_RawString: "raw string",
     ET_QuotedString: "quoted string",
     ET_BracketString: "bracket expression",
@@ -840,7 +840,7 @@ const EtMap = {
     ET_Eq: "=",
     ET_Comma: ",",
 };
-const Suffixes = ("th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th");
+const list<string> Suffixes = ("th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th");
 
 # private scanner for parse_to_qore_value()
 /** Byte-indexed: walks UTF-8 bytes via getByte() for O(1) per-call access
@@ -1681,10 +1681,10 @@ public string sub get_exception_string(hash<auto> ex) {
 }
 
 #! storage names (Geop, which would normally follow Bronto, is excluded as the abbreviation would be GB/GiB)
-public const StorageNames = ("Kilo", "Mega", "Giga", "Tera", "Peta", "Exa", "Zetta", "Yotta", "Bronto");
+public const list<string> StorageNames = ("Kilo", "Mega", "Giga", "Tera", "Peta", "Exa", "Zetta", "Yotta", "Bronto");
 
 #! hash of single-letter storage name abbreviations
-public const StorageAbbr = map {$1[0].lwr(): $#}, StorageNames;
+public const hash<string, int> StorageAbbr = map {$1[0].lwr(): $#}, StorageNames;
 
 #! returns a string giving a user-friendly real storage size (ie based on 1KiB = 1024 bytes) in KiB, MiB, GiB, TiB, etc for the given byte size
 /** @par Example:
@@ -1851,7 +1851,7 @@ public bool sub is_int(string text, bool pure = False) {
     return False;
 }
 
-const RE_FLOAT = '^\s*[-+]?('
+const string RE_FLOAT = '^\s*[-+]?('
     '\d+\.\d*(e[-+]?\d+)?' # floating point number, with dot, optional exponent
     '|\.\d+(e[-+]?\d+)?' # floating point number, starting with a dot, optional exponent
     '|\d+e[-+]?\d+' # floating point number, without dot, with exponent
@@ -1881,7 +1881,7 @@ public bool sub is_float(string text, bool pure = False) {
     return False;
 }
 
-const RE_NUMBER = '^\s*[-+]?('
+const string RE_NUMBER = '^\s*[-+]?('
     '\d+\.\d*(e[-+]?\d+)?' # floating point number, with dot, optional exponent
     '|\.\d+(e[-+]?\d+)?' # floating point number, starting with a dot, optional exponent
     '|\d+e[-+]?\d+' # floating point number, without dot, with exponent
@@ -2578,26 +2578,26 @@ public class TerminalColor {
 
     private {
         # ANSI color codes
-        const Reset = "\033[0m";
-        const Bold = "\033[1m";
-        const Dim = "\033[2m";
+        const string Reset = "\033[0m";
+        const string Bold = "\033[1m";
+        const string Dim = "\033[2m";
 
         # Foreground colors
-        const Red = "\033[31m";
-        const Green = "\033[32m";
-        const Yellow = "\033[33m";
-        const Blue = "\033[34m";
-        const Magenta = "\033[35m";
-        const Cyan = "\033[36m";
-        const White = "\033[37m";
+        const string Red = "\033[31m";
+        const string Green = "\033[32m";
+        const string Yellow = "\033[33m";
+        const string Blue = "\033[34m";
+        const string Magenta = "\033[35m";
+        const string Cyan = "\033[36m";
+        const string White = "\033[37m";
 
         # Bright foreground colors
-        const BrightRed = "\033[91m";
-        const BrightGreen = "\033[92m";
-        const BrightYellow = "\033[93m";
-        const BrightBlue = "\033[94m";
-        const BrightMagenta = "\033[95m";
-        const BrightCyan = "\033[96m";
+        const string BrightRed = "\033[91m";
+        const string BrightGreen = "\033[92m";
+        const string BrightYellow = "\033[93m";
+        const string BrightBlue = "\033[94m";
+        const string BrightMagenta = "\033[95m";
+        const string BrightCyan = "\033[96m";
     }
 
     #! Creates a TerminalColor object
