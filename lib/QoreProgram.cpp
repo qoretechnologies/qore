@@ -456,6 +456,72 @@ std::string qore_get_parse_diagnostics_json(QoreProgram& pgm) {
     return qore_program_private::get(pgm)->getParseDiagnosticsJSON();
 }
 
+// extracts 1-based line number `line` from source text into `out`; returns true if found
+static bool extract_source_line(const char* src, int line, std::string& out) {
+    if (!src || line < 1) {
+        return false;
+    }
+    int cur = 1;
+    const char* p = src;
+    const char* line_start = src;
+    while (cur < line && *p) {
+        if (*p == '\n') {
+            ++cur;
+            line_start = p + 1;
+        }
+        ++p;
+    }
+    if (cur != line) {
+        return false;
+    }
+    const char* line_end = line_start;
+    while (*line_end && *line_end != '\n') {
+        ++line_end;
+    }
+    out.assign(line_start, line_end - line_start);
+    return true;
+}
+
+unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os) {
+    return qore_program_private::get(pgm)->renderParseDiagnosticFrames(source_text, os);
+}
+
+unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_text, FILE* os) const {
+    unsigned errors = 0;
+    for (auto& d : diagnostics) {
+        if (d.error) {
+            ++errors;
+        }
+        const char* sev = d.error ? "error" : "warning";
+        // header: file:line:col: severity[code]: message
+        fprintf(os, "%s:%d", d.file.empty() ? "<input>" : d.file.c_str(), d.start_line);
+        if (d.start_column >= 0) {
+            fprintf(os, ":%d", d.start_column);
+        }
+        fprintf(os, ": %s[%s]: %s\n", sev, d.code.c_str(), d.message.c_str());
+
+        // code frame: the source line plus a caret line under the offending span
+        std::string line;
+        if (extract_source_line(source_text, d.start_line, line)) {
+            fprintf(os, "  %s\n", line.c_str());
+            if (d.start_column >= 0) {
+                std::string caret("  ");
+                // pad up to the start column (columns are 0-based offsets within the line)
+                for (int i = 0; i < d.start_column && i < (int)line.size(); ++i) {
+                    caret += (line[i] == '\t') ? '\t' : ' ';
+                }
+                caret += '^';
+                int span = (d.end_column > d.start_column) ? (d.end_column - d.start_column - 1) : 0;
+                for (int i = 0; i < span; ++i) {
+                    caret += '~';
+                }
+                fprintf(os, "%s\n", caret.c_str());
+            }
+        }
+    }
+    return errors;
+}
+
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline) {
     QoreProgramLocation loc(sline, eline);
 

@@ -1362,6 +1362,11 @@ public:
     //! used by the standalone interpreter's --diag-format=json mode for external tooling
     DLLLOCAL std::string getParseDiagnosticsJSON() const;
 
+    //! renders the collected diagnostics as human-readable code frames (source line + caret under the span)
+    //! to the given stream; \a source_text provides the source lines for the main input (may be nullptr).
+    //! Returns the number of error (not warning) diagnostics rendered.  Implemented in QoreProgram.cpp.
+    DLLLOCAL unsigned renderParseDiagnosticFrames(const char* source_text, FILE* os) const;
+
     DLLLOCAL int checkParse(ExceptionSink* xsink) const {
         // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
         // The calling thread (doing the parsing) is not attached to this Program,
@@ -3508,5 +3513,9 @@ DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them
 DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
+
+//! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
+//! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
+DLLEXPORT unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os);
 
 #endif
