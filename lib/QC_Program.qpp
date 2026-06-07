@@ -1104,6 +1104,16 @@ const WARN_BROKEN_LOGIC_PRECEDENCE = QP_WARN_BROKEN_LOGIC_PRECEDENCE;
     @since %Qore 1.0
 */
 const WARN_INVALID_CATCH = QP_WARN_INVALID_CATCH;
+
+//! This warns when a @ref switch "switch statement" over an @ref enums "enum" value does not handle all of the enum's values and has no \c default label
+/** Adding a \c default label silences the warning.  This helps catch unhandled values, for example when a
+    new member is added to an enum but an existing \c switch over that enum is not updated.
+
+    @see @ref non-exhaustive-switch
+
+    @since %Qore 2.3
+*/
+const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
 ///@}
 
 //! Program objects allow %Qore programs to support subprograms with the option to restrict capabilities, for example, to support user-defined logic for application actions

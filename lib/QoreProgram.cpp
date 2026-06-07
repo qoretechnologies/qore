@@ -98,6 +98,7 @@ static const char* qore_warnings_l[] = {
     "invalid-catch",
     "ambiguous-call-resolution",
     "ambiguous-overload",
+    "non-exhaustive-switch",
 };
 #define NUM_WARNINGS (sizeof(qore_warnings_l)/sizeof(const char* ))
 
