@@ -12,7 +12,7 @@
 - Standard library modules are Qore sources in `qlib/`, loaded by the core at runtime.
 - Optional integrations live in `modules/` (versioned separately).
 - Parser/AST tooling lives in `modules/astparser/`; `qlib/Qdx.qm` and `doxygen/qdx` use it for docs.
-- When editing the core parser (`lib/parser.ypp`, `lib/scanner.lpp`), mirror changes in `modules/astparser/src/`.
+- The `astparser` parser is a **tree-sitter grammar**: edit `modules/astparser/grammars/tree-sitter-qore/grammar.js`, then regenerate the committed `src/parser.c`/`src/grammar.json`/`src/node-types.json` with `npx tree-sitter-cli@0.26.8 generate` (version pinned in `package.json`; needs node, `nvm use v24`). CMake compiles the committed `parser.c` directly and never runs tree-sitter, so changes to language syntax accepted by the core parser (`lib/parser.ypp`, `lib/scanner.lpp`) must be reflected in `grammar.js` too, or `qdx`/docs builds will fail to parse them.
 
 ## Build, Test, and Development Commands
 - `cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr` configures the recommended CMake build.

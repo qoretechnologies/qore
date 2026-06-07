@@ -1632,7 +1632,13 @@ module.exports = grammar({
 
     variable_name: $ => seq('$', /[a-zA-Z_][a-zA-Z0-9_]*/),
 
-    scoped_identifier: $ => prec.left(seq(
+    // prec.right so the path is consumed greedily: at `A::B • :: C` the
+    // shift/reduce conflict (extend this scope path vs. reduce `A::B` and let
+    // `::C` start a following scoped_identifier via its optional leading `::`)
+    // resolves toward shift. Without this, declarations whose name may itself be
+    // a scoped_identifier (typed const, typedef) truncate a 3+ component scoped
+    // type to its first two components and fail to parse.
+    scoped_identifier: $ => prec.right(seq(
       optional('::'),
       $.identifier,
       repeat1(seq('::', $.identifier)),

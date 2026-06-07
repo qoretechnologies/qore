@@ -419,6 +419,7 @@ sub test() {
         addTestCase("Constant parsing", \testConstantParsing());
         addTestCase("Read-only const syntax parsing", \testReadonlyConstSyntaxParsing());
 %endif
+        addTestCase("Scoped type declarations", \testScopedTypeDeclarations());
         addTestCase("Symbol kind constants", \testSymbolKindConstants());
 %ifdef HasAstTreeSearcher
         addTestCase("Find symbol info", \testFindSymbolInfo());
@@ -1252,6 +1253,56 @@ class C {
             "catch const reports parse errors");
     }
 %endif
+
+    testScopedTypeDeclarations() {
+        # regression: a 3+ component scoped type (e.g. Qore::Reflection::Type) in a
+        # declaration whose name may itself be a scoped_identifier (typed const,
+        # typedef) must be consumed greedily as a single type. Before the fix the
+        # scoped_identifier truncated to its first two components ("A::B") and the
+        # remainder failed to parse.
+        hash<string, string> cases = {
+            "typed const, scoped type":
+                "%modern\npublic const Qore::Reflection::Type SoftBoolStringType = new Foo();\n",
+            "typed const, 3-component generic scope":
+                "%modern\nconst A::B::C Name = 1;\n",
+            "typed const, 4-component scope":
+                "%modern\nconst A::B::C::D Name = 1;\n",
+            "typed const, 2-component scope (baseline)":
+                "%modern\nconst A::B Name = 1;\n",
+            "typedef, scoped type":
+                "%modern\ntypedef Qore::Reflection::Type MyType;\n",
+            "global var, scoped type":
+                "%modern\nour A::B::C globalVar;\n",
+            "root-namespace scoped const name":
+                "%modern\nconst ::A::B::C = 1;\n",
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            AstParser parser();
+            *AstTree tree = parser.parseString(i.value);
+            assertEq(0, parser.getErrorCount(), i.key + ": no parse errors");
+            assertTrue(exists(tree), i.key + ": tree returned");
+        }
+
+        # verify the scoped type captures all three components
+        AstParser parser();
+        *AstTree tree = parser.parseString("%modern\nconst A::B::C Name = 1;\n");
+        assertEq(0, parser.getErrorCount(), "scoped type structural: no parse errors");
+        list nodes = tree.getNodesInfo();
+        assertEq(1, countNodesByType(nodes, "constant_declaration"), "one constant declaration");
+        *hash<auto> cd = findNodeByType(nodes, "constant_declaration");
+        assertTrue(exists(cd), "constant declaration found");
+        *hash<auto> t = findChildByField(cd, "type");
+        assertTrue(exists(t), "constant type found");
+        *hash<auto> st = findChildByType(t, "simple_type");
+        assertTrue(exists(st), "simple type found");
+        *hash<auto> si = findChildByType(st, "scoped_identifier");
+        assertTrue(exists(si), "scoped identifier type found");
+        int comps = (map $1, si.children, $1.type == "identifier").size();
+        assertEq(3, comps, "scoped type captures all three components");
+        *hash<auto> name = findChildByField(cd, "name");
+        assertTrue(exists(name), "constant name found");
+        assertEq("Name", name.text, "constant name after scoped type");
+    }
 
     testSymbolKindConstants() {
         # Verify all symbol kind constants are defined and have expected values
