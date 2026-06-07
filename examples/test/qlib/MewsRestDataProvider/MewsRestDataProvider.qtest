@@ -93,7 +93,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             # Handle connection/protocol errors
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 delete mews;
                 testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
             }
@@ -156,7 +156,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             # Handle connection/protocol errors
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                    || ex.err == "HTTP2-ERROR" || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 delete mews;
                 testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
             }

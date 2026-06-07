@@ -134,7 +134,7 @@ public class DeelDataProviderTest inherits QUnit::Test {
             });
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Deel API: %s", ex.desc));
             }
             # 401 Unauthorized from a reachable API — skip rather than fail unit tests

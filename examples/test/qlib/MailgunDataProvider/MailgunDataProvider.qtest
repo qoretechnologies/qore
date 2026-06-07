@@ -107,7 +107,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
             return new MailgunDataProvider::MailgunDataProvider({"apikey": "x"});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Mailgun API: %s", ex.desc));
             }
             rethrow;
@@ -344,7 +344,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
             assertTrue(clientDefault.getURL() =~ /api\.mailgun\.net$/);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Mailgun API: %s", ex.desc));
                 return;
             }

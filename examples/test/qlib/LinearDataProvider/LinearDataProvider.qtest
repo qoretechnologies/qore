@@ -97,7 +97,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
             return new LinearDataProvider::LinearDataProvider({"token": "x"});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 testSkip(sprintf("cannot connect to Linear API: %s", ex.desc));
             }
             rethrow;
@@ -341,7 +341,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
             assertEq("linear", emptyProv.getName());
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
-                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR" || ex.err == "SOCKET-TIMEOUT" || ex.err == "HTTPCLIENT-NEGOTIATE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
                 # Skip this assertion if connection fails
             } else {
                 rethrow;
