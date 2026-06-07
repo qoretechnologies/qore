@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,10 @@
 #include <cstring>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#include <algorithm>
+#include <string>
+#include <vector>
 
 extern bool threads_initialized;
 
@@ -207,6 +211,163 @@ void parseException(const QoreProgramLocation& loc, const char *err, const char 
             break;
     }
     parseException(loc, err, desc);
+}
+
+int q_edit_distance(const char* a, const char* b, int max) {
+    assert(a);
+    assert(b);
+    const size_t la = strlen(a);
+    const size_t lb = strlen(b);
+
+    // handle trivial cases
+    if (!la) {
+        return (int)lb;
+    }
+    if (!lb) {
+        return (int)la;
+    }
+
+    // quick lower bound: the distance is at least the difference in lengths
+    if (max >= 0 && (size_t)std::abs((long)la - (long)lb) > (size_t)max) {
+        return max + 1;
+    }
+
+    // Optimal String Alignment: three rolling rows (prev-prev, prev, current)
+    std::vector<int> prev2(lb + 1, 0);
+    std::vector<int> prev(lb + 1, 0);
+    std::vector<int> curr(lb + 1, 0);
+
+    for (size_t j = 0; j <= lb; ++j) {
+        prev[j] = (int)j;
+    }
+
+    for (size_t i = 1; i <= la; ++i) {
+        curr[0] = (int)i;
+        int row_min = curr[0];
+        for (size_t j = 1; j <= lb; ++j) {
+            const int cost = (a[i - 1] == b[j - 1]) ? 0 : 1;
+            int v = prev[j] + 1;            // deletion
+            const int ins = curr[j - 1] + 1;    // insertion
+            if (ins < v) {
+                v = ins;
+            }
+            const int sub = prev[j - 1] + cost; // substitution
+            if (sub < v) {
+                v = sub;
+            }
+            // adjacent transposition
+            if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+                const int trans = prev2[j - 2] + 1;
+                if (trans < v) {
+                    v = trans;
+                }
+            }
+            curr[j] = v;
+            if (v < row_min) {
+                row_min = v;
+            }
+        }
+        // early exit: every subsequent row value can only grow from this row's minimum
+        if (max >= 0 && row_min > max) {
+            return max + 1;
+        }
+        prev2.swap(prev);
+        prev.swap(curr);
+    }
+
+    return prev[lb];
+}
+
+QoreSuggestionList::QoreSuggestionList(const char* targ) : target(targ ? targ : "") {
+    // scale the acceptable edit distance with the target length: short names tolerate fewer typos
+    const size_t len = target.size();
+    threshold = (int)(len / 3);
+    if (threshold < 1) {
+        threshold = 1;
+    } else if (threshold > 2) {
+        threshold = 2;
+    }
+}
+
+void QoreSuggestionList::add(const char* candidate) {
+    if (!candidate || !*candidate || target.empty()) {
+        return;
+    }
+    // an exact match cannot be a suggestion (the name failed to resolve)
+    if (target == candidate) {
+        return;
+    }
+    // a pure capitalization difference is the strongest possible hint
+    if (!strcasecmp(target.c_str(), candidate)) {
+        matches.push_back(std::make_pair(-1, std::string(candidate)));
+        return;
+    }
+    const int d = q_edit_distance(target.c_str(), candidate, threshold);
+    if (d <= threshold) {
+        matches.push_back(std::make_pair(d, std::string(candidate)));
+    }
+}
+
+std::vector<std::pair<int, std::string>> QoreSuggestionList::rank() const {
+    std::vector<std::pair<int, std::string>> sorted(matches);
+    // closest first; stable so equal-distance names keep insertion order
+    std::stable_sort(sorted.begin(), sorted.end(),
+        [](const std::pair<int, std::string>& l, const std::pair<int, std::string>& r) {
+            return l.first < r.first;
+        });
+    // de-duplicate by name (the same name can be reached from multiple scopes) and cap the result
+    std::vector<std::pair<int, std::string>> result;
+    for (auto& i : sorted) {
+        bool dup = false;
+        for (auto& r : result) {
+            if (r.second == i.second) {
+                dup = true;
+                break;
+            }
+        }
+        if (!dup) {
+            result.push_back(i);
+            if (result.size() >= 3) {
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+bool QoreSuggestionList::empty() const {
+    return matches.empty();
+}
+
+std::vector<std::string> QoreSuggestionList::getSuggestions() const {
+    std::vector<std::string> rv;
+    for (auto& i : rank()) {
+        rv.push_back(i.second);
+    }
+    return rv;
+}
+
+std::string QoreSuggestionList::getHint() const {
+    std::vector<std::pair<int, std::string>> r = rank();
+    if (r.empty()) {
+        return std::string();
+    }
+
+    std::string hint("did you mean ");
+    for (size_t i = 0; i < r.size(); ++i) {
+        if (i) {
+            hint += (i == r.size() - 1) ? " or " : ", ";
+        }
+        hint += "'";
+        hint += r[i].second;
+        hint += "'";
+    }
+    hint += "?";
+    // if the single closest match differs only in capitalization, call that out
+    if (r.size() == 1 && r[0].first == -1) {
+        hint += " (check capitalization)";
+    }
+    return hint;
 }
 
 // returns 1 for success

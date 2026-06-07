@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DidYouMeanTest
+
+#! Tests "did you mean ...?" near-match suggestions in identifier-resolution parse errors
+public class DidYouMeanTest inherits QUnit::Test {
+    constructor() : Test("DidYouMeanTest", "1.0") {
+        addTestCase("bareword constant typo", \testConstantTypo());
+        addTestCase("bareword local var typo", \testLocalVarTypo());
+        addTestCase("bareword global var typo", \testGlobalVarTypo());
+        addTestCase("bareword case mismatch", \testCaseMismatch());
+        addTestCase("class constant typo", \testClassConstantTypo());
+        addTestCase("undefined class typo", \testUndefinedClassTypo());
+        addTestCase("no false suggestion", \testNoFalseSuggestion());
+        addTestCase("transposition typo", \testTranspositionTypo());
+        set_return_value(main());
+    }
+
+    testConstantTypo() {
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "did you mean 'MY_TIMEOUT'", \p.parse(),
+            ("const MY_TIMEOUT = 100; int sub t() { return MY_TIMEOUTT; }", ""));
+    }
+
+    testLocalVarTypo() {
+        Program p(PO_NEW_STYLE);
+        # in %new-style bare references are enabled, so a misspelled local var is an unresolved bareword
+        assertThrows("PARSE-EXCEPTION", "did you mean 'myCount'", \p.parse(),
+            ("int sub t() { int myCount = 3; return myCountt; }", ""));
+    }
+
+    testGlobalVarTypo() {
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "did you mean 'myGlobal'", \p.parse(),
+            ("our int myGlobal; int sub t() { return myGloball; }", ""));
+    }
+
+    testCaseMismatch() {
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "did you mean 'MyConst'.*check capitalization", \p.parse(),
+            ("const MyConst = 5; int sub t() { return myconst; }", ""));
+    }
+
+    testClassConstantTypo() {
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "did you mean 'TIMEOUT'", \p.parse(),
+            ("class C { public { const TIMEOUT = 10; } int m() { return TIMEOUTT; } }", ""));
+    }
+
+    testUndefinedClassTypo() {
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "did you mean 'MyClass'", \p.parse(),
+            ("class MyClass {} MyClass sub t() { return new MyClasss(); }", ""));
+    }
+
+    testNoFalseSuggestion() {
+        Program p(PO_NEW_STYLE);
+        # a name with no near match must not produce a spurious suggestion
+        *string desc;
+        try {
+            p.parse("int sub t() { return zzqqxxww; }", "");
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+        }
+        assertEq(True, exists desc, "parse must fail");
+        assertEq(False, desc =~ /did you mean/, "no suggestion for an unrelated name");
+    }
+
+    testTranspositionTypo() {
+        Program p(PO_NEW_STYLE);
+        # adjacent transposition (Damerau): 'VALEU' -> 'VALUE' is edit distance 1
+        assertThrows("PARSE-EXCEPTION", "did you mean 'VALUE'", \p.parse(),
+            ("const VALUE = 42; int sub t() { return VALEU; }", ""));
+    }
+}

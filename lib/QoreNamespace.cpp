@@ -1744,7 +1744,43 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
     if (const char* hint = bareword_foreign_hint(bword)) {
         parse_error(*loc, "cannot resolve bareword '%s' to any reachable object; %s", bword, hint);
     } else {
-        parse_error(*loc, "cannot resolve bareword '%s' to any reachable object", bword);
+        // gather near-match candidates from the scopes that were just searched to suggest a likely fix
+        QoreSuggestionList sl(bword);
+        // local variables (only reachable when bare references are enabled)
+        if (abr) {
+            for (VNode* vnode = getVStack(); vnode; vnode = vnode->nextSearch()) {
+                sl.add(vnode->getName());
+            }
+        }
+        // class constants and static variables in the current class context
+        if (pc) {
+            QoreClassConstantIterator cci(*pc);
+            while (cci.next()) {
+                sl.add(cci.get().getName());
+            }
+            QoreClassStaticMemberIterator csi(*pc);
+            while (csi.next()) {
+                sl.add(csi.getName());
+            }
+        }
+        // root constants (committed constants flattened across namespaces)
+        for (auto& i : cnmap) {
+            sl.add(i.first.c_str());
+        }
+        // global variables (committed global vars flattened across namespaces; only reachable
+        // when bare references are enabled)
+        if (abr) {
+            for (auto& i : varmap) {
+                sl.add(i.first.c_str());
+            }
+        }
+
+        std::string sugg = sl.getHint();
+        if (!sugg.empty()) {
+            parse_error(*loc, "cannot resolve bareword '%s' to any reachable object; %s", bword, sugg.c_str());
+        } else {
+            parse_error(*loc, "cannot resolve bareword '%s' to any reachable object", bword);
+        }
     }
 
     //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() this: %p '%s' abr: %d\n", this, bword, abr);
@@ -2034,7 +2070,17 @@ QoreClass* qore_root_ns_private::parseFindScopedClassIntern(const QoreProgramLoc
     if (nscope.size() == 1) {
         oc = parseFindClassIntern(nscope.ostr);
         if (!oc && raise_error) {
-            parse_error(*loc, "reference to undefined class '%s'", nscope.ostr);
+            // suggest a near-match from the known class names
+            QoreSuggestionList sl(nscope.ostr);
+            for (auto& i : clmap) {
+                sl.add(i.first.c_str());
+            }
+            std::string hint = sl.getHint();
+            if (!hint.empty()) {
+                parse_error(*loc, "reference to undefined class '%s'; %s", nscope.ostr, hint.c_str());
+            } else {
+                parse_error(*loc, "reference to undefined class '%s'", nscope.ostr);
+            }
         }
         return oc;
     }

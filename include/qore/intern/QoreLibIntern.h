@@ -487,6 +487,52 @@ DLLLOCAL void parse_error(const QoreProgramLocation& loc, const char* fmt, ...);
 DLLLOCAL void parseException(const QoreProgramLocation& loc, const char* err, const char* fmt, ...);
 DLLLOCAL void parseException(const QoreProgramLocation& loc, const char* err, QoreStringNode* desc);
 
+//! Computes the Optimal String Alignment (restricted Damerau-Levenshtein) edit distance between two strings
+/** Counts single-character insertions, deletions, substitutions, and adjacent transpositions.  The
+    computation is bounded: if \a max >= 0 and the distance is guaranteed to exceed \a max, then a value
+    > \a max is returned early without completing the full matrix.  Used to find near-matches for
+    identifier-resolution error messages ("did you mean ...?").
+    @param a the first string (may not be nullptr)
+    @param b the second string (may not be nullptr)
+    @param max the maximum distance of interest, or -1 for no bound
+    @return the edit distance, or a value > \a max if the distance exceeds \a max (when \a max >= 0)
+*/
+DLLLOCAL int q_edit_distance(const char* a, const char* b, int max = -1);
+
+//! Collects candidate identifier names and produces a "did you mean ...?" hint for a name that failed to resolve
+/** Used to improve parse-time identifier-resolution error messages for both human developers and AI coding
+    tools.  Candidates within a length-scaled edit-distance threshold of the target are retained; a pure
+    capitalization difference is always retained and flagged specially.  Only names actually found in a real
+    container should be added, so suggestions never invent identifiers.
+    @since %Qore 2.3
+*/
+class QoreSuggestionList {
+public:
+    //! creates the list for the given (unresolved) target name
+    DLLLOCAL QoreSuggestionList(const char* target);
+
+    //! considers a candidate name; retains it if it is close enough to the target
+    DLLLOCAL void add(const char* candidate);
+
+    //! returns true if there are no suggestions
+    DLLLOCAL bool empty() const;
+
+    //! returns a hint like "did you mean 'foo'?" or "did you mean 'foo' or 'bar'?", or an empty string if none
+    DLLLOCAL std::string getHint() const;
+
+    //! returns the ranked suggestion names (closest first, at most 3), for structured diagnostics
+    DLLLOCAL std::vector<std::string> getSuggestions() const;
+
+private:
+    std::string target;
+    int threshold;
+    // qualifying matches as (effective distance, name); a pure case difference uses distance -1
+    std::vector<std::pair<int, std::string>> matches;
+
+    // returns matches sorted closest-first, de-duplicated by name, capped at 3
+    DLLLOCAL std::vector<std::pair<int, std::string>> rank() const;
+};
+
 DLLLOCAL QoreString* findFileInPath(const char* file, const char* path);
 DLLLOCAL QoreString* findFileInEnvPath(const char* file, const char* varname);
 DLLLOCAL int qore_find_file_in_path(QoreString& str, const char* file, const char* path);
