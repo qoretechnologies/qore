@@ -392,6 +392,20 @@ const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int
     return *i;
 }
 
+const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline, int scol, int ecol) {
+    QoreProgramLocation loc(sline, eline, scol, ecol);
+
+    loc_set_t::iterator i = loc_set.find(&loc);
+    if (i == loc_set.end()) {
+        QoreProgramLocation* lp = new QoreProgramLocation(loc);
+        pgmloc.push_back(lp);
+        loc_set.insert(lp);
+        return lp;
+    }
+
+    return *i;
+}
+
 const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProgramLocation& loc, int sline, int eline) {
     QoreProgramLocation loc1(loc);
     loc1.start_line = sline;
@@ -413,6 +427,25 @@ const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProg
         loc_set.insert(i, lp);
     }
     */
+
+    return *i;
+}
+
+const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProgramLocation& loc, int sline,
+        int eline, int scol, int ecol) {
+    QoreProgramLocation loc1(loc);
+    loc1.start_line = sline;
+    loc1.end_line = eline;
+    loc1.start_column = QoreProgramLineLocation::normalizeColumn(scol);
+    loc1.end_column = QoreProgramLineLocation::normalizeColumn(ecol);
+
+    loc_set_t::iterator i = loc_set.find(&loc1);
+    if (i == loc_set.end()) {
+        QoreProgramLocation* lp = new QoreProgramLocation(loc1);
+        pgmloc.push_back(lp);
+        loc_set.insert(lp);
+        return lp;
+    }
 
     return *i;
 }

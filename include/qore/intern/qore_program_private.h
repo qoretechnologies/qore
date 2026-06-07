@@ -742,7 +742,10 @@ public:
 #endif
 
     DLLLOCAL const QoreProgramLocation* getLocation(int sline, int eline);
+    DLLLOCAL const QoreProgramLocation* getLocation(int sline, int eline, int scol, int ecol);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline);
+    DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline,
+        int scol, int ecol);
 
     DLLLOCAL void startThread(ExceptionSink& xsink);
 

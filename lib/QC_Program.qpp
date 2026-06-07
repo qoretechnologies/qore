@@ -68,6 +68,16 @@ hashdecl SourceLocationInfo {
     //! the ending source line number
     int endline;
 
+    //! the starting source column number (1-based), or -1 if unknown
+    /** @since %Qore 2.3
+    */
+    int column;
+
+    //! the ending source column number (1-based), or -1 if unknown
+    /** @since %Qore 2.3
+    */
+    int endcolumn;
+
     //! the source object or file name tag (used when multiple source objects are defined from the same source)
     *string source;
 

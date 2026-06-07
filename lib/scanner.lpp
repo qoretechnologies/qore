@@ -70,7 +70,8 @@
 int yyparse(yyscan_t yyscanner);
 
 static const QoreProgramLocation* get_loc(YYLTYPE* yylloc) {
-    return qore_program_private::get(*getProgram())->getLocation(yylloc->first_line, yylloc->last_line);
+    return qore_program_private::get(*getProgram())->getLocation(yylloc->first_line, yylloc->last_line,
+        yylloc->first_col, yylloc->last_col);
 }
 
 static void check_broken_op(YYLTYPE* yylloc, const char* got, const char* expected) {

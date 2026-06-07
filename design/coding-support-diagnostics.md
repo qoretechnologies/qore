@@ -196,6 +196,23 @@ everywhere they aren't set, and existing line-only behavior must be unchanged.
 Run full suite + valgrind (C++ change). **Wire format:** none (parse-time
 struct; not serialized in AOT).
 
+**Outcome (implemented):** columns are carried by `QoreProgramLineLocation`
+(`start_column`/`end_column`, -1 = unknown), interned distinctly (the fragile
+`operator<` was rewritten as a proper lexicographic ordering including columns),
+and threaded from the scanner's `get_loc` plus all 337 `getLocation(@…)` grammar
+call sites (mechanically transformed: the column expr is the line expr with
+`first_line→first_col`/`last_line→last_col`). **Parse-error and AST-node
+locations now carry accurate columns** (verified: an undefined bareword reports
+its exact column span). Exposed additively via the `SourceLocationInfo` hashdecl
+(`column`/`endcolumn`).
+
+**Known follow-on:** reflection-of-*declaration* source locations (function
+variants, classes, hashdecls, constants, members) build their `QoreProgramLocation`
+from bare line ints inside `UserSignature`/variant/member constructors, so they
+report `column == -1`. Threading columns through those constructor chains is a
+separate, bounded effort and is NOT required by the diagnostic features (Phases
+6/8 consume parse-error/AST-node locations, which do carry columns).
+
 ---
 
 ## Phase 5 — Stable error codes + internal structured record

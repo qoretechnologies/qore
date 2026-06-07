@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -359,8 +359,26 @@ struct QoreProgramLineLocation {
     int16_t start_line = -1,
         end_line = -1;
 
+    // source columns (1-based); -1 means unknown (e.g. for programmatically-created or
+    // AOT-deserialized locations, which do not carry column information)
+    int16_t start_column = -1,
+        end_column = -1;
+
+    // clamps a raw column value to the valid stored range; out-of-range or non-positive -> -1 (unknown)
+    DLLLOCAL static int16_t normalizeColumn(int col) {
+        return (col > 0 && col <= 0x7fff) ? (int16_t)col : (int16_t)-1;
+    }
+
     // if sline is 0 and eline is > 0 then set sline to 1
     DLLLOCAL QoreProgramLineLocation(int sline, int eline) : start_line(sline ? sline : (eline ? 1 : 0)), end_line(eline) {
+        assert(sline <= 0xffff);
+        assert(eline <= 0xffff);
+    }
+
+    // variant that also carries source column information
+    DLLLOCAL QoreProgramLineLocation(int sline, int eline, int scol, int ecol)
+            : start_line(sline ? sline : (eline ? 1 : 0)), end_line(eline),
+            start_column(normalizeColumn(scol)), end_column(normalizeColumn(ecol)) {
         assert(sline <= 0xffff);
         assert(eline <= 0xffff);
     }
@@ -392,12 +410,16 @@ public:
     // sets file position info from thread-local parse information
     DLLLOCAL QoreProgramLocation(int sline, int eline);
 
+    // sets file position info from thread-local parse information and carries column information
+    DLLLOCAL QoreProgramLocation(int sline, int eline, int scol, int ecol);
+
     DLLLOCAL QoreProgramLocation(const QoreProgramLocation& old) = default;
 
     DLLLOCAL QoreProgramLocation(QoreProgramLocation&& old) = default;
 
     DLLLOCAL void clear() {
         start_line = end_line = -1;
+        start_column = end_column = -1;
         file = nullptr;
         source = nullptr;
         offset = 0;
@@ -441,18 +463,38 @@ public:
         lang = l;
     }
 
+    // proper lexicographic ordering (a valid strict weak ordering, suitable for use as a set key);
+    // columns participate so that locations differing only in column are interned distinctly
     DLLLOCAL bool operator<(const QoreProgramLocation& loc) const {
-        return start_line < loc.start_line
-            || end_line < loc.end_line
-            || file < loc.file
-            || source < loc.source
-            || offset < loc.offset
-            || lang < loc.lang;
+        if (start_line != loc.start_line) {
+            return start_line < loc.start_line;
+        }
+        if (end_line != loc.end_line) {
+            return end_line < loc.end_line;
+        }
+        if (start_column != loc.start_column) {
+            return start_column < loc.start_column;
+        }
+        if (end_column != loc.end_column) {
+            return end_column < loc.end_column;
+        }
+        if (file != loc.file) {
+            return file < loc.file;
+        }
+        if (source != loc.source) {
+            return source < loc.source;
+        }
+        if (offset != loc.offset) {
+            return offset < loc.offset;
+        }
+        return lang < loc.lang;
     }
 
     DLLLOCAL bool operator==(const QoreProgramLocation& loc) const {
         return start_line == loc.start_line
             && end_line == loc.end_line
+            && start_column == loc.start_column
+            && end_column == loc.end_column
             && file == loc.file
             && source == loc.source
             && offset == loc.offset
