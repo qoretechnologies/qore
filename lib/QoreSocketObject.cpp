@@ -5484,6 +5484,13 @@ int QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id, ExceptionSink* 
     return 0;
 }
 
+void QoreSocketObject::setHttp2StreamStreamingDirect(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->setStreamStreaming(stream_id);
+    }
+}
+
 void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
     AutoLocker al(priv->m);
     priv->socket->setHttp2ConnectProtocolEnabled(enable);
@@ -6274,19 +6281,11 @@ int QoreSocketObject::sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, co
     return session->sendStreamData(stream_id, data, len, end_stream, xsink);
 }
 
-int QoreSocketObject::setQuicClientStreamStreaming(int64_t stream_id, ExceptionSink* xsink) {
-    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
-        std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
-        if (session) {
-            session->setStreamStreaming(stream_id);
-        }
-        return 0;
+void QoreSocketObject::setQuicClientStreamStreamingDirect(int64_t stream_id) {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
+    if (session) {
+        session->setStreamStreaming(stream_id);
     }
-
-    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
-        new QoreSocketObjectQuicEnqueuePollOperation(this,
-            QoreSocketObjectQuicEnqueuePollOperation::Action::SetStreaming, 0, stream_id),
-        "setQuicClientStreamStreaming", xsink));
 }
 
 int QoreSocketObject::submitQuicClientTrailers(int64_t stream_id, const QoreHashNode* trailers,

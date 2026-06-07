@@ -742,11 +742,8 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     }
 
     if (action->isStreaming()
-            && sock_obj
-            && sock_obj->setQuicClientStreamStreaming(stream_id, xsink)) {
-        endSubmitFail();
-        action->deref(xsink);
-        return -1;
+            && sock_obj) {
+        sock_obj->setQuicClientStreamStreamingDirect(stream_id);
     }
 
     endSubmitOk(stream_id);
@@ -863,7 +860,8 @@ int Http3ClientPollOperationPriv::setStreamStreaming(int64_t stream_id,
             (long long)stream_id);
         return -1;
     }
-    return sock_obj->setQuicClientStreamStreaming(stream_id, xsink);
+    sock_obj->setQuicClientStreamStreamingDirect(stream_id);
+    return 0;
 }
 
 bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink* xsink) {
