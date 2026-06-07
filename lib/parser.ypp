@@ -1394,7 +1394,8 @@ struct NSNode {
                     parse_error(*n.cn->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                         n.cn->name.ostr);
                 }
-                ns.parseAddConstant(n.cn->loc, n.cn->name, n.cn->value, n.cn->pub, n.cn->getTypeInfo());
+                ns.parseAddConstant(n.cn->loc, n.cn->name, n.cn->value, n.cn->pub, n.cn->typeInfo,
+                    n.cn->takeParseTypeInfo());
                 delete n.cn;
                 break;
             case NSN_TYPEDEF:
@@ -1488,6 +1489,9 @@ public:
         QoreSimpleValue exp;
     } u;
     const QoreTypeInfo* typeInfo = nullptr;
+    // unresolved declared type for an explicitly-typed class constant (MI_Constant); deferred to ConstantEntry so
+    // that forward references to hashdecls/classes declared later in the same module resolve correctly
+    QoreParseTypeInfo* constParseTypeInfo = nullptr;
 
     DLLLOCAL MemberInfo(char* n, QoreMemberInfo* mi) : loc(mi->loc), name(n), type(MI_Member) {
         u.memberInfo = mi;
@@ -1496,7 +1500,8 @@ public:
     }
 
     DLLLOCAL MemberInfo(const QoreProgramLocation* loc, char* n, QoreValue exp,
-            const QoreTypeInfo* ti = nullptr) : loc(loc), name(n), type(MI_Constant), typeInfo(ti) {
+            const QoreTypeInfo* ti = nullptr, QoreParseTypeInfo* pti = nullptr)
+            : loc(loc), name(n), type(MI_Constant), typeInfo(ti), constParseTypeInfo(pti) {
         u.exp = exp;
     }
 
@@ -1521,6 +1526,8 @@ public:
                 QoreValue(u.exp).discard(nullptr);
                 break;
         }
+        // only set for MI_Constant; nullptr (and harmless to delete) otherwise, or taken by takeConstParseTypeInfo()
+        delete constParseTypeInfo;
     }
 
     DLLLOCAL member_pair_t getPair() {
@@ -1557,6 +1564,13 @@ public:
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
         assert(type == MI_Constant);
         return typeInfo;
+    }
+
+    DLLLOCAL QoreParseTypeInfo* takeConstParseTypeInfo() {
+        assert(type == MI_Constant);
+        QoreParseTypeInfo* rv = constParseTypeInfo;
+        constParseTypeInfo = nullptr;
+        return rv;
     }
 
     DLLLOCAL void setTransient() {
@@ -1603,7 +1617,8 @@ public:
         if (member->type == MI_Member)
             mmap.addNoCheck(member->getPair());
         else if (member->type == MI_Constant)
-            cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo());
+            cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo(), false, Public,
+                member->takeConstParseTypeInfo());
         else
             vmap.addNoCheck(member->getVarPair());
 
@@ -1640,7 +1655,8 @@ public:
             }
 
             // add new constant to list
-            cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo());
+            cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo(), false, Public,
+                member->takeConstParseTypeInfo());
         } else {
             assert(member->type == MI_Var);
             if (vmap.find(member->name)) {
@@ -2880,7 +2896,7 @@ top_level_command:
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "constant", $1->name.ostr);
         qore_root_ns_private::parseAddConstant($1->loc, *getRootNS(), $1->name, $1->value, $1->pub,
-            $1->getTypeInfo());
+            $1->typeInfo, $1->takeParseTypeInfo());
         delete $1;
     }
     | unscoped_const_decl {
@@ -2889,7 +2905,7 @@ top_level_command:
                 $1->name.ostr);
         }
         qore_root_ns_private::parseAddConstant($1->loc, *getRootNS(), $1->name, $1->value, $1->pub,
-            $1->getTypeInfo());
+            $1->typeInfo, $1->takeParseTypeInfo());
         delete $1;
     }
     | outofline_methoddef {
@@ -4151,7 +4167,8 @@ class_attributes:
                 $1->getName());
         }
         $$ = new QoreParseClass(loc);
-        qore_class_private::parseAddConstant(*($$), loc, $1->getName(), $1->takeValue(), Public, $1->getTypeInfo());
+        qore_class_private::parseAddConstant(*($$), loc, $1->getName(), $1->takeValue(), Public, $1->typeInfo,
+            $1->takeParseTypeInfo());
         delete $1;
     }
     | class_attributes inline_methoddef {
@@ -4179,7 +4196,8 @@ class_attributes:
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $2->getName());
         }
-        qore_class_private::parseAddConstant(*($$), loc, $2->getName(), $2->takeValue(), Public, $2->getTypeInfo());
+        qore_class_private::parseAddConstant(*($$), loc, $2->getName(), $2->takeValue(), Public, $2->typeInfo,
+            $2->takeParseTypeInfo());
         $$ = $1;
         delete $2;
     }
@@ -4462,7 +4480,7 @@ member2:
         if ($1->pub) {
             parse_error(*loc, "cannot change class constant scope for constant '%s' within a public or private declaration block", $1->name.ostr);
         }
-        $$ = new MemberInfo(loc, $1->name.takeName(), $1->value, $1->getTypeInfo());
+        $$ = new MemberInfo(loc, $1->name.takeName(), $1->value, $1->typeInfo, $1->takeParseTypeInfo());
         delete $1;
     }
     ;

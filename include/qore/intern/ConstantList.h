@@ -96,6 +96,10 @@ public:
     ParseWarnOptions pwo;
     std::string name;
     const QoreTypeInfo* typeInfo;
+    // unresolved declared type for an explicitly-typed constant; resolution is deferred to parseInit() so that
+    // forward references to hashdecls/classes declared later in the same module resolve correctly (the same
+    // deferral that type inference already gets); nullptr once resolved or for built-in/already-resolved types
+    QoreParseTypeInfo* parseTypeInfo = nullptr;
     QoreValue val{};
     bool in_init : 1,     // being initialized
         pub : 1,          // public constant (modules only)
@@ -112,7 +116,7 @@ public:
 
     DLLLOCAL ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue v,
         const QoreTypeInfo* ti = nullptr, bool n_pub = false, bool n_init = false, bool n_builtin = false,
-        ClassAccess n_access = Public);
+        ClassAccess n_access = Public, QoreParseTypeInfo* pti = nullptr);
 
     DLLLOCAL ConstantEntry(const ConstantEntry& old);
 
@@ -248,6 +252,8 @@ protected:
         assert(saved_val.isNothing());
         assert(aot_init_expr.isNothing());
         assert(val.isNothing());
+        // free the deferred declared type if parseInit() never ran (e.g. a parse error aborted the commit)
+        delete parseTypeInfo;
     }
 
     DLLLOCAL void del(ExceptionSink* xsink);
@@ -323,7 +329,8 @@ public:
             ClassAccess access = Public);
 
     DLLLOCAL cnemap_t::iterator parseAdd(const QoreProgramLocation* loc, const char* name, QoreValue val,
-            const QoreTypeInfo* typeInfo = nullptr, bool pub = false, ClassAccess access = Public);
+            const QoreTypeInfo* typeInfo = nullptr, bool pub = false, ClassAccess access = Public,
+            QoreParseTypeInfo* parseTypeInfo = nullptr);
 
     //! Add a pre-created ConstantEntry (takes ownership)
     /** Uses ce->getName() as the key — which returns a pointer into the
@@ -368,7 +375,7 @@ public:
 
     // add a constant to a list with duplicate checking (pub & priv + pending)
     DLLLOCAL void parseAdd(const QoreProgramLocation* loc, const std::string& name, QoreValue val, ClassAccess access,
-            const char* cname, const QoreTypeInfo* typeInfo = nullptr);
+            const char* cname, const QoreTypeInfo* typeInfo = nullptr, QoreParseTypeInfo* parseTypeInfo = nullptr);
 
     DLLLOCAL int parseInit();
     DLLLOCAL int parseCommitRuntimeInit();

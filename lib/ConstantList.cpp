@@ -47,9 +47,9 @@ const char* ClassNs::getName() const {
 #endif
 
 ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue val, const QoreTypeInfo* ti,
-        bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access)
-        : loc(loc), name(n), typeInfo(ti), val(val), in_init(false), pub(n_pub),
-        init(n_init), builtin(n_builtin), delayed_eval(false), explicit_type(ti), has_init_expr(false),
+        bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access, QoreParseTypeInfo* pti)
+        : loc(loc), name(n), typeInfo(ti), parseTypeInfo(pti), val(val), in_init(false), pub(n_pub),
+        init(n_init), builtin(n_builtin), delayed_eval(false), explicit_type(ti || pti), has_init_expr(false),
         saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
         access(n_access) {
     QoreProgram* pgm = getProgram();
@@ -247,6 +247,18 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         //printd(5, "ConstantEntry::parseInit() this: %p '%s' about to init val: '%s' class: %p '%s'\n", this,
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
+
+        // resolve a deferred explicit declared type here (rather than eagerly in the parser) so that forward
+        // references to hashdecls/classes declared later in the same module resolve correctly; the class/namespace
+        // parse context pushed above is in scope, matching the behavior of type inference
+        if (parseTypeInfo) {
+            int resolve_err = 0;
+            typeInfo = QoreParseTypeInfo::resolveAndDelete(parseTypeInfo, loc, resolve_err);
+            parseTypeInfo = nullptr;
+            if (resolve_err) {
+                err = resolve_err;
+            }
+        }
 
         const QoreTypeInfo* declaredTypeInfo = explicit_type ? typeInfo : nullptr;
         parse_context.expected_type_info = declaredTypeInfo;
@@ -613,17 +625,21 @@ static bool parsingExternalStubDeclarations() {
 }
 
 cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const char* name, QoreValue value,
-        const QoreTypeInfo* typeInfo, bool pub, ClassAccess access) {
+        const QoreTypeInfo* typeInfo, bool pub, ClassAccess access, QoreParseTypeInfo* parseTypeInfo) {
     // first check if the constant has already been defined
     if (cnemap.find(name) != cnemap.end()) {
         parse_error(*loc, "constant \"%s\" has already been defined", name);
         value.discard(nullptr);
+        delete parseTypeInfo;
         return cnemap.end();
     }
 
-    ConstantEntry* ce = new ConstantEntry(loc, name, value,
-        typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo : value.getTypeInfo(),
-        pub, false, false, access);
+    // when an explicit declared type is deferred (parseTypeInfo set), do not infer the type from the value here;
+    // keep typeInfo null and let ConstantEntry::parseInit() resolve parseTypeInfo when hashdecls/classes are committed
+    const QoreTypeInfo* ti = parseTypeInfo
+        ? typeInfo
+        : (typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo : value.getTypeInfo());
+    ConstantEntry* ce = new ConstantEntry(loc, name, value, ti, pub, false, false, access, parseTypeInfo);
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();
     }
@@ -763,16 +779,20 @@ void ConstantList::assimilate(ConstantList& n, const char* type, const char* nam
 }
 
 void ConstantList::parseAdd(const QoreProgramLocation* loc, const std::string& name, QoreValue val,
-        ClassAccess access, const char* cname, const QoreTypeInfo* typeInfo) {
+        ClassAccess access, const char* cname, const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo) {
     if (inList(name)) {
         parse_error(*loc, "constant \"%s\" has already been defined in class \"%s\"", name.c_str(), cname);
         val.discard(nullptr);
+        delete parseTypeInfo;
         return;
     }
 
-    ConstantEntry* ce = new ConstantEntry(loc, name.c_str(), val,
-        typeInfo || (val.hasNode() && val.getInternalNode()->needs_eval()) ? typeInfo : val.getTypeInfo(),
-        false, false, false, access);
+    // when an explicit declared type is deferred (parseTypeInfo set), do not infer the type from the value here;
+    // keep typeInfo null and let ConstantEntry::parseInit() resolve parseTypeInfo when hashdecls/classes are committed
+    const QoreTypeInfo* ti = parseTypeInfo
+        ? typeInfo
+        : (typeInfo || (val.hasNode() && val.getInternalNode()->needs_eval()) ? typeInfo : val.getTypeInfo());
+    ConstantEntry* ce = new ConstantEntry(loc, name.c_str(), val, ti, false, false, false, access, parseTypeInfo);
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();
     }

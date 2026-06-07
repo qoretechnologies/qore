@@ -12,7 +12,58 @@ class ConstInitTest inherits QUnit::Test {
     constructor() : QUnit::Test("Const init test", "1.0") {
         addTestCase("Test", \testConstInit());
         addTestCase("local var in const init", \testConstInitLocalVar());
+        addTestCase("typed const decls", \testTypedConstDecl());
+        addTestCase("typed const forward hashdecl ref", \testTypedConstForwardHashDeclRef());
+        addTestCase("typed const type mismatch", \testTypedConstTypeMismatch());
         set_return_value(main());
+    }
+
+    testTypedConstDecl() {
+        Program p(PO_DEFAULT);
+        # explicit scalar and container element types must parse and retain their declared types
+        string c = '
+const int I = 1;
+const string S = "x";
+const hash<string, int> H = {"a": 1, "b": 2};
+const list<string> L = ("a", "b");
+';
+        assertNothing(p.parse(c, "test"));
+    }
+
+    testTypedConstForwardHashDeclRef() {
+        # an explicitly-typed constant whose element type is a hashdecl declared LATER in the same parse unit must
+        # resolve (type resolution is deferred to the commit phase, matching type inference); regression for the
+        # "illegal access to unknown member in undefined hashdecl" parse failure
+        {
+            Program p(PO_DEFAULT);
+            string c = '
+public const hash<string, hash<FwdInfo>> FwdMap = {"a": <FwdInfo>{"type": "b", "desc": "x"}};
+public hashdecl FwdInfo { string type; string desc; }
+';
+            assertNothing(p.parse(c, "test"));
+        }
+        # same, but as a class constant referencing a hashdecl declared later
+        {
+            Program p(PO_DEFAULT);
+            string c = '
+class K {
+    public {
+        const hash<string, hash<FwdInfo2>> Map = {"a": <FwdInfo2>{"v": 1}};
+    }
+}
+public hashdecl FwdInfo2 { int v; }
+';
+            assertNothing(p.parse(c, "test"));
+        }
+    }
+
+    testTypedConstTypeMismatch() {
+        # an explicit declared type that does not accept the initializer must still raise a parse error
+        Program p(PO_DEFAULT);
+        string c = '
+const int Bad = "not an int";
+';
+        assertThrows("PARSE-TYPE-ERROR", sub () { p.parse(c, "test"); });
     }
 
     testConstInit() {

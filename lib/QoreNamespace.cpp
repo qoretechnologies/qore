@@ -2265,15 +2265,18 @@ void qore_root_ns_private::addConstant(qore_ns_private& ns, const char* cname, Q
 }
 
 void qore_root_ns_private::parseAddConstantIntern(const QoreProgramLocation* loc, QoreNamespace& ns,
-        const NamedScope& name, QoreValue value, bool cpub, const QoreTypeInfo* typeInfo) {
+        const NamedScope& name, QoreValue value, bool cpub, const QoreTypeInfo* typeInfo,
+        QoreParseTypeInfo* parseTypeInfo) {
     ValueHolder vh(value, 0);
 
     QoreNamespace* sns = ns.priv->resolveNameScope(loc, name);
-    if (!sns)
+    if (!sns) {
+        delete parseTypeInfo;
         return;
+    }
 
     const char* cname = name.get(name.size() - 1);
-    cnemap_t::iterator i = sns->priv->parseAddConstant(loc, cname, vh.release(), cpub, typeInfo);
+    cnemap_t::iterator i = sns->priv->parseAddConstant(loc, cname, vh.release(), cpub, typeInfo, parseTypeInfo);
     if (i == sns->priv->constant.end())
         return;
 
@@ -3327,13 +3330,14 @@ qore_ns_private* qore_ns_private::parseAddNamespace(QoreNamespace* nns) {
 
 // only called while parsing before addition to namespace tree, no locking needed
 cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* loc, const char* cname,
-        QoreValue value, bool cpub, const QoreTypeInfo* typeInfo) {
+        QoreValue value, bool cpub, const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo) {
     ValueHolder vh(value, 0);
 
     if (constant.inList(cname)) {
         std::string path;
         getPath(path, true);
         parse_error(*loc, "constant '%s' has already been defined in '%s'", cname, path.c_str());
+        delete parseTypeInfo;
         return constant.end();
     }
 
@@ -3342,19 +3346,21 @@ cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* 
         "constant '%s::%s' is declared public but the enclosing namespace '%s::' is not public", name.c_str(), cname,
         name.c_str());
 
-    return constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub);
+    return constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub, Public, parseTypeInfo);
 }
 
 // only called while parsing before addition to namespace tree, no locking needed
 void qore_ns_private::parseAddConstant(const QoreProgramLocation* loc, const NamedScope& nscope, QoreValue value,
-        bool cpub, const QoreTypeInfo* typeInfo) {
+        bool cpub, const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo) {
    ValueHolder vh(value, 0);
 
    QoreNamespace* sns = resolveNameScope(loc, nscope);
-   if (!sns)
+   if (!sns) {
+      delete parseTypeInfo;
       return;
+   }
 
-   sns->priv->parseAddConstant(loc, nscope[nscope.size() - 1], vh.release(), cpub, typeInfo);
+   sns->priv->parseAddConstant(loc, nscope[nscope.size() - 1], vh.release(), cpub, typeInfo, parseTypeInfo);
 }
 
 // only called while parsing before addition to namespace tree, no locking needed

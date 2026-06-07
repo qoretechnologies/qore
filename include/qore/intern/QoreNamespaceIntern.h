@@ -439,10 +439,10 @@ public:
     DLLLOCAL bool addGlobalVars(qore_root_ns_private& rns);
 
     DLLLOCAL cnemap_t::iterator parseAddConstant(const QoreProgramLocation* loc, const char* name, QoreValue value,
-            bool pub, const QoreTypeInfo* typeInfo = nullptr);
+            bool pub, const QoreTypeInfo* typeInfo = nullptr, QoreParseTypeInfo* parseTypeInfo = nullptr);
 
     DLLLOCAL void parseAddConstant(const QoreProgramLocation* loc, const NamedScope& name, QoreValue value,
-            bool pub, const QoreTypeInfo* typeInfo = nullptr);
+            bool pub, const QoreTypeInfo* typeInfo = nullptr, QoreParseTypeInfo* parseTypeInfo = nullptr);
 
     //! Adds a typedef to the namespace; returns the TypedefEntry* on success, nullptr on error
     DLLLOCAL TypedefEntry* parseAddTypedef(const QoreProgramLocation* loc, const char* name,
@@ -1816,7 +1816,8 @@ protected:
             const NamedScope& name, const QoreTypeInfo*& typeInfo, bool& found);
 
     DLLLOCAL void parseAddConstantIntern(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
-            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr);
+            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr,
+            QoreParseTypeInfo* parseTypeInfo = nullptr);
 
     DLLLOCAL void parseAddClassIntern(const QoreProgramLocation* loc, const NamedScope& name, QoreClass* oc);
 
@@ -2551,8 +2552,9 @@ public:
     }
 
     DLLLOCAL static void parseAddConstant(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
-            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr) {
-        getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo);
+            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr,
+            QoreParseTypeInfo* parseTypeInfo = nullptr) {
+        getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo, parseTypeInfo);
     }
 
     // returns 0 for success, non-zero for error
