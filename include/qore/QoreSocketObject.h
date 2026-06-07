@@ -512,17 +512,7 @@ public:
     DLLEXPORT void cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
 
     //! Mark an HTTP/2 stream for incremental response body delivery
-    /** When set, the stream's body data is delivered incrementally via
-        hasStreamingData()/takeStreamData() instead of waiting for END_STREAM.
-        @param stream_id the stream to mark
-        @since %Qore 2.3
-    */
-    DLLEXPORT void setHttp2StreamStreaming(int32_t stream_id);
-
-    //! Internal variant of setHttp2StreamStreaming() that reports controller errors
-    DLLLOCAL int setHttp2StreamStreaming(int32_t stream_id, ExceptionSink* xsink);
-
-    //! Internal direct variant for callers that already serialized request submission on the
+    /** Internal direct variant for callers that already serialized request submission on the
     /** async I/O thread; mutates only lock-protected Http2Session bookkeeping (no nghttp2 calls),
         so it is safe to call from any thread.
     */
