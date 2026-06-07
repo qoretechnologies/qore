@@ -82,7 +82,7 @@ public hashdecl DpqlSignatureHelp {
 }
 
 #! Expression operators rendered with DPQL prefix-operator syntax
-const DpqlPrefixExpressionOperators = (
+const list<auto> DpqlPrefixExpressionOperators = (
     DP_OP_MAP,
     DP_OP_HASH_MAP,
     DP_OP_SELECT,
@@ -122,17 +122,17 @@ public hashdecl DpqlCompletionContext {
 }
 
 #! Completion context types
-const DPQL_CTX_START = "start";              # Start of expression
-const DPQL_CTX_AFTER_FIELD = "after_field";  # After a field reference
-const DPQL_CTX_AFTER_OP = "after_op";        # After an operator
-const DPQL_CTX_AFTER_VALUE = "after_value";  # After a value
-const DPQL_CTX_IN_FIELD = "in_field";        # Inside a field reference (after @)
-const DPQL_CTX_IN_STRING = "in_string";      # Inside a string
-const DPQL_CTX_IN_PAREN = "in_paren";        # Inside parentheses
-const DPQL_CTX_IN_INDEX = "in_index";        # Inside index accessor [...]
-const DPQL_CTX_IN_KEY = "in_key";            # Inside key accessor {...}
-const DPQL_CTX_AFTER_ACCESSOR = "after_acc"; # After ] or } - can add more accessors
-const DPQL_CTX_IN_TEMPLATE = "in_template"; # Inside a template reference (after $)
+const string DPQL_CTX_START = "start";              # Start of expression
+const string DPQL_CTX_AFTER_FIELD = "after_field";  # After a field reference
+const string DPQL_CTX_AFTER_OP = "after_op";        # After an operator
+const string DPQL_CTX_AFTER_VALUE = "after_value";  # After a value
+const string DPQL_CTX_IN_FIELD = "in_field";        # Inside a field reference (after @)
+const string DPQL_CTX_IN_STRING = "in_string";      # Inside a string
+const string DPQL_CTX_IN_PAREN = "in_paren";        # Inside parentheses
+const string DPQL_CTX_IN_INDEX = "in_index";        # Inside index accessor [...]
+const string DPQL_CTX_IN_KEY = "in_key";            # Inside key accessor {...}
+const string DPQL_CTX_AFTER_ACCESSOR = "after_acc"; # After ] or } - can add more accessors
+const string DPQL_CTX_IN_TEMPLATE = "in_template"; # Inside a template reference (after $)
 
 #! Completion provider for DPQL expressions
 /** This class provides context-aware code completion for DPQL query expressions.
@@ -161,7 +161,7 @@ public class DpqlCompletionProvider {
         hash<string, string> name_to_symbol;
 
         #! Comparison operators with descriptions
-        const ComparisonOperators = (
+        const list<auto> ComparisonOperators = (
             {"label": "==", "kind": "operator", "insert_text": "== ",
                 "documentation": "Equals comparison", "sort_priority": 10},
             {"label": "!=", "kind": "operator", "insert_text": "!= ",
@@ -185,7 +185,7 @@ public class DpqlCompletionProvider {
         );
 
         #! Logical operators with descriptions
-        const LogicalOperators = (
+        const list<auto> LogicalOperators = (
             {"label": "&&", "kind": "operator", "insert_text": "&& ",
                 "documentation": "Logical AND", "sort_priority": 30},
             {"label": "||", "kind": "operator", "insert_text": "|| ",
@@ -193,7 +193,7 @@ public class DpqlCompletionProvider {
         );
 
         #! Keyword completions
-        const Keywords = (
+        const list<auto> Keywords = (
             {"label": "true", "kind": "keyword", "insert_text": "true",
                 "documentation": "Boolean true value", "sort_priority": 50},
             {"label": "false", "kind": "keyword", "insert_text": "false",
@@ -206,7 +206,7 @@ public class DpqlCompletionProvider {
         );
 
         #! Accessor completions
-        const AccessorCompletions = (
+        const list<auto> AccessorCompletions = (
             {"label": "[", "kind": "operator", "insert_text": "[",
                 "documentation": "Index accessor: [0], [-1], [0..3]", "sort_priority": 5},
             {"label": "{", "kind": "operator", "insert_text": "{",
@@ -216,7 +216,7 @@ public class DpqlCompletionProvider {
         );
 
         #! Well-known template contexts with descriptions
-        const DefaultTemplateContexts = (
+        const list<auto> DefaultTemplateContexts = (
             {"label": "$static:", "kind": "template", "insert_text": "$static:",
                 "documentation": "Static context values", "sort_priority": 1},
             {"label": "$dynamic:", "kind": "template", "insert_text": "$dynamic:",
@@ -238,7 +238,7 @@ public class DpqlCompletionProvider {
         );
 
         #! Index accessor suggestions
-        const IndexSuggestions = (
+        const list<auto> IndexSuggestions = (
             {"label": "0", "kind": "value", "insert_text": "0",
                 "documentation": "First element", "sort_priority": 1},
             {"label": "-1", "kind": "value", "insert_text": "-1",

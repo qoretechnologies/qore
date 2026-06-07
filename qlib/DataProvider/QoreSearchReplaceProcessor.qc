@@ -28,7 +28,7 @@ public namespace DataProvider {
 public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreSearchReplaceProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_TRANSFORM,
@@ -36,7 +36,7 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "field": <DataProviderOptionInfo>{
                 "display_name": "Field Name",
                 "short_desc": "Field to apply search and replace on",

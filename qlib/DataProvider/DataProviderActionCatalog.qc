@@ -213,13 +213,13 @@ public enum UiOptionView {
 #! Maps string values to UiOptionView enum values for deserialization
 /** @since DataProvider 3.3
 */
-public const UiOptionViewMap = {
+public const hash<auto> UiOptionViewMap = {
     "template": UiOptionView::Template,
     "expression": UiOptionView::Expression,
 };
 
 #! Maps DPAT_* action type codes to app action flags
-public const ActionCodeFlagMap = {
+public const hash<string, string> ActionCodeFlagMap = {
     DPAT_EVENT: "supports_events",
     DPAT_API: "supports_apis",
     DPAT_SEND_MESSAGE: "supports_messages",
@@ -236,7 +236,7 @@ public const ActionCodeFlagMap = {
 public const AppActionFlags = ActionCodeFlagMap.values();
 
 #! Maps DPAT_* action type codes to a data provider attribute string
-public const ActionAttrMap = {
+public const hash<string, string> ActionAttrMap = {
     DPAT_EVENT: "supports_observable",
     DPAT_API: "supports_request",
     DPAT_SEND_MESSAGE: "supports_messages",
@@ -250,7 +250,7 @@ public const ActionAttrMap = {
 };
 
 #! Maps DPAT_* action type codes to a user-friendly name
-public const ActionNameMap = {
+public const hash<string, string> ActionNameMap = {
     DPAT_EVENT: "EVENT",
     DPAT_API: "API",
     DPAT_SEND_MESSAGE: "MESSAGE",
@@ -264,7 +264,7 @@ public const ActionNameMap = {
 };
 
 #! Set of actions that support search expressions
-public const ActionsWithSearch = {
+public const hash<string, bool> ActionsWithSearch = {
     DPAT_FIND: True,
     DPAT_FIND_SINGLE: True,
     DPAT_UPDATE: True,
@@ -355,24 +355,24 @@ public hashdecl DataProviderPathVarInfo inherits DisplayDescInfo {
 #! Normal data
 /** The type describes the input or output data directly
 */
-public const DPAD_NORMAL = "normal";
+public const string DPAD_NORMAL = "normal";
 
 #! Record stream data
 /** The data is a record stream, and the type describes the records provided by it. The data type is
     @ref DataProvider::AbstractDataProviderBulkRecordInterface "AbstractDataProviderBulkRecordInterface"
 */
-public const DPAD_RECORD_STREAM = "record-stream";
+public const string DPAD_RECORD_STREAM = "record-stream";
 
 #! Record set data
 /** The data is a hash of record info; keys are field names, values are lists of field values
 */
-public const DPAD_RECORD_SET = "record-set";
+public const string DPAD_RECORD_SET = "record-set";
 
 #! Pass-through data
 /** The output type is the same as the input type; the processor passes records through unchanged
     (e.g., filter processors that drop non-matching records but do not modify matching ones)
 */
-public const DPAD_PASS_THROUGH = "pass-through";
+public const string DPAD_PASS_THROUGH = "pass-through";
 
 #! Modified pass-through data
 /** The output type is a modification of the input type based on the processor's configuration.
@@ -383,7 +383,7 @@ public const DPAD_PASS_THROUGH = "pass-through";
 
     @since %DataProvider 3.4
 */
-public const DPAD_MODIFIED_PASS_THROUGH = "modified-pass-through";
+public const string DPAD_MODIFIED_PASS_THROUGH = "modified-pass-through";
 #/@}
 
 #! DataProvider action definition
@@ -518,7 +518,7 @@ public hashdecl DataProviderActionInfo {
 public class DataProviderActionCatalog {
     public {
         #! Required application key set
-        const RequiredAppKeys = {
+        const hash<string, bool> RequiredAppKeys = {
             "name": True,
             "display_name": True,
             "short_desc": True,
@@ -530,7 +530,7 @@ public class DataProviderActionCatalog {
         };
 
         #! Required action key set (without action_code and path_vars, which are checked separately)
-        const RequiredActionKeys = {
+        const hash<string, bool> RequiredActionKeys = {
             "app": True,
             "action": True,
             "path": True,
@@ -571,7 +571,7 @@ public class DataProviderActionCatalog {
 
             @since DataProvider 3.5
         */
-        const GenericApiCallBuilderModule = "RestClientDataProvider";
+        const string GenericApiCallBuilderModule = "RestClientDataProvider";
 
         #! Late-bound scheme lookup hook — set by @c ConnectionProvider at init time
         /** Signature: <tt>*hash<auto> sub (string scheme)</tt>. Returns the
@@ -622,7 +622,7 @@ public class DataProviderActionCatalog {
         static hash<string, hash<string, bool>> appmodmap;
 
         #! Default description
-        const DefaultDescription = "";
+        const string DefaultDescription = "";
     }
 
     #! Registers an app for deferred initialization / initialization on demand

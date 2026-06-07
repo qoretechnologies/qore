@@ -31,7 +31,7 @@ public class NullDataProviderFactory inherits AbstractDataProviderFactory {
         static Class cls = new Class("NullDataProvider");
 
         #! Factory info
-        const FactoryInfo = <DataProviderFactoryInfo>{
+        const hash<DataProviderFactoryInfo> FactoryInfo = <DataProviderFactoryInfo>{
             "name": "null",
             "desc": "null data provider factory",
             "children_can_support_apis": True,

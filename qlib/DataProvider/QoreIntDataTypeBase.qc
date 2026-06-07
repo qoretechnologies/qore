@@ -28,7 +28,7 @@ public namespace DataProvider {
 public class QoreIntDataTypeBase inherits QoreDataType {
     private {
         #! supported non-soft options
-        const SupportedOptions = {
+        const hash<string, hash<DataProviderTypeOptionInfo>> SupportedOptions = {
             "number.min": <DataProviderTypeOptionInfo>{
                 "type": Type::Int,
                 "desc": "The minimum value for this type; by default values less than this will be silently "
@@ -42,7 +42,7 @@ public class QoreIntDataTypeBase inherits QoreDataType {
         };
 
         #! supported soft options
-        const SupportedSoftOptions = {
+        const hash<string, hash<DataProviderTypeOptionInfo>> SupportedSoftOptions = {
             "number.format": <DataProviderTypeOptionInfo>{
                 "type": Type::String,
                 "desc": "The format string for converting strings to numbers",

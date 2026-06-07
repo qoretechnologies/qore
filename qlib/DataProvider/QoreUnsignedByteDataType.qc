@@ -28,7 +28,7 @@ public namespace DataProvider {
 public class QoreUnsignedByteDataType inherits QoreIntDataTypeBase {
     public {
         #! Int type options
-        const Options = {
+        const hash<string, int> Options = {
             "number.min": 0,
             "number.max": 255,
         };
@@ -55,6 +55,6 @@ public class QoreUnsignedByteDataType inherits QoreIntDataTypeBase {
 }
 
 #! Unsigned byte data type for ints with values from 0 - 255
-public const QoreUnsignedByteDataType = new QoreUnsignedByteDataType();
+public const QoreUnsignedByteDataType QoreUnsignedByteDataType = new QoreUnsignedByteDataType();
 }
 

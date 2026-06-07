@@ -24,7 +24,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A type that converts dates to UNIX timestamps in milliseconds
-public const UnixTimestampMsType = new UnixTimestampMsType();
+public const UnixTimestampMsType UnixTimestampMsType = new UnixTimestampMsType();
 
 #! A type that converts dates to UNIX timestamps in milliseconds
 public class UnixTimestampMsType inherits UnixTimestampType {

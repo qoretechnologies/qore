@@ -163,7 +163,7 @@ public class QoreDataType inherits AbstractDataProviderType {
         hash<string, bool> element_allowed_values_map;
 
         #! supported options
-        const SupportedOptions = {
+        const hash<string, hash<DataProviderTypeOptionInfo>> SupportedOptions = {
             "qore.no_null": <DataProviderTypeOptionInfo>{
                 "type": Type::Boolean,
                 "desc": "if `True` then `NULL` is not supported on input if `NOTHING` is also not accepted",
@@ -171,7 +171,7 @@ public class QoreDataType inherits AbstractDataProviderType {
         };
 
         #! map from normal types to soft types
-        const SoftTypeMap = {
+        const hash<auto> SoftTypeMap = {
             "int": SoftIntType,
             "bool": SoftBoolType,
             "float": SoftFloatType,

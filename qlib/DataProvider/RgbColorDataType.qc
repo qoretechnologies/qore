@@ -27,7 +27,7 @@ public namespace DataProvider {
 #! RGB color data type
 public class RgbColorDataTypeBase inherits HashDataType {
     public {
-        const Fields = {
+        const hash<auto> Fields = {
             "r": {
                 "display_name": "Red",
                 "short_desc": "Red color component as an integer from 0 - 255",
@@ -74,8 +74,8 @@ public class RgbColorOrNothingDataType inherits RgbColorDataTypeBase {
 }
 
 #! RGB color data type
-public const RgbColorDataType = new RgbColorDataType();
+public const RgbColorDataType RgbColorDataType = new RgbColorDataType();
 
 #! RGB color "or nothing" data type constant
-public const RgbColorOrNothingDataType = new RgbColorOrNothingDataType();
+public const RgbColorOrNothingDataType RgbColorOrNothingDataType = new RgbColorOrNothingDataType();
 }

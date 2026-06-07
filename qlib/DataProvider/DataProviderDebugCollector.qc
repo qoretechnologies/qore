@@ -28,12 +28,12 @@ public namespace DataProvider {
 #! Debug info operation types
 /** @since DataProvider 3.3
 */
-public const DPDI_OP_REQUEST = "request";           #!< HTTP/REST request operation
-public const DPDI_OP_RESPONSE = "response";         #!< HTTP/REST response operation
-public const DPDI_OP_CONNECT = "connect";           #!< Connection established
-public const DPDI_OP_DISCONNECT = "disconnect";     #!< Connection closed
-public const DPDI_OP_SEND = "send";                 #!< Message sent (WebSocket, etc.)
-public const DPDI_OP_RECEIVE = "receive";           #!< Message received (WebSocket, etc.)
+public const string DPDI_OP_REQUEST = "request";           #!< HTTP/REST request operation
+public const string DPDI_OP_RESPONSE = "response";         #!< HTTP/REST response operation
+public const string DPDI_OP_CONNECT = "connect";           #!< Connection established
+public const string DPDI_OP_DISCONNECT = "disconnect";     #!< Connection closed
+public const string DPDI_OP_SEND = "send";                 #!< Message sent (WebSocket, etc.)
+public const string DPDI_OP_RECEIVE = "receive";           #!< Message received (WebSocket, etc.)
 
 #! Data provider debug info structure
 /** This hashdecl provides technical debugging information about data provider operations.

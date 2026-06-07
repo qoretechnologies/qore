@@ -25,7 +25,7 @@
 #! Main DataProvider namespace
 public namespace DataProvider {
     #! Test constant to verify file is being loaded
-    public const AppGroupTestConst = "test_value";
+    public const string AppGroupTestConst = "test_value";
 
     #! Data Provider Application Group enum
     /** Provides type-safe application group names for categorizing data provider applications.

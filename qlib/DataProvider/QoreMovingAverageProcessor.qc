@@ -30,7 +30,7 @@ public namespace DataProvider {
 public class QoreMovingAverageProcessor inherits AbstractAnalyticsProcessor {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreMovingAverageProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_ANALYTICS,

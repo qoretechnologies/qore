@@ -30,7 +30,7 @@ public namespace DataProvider {
 public class QoreRateOfChangeProcessor inherits AbstractAnalyticsProcessor {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreRateOfChangeProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_ANALYTICS,

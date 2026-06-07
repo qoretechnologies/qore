@@ -28,14 +28,14 @@ public namespace DataProvider {
 public class QoreProcessorsDataProvider inherits AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreProcessorsDataProvider",
             "supports_children": True,
             "children_can_support_pipeline_processors": True,
         };
 
         #! Child processor names
-        const Children = {
+        const hash<string, string> Children = {
             "filter": "QoreFilterRecordsProcessor",
             "select-fields": "QoreSelectFieldsProcessor",
             "set-fields": "QoreSetFieldsProcessor",

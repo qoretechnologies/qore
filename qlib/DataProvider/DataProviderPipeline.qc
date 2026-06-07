@@ -36,13 +36,13 @@ public namespace DataProvider {
 */
 #/@{
 #! Pipeline status: ABORTED
-public const PS_ABORTED = "ABORTED";
+public const string PS_ABORTED = "ABORTED";
 
 #! Pipeline status: RUNNING
-public const PS_RUNNING = "RUNNING";
+public const string PS_RUNNING = "RUNNING";
 
 #! Pipeline status: IDLE
-public const PS_IDLE = "IDLE";
+public const string PS_IDLE = "IDLE";
 #/@}
 
 #! Pipeline info

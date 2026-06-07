@@ -35,19 +35,19 @@ public namespace DataProvider {
 public class DpqlActionSession {
     public {
         #! Default token format
-        const DefaultTokenFormat = "token-span";
+        const string DefaultTokenFormat = "token-span";
 
         #! Default field format
-        const DefaultFieldFormat = "map";
+        const string DefaultFieldFormat = "map";
 
         #! Supported token formats
-        const TokenFormats = {
+        const hash<string, bool> TokenFormats = {
             "token-span": True,
             "dpql": True,
         };
 
         #! Supported field formats
-        const FieldFormats = {
+        const hash<string, bool> FieldFormats = {
             "map": True,
             "list": True,
         };

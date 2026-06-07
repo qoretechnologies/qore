@@ -33,7 +33,7 @@ public namespace DataProvider {
 public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreCrossCorrelationProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_AGGREGATE,
@@ -41,7 +41,7 @@ public class QoreCrossCorrelationProcessor inherits AbstractDataProvider {
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "field_x": <DataProviderOptionInfo>{
                 "display_name": "First Field",
                 "short_desc": "First numeric field name",

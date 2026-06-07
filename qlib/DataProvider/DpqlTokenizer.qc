@@ -116,7 +116,7 @@ public const DPQL_TOK_ERROR = 99;
 #!@}
 
 #! Maps token type codes to human-readable names
-public const DpqlTokenTypeNames = {
+public const hash<string, string> DpqlTokenTypeNames = {
     DPQL_TOK_FIELD: "field",
     DPQL_TOK_STRING: "string",
     DPQL_TOK_NUMBER: "number",

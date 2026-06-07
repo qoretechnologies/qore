@@ -28,7 +28,7 @@ public namespace DataProvider {
 public class QoreRecordLimitProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreRecordLimitProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_FILTER,
@@ -36,7 +36,7 @@ public class QoreRecordLimitProcessor inherits AbstractDataProvider {
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Record Limit",
                 "short_desc": "Maximum number of records to pass through",
