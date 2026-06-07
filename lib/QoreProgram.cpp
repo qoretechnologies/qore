@@ -367,6 +367,26 @@ qore_program_private::~qore_program_private() {
     assert(!dpgm);
 }
 
+QoreListNode* qore_program_private::getParseDiagnosticList() const {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(hashdeclParseDiagnosticInfo->getTypeInfo()), nullptr);
+    for (auto& d : diagnostics) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclParseDiagnosticInfo, nullptr), nullptr);
+        auto ph = qore_hash_private::get(**h);
+        ph->setKeyValueIntern("severity", new QoreStringNode(d.error ? "error" : "warning"));
+        ph->setKeyValueIntern("code", new QoreStringNode(d.code));
+        ph->setKeyValueIntern("warningCode", d.warn_code >= 0 ? QoreValue((int64)d.warn_code) : QoreValue());
+        ph->setKeyValueIntern("file", d.file.empty() ? QoreValue() : QoreValue(new QoreStringNode(d.file)));
+        ph->setKeyValueIntern("source", d.source.empty() ? QoreValue() : QoreValue(new QoreStringNode(d.source)));
+        ph->setKeyValueIntern("startLine", (int64)d.start_line);
+        ph->setKeyValueIntern("endLine", (int64)d.end_line);
+        ph->setKeyValueIntern("startColumn", (int64)d.start_column);
+        ph->setKeyValueIntern("endColumn", (int64)d.end_column);
+        ph->setKeyValueIntern("message", new QoreStringNode(d.message));
+        l->push(h.release(), nullptr);
+    }
+    return l.release();
+}
+
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline) {
     QoreProgramLocation loc(sline, eline);
 

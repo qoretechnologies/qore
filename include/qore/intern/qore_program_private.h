@@ -510,6 +510,12 @@ public:
     RootQoreNamespace* RootNS = nullptr;
     QoreNamespace* QoreNS = nullptr;
 
+    // when true, parse errors and warnings are also captured as structured diagnostics (machine-readable
+    // form for tooling / AI coding assistants); see Program::setParseDiagnosticsCollected()
+    bool collect_diagnostics = false;
+    // structured diagnostics captured during the current/last parse action (cleared on each parse start)
+    std::vector<QoreDiagnostic> diagnostics;
+
     // top level statements
     TopLevelStatementBlock sb;
 
@@ -1324,11 +1330,33 @@ public:
         pwo.warn_mask = wm;
         parseSink = xsink;
 
+        // structured diagnostics are scoped to a single parse action
+        if (collect_diagnostics) {
+            diagnostics.clear();
+        }
+
         if (pendingParseSink) {
             parseSink->assimilate(pendingParseSink);
             pendingParseSink = nullptr;
         }
     }
+
+    //! enables or disables structured parse-diagnostic collection; disabling also clears any collected data
+    DLLLOCAL void setParseDiagnosticsCollected(bool collect) {
+        collect_diagnostics = collect;
+        if (!collect) {
+            diagnostics.clear();
+        }
+    }
+
+    //! returns true if structured parse-diagnostic collection is enabled
+    DLLLOCAL bool parseDiagnosticsCollected() const {
+        return collect_diagnostics;
+    }
+
+    //! returns the structured diagnostics collected during the last parse action as a
+    //! list<hash<ParseDiagnosticInfo>> (implemented in QoreProgram.cpp); never returns nullptr
+    DLLLOCAL QoreListNode* getParseDiagnosticList() const;
 
     DLLLOCAL int checkParse(ExceptionSink* xsink) const {
         // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
@@ -2046,6 +2074,10 @@ public:
 
     DLLLOCAL void makeParseException(const QoreProgramLocation& loc, const char* err, QoreStringNode* desc) {
         QORE_TRACE("QoreProgram::makeParseException()");
+
+        if (collect_diagnostics) {
+            diagnostics.push_back(QoreDiagnostic(true, err, -1, loc, desc->c_str()));
+        }
 
         QoreStringNodeHolder d(desc);
         if (!requires_exception) {
@@ -2766,6 +2798,9 @@ public:
             if (!rc)
                 break;
         }
+        if (pgm->priv->collect_diagnostics) {
+            pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
+        }
         QoreException *ne = new ParseException(loc, warn, desc);
         pgm->priv->warnSink->raiseException(ne);
     }
@@ -2780,6 +2815,9 @@ public:
             return;
         }
 
+        if (pgm->priv->collect_diagnostics) {
+            pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
+        }
         QoreException *ne = new ParseException(loc, warn, desc);
         pgm->priv->warnSink->raiseException(ne);
     }
@@ -3461,5 +3499,6 @@ private:
 };
 
 DLLLOCAL TypedHashDecl* init_hashdecl_SourceLocationInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
 
 #endif

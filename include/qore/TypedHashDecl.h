@@ -352,6 +352,11 @@ DLLEXPORT extern const TypedHashDecl* hashdeclNetIfInfo;
 //! SourceLocationInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclSourceLocationInfo;
 
+//! ParseDiagnosticInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclParseDiagnosticInfo;
+
 //! SerializationInfo hashdecl
 /** @since %Qore 0.9
 */

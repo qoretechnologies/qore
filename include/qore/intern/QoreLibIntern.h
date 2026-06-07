@@ -575,6 +575,32 @@ private:
     DLLLOCAL std::vector<std::pair<int, std::string>> rank() const;
 };
 
+//! A structured representation of a single parse-time diagnostic (error or warning)
+/** Captured at the parse error/warning chokepoints when structured diagnostic collection is enabled
+    on a Program (see Program::setParseDiagnosticsCollected()).  Provides a machine-readable form of
+    parse diagnostics for tooling and AI coding assistants.
+    @since %Qore 2.3
+*/
+struct QoreDiagnostic {
+    bool error = true;          //!< true for an error, false for a warning
+    std::string code;           //!< stable identifier (the exception err string or warning name)
+    int warn_code = -1;         //!< the QP_WARN_* bit for warnings, -1 for errors
+    std::string file;           //!< source file or parse label (may be empty)
+    std::string source;         //!< source object tag (may be empty)
+    int start_line = -1;
+    int end_line = -1;
+    int start_column = -1;      //!< 1-based start column, or -1 if unknown
+    int end_column = -1;        //!< 1-based end column, or -1 if unknown
+    std::string message;        //!< the human-readable diagnostic message
+
+    DLLLOCAL QoreDiagnostic(bool error, const char* code, int warn_code, const QoreProgramLocation& loc,
+            const char* message) : error(error), code(code ? code : ""), warn_code(warn_code),
+            file(loc.getFileValue()), source(loc.getSourceValue()), start_line(loc.start_line),
+            end_line(loc.end_line), start_column(loc.start_column), end_column(loc.end_column),
+            message(message ? message : "") {
+    }
+};
+
 DLLLOCAL QoreString* findFileInPath(const char* file, const char* path);
 DLLLOCAL QoreString* findFileInEnvPath(const char* file, const char* varname);
 DLLLOCAL int qore_find_file_in_path(QoreString& str, const char* file, const char* path);

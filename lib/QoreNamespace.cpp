@@ -234,6 +234,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclStatementInfo,
     * hashdeclNetIfInfo,
     * hashdeclSourceLocationInfo,
+    * hashdeclParseDiagnosticInfo,
     * hashdeclSerializationInfo,
     * hashdeclObjectSerializationInfo,
     * hashdeclIndexedObjectSerializationInfo,
@@ -1341,6 +1342,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclStatementInfo = init_hashdecl_StatementInfo(qns);
     hashdeclNetIfInfo = init_hashdecl_NetIfInfo(qns);
     hashdeclSourceLocationInfo = init_hashdecl_SourceLocationInfo(qns);
+    hashdeclParseDiagnosticInfo = init_hashdecl_ParseDiagnosticInfo(qns);
     hashdeclObjectSerializationInfo = init_hashdecl_ObjectSerializationInfo(qns);
     hashdeclSerializationInfo = init_hashdecl_SerializationInfo(qns);
     hashdeclIndexedObjectSerializationInfo = init_hashdecl_IndexedObjectSerializationInfo(qns);
