@@ -37,7 +37,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining cached tables
               and foreign key relationships between tables
         */
-        const TableOptions = {
+        const hash<auto> TableOptions = {
             "native_case": Type::Boolean,
             "table_cache": "Tables",
         };
@@ -59,7 +59,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
               to operator class name (e.g. \c {"embedding": "vector_cosine_ops"}); throws
               \c INDEX-OPTION-ERROR on drivers that do not support it
         */
-        const IndexOptions = {
+        const hash<auto> IndexOptions = {
             "index_tablespace": Type::String,
             "replace": Type::Boolean,
             "method": Type::String,
@@ -73,7 +73,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         const ConstraintOptions = IndexOptions;
 
         #! default cache options
-        const CacheOptions = {
+        const hash<string, string> CacheOptions = {
             "table_cache": "Tables",
         };
 
@@ -95,7 +95,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** @see @ref select_option_hash for more information on the default possible select options; see
             driver-specific information for any additional select options supported by the driver-specific module
         */
-        const SelectOptions = {
+        const hash<auto> SelectOptions = {
             "alias": Type::String,
             "comment": Type::String,
             "hint": Type::String,
@@ -113,7 +113,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! alignment omission options
-        const TableOmissionOptions = {
+        const hash<string, bool> TableOmissionOptions = {
             "indexes": True,
             "foreign_constraints": True,
             "triggers": True,
@@ -161,7 +161,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
 
             @see @ref table_desc_hash
         */
-        const TableDescriptionHashOptions = {
+        const hash<auto> TableDescriptionHashOptions = {
             "columns": Type::Hash,
             "primary_key": Type::Hash,
             "indexes": Type::Hash,
@@ -177,7 +177,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! partition strategy options
         /** @since SqlUtil 2.4
         */
-        const PartitionStrategyOptions = {
+        const hash<auto> PartitionStrategyOptions = {
             "method": Type::String,
             "columns": "softstringlist",
             "auto": Type::Hash,
@@ -187,7 +187,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! partition specification options
         /** @since SqlUtil 2.4
         */
-        const PartitionSpecOptions = {
+        const hash<auto> PartitionSpecOptions = {
             "name": Type::String,
             "method": Type::String,
             "columns": "softstringlist",
@@ -206,7 +206,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! options for getDescriptionHash()
         /** @since SqlUtil 2.4
         */
-        const GetDescriptionOptions = {
+        const hash<auto> GetDescriptionOptions = {
             "with_partitions": Type::Boolean,
         };
 
@@ -223,7 +223,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c driver: this key can optionally contain a hash keyed by driver name which contains a hash of values that will be added to the column description hash before processing; this way a column description hash can contain all the information required for the column including driver-specific options; any driver-specific options will overwrite values in the top level of the hash if there are duplicate hash keys, see below for an example
             @see @ref column_desc_hash
         */
-        const ColumnDescOptions = {
+        const hash<auto> ColumnDescOptions = {
             "qore_type": Type::String,
             "native_type": Type::String,
             "size": Type::Int,
@@ -239,19 +239,19 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** the following keys are valid in a @ref table_desc_hash "table description hash" in addition to any \c SqlUtil::AbstractTable::ColumnDescOptions "AbstractTable::ColumnDescOptions":
             - \c notnull: (\c bool_type) if @ref True "True" then the column will have a not null constraint
         */
-        const AdditionalColumnDescOptions = {
+        const hash<auto> AdditionalColumnDescOptions = {
             "notnull": Type::Boolean,
         };
 
         #! Column options; this is currently empty and can be extended in database-specific modules
-        const ColumnOptions = {};
+        const hash<auto> ColumnOptions = {};
 
         #! generic SQL data operation callbacks
         /** The following keys can be set for this option:
             - \c sqlarg_callback: see @ref sqlarg_callback
             - \c tablecode: a closure taking a string table name and returning an AbstractTable object for late resolution of table names in joins
         */
-        const SqlDataCallbackOptions = {
+        const hash<string, string> SqlDataCallbackOptions = {
             "sqlarg_callback": "code",
             "tablecode": "code",
         };
@@ -314,7 +314,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c upsert_columns: a list of column names that identifies the unique index or constraint to use for the
               upsert operation
         */
-        const UpsertOptions = {
+        const hash<auto> UpsertOptions = {
             "commit_block": Type::Int,
             "delete_others": Type::Boolean,
             "info_callback": "code",
@@ -396,7 +396,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! hash mapping upsert strategy codes to a text description
         /** @see @ref UpsertStrategyDescriptionMap for a reverse mapping
         */
-        const UpsertStrategyMap = {
+        const hash<string, string> UpsertStrategyMap = {
             UpsertInsertFirst: "UpsertInsertFirst",
             UpsertUpdateFirst: "UpsertUpdateFirst",
             UpsertSelectFirst: "UpsertSelectFirst",
@@ -408,7 +408,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! hash mapping upsert strategy descriptions to upsert strategy codes
         /** @see @ref UpsertStrategyMap for a reverse mapping
         */
-        const UpsertStrategyDescriptionMap = {
+        const hash<auto> UpsertStrategyDescriptionMap = {
             "UpsertInsertFirst": UpsertInsertFirst,
             "UpsertUpdateFirst": UpsertUpdateFirst,
             "UpsertSelectFirst": UpsertSelectFirst,
@@ -441,7 +441,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! hash mapping upsert results to a description
         /** @see @ref UpsertResultDescriptionMap for a reverse mapping
         */
-        const UpsertResultMap = {
+        const hash<string, string> UpsertResultMap = {
             UR_Inserted: "inserted",
             UR_Verified: "verified",
             UR_Updated: "updated",
@@ -452,7 +452,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! hash mapping upsert descriptions to codes
         /** @see @ref UpsertResultMap for a reverse mapping
         */
-        const UpsertResultDescriptionMap = {
+        const hash<auto> UpsertResultDescriptionMap = {
             "inserted": UR_Inserted,
             "verified": UR_Verified,
             "updated": UR_Updated,
@@ -461,7 +461,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! maps upsert result codes to single letter symbols
-        const UpsertResultLetterMap = {
+        const hash<string, string> UpsertResultLetterMap = {
             UR_Inserted: "I",
             UR_Verified: "V",
             UR_Updated: "U",

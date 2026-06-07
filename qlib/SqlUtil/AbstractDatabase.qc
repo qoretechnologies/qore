@@ -31,7 +31,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         /** The following keys can be set for this option:
             - \c native_case: (\c bool_type) if @ref True "True" then objects will be returned in the case the database server returns them in even if the database server uses case-insensitive names; normally in this case %SqlUtil will convert the names to lower-case
         */
-        const DatabaseOptions = (
+        const hash<auto> DatabaseOptions = (
             "native_case": Type::Boolean,
         );
 
@@ -39,7 +39,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         /** The following keys can be set for this option:
             - \c table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining cached tables and foreign key relationships between tables
         */
-        const CacheOptions = (
+        const hash<string, string> CacheOptions = (
             "table_cache": "Tables",
         );
 
@@ -49,7 +49,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
             - \c sql_callback: see @ref sql_callback
             - \c sql_callback_executed: see @ref sql_callback_executed
         */
-        const CallbackOptions = (
+        const hash<auto> CallbackOptions = (
             "info_callback": "code",
             "sql_callback": "code",
             "sql_callback_executed": Type::Boolean,
@@ -101,7 +101,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         #/@}
 
         #! maps from action codes to action descriptions
-        const ActionMap = (
+        const hash<string, string> ActionMap = (
             AC_Unchanged: "unchanged",
             AC_Create: "create",
             AC_Drop: "drop",
@@ -117,7 +117,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         );
 
         #! maps from action descriptions to action codes
-        const ActionDescMap = (
+        const hash<auto> ActionDescMap = (
             "unchanged": AC_Unchanged,
             "create": AC_Create,
             "drop": AC_Drop,
@@ -133,7 +133,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         );
 
         #! maps from action codes to action letter codes
-        const ActionLetterMap = (
+        const hash<string, string> ActionLetterMap = (
             AC_Unchanged: ".",
             AC_Create: "C",
             AC_Drop: "D",
@@ -191,7 +191,7 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
 
             @see @ref schema_desc_hash for more information
         */
-        const SchemaDescriptionOptions = (
+        const hash<auto> SchemaDescriptionOptions = (
             "tables": Type::Hash,
             "table_map": Type::Hash,
 
@@ -214,19 +214,19 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
             - \c increment: (@ref int_type) the increment value for the sequence
             - \c end: (@ref int_type) the ending value for the sequence
         */
-        const SequenceDescriptionOptions = (
+        const hash<auto> SequenceDescriptionOptions = (
             "start": Type::Int,
             "increment": Type::Int,
             "end": Type::Int,
         );
 
         #! Options for computeStatistics()
-        const ComputeStatisticsOptions = (
+        const hash<string, string> ComputeStatisticsOptions = (
             "tables"            : "softstringlist",
         );
 
         #! Options for reclaimSpace()
-        const ReclaimSpaceOptions = (
+        const hash<string, string> ReclaimSpaceOptions = (
             "tables"            : "softstringlist",
         );
     }
