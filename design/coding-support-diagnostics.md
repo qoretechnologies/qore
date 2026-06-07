@@ -340,10 +340,27 @@ flag the diverging argument.
   variants, render their signatures, and indicate which argument position
   diverged (type mismatch / arity). Emit as `hint` + structured `suggestions`.
 
-**Tests:** snippet calling a function with a wrong-typed arg asserts the
-candidate signature appears.
+**Outcome (implemented):** this objective is substantially met by Qore's
+*existing* overload diagnostics, now surfaced through the structured API:
+- single-candidate mismatches already produce a precise per-argument message
+  ("argument 'x' to f(int x) expects int, but call supplies bool");
+- multi-candidate mismatches already render the actual call with argument types
+  plus every candidate signature ("no variant matching 'f(float,float,float)';
+  the following variants were tested: f(int x); f(string x, int y)").
+Both are raised via `parseException`, so they flow through the
+`makeParseException` chokepoint and are captured as `PARSE-TYPE-ERROR`
+diagnostics by the Phase 6 collector / Phase 7 JSON emitter / Phase 8 frames.
+Rather than duplicate the intricate overload-resolution logic (flagged as a
+recurring hazard) for marginal gain, Phase 9 ships as a verification test
+(`overload-diagnostics.qtest`) locking in the candidate-signature +
+diverging-argument detail in the structured output. The diverging-argument
+pointer for the *multi-candidate* case (which Qore does not pinpoint today) is a
+possible future refinement in the resolution code.
 
-**Risk:** low-medium (resolution code is intricate). **Wire format:** none.
+**Tests:** `overload-diagnostics.qtest` — single-variant (diverging arg named),
+multi-variant (candidates listed), arg-count mismatch.
+
+**Risk:** low (no change to resolution code). **Wire format:** none.
 
 ---
 
