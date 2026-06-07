@@ -386,6 +386,7 @@ public class LoggerEventParameter {
     - \c cursor: an appender-specific continuation token returned by an earlier search
     - \c direction: \c "backward" (default) or \c "forward"
     - \c max_scanned_bytes: backend scan cap when applicable
+    - \c include_compressed_rotated: include compressed rotated file sources when applicable
 
     Implementations return a hash with stable generic fields including \c status, \c source, \c capabilities,
     \c entries, \c next_cursor, \c scanned_bytes, \c scanned_events, \c truncated, and optionally \c reason.
@@ -413,6 +414,7 @@ public class LoggerSearchUtil {
         const int MaxSearchLimit = 200;
         const int DefaultMaxScannedBytes = 1024 * 1024;
         const int UnlimitedScannedBytes = -1;
+        const SupportedCompressedRotatedEncodings = ("gzip", "bzip2", "zstd");
     }
 
     #! Returns generic search capabilities for an appender
@@ -520,16 +522,49 @@ public class LoggerSearchUtil {
             "rendered_lines": True,
             "time_filter": False,
             "cursor": True,
-            "levels": False,
+            "levels": True,
             "regex": True,
             "context": True,
             "structured_fields": False,
             "include_rotated": include_rotated,
             "include_archived": include_archived,
+            "include_compressed_rotated": include_rotated,
+            "compressed_rotated_encodings": include_rotated ? SupportedCompressedRotatedEncodings : (),
             "max_limit": MaxSearchLimit,
             "default_limit": DefaultSearchLimit,
             "default_max_scanned_bytes": DefaultMaxScannedBytes,
         };
+    }
+
+    #! Returns file-backed sources that a rendered-history search can inspect
+    /** This is primarily useful for callers that maintain secondary indexes
+        and need to reconcile source-file lifetime with indexed records.
+
+        @param appender the logger appender to inspect
+        @param request optional search request fields such as \c direction,
+            \c include_rotated, and \c include_compressed_rotated
+        @return list of normalized source hashes, or an empty list for
+            appenders without file-backed source enumeration
+    */
+    static public list<hash<auto>> getAppenderSearchSources(LoggerAppender appender, *hash<auto> request) {
+        hash<auto> req = request ?? {};
+        if (appender instanceof LoggerAppenderFileRotate) {
+            return getFileSources(cast<LoggerAppenderFile>(appender), "file-rotate", req);
+        }
+
+        if (appender instanceof LoggerAppenderFileRing) {
+            return getFileSources(cast<LoggerAppenderFile>(appender), "file-ring", req);
+        }
+
+        if (appender instanceof LoggerAppenderFileArchive) {
+            return getFileSources(cast<LoggerAppenderFile>(appender), "file-archive", req);
+        }
+
+        if (appender instanceof LoggerAppenderFile) {
+            return getFileSources(cast<LoggerAppenderFile>(appender), "file", req);
+        }
+
+        return ();
     }
 
     #! Clamps a requested result limit to the supported range
@@ -617,6 +652,8 @@ public class LoggerSearchUtil {
             "max_scanned_bytes": int(request.max_scanned_bytes ?? DefaultMaxScannedBytes),
             "terms": getSearchTerms(request),
             "cursor": request.cursor,
+            "level": request.level,
+            "level_min": request.level_min,
         };
 
         if (req.direction != "backward" && req.direction != "forward") {
@@ -634,6 +671,11 @@ public class LoggerSearchUtil {
             } catch () {
                 return {"status": "invalid", "reason": "invalid-regex"};
             }
+        }
+        try {
+            validateLevelRequest(req);
+        } catch () {
+            return {"status": "invalid", "reason": "invalid-level"};
         }
 
         if (req.context_before < 0) {
@@ -728,12 +770,7 @@ public class LoggerSearchUtil {
             string source_kind) {
         string filename = appender.getFileName();
         if (filename && is_file(filename)) {
-            push sources, {
-                "id": "active",
-                "kind": source_kind,
-                "path": filename,
-                "active": True,
-            };
+            push sources, makeFileSource("active", source_kind, filename, True, NOTHING);
         }
     }
 
@@ -743,31 +780,79 @@ public class LoggerSearchUtil {
             LoggerAppenderFileRotate rot = cast<LoggerAppenderFileRotate>(appender);
             for (int i = 1; i <= rot.getCount(); ++i) {
                 string filename = rot.getArchiveFileName(i);
-                if (filename && is_file(filename)) {
-                    push sources, {
-                        "id": sprintf("rotated-%d", i),
-                        "kind": "file-rotate",
-                        "path": filename,
-                        "active": False,
-                        "rotation_index": i,
-                    };
-                }
+                addRotatedSource(\sources, sprintf("rotated-%d", i), "file-rotate",
+                    filename, "rotation_index", i, request);
             }
         } else if (appender instanceof LoggerAppenderFileRing && (request.include_rotated ?? True)) {
             LoggerAppenderFileRing ring = cast<LoggerAppenderFileRing>(appender);
             for (int i = 0; i < ring.getCount(); ++i) {
                 string filename = ring.getFileNameForIndex(i);
                 if (filename && filename != ring.getFileName() && is_file(filename)) {
-                    push sources, {
-                        "id": sprintf("ring-%d", i),
-                        "kind": "file-ring",
-                        "path": filename,
-                        "active": False,
-                        "ring_index": i,
-                    };
+                    push sources, makeFileSource(sprintf("ring-%d", i), "file-ring", filename, False,
+                        {"ring_index": i});
                 }
             }
         }
+    }
+
+    private static addRotatedSource(reference<list<hash<auto>>> sources, string source_id, string source_kind,
+            string filename, string index_key, int index_value, hash<auto> request) {
+        if (!filename) {
+            return;
+        }
+        hash<auto> extra = {};
+        extra{index_key} = index_value;
+        if (is_file(filename)) {
+            push sources, makeFileSource(source_id, source_kind, filename, False, extra);
+            return;
+        }
+        if (!(request.include_compressed_rotated ?? False)) {
+            return;
+        }
+        *hash<auto> compressed = findCompressedRotatedSource(filename);
+        if (compressed) {
+            push sources, makeFileSource(source_id + "." + compressed.suffix, source_kind,
+                compressed.path, False, extra + {
+                    "compressed": True,
+                    "compression": compressed.encoding,
+                    "logical_path": filename,
+                });
+        }
+    }
+
+    private static *hash<auto> findCompressedRotatedSource(string filename) {
+        foreach hash<auto> info in (({
+                    "suffix": "gz",
+                    "encoding": "gzip",
+                }, {
+                    "suffix": "bz2",
+                    "encoding": "bzip2",
+                }, {
+                    "suffix": "zst",
+                    "encoding": "zstd",
+                })) {
+            string path = filename + "." + info.suffix;
+            if (is_file(path)) {
+                return info + {"path": path};
+            }
+        }
+        return NOTHING;
+    }
+
+    private static hash<auto> makeFileSource(string id, string kind, string path, bool active,
+            *hash<auto> extra) {
+        hash<auto> source = {
+            "id": id,
+            "kind": kind,
+            "path": path,
+            "active": active,
+            "compressed": False,
+        };
+        if (extra) {
+            source += extra;
+        }
+        source.source_fingerprint = getSourceSignature(source);
+        return source;
     }
 
     private static hash<auto> searchFileSources(list<hash<auto>> sources, hash<auto> caps, hash<auto> req) {
@@ -807,16 +892,15 @@ public class LoggerSearchUtil {
                 continue;
             }
 
+            string content = readSourceContent(source);
             if (req.max_scanned_bytes != UnlimitedScannedBytes
-                    && scanned_bytes + stat.size > req.max_scanned_bytes) {
+                    && scanned_bytes + content.size() > req.max_scanned_bytes) {
                 truncated = True;
                 reason = "max-scanned-bytes";
                 next_cursor = makeCursor(sources, source_idx, req.direction == "backward" ? -1 : 0,
                     req.direction);
                 break;
             }
-
-            string content = ReadOnlyFile::readTextFile(source.path);
             scanned_bytes += content.size();
             list<string> lines = content.split("\n");
             int line_idx = getInitialLineIndex(lines, req.direction, source_idx == source_start ? cursor_line : NOTHING);
@@ -865,6 +949,9 @@ public class LoggerSearchUtil {
     }
 
     private static bool matchesRenderedLine(string line, hash<auto> req) {
+        if (!matchesRenderedLineLevel(line, req)) {
+            return False;
+        }
         if (!req.terms.size()) {
             return True;
         }
@@ -886,6 +973,77 @@ public class LoggerSearchUtil {
         }
 
         return haystack.find(terms[0]) >= 0;
+    }
+
+    private static validateLevelRequest(hash<auto> req) {
+        if (req.level) {
+            if (req.level instanceof list) {
+                foreach auto level in (req.level) {
+                    getLevelValue(string(level));
+                }
+            } else {
+                getLevelValue(string(req.level));
+            }
+        }
+        if (req.level_min) {
+            getLevelValue(string(req.level_min));
+        }
+    }
+
+    private static bool matchesRenderedLineLevel(string line, hash<auto> req) {
+        if (!req.level && !req.level_min) {
+            return True;
+        }
+
+        *int line_value = getRenderedLineLevelValue(line);
+        if (!exists line_value) {
+            return False;
+        }
+
+        if (req.level) {
+            bool found;
+            if (req.level instanceof list) {
+                foreach auto level in (req.level) {
+                    if (line_value == getLevelValue(string(level))) {
+                        found = True;
+                        break;
+                    }
+                }
+            } else {
+                found = line_value == getLevelValue(string(req.level));
+            }
+            if (!found) {
+                return False;
+            }
+        }
+
+        if (req.level_min && line_value < getLevelValue(string(req.level_min))) {
+            return False;
+        }
+        return True;
+    }
+
+    private static *int getRenderedLineLevelValue(string line) {
+        *list<string> m = regex_extract(line, "\\[(TRACE|DEBUG|DETAIL|INFO|WARN|WARNING|ERROR|FATAL)\\]",
+            RE_Caseless);
+        if (!m) {
+            return NOTHING;
+        }
+        return getLevelValue(m[0]);
+    }
+
+    private static int getLevelValue(string level) {
+        switch (level.upr()) {
+            case "TRACE": return 5000;
+            case "DEBUG": return 10000;
+            case "DETAIL": return 15000;
+            case "INFO": return 20000;
+            case "WARN": return 30000;
+            case "WARNING": return 30000;
+            case "ERROR": return 40000;
+            case "FATAL": return 50000;
+        }
+        throw "LOGGER-SEARCH-ERROR", sprintf("unsupported log level %y", level);
     }
 
     private static list<hash<auto>> makeMatchEntries(list<string> lines, hash<auto> source, int line_idx,
@@ -918,14 +1076,39 @@ public class LoggerSearchUtil {
                 "kind": source.kind,
                 "path": source.path,
                 "active": source.active,
+                "compressed": source.compressed ?? False,
+                "compression": source.compression,
+                "logical_path": source.logical_path,
+                "source_fingerprint": source.source_fingerprint,
             },
             "source_ref": sprintf("%s:%d", source.id, line_idx + 1),
+            "source_path": source.path,
+            "source_kind": source.kind,
+            "source_fingerprint": source.source_fingerprint,
+            "source_compression": source.compression,
             "line": line_idx + 1,
             "sequence": line_idx,
             "line_hash": has_digest("sha256") ? digest("sha256", line).toHex() : NOTHING,
             "context": context_type,
             "metadata": {},
         };
+    }
+
+    private static string readSourceContent(hash<auto> source) {
+        if (!(source.compressed ?? False)) {
+            return ReadOnlyFile::readTextFile(source.path);
+        }
+
+        binary raw = ReadOnlyFile::readBinaryFile(source.path);
+        switch (source.compression) {
+            case "gzip":
+                return gunzip_to_string(raw);
+            case "bzip2":
+                return bunzip2_to_string(raw);
+            case "zstd":
+                return unzstd_to_string(raw);
+        }
+        throw "LOGGER-SEARCH-ERROR", sprintf("unsupported compressed log encoding %y", source.compression);
     }
 
     private static hash<auto> parseCursor(auto cursor) {
@@ -987,6 +1170,9 @@ public class LoggerSearchUtil {
             source.kind,
             source.path,
             stat ? stat.inode : NOTHING);
+        if (source.compressed) {
+            base += sprintf("|%y|%y", source.compressed, source.compression);
+        }
         if (!source.active || source.kind == "file-ring") {
             base += sprintf("|%y|%y", stat ? stat.size : NOTHING, stat ? stat.mtime : NOTHING);
         }
