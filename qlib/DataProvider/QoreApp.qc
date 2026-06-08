@@ -27,7 +27,7 @@ public namespace DataProvider {
 #! Contains constants for the built-in Qore data pipeline processors app
 public namespace QoreApp {
     #! The application name for the built-in Qore processors
-    public const AppName = "Qore";
+    public const string AppName = "Qore";
 
     #! The Qore Q logo SVG data
     public const QoreLogo = File::readTextFile(get_script_dir() + "/Qore-Q-square.svg");

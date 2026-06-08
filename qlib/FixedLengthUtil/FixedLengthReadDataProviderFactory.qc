@@ -31,7 +31,7 @@ public class FixedLengthReadDataProviderFactory inherits AbstractDataProviderFac
         static Class cls = new Class("FixedLengthReadDataProvider");
 
         #! Factory info
-        const FactoryInfo = <DataProviderFactoryInfo>{
+        const hash<DataProviderFactoryInfo> FactoryInfo = <DataProviderFactoryInfo>{
             "name": "fixedlengthread",
             "desc": "Fixed length data reader data provider factory",
             "children_can_support_records": True,

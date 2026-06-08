@@ -30,7 +30,7 @@ public namespace FixedLengthUtil {
 public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "FixedLengthReadDataProvider",
             "supports_read": True,
             "has_record": True,
@@ -41,7 +41,7 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
                 "display_name": "Input Path",
                 "short_desc": "The path to the input file",
@@ -115,7 +115,7 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
         };
 
         #! iteration option list
-        const FixedLengthReadOptionList = keys (ConstructorOptions - ("path", "stream", "spec"));
+        const list<string> FixedLengthReadOptionList = keys (ConstructorOptions - ("path", "stream", "spec"));
     }
 
     private {

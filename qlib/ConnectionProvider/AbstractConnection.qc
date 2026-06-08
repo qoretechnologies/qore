@@ -30,35 +30,35 @@ public namespace ConnectionProvider {
 */
 #/@{
 #! Ping flag: throw exception on error
-public const PF_THROW_EXCEPTION = (1 << 0);
+public const int PF_THROW_EXCEPTION = (1 << 0);
 
 #! Ping flag: automatic / scheduled ping
 /** This should be set internally when calling ping() and can be used by connection classes to selectively disable
     automatic pings, for example, for metered or rate-limited connections
 */
-public const PF_AUTOMATIC_PING =  (1 << 1);
+public const int PF_AUTOMATIC_PING =  (1 << 1);
 #/@}
 
 /** @defgroup ConnectionCustomizationStatuses Connection Customization Statuses
 */
 #/@{
 #! Customization status: unsupported
-public const CCS_UNSUPPORTED = "unsupported";
+public const string CCS_UNSUPPORTED = "unsupported";
 
 #! Customization status: uncustomized
 /** The connection supports customization, but customization has not yet been started
 */
-public const CCS_UNCUSTOMIZED = "uncustomized";
+public const string CCS_UNCUSTOMIZED = "uncustomized";
 
 #! Customization status: in-progress
 /** The connection supports customization, and customization is currently in progress
 */
-public const CCS_IN_PROGRESS = "in-progress";
+public const string CCS_IN_PROGRESS = "in-progress";
 
 #! Customization status: customized
 /** The connection supports customization, and customization has been completed
 */
-public const CCS_CUSTOMIZED = "customized";
+public const string CCS_CUSTOMIZED = "customized";
 #/@}
 
 #! Abstract base class for connections
@@ -169,7 +169,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         #! Connection feature: Logger support
         /** Indicates that connection objects support setting / updating a logger interface object in the connection
         */
-        const CF_LOGGER = "logger";
+        const string CF_LOGGER = "logger";
 
         #! Connection feature: Update Options support
         /** Returned as a connection feature indicating that the connection object inherits
@@ -178,13 +178,13 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
             @see @ref UpdateOptionsInterface
         */
-        const CF_UPDATE_OPTIONS = "update-options";
+        const string CF_UPDATE_OPTIONS = "update-options";
 
         #! Default option description
-        const DefaultDescription = "n/a; update connection to use the `AbstractConnectionWithInfo` class instead";
+        const string DefaultDescription = "n/a; update connection to use the `AbstractConnectionWithInfo` class instead";
 
         #! Connection info keys mapped 1:1 to DataProviderOptionInfo keys
-        const CommonConnectionKeys = (
+        const list<string> CommonConnectionKeys = (
             "allowed_values",
             "allowed_values_creatable",
             "default_value",

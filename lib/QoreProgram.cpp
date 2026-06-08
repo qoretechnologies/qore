@@ -98,6 +98,7 @@ static const char* qore_warnings_l[] = {
     "invalid-catch",
     "ambiguous-call-resolution",
     "ambiguous-overload",
+    "non-exhaustive-switch",
 };
 #define NUM_WARNINGS (sizeof(qore_warnings_l)/sizeof(const char* ))
 
@@ -366,6 +367,161 @@ qore_program_private::~qore_program_private() {
     assert(!dpgm);
 }
 
+QoreListNode* qore_program_private::getParseDiagnosticList() const {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(hashdeclParseDiagnosticInfo->getTypeInfo()), nullptr);
+    for (auto& d : diagnostics) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclParseDiagnosticInfo, nullptr), nullptr);
+        auto ph = qore_hash_private::get(**h);
+        ph->setKeyValueIntern("severity", new QoreStringNode(d.error ? "error" : "warning"));
+        ph->setKeyValueIntern("code", new QoreStringNode(d.code));
+        ph->setKeyValueIntern("warningCode", d.warn_code >= 0 ? QoreValue((int64)d.warn_code) : QoreValue());
+        ph->setKeyValueIntern("file", d.file.empty() ? QoreValue() : QoreValue(new QoreStringNode(d.file)));
+        ph->setKeyValueIntern("source", d.source.empty() ? QoreValue() : QoreValue(new QoreStringNode(d.source)));
+        ph->setKeyValueIntern("startLine", (int64)d.start_line);
+        ph->setKeyValueIntern("endLine", (int64)d.end_line);
+        ph->setKeyValueIntern("startColumn", (int64)d.start_column);
+        ph->setKeyValueIntern("endColumn", (int64)d.end_column);
+        ph->setKeyValueIntern("message", new QoreStringNode(d.message));
+        l->push(h.release(), nullptr);
+    }
+    return l.release();
+}
+
+// appends a JSON-escaped string (without surrounding quotes) to str
+static void json_escape_append(std::string& str, const std::string& s) {
+    for (char c : s) {
+        switch (c) {
+            case '"': str += "\\\""; break;
+            case '\\': str += "\\\\"; break;
+            case '\b': str += "\\b"; break;
+            case '\f': str += "\\f"; break;
+            case '\n': str += "\\n"; break;
+            case '\r': str += "\\r"; break;
+            case '\t': str += "\\t"; break;
+            default:
+                if ((unsigned char)c < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+                    str += buf;
+                } else {
+                    str += c;
+                }
+        }
+    }
+}
+
+std::string qore_program_private::getParseDiagnosticsJSON() const {
+    std::string j = "[";
+    bool first = true;
+    for (auto& d : diagnostics) {
+        if (!first) {
+            j += ",";
+        }
+        first = false;
+        j += "{\"severity\":\"";
+        j += d.error ? "error" : "warning";
+        j += "\",\"code\":\"";
+        json_escape_append(j, d.code);
+        j += "\",\"warningCode\":";
+        j += (d.warn_code >= 0) ? std::to_string(d.warn_code) : std::string("null");
+        j += ",\"file\":";
+        if (d.file.empty()) {
+            j += "null";
+        } else {
+            j += "\"";
+            json_escape_append(j, d.file);
+            j += "\"";
+        }
+        j += ",\"source\":";
+        if (d.source.empty()) {
+            j += "null";
+        } else {
+            j += "\"";
+            json_escape_append(j, d.source);
+            j += "\"";
+        }
+        j += ",\"startLine\":" + std::to_string(d.start_line);
+        j += ",\"endLine\":" + std::to_string(d.end_line);
+        j += ",\"startColumn\":" + std::to_string(d.start_column);
+        j += ",\"endColumn\":" + std::to_string(d.end_column);
+        j += ",\"message\":\"";
+        json_escape_append(j, d.message);
+        j += "\"}";
+    }
+    j += "]";
+    return j;
+}
+
+std::string qore_get_parse_diagnostics_json(QoreProgram& pgm) {
+    return qore_program_private::get(pgm)->getParseDiagnosticsJSON();
+}
+
+// extracts 1-based line number `line` from source text into `out`; returns true if found
+static bool extract_source_line(const char* src, int line, std::string& out) {
+    if (!src || line < 1) {
+        return false;
+    }
+    int cur = 1;
+    const char* p = src;
+    const char* line_start = src;
+    while (cur < line && *p) {
+        if (*p == '\n') {
+            ++cur;
+            line_start = p + 1;
+        }
+        ++p;
+    }
+    if (cur != line) {
+        return false;
+    }
+    const char* line_end = line_start;
+    while (*line_end && *line_end != '\n') {
+        ++line_end;
+    }
+    out.assign(line_start, line_end - line_start);
+    return true;
+}
+
+unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os) {
+    return qore_program_private::get(pgm)->renderParseDiagnosticFrames(source_text, os);
+}
+
+unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_text, FILE* os) const {
+    unsigned errors = 0;
+    for (auto& d : diagnostics) {
+        if (d.error) {
+            ++errors;
+        }
+        const char* sev = d.error ? "error" : "warning";
+        // header: file:line:col: severity[code]: message
+        fprintf(os, "%s:%d", d.file.empty() ? "<input>" : d.file.c_str(), d.start_line);
+        if (d.start_column >= 0) {
+            fprintf(os, ":%d", d.start_column);
+        }
+        fprintf(os, ": %s[%s]: %s\n", sev, d.code.c_str(), d.message.c_str());
+
+        // code frame: the source line plus a caret line under the offending span
+        std::string line;
+        if (extract_source_line(source_text, d.start_line, line)) {
+            fprintf(os, "  %s\n", line.c_str());
+            if (d.start_column >= 0) {
+                std::string caret("  ");
+                // pad up to the start column (columns are 0-based offsets within the line)
+                for (int i = 0; i < d.start_column && i < (int)line.size(); ++i) {
+                    caret += (line[i] == '\t') ? '\t' : ' ';
+                }
+                caret += '^';
+                int span = (d.end_column > d.start_column) ? (d.end_column - d.start_column - 1) : 0;
+                for (int i = 0; i < span; ++i) {
+                    caret += '~';
+                }
+                fprintf(os, "%s\n", caret.c_str());
+            }
+        }
+    }
+    return errors;
+}
+
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline) {
     QoreProgramLocation loc(sline, eline);
 
@@ -391,6 +547,20 @@ const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int
     return *i;
 }
 
+const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline, int scol, int ecol) {
+    QoreProgramLocation loc(sline, eline, scol, ecol);
+
+    loc_set_t::iterator i = loc_set.find(&loc);
+    if (i == loc_set.end()) {
+        QoreProgramLocation* lp = new QoreProgramLocation(loc);
+        pgmloc.push_back(lp);
+        loc_set.insert(lp);
+        return lp;
+    }
+
+    return *i;
+}
+
 const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProgramLocation& loc, int sline, int eline) {
     QoreProgramLocation loc1(loc);
     loc1.start_line = sline;
@@ -412,6 +582,25 @@ const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProg
         loc_set.insert(i, lp);
     }
     */
+
+    return *i;
+}
+
+const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProgramLocation& loc, int sline,
+        int eline, int scol, int ecol) {
+    QoreProgramLocation loc1(loc);
+    loc1.start_line = sline;
+    loc1.end_line = eline;
+    loc1.start_column = QoreProgramLineLocation::normalizeColumn(scol);
+    loc1.end_column = QoreProgramLineLocation::normalizeColumn(ecol);
+
+    loc_set_t::iterator i = loc_set.find(&loc1);
+    if (i == loc_set.end()) {
+        QoreProgramLocation* lp = new QoreProgramLocation(loc1);
+        pgmloc.push_back(lp);
+        loc_set.insert(lp);
+        return lp;
+    }
 
     return *i;
 }

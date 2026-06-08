@@ -24,13 +24,13 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A type that indicates a file
-public const FileDataType = new FileDataType();
+public const FileDataType FileDataType = new FileDataType();
 
 #! A type that indicates a file
 public class FileDataType inherits AbstractDataProviderType {
     public {
         #! File fields
-        const Fields = {
+        const hash<string, QoreDataField> Fields = {
             "name": new QoreDataField({
                 "name": "name",
                 "display_name": "Filename",
@@ -58,7 +58,7 @@ public class FileDataType inherits AbstractDataProviderType {
         };
 
         #! Example MIME type list
-        const ExampleMimeTypeList = (
+        const list<hash<AllowedValueInfo>> ExampleMimeTypeList = (
             <AllowedValueInfo>{
                 "display_name": "Autodetect",
                 "short_desc": "Autodetect from the file name; valid only on input",
@@ -104,7 +104,7 @@ public class FileDataType inherits AbstractDataProviderType {
         );
 
         #! File option types
-        const SupportedOptions = {
+        const hash<string, hash<DataProviderTypeOptionInfo>> SupportedOptions = {
             "accept": <DataProviderTypeOptionInfo>{
                 "type": "list",
                 "desc": "Set accepted file MIME types",

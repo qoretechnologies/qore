@@ -37,25 +37,25 @@ public namespace DataProvider {
 */
 #/@{
 #! Processor can transform records: 1 input -> 1 output
-public const DPC_TRANSFORM = (1 << 0);
+public const int DPC_TRANSFORM = (1 << 0);
 #! Processor can filter records: 1 input -> 0 or 1 output
-public const DPC_FILTER = (1 << 1);
+public const int DPC_FILTER = (1 << 1);
 #! Processor can expand records: 1 input -> N outputs
-public const DPC_EXPAND = (1 << 2);
+public const int DPC_EXPAND = (1 << 2);
 #! Processor can aggregate records: N inputs -> M outputs; uses flush to emit pending
-public const DPC_AGGREGATE = (1 << 3);
+public const int DPC_AGGREGATE = (1 << 3);
 #! Processor is a data sink: consumes records, writes to external target; may or may not pass through
-public const DPC_SINK = (1 << 4);
+public const int DPC_SINK = (1 << 4);
 #! Processor computes streaming analytics: accumulates data in windows and emits analytics events
 /** @since %DataProvider 3.3
 */
-public const DPC_ANALYTICS = (1 << 5);
+public const int DPC_ANALYTICS = (1 << 5);
 #/@}
 
 #! Map of DPC_* processor capability codes to descriptive names
 /** @since %DataProvider 3.3
 */
-public const ProcessorCapabilityNameMap = {
+public const hash<string, string> ProcessorCapabilityNameMap = {
     DPC_TRANSFORM: "TRANSFORM",
     DPC_FILTER: "FILTER",
     DPC_EXPAND: "EXPAND",

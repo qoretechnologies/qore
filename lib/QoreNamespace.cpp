@@ -234,6 +234,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclStatementInfo,
     * hashdeclNetIfInfo,
     * hashdeclSourceLocationInfo,
+    * hashdeclParseDiagnosticInfo,
     * hashdeclSerializationInfo,
     * hashdeclObjectSerializationInfo,
     * hashdeclIndexedObjectSerializationInfo,
@@ -1341,6 +1342,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclStatementInfo = init_hashdecl_StatementInfo(qns);
     hashdeclNetIfInfo = init_hashdecl_NetIfInfo(qns);
     hashdeclSourceLocationInfo = init_hashdecl_SourceLocationInfo(qns);
+    hashdeclParseDiagnosticInfo = init_hashdecl_ParseDiagnosticInfo(qns);
     hashdeclObjectSerializationInfo = init_hashdecl_ObjectSerializationInfo(qns);
     hashdeclSerializationInfo = init_hashdecl_SerializationInfo(qns);
     hashdeclIndexedObjectSerializationInfo = init_hashdecl_IndexedObjectSerializationInfo(qns);
@@ -1744,7 +1746,43 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
     if (const char* hint = bareword_foreign_hint(bword)) {
         parse_error(*loc, "cannot resolve bareword '%s' to any reachable object; %s", bword, hint);
     } else {
-        parse_error(*loc, "cannot resolve bareword '%s' to any reachable object", bword);
+        // gather near-match candidates from the scopes that were just searched to suggest a likely fix
+        QoreSuggestionList sl(bword);
+        // local variables (only reachable when bare references are enabled)
+        if (abr) {
+            for (VNode* vnode = getVStack(); vnode; vnode = vnode->nextSearch()) {
+                sl.add(vnode->getName());
+            }
+        }
+        // class constants and static variables in the current class context
+        if (pc) {
+            QoreClassConstantIterator cci(*pc);
+            while (cci.next()) {
+                sl.add(cci.get().getName());
+            }
+            QoreClassStaticMemberIterator csi(*pc);
+            while (csi.next()) {
+                sl.add(csi.getName());
+            }
+        }
+        // root constants (committed constants flattened across namespaces)
+        for (auto& i : cnmap) {
+            sl.add(i.first.c_str());
+        }
+        // global variables (committed global vars flattened across namespaces; only reachable
+        // when bare references are enabled)
+        if (abr) {
+            for (auto& i : varmap) {
+                sl.add(i.first.c_str());
+            }
+        }
+
+        std::string sugg = sl.getHint();
+        if (!sugg.empty()) {
+            parse_error(*loc, "cannot resolve bareword '%s' to any reachable object; %s", bword, sugg.c_str());
+        } else {
+            parse_error(*loc, "cannot resolve bareword '%s' to any reachable object", bword);
+        }
     }
 
     //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() this: %p '%s' abr: %d\n", this, bword, abr);
@@ -1868,8 +1906,18 @@ TypedHashDecl* qore_root_ns_private::parseFindHashDecl(const QoreProgramLocation
     // if there is no namespace specified, then just find class
     if (nscope.size() == 1) {
         hd = parseFindHashDeclIntern(nscope.ostr);
-        if (!hd)
-            parse_error(*loc, "reference to undefined hashdecl '%s'", nscope.ostr);
+        if (!hd) {
+            QoreSuggestionList sl(nscope.ostr);
+            for (auto& i : thdmap) {
+                sl.add(i.first.c_str());
+            }
+            std::string hint = sl.getHint();
+            if (!hint.empty()) {
+                parse_error(*loc, "reference to undefined hashdecl '%s'; %s", nscope.ostr, hint.c_str());
+            } else {
+                parse_error(*loc, "reference to undefined hashdecl '%s'", nscope.ostr);
+            }
+        }
         return hd;
     }
 
@@ -2034,7 +2082,17 @@ QoreClass* qore_root_ns_private::parseFindScopedClassIntern(const QoreProgramLoc
     if (nscope.size() == 1) {
         oc = parseFindClassIntern(nscope.ostr);
         if (!oc && raise_error) {
-            parse_error(*loc, "reference to undefined class '%s'", nscope.ostr);
+            // suggest a near-match from the known class names
+            QoreSuggestionList sl(nscope.ostr);
+            for (auto& i : clmap) {
+                sl.add(i.first.c_str());
+            }
+            std::string hint = sl.getHint();
+            if (!hint.empty()) {
+                parse_error(*loc, "reference to undefined class '%s'; %s", nscope.ostr, hint.c_str());
+            } else {
+                parse_error(*loc, "reference to undefined class '%s'", nscope.ostr);
+            }
         }
         return oc;
     }
@@ -2207,15 +2265,18 @@ void qore_root_ns_private::addConstant(qore_ns_private& ns, const char* cname, Q
 }
 
 void qore_root_ns_private::parseAddConstantIntern(const QoreProgramLocation* loc, QoreNamespace& ns,
-        const NamedScope& name, QoreValue value, bool cpub, const QoreTypeInfo* typeInfo) {
+        const NamedScope& name, QoreValue value, bool cpub, const QoreTypeInfo* typeInfo,
+        QoreParseTypeInfo* parseTypeInfo) {
     ValueHolder vh(value, 0);
 
     QoreNamespace* sns = ns.priv->resolveNameScope(loc, name);
-    if (!sns)
+    if (!sns) {
+        delete parseTypeInfo;
         return;
+    }
 
     const char* cname = name.get(name.size() - 1);
-    cnemap_t::iterator i = sns->priv->parseAddConstant(loc, cname, vh.release(), cpub, typeInfo);
+    cnemap_t::iterator i = sns->priv->parseAddConstant(loc, cname, vh.release(), cpub, typeInfo, parseTypeInfo);
     if (i == sns->priv->constant.end())
         return;
 
@@ -3269,13 +3330,14 @@ qore_ns_private* qore_ns_private::parseAddNamespace(QoreNamespace* nns) {
 
 // only called while parsing before addition to namespace tree, no locking needed
 cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* loc, const char* cname,
-        QoreValue value, bool cpub, const QoreTypeInfo* typeInfo) {
+        QoreValue value, bool cpub, const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo) {
     ValueHolder vh(value, 0);
 
     if (constant.inList(cname)) {
         std::string path;
         getPath(path, true);
         parse_error(*loc, "constant '%s' has already been defined in '%s'", cname, path.c_str());
+        delete parseTypeInfo;
         return constant.end();
     }
 
@@ -3284,19 +3346,21 @@ cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* 
         "constant '%s::%s' is declared public but the enclosing namespace '%s::' is not public", name.c_str(), cname,
         name.c_str());
 
-    return constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub);
+    return constant.parseAdd(loc, cname, vh.release(), typeInfo, cpub, Public, parseTypeInfo);
 }
 
 // only called while parsing before addition to namespace tree, no locking needed
 void qore_ns_private::parseAddConstant(const QoreProgramLocation* loc, const NamedScope& nscope, QoreValue value,
-        bool cpub, const QoreTypeInfo* typeInfo) {
+        bool cpub, const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo) {
    ValueHolder vh(value, 0);
 
    QoreNamespace* sns = resolveNameScope(loc, nscope);
-   if (!sns)
+   if (!sns) {
+      delete parseTypeInfo;
       return;
+   }
 
-   sns->priv->parseAddConstant(loc, nscope[nscope.size() - 1], vh.release(), cpub, typeInfo);
+   sns->priv->parseAddConstant(loc, nscope[nscope.size() - 1], vh.release(), cpub, typeInfo, parseTypeInfo);
 }
 
 // only called while parsing before addition to namespace tree, no locking needed

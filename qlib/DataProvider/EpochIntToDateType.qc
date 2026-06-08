@@ -24,7 +24,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A type that converts to UNIX timestamps in seconds to dates
-public const EpochIntToDateType = new EpochIntToDateType();
+public const EpochIntToDateType EpochIntToDateType = new EpochIntToDateType();
 
 #! A type that converts to UNIX timestamps in seconds to dates
 public class EpochIntToDateType inherits AbstractDataProviderType {

@@ -24,7 +24,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A type that indicates a file
-public const FileOrNothingDataType = new FileOrNothingDataType();
+public const FileOrNothingDataType FileOrNothingDataType = new FileOrNothingDataType();
 
 #! A type that indicates a file
 public class FileOrNothingDataType inherits AbstractDataProviderType {

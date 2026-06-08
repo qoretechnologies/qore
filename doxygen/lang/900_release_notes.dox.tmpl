@@ -35,7 +35,10 @@
       constants can now be declared as \c "const Type NAME = expr", and
       local variables and parameters can be declared with \c const to reject
       reassignment, removal, mutable references, and lvalue writes rooted at the
-      binding
+      binding. An explicit constant type may reference a hashdecl or class
+      declared later in the same module (the declared type is resolved during
+      parse commit, like type inference). The standard library modules now
+      declare explicit types for their constants.
     - Added @ref const_methods "const-qualified instance methods" with trailing
       \c const syntax. Read-only receivers can call only const methods when
       method resolution is static, and const-method metadata is available through

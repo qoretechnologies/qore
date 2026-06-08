@@ -650,7 +650,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         const AIFlags = AI_PASSIVE | AI_ADDRCONFIG;
 
         #! HTTP methods supported by default
-        const HttpMethods = {
+        const hash<auto> HttpMethods = {
             "HEAD": True,
             "POST": True,
             "PUT": True,
@@ -666,7 +666,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         const HttpCodes = HttpServer::HttpCodes;
 
         #! content-encodings supported; this is a hash to simulate a set with O(ln(n)) access times
-        const ContentEncodings = {
+        const hash<string, string> ContentEncodings = {
             "br": "br",
             "zstd": "zstd",
             "gzip": "gzip",
@@ -693,16 +693,16 @@ public class HttpServer inherits HttpServer::AbstractLogger {
          */
         #/@{
         #! listener log option: log recv headers
-        const LLO_RECV_HEADERS = (1 << 0);
+        const int LLO_RECV_HEADERS = (1 << 0);
 
         #! listener log option: log recv message body
-        const LLO_RECV_BODY = (1 << 1);
+        const int LLO_RECV_BODY = (1 << 1);
 
         #! listener log option: log send headers
-        const LLO_SEND_HEADERS = (1 << 2);
+        const int LLO_SEND_HEADERS = (1 << 2);
 
         #! listener log option: log sent message body
-        const LLO_SEND_BODY = (1 << 3);
+        const int LLO_SEND_BODY = (1 << 3);
         #/@}
 
         #! Default connection time-to-live
@@ -4333,7 +4333,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         HttpHandlerList handlers();
 
         #! map for converting ssl verify flags to strings
-        const SslVerifyMap = {
+        const hash<string, string> SslVerifyMap = {
             SSL_VERIFY_PEER: "SSL_VERIFY_PEER",
             SSL_VERIFY_FAIL_IF_NO_PEER_CERT: "SSL_VERIFY_FAIL_IF_NO_PEER_CERT",
             SSL_VERIFY_CLIENT_ONCE: "SSL_VERIFY_CLIENT_ONCE",

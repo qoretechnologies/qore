@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DiagCodeFramesTest
+
+#! Tests the standalone interpreter's --code-frames human-readable diagnostic renderer
+public class DiagCodeFramesTest inherits QUnit::Test {
+    constructor() : Test("DiagCodeFramesTest", "1.0") {
+        addTestCase("code frame for parse error", \testFrameError());
+        addTestCase("no frame for clean program", \testFrameClean());
+        addTestCase("frame via environment variable", \testFrameEnv());
+        set_return_value(main());
+    }
+
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    private string runFrames(string src, *bool via_env) {
+        string cmd = via_env
+            ? sprintf("QORE_CODE_FRAMES=1 %s -e %s 2>&1", qoreBin(), shellQuote(src))
+            : sprintf("%s --code-frames -e %s 2>&1", qoreBin(), shellQuote(src));
+        return backquote(cmd);
+    }
+
+    testFrameError() {
+        string out = runFrames("int sub f() { return undefinedvar; }");
+        # header line with severity + code
+        assertRegex("error\\[PARSE-EXCEPTION\\]", out);
+        assertRegex("cannot resolve bareword 'undefinedvar'", out);
+        # the source line is echoed
+        assertRegex("int sub f\\(\\) \\{ return undefinedvar", out);
+        # a caret underline is rendered (^ followed by ~ tildes under the identifier)
+        assertRegex("\\^~+", out);
+    }
+
+    testFrameClean() {
+        string out = runFrames("int sub f() { return 1; }");
+        assertEq("", trim(out), "a clean program renders no frames");
+    }
+
+    testFrameEnv() {
+        string out = runFrames("int sub f() { return undefinedvar; }", True);
+        assertRegex("\\^~+", out);
+    }
+}

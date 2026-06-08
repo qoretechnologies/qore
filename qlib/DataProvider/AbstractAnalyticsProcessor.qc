@@ -254,7 +254,7 @@ public hashdecl SeasonalityDetectionEventInfo inherits AnalyticsEventInfo {
 public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     public {
         #! Base constructor options shared by all analytics processors
-        const BaseConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> BaseConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Field Names",
                 "short_desc": "Field names to analyze",

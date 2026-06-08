@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StructuredDiagnosticsTest
+
+#! Tests the per-Program structured parse-diagnostics API (machine-readable errors/warnings for tooling/AI)
+public class StructuredDiagnosticsTest inherits QUnit::Test {
+    constructor() : Test("StructuredDiagnosticsTest", "1.0") {
+        addTestCase("disabled by default", \testDisabledByDefault());
+        addTestCase("toggle flag", \testToggleFlag());
+        addTestCase("structured error with column + suggestion", \testStructuredError());
+        addTestCase("structured warning with warning code", \testStructuredWarning());
+        addTestCase("accurate error columns", \testErrorColumns());
+        addTestCase("first-column diagnostic preserved", \testFirstColumnPreserved());
+        addTestCase("disabling clears diagnostics", \testClearedOnDisable());
+        set_return_value(main());
+    }
+
+    testFirstColumnPreserved() {
+        # a diagnostic whose offending token starts at the very first character of the source must report a
+        # 0-based start column of 0 (not -1/unknown); columns are 0-based with an exclusive end column
+        Program p(PO_NEW_STYLE);
+        p.setParseDiagnosticsCollected(True);
+        # a bareword as the first token of the program: the diagnostic begins at column 0
+        try {
+            p.parse("undefinedvar;", "");
+        } catch (hash<ExceptionInfo> ex) {}
+        *hash<ParseDiagnosticInfo> bareword;
+        foreach hash<ParseDiagnosticInfo> d in (p.getParseDiagnostics()) {
+            if (d.message =~ /bareword/) {
+                bareword = d;
+                break;
+            }
+        }
+        assertEq(True, exists bareword, "the column-0 bareword diagnostic was collected");
+        assertEq(0, bareword.startColumn, "first-character diagnostic reports 0-based start column 0");
+        assertEq(12, bareword.endColumn, "end column is exclusive (12-char bareword starting at 0)");
+    }
+
+    testDisabledByDefault() {
+        Program p(PO_NEW_STYLE);
+        assertFalse(p.parseDiagnosticsCollected());
+        try {
+            p.parse("int sub f() { return undefinedxyz; }", "");
+        } catch (hash<ExceptionInfo> ex) {}
+        # collection was never enabled: nothing recorded
+        assertEq((), p.getParseDiagnostics());
+    }
+
+    testToggleFlag() {
+        Program p(PO_NEW_STYLE);
+        p.setParseDiagnosticsCollected(True);
+        assertTrue(p.parseDiagnosticsCollected());
+        p.setParseDiagnosticsCollected(False);
+        assertFalse(p.parseDiagnosticsCollected());
+    }
+
+    testStructuredError() {
+        Program p(PO_NEW_STYLE);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse("class MyWidget {} MyWidget sub f() { return new MyWidgett(); }", "<in>");
+        } catch (hash<ExceptionInfo> ex) {}
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        # find the undefined-class error
+        *hash<ParseDiagnosticInfo> err;
+        foreach hash<ParseDiagnosticInfo> d in (diags) {
+            if (d.message =~ /undefined class 'MyWidgett'/) {
+                err = d;
+                break;
+            }
+        }
+        assertEq(True, exists err, "undefined-class diagnostic present");
+        assertEq("error", err.severity);
+        assertEq("<in>", err.file);
+        assertEq(NOTHING, err.warningCode, "errors have no warning code");
+        assertRegex("did you mean 'MyWidget'", err.message);
+        assertGt(0, err.startColumn, "error carries a real start column");
+    }
+
+    testStructuredWarning() {
+        Program p(PO_NEW_STYLE);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("enum Color : int { Red = 1, Green = 2, } "
+            "int sub f(Color c) { switch (c) { case Color::Red: return 1; } return 0; }",
+            "", WARN_NONEXHAUSTIVE_SWITCH);
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        assertEq(1, diags.size(), "one warning collected");
+        assertEq("warning", diags[0].severity);
+        assertEq("NON-EXHAUSTIVE-SWITCH", diags[0].code);
+        assertEq(WARN_NONEXHAUSTIVE_SWITCH, diags[0].warningCode);
+        assertRegex("Green", diags[0].message);
+    }
+
+    testErrorColumns() {
+        Program p(PO_NEW_STYLE);
+        p.setParseDiagnosticsCollected(True);
+        # "int sub f() { return " is 21 characters, so 'undefinedvar' starts at column 22
+        try {
+            p.parse("int sub f() { return undefinedvar; }", "");
+        } catch (hash<ExceptionInfo> ex) {}
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        assertEq(1, diags.size());
+        # the unresolved bareword 'undefinedvar' (12 chars) follows "int sub f() { return " (21 chars)
+        assertEq(21, diags[0].startColumn, "start column of the unresolved bareword");
+        assertEq(diags[0].startColumn + 12, diags[0].endColumn, "column span covers the identifier");
+    }
+
+    testClearedOnDisable() {
+        Program p(PO_NEW_STYLE);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("enum E : int { A = 1, B = 2, } int sub f(E e) { switch (e) { case E::A: return 1; } return 0; }",
+            "", WARN_NONEXHAUSTIVE_SWITCH);
+        assertEq(1, p.getParseDiagnostics().size());
+        # disabling collection clears any collected diagnostics
+        p.setParseDiagnosticsCollected(False);
+        assertEq((), p.getParseDiagnostics(), "disabling collection clears collected diagnostics");
+    }
+}

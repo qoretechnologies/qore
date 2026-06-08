@@ -35,6 +35,7 @@
 #include <qore/Qore.h>
 #include <qore/ParseOptionMap.h>
 #include <qore/safe_dslist>
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_debug_narrowing.h"
@@ -98,6 +99,14 @@ static bool warnings_are_errors = false;
 
 // stop writing parse exceptions after 1st one
 static bool only_first_except = false;
+
+// when true, parse the program and emit structured parse diagnostics as JSON instead of executing it
+// (for external tooling and AI coding assistants); set by --diag-format=json or QORE_DIAG_FORMAT=json
+static bool diag_json = false;
+
+// when true, parse the program and render human-readable code frames for any parse diagnostics instead
+// of executing it; set by --code-frames or QORE_CODE_FRAMES
+static bool code_frames = false;
 
 // force interactive REPL mode
 static bool interactive_mode = false;
@@ -198,6 +207,8 @@ static const char helpstr[] =
    "  -B, --show-build-options     show Qore build options and quit\n"
    "  -c, --charset=arg            sets default character set encoding\n"
    "  -D, --define=arg             sets the value of a parse define\n"
+   "      --diag-format=json       parse only and emit structured parse diagnostics as JSON\n"
+   "      --code-frames            parse only and render parse diagnostics as code frames\n"
    "  -e, --exec=arg               execute program given on command-line\n"
    "      --exec-mode=arg          execution mode: ast, ir, jit, or tiered\n"
    "                               (default: tiered for %modern, ast otherwise)\n"
@@ -512,6 +523,19 @@ static void do_no_top_level(const char* arg) {
 
 static void do_allow_reparse(const char* arg) {
    parse_options |= PO_ALLOW_REPARSE;
+}
+
+static void set_diag_format(const char* arg) {
+   if (arg && !strcmp(arg, "json")) {
+      diag_json = true;
+   } else {
+      fprintf(stderr, "unknown diagnostic format '%s'; supported formats: json\n", arg ? arg : "");
+      exit(1);
+   }
+}
+
+static void do_code_frames(const char* arg) {
+   code_frames = true;
 }
 
 static void do_no_filesystem(const char* arg) {
@@ -1285,6 +1309,8 @@ static struct opt_struct_s {
    { 'A', "lock-warnings",         ARG_NONE, do_lock_warnings },
    { '\0', "allow-bare-refs",      ARG_NONE, allow_bare_refs },
    { '\0', "allow-reparse",        ARG_NONE, do_allow_reparse },
+   { '\0', "diag-format",          ARG_MAND, set_diag_format },
+   { '\0', "code-frames",          ARG_NONE, do_code_frames },
    { '\0', "assume-local",         ARG_NONE, assume_local },
    { 'M', "modern",                ARG_NONE, do_modern },
    { 'n', "new-style",             ARG_NONE, new_style },
@@ -1601,6 +1627,20 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
           qpgm->setIRFallbackReport(true);
       }
 
+      // allow enabling diagnostic modes via the environment (for tooling that cannot pass flags)
+      if (!diag_json) {
+          const char* df = getenv("QORE_DIAG_FORMAT");
+          if (df && !strcmp(df, "json")) {
+              diag_json = true;
+          }
+      }
+      if (!code_frames && getenv("QORE_CODE_FRAMES")) {
+          code_frames = true;
+      }
+      if (diag_json || code_frames) {
+          qore_program_private::get(**qpgm)->setParseDiagnosticsCollected(true);
+      }
+
       // set parse defines
       qpgm->parseCmdLineDefines(xsink, wsink, warnings, defmap);
 
@@ -1679,6 +1719,42 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          } else {
             qpgm->parse(stdin, "<stdin>", &xsink, &wsink, warnings);
          }
+      }
+
+      // structured-diagnostics mode: emit the collected diagnostics as JSON and exit without executing
+      if (diag_json) {
+         printf("%s\n", qore_get_parse_diagnostics_json(**qpgm).c_str());
+         rc = xsink.isException() ? 2 : 0;
+         // suppress the default human-readable error/warning output
+         xsink.clear();
+         wsink.clear();
+         goto exit;
+      }
+
+      // code-frames mode: render the collected diagnostics as human-readable code frames and exit
+      if (code_frames) {
+         // obtain the main source text so the frame can show the offending source line
+         std::string src_text;
+         const char* src_ptr = nullptr;
+         if (cl_pgm) {
+            src_ptr = cl_pgm;
+         } else if (program_file_name) {
+            if (FILE* f = fopen(program_file_name, "r")) {
+               char buf[4096];
+               size_t n;
+               while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+                  src_text.append(buf, n);
+               }
+               fclose(f);
+               src_ptr = src_text.c_str();
+            }
+         }
+         unsigned errs = qore_render_parse_diagnostic_frames(**qpgm, src_ptr, stderr);
+         rc = errs ? 2 : 0;
+         // suppress the default human-readable error/warning output (frames replace it)
+         xsink.clear();
+         wsink.clear();
+         goto exit;
       }
 
       // display any warnings now

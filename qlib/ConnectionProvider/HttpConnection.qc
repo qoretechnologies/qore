@@ -74,7 +74,7 @@ public namespace ConnectionProvider {
 public class HttpConnection inherits AbstractConnectionWithInfo {
     public {
         #! HTTP Negotiate delegation modes
-        const NegotiateDelegationModeAllowedValues = (
+        const list<hash<AllowedValueInfo>> NegotiateDelegationModeAllowedValues = (
             <AllowedValueInfo>{
                 "value": "none",
                 "desc": "Do not delegate credentials",
@@ -90,7 +90,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         );
 
         #! HTTP Negotiate option names
-        const NegotiateOptionNames = (
+        const list<string> NegotiateOptionNames = (
             "negotiate_auth",
             "negotiate_service_principal",
             "negotiate_keytab",
@@ -100,7 +100,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         );
 
         #! HTTP Negotiate option metadata
-        const NegotiateOptions = {
+        const hash<string, hash<ConnectionOptionInfo>> NegotiateOptions = {
             "negotiate_auth": <ConnectionOptionInfo>{
                 "display_name": "Kerberos Negotiate Auth?",
                 "short_desc": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
@@ -149,7 +149,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         };
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "HTTP Connection",
             "short_desc": "A connection to a HTTP server",
             "desc": "A connectioas to a HTTP server",
@@ -356,7 +356,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         };
 
         #! HttpConnection object connection options
-        const Options = map {$1: True}, keys ConnectionScheme.options;
+        const hash<string, bool> Options = map {$1: True}, keys ConnectionScheme.options;
     }
 
     #! Creates the HttpConnection object

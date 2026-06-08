@@ -36,10 +36,10 @@ public namespace DataProvider {
 */
 #/@{
 #! AND logic
-public const DP_OP_AND = "&&";
+public const string DP_OP_AND = "&&";
 
 #! OR logic
-public const DP_OP_OR = "||";
+public const string DP_OP_OR = "||";
 #/@}
 
 /** @defgroup dataprovider_generic_search_ops DataProvider Generic Search Operators
@@ -49,52 +49,52 @@ public const DP_OP_OR = "||";
 #! Identifies the regex operator for use in generic search criteria
 /** @see dp_op_like()
 */
-public const DP_SEARCH_OP_REGEX = "regex";
+public const string DP_SEARCH_OP_REGEX = "regex";
 
 #! Identifies the generic data provider less than (<) operator for use in generic search criteria
 /** @see dp_op_lt()
 */
-public const DP_SEARCH_OP_LT = "<";
+public const string DP_SEARCH_OP_LT = "<";
 
 #! Identifies the generic data provider less than or equals (<=) operator for use in generic search criteria
 /** @see dp_op_le()
 */
-public const DP_SEARCH_OP_LE = "<=";
+public const string DP_SEARCH_OP_LE = "<=";
 
 #! Identifies the generic data provider greater than operator (>) for use in generic search criteria
 /** @see dp_op_gt()
 */
-public const DP_SEARCH_OP_GT = ">";
+public const string DP_SEARCH_OP_GT = ">";
 
 #! Identifies the generic data provider greater than or equals operator (>=) for use in generic search criteria
 /** @see dp_op_ge()
 */
-public const DP_SEARCH_OP_GE = ">=";
+public const string DP_SEARCH_OP_GE = ">=";
 
 #! Identifies the generic data provider not equals operator (!= or <>) for use in generic search criteria
 /** @see dp_op_ne()
 */
-public const DP_SEARCH_OP_NE = "!=";
+public const string DP_SEARCH_OP_NE = "!=";
 
 #! Identifies the generic data provider equals operator (=) for use in generic search criteria
 /** @see dp_op_eq()
 */
-public const DP_SEARCH_OP_EQ = "==";
+public const string DP_SEARCH_OP_EQ = "==";
 
 #! Identifies the generic data provider \c "between" operator for use in generic search criteria
 /** @see dp_op_between()
 */
-public const DP_SEARCH_OP_BETWEEN = "between";
+public const string DP_SEARCH_OP_BETWEEN = "between";
 
 #! Identifies the generic data provider \c "in" operator for use in generic search criteria
 /** @see dp_op_in()
 */
-public const DP_SEARCH_OP_IN = "in";
+public const string DP_SEARCH_OP_IN = "in";
 
 #! Identifies the generic data provider \c "not" operator for use in generic search criteria
 /** @see dp_op_not()
 */
-public const DP_SEARCH_OP_NOT = "!";
+public const string DP_SEARCH_OP_NOT = "!";
 #/@}
 
 /** @defgroup dataprovider_extended_ops DataProvider Extended Operators
@@ -104,115 +104,115 @@ public const DP_SEARCH_OP_NOT = "!";
 */
 #/@{
 #! Absolute equality operator (===): returns True if both type and value are equal
-public const DP_OP_ABSOLUTE_EQ = "===";
+public const string DP_OP_ABSOLUTE_EQ = "===";
 
 #! Absolute not-equal operator (!==): returns True if type or value differ
-public const DP_OP_ABSOLUTE_NE = "!==";
+public const string DP_OP_ABSOLUTE_NE = "!==";
 
 #! Addition operator (+): adds values (numbers, strings, dates, lists)
-public const DP_OP_PLUS = "+";
+public const string DP_OP_PLUS = "+";
 
 #! Subtraction operator (-): subtracts the second value from the first
-public const DP_OP_MINUS = "-";
+public const string DP_OP_MINUS = "-";
 
 #! Multiplication operator (*): multiplies numeric values
-public const DP_OP_MULT = "*";
+public const string DP_OP_MULT = "*";
 
 #! Division operator (/): divides the first numeric value by the second
-public const DP_OP_DIV = "/";
+public const string DP_OP_DIV = "/";
 
 #! String starts-with operator
-public const DP_OP_STARTS_WITH = "starts-with";
+public const string DP_OP_STARTS_WITH = "starts-with";
 
 #! String ends-with operator
-public const DP_OP_ENDS_WITH = "ends-with";
+public const string DP_OP_ENDS_WITH = "ends-with";
 
 #! String contains operator
-public const DP_OP_CONTAINS = "contains";
+public const string DP_OP_CONTAINS = "contains";
 
 #! List contains element operator
-public const DP_OP_LIST_CONTAINS = "listContains";
+public const string DP_OP_LIST_CONTAINS = "listContains";
 
 #! String contains any of a list of substrings
-public const DP_OP_CONTAINS_ANY = "contains-any";
+public const string DP_OP_CONTAINS_ANY = "contains-any";
 
 #! List contains any of a list of values
-public const DP_OP_LIST_CONTAINS_ANY = "listContainsAny";
+public const string DP_OP_LIST_CONTAINS_ANY = "listContainsAny";
 
 #! Find value in hash/list by dot-notation path
-public const DP_OP_FIND_IN = "findIn";
+public const string DP_OP_FIND_IN = "findIn";
 
 #! Has a "true" value (non-null, non-empty)
-public const DP_OP_HAS_VALUE = "has-value";
+public const string DP_OP_HAS_VALUE = "has-value";
 
 #! In range: >= lower bound and < upper bound
-public const DP_OP_RANGE = "inRange";
+public const string DP_OP_RANGE = "inRange";
 
 #! Regex match operator (=~)
-public const DP_OP_REGEX_MATCH = "regex-match";
+public const string DP_OP_REGEX_MATCH = "regex-match";
 
 #! Regex non-match operator (!~)
-public const DP_OP_REGEX_NMATCH = "regex-nmatch";
+public const string DP_OP_REGEX_NMATCH = "regex-nmatch";
 
 #! Regex substitution operator
-public const DP_OP_REGEX_SUBST = "regex-subst";
+public const string DP_OP_REGEX_SUBST = "regex-subst";
 
 #! Simple string replacement
-public const DP_OP_REPLACE = "replace";
+public const string DP_OP_REPLACE = "replace";
 
 #! Get byte size (or element count for hashes/lists)
-public const DP_OP_SIZE = "size";
+public const string DP_OP_SIZE = "size";
 
 #! Get character length (or element count for hashes/lists)
-public const DP_OP_LENGTH = "length";
+public const string DP_OP_LENGTH = "length";
 
 #! Get display character width of a string
-public const DP_OP_CHAR_WIDTH = "width";
+public const string DP_OP_CHAR_WIDTH = "width";
 
 #! Get character encoding name of a string
-public const DP_OP_CHAR_ENCODING = "encoding";
+public const string DP_OP_CHAR_ENCODING = "encoding";
 
 #! Remove accents from a string
-public const DP_OP_UNACCENT = "unaccent";
+public const string DP_OP_UNACCENT = "unaccent";
 
 #! Convert string to lower case
-public const DP_OP_TO_LOWER = "lwr";
+public const string DP_OP_TO_LOWER = "lwr";
 
 #! Convert string to upper case
-public const DP_OP_TO_UPPER = "upr";
+public const string DP_OP_TO_UPPER = "upr";
 
 #! Join list elements with a separator string
-public const DP_OP_JOIN = "join";
+public const string DP_OP_JOIN = "join";
 
 #! Convert string/binary to hex string
-public const DP_OP_TO_HEX = "to-hex";
+public const string DP_OP_TO_HEX = "to-hex";
 
 #! Convert string/binary to base64 string
-public const DP_OP_TO_BASE64 = "to-base64";
+public const string DP_OP_TO_BASE64 = "to-base64";
 
 #! Convert string/binary to base64-URL string (RFC 4648)
-public const DP_OP_TO_BASE64_URL = "to-base64-url";
+public const string DP_OP_TO_BASE64_URL = "to-base64-url";
 
 #! Convert value to string
-public const DP_OP_TO_STRING = "toString";
+public const string DP_OP_TO_STRING = "toString";
 
 #! Convert value to integer
-public const DP_OP_TO_INT = "toInt";
+public const string DP_OP_TO_INT = "toInt";
 
 #! Convert value to boolean
-public const DP_OP_TO_BOOL = "toBool";
+public const string DP_OP_TO_BOOL = "toBool";
 
 #! Convert value to float
-public const DP_OP_TO_FLOAT = "toFloat";
+public const string DP_OP_TO_FLOAT = "toFloat";
 
 #! Convert value to arbitrary-precision number
-public const DP_OP_TO_NUMBER = "toNumber";
+public const string DP_OP_TO_NUMBER = "toNumber";
 
 #! Convert value to date
-public const DP_OP_TO_DATE = "toDate";
+public const string DP_OP_TO_DATE = "toDate";
 
 #! Ternary conditional operator (condition ? true_val : false_val)
-public const DP_OP_TERNARY = "ternary";
+public const string DP_OP_TERNARY = "ternary";
 #/@}
 
 /** @defgroup dpql_function_ops DPQL Function Operator Constants
@@ -220,13 +220,13 @@ public const DP_OP_TERNARY = "ternary";
 */
 #/@{
 #! Index function: access a single element by index (e.g., \c index(\@items, 0))
-public const DP_FUNC_INDEX = "index";
+public const string DP_FUNC_INDEX = "index";
 
 #! Slice function: access multiple elements by indices/ranges (e.g., \c slice(\@items, 0..3))
-public const DP_FUNC_SLICE = "slice";
+public const string DP_FUNC_SLICE = "slice";
 
 #! Key function: access hash values by key (e.g., \c key(\@record, "name"))
-public const DP_FUNC_KEY = "key";
+public const string DP_FUNC_KEY = "key";
 #/@}
 
 /** @defgroup dpql_extended_function_ops DPQL Extended Function Operator Constants
@@ -236,166 +236,166 @@ public const DP_FUNC_KEY = "key";
 */
 #/@{
 #! Substring extraction function
-public const DP_FUNC_SUBSTR = "substr";
+public const string DP_FUNC_SUBSTR = "substr";
 
 #! Format date as string
-public const DP_FUNC_FORMAT_DATE = "format_date";
+public const string DP_FUNC_FORMAT_DATE = "format_date";
 
 #! Format number as string
-public const DP_FUNC_FORMAT_NUMBER = "format_number";
+public const string DP_FUNC_FORMAT_NUMBER = "format_number";
 
 #! Split string by regular expression
-public const DP_FUNC_SPLIT_REGEX = "split_regex";
+public const string DP_FUNC_SPLIT_REGEX = "split_regex";
 
 #! Split string by separator, optionally respecting quotes
-public const DP_FUNC_SPLIT_QUOTED = "split_quoted";
+public const string DP_FUNC_SPLIT_QUOTED = "split_quoted";
 
 #! Parse hex string to binary
-public const DP_FUNC_PARSE_HEX = "parse_hex";
+public const string DP_FUNC_PARSE_HEX = "parse_hex";
 
 #! Parse base64 string to binary
-public const DP_FUNC_PARSE_BASE64 = "parse_base64";
+public const string DP_FUNC_PARSE_BASE64 = "parse_base64";
 
 #! Parse base64-URL string (RFC 4648) to binary
-public const DP_FUNC_PARSE_BASE64_URL = "parse_base64_url";
+public const string DP_FUNC_PARSE_BASE64_URL = "parse_base64_url";
 
 #! Parse base64 string to string with optional encoding
-public const DP_FUNC_PARSE_BASE64_TO_STRING = "parse_base64_to_string";
+public const string DP_FUNC_PARSE_BASE64_TO_STRING = "parse_base64_to_string";
 
 #! Parse base64-URL string (RFC 4648) to string with optional encoding
-public const DP_FUNC_PARSE_BASE64_URL_TO_STRING = "parse_base64_url_to_string";
+public const string DP_FUNC_PARSE_BASE64_URL_TO_STRING = "parse_base64_url_to_string";
 
 #! Compute cryptographic digest (returns hex string)
-public const DP_FUNC_DIGEST = "digest";
+public const string DP_FUNC_DIGEST = "digest";
 
 #! Compute HMAC (returns hex string)
-public const DP_FUNC_HMAC = "hmac";
+public const string DP_FUNC_HMAC = "hmac";
 
 #! Encrypt data
-public const DP_FUNC_ENCRYPT = "encrypt";
+public const string DP_FUNC_ENCRYPT = "encrypt";
 
 #! Decrypt data
-public const DP_FUNC_DECRYPT = "decrypt";
+public const string DP_FUNC_DECRYPT = "decrypt";
 
 #! URL-encode a string
-public const DP_FUNC_ENCODE_URL = "encode_url";
+public const string DP_FUNC_ENCODE_URL = "encode_url";
 
 #! URL-decode a string
-public const DP_FUNC_DECODE_URL = "decode_url";
+public const string DP_FUNC_DECODE_URL = "decode_url";
 
 #! Returns the current date/time with microsecond precision
-public const DP_FUNC_NOW = "now";
+public const string DP_FUNC_NOW = "now";
 
 #! Split string by plain separator
-public const DP_FUNC_SPLIT = "split";
+public const string DP_FUNC_SPLIT = "split";
 
 #! Concatenate multiple values as strings
-public const DP_FUNC_CONCAT = "concat";
+public const string DP_FUNC_CONCAT = "concat";
 
 #! Trim whitespace (or custom characters) from both sides of a string
-public const DP_FUNC_TRIM = "trim";
+public const string DP_FUNC_TRIM = "trim";
 
 #! Trim whitespace (or custom characters) from the left side of a string
-public const DP_FUNC_LTRIM = "ltrim";
+public const string DP_FUNC_LTRIM = "ltrim";
 
 #! Trim whitespace (or custom characters) from the right side of a string
-public const DP_FUNC_RTRIM = "rtrim";
+public const string DP_FUNC_RTRIM = "rtrim";
 
 #! Returns the absolute value of a number
-public const DP_FUNC_ABS = "abs";
+public const string DP_FUNC_ABS = "abs";
 
 #! Rounds a number to the given number of decimal places
-public const DP_FUNC_ROUND = "round";
+public const string DP_FUNC_ROUND = "round";
 
 #! Returns the largest integer not greater than the argument
-public const DP_FUNC_FLOOR = "floor";
+public const string DP_FUNC_FLOOR = "floor";
 
 #! Returns the smallest integer not less than the argument
-public const DP_FUNC_CEIL = "ceil";
+public const string DP_FUNC_CEIL = "ceil";
 
 #! Returns the first non-NOTHING argument
-public const DP_FUNC_COALESCE = "coalesce";
+public const string DP_FUNC_COALESCE = "coalesce";
 
 #! Returns NOTHING if the two arguments are equal, otherwise returns the first argument
-public const DP_FUNC_NULLIF = "nullif";
+public const string DP_FUNC_NULLIF = "nullif";
 
 #! Returns a relative date/time value representing the given number of years
-public const DP_FUNC_YEARS = "years";
+public const string DP_FUNC_YEARS = "years";
 
 #! Returns a relative date/time value representing the given number of months
-public const DP_FUNC_MONTHS = "months";
+public const string DP_FUNC_MONTHS = "months";
 
 #! Returns a relative date/time value representing the given number of weeks
-public const DP_FUNC_WEEKS = "weeks";
+public const string DP_FUNC_WEEKS = "weeks";
 
 #! Returns a relative date/time value representing the given number of days
-public const DP_FUNC_DAYS = "days";
+public const string DP_FUNC_DAYS = "days";
 
 #! Returns a relative date/time value representing the given number of hours
-public const DP_FUNC_HOURS = "hours";
+public const string DP_FUNC_HOURS = "hours";
 
 #! Returns a relative date/time value representing the given number of minutes
-public const DP_FUNC_MINUTES = "minutes";
+public const string DP_FUNC_MINUTES = "minutes";
 
 #! Returns a relative date/time value representing the given number of seconds
-public const DP_FUNC_SECONDS = "seconds";
+public const string DP_FUNC_SECONDS = "seconds";
 
 #! Returns a relative date/time value representing the given number of milliseconds
-public const DP_FUNC_MILLISECONDS = "milliseconds";
+public const string DP_FUNC_MILLISECONDS = "milliseconds";
 
 #! Returns a relative date/time value representing the given number of microseconds
-public const DP_FUNC_MICROSECONDS = "microseconds";
+public const string DP_FUNC_MICROSECONDS = "microseconds";
 
 #! Extracts the year component from a date/time value
-public const DP_FUNC_GET_YEAR = "get_year";
+public const string DP_FUNC_GET_YEAR = "get_year";
 
 #! Extracts the month component from a date/time value
-public const DP_FUNC_GET_MONTH = "get_month";
+public const string DP_FUNC_GET_MONTH = "get_month";
 
 #! Extracts the day component from a date/time value
-public const DP_FUNC_GET_DAY = "get_day";
+public const string DP_FUNC_GET_DAY = "get_day";
 
 #! Extracts the hour component from a date/time value
-public const DP_FUNC_GET_HOUR = "get_hour";
+public const string DP_FUNC_GET_HOUR = "get_hour";
 
 #! Extracts the minute component from a date/time value
-public const DP_FUNC_GET_MINUTE = "get_minute";
+public const string DP_FUNC_GET_MINUTE = "get_minute";
 
 #! Extracts the second component from a date/time value
-public const DP_FUNC_GET_SECOND = "get_second";
+public const string DP_FUNC_GET_SECOND = "get_second";
 
 #! Maps a list by applying an expression to each element, returning a new list
-public const DP_OP_MAP = "map";
+public const string DP_OP_MAP = "map";
 
 #! Maps a list or hash by applying key and value expressions to each element, returning a hash
-public const DP_OP_HASH_MAP = "hash_map";
+public const string DP_OP_HASH_MAP = "hash_map";
 
 #! Filters a list or hash source by applying a predicate expression to each element
-public const DP_OP_SELECT = "select";
+public const string DP_OP_SELECT = "select";
 
 #! Returns the first element in a list or hash source, optionally matching a predicate
-public const DP_OP_FIRST = "first";
+public const string DP_OP_FIRST = "first";
 
 #! Returns True if any source element or predicate result is true
-public const DP_OP_ANY = "any";
+public const string DP_OP_ANY = "any";
 
 #! Returns True if all predicate results are true
-public const DP_OP_ALL = "all";
+public const string DP_OP_ALL = "all";
 
 #! Counts source elements, optionally matching a predicate
-public const DP_OP_COUNT = "count";
+public const string DP_OP_COUNT = "count";
 
 #! Returns the first N elements from a list or hash source
-public const DP_OP_TAKE = "take";
+public const string DP_OP_TAKE = "take";
 
 #! Drops the first N elements from a list or hash source
-public const DP_OP_DROP = "drop";
+public const string DP_OP_DROP = "drop";
 
 #! Returns source elements until a predicate becomes false
-public const DP_OP_TAKEWHILE = "takewhile";
+public const string DP_OP_TAKEWHILE = "takewhile";
 
 #! Returns source elements until a predicate becomes true
-public const DP_OP_TAKEUNTIL = "takeuntil";
+public const string DP_OP_TAKEUNTIL = "takeuntil";
 #/@}
 
 /** @defgroup dpql_extended_operator_ops2 DPQL Extended Operator Constants (Part 2)
@@ -405,37 +405,37 @@ public const DP_OP_TAKEUNTIL = "takeuntil";
 */
 #/@{
 #! Returns True if the argument is NOTHING (null)
-public const DP_OP_IS_NULL = "isNull";
+public const string DP_OP_IS_NULL = "isNull";
 
 #! Returns True if the argument is not NOTHING (not null)
-public const DP_OP_IS_NOT_NULL = "isNotNull";
+public const string DP_OP_IS_NOT_NULL = "isNotNull";
 
 #! Returns True if the first argument is not found in the second argument (list)
-public const DP_OP_NOT_IN = "notIn";
+public const string DP_OP_NOT_IN = "notIn";
 
 #! Modulus operator: returns the remainder of dividing the first argument by the second
-public const DP_OP_MOD = "mod";
+public const string DP_OP_MOD = "mod";
 
 #! SQL LIKE operator: pattern matching with % and _ wildcards
-public const DP_OP_LIKE = "like";
+public const string DP_OP_LIKE = "like";
 
 #! Serialize value to YAML string
-public const DP_FUNC_MAKE_YAML = "make_yaml";
+public const string DP_FUNC_MAKE_YAML = "make_yaml";
 
 #! Deserialize YAML string to data
-public const DP_FUNC_PARSE_YAML = "parse_yaml";
+public const string DP_FUNC_PARSE_YAML = "parse_yaml";
 
 #! Serialize value to JSON string
-public const DP_FUNC_MAKE_JSON = "make_json";
+public const string DP_FUNC_MAKE_JSON = "make_json";
 
 #! Deserialize JSON string to data
-public const DP_FUNC_PARSE_JSON = "parse_json";
+public const string DP_FUNC_PARSE_JSON = "parse_json";
 
 #! Serialize value to XML string
-public const DP_FUNC_MAKE_XML = "make_xml";
+public const string DP_FUNC_MAKE_XML = "make_xml";
 
 #! Deserialize XML string to data
-public const DP_FUNC_PARSE_XML = "parse_xml";
+public const string DP_FUNC_PARSE_XML = "parse_xml";
 #/@}
 
 /** @defgroup dpql_expression_types DPQL Expression Type Constants
@@ -458,7 +458,7 @@ public const DP_FUNC_PARSE_XML = "parse_xml";
 
     @since DataProvider 3.3
 */
-public const DP_EXPR_VALUE = "value";
+public const string DP_EXPR_VALUE = "value";
 
 #! Template expression operator
 /** Used to wrap a standalone template reference as an expression.
@@ -474,11 +474,11 @@ public const DP_EXPR_VALUE = "value";
 
     @since DataProvider 3.3
 */
-public const DP_EXPR_TEMPLATE = "template";
+public const string DP_EXPR_TEMPLATE = "template";
 #/@}
 
 #! Operator alias map; maps from old operator names to canonical ones
-public const OperatorAliasMap = {
+public const hash<auto> OperatorAliasMap = {
     "AND": DP_OP_AND,
     "OR": DP_OP_OR,
     "NOT": DP_SEARCH_OP_NOT,
@@ -571,7 +571,7 @@ public hashdecl SearchOperatorInfo {
 }
 
 #! a hash of valid operators for use in generic search criteria
-public const DefaultGenericSearchOpMap = {
+public const hash<auto> DefaultGenericSearchOpMap = {
     DP_SEARCH_OP_REGEX: (
         "code": bool sub (hash<auto> cmd, auto field_value, string field_name, hash<auto> rec) {
             return regex(field_value.toString(), cmd.arg[0], cmd.arg[1]);

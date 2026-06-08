@@ -1,0 +1,65 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class OverloadDiagnosticsTest
+
+#! Tests that overload / argument-mismatch errors are captured as structured diagnostics with full
+#! candidate-signature and diverging-argument detail (for tooling and AI coding assistants)
+public class OverloadDiagnosticsTest inherits QUnit::Test {
+    constructor() : Test("OverloadDiagnosticsTest", "1.0") {
+        addTestCase("single variant names diverging argument", \testSingleVariant());
+        addTestCase("multiple variants list candidate signatures", \testMultiVariant());
+        addTestCase("argument-count mismatch", \testArgCount());
+        set_return_value(main());
+    }
+
+    private list<hash<ParseDiagnosticInfo>> diagnose(string src) {
+        Program p(PO_NEW_STYLE);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse(src, "<in>");
+        } catch (hash<ExceptionInfo> ex) {}
+        return p.getParseDiagnostics();
+    }
+
+    testSingleVariant() {
+        # a single candidate yields a precise per-argument diagnostic
+        list<hash<ParseDiagnosticInfo>> d = diagnose(
+            "int sub f(int x) { return x; } int sub g() { return f(True); }");
+        assertEq(False, d.empty(), "diagnostic captured");
+        assertEq("error", d[0].severity);
+        assertEq("PARSE-TYPE-ERROR", d[0].code);
+        # names the diverging argument and the actual vs expected type
+        assertRegex("argument 'x'", d[0].message);
+        assertRegex("expects int", d[0].message);
+        assertRegex("bool", d[0].message);
+    }
+
+    testMultiVariant() {
+        # multiple candidates: the actual call types and every candidate signature are listed
+        list<hash<ParseDiagnosticInfo>> d = diagnose(
+            "int sub f(int x) { return x; } int sub f(string x, int y) { return y; } "
+            "int sub g() { return f(3.0, 4.0, 5.0); }");
+        assertEq(False, d.empty(), "diagnostic captured");
+        assertEq("PARSE-TYPE-ERROR", d[0].code);
+        # the actual call with argument types
+        assertRegex("f\\(float, float, float\\)", d[0].message);
+        # all candidate signatures
+        assertRegex("f\\(int x\\)", d[0].message);
+        assertRegex("f\\(string x, int y\\)", d[0].message);
+    }
+
+    testArgCount() {
+        list<hash<ParseDiagnosticInfo>> d = diagnose(
+            "int sub h(int x) { return x; } int sub k() { return h(1, 2, 3); }");
+        assertEq(False, d.empty(), "diagnostic captured");
+        assertEq("PARSE-TYPE-ERROR", d[0].code);
+        assertRegex("h\\(int, int, int\\)", d[0].message);
+        assertRegex("h\\(int x\\)", d[0].message);
+    }
+}

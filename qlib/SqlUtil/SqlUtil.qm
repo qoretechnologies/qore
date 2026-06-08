@@ -2414,23 +2414,23 @@ public namespace SqlUtil {
     #! Features constants
 
     #! Feature: functions
-    public const DB_FUNCTIONS = "functions";
+    public const string DB_FUNCTIONS = "functions";
     #! Feature: materialized views / snapshots
-    public const DB_MVIEWS = "materialized views";
+    public const string DB_MVIEWS = "materialized views";
     #! Feature: packages
-    public const DB_PACKAGES = "packages";
+    public const string DB_PACKAGES = "packages";
     #! Feature: procedures
-    public const DB_PROCEDURES = "procedures";
+    public const string DB_PROCEDURES = "procedures";
     #! Feature: sequences
-    public const DB_SEQUENCES = "sequences";
+    public const string DB_SEQUENCES = "sequences";
     #! Feature: tables
-    public const DB_TABLES = "tables";
+    public const string DB_TABLES = "tables";
     #! Feature: named types
-    public const DB_TYPES = "named types";
+    public const string DB_TYPES = "named types";
     #! Feature: views
-    public const DB_VIEWS = "views";
+    public const string DB_VIEWS = "views";
     #! Feature: synonyms
-    public const DB_SYNONYMS = "synonyms";
+    public const string DB_SYNONYMS = "synonyms";
     #/@}
 
     /* @defgroup SqlTypeConstants SQL Type Constants
@@ -2438,19 +2438,19 @@ public namespace SqlUtil {
     */
     #/@{
     #! specifies a \c VARCHAR column (equivalent to @ref Qore::Type::String)
-    public const VARCHAR = "string";
+    public const string VARCHAR = "string";
 
     #! specifies a numeric column (equivalent to @ref Qore::Type::Number)
-    public const NUMERIC = "number";
+    public const string NUMERIC = "number";
 
     #! specifies a \c CHAR column
-    public const CHAR = "char";
+    public const string CHAR = "char";
 
     #! specifies a large variable-length binary column (ie \c BLOB or \c BYTEA, etc)
-    public const BLOB = "blob";
+    public const string BLOB = "blob";
 
     #! specifies a large variable-length character column (ie \c CLOB or \c TEXT, etc)
-    public const CLOB = "clob";
+    public const string CLOB = "clob";
     #/@}
 
     /** @defgroup ColumnSizeOptions Column Size Options
@@ -2477,139 +2477,139 @@ public namespace SqlUtil {
     #! to rename a column on output
     /** @see cop_as()
     */
-    public const COP_AS = "as";
+    public const string COP_AS = "as";
 
     #! to convert column value into another datatype
     /** @see cop_cast()
     */
-    public const COP_CAST = "cast";
+    public const string COP_CAST = "cast";
 
     #! to prepend a string to a column on output
     /** @see cop_prepend()
     */
-    public const COP_PREPEND = "prepend";
+    public const string COP_PREPEND = "prepend";
 
     #! to append a string to a column on output
     /** @see cop_append()
     */
-    public const COP_APPEND = "append";
+    public const string COP_APPEND = "append";
 
     #! to append a constant value (SQL Literal) to use as an output column value
     /** @see cop_value()
     */
-    public const COP_VALUE = "value";
+    public const string COP_VALUE = "value";
 
     #! to return column value in upper case
     /** @see cop_upper()
     */
-    public const COP_UPPER = "upper";
+    public const string COP_UPPER = "upper";
 
     #! to return column value in lower case
     /** @see cop_lower()
     */
-    public const COP_LOWER = "lower";
+    public const string COP_LOWER = "lower";
 
     #! to return distinct values
     /** @see cop_distinct
     */
-    public const COP_DISTINCT = "distinct";
+    public const string COP_DISTINCT = "distinct";
 
     #! to return the minimum value
     /** @see cop_min
     */
-    public const COP_MIN = "min";
+    public const string COP_MIN = "min";
 
     #! to return the maximum value
     /** @see cop_max
     */
-    public const COP_MAX = "max";
+    public const string COP_MAX = "max";
 
     #! to return the average value
     /** @see cop_avg
     */
-    public const COP_AVG = "avg";
+    public const string COP_AVG = "avg";
 
     #! to return the sum value
     /** @see cop_sum
     */
-    public const COP_SUM = "sum";
+    public const string COP_SUM = "sum";
 
     #! to return the row count
     /** @see cop_count
     */
-    public const COP_COUNT = "count";
+    public const string COP_COUNT = "count";
 
     #! the SQL \c "over" clause
     /** @see cop_over()
     */
-    public const COP_OVER = "over";
+    public const string COP_OVER = "over";
 
     #! the SQL \c "minus" operator
     /** @see cop_minus()
     */
-    public const COP_MINUS = "minus";
+    public const string COP_MINUS = "minus";
 
     #! the SQL \c "plus" operator
     /** @see cop_plus()
     */
-    public const COP_PLUS = "plus";
+    public const string COP_PLUS = "plus";
 
     #! the SQL \c "divide" operator
     /** @see cop_divide()
     */
-    public const COP_DIVIDE = "divide";
+    public const string COP_DIVIDE = "divide";
 
     #! the SQL \c "multiply" operator
     /** @see cop_multiply()
     */
-    public const COP_MULTIPLY = "multiply";
+    public const string COP_MULTIPLY = "multiply";
 
     #! to return a date value with year information only
     /** @see cop_year()
     */
-    public const COP_YEAR = "year";
+    public const string COP_YEAR = "year";
 
     #! to return a date value with year to month information
     /** @see cop_year_month()
     */
-    public const COP_YEAR_MONTH = "year_month";
+    public const string COP_YEAR_MONTH = "year_month";
 
     #! to return a date value with year to day information
     /** @see cop_year_day()
     */
-    public const COP_YEAR_DAY = "year_day";
+    public const string COP_YEAR_DAY = "year_day";
 
     #! to return a date value with year to hour information
     /** @see cop_year_hour()
     */
-    public const COP_YEAR_HOUR = "year_hour";
+    public const string COP_YEAR_HOUR = "year_hour";
 
     #! to return the next value of a sequence
     /** @see cop_seq()
     */
-    public const COP_SEQ = "seq";
+    public const string COP_SEQ = "seq";
 
     #! to return the last value of a sequence issued in the same session
     /** @see cop_seq_currval()
     */
-    public const COP_SEQ_CURRVAL = "seq_currval";
+    public const string COP_SEQ_CURRVAL = "seq_currval";
 
     #! to return the first non-null argument in the list
     /** @see cop_coalesce()
     */
-    public const COP_COALESCE = "coalesce";
+    public const string COP_COALESCE = "coalesce";
 
     #! to extract a substring from a column
     /** @see cop_substr()
     */
-    public const COP_SUBSTR = "substr";
+    public const string COP_SUBSTR = "substr";
 
     #! to get the length of a text field
     /** @see cop_length()
 
         @since %SqlUtil 1.3.1
     */
-    public const COP_LENGTH = "length";
+    public const string COP_LENGTH = "length";
 
     #! to return the date with truncated value
     /** @see cop_trunc_date()
@@ -2618,63 +2618,63 @@ public namespace SqlUtil {
 
         @since %SqlUtil 1.4.0
      */
-    public const COP_TRUNC_DATE = "truncate_date";
+    public const string COP_TRUNC_DATE = "truncate_date";
 
     #! Analytic (window) function: CUME_DIST
     /** @see cop_cume_dist()
 
         @since %SqlUtil 1.4.0
     */
-    public const COP_CUME_DIST = "cume_dist";
+    public const string COP_CUME_DIST = "cume_dist";
 
     #! Analytic (window) function: DENSE_RANK
     /** @see cop_dense_rank()
 
         @since %SqlUtil 1.4.0
     */
-    public const COP_DENSE_RANK = "dense_rank";
+    public const string COP_DENSE_RANK = "dense_rank";
 
     #! Analytic (window) function: FIRST_VALUE
     /** @see cop_first_value()
 
         @since %SqlUtil 1.4.0
     */
-    public const COP_FIRST_VALUE = "first_value";
+    public const string COP_FIRST_VALUE = "first_value";
 
     #! Analytic (window) function: LAST_VALUE
     /** @see cop_last_value()
 
         @since %SqlUtil 1.4.0
     */
-    public const COP_LAST_VALUE = "last_value";
+    public const string COP_LAST_VALUE = "last_value";
 
     #! Analytic (window) function: NTILE
     /** @see cop_ntile()
 
         @since %SqlUtil 1.4.0
     */
-    public const COP_NTILE = "ntile";
+    public const string COP_NTILE = "ntile";
 
     #! Analytic (window) function: PERCENT_RANK
     /** @see cop_percent_rank()
 
         @since %SqlUtil 1.4.0
     */
-    public const COP_PERCENT_RANK = "percent_rank";
+    public const string COP_PERCENT_RANK = "percent_rank";
 
     #! Analytic (window) function: RANK
     /** @see cop_rank()
 
         @since %SqlUtil 1.4.0
     */
-    public const COP_RANK = "rank";
+    public const string COP_RANK = "rank";
 
     #! Analytic (window) function: ROW_NUMBER
     /** @see cop_row_number()
 
         @since %SqlUtil 1.4.0
     */
-    public const COP_ROW_NUMBER = "row_number";
+    public const string COP_ROW_NUMBER = "row_number";
 
     #! Query information
     public hashdecl QueryInfo {
@@ -2710,7 +2710,7 @@ public namespace SqlUtil {
     }
 
     #! a hash of default column operator descriptions
-    public const DefaultCopMap = (
+    public const hash<auto> DefaultCopMap = (
         COP_AS: (
             "arg": Type::String,
             "withalias": True,
@@ -3761,25 +3761,25 @@ select row_number() over (partition by row_type order by id) as "row_number" fro
      */
     #/@{
     #! Format unit: year
-    public const DT_YEAR = "Y";
+    public const string DT_YEAR = "Y";
 
     #! Format unit: month
-    public const DT_MONTH = "M";
+    public const string DT_MONTH = "M";
 
     #! Format unit: day
-    public const DT_DAY = "D";
+    public const string DT_DAY = "D";
 
     #! Format unit: hour
-    public const DT_HOUR = "H";
+    public const string DT_HOUR = "H";
 
     #! Format unit: minute
-    public const DT_MINUTE = "m";
+    public const string DT_MINUTE = "m";
 
     #! Format unit: hour
-    public const DT_SECOND = "S";
+    public const string DT_SECOND = "S";
 
     # let's simulate and enum here'
-    const DT_ALL_VALUES = ( DT_YEAR, DT_MONTH, DT_DAY, DT_HOUR, DT_MINUTE, DT_SECOND );
+    const list<auto> DT_ALL_VALUES = ( DT_YEAR, DT_MONTH, DT_DAY, DT_HOUR, DT_MINUTE, DT_SECOND );
     #/@}
 
     /** @defgroup sql_uops SQL Update Operators
@@ -3787,7 +3787,7 @@ select row_number() over (partition by row_type order by id) as "row_number" fro
      */
     #/@{
     #! a hash of valid update operators
-    public const DefaultUopMap = (
+    public const hash<auto> DefaultUopMap = (
         COP_PREPEND: True,
         COP_APPEND: True,
         COP_UPPER: True,
@@ -4044,20 +4044,20 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     #! for standard inner joins
     /** @see join_inner()
     */
-    public const JOP_INNER = "inner";
+    public const string JOP_INNER = "inner";
 
     #! for left outer joins
     /** @see join_left()
     */
-    public const JOP_LEFT = "left";
+    public const string JOP_LEFT = "left";
 
     #! for right outer joins
     /** @see join_right()
     */
-    public const JOP_RIGHT = "right";
+    public const string JOP_RIGHT = "right";
 
     #! a hash of valid join operators
-    public const JopMap = {
+    public const hash<string, string> JopMap = {
         JOP_INNER: "inner",
         JOP_LEFT: "left outer",
         JOP_RIGHT: "right outer",
@@ -4553,100 +4553,100 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     #! the SQL "like" operator for use in @ref where_clauses
     /** @see op_like()
     */
-    public const OP_LIKE = "like";
+    public const string OP_LIKE = "like";
 
     #! the SQL less than (<) operator for use in @ref where_clauses
     /** @see op_lt()
     */
-    public const OP_LT = "<";
+    public const string OP_LT = "<";
 
     #! the SQL less than or equals (<=) operator for use in @ref where_clauses
     /** @see op_le()
     */
-    public const OP_LE = "<=";
+    public const string OP_LE = "<=";
 
     #! the SQL greater than operator (>) for use in @ref where_clauses
     /** @see op_gt()
     */
-    public const OP_GT = ">";
+    public const string OP_GT = ">";
 
     #! the SQL greater than or equals operator (>=) for use in @ref where_clauses
     /** @see op_ge()
     */
-    public const OP_GE = ">=";
+    public const string OP_GE = ">=";
 
     #! the SQL not equals operator (!= or <>) for use in @ref where_clauses
     /** @see op_ne()
     */
-    public const OP_NE = "!=";
+    public const string OP_NE = "!=";
 
     #! the SQL equals operator (=) for use in @ref where_clauses
     /** @see op_eq()
     */
-    public const OP_EQ = "==";
+    public const string OP_EQ = "==";
 
     #! the SQL less than (<) operator for use in @ref where_clauses when comparing two columns
     /** @see op_clt()
     */
-    public const OP_CLT = "C<";
+    public const string OP_CLT = "C<";
 
     #! the SQL less than or equals (<=) operator for use in @ref where_clauses
     /** @see op_cle()
     */
-    public const OP_CLE = "C<=";
+    public const string OP_CLE = "C<=";
 
     #! the SQL greater than operator (>) for use in @ref where_clauses
     /** @see op_cgt()
     */
-    public const OP_CGT = "C>";
+    public const string OP_CGT = "C>";
 
     #! the SQL greater than or equals operator (>=) for use in @ref where_clauses
     /** @see op_cge()
     */
-    public const OP_CGE = "C>=";
+    public const string OP_CGE = "C>=";
 
     #! the SQL not equals operator (!= or <>) for use in @ref where_clauses
     /** @see op_cne()
     */
-    public const OP_CNE = "C!=";
+    public const string OP_CNE = "C!=";
 
     #! the SQL equals operator (=) for use in @ref where_clauses
     /** @see op_ceq()
     */
-    public const OP_CEQ = "C=";
+    public const string OP_CEQ = "C=";
 
     #! the SQL \c "between" operator for use in @ref where_clauses
     /** @see op_between()
     */
-    public const OP_BETWEEN = "between";
+    public const string OP_BETWEEN = "between";
 
     #! the SQL \c "in" operator for use in @ref where_clauses
     /** @see op_in()
     */
-    public const OP_IN = "in";
+    public const string OP_IN = "in";
 
     #! the SQL \c "not" operator for use in @ref where_clauses
     /** @see op_not()
     */
-    public const OP_NOT = "!";
+    public const string OP_NOT = "!";
 
     #! the SQL \c "substr" operator for use in @ref where_clauses
     /** @see op_substr()
     */
-    public const OP_SUBSTR = "substr";
+    public const string OP_SUBSTR = "substr";
 
     #! to combine SQL expressions with \c "or" for use in @ref where_clauses
     /** @see wop_or()
     */
-    public const OP_OR = "or";
+    public const string OP_OR = "or";
 
     #! the SQL \c "in" operator with a select query for use in @ref where_clauses
     /** @see op_in_select()
     */
-    public const OP_IN_SELECT = "in_select";
+    public const string OP_IN_SELECT = "in_select";
 
     #! Default expressions to be supported by all SqlUtil modules
-    public const DefaultExpressionMap = {
+    public const hash<auto> DefaultExpressionMap = {
         # first the "AND" and "OR" "operators"
         DP_OP_AND: {
             "exp": AbstractDataProvider::GenericExpressions{DP_OP_AND},
@@ -6332,7 +6332,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     };
 
     #! a hash of valid operators for use in @ref where_clauses
-    public const DefaultOpMap = {
+    public const hash<auto> DefaultOpMap = {
         OP_LIKE: {
             "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
                 info.args += arg;
@@ -6913,15 +6913,15 @@ select * from schema.table where name = other_name and ((type = %v and validatio
     #! for using the value of a sequence
     /** @see iop_seq()
     */
-    public const IOP_SEQ = "seq";
+    public const string IOP_SEQ = "seq";
 
     #! for using the last value of a sequence issued in the current session
     /** @see iop_seq_currval()
     */
-    public const IOP_SEQ_CURRVAL = "seq_currval";
+    public const string IOP_SEQ_CURRVAL = "seq_currval";
 
     #! a hash of default insert operator descriptions (currently empty, all operators are driver-dependent)
-    public const DefaultIopMap = {};
+    public const hash<auto> DefaultIopMap = {};
     #/@}
 
     /** @defgroup sql_iop_funcs SQL Insert Operator Functions
@@ -6971,7 +6971,7 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     #/@}
 
     #! known drivers
-    public const SqlUtilDrivers = (
+    public const list<string> SqlUtilDrivers = (
         "oracle",
         "pgsql",
         "mysql",

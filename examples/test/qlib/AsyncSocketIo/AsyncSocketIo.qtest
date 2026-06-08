@@ -313,6 +313,10 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         SimpleStringHandler::interruptSleep(False);
 
         # test cancellation
+        # clear the 2-second interrupt window left by the interruptSleep(False) above: otherwise the next
+        # Wait-Forever request returns a 200 immediately (interruptibleSleep() short-circuits inside the window)
+        # and the operation can complete normally before cancel() reaches it, leaving info.canceled unset
+        SimpleStringHandler::resetInterruptWindow();
         spop = rest.startPollSendRecv("GET", "/api_text", NOTHING, {"Wait-Forever": 1});
         Queue q = io_controller.submit(<SocketPollOperationInfo>{
             "sock": rest,

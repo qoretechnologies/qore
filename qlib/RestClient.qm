@@ -437,7 +437,7 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
 
             @since %RestClient 2.6
         */
-        const Http1OnlyOptions = {
+        const hash<string, string> Http1OnlyOptions = {
             "pre_encoded_urls": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol "
                 "level; send pre-encoded paths directly",
             "assume_encoding": "HTTP/2 and HTTP/3 responses use binary bodies with explicit "
@@ -602,7 +602,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 %endif
         ;
 
-        const DataSerializationSupport = {
+        const hash<auto> DataSerializationSupport = {
 %ifndef NoJson
             "json": MimeTypeJson,
 %endif
@@ -619,13 +619,13 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         } + (SupportsCbor ? {"cbor": MimeTypeCbor} : {});
 
 %ifndef NoYaml
-        const DeserializeYaml = {
+        const hash<auto> DeserializeYaml = {
             "code": "yaml",
             "in": \parse_yaml(),
         };
 %endif
 %ifndef NoXml
-        const DeserializeXml = {
+        const hash<auto> DeserializeXml = {
             "code": "xml",
             "arg": True,
             "in": hash<auto> sub (string xml, reference<string> type) {
@@ -645,7 +645,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 %endif
 
         #! Accept header list
-        const AcceptList = (
+        const list<auto> AcceptList = (
 %ifndef NoYaml
             MimeTypeYamlApp, MimeTypeYaml, MimeTypeYamlRpc,
 %endif
@@ -661,28 +661,28 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         ) + (SupportsCbor ? (MimeTypeCbor,) : ());
 
         #! Accept header value
-        const Accept = AcceptList.join(",");
+        const string Accept = AcceptList.join(",");
 
         #! Map of acceptable Mime types
-        const AcceptMap = map {$1: True}, AcceptList;
+        const hash<string, bool> AcceptMap = map {$1: True}, AcceptList;
 
         #! RestClient Version
-        const Version = "2.5";
+        const string Version = "2.5";
 
         #! RestClient Version String
-        const VersionString = sprintf("Qore-RestClient/%s", RestClient::Version);
+        const string VersionString = sprintf("Qore-RestClient/%s", RestClient::Version);
 
         #! default HTTP headers (Content-Type is added before sending)
-        const DefaultHeaders = {
+        const hash<auto> DefaultHeaders = {
             "Accept": Accept,
             "User-Agent": RestClient::VersionString,
         };
 
         #! Default oauth2_redirect_url option value
-        const DefaultOAuth2RedirectUrl = "auto";
+        const string DefaultOAuth2RedirectUrl = "auto";
 
         #! Default option values
-        const DefaultOptions = {
+        const hash<auto> DefaultOptions = {
             "oauth2_redirect_url": DefaultOAuth2RedirectUrl,
         };
 
@@ -698,7 +698,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
             - \c "xml": use only XML-RPC serialization
             - \c "yaml": use only YAML serialization
         */
-        const DataSerializationOptions = {
+        const hash<string, bool> DataSerializationOptions = {
             "auto": True,
 %ifndef NoJson
             "json": True,
@@ -722,7 +722,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
             - \c "deflate": use deflate compression
             - \c "identity": use no content encoding
         */
-        const EncodingSupport = {
+        const hash<auto> EncodingSupport = {
             "gzip": {
                 "ce": "gzip",
                 "func": \gzip(),
@@ -748,7 +748,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
             @note the \c implicit grant type returns the token directly in the redirect URL fragment,
             so no token URL is required
         */
-        const OAuth2GrantOptions = {
+        const hash<auto> OAuth2GrantOptions = {
             "authorization_code": (
                 "oauth2_auth_url",
                 "oauth2_client_id",
@@ -774,7 +774,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         };
 
         #! Headers to send when making an authorization / token request
-        const OAuth2AuthHeaders = {
+        const hash<auto> OAuth2AuthHeaders = {
             # this will ensure that OAuth2 servers do not prefer XML or other serialization with a different data
             # format (ex: the Salesforce OAuth2 server)
             "Accept": MimeTypeFormUrlEncoded + "," + MimeTypeJson,
@@ -787,7 +787,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         const Oauth2TokenRefreshWindow = 10m;
 
         #! Custom token options; if at least one is set, they all must be set
-        const CustomTokenOptions = {
+        const hash<string, bool> CustomTokenOptions = {
             "custom_token_auth": True,
             "custom_token_method": True,
             "custom_token_path": True,
@@ -795,7 +795,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         };
 
         #! Valid PKCE option values
-        const PkceValueSet = {
+        const hash<string, bool> PkceValueSet = {
             "plain": True,
             "S256": True,
             "none": True,
@@ -3470,7 +3470,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         bool needs_auth;
 
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "REST Connection",
             "short_desc": "A connection to a REST server",
             "desc": "A connection to a REST server",
@@ -3971,13 +3971,13 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         };
 
         #! object connection options
-        const Options = map {$1: True}, keys ConnectionScheme.options;
+        const hash<string, bool> Options = map {$1: True}, keys ConnectionScheme.options;
 
         #! object connection option list
-        const OptionList = keys ConnectionScheme.options;
+        const list<string> OptionList = keys ConnectionScheme.options;
 
         #! Options required for an OAuth2 authorization_code authorization request
-        const OAuth2AuthRequestOptions = (
+        const list<string> OAuth2AuthRequestOptions = (
             "oauth2_auth_url",
             "oauth2_token_url",
             "oauth2_client_id",
@@ -3989,14 +3989,14 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         /** @note oauth2_token_url and oauth2_client_secret are not required for implicit grant
             since the token is returned directly in the URL fragment
         */
-        const OAuth2ImplicitAuthRequestOptions = (
+        const list<string> OAuth2ImplicitAuthRequestOptions = (
             "oauth2_auth_url",
             "oauth2_client_id",
             "oauth2_redirect_url",
         );
 
         #! All OAuth2 options
-        const OAuth2Options = (
+        const list<string> OAuth2Options = (
             "oauth2_alt_token_url",
             "oauth2_alt_url_subst",
             "oauth2_app",
@@ -4025,14 +4025,14 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         /** Returned as a connection feature if the connection is configured for the oauth2 authorization_code grant
             flow
         */
-        const RCF_OAUTH2_AUTH_CODE = "oauth2-auth-code";
+        const string RCF_OAUTH2_AUTH_CODE = "oauth2-auth-code";
 
         #! RestClient feature: OAuth2 Implicit Grant support
         /** Returned as a connection feature if the connection is configured for the oauth2 implicit grant flow
 
             @since %RestClient 2.3.3
         */
-        const RCF_OAUTH2_IMPLICIT = "oauth2-implicit";
+        const string RCF_OAUTH2_IMPLICIT = "oauth2-implicit";
 
         #! RestClient feature: OAuth2 Authorization support (any grant type requiring user authorization)
         /** Returned as a connection feature if the connection is configured for oauth2 authorization_code or
@@ -4040,10 +4040,10 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
 
             @since %RestClient 2.3.3
         */
-        const RCF_OAUTH2_AUTH = "oauth2-auth";
+        const string RCF_OAUTH2_AUTH = "oauth2-auth";
 
         #! Validator options
-        const ValOpts = (
+        const list<string> ValOpts = (
             "openapi3",
             "swagger",
             "validator",
@@ -4882,25 +4882,25 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
 public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Retrieve Swagger schema
-        const SPS_GET_SWAGGER = 'get-swagger';
+        const string SPS_GET_SWAGGER = 'get-swagger';
 
         #! Retrieve OpenApi 3 schema
-        const SPS_GET_OPENAPI3 = 'get-openapi3';
+        const string SPS_GET_OPENAPI3 = 'get-openapi3';
 
         #! OAuth2 get token state
-        const SPS_OAUTH2_GET_TOKEN = "oauth2-get-token";
+        const string SPS_OAUTH2_GET_TOKEN = "oauth2-get-token";
 
         #! OAuth2 refresh token state
-        const SPS_OAUTH2_REFRESH_TOKEN = "oauth2-refresh-token";
+        const string SPS_OAUTH2_REFRESH_TOKEN = "oauth2-refresh-token";
 
         #! Custom refresh token state
-        const SPS_CUSTOM_GET_TOKEN = "custom-refresh";
+        const string SPS_CUSTOM_GET_TOKEN = "custom-refresh";
 
         #! Execute ping request
-        const SPS_REST_PING = "rest-ping";
+        const string SPS_REST_PING = "rest-ping";
 
         #! Complete state
-        const SPS_COMPLETE = "complete";
+        const string SPS_COMPLETE = "complete";
     }
 
     private {
@@ -5284,13 +5284,13 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Send request state
-        const SPS_SEND_REQUEST = "send-request";
+        const string SPS_SEND_REQUEST = "send-request";
         #! OAuth2 token refresh state
-        const SPS_AUTH_REFRESH = "auth-refresh";
+        const string SPS_AUTH_REFRESH = "auth-refresh";
         #! Auth retry state (re-send with new token)
-        const SPS_AUTH_RETRY = "auth-retry";
+        const string SPS_AUTH_RETRY = "auth-retry";
         #! Complete state
-        const SPS_COMPLETE = "complete";
+        const string SPS_COMPLETE = "complete";
     }
 
     private {

@@ -220,7 +220,7 @@ public namespace QUnit {
 our bool timestamps_enabled;
 
 #! Default character budget for assertion-name display when @ref name_max_chars is unset
-public const DefaultNameMaxChars = 80;
+public const int DefaultNameMaxChars = 80;
 
 #! Maximum characters to display for an assertion name in OK / SKIP output
 /** Names exceeding this limit (or containing line breaks) are truncated with a trailing
@@ -637,17 +637,17 @@ public class TestCase {
 #! Base class for collecting test results and reporting
 public class TestReporter {
     private {
-        const PLAINQUIET = 0;
-        const PLAIN = 1;
-        const JUNIT = 2;
+        const int PLAINQUIET = 0;
+        const int PLAIN = 1;
+        const int JUNIT = 2;
 
-        const OUT_TYPES = (
+        const hash<string, int> OUT_TYPES = (
             "plainquiet" : PLAINQUIET,
             "plain" : PLAIN,
             "junit" : JUNIT,
         );
 
-        const RESULT_TYPE_DESCRIPTION = (
+        const hash<string, hash<auto>> RESULT_TYPE_DESCRIPTION = (
             TEST_SUCCESS : ("desc": "Success", "junittag" : NOTHING), # Success does not have a junit child tag
             TEST_FAILURE : ("desc": "FAILURE", "junittag" : "failure"),
             TEST_ERROR   : ("desc": "ERROR", "junittag" : "error"),
@@ -655,7 +655,7 @@ public class TestReporter {
         );
 
         #! the default column offset for printing options used in printOption() and usageIntern()
-        const OffsetColumn = 20;
+        const int OffsetColumn = 20;
 
         #! A map of print methods, categorised into three types: header, summary, testreport
         hash<string, hash<string, code>> m_printMethods;
@@ -702,7 +702,7 @@ public class TestReporter {
 
     public {
         #! default options for @ref Qore::GetOpt::constructor()
-        const Opts = {
+        const hash<string, string> Opts = {
             "help"    : "h,help",
             "verbose" : "v,verbose:i+",
             "quiet"   : "q,quiet",
@@ -714,15 +714,15 @@ public class TestReporter {
         };
 
         #! Environment variable for whitelist patterns (comma-separated)
-        const ENV_INCLUDE = "QUNIT_INCLUDE";
+        const string ENV_INCLUDE = "QUNIT_INCLUDE";
 
         #! Environment variable for blacklist patterns (comma-separated)
-        const ENV_EXCLUDE = "QUNIT_EXCLUDE";
+        const string ENV_EXCLUDE = "QUNIT_EXCLUDE";
 
-        const TEST_SUCCESS = 0;
-        const TEST_FAILURE = 1;
-        const TEST_ERROR = 2;
-        const TEST_SKIPPED = 3;
+        const int TEST_SUCCESS = 0;
+        const int TEST_FAILURE = 1;
+        const int TEST_ERROR = 2;
+        const int TEST_SKIPPED = 3;
     }
 
     private printOption(string left, string right, int offset = OffsetColumn) {
@@ -1023,24 +1023,24 @@ public class Test inherits QUnit::TestReporter {
 
     private:internal {
         #! equality comparitor
-        const QUC_EQ = "eq";
+        const string QUC_EQ = "eq";
         #! inequality comparitor
-        const QUC_NEQ = "neq";
+        const string QUC_NEQ = "neq";
         #! greater than comparitor
-        const QUC_GT = "gt";
+        const string QUC_GT = "gt";
         #! greater than or equals comparitor
-        const QUC_GE = "ge";
+        const string QUC_GE = "ge";
         #! greater than comparitor
-        const QUC_LT = "lt";
+        const string QUC_LT = "lt";
         #! greater than or equals comparitor
-        const QUC_LE = "le";
+        const string QUC_LE = "le";
         #! regex comparitor
-        const QUC_RE = "re";
+        const string QUC_RE = "re";
         #! negative regex comparitor
-        const QUC_NRE = "nre";
+        const string QUC_NRE = "nre";
 
         #! comparitor info
-        const QUC_Map = (
+        const hash<string, *string> QUC_Map = (
             QUC_EQ: NOTHING,
             QUC_NEQ: "Not Equal",
             QUC_GT: "Greater Than",
@@ -1052,7 +1052,7 @@ public class Test inherits QUnit::TestReporter {
         );
 
         #! default epsilon for number/float comparison
-        const DEFAULT_EPSILON = 0.0000000001;
+        const float DEFAULT_EPSILON = 0.0000000001;
     }
 
     #! creates the object and sets the name of the test

@@ -69,7 +69,7 @@ public hashdecl GroupByAggSpec {
 public class QoreGroupByProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreGroupByProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_AGGREGATE,
@@ -77,7 +77,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "group_by": <DataProviderOptionInfo>{
                 "display_name": "Group By Fields",
                 "short_desc": "Field names to group records by",
@@ -104,7 +104,7 @@ public class QoreGroupByProcessor inherits AbstractDataProvider {
         };
 
         #! Supported aggregate operations
-        const SupportedOps = {
+        const hash<string, bool> SupportedOps = {
             "count": True,
             "sum": True,
             "avg": True,

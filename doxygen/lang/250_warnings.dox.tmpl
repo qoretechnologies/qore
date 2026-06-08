@@ -96,6 +96,11 @@
     @since %Qore 0.8.4
 
     <hr>
+    @section non-exhaustive-switch non-exhaustive-switch
+    Raised when a @ref switch "switch statement" whose argument has an @ref enums "enum" type does not handle all of the enum's values and has no \c default label; adding the missing \c case labels or a \c default label silences the warning. This helps catch unhandled values, for example when a new member is added to an enum but an existing \c switch over that enum is not updated. Only simple \c case labels (not relational case expressions) are considered when determining coverage.
+    @since %Qore 2.3
+
+    <hr>
     @section non-existent-method-call non-existent-method-call
     Warning is raised when the given method cannot be found in the class at parse time; this is a warning because the object could be a subclass that has the given method implemented, in which case the call will succeed at run time. Use the @ref cast "cast<>() operator" to avoid this warning
     @since %Qore 0.8.0

@@ -41,7 +41,7 @@ public hashdecl DpqlParseResult {
 }
 
 #! Prefix-operator argument counts for DPQL operators that evaluate arguments in a controlled context
-const DpqlPrefixOperatorSpecs = {
+const hash<auto> DpqlPrefixOperatorSpecs = {
     DP_OP_MAP: {"min": 2, "max": 3},
     DP_OP_HASH_MAP: {"min": 3, "max": 4},
     DP_OP_SELECT: {"min": 2, "max": 2},

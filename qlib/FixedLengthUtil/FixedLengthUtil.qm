@@ -364,17 +364,17 @@ w.write(data);
 #! The FixedLengthUtil namespace contains all the definitions in the FixedLengthUtil module
 public namespace FixedLengthUtil {
 #! FixedLength app name
-public const AppName = "FixedLength";
+public const string AppName = "FixedLength";
 
 #! Unix end of line character sequence (for new OS X too)
-public const EOL_UNIX = "\n";
+public const string EOL_UNIX = "\n";
 #! MS DOS/Windows end of line character sequence
-public const EOL_WIN = "\r\n";
+public const string EOL_WIN = "\r\n";
 #! Old (pre-OSX) Macintosh end of line character sequence
-public const EOL_MACINTOSH = "\r";
+public const string EOL_MACINTOSH = "\r";
 
 # helper hash (for O(ln(n)) lookups in the worst case) of end of line values
-const EOLS = {
+const hash<string, bool> EOLS = {
     EOL_UNIX: True,
     EOL_WIN: True,
     EOL_MACINTOSH: True,
@@ -382,7 +382,7 @@ const EOLS = {
 }
 
 namespace Priv {
-const FixedLengthWhiteLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+const string FixedLengthWhiteLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
 <!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">
 <svg width=\"100%\" height=\"100%\" viewBox=\"0 0 200 200\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" xml:space=\"preserve\" xmlns:serif=\"http://www.serif.com/\" style=\"fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;\">
     <g transform=\"matrix(1,0,0,1,-2.00787,164.04)\">
@@ -399,7 +399,7 @@ const FixedLengthWhiteLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalon
     </g>
 </svg>";
 
-const FixedLengthBlackLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+const string FixedLengthBlackLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
 <!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">
 <svg width=\"100%\" height=\"100%\" viewBox=\"0 0 200 200\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" xml:space=\"preserve\" xmlns:serif=\"http://www.serif.com/\" style=\"fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;\">
     <g transform=\"matrix(1,0,0,1,-2.00787,164.04)\">

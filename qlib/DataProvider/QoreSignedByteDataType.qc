@@ -28,7 +28,7 @@ public namespace DataProvider {
 public class QoreSignedByteDataType inherits QoreIntDataTypeBase {
     public {
         #! Int type options
-        const Options = {
+        const hash<string, int> Options = {
             "number.min": -127,
             "number.max": 128,
         };

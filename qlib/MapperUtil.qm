@@ -64,7 +64,7 @@ module MapperUtil {
 #! All the definitions in the MapperUtil module are contained in the Mapper namespace
 public namespace Mapper {
     #! Mapper standard field key info hash
-    public const MapperKeyInfo = {
+    public const hash<string, hash<MapperRuntimeKeyInfo>> MapperKeyInfo = {
         "code": <MapperRuntimeKeyInfo>{
             "desc": "a code block for generating the field output programmatically",
             "value_type": "mapper-code",

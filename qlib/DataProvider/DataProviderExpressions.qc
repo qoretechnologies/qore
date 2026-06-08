@@ -168,7 +168,7 @@ int sub dp_stream_non_negative_count(string op, auto value) {
 #! Extended expression implementations for data providers
 /** @since DataProvider 3.3
 */
-public const ExtendedExpressionImplementations = {
+public const hash<auto> ExtendedExpressionImplementations = {
     # --- Comparison extras ---
     DP_OP_ABSOLUTE_EQ: {
         "exp": <DataProviderExpressionInfo>{
@@ -3461,7 +3461,7 @@ public const ExtendedExpressionImplementations = {
 /** @since DataProvider 3.3
 */
 %ifndef NoYaml
-public const YamlExpressionImplementations = {
+public const hash<auto> YamlExpressionImplementations = {
     DP_FUNC_MAKE_YAML: {
         "exp": <DataProviderExpressionInfo>{
             "type": DET_Function,
@@ -3516,7 +3516,7 @@ public const YamlExpressionImplementations = {
 /** @since DataProvider 3.3
 */
 %ifndef NoJson
-public const JsonExpressionImplementations = {
+public const hash<auto> JsonExpressionImplementations = {
     DP_FUNC_MAKE_JSON: {
         "exp": <DataProviderExpressionInfo>{
             "type": DET_Function,
@@ -3571,7 +3571,7 @@ public const JsonExpressionImplementations = {
 /** @since DataProvider 3.3
 */
 %ifndef NoXml
-public const XmlExpressionImplementations = {
+public const hash<auto> XmlExpressionImplementations = {
     DP_FUNC_MAKE_XML: {
         "exp": <DataProviderExpressionInfo>{
             "type": DET_Function,

@@ -28,7 +28,7 @@ public namespace FixedLengthUtil {
 public class FixedLengthWriteDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "FixedLengthWriteDataProvider",
             "supports_create": True,
             "has_record": True,
@@ -36,7 +36,7 @@ public class FixedLengthWriteDataProvider inherits DataProvider::AbstractDataPro
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
                 "display_name": "Output Path",
                 "short_desc": "Where to write the output file",
@@ -119,7 +119,7 @@ public class FixedLengthWriteDataProvider inherits DataProvider::AbstractDataPro
         };
 
         #! write option list
-        const FixedLengthWriteOptionList = keys (ConstructorOptions - ("path", "stream", "spec"));
+        const list<string> FixedLengthWriteOptionList = keys (ConstructorOptions - ("path", "stream", "spec"));
     }
 
     private {

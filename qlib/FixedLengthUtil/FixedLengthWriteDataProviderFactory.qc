@@ -31,7 +31,7 @@ public class FixedLengthWriteDataProviderFactory inherits AbstractDataProviderFa
         static Class cls = new Class("FixedLengthWriteDataProvider");
 
         #! Factory info
-        const FactoryInfo = <DataProviderFactoryInfo>{
+        const hash<DataProviderFactoryInfo> FactoryInfo = <DataProviderFactoryInfo>{
             "name": "fixedlengthwrite",
             "desc": "Fixed length data writer data provider factory",
             "children_can_support_records": True,

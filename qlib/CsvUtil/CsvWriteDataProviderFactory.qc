@@ -31,7 +31,7 @@ public class CsvWriteDataProviderFactory inherits AbstractDataProviderFactory {
         static Class cls = new Class("CsvWriteDataProvider");
 
         #! Factory info
-        const FactoryInfo = <DataProviderFactoryInfo>{
+        const hash<DataProviderFactoryInfo> FactoryInfo = <DataProviderFactoryInfo>{
             "name": "csvwrite",
             "desc": "CSV writer data provider factory",
             "children_can_support_records": True,

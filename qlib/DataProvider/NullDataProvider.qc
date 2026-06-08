@@ -23,7 +23,7 @@ public namespace DataProvider {
 class NullDataProvider inherits AbstractDataProvider {
     public {
        #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "NullDataProvider",
             "supports_request": True,
         };

@@ -24,7 +24,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A type that converts almost any type to a string
-public const SuperSoftStringDataType = new SuperSoftStringDataType();
+public const SuperSoftStringDataType SuperSoftStringDataType = new SuperSoftStringDataType();
 
 #! A type that converts to UNIX timestamps in seconds to dates
 public class SuperSoftStringDataType inherits AbstractDataProviderType {

@@ -44,7 +44,7 @@ public class QoreStringDataTypeBase inherits QoreDataType {
         };
 
         #! supported "or nothing" options
-        const SupportedOrNothingOptions = {
+        const hash<auto> SupportedOrNothingOptions = {
             # only used with "or nothing" types
             "string.empty_to_nothing": <DataProviderTypeOptionInfo>{
                 "type": Type::Boolean,

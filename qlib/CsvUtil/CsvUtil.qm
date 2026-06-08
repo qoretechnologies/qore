@@ -273,7 +273,7 @@ while (i.next())
 
 %requires CsvUtil
 
-const Spec = {
+const hash<auto> Spec = {
     "header": {
         "type": {"type": "int", "value": 1},
         "invoice_no": "string",
@@ -292,7 +292,7 @@ const Spec = {
     },
 };
 
-const Opts = {};
+const hash<auto> Opts = {};
 
 FileInputStream input("example-multi-file.csv");
 CsvIterator i(input, NOTHING, Spec, {"extended_record": True} + Opts);
@@ -433,22 +433,22 @@ while (i.next()) {
 #! the CsvUtil namespace contains all the objects in the CsvUtil module
 public namespace CsvUtil {
 #! CSV app name
-public const AppName = "Csv";
+public const string AppName = "Csv";
 
 #! Unix end of line character sequence (for new OS X too)
-public const EOL_UNIX = "\n";
+public const string EOL_UNIX = "\n";
 #! MS DOS/Windows end of line character sequence
-public const EOL_WIN = "\r\n";
+public const string EOL_WIN = "\r\n";
 #! Old (pre-OSX) Macintosh end of line character sequence
-public const EOL_MACINTOSH = "\r";
+public const string EOL_MACINTOSH = "\r";
 
 # helper list of end of line values
-const EOLS = (EOL_UNIX, EOL_WIN, EOL_MACINTOSH, );
+const list<string> EOLS = (EOL_UNIX, EOL_WIN, EOL_MACINTOSH, );
 
 #! Record type when non matching any type
-public const CSV_TYPE_UNKNOWN = "<unknown>";
+public const string CSV_TYPE_UNKNOWN = "<unknown>";
 #! Record type when multi-type is disabled
-public const CSV_TYPE_SINGLE = "<single>";
+public const string CSV_TYPE_SINGLE = "<single>";
 
 #! global option to force "*string" fields with no value to return an empty string when parsing rather than @ref nothing for backwards compatibility with very early versions of CsvUtil
 our bool global_compat_force_empty_string;
@@ -460,7 +460,7 @@ public sub csvutil_set_global_compat_force_empty_string(softbool val) {
 } # CsvUtil namespace
 
 namespace Priv {
-const CsvWhiteLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+const string CsvWhiteLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
 <!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">
 <svg width=\"100%\" height=\"100%\" viewBox=\"0 0 200 200\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" xml:space=\"preserve\" xmlns:serif=\"http://www.serif.com/\" style=\"fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;\">
     <g transform=\"matrix(1,0,0,1,-4.56842,141.723)\">
@@ -480,7 +480,7 @@ const CsvWhiteLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"
     </g>
 </svg>";
 
-const CsvBlackLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+const string CsvBlackLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
 <!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">
 <svg width=\"100%\" height=\"100%\" viewBox=\"0 0 200 200\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" xml:space=\"preserve\" xmlns:serif=\"http://www.serif.com/\" style=\"fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;\">
     <g transform=\"matrix(1,0,0,1,-4.56842,141.723)\">

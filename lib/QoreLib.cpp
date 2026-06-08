@@ -2165,6 +2165,11 @@ QoreProgramLocation::QoreProgramLocation(int sline, int eline) : QoreProgramLine
     set_parse_file_info(*this);
 }
 
+QoreProgramLocation::QoreProgramLocation(int sline, int eline, int scol, int ecol)
+        : QoreProgramLineLocation(sline, eline, scol, ecol) {
+    set_parse_file_info(*this);
+}
+
 void QoreProgramLocation::toString(QoreString& str) const {
     str.concat(file ? file : "<unknown>");
     if (start_line > 0) {
@@ -3302,6 +3307,8 @@ QoreHashNode* get_source_location(const QoreProgramLocation* loc) {
 
     ph->setKeyValueIntern("line", loc->start_line);
     ph->setKeyValueIntern("endline", loc->end_line);
+    ph->setKeyValueIntern("column", (int64)loc->start_column);
+    ph->setKeyValueIntern("endcolumn", (int64)loc->end_column);
 
     {
         const char* source = loc->getSource();

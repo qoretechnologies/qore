@@ -34,7 +34,7 @@ public namespace DataProvider {
 public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreFilterRecordsProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_FILTER,
@@ -42,7 +42,7 @@ public class QoreFilterRecordsProcessor inherits AbstractDataProvider {
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "where_cond": <DataProviderOptionInfo>{
                 "display_name": "Filter Expression",
                 "short_desc": "A structured filter expression",

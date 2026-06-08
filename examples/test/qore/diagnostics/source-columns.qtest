@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+
+%exec-class SourceColumnsTest
+
+#! Tests that source locations expose column information via the SourceLocationInfo hashdecl
+/** Note: locations for reflected *declarations* (functions, classes, etc.) are currently built from
+    bare line numbers and therefore report column == -1 (unknown).  Accurate columns are carried on
+    parse-error / AST-node locations (verified through the structured parse-diagnostics API).
+*/
+public class SourceColumnsTest inherits QUnit::Test {
+    constructor() : Test("SourceColumnsTest", "1.0") {
+        addTestCase("SourceLocationInfo exposes column keys", \testColumnKeys());
+        addTestCase("unknown columns report -1", \testUnknownColumns());
+        set_return_value(main());
+    }
+
+    private hash<SourceLocationInfo> funcLoc() {
+        AbstractVariant v = Function::forName("printf").getVariants()[0];
+        return v.getSourceLocation();
+    }
+
+    testColumnKeys() {
+        hash<SourceLocationInfo> loc = funcLoc();
+        # the column keys must exist and be integers
+        assertEq(Type::Int, loc.column.type());
+        assertEq(Type::Int, loc.endcolumn.type());
+    }
+
+    testUnknownColumns() {
+        # builtin / declaration locations do not carry columns yet; -1 means unknown
+        hash<SourceLocationInfo> loc = funcLoc();
+        assertEq(-1, loc.column, "builtin function column is unknown (-1)");
+        assertEq(-1, loc.endcolumn, "builtin function end column is unknown (-1)");
+    }
+}

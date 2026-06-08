@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -185,6 +185,62 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
     return rc_state;
 }
 
+// raises a warning if the switch operand has an enum type, there is no default case, and one or
+// more enum members are not handled by a simple (non-relational) case value; helps human and AI
+// coders catch unhandled cases when an enum gains a new member
+static void warnNonExhaustiveSwitch(QoreProgram* pgm, const QoreProgramLocation* loc,
+        const QoreTypeInfo* switch_type_info, const CaseNode* head) {
+    const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(switch_type_info);
+    if (!ed) {
+        return;
+    }
+
+    // if any case uses a relational or regex match (not a simple value), coverage cannot be
+    // determined reliably, so do not warn
+    for (const CaseNode* w = head; w; w = w->next) {
+        if (!w->isDefault() && !w->isCaseNode()) {
+            return;
+        }
+    }
+
+    // collect the enum members not covered by any simple case value
+    ExceptionSink xsink;
+    QoreString missing;
+    unsigned missing_count = 0;
+    QoreEnumMemberIterator mi(*ed);
+    while (mi.next()) {
+        const QoreValue mval = mi.getValue();
+        bool covered = false;
+        for (const CaseNode* w = head; w; w = w->next) {
+            if (w->isDefault() || !w->isCaseNode()) {
+                continue;
+            }
+            if (qore_switch_case_equal(mval, w->val, &xsink)) {
+                covered = true;
+                break;
+            }
+            // ignore any comparison error; such case values simply do not match this member
+            if (xsink) {
+                xsink.clear();
+            }
+        }
+        if (!covered) {
+            if (missing_count++) {
+                missing.concat(", ");
+            }
+            missing.concat(mi.getName());
+        }
+    }
+
+    if (missing_count) {
+        qore_program_private::makeParseWarning(pgm, *loc, QP_WARN_NONEXHAUSTIVE_SWITCH,
+            "NON-EXHAUSTIVE-SWITCH",
+            "switch over enum '%s' does not handle %d of its values (%s); add the missing "
+            "case%s or a default: label", ed->getName(), missing_count, missing.c_str(),
+            missing_count == 1 ? "" : "s");
+    }
+}
+
 int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);
@@ -195,6 +251,10 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
 
     parse_context.typeInfo = nullptr;
     int err = parse_init_value(sexp, parse_context);
+
+    // save the type of the switch operand for enum-exhaustiveness analysis below; the case loop
+    // overwrites parse_context.typeInfo
+    const QoreTypeInfo* switch_type_info = parse_context.typeInfo;
 
     // Track narrowed types across switch branches
     NarrowedTypeHelper nth;
@@ -287,6 +347,12 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
 
     // Merge types from all branches
     nth.mergeAndApply();
+
+    // warn if the switch is over an enum value, has no default case, and does not handle all
+    // enum members (only when the switch parsed cleanly, to avoid noise on broken code)
+    if (!err && !deflt && !parse_context.pgm->parseExceptionRaised()) {
+        warnNonExhaustiveSwitch(parse_context.pgm, loc, switch_type_info, head);
+    }
 
     return err;
 }

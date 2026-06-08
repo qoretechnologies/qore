@@ -439,10 +439,10 @@ public:
     DLLLOCAL bool addGlobalVars(qore_root_ns_private& rns);
 
     DLLLOCAL cnemap_t::iterator parseAddConstant(const QoreProgramLocation* loc, const char* name, QoreValue value,
-            bool pub, const QoreTypeInfo* typeInfo = nullptr);
+            bool pub, const QoreTypeInfo* typeInfo = nullptr, QoreParseTypeInfo* parseTypeInfo = nullptr);
 
     DLLLOCAL void parseAddConstant(const QoreProgramLocation* loc, const NamedScope& name, QoreValue value,
-            bool pub, const QoreTypeInfo* typeInfo = nullptr);
+            bool pub, const QoreTypeInfo* typeInfo = nullptr, QoreParseTypeInfo* parseTypeInfo = nullptr);
 
     //! Adds a typedef to the namespace; returns the TypedefEntry* on success, nullptr on error
     DLLLOCAL TypedefEntry* parseAddTypedef(const QoreProgramLocation* loc, const char* name,
@@ -1494,8 +1494,21 @@ protected:
 
         const FunctionEntry* f = parseFindFunctionEntryIntern(fname);
         if (!f) {
-            // cannot find function, throw exception
-            parse_error(*loc, "function '%s()' cannot be found", fname);
+            // cannot find function, throw exception (with a near-match suggestion if available);
+            // include pending functions, which are not yet merged into the committed fmap
+            QoreSuggestionList sl(fname);
+            for (auto& i : fmap) {
+                sl.add(i.first);
+            }
+            for (auto& i : pend_fmap) {
+                sl.add(i.first);
+            }
+            std::string hint = sl.getHint();
+            if (!hint.empty()) {
+                parse_error(*loc, "function '%s()' cannot be found; %s", fname, hint.c_str());
+            } else {
+                parse_error(*loc, "function '%s()' cannot be found", fname);
+            }
         } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
             parseWarnAmbiguousFunctionCall(loc, fname, f);
         }
@@ -1803,7 +1816,8 @@ protected:
             const NamedScope& name, const QoreTypeInfo*& typeInfo, bool& found);
 
     DLLLOCAL void parseAddConstantIntern(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
-            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr);
+            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr,
+            QoreParseTypeInfo* parseTypeInfo = nullptr);
 
     DLLLOCAL void parseAddClassIntern(const QoreProgramLocation* loc, const NamedScope& name, QoreClass* oc);
 
@@ -2538,8 +2552,9 @@ public:
     }
 
     DLLLOCAL static void parseAddConstant(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
-            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr) {
-        getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo);
+            QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr,
+            QoreParseTypeInfo* parseTypeInfo = nullptr) {
+        getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo, parseTypeInfo);
     }
 
     // returns 0 for success, non-zero for error
@@ -2606,6 +2621,35 @@ public:
 
     DLLLOCAL static Var* parseFindGlobalVar(const NamedScope& nscope) {
         return getRootNS()->rpriv->parseFindGlobalVarIntern(nscope);
+    }
+
+    // the following helpers add near-match candidate names to a suggestion list from the
+    // root-level name maps; used to enrich identifier-resolution parse errors ("did you mean ...?")
+    DLLLOCAL static void addClassSuggestions(QoreSuggestionList& sl) {
+        for (auto& i : getRootNS()->rpriv->clmap) {
+            sl.add(i.first.c_str());
+        }
+    }
+
+    DLLLOCAL static void addHashDeclSuggestions(QoreSuggestionList& sl) {
+        for (auto& i : getRootNS()->rpriv->thdmap) {
+            sl.add(i.first.c_str());
+        }
+    }
+
+    DLLLOCAL static void addFunctionSuggestions(QoreSuggestionList& sl) {
+        for (auto& i : getRootNS()->rpriv->fmap) {
+            sl.add(i.first);
+        }
+        for (auto& i : getRootNS()->rpriv->pend_fmap) {
+            sl.add(i.first);
+        }
+    }
+
+    DLLLOCAL static void addConstantSuggestions(QoreSuggestionList& sl) {
+        for (auto& i : getRootNS()->rpriv->cnmap) {
+            sl.add(i.first.c_str());
+        }
     }
 
     DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns,

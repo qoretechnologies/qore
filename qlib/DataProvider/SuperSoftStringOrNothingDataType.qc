@@ -24,7 +24,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! A type that converts almost any type to a string
-public const SuperSoftStringOrNothingDataType = new SuperSoftStringOrNothingDataType();
+public const SuperSoftStringOrNothingDataType SuperSoftStringOrNothingDataType = new SuperSoftStringOrNothingDataType();
 
 #! A type that converts almost any type to a string
 public class SuperSoftStringOrNothingDataType inherits SuperSoftStringDataType {

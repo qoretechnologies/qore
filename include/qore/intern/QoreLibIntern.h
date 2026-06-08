@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -359,8 +359,28 @@ struct QoreProgramLineLocation {
     int16_t start_line = -1,
         end_line = -1;
 
+    // source columns (0-based; end_column is exclusive); -1 means unknown (e.g. for programmatically-created
+    // or AOT-deserialized locations, which do not carry column information). 0-based to match the parser's
+    // location tracking (QoreParserLocation::first_col/last_col) and the structured-diagnostics API/tests.
+    int16_t start_column = -1,
+        end_column = -1;
+
+    // clamps a raw 0-based column value to the valid stored range; a negative or out-of-range value -> -1
+    // (unknown). Column 0 is a valid first-character position and must be preserved.
+    DLLLOCAL static int16_t normalizeColumn(int col) {
+        return (col >= 0 && col <= 0x7fff) ? (int16_t)col : (int16_t)-1;
+    }
+
     // if sline is 0 and eline is > 0 then set sline to 1
     DLLLOCAL QoreProgramLineLocation(int sline, int eline) : start_line(sline ? sline : (eline ? 1 : 0)), end_line(eline) {
+        assert(sline <= 0xffff);
+        assert(eline <= 0xffff);
+    }
+
+    // variant that also carries source column information
+    DLLLOCAL QoreProgramLineLocation(int sline, int eline, int scol, int ecol)
+            : start_line(sline ? sline : (eline ? 1 : 0)), end_line(eline),
+            start_column(normalizeColumn(scol)), end_column(normalizeColumn(ecol)) {
         assert(sline <= 0xffff);
         assert(eline <= 0xffff);
     }
@@ -392,12 +412,16 @@ public:
     // sets file position info from thread-local parse information
     DLLLOCAL QoreProgramLocation(int sline, int eline);
 
+    // sets file position info from thread-local parse information and carries column information
+    DLLLOCAL QoreProgramLocation(int sline, int eline, int scol, int ecol);
+
     DLLLOCAL QoreProgramLocation(const QoreProgramLocation& old) = default;
 
     DLLLOCAL QoreProgramLocation(QoreProgramLocation&& old) = default;
 
     DLLLOCAL void clear() {
         start_line = end_line = -1;
+        start_column = end_column = -1;
         file = nullptr;
         source = nullptr;
         offset = 0;
@@ -441,18 +465,38 @@ public:
         lang = l;
     }
 
+    // proper lexicographic ordering (a valid strict weak ordering, suitable for use as a set key);
+    // columns participate so that locations differing only in column are interned distinctly
     DLLLOCAL bool operator<(const QoreProgramLocation& loc) const {
-        return start_line < loc.start_line
-            || end_line < loc.end_line
-            || file < loc.file
-            || source < loc.source
-            || offset < loc.offset
-            || lang < loc.lang;
+        if (start_line != loc.start_line) {
+            return start_line < loc.start_line;
+        }
+        if (end_line != loc.end_line) {
+            return end_line < loc.end_line;
+        }
+        if (start_column != loc.start_column) {
+            return start_column < loc.start_column;
+        }
+        if (end_column != loc.end_column) {
+            return end_column < loc.end_column;
+        }
+        if (file != loc.file) {
+            return file < loc.file;
+        }
+        if (source != loc.source) {
+            return source < loc.source;
+        }
+        if (offset != loc.offset) {
+            return offset < loc.offset;
+        }
+        return lang < loc.lang;
     }
 
     DLLLOCAL bool operator==(const QoreProgramLocation& loc) const {
         return start_line == loc.start_line
             && end_line == loc.end_line
+            && start_column == loc.start_column
+            && end_column == loc.end_column
             && file == loc.file
             && source == loc.source
             && offset == loc.offset
@@ -486,6 +530,78 @@ DLLLOCAL extern QoreCommandLineLocation qoreCommandLineLocation;
 DLLLOCAL void parse_error(const QoreProgramLocation& loc, const char* fmt, ...);
 DLLLOCAL void parseException(const QoreProgramLocation& loc, const char* err, const char* fmt, ...);
 DLLLOCAL void parseException(const QoreProgramLocation& loc, const char* err, QoreStringNode* desc);
+
+//! Computes the Optimal String Alignment (restricted Damerau-Levenshtein) edit distance between two strings
+/** Counts single-character insertions, deletions, substitutions, and adjacent transpositions.  The
+    computation is bounded: if \a max >= 0 and the distance is guaranteed to exceed \a max, then a value
+    > \a max is returned early without completing the full matrix.  Used to find near-matches for
+    identifier-resolution error messages ("did you mean ...?").
+    @param a the first string (may not be nullptr)
+    @param b the second string (may not be nullptr)
+    @param max the maximum distance of interest, or -1 for no bound
+    @return the edit distance, or a value > \a max if the distance exceeds \a max (when \a max >= 0)
+*/
+DLLLOCAL int q_edit_distance(const char* a, const char* b, int max = -1);
+
+//! Collects candidate identifier names and produces a "did you mean ...?" hint for a name that failed to resolve
+/** Used to improve parse-time identifier-resolution error messages for both human developers and AI coding
+    tools.  Candidates within a length-scaled edit-distance threshold of the target are retained; a pure
+    capitalization difference is always retained and flagged specially.  Only names actually found in a real
+    container should be added, so suggestions never invent identifiers.
+    @since %Qore 2.3
+*/
+class QoreSuggestionList {
+public:
+    //! creates the list for the given (unresolved) target name
+    DLLLOCAL QoreSuggestionList(const char* target);
+
+    //! considers a candidate name; retains it if it is close enough to the target
+    DLLLOCAL void add(const char* candidate);
+
+    //! returns true if there are no suggestions
+    DLLLOCAL bool empty() const;
+
+    //! returns a hint like "did you mean 'foo'?" or "did you mean 'foo' or 'bar'?", or an empty string if none
+    DLLLOCAL std::string getHint() const;
+
+    //! returns the ranked suggestion names (closest first, at most 3), for structured diagnostics
+    DLLLOCAL std::vector<std::string> getSuggestions() const;
+
+private:
+    std::string target;
+    int threshold;
+    // qualifying matches as (effective distance, name); a pure case difference uses distance -1
+    std::vector<std::pair<int, std::string>> matches;
+
+    // returns matches sorted closest-first, de-duplicated by name, capped at 3
+    DLLLOCAL std::vector<std::pair<int, std::string>> rank() const;
+};
+
+//! A structured representation of a single parse-time diagnostic (error or warning)
+/** Captured at the parse error/warning chokepoints when structured diagnostic collection is enabled
+    on a Program (see Program::setParseDiagnosticsCollected()).  Provides a machine-readable form of
+    parse diagnostics for tooling and AI coding assistants.
+    @since %Qore 2.3
+*/
+struct QoreDiagnostic {
+    bool error = true;          //!< true for an error, false for a warning
+    std::string code;           //!< stable identifier (the exception err string or warning name)
+    int warn_code = -1;         //!< the QP_WARN_* bit for warnings, -1 for errors
+    std::string file;           //!< source file or parse label (may be empty)
+    std::string source;         //!< source object tag (may be empty)
+    int start_line = -1;
+    int end_line = -1;
+    int start_column = -1;      //!< 0-based start column, or -1 if unknown
+    int end_column = -1;        //!< 0-based end column (exclusive), or -1 if unknown
+    std::string message;        //!< the human-readable diagnostic message
+
+    DLLLOCAL QoreDiagnostic(bool error, const char* code, int warn_code, const QoreProgramLocation& loc,
+            const char* message) : error(error), code(code ? code : ""), warn_code(warn_code),
+            file(loc.getFileValue()), source(loc.getSourceValue()), start_line(loc.start_line),
+            end_line(loc.end_line), start_column(loc.start_column), end_column(loc.end_column),
+            message(message ? message : "") {
+    }
+};
 
 DLLLOCAL QoreString* findFileInPath(const char* file, const char* path);
 DLLLOCAL QoreString* findFileInEnvPath(const char* file, const char* varname);

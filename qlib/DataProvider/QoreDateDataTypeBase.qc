@@ -31,7 +31,7 @@ public namespace DataProvider {
 public class QoreDateDataTypeBase inherits QoreDataType {
     private {
         #! supported options
-        const SupportedOptions = {
+        const hash<string, hash<DataProviderTypeOptionInfo>> SupportedOptions = {
             "date.output_timezone": <DataProviderTypeOptionInfo>{
                 "type": "object<TimeZone>",
                 "desc": "the time zone to use when writing to the type",
@@ -39,7 +39,7 @@ public class QoreDateDataTypeBase inherits QoreDataType {
         };
 
         #! supported soft options
-        const SupportedSoftOptions = {
+        const hash<string, hash<DataProviderTypeOptionInfo>> SupportedSoftOptions = {
             "date.format": <DataProviderTypeOptionInfo>{
                 "type": Type::String,
                 "desc": "the format string for converting strings to dates",

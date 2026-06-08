@@ -28,7 +28,7 @@ public namespace DataProvider {
 public class QoreSetFieldsProcessor inherits AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "QoreSetFieldsProcessor",
             "supports_pipeline_processor": True,
             "processor_capabilities": DPC_TRANSFORM,
@@ -36,7 +36,7 @@ public class QoreSetFieldsProcessor inherits AbstractDataProvider {
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "fields": <DataProviderOptionInfo>{
                 "display_name": "Fields",
                 "short_desc": "A hash of field names and values to set",

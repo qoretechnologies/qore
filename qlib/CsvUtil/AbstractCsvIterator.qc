@@ -113,7 +113,7 @@ public namespace CsvUtil {
     public class AbstractCsvIterator inherits Qore::AbstractIterator<hash<auto>>, private CsvHelper {
         private {
             #! valid options for the object (a hash for quick lookups of valid keys)
-            const Options = {
+            const hash<string, int> Options = {
                 "compat_force_empty_string": C_OPT1|C_OPT2,
                 "date_format": C_OPT1|C_OPT2,
                 "date-format": C_OPT1|C_OPT2,

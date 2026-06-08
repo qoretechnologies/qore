@@ -29,19 +29,19 @@ public namespace DataProvider {
 */
 #/@{
 #! Indicates that the record was inserted
-public const UpsertResultInserted = "inserted";
+public const string UpsertResultInserted = "inserted";
 
 #! Indicates that the record was updated
-public const UpsertResultUpdated = "updated";
+public const string UpsertResultUpdated = "updated";
 
 #! Indicates that the record was verified as already in the target state
-public const UpsertResultVerified = "verified";
+public const string UpsertResultVerified = "verified";
 
 #! Indicates that the record was left unchanged
-public const UpsertResultUnchanged = "unchanged";
+public const string UpsertResultUnchanged = "unchanged";
 
 #! Indicates that the record was deleted
-public const UpsertResultDeleted = "deleted";
+public const string UpsertResultDeleted = "deleted";
 #/@}
 
 #! Base class for recording simulated data-provider requests
@@ -366,19 +366,19 @@ public hashdecl DataProviderMessageInfo {
 #! No output type
 /** The data provider does not support output messages
 */
-public const MSG_None = "NONE";
+public const string MSG_None = "NONE";
 
 #! Synchronous output type, an output message is expected after each observed event
 /** The data provider supports output messages, and an output message is expected after each input message.
 
     This can be used to support the server-side request-response API integration pattern
 */
-public const MSG_Sync = "SYNC";
+public const string MSG_Sync = "SYNC";
 
 #! Asynchronous output type, output can happen any time
 /** Input (i.e. observed events) may not be related or supported
 */
-public const MSG_Async = "ASYNC";
+public const string MSG_Async = "ASYNC";
 #/@}
 
 /** @defgroup signature_type_codes Signature Type Codes
@@ -400,7 +400,7 @@ public const ST_Field = 3;
 #/@}
 
 #! Maps signature type codes to descriptions
-public const SignatureTypeCodeMap = {
+public const hash<string, string> SignatureTypeCodeMap = {
     ST_Any: "any",
     ST_Value: "value",
     ST_Field: "field reference",
@@ -415,17 +415,17 @@ public const SignatureTypeDescMap = map {$1.value: $1.key.toInt()}, SignatureTyp
 */
 #/@{
 #! Indicates an expression that can be used in a search operation
-public const ER_Search = (1 << 0);
+public const int ER_Search = (1 << 0);
 
 #! Indicates an expression that can be used in a field
-public const ER_Field = (1 << 1);
+public const int ER_Field = (1 << 1);
 
 #! Indicates an expression that can be used in all contexts
 public const ER_All = ER_Search | ER_Field;
 #/@}
 
 #! Role map from codes to descriptions
-public const RoleCodeMap = {
+public const hash<string, string> RoleCodeMap = {
     ER_Search: "search",
     ER_Field: "field",
     ER_All: "all",
@@ -440,17 +440,17 @@ public const RoleDescMap = map {$1.value: $1.key.toInt()}, RoleCodeMap.pairItera
 */
 #/@{
 #! Indicates that boolean expressions can be combined with AND logic
-public const LC_And = (1 << 0);
+public const int LC_And = (1 << 0);
 
 #! Indicates that boolean expressions can be combined with OR logic
-public const LC_Or = (1 << 1);
+public const int LC_Or = (1 << 1);
 
 #! Indicates that all logic capabilities are supported
 public const LC_All = (LC_And | LC_Or);
 #/@}
 
 #! Logic map from codes to descriptions
-public const LogicCodeMap = {
+public const hash<string, string> LogicCodeMap = {
     LC_And: "AND",
     LC_Or: "OR",
 };
@@ -468,133 +468,133 @@ public hashdecl DataProviderSignatureTypeInfo {
 }
 
 #! Data provider signature field type
-public const DataProviderSignatureFieldType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureFieldType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."any",
     "type_code": ST_Field,
 };
 
 #! Data provider signature string value type
-public const DataProviderSignatureStringValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureStringValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."string",
     "type_code": ST_Value,
 };
 
 #! Data provider signature optional string value type
-public const DataProviderSignatureOptionalStringValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalStringValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*string",
     "type_code": ST_Value,
 };
 
 #! Data provider signature int value type
-public const DataProviderSignatureIntValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureIntValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."int",
     "type_code": ST_Value,
 };
 
 #! Data provider signature *int value type
-public const DataProviderSignatureOptionalIntValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalIntValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*int",
     "type_code": ST_Value,
 };
 
 #! Data provider signature bool value type
-public const DataProviderSignatureBoolValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureBoolValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."bool",
     "type_code": ST_Value,
 };
 
 #! Data provider signature *int value type
-public const DataProviderSignatureOptionalBoolValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalBoolValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*bool",
     "type_code": ST_Value,
 };
 
 #! Data provider signature list value type
-public const DataProviderSignatureListValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureListValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."list",
     "type_code": ST_Value,
 };
 
 #! Data provider signature optional list value type
-public const DataProviderSignatureOptionalListValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalListValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*list",
     "type_code": ST_Value,
 };
 
 #! Data provider signature optional string list value type
-public const DataProviderSignatureOptionalStringListValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalStringListValueType = <DataProviderSignatureTypeInfo>{
     "type": new ListDataType("*list<string>", StringType, True),
     "type_code": ST_Value,
 };
 
 #! Data provider signature hash value type
-public const DataProviderSignatureHashValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureHashValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."hash",
     "type_code": ST_Value,
 };
 
 #! Data provider signature optional hash value type
-public const DataProviderSignatureOptionalHashValueType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalHashValueType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*hash",
     "type_code": ST_Value,
 };
 
 #! Data provider signature any type
-public const DataProviderSignatureAnyType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureAnyType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."any",
     "type_code": ST_Any,
 };
 
 #! Data provider signature list type
-public const DataProviderSignatureListType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureListType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."list",
     "type_code": ST_Any,
 };
 
 #! Data provider signature bool type
-public const DataProviderSignatureBoolType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureBoolType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."bool",
     "type_code": ST_Any,
 };
 
 #! Data provider signature optional bool type
-public const DataProviderSignatureOptionalBoolType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalBoolType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*bool",
     "type_code": ST_Any,
 };
 
 #! Data provider signature int type
-public const DataProviderSignatureIntType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureIntType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."int",
     "type_code": ST_Any,
 };
 
 #! Data provider signature optional int type
-public const DataProviderSignatureOptionalIntType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalIntType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*int",
     "type_code": ST_Any,
 };
 
 #! Data provider signature string type
-public const DataProviderSignatureStringType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureStringType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."string",
     "type_code": ST_Any,
 };
 
 #! Data provider signature optional string type
-public const DataProviderSignatureOptionalStringType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalStringType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*string",
     "type_code": ST_Any,
 };
 
 #! Data provider signature date type
-public const DataProviderSignatureDateType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureDateType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."date",
     "type_code": ST_Any,
 };
 
 #! Data provider signature optional date type
-public const DataProviderSignatureOptionalDateType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalDateType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*date",
     "type_code": ST_Any,
 };
@@ -602,7 +602,7 @@ public const DataProviderSignatureOptionalDateType = <DataProviderSignatureTypeI
 #! Data provider signature float type
 /** @since DataProvider 3.3
 */
-public const DataProviderSignatureFloatType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureFloatType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."float",
     "type_code": ST_Any,
 };
@@ -610,7 +610,7 @@ public const DataProviderSignatureFloatType = <DataProviderSignatureTypeInfo>{
 #! Data provider signature optional float type
 /** @since DataProvider 3.3
 */
-public const DataProviderSignatureOptionalFloatType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalFloatType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."*float",
     "type_code": ST_Any,
 };
@@ -618,7 +618,7 @@ public const DataProviderSignatureOptionalFloatType = <DataProviderSignatureType
 #! Data provider signature number type (accepts int, float, or number)
 /** @since DataProvider 3.3
 */
-public const DataProviderSignatureNumberType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureNumberType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."any",
     "type_code": ST_Any,
 };
@@ -626,7 +626,7 @@ public const DataProviderSignatureNumberType = <DataProviderSignatureTypeInfo>{
 #! Data provider signature data type (string or binary)
 /** @since DataProvider 3.3
 */
-public const DataProviderSignatureDataType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureDataType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."any",
     "type_code": ST_Any,
 };
@@ -634,7 +634,7 @@ public const DataProviderSignatureDataType = <DataProviderSignatureTypeInfo>{
 #! Data provider signature optional data type (*string or *binary)
 /** @since DataProvider 3.3
 */
-public const DataProviderSignatureOptionalDataType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalDataType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."any",
     "type_code": ST_Any,
 };
@@ -642,7 +642,7 @@ public const DataProviderSignatureOptionalDataType = <DataProviderSignatureTypeI
 #! Data provider signature optional any type
 /** @since DataProvider 3.3
 */
-public const DataProviderSignatureOptionalAnyType = <DataProviderSignatureTypeInfo>{
+public const hash<DataProviderSignatureTypeInfo> DataProviderSignatureOptionalAnyType = <DataProviderSignatureTypeInfo>{
     "type": AbstractDataProviderTypeMap."any",
     "type_code": ST_Any,
 };
@@ -660,7 +660,7 @@ public const DET_Function = 2;
 #/@}
 
 #! Maps DataProvider expression type codes to descriptions
-public const ExpressionTypeCodeMap = {
+public const hash<string, string> ExpressionTypeCodeMap = {
     DET_Operator: "operator",
     DET_Function: "function",
 };
@@ -681,7 +681,7 @@ public const DES_LogicOperator = 2;
 #/@}
 
 #! Maps DataProvider expression subtype codes to descriptions
-public const ExpressionSubtypeCodeMap = {
+public const hash<string, string> ExpressionSubtypeCodeMap = {
     DES_Generic: "generic",
     DES_LogicOperator: "logic-operator",
 };
@@ -1297,7 +1297,7 @@ public hash<string, hash<DataProviderExpressionInfo>> sub dp_get_all_expression_
 }
 
 #! Regular expression options
-public const RegexOpts = {
+public const hash<auto> RegexOpts = {
     "RE_Caseless": RE_Caseless,
     "RE_DotAll": RE_DotAll,
     "RE_Extended": RE_Extended,
@@ -1314,7 +1314,7 @@ public const RegexOpts = {
 };
 
 #! Regular expression argument info
-public const RegularExpressionArgInfo = (
+public const list<hash<DataProviderArgInfo>> RegularExpressionArgInfo = (
     <DataProviderArgInfo>{
         "display_name": "String Value",
         "short_desc": "The string value to be matched to the next argument",
@@ -1943,7 +1943,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             TypedHash::forName("DataProviderSummaryInfo"));
 
         #! 'Requires Result' option info
-        const RequiresResultOption = <DataProviderOptionInfo>{
+        const hash<DataProviderOptionInfo> RequiresResultOption = <DataProviderOptionInfo>{
             "display_name": "Requires Result",
             "short_desc": "If True, the operation requires a result or affected records",
             "desc": "If `True`, then an operation that returns no result or affects no records results in an error",
@@ -1961,7 +1961,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             - \c requires_result: if \c True, then an operation that returns no result or affects no records
               results in an error
         */
-        const GenericRecordSearchOptions = {
+        const hash<auto> GenericRecordSearchOptions = {
             "columns": <DataProviderOptionInfo>{
                 "display_name": "Columns",
                 "short_desc": "Columns to include in output",
@@ -2005,12 +2005,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
             @since DataProvider 3.5
         */
-        const GenericApiCallChildName = "__call__";
+        const string GenericApiCallChildName = "__call__";
 
         #! Action name used by the auto-injected generic "Make an API call" action
         /** @since DataProvider 3.5
         */
-        const GenericApiCallActionName = "make-api-call";
+        const string GenericApiCallActionName = "make-api-call";
 
         #! Convention-based member name used by reflective REST-client discovery
         /** The default @ref getRestClientForGenericCallImpl() walks the actual class hierarchy of
@@ -2021,7 +2021,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
             @since DataProvider 3.5
         */
-        const GenericApiCallRestMemberName = "rest";
+        const string GenericApiCallRestMemberName = "rest";
 
         #! Convention-based connection member name used by reflective REST-client discovery
         /** Some frameworks (notably the @c TypeScriptActionInterface module in module-v8) hold an
@@ -2034,7 +2034,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
             @since DataProvider 3.5
         */
-        const GenericApiCallConnectionMemberName = "conn";
+        const string GenericApiCallConnectionMemberName = "conn";
     }
 
     private {

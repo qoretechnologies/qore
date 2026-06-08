@@ -4267,9 +4267,19 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             if (hd) {
                 return hd->getTypeInfo(or_nothing);
             }
-            // Unknown hashdecl - raise parse error
-            parseException(*loc, "PARSE-EXCEPTION", "illegal access to unknown member in undefined hashdecl '%s'",
-                subtypes[0]->cscope->ostr);
+            // Unknown hashdecl - raise parse error with a near-match suggestion if available
+            {
+                QoreSuggestionList sl(subtypes[0]->cscope->ostr);
+                qore_root_ns_private::addHashDeclSuggestions(sl);
+                std::string shint = sl.getHint();
+                if (!shint.empty()) {
+                    parseException(*loc, "PARSE-EXCEPTION", "illegal access to unknown member in undefined "
+                        "hashdecl '%s'; %s", subtypes[0]->cscope->ostr, shint.c_str());
+                } else {
+                    parseException(*loc, "PARSE-EXCEPTION", "illegal access to unknown member in undefined "
+                        "hashdecl '%s'", subtypes[0]->cscope->ostr);
+                }
+            }
             err = -1;
             return hashTypeInfo;
         }
@@ -4741,8 +4751,18 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
         return hd->getTypeInfo(or_nothing);
     }
 
-    // type not found - raise error
-    parse_error(*loc, "reference to undefined type '%s'", cscope.ostr);
+    // type not found - raise error with a near-match suggestion from known type names
+    {
+        QoreSuggestionList sl(cscope.ostr);
+        qore_root_ns_private::addClassSuggestions(sl);
+        qore_root_ns_private::addHashDeclSuggestions(sl);
+        std::string hint = sl.getHint();
+        if (!hint.empty()) {
+            parse_error(*loc, "reference to undefined type '%s'; %s", cscope.ostr, hint.c_str());
+        } else {
+            parse_error(*loc, "reference to undefined type '%s'", cscope.ostr);
+        }
+    }
     err = -1;
     return objectTypeInfo;
 }

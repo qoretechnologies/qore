@@ -40,25 +40,25 @@ public namespace DataProvider {
 /** If this is set, then external server threads or programs may be started for data provider functionality; in this
     case the user must call @ref DataProvider::shutdown() before exiting
 */
-public const DPO_EnableServers                  = (1 << 0);
+public const int DPO_EnableServers                  = (1 << 0);
 
 #! Disable on-demand initialization
 /** This option ensures that all eligible data providers are initialized immediately instead of when they are used;
     this can be useful for testing
 */
-public const DPO_DisableOnDemandInitialization  = (1 << 1);
+public const int DPO_DisableOnDemandInitialization  = (1 << 1);
 
 #! Enable on-demand initialization of actions
 /** This option ensures that data providers are initialized immediately but action initialization is deferred
 */
-public const DPO_EnableOnDemandActions          = (1 << 2);
+public const int DPO_EnableOnDemandActions          = (1 << 2);
 
 #! Enable in-process servers
 /** If this is set (and \c DPO_EnableServers is NOT set), then in-process JavaScript program pools will be used for
     data provider functionality instead of external server processes; this eliminates IPC overhead while supporting
     concurrent access through multiple in-process program instances
 */
-public const DPO_EnableInProcessServers         = (1 << 3);
+public const int DPO_EnableInProcessServers         = (1 << 3);
 
 #! The mask of all data provider options
 public const DPO_AllOptions = (
@@ -73,7 +73,7 @@ public const DPO_AllOptions = (
 public class DataProvider {
     public {
         #! Map of known data provider factory names to modules
-        const FactoryMap = {
+        const hash<string, string> FactoryMap = {
             # provided by the amqp module
             "amqp": "AmqpDataProvider",
 
@@ -356,18 +356,18 @@ public class DataProvider {
         };
 
         #! Map of known type path prefixes to modules
-        const TypeMap = {
+        const hash<string, string> TypeMap = {
             "qore/ftp": "FtpPollerUtil",
             "qore/sftp": "SftpPollerUtil",
             "qore/fsevents": "FsEventPollerUtil",
         };
 
         #! List of data provider factory modules
-        const FactoryModuleList = keys (map {$1: True}, FactoryMap.iterator());
+        const list<string> FactoryModuleList = keys (map {$1: True}, FactoryMap.iterator());
         # "map" is used above to ensure that the values only appear once in the final list
 
         #! An invalid app name
-        const NoApp = "$NO_APP";
+        const string NoApp = "$NO_APP";
     }
 
     private {

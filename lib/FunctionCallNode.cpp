@@ -1441,7 +1441,19 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 assert(!n);
             }
 
-            parse_error(*loc, "cannot resolve call '%s()' to any reachable and callable object", scope->ostr);
+            {
+                // suggest a near-match function name
+                QoreSuggestionList sl(scope->ostr);
+                qore_root_ns_private::addFunctionSuggestions(sl);
+                std::string hint = sl.getHint();
+                if (!hint.empty()) {
+                    parse_error(*loc, "cannot resolve call '%s()' to any reachable and callable object; %s",
+                        scope->ostr, hint.c_str());
+                } else {
+                    parse_error(*loc, "cannot resolve call '%s()' to any reachable and callable object",
+                        scope->ostr);
+                }
+            }
             return -1;
         }
 

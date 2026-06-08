@@ -31,7 +31,7 @@ public namespace CsvUtil {
 public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
-        const ProviderInfo = <DataProviderInfo>{
+        const hash<DataProviderInfo> ProviderInfo = <DataProviderInfo>{
             "type": "CsvWriteDataProvider",
             "supports_create": True,
             "has_record": True,
@@ -39,7 +39,7 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
         };
 
         #! Constructor options
-        const ConstructorOptions = {
+        const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
                 "display_name": "CSV Output Path",
                 "short_desc": "Where to write the CSV output file",
@@ -183,7 +183,7 @@ public class CsvWriteDataProvider inherits DataProvider::AbstractDataProvider {
         };
 
         #! CSV generation option list
-        const CsvGenerationOptionList = keys (ConstructorOptions - ("path", "stream"));
+        const list<string> CsvGenerationOptionList = keys (ConstructorOptions - ("path", "stream"));
     }
 
     private {

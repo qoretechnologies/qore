@@ -1394,7 +1394,8 @@ struct NSNode {
                     parse_error(*n.cn->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                         n.cn->name.ostr);
                 }
-                ns.parseAddConstant(n.cn->loc, n.cn->name, n.cn->value, n.cn->pub, n.cn->getTypeInfo());
+                ns.parseAddConstant(n.cn->loc, n.cn->name, n.cn->value, n.cn->pub, n.cn->typeInfo,
+                    n.cn->takeParseTypeInfo());
                 delete n.cn;
                 break;
             case NSN_TYPEDEF:
@@ -1488,6 +1489,9 @@ public:
         QoreSimpleValue exp;
     } u;
     const QoreTypeInfo* typeInfo = nullptr;
+    // unresolved declared type for an explicitly-typed class constant (MI_Constant); deferred to ConstantEntry so
+    // that forward references to hashdecls/classes declared later in the same module resolve correctly
+    QoreParseTypeInfo* constParseTypeInfo = nullptr;
 
     DLLLOCAL MemberInfo(char* n, QoreMemberInfo* mi) : loc(mi->loc), name(n), type(MI_Member) {
         u.memberInfo = mi;
@@ -1496,7 +1500,8 @@ public:
     }
 
     DLLLOCAL MemberInfo(const QoreProgramLocation* loc, char* n, QoreValue exp,
-            const QoreTypeInfo* ti = nullptr) : loc(loc), name(n), type(MI_Constant), typeInfo(ti) {
+            const QoreTypeInfo* ti = nullptr, QoreParseTypeInfo* pti = nullptr)
+            : loc(loc), name(n), type(MI_Constant), typeInfo(ti), constParseTypeInfo(pti) {
         u.exp = exp;
     }
 
@@ -1521,6 +1526,8 @@ public:
                 QoreValue(u.exp).discard(nullptr);
                 break;
         }
+        // only set for MI_Constant; nullptr (and harmless to delete) otherwise, or taken by takeConstParseTypeInfo()
+        delete constParseTypeInfo;
     }
 
     DLLLOCAL member_pair_t getPair() {
@@ -1557,6 +1564,13 @@ public:
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
         assert(type == MI_Constant);
         return typeInfo;
+    }
+
+    DLLLOCAL QoreParseTypeInfo* takeConstParseTypeInfo() {
+        assert(type == MI_Constant);
+        QoreParseTypeInfo* rv = constParseTypeInfo;
+        constParseTypeInfo = nullptr;
+        return rv;
     }
 
     DLLLOCAL void setTransient() {
@@ -1603,7 +1617,8 @@ public:
         if (member->type == MI_Member)
             mmap.addNoCheck(member->getPair());
         else if (member->type == MI_Constant)
-            cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo());
+            cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo(), false, Public,
+                member->takeConstParseTypeInfo());
         else
             vmap.addNoCheck(member->getVarPair());
 
@@ -1640,7 +1655,8 @@ public:
             }
 
             // add new constant to list
-            cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo());
+            cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo(), false, Public,
+                member->takeConstParseTypeInfo());
         } else {
             assert(member->type == MI_Var);
             if (vmap.find(member->name)) {
@@ -2526,7 +2542,7 @@ static const char* qore_syntax_hint(const char* str) {
 
 DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
     //printd(5, "yyerror() location: %d:%d - %d:%d \"%s\"\n", loc->first_line, loc->first_col, loc->last_line, loc->last_col, str);
-    const QoreProgramLocation* qloc = qore_program_private::get(*getProgram())->getLocation(loc->first_line, loc->last_line);
+    const QoreProgramLocation* qloc = qore_program_private::get(*getProgram())->getLocation(loc->first_line, loc->last_line, loc->first_col, loc->last_col);
     const char* hint = qore_syntax_hint(str);
     if (hint) {
         parse_error(*qloc, "%s; %s", str, hint);
@@ -2880,7 +2896,7 @@ top_level_command:
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "constant", $1->name.ostr);
         qore_root_ns_private::parseAddConstant($1->loc, *getRootNS(), $1->name, $1->value, $1->pub,
-            $1->getTypeInfo());
+            $1->typeInfo, $1->takeParseTypeInfo());
         delete $1;
     }
     | unscoped_const_decl {
@@ -2889,7 +2905,7 @@ top_level_command:
                 $1->name.ostr);
         }
         qore_root_ns_private::parseAddConstant($1->loc, *getRootNS(), $1->name, $1->value, $1->pub,
-            $1->getTypeInfo());
+            $1->typeInfo, $1->takeParseTypeInfo());
         delete $1;
     }
     | outofline_methoddef {
@@ -2912,7 +2928,7 @@ top_level_command:
     }
     | top_namespace_decl {
         if (parse_check_parse_option(QoreParseOptions::NO_NAMESPACE_DEFS)) {
-            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
             parse_error(*loc, "namespace definitions cannot be made with parse option NO_NAMESPACE_DEFS set");
         }
         qore_root_ns_private::parseAddNamespace($1);
@@ -2920,7 +2936,7 @@ top_level_command:
     | TOK_MODULE '{' module_decls '}' {
         QoreModuleDefContext* qmd = get_module_def_context();
         if (!qmd)
-            qore_program_private::makeParseWarning(getProgram(), *qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line), QP_WARN_MODULE_ONLY, "MODULE-ONLY", "module definitions are ignored when not defining a module");
+            qore_program_private::makeParseWarning(getProgram(), *qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), QP_WARN_MODULE_ONLY, "MODULE-ONLY", "module definitions are ignored when not defining a module");
         else {
             QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(qmd);
             uqmd->close();
@@ -2929,7 +2945,7 @@ top_level_command:
     }
     | TRY_MODULE_ERROR {
         bool has_dollar = $1->var[0] == '$';
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         if (!has_dollar) {
             if (!parse_check_parse_option(PO_ALLOW_BARE_REFS)) {
                 parse_error(*loc, "%%try-module variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $1->var);
@@ -2961,7 +2977,7 @@ module_decls:
 module_decl:
     identifier '=' exp ';' {
         QoreModuleDefContext* qmd = get_module_def_context();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         if (!qmd)
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_MODULE_ONLY, "MODULE-ONLY", "cannot add module tag '%s' = <%s> when not defining a module", $1, QoreValue($3).getTypeName());
         else
@@ -3024,7 +3040,7 @@ ppub:   /* empty */
 gvardecl:
     ppub TOK_OUR uncqtypedef SCOPED_REF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "global variable", $4);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($3);
@@ -3033,26 +3049,26 @@ gvardecl:
     }
     | ppub TOK_OUR SCOPED_REF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line, $1 ? @1.first_col : @2.first_col, @3.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "global variable", $3);
         $$ = new GVarSingleDecl(loc, $3, 0, 0, $1, true);
     }
     | ppub TOK_OUR uncqtypedef identifier {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($3);
         $$ = new GVarSingleDecl(loc, $4, t, t ? 0 : ParserTypeStruct::getParseTypeInfo($3), $1, true);
         delete $3;
     }
     | ppub TOK_OUR identifier {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line, $1 ? @1.first_col : @2.first_col, @3.last_col);
         $$ = new GVarSingleDecl(loc, $3, 0, 0, $1, true);
     }
     | ppub TOK_OUR qtypedef SCOPED_VREF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "global variable", $4);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($3);
@@ -3061,19 +3077,19 @@ gvardecl:
     }
     | ppub TOK_OUR qtypedef VAR_REF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($3);
         $$ = new GVarSingleDecl(loc, $4, t, t ? 0 : ParserTypeStruct::getParseTypeInfo($3), $1, false);
         delete $3;
     }
     | ppub TOK_OUR '(' list ')' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line, $1 ? @1.first_col : @2.first_col, @5.last_col);
         $$ = new GVarListDecl(loc, $4, $1);
     }
     | ppub TOK_THREAD_LOCAL uncqtypedef SCOPED_REF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "thread_local variable", $4);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($3);
@@ -3082,26 +3098,26 @@ gvardecl:
     }
     | ppub TOK_THREAD_LOCAL SCOPED_REF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line, $1 ? @1.first_col : @2.first_col, @3.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "thread_local variable", $3);
         $$ = new GVarSingleDecl(loc, $3, 0, 0, $1, true, VT_THREAD_LOCAL);
     }
     | ppub TOK_THREAD_LOCAL uncqtypedef identifier {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($3);
         $$ = new GVarSingleDecl(loc, $4, t, t ? 0 : ParserTypeStruct::getParseTypeInfo($3), $1, true, VT_THREAD_LOCAL);
         delete $3;
     }
     | ppub TOK_THREAD_LOCAL identifier {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line, $1 ? @1.first_col : @2.first_col, @3.last_col);
         $$ = new GVarSingleDecl(loc, $3, 0, 0, $1, true, VT_THREAD_LOCAL);
     }
     | ppub TOK_THREAD_LOCAL qtypedef SCOPED_VREF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "thread_local variable", $4);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($3);
@@ -3110,14 +3126,14 @@ gvardecl:
     }
     | ppub TOK_THREAD_LOCAL qtypedef VAR_REF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($3);
         $$ = new GVarSingleDecl(loc, $4, t, t ? 0 : ParserTypeStruct::getParseTypeInfo($3), $1, false, VT_THREAD_LOCAL);
         delete $3;
     }
     | ppub TOK_THREAD_LOCAL '(' list ')' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line, $1 ? @1.first_col : @2.first_col, @5.last_col);
         $$ = new GVarListDecl(loc, $4, $1, VT_THREAD_LOCAL);
     }
     ;
@@ -3125,7 +3141,7 @@ gvardecl:
 top_namespace_decl:
     nsc_modifiers TOK_NAMESPACE '{' namespace_decls '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line, $1 ? @1.first_col : @2.first_col, @5.last_col);
         qore_ns_private* p = new qore_ns_private(loc);
         check_nsmod(loc, $1, *p);
         $4->add(*p);
@@ -3134,14 +3150,14 @@ top_namespace_decl:
     }
     | nsc_modifiers TOK_NAMESPACE ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line, $1 ? @1.first_col : @2.first_col, @2.last_col);
         qore_ns_private* p = new qore_ns_private(loc);
         check_nsmod(loc, $1, *p);
         $$ = p->ns;
     }
     | nsc_modifiers TOK_NAMESPACE '{' '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         qore_ns_private* p = new qore_ns_private(loc);
         check_nsmod(loc, $1, *p);
         $$ = p->ns;
@@ -3208,18 +3224,18 @@ namespace_decl:
 
 unscoped_const_decl:
     TOK_CONST identifier '=' exp ';' {
-        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line), $2, $4);
+        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), $2, $4);
     }
     | TOK_CONST uncqtypedef identifier '=' exp ';' {
-        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $3,
+        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $3,
             $5, false, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2));
         delete $2;
     }
     | TOK_PUBLIC TOK_CONST identifier '=' exp ';' {
-        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $3, $5, true);
+        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $3, $5, true);
     }
     | TOK_PUBLIC TOK_CONST uncqtypedef identifier '=' exp ';' {
-        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line), $4,
+        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col), $4,
             $6, true, ParserTypeStruct::getTypeInfo($3), ParserTypeStruct::getParseTypeInfo($3));
         delete $3;
     }
@@ -3227,18 +3243,18 @@ unscoped_const_decl:
 
 scoped_const_decl:
     TOK_CONST SCOPED_REF '=' exp ';' {
-        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line), $2, $4);
+        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), $2, $4);
     }
     | TOK_CONST uncqtypedef SCOPED_REF '=' exp ';' {
-        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line),
+        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col),
             new NamedScope($3), $5, false, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2));
         delete $2;
     }
     | TOK_PUBLIC TOK_CONST SCOPED_REF '=' exp ';' {
-        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $3, $5, true);
+        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $3, $5, true);
     }
     | TOK_PUBLIC TOK_CONST uncqtypedef SCOPED_REF '=' exp ';' {
-        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line),
+        $$ = new ConstNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col),
             new NamedScope($4), $6, true, ParserTypeStruct::getTypeInfo($3), ParserTypeStruct::getParseTypeInfo($3));
         delete $3;
     }
@@ -3246,14 +3262,14 @@ scoped_const_decl:
 
 typedef_decl:
     TOK_TYPEDEF identifier '=' uncqtypedef ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         const QoreTypeInfo* ti = $4->getTypeInfo();
         QoreParseTypeInfo* pti = $4->getParseTypeInfo();
         delete $4;
         $$ = new TypedefNode(loc, $2, ti, pti);
     }
     | TOK_PUBLIC TOK_TYPEDEF identifier '=' uncqtypedef ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         const QoreTypeInfo* ti = $5->getTypeInfo();
         QoreParseTypeInfo* pti = $5->getParseTypeInfo();
         delete $5;
@@ -3263,14 +3279,14 @@ typedef_decl:
 
 scoped_typedef_decl:
     TOK_TYPEDEF SCOPED_REF '=' uncqtypedef ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         const QoreTypeInfo* ti = $4->getTypeInfo();
         QoreParseTypeInfo* pti = $4->getParseTypeInfo();
         delete $4;
         $$ = new TypedefNode(loc, $2, ti, pti);
     }
     | TOK_PUBLIC TOK_TYPEDEF SCOPED_REF '=' uncqtypedef ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         const QoreTypeInfo* ti = $5->getTypeInfo();
         QoreParseTypeInfo* pti = $5->getParseTypeInfo();
         delete $5;
@@ -3329,7 +3345,7 @@ statement:
                 ok = true;
         }
 
-        const QoreProgramLocation* loc = pgm->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = pgm->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
 
         if (!ok) {
             if (!value_has_effect_as_root(v1) && (t != NT_VARREF || !v1.get<VarRefNode>()->parseIsDecl())) {
@@ -3349,7 +3365,7 @@ statement:
         NamedScope *ns = new NamedScope($1);
         assert(ns->size() > 1);
         printd(5, "statement: parsing static method call: %s() size=%d\n", ns->ostr, ns->size());
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new ExpressionStatement(loc, new StaticMethodCallNode(loc, ns, $3));
     }
     | try_statement
@@ -3389,7 +3405,7 @@ statement:
     | TOK_SUMMARIZE optname '(' exp ')' TOK_BY '(' exp ')' context_mods statement_or_block {
         if (parse_check_parse_option(QoreParseOptions::NO_SUMMARIZE)) {
             const QoreProgramLocation* loc = qore_program_private::get(*getProgram())
-                ->getLocation(@1.first_line, @11.last_line);
+                ->getLocation(@1.first_line, @11.last_line, @1.first_col, @11.last_col);
             parse_error(*loc, "the 'summarize' statement is not allowed when '%%no-summarize' is "
                 "set (implied by '%%modern'); rewrite as a 'context' loop with manual grouping");
         }
@@ -3417,7 +3433,7 @@ statement:
         QoreValue v2($2);
         if (v2.getType() == NT_VARREF && v2.get<VarRefNode>()->isReadOnlyDecl()) {
             const QoreProgramLocation* loc =
-                qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+                qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
             parseException(*loc, "READONLY-VARIABLE-ASSIGNMENT-ERROR",
                 "read-only foreach variables are not supported; declare a mutable foreach variable");
         }
@@ -3425,7 +3441,7 @@ statement:
     }
     | return_statement ';' { $$ = $1; }
     | TOK_THREAD_EXIT ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         // see if thread exit is allowed
         if (parse_check_parse_option(PO_NO_THREAD_CONTROL)) {
             parse_error(*loc, "illegal use of \"thread_exit\" (conflicts with parse option PO_NO_THREAD_CONTROL)");
@@ -3494,114 +3510,114 @@ case_block:
 case_code:
     TOK_CASE LOGICAL_GE exp ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, ">=", $3);
         $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals);
     }
     | TOK_CASE LOGICAL_GE exp ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, ">=", $3);
         $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals);
     }
     | TOK_CASE LOGICAL_LE exp ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "<=", $3);
         $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals);
     }
     | TOK_CASE LOGICAL_LE exp ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "<=", $3);
         $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals);
     }
     | TOK_CASE LOGICAL_EQ exp ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "==", $3);
         $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalEqualsOperatorNode::softEqual);
     }
     | TOK_CASE LOGICAL_EQ exp ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "==", $3);
         $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalEqualsOperatorNode::softEqual);
     }
     | TOK_CASE '<' exp ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "<", $3);
         $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalLessThanOperatorNode::doLessThan);
     }
     | TOK_CASE '<' exp ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "<", $3);
         $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalLessThanOperatorNode::doLessThan);
     }
     | TOK_CASE '>' exp ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, ">", $3);
         $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalGreaterThanOperatorNode::doGreaterThan);
     }
     | TOK_CASE '>' exp ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, ">", $3);
         $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalGreaterThanOperatorNode::doGreaterThan);
     }
     | TOK_CASE REGEX_MATCH REGEX ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         $$ = new CaseNodeRegex(loc, $3, $5);
     }
     | TOK_CASE REGEX_MATCH REGEX ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new CaseNodeRegex(loc, $3, nullptr);
     }
     | TOK_CASE REGEX_NMATCH REGEX ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         $$ = new CaseNodeNegRegex(loc, $3, $5);
     }
     | TOK_CASE REGEX_NMATCH REGEX ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new CaseNodeNegRegex(loc, $3, nullptr);
     }
     | TOK_CASE REGEX ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new CaseNodeRegex(loc, $2, $4);
     }
     | TOK_CASE REGEX ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = new CaseNodeRegex(loc, $2, nullptr);
     }
     | TOK_CASE exp ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, 0, $2);
         $$ = new CaseNode(loc, $2, $4);
     }
     | TOK_CASE exp ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_case(loc, 0, $2);
         $$ = new CaseNode(loc, $2, nullptr);
     }
     | TOK_DEFAULT ':' statements
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = new CaseNode(loc, QoreValue(), $3, true);
     }
     | TOK_DEFAULT ':' // nothing
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new CaseNode(loc, QoreValue(), nullptr, true);
     }
     ;
@@ -3612,7 +3628,7 @@ try_statement:
         const QoreTypeInfo* typeInfo = nullptr;
         QoreParseTypeInfo* parseTypeInfo = nullptr;
         const QoreProgramLocation* loc =
-            qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
+            qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         bool missing_type_decl = true;
         QoreValue v5($5);  // Convert to QoreValue for method calls
         if (v5.getType() == NT_VARREF) {
@@ -3649,7 +3665,7 @@ try_statement:
             }
         }
         v5.discard(nullptr);
-        const QoreProgramLocation* vloc = qore_program_private::get(*getProgram())->getLocation($5 ? @5.first_line : 0, $5 ? @5.last_line : 0);
+        const QoreProgramLocation* vloc = qore_program_private::get(*getProgram())->getLocation($5 ? @5.first_line : 0, $5 ? @5.last_line : 0, $5 ? @5.first_col : 0, $5 ? @5.last_col : 0);
         $$ = new TryStatement(loc, $2, $7, param, typeInfo, parseTypeInfo, vloc);
     }
     ;
@@ -3664,7 +3680,7 @@ call_args:
         $$ = nullptr;
     }
     | exp {
-        $$ = make_args(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line), $1);
+        $$ = make_args(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col), $1);
     }
     | named_call_args {
         $$ = $1;
@@ -3680,7 +3696,8 @@ named_call_args:
     }
     | exp ',' named_arg_list {
         QoreParseListNode* positional = make_args(qore_program_private::get(*getProgram())->getLocation(
-            @1.first_line, @1.last_line), $1);
+            @1.first_line, @1.last_line, 
+            @1.first_col, @1.last_col), $1);
         $$ = append_call_args(positional, $3);
     }
     ;
@@ -3688,13 +3705,15 @@ named_call_args:
 named_arg_list:
     identifier ':' exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
-            @1.first_line, @3.last_line);
+            @1.first_line, @3.last_line, 
+            @1.first_col, @3.last_col);
         $$ = new QoreParseListNode(loc);
         add_named_call_arg($$, $1, $3, loc);
     }
     | named_arg_list ',' identifier ':' exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
-            @3.first_line, @5.last_line);
+            @3.first_line, @5.last_line, 
+            @3.first_col, @5.last_col);
         add_named_call_arg($1, $3, $5, loc);
         $$ = $1;
     }
@@ -3703,7 +3722,8 @@ named_arg_list:
     }
     | named_arg_list ',' exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
-            @3.first_line, @3.last_line);
+            @3.first_line, @3.last_line, 
+            @3.first_col, @3.last_col);
         parseException(*loc, "NAMED-ARG-POSITIONAL-AFTER-NAMED",
             "positional argument cannot follow a named argument in a named call");
         QoreValue($3).discard(nullptr);
@@ -3714,7 +3734,7 @@ named_arg_list:
 hashdecl_def:
     nsc_modifiers TOK_HASHDECL identifier hashdecl_inherits '{' hashdecl_attrs '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line, $1 ? @1.first_col : @2.first_col, @7.last_col);
         check_hashdeclmod(loc, $1, *($6));
         if ($4) {
             $6->setParseParent($4);
@@ -3723,7 +3743,7 @@ hashdecl_def:
     }
     | nsc_modifiers TOK_HASHDECL ANGLE_IDENTIFIER hashdecl_inherits '{' hashdecl_attrs '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line, $1 ? @1.first_col : @2.first_col, @7.last_col);
         ClassDeclParseInfo cdi(loc, $3, "hashdecl");
         cdi.applyTypeParams($6);
         check_hashdeclmod(loc, $1, *($6));
@@ -3734,7 +3754,7 @@ hashdecl_def:
     }
     | nsc_modifiers TOK_HASHDECL SCOPED_REF hashdecl_inherits '{' hashdecl_attrs '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line, $1 ? @1.first_col : @2.first_col, @7.last_col);
         check_hashdeclmod(loc, $1, *($6));
         if ($4) {
             $6->setParseParent($4);
@@ -3749,7 +3769,8 @@ hashdecl_inherits:
     }
     | TOK_INHERITS ANGLE_IDENTIFIER {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line,
-            @2.last_line);
+            @2.last_line, @2.first_col,
+            @2.last_col);
         $$ = ParserTypeStruct::getParseType(loc, $2, false);
     }
     | TOK_INHERITS SCOPED_REF {
@@ -3763,7 +3784,7 @@ hashdecl_inherits:
 enum_def:
     nsc_modifiers TOK_ENUM identifier '{' enum_members '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line, $1 ? @1.first_col : @2.first_col, @6.last_col);
         $$ = new EnumDef(loc, $3, nullptr, $5);
         if ($$->enumdecl) {
             check_enummod(loc, $1, *qore_enum_decl_private::get(*$$->enumdecl));
@@ -3771,7 +3792,7 @@ enum_def:
     }
     | nsc_modifiers TOK_ENUM identifier ':' uncqtypedef '{' enum_members '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         $$ = new EnumDef(loc, $3, $5->getTypeInfo(), $7);
         delete $5;
         if ($$->enumdecl) {
@@ -3780,7 +3801,7 @@ enum_def:
     }
     | nsc_modifiers TOK_ENUM SCOPED_REF '{' enum_members '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line, $1 ? @1.first_col : @2.first_col, @6.last_col);
         $$ = new EnumDef(loc, $3, nullptr, $5);
         if ($$->enumdecl) {
             check_enummod(loc, $1, *qore_enum_decl_private::get(*$$->enumdecl));
@@ -3788,7 +3809,7 @@ enum_def:
     }
     | nsc_modifiers TOK_ENUM SCOPED_REF ':' uncqtypedef '{' enum_members '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         $$ = new EnumDef(loc, $3, $5->getTypeInfo(), $7);
         delete $5;
         if ($$->enumdecl) {
@@ -3813,11 +3834,11 @@ enum_members:
 
 enum_member:
     identifier {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new EnumMemberInfo(loc, $1);
     }
     | identifier '=' exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = new EnumMemberInfo(loc, $1, $3);
     }
     ;
@@ -3825,7 +3846,7 @@ enum_member:
 class_def:
     nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list '{' class_attributes '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line, $1 ? @1.first_col : @2.first_col, @7.last_col);
         check_classmod(loc, $1, *($6));
         apply_class_compat_attrs(loc, $3, *($6));
         qore_class_private::parseSetBaseClassList(*($6), $4);
@@ -3833,7 +3854,7 @@ class_def:
     }
     | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list '{' class_attributes '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line, $1 ? @1.first_col : @2.first_col, @7.last_col);
         ClassDeclParseInfo cdi(loc, $2);
         if (cdi.isScoped()) {
             check_strong_encapsulation(loc, "class", cdi.name.c_str());
@@ -3846,7 +3867,7 @@ class_def:
     }
     | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list '{' class_attributes '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line, $1 ? @1.first_col : @2.first_col, @7.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "class", $2->ostr);
         check_classmod(loc, $1, *($6));
@@ -3856,7 +3877,7 @@ class_def:
     }
     | nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         // class name is set automatically from name saved in scanner
         QoreClass* qc = new QoreParseClass(loc);
         check_classmod(loc, $1, *qc);
@@ -3866,7 +3887,7 @@ class_def:
     }
     | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         ClassDeclParseInfo cdi(loc, $2);
         if (cdi.isScoped()) {
             check_strong_encapsulation(loc, "class", cdi.name.c_str());
@@ -3881,7 +3902,7 @@ class_def:
     }
     | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "class", $2->ostr);
         // class name is set automatically from name saved in scanner
@@ -3893,7 +3914,7 @@ class_def:
     }
     | nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list '{' '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line, $1 ? @1.first_col : @2.first_col, @6.last_col);
         // class name is set automatically from name saved in scanner
         QoreClass* qc = new QoreParseClass(loc);
         check_classmod(loc, $1, *qc);
@@ -3903,7 +3924,7 @@ class_def:
     }
     | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list '{' '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line, $1 ? @1.first_col : @2.first_col, @6.last_col);
         ClassDeclParseInfo cdi(loc, $2);
         if (cdi.isScoped()) {
             check_strong_encapsulation(loc, "class", cdi.name.c_str());
@@ -3918,7 +3939,7 @@ class_def:
     }
     | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list '{' '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line, $1 ? @1.first_col : @2.first_col, @6.last_col);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "class", $2->ostr);
         // class name is set automatically from name saved in scanner
@@ -3935,7 +3956,7 @@ class_compat_attrs:
     { $$ = 0; }
     | class_compat_attrs class_compat_attr {
         if (($1 | $2) == $1) {
-            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
             parse_error(*loc, "class compatibility attribute given twice");
         }
         $$ = $1 | $2;
@@ -3944,7 +3965,7 @@ class_compat_attrs:
 
 class_compat_attr:
     '[' identifier ']' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = parse_class_compat_attr(loc, $2);
     }
     ;
@@ -3970,70 +3991,70 @@ superclass_list:
 
 superclass:
     IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new BCNode(loc, $1, Public);
     }
     | ANGLE_IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $1, false), Public);
     }
     | SCOPED_REF {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new BCNode(loc, new NamedScope($1), Public);
     }
     | TOK_PUBLIC IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, $2, Public);
     }
     | TOK_PUBLIC ANGLE_IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Public);
     }
     | TOK_PUBLIC SCOPED_REF {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, new NamedScope($2), Public);
     }
     | TOK_PRIVATE IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, $2, Private);
     }
     | TOK_PRIVATE ANGLE_IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Private);
     }
     | TOK_PRIVATE SCOPED_REF {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, new NamedScope($2), Private);
     }
     | TOK_PRIVATEHIERARCHY IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, $2, Private);
     }
     | TOK_PRIVATEHIERARCHY ANGLE_IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Private);
     }
     | TOK_PRIVATEHIERARCHY SCOPED_REF {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, new NamedScope($2), Private);
     }
     | TOK_PRIVATEINTERNAL IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, $2, Internal);
     }
     | TOK_PRIVATEINTERNAL ANGLE_IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Internal);
     }
     | TOK_PRIVATEINTERNAL SCOPED_REF {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new BCNode(loc, new NamedScope($2), Internal);
     }
     ;
 
 hashdecl_attrs:
     hashdecl_member {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new typed_hash_decl_private(loc);
         if ($1) {
             $$->parseAdd($1->getHashMemPair());
@@ -4057,17 +4078,17 @@ hashdecl_attrs:
 
 hashdecl_member:
     uncqtypedef identifier ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new MemberInfo($2, new HashDeclMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
         delete $1;
     }
     | uncqtypedef identifier '=' exp ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new MemberInfo($2, new HashDeclMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1), $4));
         delete $1;
     }
     | uncqtypedef identifier '(' call_args ')' ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line, $1 ? @1.first_col : @2.first_col, @5.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
         QoreParseTypeInfo* pti = ParserTypeStruct::getParseTypeInfo($1);
@@ -4091,7 +4112,8 @@ hashdecl_member:
     }
     | uncqtypedef KW_IDENTIFIER_OPENPAREN call_args ')' ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
-            $1 ? @1.first_line : @2.first_line, @5.last_line);
+            $1 ? @1.first_line : @2.first_line, @5.last_line, 
+            $1 ? @1.first_col : @2.first_col, @5.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
         QoreParseTypeInfo* pti = ParserTypeStruct::getParseTypeInfo($1);
@@ -4121,31 +4143,32 @@ class_attributes:
         $1->addAndDelete($$);
     }
     | internal_member_list {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new QoreParseClass(loc);
         $1->merge($$, Internal);
         delete $1;
     }
     | private_member_list {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new QoreParseClass(loc);
         $1->merge($$, Private);
         delete $1;
     }
     | public_member_list {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new QoreParseClass(loc);
         $1->merge($$, Public);
         delete $1;
     }
     | unscoped_const_decl {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->getName());
         }
         $$ = new QoreParseClass(loc);
-        qore_class_private::parseAddConstant(*($$), loc, $1->getName(), $1->takeValue(), Public, $1->getTypeInfo());
+        qore_class_private::parseAddConstant(*($$), loc, $1->getName(), $1->takeValue(), Public, $1->typeInfo,
+            $1->takeParseTypeInfo());
         delete $1;
     }
     | class_attributes inline_methoddef {
@@ -4168,12 +4191,13 @@ class_attributes:
         delete $2;
     }
     | class_attributes unscoped_const_decl {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line, @2.last_line, @2.first_col, @2.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $2->getName());
         }
-        qore_class_private::parseAddConstant(*($$), loc, $2->getName(), $2->takeValue(), Public, $2->getTypeInfo());
+        qore_class_private::parseAddConstant(*($$), loc, $2->getName(), $2->takeValue(), Public, $2->typeInfo,
+            $2->takeParseTypeInfo());
         $$ = $1;
         delete $2;
     }
@@ -4197,7 +4221,7 @@ uncqtypedef:
         $$ = new ParserTypeStruct(new QoreParseTypeInfo($1, false));
     }
     | ANGLE_IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = ParserTypeStruct::getType(loc, $1, false);
     }
     | '*' IDENTIFIER {
@@ -4217,7 +4241,7 @@ uncqtypedef:
         $$ = new ParserTypeStruct(new QoreParseTypeInfo($2, true));
     }
     | '*' ANGLE_IDENTIFIER {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = ParserTypeStruct::getType(loc, $2, true);
     }
     ;
@@ -4267,27 +4291,27 @@ public_member_list
 
 classvardecl:
     TOK_STATIC uncqtypedef identifier ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = new ClassVarInfo($3, new QoreVarInfo(loc, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2)));
         delete $2;
     }
     | TOK_STATIC identifier ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new ClassVarInfo($2, new QoreVarInfo(loc));
     }
     | TOK_STATIC uncqtypedef identifier '=' exp ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         $$ = new ClassVarInfo($3,
             new QoreVarInfo(loc, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2), $5));
         //printd(5, "new QoreVarInfo = %p (empty: %d)\n", $$->u.varInfo, $$->u.varInfo->empty());
         delete $2;
     }
     | TOK_STATIC identifier '=' exp ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new ClassVarInfo($2, new QoreVarInfo(loc, nullptr, nullptr, $4));
     }
     | TOK_STATIC uncqtypedef identifier '(' call_args ')' ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($2);
         AbstractQoreNode* new_call = nullptr;
         QoreParseTypeInfo* pti = ParserTypeStruct::getParseTypeInfo($2);
@@ -4307,7 +4331,8 @@ classvardecl:
     }
     | TOK_STATIC uncqtypedef KW_IDENTIFIER_OPENPAREN call_args ')' ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
-            @6.last_line);
+            @6.last_line, @1.first_col,
+            @6.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($2);
         AbstractQoreNode* new_call = nullptr;
         QoreParseTypeInfo* pti = ParserTypeStruct::getParseTypeInfo($2);
@@ -4330,7 +4355,7 @@ classvardecl:
 member2:
     qtypedef SELF_REF ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line, $1 ? @1.first_col : @2.first_col, @2.last_col);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
         delete $1;
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
@@ -4338,7 +4363,7 @@ member2:
     }
     | qtypedef SELF_REF '=' exp ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line, $1 ? @1.first_col : @2.first_col, @4.last_col);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1), $4));
         delete $1;
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
@@ -4346,7 +4371,7 @@ member2:
     }
     | qtypedef SELF_REF '(' call_args ')' ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line, $1 ? @1.first_col : @2.first_col, @5.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
         QoreParseTypeInfo* pti = $1 ? ParserTypeStruct::getParseTypeInfo($1) : nullptr;
@@ -4369,21 +4394,21 @@ member2:
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $2);
     }
     | uncqtypedef identifier ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
         delete $1;
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $2);
     }
     | uncqtypedef identifier '=' exp ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1), $4));
         delete $1;
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $2);
     }
     | uncqtypedef identifier '(' call_args ')' ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
         QoreParseTypeInfo* pti = ParserTypeStruct::getParseTypeInfo($1);
@@ -4407,7 +4432,8 @@ member2:
     }
     | uncqtypedef KW_IDENTIFIER_OPENPAREN call_args ')' ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
-            @5.last_line);
+            @5.last_line, @1.first_col,
+            @5.last_col);
         const QoreTypeInfo* t = ParserTypeStruct::getTypeInfo($1);
         AbstractQoreNode* new_call = nullptr;
         QoreParseTypeInfo* pti = ParserTypeStruct::getParseTypeInfo($1);
@@ -4431,13 +4457,13 @@ member2:
                 $2);
     }
     | identifier ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new MemberInfo($1, new QoreMemberInfo(loc));
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $1);
     }
     | identifier '=' exp ';' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = new MemberInfo($1, new QoreMemberInfo(loc, nullptr, nullptr, $3));
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "member '%s' declared without '$.' prefix, but parse option 'allow-bare-refs' is not set", $1);
@@ -4446,7 +4472,7 @@ member2:
         $$ = $1;
     }
     | unscoped_const_decl {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->getName());
@@ -4454,7 +4480,7 @@ member2:
         if ($1->pub) {
             parse_error(*loc, "cannot change class constant scope for constant '%s' within a public or private declaration block", $1->name.ostr);
         }
-        $$ = new MemberInfo(loc, $1->name.takeName(), $1->value, $1->getTypeInfo());
+        $$ = new MemberInfo(loc, $1->name.takeName(), $1->value, $1->typeInfo, $1->takeParseTypeInfo());
         delete $1;
     }
     ;
@@ -4468,13 +4494,13 @@ transient_member2:
 
 member:
     SELF_REF {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new MemberInfo($1, new QoreMemberInfo(loc));
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $1);
     }
     | SELF_REF SCOPED_REF {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new MemberInfo($1, new QoreMemberInfo(loc, nullptr, new QoreParseTypeInfo($2)));
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $1);
@@ -4541,7 +4567,7 @@ inline_methoddef:
     nsc_modifiers ident_openparen myexp ')' method_qualifier base_constructor_list return_value block {
         int mod = $1 | $5;
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($8)
                 parse_error(*loc, "'abstract' can only be used with no implementation (remove the body and terminate the declaration with ';' or remove the 'abstract')");
@@ -4558,7 +4584,7 @@ inline_methoddef:
     | nsc_modifiers callable_return_type ident_openparen myexp ')' method_qualifier base_constructor_list block {
         int mod = $1 | $6;
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($8)
                 parse_error(*loc, "'abstract' can only be used with no implementation (remove the body and terminate the declaration with ';' or remove the 'abstract')");
@@ -4579,7 +4605,7 @@ inline_methoddef:
     | nsc_modifiers ident_openparen myexp ')' method_qualifier base_constructor_list return_value ';' {
         int mod = $1 | $5;
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         std::vector<QoreGenericTypeParam> type_params;
@@ -4592,7 +4618,7 @@ inline_methoddef:
     | nsc_modifiers callable_return_type ident_openparen myexp ')' method_qualifier base_constructor_list ';' {
         int mod = $1 | $6;
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @8.last_line, $1 ? @1.first_col : @2.first_col, @8.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
@@ -4617,7 +4643,7 @@ inline_methoddef:
 outofline_methoddef:
     method_modifiers SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list return_value block {
         int mod = $1 | $6;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($9)
                 parse_error(*loc, "'abstract' can only be used with no implementation (remove the body and terminate the declaration with ';' or remove the 'abstract')");
@@ -4631,7 +4657,7 @@ outofline_methoddef:
     }
     | method_modifiers ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value block {
         int mod = $1 | $6;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($9)
                 parse_error(*loc, "'abstract' can only be used with no implementation (remove the body and terminate the declaration with ';' or remove the 'abstract')");
@@ -4645,7 +4671,7 @@ outofline_methoddef:
     }
     | method_modifiers uncqtypedef SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list block {
         int mod = $1 | $7;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($9)
                 parse_error(*loc, "'abstract' can only be used with no implementation (remove the body and terminate the declaration with ';' or remove the 'abstract')");
@@ -4661,7 +4687,7 @@ outofline_methoddef:
     }
     | method_modifiers uncqtypedef ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list block {
         int mod = $1 | $7;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (mod & OFM_ABSTRACT) {
             if ($9)
                 parse_error(*loc, "'abstract' can only be used with no implementation (remove the body and terminate the declaration with ';' or remove the 'abstract')");
@@ -4677,7 +4703,7 @@ outofline_methoddef:
     }
     | method_modifiers SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list return_value ';' {
         int mod = $1 | $6;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         if ($4 && $4->hasNamedArgs()) {
@@ -4687,7 +4713,7 @@ outofline_methoddef:
     }
     | method_modifiers ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value ';' {
         int mod = $1 | $6;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         if ($4 && $4->hasNamedArgs()) {
@@ -4697,7 +4723,7 @@ outofline_methoddef:
     }
     | method_modifiers uncqtypedef SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list ';' {
         int mod = $1 | $7;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
@@ -4709,7 +4735,7 @@ outofline_methoddef:
     }
     | method_modifiers uncqtypedef ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list ';' {
         int mod = $1 | $7;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (!(mod & OFM_ABSTRACT))
             parse_error(*loc, "non-abstract method declared without any body; either declare the method 'abstract' or declare an empty method body with '{}'");
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
@@ -4720,14 +4746,14 @@ outofline_methoddef:
         $$ = new MethodDef(loc, mod, $3, @5.first_line, @5.last_line, $5, $8, rt, 0);
     }
     | SCOPED_REF '(' call_args ')' method_qualifier base_constructor_list return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         if ($3 && $3->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
         $$ = new MethodDef(loc, $5, $1, @3.first_line, @3.last_line, $3, $6, $7, $8);
     }
     | ANGLE_IDENTIFIER '(' call_args ')' method_qualifier base_constructor_list return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         if ($3 && $3->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
@@ -4737,7 +4763,7 @@ outofline_methoddef:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
@@ -4747,7 +4773,7 @@ outofline_methoddef:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         if ($4 && $4->hasNamedArgs()) {
             parse_error(*loc, "named arguments are not valid in method declarations");
         }
@@ -4776,11 +4802,11 @@ base_constructors:
 
 base_constructor:
     IDENTIFIER '(' call_args ')' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new BCANode($1, $3, loc);
     }
     | SCOPED_REF '(' call_args ')' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new BCANode(new NamedScope($1), $3, loc);
     }
     ;
@@ -4805,7 +4831,7 @@ method_modifiers:
     method_modifier { $$ = $1; }
     | method_modifiers method_modifier {
         if (($1 | $2) == $1) {
-            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
             parse_error(*loc, "modifier given twice");
         }
         $$ = $1 | $2;
@@ -4828,12 +4854,12 @@ return_value:
     TOK_RETURNS qtypedef {
         // see if the deprecated "returns" keyword can be used
         if (!parse_check_parse_option(PO_ALLOW_RETURNS)) {
-            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
             parse_error(*loc, "illegal use of the deprecated \"returns\" keyword (enable by setting parse option PO_ALLOW_RETURNS)");
         }
 
         if (!$2) {
-            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
             parse_error(*loc, "missing type declaration after 'returns'");
             $$ = 0;
         } else {
@@ -4851,7 +4877,7 @@ sub_def:
     TOK_SUB ident_openparen myexp ')' return_value block {
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
         $$ = new ParseUserFunction(loc, $2, new UserFunctionVariant($6, @3.first_line, @3.last_line, $3, $5, false, flags));
     }
     | uncqtypedef TOK_SUB ident_openparen myexp ')' block {
@@ -4861,11 +4887,11 @@ sub_def:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
         $$ = new ParseUserFunction(loc, $3, new UserFunctionVariant($6, @4.first_line, @4.last_line, $4, rt, false, flags));
     }
     | method_modifiers TOK_SUB ident_openparen myexp ')' return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
@@ -4877,7 +4903,7 @@ sub_def:
             $$->setPublic();
     }
     | method_modifiers uncqtypedef TOK_SUB ident_openparen myexp ')' block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
@@ -4901,7 +4927,7 @@ scoped_sub_def:
     TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         $$ = new ParseScopedUserFunction(loc, $2, new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, $6, false, flags));
     }
     | uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
@@ -4911,11 +4937,11 @@ scoped_sub_def:
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         $$ = new ParseScopedUserFunction(loc, $3, new UserFunctionVariant($7, @5.first_line, @5.last_line, $5, rt, false, flags));
     }
     | method_modifiers TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
@@ -4927,7 +4953,7 @@ scoped_sub_def:
             $$->setPublic();
     }
     | method_modifiers uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
@@ -4945,12 +4971,12 @@ scoped_sub_def:
 
 list:
     exp ',' exp {
-        const QoreProgramLocation* loc1 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
-        const QoreProgramLocation* loc3 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc1 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
+        const QoreProgramLocation* loc3 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = splice_expressions($1, $3, loc1, loc3);
     }
     | exp ',' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         QoreParseListNode* l;
         QoreValue v1($1);  // Convert to QoreValue for method calls
         if (v1.getType() == NT_PARSE_LIST) {
@@ -4970,8 +4996,8 @@ list:
 
 list_n:
     exp_n ',' exp {
-        const QoreProgramLocation* loc1 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
-        const QoreProgramLocation* loc3 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc1 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
+        const QoreProgramLocation* loc3 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = splice_expressions($1, $3, loc1, loc3);
     }
     | exp_n ',' {
@@ -4980,7 +5006,7 @@ list_n:
         if (v1.getType() == NT_PARSE_LIST)
             l = v1.get<QoreParseListNode>();
         else {
-            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
             l = new QoreParseListNode(loc);
             l->add($1, loc);
         }
@@ -4990,7 +5016,7 @@ list_n:
 
 hash:
     hash_element {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = new QoreParseHashNode(loc);
         $1->addDelete($$);
     }
@@ -5022,14 +5048,14 @@ immediate_typed_hash:
         // mark for the curly-bracket version of a literal parse hash expression for the hash version of the map operator
         $2->setCurly();
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         QoreStringMaker fake_cast("hash<%s>", $1);
         free($1);
         $$ = new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, fake_cast.giveBuffer(), false), $2,
             false);
     }
     | HASHDECL_IDENTIFIER_OPENCURLY '}' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         QoreStringMaker fake_cast("hash<%s>", $1);
         free($1);
         $$ = new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, fake_cast.giveBuffer(), false),
@@ -5046,7 +5072,8 @@ exp_c:
     { $$ = $2; }
     | ANGLE_IDENTIFIER '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
-            @4.last_line);
+            @4.last_line, @1.first_col,
+            @4.last_col);
         ptype_vec_t type_args;
         char* name = parse_explicit_generic_call_name(loc, $1, type_args);
         if (strstr(name, "::")) {
@@ -5061,7 +5088,7 @@ exp_c:
     }
     | SCOPED_REF
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new ScopedRefNode(loc, $1));
     }
     | qtypedef VAR_REF {
@@ -5069,7 +5096,7 @@ exp_c:
         if (!$1 && !strcmp($2, "argv"))
             inc_argv_ref();
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line, $1 ? @1.first_col : @2.first_col, @2.last_col);
         if ($1)
             $$ = (new VarRefDeclNode(loc, $2, get_var_type(), ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
         else
@@ -5081,7 +5108,7 @@ exp_c:
     }
     | qtypedef SCOPED_VREF {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @2.last_line, $1 ? @1.first_col : @2.first_col, @2.last_col);
         if ($1)
             $$ = (new VarRefDeclNode(loc, $2, get_var_type(), ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
         else
@@ -5093,7 +5120,8 @@ exp_c:
     }
     | TOK_CONST qtypedef VAR_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
-            @3.last_line);
+            @3.last_line, @1.first_col,
+            @3.last_col);
         VarRefDeclNode* v;
         if ($2) {
             v = new VarRefDeclNode(loc, $3, get_var_type(), ParserTypeStruct::getTypeInfo($2),
@@ -5115,7 +5143,8 @@ exp_c:
     }
     | TOK_CONST uncqtypedef identifier %prec CONST_READONLY_DECL_PREFIX {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
-            @3.last_line);
+            @3.last_line, @1.first_col,
+            @3.last_col);
         VarRefDeclNode* v = new VarRefDeclNode(loc, $3, get_var_type(), ParserTypeStruct::getTypeInfo($2),
             ParserTypeStruct::getParseTypeInfo($2));
         v->setReadOnlyDecl();
@@ -5128,7 +5157,8 @@ exp_c:
     }
     | TOK_CONST identifier %prec CONST_READONLY_DECL_PREFIX {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
-            @2.last_line);
+            @2.last_line, @1.first_col,
+            @2.last_col);
         if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
             parse_error(*loc, "read-only local variable '%s' declared without type information; use 'const auto %s' "
                 "or another explicit type", $2, $2);
@@ -5142,7 +5172,7 @@ exp_c:
         }
     }
     | uncqtypedef identifier {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new VarRefDeclNode(loc, $2, get_var_type(), ParserTypeStruct::getTypeInfo($1), ParserTypeStruct::getParseTypeInfo($1)));
         delete $1;
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
@@ -5150,7 +5180,8 @@ exp_c:
     }
     | uncqtypedef KW_IDENTIFIER_OPENPAREN call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
-            @4.last_line);
+            @4.last_line, @1.first_col,
+            @4.last_col);
         QoreValue decl(new VarRefDeclNode(loc, $2, get_var_type(), ParserTypeStruct::getTypeInfo($1),
             ParserTypeStruct::getParseTypeInfo($1)));
         delete $1;
@@ -5160,7 +5191,7 @@ exp_c:
         $$ = processCall(@1.first_line, @4.last_line, decl, $3);
     }
     | TOK_MY uncqtypedef identifier {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         VarRefDeclNode* v = new VarRefDeclNode(loc, $3, VT_LOCAL, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2));
         v->setExplicitScope();
         $$ = (v);
@@ -5169,7 +5200,7 @@ exp_c:
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $3);
     }
     | TOK_MY identifier {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         // see if types are required
         if (parse_check_parse_option(PO_REQUIRE_TYPES))
             parse_error(*loc, "local variable '%s' declared without type information, but parse options require all declarations to have type information", $2);
@@ -5180,7 +5211,7 @@ exp_c:
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $2);
     }
     | TOK_MY qtypedef VAR_REF {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         VarRefNode* v;
         if ($2) {
             v = new VarRefDeclNode(loc, $3, VT_LOCAL, ParserTypeStruct::getTypeInfo($2), ParserTypeStruct::getParseTypeInfo($2));
@@ -5199,7 +5230,7 @@ exp_c:
     | TOK_MY '(' list ')' {
         $3->setVariableList();
         QoreParseListNode::nvec_t& vl = $3->getValues();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         for (unsigned i = 0; i < vl.size(); ++i) {
             QoreValue& n = vl[i];
             qore_type_t t = n.getType();
@@ -5239,32 +5270,32 @@ exp_c:
         if (parse_check_parse_option(PO_ASSUME_LOCAL & PO_ALLOW_BARE_REFS) && !strcmp($1, "argv"))
             inc_argv_ref();
 
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new BarewordNode(loc, $1));
     }
     | CONTEXT_REF
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new ContextrefNode(loc, $1));
     }
     | TOK_CONTEXT_ROW
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new ContextRowNode(loc));
     }
     | COMPLEX_CONTEXT_REF
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new ComplexContextrefNode(loc, $1));
     }
     | TOK_FIND exp TOK_IN exp TOK_WHERE '(' exp ')'
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         $$ = (new FindNode(loc, $2, $4, $7));
     }
     | TOK_FIND TOK_FIRST exp TOK_IN exp TOK_WHERE '(' exp ')'
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_FIND_MODIFIERS)
             || parse_check_parse_option(QoreParseOptions::NO_FIRST)) {
             parse_error(*loc, "find first is disabled by the current parse options");
@@ -5278,7 +5309,7 @@ exp_c:
     }
     | TOK_FIND TOK_LAST exp TOK_IN exp TOK_WHERE '(' exp ')'
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_FIND_MODIFIERS)) {
             parse_error(*loc, "find last is disabled by the current parse options");
             QoreValue($3).discard(nullptr);
@@ -5291,7 +5322,7 @@ exp_c:
     }
     | TOK_FIND TOK_ONE exp TOK_IN exp TOK_WHERE '(' exp ')'
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_FIND_MODIFIERS)) {
             parse_error(*loc, "find one is disabled by the current parse options");
             QoreValue($3).discard(nullptr);
@@ -5304,20 +5335,20 @@ exp_c:
     }
     | TOK_EXISTS exp
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreExistsOperatorNode(loc, $2));
     }
     | TOK_ELEMENTS exp
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreElementsOperatorNode(loc, $2));
     }
     | TOK_KEYS exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreKeysOperatorNode(loc, $2));
     }
     | TOK_UNSHIFT exp {  // unshift list, element
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
         if (!l || l->size() != 2) {
@@ -5332,11 +5363,11 @@ exp_c:
         }
     }
     | TOK_SHIFT exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreShiftOperatorNode(loc, $2));
     }
     | TOK_PUSH exp {  // push lvalue-list, element
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
         if (!l || l->size() != 2) {
@@ -5351,21 +5382,21 @@ exp_c:
         }
     }
     | TOK_POP exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QorePopOperatorNode(loc, $2));
     }
     | TOK_CHOMP exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreChompOperatorNode(loc, $2));
     }
     | TOK_TRIM exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreTrimOperatorNode(loc, $2));
     }
     | TOK_SPLICE exp {  // splice lvalue-list, offset, [length, list]
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         if (!l) {
             parse_error(*loc, "invalid arguments to splice, expected: lvalue, offset exp[, length exp[, list exp]] (got %s)", v2.getTypeName());
             v2.discard(nullptr);
@@ -5389,7 +5420,7 @@ exp_c:
     | TOK_EXTRACT exp {  // extract lvalue-list, offset, [length, list]
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         if (!l) {
             parse_error(*loc, "invalid arguments to extract, expected: lvalue, offset exp[, length exp[, list exp]] (got %s)", v2.getTypeName());
             v2.discard(nullptr);
@@ -5414,7 +5445,7 @@ exp_c:
         }
     }
     | TOK_MAP exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         pop_ignore_numeric_argv_ref();
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
@@ -5446,7 +5477,7 @@ exp_c:
         pop_ignore_numeric_argv_ref();
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         if (!l || l->size() != 2) {
             parse_error(*loc, "invalid arguments to foldr operator, expected: 2-element list expected: 2-element list (fold expression and list expression), got: '%s'", v2.getTypeName());
             v2.discard(nullptr);
@@ -5463,7 +5494,7 @@ exp_c:
         pop_ignore_numeric_argv_ref();
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         if (!l || l->size() != 2) {
             parse_error(*loc, "invalid arguments to foldl operator, expected: 2-element list (fold expression and list expression), got: '%s'", v2.getTypeName());
             v2.discard(nullptr);
@@ -5480,7 +5511,7 @@ exp_c:
         pop_ignore_numeric_argv_ref();
         QoreValue v2($2);  // Convert to QoreValue for method calls
         QoreParseListNode* l = v2.getType() == NT_PARSE_LIST ? v2.get<QoreParseListNode>() : nullptr;
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         if (!l || l->size() != 2) {
             parse_error(*loc, "invalid arguments to select operator, expected: 2-element list (list expression and select expression) got: '%s'", v2.getTypeName());
             v2.discard(nullptr);
@@ -5495,64 +5526,64 @@ exp_c:
     }
     | TOK_ITERATE exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new QoreIterateOperatorNode(loc, $2);
     }
     | TOK_FIRST exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::First, "first", "predicate expression", $2,
             true);
     }
     | TOK_ANY_OP exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::Any, "any", "predicate expression", $2, true);
     }
     | TOK_ALL exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::All, "all", "predicate expression", $2, false);
     }
     | TOK_COUNT exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::Count, "count", "predicate expression", $2,
             true);
     }
     | TOK_TAKE exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::Take, "take", "count expression", $2, false);
     }
     | TOK_DROP exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::Drop, "drop", "count expression", $2, false);
     }
     | TOK_TAKEWHILE exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::TakeWhile, "takewhile",
             "predicate expression", $2, false);
     }
     | TOK_TAKEUNTIL exp {
         pop_ignore_numeric_argv_ref();
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::TakeUntil, "takeuntil",
             "predicate expression", $2, false);
     }
     | P_INCREMENT exp {  // pre-increment
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QorePreIncrementOperatorNode(loc, $2));
     }
     | P_DECREMENT exp {  // pre-decrement
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QorePreDecrementOperatorNode(loc, $2));
     }
     | BASE_CLASS_CALL '(' call_args ')' {
         printd(5, "parsing in-object base class method call %s()\n", $1->ostr);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         if (!strcmp($1->getIdentifier(), "copy"))
             parse_error(*loc, "illegal call to base class copy method '%s'", $1->ostr);
 
@@ -5560,12 +5591,12 @@ exp_c:
     }
     | KW_IDENTIFIER_OPENPAREN call_args ')' {
         printd(5, "parsing call %s()\n", $1);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = (new FunctionCallNode(loc, $1, $2));
     }
     | SELF_REF
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new SelfVarrefNode(loc, $1));
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $1);
@@ -5574,20 +5605,20 @@ exp_c:
         // FIXME: need to expand constant expression checking to determine
         //        if the expression can throw an exception at run-time
         // first check for constant expressions
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreUnaryMinusOperatorNode(loc, $2));
     }
     | '+' exp %prec UPLUS
     {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreUnaryPlusOperatorNode(loc, $2));
     }
     | '~' exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreBinaryNotOperatorNode(loc, $2));
     }
     | '!' exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreLogicalNotOperatorNode(loc, $2));
     }
     | '\\' exp {
@@ -5616,14 +5647,14 @@ exp_c:
             }
 
             if (make_ref) {
-                const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+                const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
                 //printd(5, "type=%s\n", v2.getTypeName());
                 $$ = (new ParseReferenceNode(loc, $2));
             }
         }
     }
     | TOK_NEW identifier '(' call_args ')' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
@@ -5631,28 +5662,29 @@ exp_c:
     }
     | TOK_NEW KW_IDENTIFIER_OPENPAREN call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
-            @4.last_line);
+            @4.last_line, @1.first_col,
+            @4.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
         $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $3));
     }
     | TOK_NEW SCOPED_REF '(' call_args ')' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
         $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $4));
     }
     | TOK_NEW ANGLE_IDENTIFIER '(' call_args ')' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
         $$ = (new ParseNewComplexTypeNode(loc, ParserTypeStruct::getParseType(loc, $2, false), $4));
     }
     | TOK_BACKGROUND exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreBackgroundOperatorNode(loc, $2));
         // check to see if the expression is legal
         QoreValue v2bg($2);  // Convert to QoreValue for method calls
@@ -5667,7 +5699,7 @@ exp_c:
         }
     }
     | BACKQUOTE {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new BackquoteNode(loc, $1));
         if (parse_check_parse_option(PO_NO_EXTERNAL_PROCESS))
             parse_error(*loc, "illegal use of backquote operator (conflicts with parse option PO_NO_EXTERNAL_PROCESS)");
@@ -5691,18 +5723,18 @@ exp_c:
         }
     }
     | '(' ')' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         QoreParseListNode* l = new QoreParseListNode(loc);
         l->setFinalized();
         $$ = (l);
     }
     | TOK_SUB '(' myexp ')' return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
         int ar = get_pop_argv_ref();
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($6, @3.first_line, @3.last_line, $3, $5, false, ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS)));
     }
     | uncqtypedef TOK_SUB '(' myexp ')' block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($1), ParserTypeStruct::getTypeInfo($1));
         delete $1;
 
@@ -5710,7 +5742,7 @@ exp_c:
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($6, @4.first_line, @4.last_line, $4, rt, false, ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS)));
     }
     | method_modifiers TOK_SUB '(' myexp ')' return_value block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         check_funcmod(loc, $1);
         int ar = get_pop_argv_ref();
         int64 flags = ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS;
@@ -5719,7 +5751,7 @@ exp_c:
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($7, @4.first_line, @4.last_line, $4, $6, $1 | OFM_SYNCED, flags)));
     }
     | method_modifiers uncqtypedef TOK_SUB '(' myexp ')' block {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         check_funcmod(loc, $1);
 
         RetTypeInfo* rt = new RetTypeInfo(ParserTypeStruct::getParseTypeInfo($2), ParserTypeStruct::getTypeInfo($2));
@@ -5736,23 +5768,23 @@ exp_c:
         inc_numeric_argv_ref();
     }
     | IMPLICIT_ELEMENT {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new QoreImplicitElementNode(loc));
     }
     | TOK_DELETE exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreDeleteOperatorNode(loc, $2));
     }
     | TOK_REMOVE exp {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreRemoveOperatorNode(loc, $2));
     }
     | QORE_CAST '(' exp ')' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = (new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, $1, false), $3));
     }
     | QORE_OR_NOTHING_CAST '(' exp ')' {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = (new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, $1, true), $3));
     }
     ;
@@ -5762,22 +5794,22 @@ exp:
     | list                              { $$ = $1; }
     | alt_hash                          { $$ = $1; }
     | immediate_typed_hash              { $$ = $1; }
-    | '{' '}'                           { $$ = (new QoreParseHashNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), true)); }
-    | exp PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp OR_EQUALS exp                 { $$ = (new QoreOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp MODULA_EQUALS exp             { $$ = (new QoreModuloEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp MULTIPLY_EQUALS exp           { $$ = (new QoreMultiplyEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp DIVIDE_EQUALS exp             { $$ = (new QoreDivideEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp XOR_EQUALS exp                { $$ = (new QoreXorEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp SHIFT_LEFT_EQUALS exp         { $$ = (new QoreShiftLeftEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp SHIFT_RIGHT_EQUALS exp        { $$ = (new QoreShiftRightEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
+    | '{' '}'                           { $$ = (new QoreParseHashNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), true)); }
+    | exp PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp OR_EQUALS exp                 { $$ = (new QoreOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp MODULA_EQUALS exp             { $$ = (new QoreModuloEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp MULTIPLY_EQUALS exp           { $$ = (new QoreMultiplyEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp DIVIDE_EQUALS exp             { $$ = (new QoreDivideEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp XOR_EQUALS exp                { $$ = (new QoreXorEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp SHIFT_LEFT_EQUALS exp         { $$ = (new QoreShiftLeftEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp SHIFT_RIGHT_EQUALS exp        { $$ = (new QoreShiftRightEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp '=' exp                       {
         $$ = (process_assignment(@1.first_line, @3.last_line, $1, $3));
     }
     | exp WEAK_ASSIGNMENT exp           {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         // see if the use of the weak assignment operator is allowed
         if (!parse_check_parse_option(PO_ALLOW_WEAK_REFERENCES))
             parse_error(*loc, "unauthorized use of the weak reference assignment operator \":=\" (parse option PO_ALLOW_WEAK_REFERENCES is not set)");
@@ -5785,65 +5817,65 @@ exp:
         $$ = (process_weak_assignment(loc, $1, $3));
     }
     | exp TOK_INSTANCEOF uncqtypedef    {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = ($3->getTypeInfo()
             ? new QoreInstanceOfOperatorNode(loc, $1, $3->getTypeInfo())
             : new QoreInstanceOfOperatorNode(loc, $1, $3->getParseTypeInfo()));
         delete $3;
     }
-    | exp NULL_COALESCING exp           { $$ = (new QoreNullCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp VALUE_COALESCING exp          { $$ = (new QoreValueCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $1, $3, $5)); }
-    | exp P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1)); } // post-increment
-    | exp P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1)); } // post-decrement
+    | exp NULL_COALESCING exp           { $$ = (new QoreNullCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp VALUE_COALESCING exp          { $$ = (new QoreValueCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, $5)); }
+    | exp P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-increment
+    | exp P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-decrement
     | exp '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, $1, $3)); }
     | exp LOGICAL_AND exp               {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_log_or(loc, $1, "logical AND");
         $$ = (new QoreLogicalAndOperatorNode(loc, $1, $3));
     }
-    | exp LOGICAL_OR exp                { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp BROKEN_LOGICAL_OR exp         { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp BROKEN_BINARY_OR exp          { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
+    | exp LOGICAL_OR exp                { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp BROKEN_LOGICAL_OR exp         { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp BROKEN_BINARY_OR exp          { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp BROKEN_BINARY_XOR exp         {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_bin_or(loc, $1, "binary XOR");
         $$ = (new QoreBinaryXorOperatorNode(loc, $1, $3));
     }
-    | exp '|' exp                       { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
+    | exp '|' exp                       { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp '&' exp                       {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_bin_or(loc, $1, "binary AND");
         check_operator_bin_xor(loc, $1, "binary AND");
         $$ = (new QoreBinaryAndOperatorNode(loc, $1, $3));
     }
-    | exp '^' exp                       { $$ = (new QoreBinaryXorOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp REGEX_MATCH REGEX             { $$ = (new QoreRegexMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp REGEX_NMATCH REGEX            { $$ = (new QoreRegexNMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp REGEX_MATCH REGEX_SUBST       { $$ = (new QoreRegexSubstOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp REGEX_MATCH REGEX_TRANS       { $$ = (new QoreTransliterationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp REGEX_MATCH REGEX_EXTRACT     { $$ = (new QoreRegexExtractOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '>' exp                       { $$ = (new QoreLogicalGreaterThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '<' exp                       { $$ = (new QoreLogicalLessThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp LOGICAL_CMP exp               { $$ = (new QoreLogicalComparisonOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp LOGICAL_EQ exp                { $$ = (new QoreLogicalEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp ABSOLUTE_EQ exp               { $$ = (new QoreLogicalAbsoluteEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp ABSOLUTE_NE exp               { $$ = (new QoreLogicalAbsoluteNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp LOGICAL_NE exp                { $$ = (new QoreLogicalNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp LOGICAL_LE exp                { $$ = (new QoreLogicalLessThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp LOGICAL_GE exp                { $$ = (new QoreLogicalGreaterThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp SHIFT_LEFT exp                { $$ = (new QoreShiftLeftOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp SHIFT_RIGHT exp               { $$ = (new QoreShiftRightOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '+' exp                       { $$ = (new QorePlusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '-' exp                       { $$ = (new QoreMinusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '%' exp                       { $$ = (new QoreModuloOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '/' exp                       { $$ = (new QoreDivisionOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '*' exp                       { $$ = (new QoreMultiplicationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp '[' exp RANGE ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $1, $3, QoreValue())); }
-    | exp '[' RANGE exp ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $1, QoreValue(), $4)); }
+    | exp '^' exp                       { $$ = (new QoreBinaryXorOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp REGEX_MATCH REGEX             { $$ = (new QoreRegexMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp REGEX_NMATCH REGEX            { $$ = (new QoreRegexNMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp REGEX_MATCH REGEX_SUBST       { $$ = (new QoreRegexSubstOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp REGEX_MATCH REGEX_TRANS       { $$ = (new QoreTransliterationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp REGEX_MATCH REGEX_EXTRACT     { $$ = (new QoreRegexExtractOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '>' exp                       { $$ = (new QoreLogicalGreaterThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '<' exp                       { $$ = (new QoreLogicalLessThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp LOGICAL_CMP exp               { $$ = (new QoreLogicalComparisonOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp LOGICAL_EQ exp                { $$ = (new QoreLogicalEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp ABSOLUTE_EQ exp               { $$ = (new QoreLogicalAbsoluteEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp ABSOLUTE_NE exp               { $$ = (new QoreLogicalAbsoluteNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp LOGICAL_NE exp                { $$ = (new QoreLogicalNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp LOGICAL_LE exp                { $$ = (new QoreLogicalLessThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp LOGICAL_GE exp                { $$ = (new QoreLogicalGreaterThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp SHIFT_LEFT exp                { $$ = (new QoreShiftLeftOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp SHIFT_RIGHT exp               { $$ = (new QoreShiftRightOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '+' exp                       { $$ = (new QorePlusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '-' exp                       { $$ = (new QoreMinusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '%' exp                       { $$ = (new QoreModuloOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '/' exp                       { $$ = (new QoreDivisionOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '*' exp                       { $$ = (new QoreMultiplicationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '[' exp RANGE ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, QoreValue())); }
+    | exp '[' RANGE exp ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, QoreValue(), $4)); }
     | exp '[' RANGE ']'                 {
-        parse_error(*qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line), "illegal range without start or end expressions; at least start or end must be given for a range");
-        $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line), $1, QoreValue(), QoreValue()));
+        parse_error(*qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), "illegal range without start or end expressions; at least start or end must be given for a range");
+        $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), $1, QoreValue(), QoreValue()));
     }
     | exp '[' exp ']'                   {
         $$.bits = 0;
@@ -5853,37 +5885,37 @@ exp:
             QoreRangeOperatorNode* ron = dynamic_cast<QoreRangeOperatorNode*>(v3.getInternalNode());
             if (ron) {
                 std::unique_ptr<QoreRangeOperatorNode> holder(ron);
-                $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line), $1, ron->swapLeft(QoreValue()), ron->swapRight(QoreValue())));
+                $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), $1, ron->swapLeft(QoreValue()), ron->swapRight(QoreValue())));
             }
         }
         if (!$$) {
-            $$ = (new QoreSquareBracketsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3));
+            $$ = (new QoreSquareBracketsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3));
         }
     }
-    | exp '{' exp '}'                   { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
+    | exp '{' exp '}'                   { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); }
-    | exp DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1, $2)); }
+    | exp DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); }
     ;
 
 exp_n:
     exp_c                                 { $$ = $1; }
     | list_n                              { $$ = $1; }
-    | exp_n PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n OR_EQUALS exp                 { $$ = (new QoreOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n MODULA_EQUALS exp             { $$ = (new QoreModuloEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n MULTIPLY_EQUALS exp           { $$ = (new QoreMultiplyEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n DIVIDE_EQUALS exp             { $$ = (new QoreDivideEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n XOR_EQUALS exp                { $$ = (new QoreXorEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n SHIFT_LEFT_EQUALS exp         { $$ = (new QoreShiftLeftEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n SHIFT_RIGHT_EQUALS exp        { $$ = (new QoreShiftRightEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
+    | exp_n PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n OR_EQUALS exp                 { $$ = (new QoreOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n MODULA_EQUALS exp             { $$ = (new QoreModuloEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n MULTIPLY_EQUALS exp           { $$ = (new QoreMultiplyEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n DIVIDE_EQUALS exp             { $$ = (new QoreDivideEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n XOR_EQUALS exp                { $$ = (new QoreXorEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n SHIFT_LEFT_EQUALS exp         { $$ = (new QoreShiftLeftEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n SHIFT_RIGHT_EQUALS exp        { $$ = (new QoreShiftRightEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp_n '=' exp                       {
         $$ = (process_assignment(@1.first_line, @3.last_line, $1, $3));
     }
     | exp_n WEAK_ASSIGNMENT exp           {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         // see if the use of the weak assignment operator is allowed
         if (!parse_check_parse_option(PO_ALLOW_WEAK_REFERENCES))
             parse_error(*loc, "unauthorized use of the weak reference assignment operator \":=\" (parse option PO_ALLOW_WEAK_REFERENCES is not set)");
@@ -5891,69 +5923,69 @@ exp_n:
         $$ = (process_weak_assignment(loc, $1, $3));
     }
     | exp_n TOK_INSTANCEOF uncqtypedef    {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = ($3->getTypeInfo()
             ? new QoreInstanceOfOperatorNode(loc, $1, $3->getTypeInfo())
             : new QoreInstanceOfOperatorNode(loc, $1, $3->getParseTypeInfo()));
         delete $3;
     }
-    | exp_n NULL_COALESCING exp           { $$ = (new QoreNullCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n VALUE_COALESCING exp          { $$ = (new QoreValueCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $1, $3, $5)); }
-    | exp_n P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1)); } // post-increment
-    | exp_n P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1)); } // post-decrement
+    | exp_n NULL_COALESCING exp           { $$ = (new QoreNullCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n VALUE_COALESCING exp          { $$ = (new QoreValueCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, $5)); }
+    | exp_n P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-increment
+    | exp_n P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-decrement
     | exp_n '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, $1, $3)); }
     | exp_n LOGICAL_AND exp               {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_log_or(loc, $1, "logical AND");
         $$ = (new QoreLogicalAndOperatorNode(loc, $1, $3));
     }
-    | exp_n LOGICAL_OR exp                { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n BROKEN_LOGICAL_OR exp         { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n BROKEN_BINARY_OR exp          { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
+    | exp_n LOGICAL_OR exp                { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n BROKEN_LOGICAL_OR exp         { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n BROKEN_BINARY_OR exp          { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp_n BROKEN_BINARY_XOR exp         {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_bin_or(loc, $1, "binary XOR");
         $$ = (new QoreBinaryXorOperatorNode(loc, $1, $3));
     }
-    | exp_n '|' exp                       { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
+    | exp_n '|' exp                       { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp_n '&' exp                       {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_bin_or(loc, $1, "binary AND");
         check_operator_bin_xor(loc, $1, "binary AND");
         $$ = (new QoreBinaryAndOperatorNode(loc, $1, $3));
     }
-    | exp_n '^' exp                       { $$ = (new QoreBinaryXorOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n REGEX_MATCH REGEX             { $$ = (new QoreRegexMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n REGEX_NMATCH REGEX            { $$ = (new QoreRegexNMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n REGEX_MATCH REGEX_SUBST       { $$ = (new QoreRegexSubstOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n REGEX_MATCH REGEX_TRANS       { $$ = (new QoreTransliterationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n REGEX_MATCH REGEX_EXTRACT     { $$ = (new QoreRegexExtractOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '>' exp                       { $$ = (new QoreLogicalGreaterThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '<' exp                       { $$ = (new QoreLogicalLessThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n LOGICAL_CMP exp               { $$ = (new QoreLogicalComparisonOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n LOGICAL_EQ exp                { $$ = (new QoreLogicalEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n ABSOLUTE_EQ exp               { $$ = (new QoreLogicalAbsoluteEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n ABSOLUTE_NE exp               { $$ = (new QoreLogicalAbsoluteNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n LOGICAL_NE exp                { $$ = (new QoreLogicalNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n LOGICAL_LE exp                { $$ = (new QoreLogicalLessThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n LOGICAL_GE exp                { $$ = (new QoreLogicalGreaterThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n SHIFT_LEFT exp                { $$ = (new QoreShiftLeftOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n SHIFT_RIGHT exp               { $$ = (new QoreShiftRightOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '+' exp                       { $$ = (new QorePlusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '-' exp                       { $$ = (new QoreMinusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '%' exp                       { $$ = (new QoreModuloOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '/' exp                       { $$ = (new QoreDivisionOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '*' exp                       { $$ = (new QoreMultiplicationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n '[' exp RANGE ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $1, $3, QoreValue())); }
-    | exp_n '[' RANGE exp ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line), $1, QoreValue(), $4)); }
+    | exp_n '^' exp                       { $$ = (new QoreBinaryXorOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n REGEX_MATCH REGEX             { $$ = (new QoreRegexMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n REGEX_NMATCH REGEX            { $$ = (new QoreRegexNMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n REGEX_MATCH REGEX_SUBST       { $$ = (new QoreRegexSubstOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n REGEX_MATCH REGEX_TRANS       { $$ = (new QoreTransliterationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n REGEX_MATCH REGEX_EXTRACT     { $$ = (new QoreRegexExtractOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '>' exp                       { $$ = (new QoreLogicalGreaterThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '<' exp                       { $$ = (new QoreLogicalLessThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n LOGICAL_CMP exp               { $$ = (new QoreLogicalComparisonOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n LOGICAL_EQ exp                { $$ = (new QoreLogicalEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n ABSOLUTE_EQ exp               { $$ = (new QoreLogicalAbsoluteEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n ABSOLUTE_NE exp               { $$ = (new QoreLogicalAbsoluteNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n LOGICAL_NE exp                { $$ = (new QoreLogicalNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n LOGICAL_LE exp                { $$ = (new QoreLogicalLessThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n LOGICAL_GE exp                { $$ = (new QoreLogicalGreaterThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n SHIFT_LEFT exp                { $$ = (new QoreShiftLeftOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n SHIFT_RIGHT exp               { $$ = (new QoreShiftRightOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '+' exp                       { $$ = (new QorePlusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '-' exp                       { $$ = (new QoreMinusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '%' exp                       { $$ = (new QoreModuloOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '/' exp                       { $$ = (new QoreDivisionOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '*' exp                       { $$ = (new QoreMultiplicationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '[' exp RANGE ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, QoreValue())); }
+    | exp_n '[' RANGE exp ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, QoreValue(), $4)); }
     | exp_n '[' RANGE ']'                 {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         parse_error(*loc, "illegal range without start or end expressions; at least start or end must be given for a range");
         $$ = (new QoreSquareBracketsRangeOperatorNode(loc, $1, QoreValue(), QoreValue()));
     }
     | exp_n '[' exp ']'                   {
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$.bits = 0;
         // issue #2198: if we have a range between square brackets, we need to return a QoreSquareBracketsRangeOperatorNode
         QoreValue v3($3);  // Convert to QoreValue for method calls
@@ -5968,10 +6000,10 @@ exp_n:
             $$ = (new QoreSquareBracketsOperatorNode(loc, $1, $3));
         }
     }
-    | exp_n '{' exp '}'                   { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
-    | exp_n RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line), $1, $3)); }
+    | exp_n '{' exp '}'                   { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp_n '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); }
-    | exp_n DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line), $1, $2)); }
+    | exp_n DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); }
     ;
 
 string:
@@ -5998,7 +6030,7 @@ scalar:
     | TOK_FALSE   { $$ = (false); }
     | ELLIPSES    {
         $$ = (new QoreEllipsesNode(
-            qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line))
+            qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col))
         );
     }
     ;

@@ -2791,13 +2791,15 @@ public:
     }
 
     DLLLOCAL void parseAddConstant(const QoreProgramLocation* loc, const std::string &cname, QoreValue val,
-            ClassAccess access, const QoreTypeInfo* typeInfo = nullptr) {
+            ClassAccess access, const QoreTypeInfo* typeInfo = nullptr, QoreParseTypeInfo* parseTypeInfo = nullptr) {
         ValueHolder val_holder(val, nullptr);
         if (parseCheckSystemCommitted(loc)) {
+            delete parseTypeInfo;
             return;
         }
         if (parseHasVar(cname.c_str())) {
             parse_error(*loc, "'%s' has already been declared as a static variable in class '%s' and therefore cannot be also declared as a constant in the same class with the same name", cname.c_str(), name.c_str());
+            delete parseTypeInfo;
             return;
         }
         if (!has_new_user_changes)
@@ -2807,7 +2809,7 @@ public:
 
         //printd(5, "parseAddConstant() this: %p cls: %p const: %s access: %d\n", this, cls, cname.c_str(), access);
 
-        constlist.parseAdd(loc, cname, val_holder.release(), access, name.c_str(), typeInfo);
+        constlist.parseAdd(loc, cname, val_holder.release(), access, name.c_str(), typeInfo, parseTypeInfo);
     }
 
     DLLLOCAL bool parseHasVar(const char* vn) {
@@ -3551,8 +3553,9 @@ public:
     }
 
     DLLLOCAL static void parseAddConstant(QoreClass& qc, const QoreProgramLocation* loc, const std::string &cname,
-            QoreValue val, ClassAccess access, const QoreTypeInfo* typeInfo = nullptr) {
-        qc.priv->parseAddConstant(loc, cname, val, access, typeInfo);
+            QoreValue val, ClassAccess access, const QoreTypeInfo* typeInfo = nullptr,
+            QoreParseTypeInfo* parseTypeInfo = nullptr) {
+        qc.priv->parseAddConstant(loc, cname, val, access, typeInfo, parseTypeInfo);
     }
 
     DLLLOCAL static LocalVar* getSelfId(const QoreClass& qc) {

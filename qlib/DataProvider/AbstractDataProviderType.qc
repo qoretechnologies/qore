@@ -27,7 +27,7 @@
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! maps type codes to type names
-public const TypeCodeMap = {
+public const hash<string, string> TypeCodeMap = {
     NT_INT: "int",
     NT_STRING: "string",
     NT_BOOLEAN: "bool",
@@ -46,7 +46,7 @@ public const TypeCodeMap = {
 #! maps Qore type name constant values from the @ref Qore::Type "Type" namespace to optimal Qore types names
 /** additionally, \c "all" is mapped to \c "any"
 */
-public const OptimalQoreDataTypeMap = {
+public const hash<auto> OptimalQoreDataTypeMap = {
     "int": "int",
     Type::Int: "int",
     Type::String: "string",
@@ -82,7 +82,7 @@ public const OptimalQoreSoftDataTypeMap = OptimalQoreDataTypeMap + {
 };
 
 #! Maps Qore type name constant values to data type objects
-public const DataTypeMap = {
+public const hash<auto> DataTypeMap = {
     "int": IntType,
     Type::Int: IntType,
     Type::String: StringType,
@@ -268,13 +268,13 @@ public hashdecl DataTypeInfo {
 */
 #/@{
 #! Tag indicating that a string value can be taken from a file
-public const DTT_FromFile = "from_file";
+public const string DTT_FromFile = "from_file";
 
 #! Tag indicates that a string value can indicate a location
-public const DTT_FromLocation = "from_location";
+public const string DTT_FromLocation = "from_location";
 
 #! Tag indicates that the value is only applicable in client contexts
-public const DTT_ClientOnly = "client_only";
+public const string DTT_ClientOnly = "client_only";
 #/@}
 
 #! describes a data type
@@ -286,7 +286,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         static AbstractDataProviderType anyDataType;
 
         #! Default description
-        const DefaultDesc = "no description available";
+        const string DefaultDesc = "no description available";
     }
 
     private {

@@ -28,7 +28,7 @@ public namespace DataProvider {
 public class QoreFloatDataTypeBase inherits QoreDataType {
     private {
         #! supported soft options
-        const SupportedSoftOptions = {
+        const hash<string, hash<DataProviderTypeOptionInfo>> SupportedSoftOptions = {
             "number.format": <DataProviderTypeOptionInfo>{
                 "type": Type::String,
                 "desc": "the format string for converting strings to numbers",

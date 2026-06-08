@@ -707,7 +707,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 %endif
             ;
 
-            const AcceptList = (
+            const list<auto> AcceptList = (
 %ifndef NoYaml
                 MimeTypeYamlApp, MimeTypeYaml, MimeTypeYamlRpc,
 %endif
@@ -723,25 +723,25 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             ) + (SupportsCbor ? (MimeTypeCbor,) : ());
 
             #! Accept header value
-            const Accept = AcceptList.join(",");
+            const string Accept = AcceptList.join(",");
 
             #! Map of acceptable Mime types
-            const AcceptMap = map {$1: True}, AcceptList;
+            const hash<string, bool> AcceptMap = map {$1: True}, AcceptList;
 
             #! RestClientIo Version
-            const Version = "1.0";
+            const string Version = "1.0";
 
             #! RestClientIo Version String
-            const VersionString = sprintf("Qore-RestClientIo/%s", RestClientIo::Version);
+            const string VersionString = sprintf("Qore-RestClientIo/%s", RestClientIo::Version);
 
             #! default HTTP headers (Content-Type is added before sending)
-            const DefaultHeaders = {
+            const hash<auto> DefaultHeaders = {
                 "Accept": Accept,
                 "User-Agent": RestClientIo::VersionString,
             };
 
             #! Map of legacy @c http_version values to internal @c protocol codes
-            const HttpVersionMap = {
+            const hash<string, string> HttpVersionMap = {
                 "auto": "auto",
                 "1.0": "h1",
                 "1.1": "h1",
@@ -752,7 +752,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! Valid @c oauth2_pkce option values
             /** Mirrors @ref RestClient::RestClient::PkceValueSet.
             */
-            const PkceValueSet = {
+            const hash<string, bool> PkceValueSet = {
                 "plain": True,
                 "S256": True,
                 "none": True,
@@ -763,7 +763,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! Custom token refresh options (all-or-nothing); mirrors
             #! @ref RestClient::RestClient::CustomTokenOptions
-            const CustomTokenOptions = {
+            const hash<string, bool> CustomTokenOptions = {
                 "custom_token_auth": True,
                 "custom_token_method": True,
                 "custom_token_path": True,
@@ -771,7 +771,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             };
 
             #! OAuth2 option requirements per grant type
-            const OAuth2GrantOptions = {
+            const hash<auto> OAuth2GrantOptions = {
                 "authorization_code": (
                     "oauth2_auth_url",
                     "oauth2_client_id",
@@ -807,7 +807,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 Subclasses that add their own options (e.g. \c AwsRestClientIo) must strip those keys
                 before calling the base constructor.
             */
-            const KnownOptions = {
+            const hash<string, bool> KnownOptions = {
                 # Core transport / URL
                 "url": True,
                 "default_path": True,
@@ -4079,11 +4079,11 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
 public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Waiting for the underlying connection to become ready
-        const SPS_CONNECTING = "connecting";
+        const string SPS_CONNECTING = "connecting";
         #! Waiting for an HTTP response
-        const SPS_IO_WAITING = "io-waiting";
+        const string SPS_IO_WAITING = "io-waiting";
         #! Complete
-        const SPS_COMPLETE = "complete";
+        const string SPS_COMPLETE = "complete";
     }
 
     private {
@@ -4432,10 +4432,10 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 */
 public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPollOperation<auto> {
     public {
-        const SPS_CONNECTING = "connecting";
-        const SPS_STREAM_WAITING = "stream-waiting";
-        const SPS_ERROR_DRAIN = "error-drain";
-        const SPS_COMPLETE = "complete";
+        const string SPS_CONNECTING = "connecting";
+        const string SPS_STREAM_WAITING = "stream-waiting";
+        const string SPS_ERROR_DRAIN = "error-drain";
+        const string SPS_COMPLETE = "complete";
     }
 
     private {
@@ -4847,15 +4847,15 @@ public namespace RestClientIo {
 public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Waiting for the OAuth2 token endpoint connection to become ready
-        const SPS_OAUTH2_CONNECTING = "oauth2-connecting";
+        const string SPS_OAUTH2_CONNECTING = "oauth2-connecting";
         #! Waiting for the OAuth2 token refresh response via EventNotifier
-        const SPS_OAUTH2_REFRESH = "oauth2-refresh";
+        const string SPS_OAUTH2_REFRESH = "oauth2-refresh";
         #! Waiting for the underlying TCP/TLS connection to become ready
-        const SPS_CONNECTING = "connecting";
+        const string SPS_CONNECTING = "connecting";
         #! Waiting for HTTP ping response via EventNotifier
-        const SPS_IO_WAITING = "io-waiting";
+        const string SPS_IO_WAITING = "io-waiting";
         #! Complete
-        const SPS_COMPLETE = "complete";
+        const string SPS_COMPLETE = "complete";
     }
 
     private {

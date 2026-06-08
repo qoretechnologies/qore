@@ -36,7 +36,7 @@ public namespace ConnectionProvider {
 public class FilesystemConnection inherits AbstractConnectionWithInfo {
     public {
         #! Connection entry info
-        const ConnectionScheme = <ConnectionSchemeInfo>{
+        const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Filesystem Connection",
             "short_desc": "A connection to the local filesystem",
             "desc": "A connection to the local filesystem",
@@ -59,7 +59,7 @@ public class FilesystemConnection inherits AbstractConnectionWithInfo {
         };
 
         #! Data provider subtypes supported
-        const DataProviderSubtypeMap = {
+        const hash<auto> DataProviderSubtypeMap = {
             "filepoller": {
                 "module": "FilePoller",
                 "class": "FileDelayedPollerDataProvider",

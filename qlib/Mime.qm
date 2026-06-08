@@ -271,54 +271,54 @@ public namespace Mime {
      */
     #/@{
     #! MIME type for unknown file types
-    public const MimeTypeUnknown = MimeTypeOctetStream;
+    public const string MimeTypeUnknown = MimeTypeOctetStream;
 
     #! MIME type for unknown file types
-    public const MimeTypeOctetStream = "application/octet-stream";
+    public const string MimeTypeOctetStream = "application/octet-stream";
 
     #! MIME type for text
-    public const MimeTypeText = "text/plain";
+    public const string MimeTypeText = "text/plain";
 
     #! MIME type for HTML
-    public const MimeTypeHtml = "text/html";
+    public const string MimeTypeHtml = "text/html";
 
     #! MIME type for csv files (http://tools.ietf.org/html/rfc4180)
-    public const MimeTypeCsv = "text/csv";
+    public const string MimeTypeCsv = "text/csv";
 
     #! MIME type for jpeg images
-    public const MimeTypeJpeg = "image/jpeg";
+    public const string MimeTypeJpeg = "image/jpeg";
 
     #! MIME type for png images
-    public const MimeTypePng = "image/png";
+    public const string MimeTypePng = "image/png";
 
     #! Mime type for SOAP XML messages (XML MIME type reference: http://tools.ietf.org/html/rfc3023)
-    public const MimeTypeSoapXml = "application/soap+xml";
+    public const string MimeTypeSoapXml = "application/soap+xml";
 
     #! Mime type for yaml data files (RFC 9512)
-    public const MimeTypeYaml = "application/yaml";
+    public const string MimeTypeYaml = "application/yaml";
 
     #! Mime type for plain (human-readable) xml files
-    public const MimeTypeXml = "text/xml";
+    public const string MimeTypeXml = "text/xml";
 
     #! Mime type for more complicated (not human-readable) xml files
-    public const MimeTypeXmlApp = "application/xml";
+    public const string MimeTypeXmlApp = "application/xml";
 
     #! Mime type for JSON
-    public const MimeTypeJson = "application/json";
+    public const string MimeTypeJson = "application/json";
 
     #! Mime type for JSON-RPC
-    public const MimeTypeJsonRpc = MimeTypeJson;
+    public const string MimeTypeJsonRpc = MimeTypeJson;
 
     #! Mime type for XML-RPC
-    public const MimeTypeXmlRpc = MimeTypeXml;
+    public const string MimeTypeXmlRpc = MimeTypeXml;
 
     #! Mime type for YAML-RPC
-    public const MimeTypeYamlRpc = "application/x-yaml";
+    public const string MimeTypeYamlRpc = "application/x-yaml";
 
     #! Official IANA MIME type for YAML (RFC 9512)
     /** @since Mime 1.7
     */
-    public const MimeTypeYamlApp = "application/yaml";
+    public const string MimeTypeYamlApp = "application/yaml";
 
     #! Set of all equivalent YAML MIME types for normalization
     /** All of these MIME types represent YAML content and should be treated as equivalent
@@ -326,7 +326,7 @@ public namespace Mime {
 
         @since Mime 1.8
     */
-    public const YamlMimeTypes = {
+    public const hash<string, bool> YamlMimeTypes = {
         MimeTypeYaml: True,
         MimeTypeYamlRpc: True,
         "text/x-yaml": True,
@@ -336,79 +336,79 @@ public namespace Mime {
     #! MIME type for CBOR (RFC 8949)
     /** @since Mime 1.7
     */
-    public const MimeTypeCbor = "application/cbor";
+    public const string MimeTypeCbor = "application/cbor";
 
     #! Mime type for Javascript
-    public const MimeTypeJavascript = "application/javascript";
+    public const string MimeTypeJavascript = "application/javascript";
 
     #! Mime type for css
-    public const MimeTypeCss = "text/css";
+    public const string MimeTypeCss = "text/css";
 
     #! Mime type for multipart form URL encoding
-    public const MimeTypeFormUrlEncoded = "application/x-www-form-urlencoded";
+    public const string MimeTypeFormUrlEncoded = "application/x-www-form-urlencoded";
 
     #! Mime type for multipart form data
-    public const MimeTypeMultipartFormData = "multipart/form-data";
+    public const string MimeTypeMultipartFormData = "multipart/form-data";
 
     #! Mime type for multipart related
-    public const MimeTypeMultipartRelated = "multipart/related";
+    public const string MimeTypeMultipartRelated = "multipart/related";
 
     #! Mime type for multipart mixed
-    public const MimeTypeMultipartMixed = "multipart/mixed";
+    public const string MimeTypeMultipartMixed = "multipart/mixed";
 
     #! Mime type for multipart alternative
-    public const MimeTypeMultipartAlternative = "multipart/alternative";
+    public const string MimeTypeMultipartAlternative = "multipart/alternative";
 
     #! Mime type for multipart digest
-    public const MimeTypeMultipartDigest = "multipart/digest";
+    public const string MimeTypeMultipartDigest = "multipart/digest";
 
     #! Mime type for multipart signed (RFC 1847)
-    public const MimeTypeMultipartSigned = "multipart/signed";
+    public const string MimeTypeMultipartSigned = "multipart/signed";
 
     #! Mime type for multipart encrypted (RFC 1847)
-    public const MimeTypeMultipartEncrypted = "multipart/encrypted";
+    public const string MimeTypeMultipartEncrypted = "multipart/encrypted";
 
     #! Mime type for multipart byteranges (HTTP partial content)
-    public const MimeTypeMultipartByteranges = "multipart/byteranges";
+    public const string MimeTypeMultipartByteranges = "multipart/byteranges";
 
     #! Mime type for RFC 822 messages
-    public const MimeTypeMessage = "message/rfc822";
+    public const string MimeTypeMessage = "message/rfc822";
 
     #! Mime type for SVG files
-    public const MimeTypeSvg = "image/svg+xml";
+    public const string MimeTypeSvg = "image/svg+xml";
 
     #! Mime type for Qore sources
-    public const MimeTypeQore = "text/x-qore";
+    public const string MimeTypeQore = "text/x-qore";
 
     #! Mime type for Java sources
-    public const MimeTypeJavaSource = "text/x-java-source";
+    public const string MimeTypeJavaSource = "text/x-java-source";
 
     #! Mime type for Java class files
-    public const MimeTypeJava = "application/java";
+    public const string MimeTypeJava = "application/java";
 
     #! Mime type for Java jar files
-    public const MimeTypeJar = "application/java-archive";
+    public const string MimeTypeJar = "application/java-archive";
 
     #! Mime type for Python sources
-    public const MimeTypePython = "text/x-python-source";
+    public const string MimeTypePython = "text/x-python-source";
 
     #! Mime type for Python compiled code
-    public const MimeTypePythonCode = "application/x-python-code";
+    public const string MimeTypePythonCode = "application/x-python-code";
 
     #! Mime type for PDF documents
-    public const MimeTypePdf = "application/pdf";
+    public const string MimeTypePdf = "application/pdf";
 
     #! Mime type for PHP sources
-    public const MimeTypePhp = "application/x-httpd-php";
+    public const string MimeTypePhp = "application/x-httpd-php";
 
     #! Mime type for server-sent events
-    public const MimeTypeSse = "text/event-stream";
+    public const string MimeTypeSse = "text/event-stream";
 
     #! Set of MIME types that are JSON-compatible (can be parsed with parse_json())
     /** These MIME types represent JSON or JSON-derived formats that can be
         deserialized using the standard parse_json() function.
     */
-    public const MimeTypesJson = {
+    public const hash<string, bool> MimeTypesJson = {
         MimeTypeJson: True,                              # application/json
         "application/vnd.oracle.resource+json": True,   # Oracle REST Data Services
         "application/vnd.api+json": True,               # JSON:API
@@ -465,7 +465,7 @@ public namespace Mime {
     #! A map of default mime types per file extension; the hash keys are file extensions in lower-case without the dot (ex: \c "txt")
     /** @showinitializer
      */
-    public const MimeTypes = {
+    public const hash<string, string> MimeTypes = {
         "123": "application/vnd.lotus-1-2-3",
         "3dml": "text/vnd.in3d.3dml",
         "3g2": "video/3gpp2",
@@ -969,7 +969,7 @@ public namespace Mime {
 
         @see <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a>
     */
-    public const UrlEncodedChars = {
+    public const hash<string, bool> UrlEncodedChars = {
         "$": True,
         "-": True,
         "_": True,
@@ -987,29 +987,29 @@ public namespace Mime {
      */
     #/@{
     #! default Content-Transfer-Encoding if none is present; implies lines < 1000 chars (= no encoding)
-    public const ContentTransEnc7Bit = "7bit";
+    public const string ContentTransEnc7Bit = "7bit";
 
     #! implies lines < 1000 chars (= no encoding)
-    public const ContentTransEnc8Bit = "8bit";
+    public const string ContentTransEnc8Bit = "8bit";
 
     #! binary transfer encoding; implies no maximum line length (= no encoding)
-    public const ContentTransEncBinary = "binary";
+    public const string ContentTransEncBinary = "binary";
 
     #! base-64 Content-Transfer-Encoding
-    public const ContentTransEncBase64 = "base64";
+    public const string ContentTransEncBase64 = "base64";
 
     #! quoted-printable Content-Transfer-Encoding
-    public const ContentTransEncQuotedPrintable = "quoted-printable";
+    public const string ContentTransEncQuotedPrintable = "quoted-printable";
 
     #! maximum line length for base64 encoding
     /** <a href="http://tools.ietf.org/html/rfc2045#section-6.8">RFC 2045 section 6.8</a>
      */
-    public const MimeBase64LineLen = 76;
+    public const int MimeBase64LineLen = 76;
 
     #! maximum line length for quoted-printable encoding
     /** <a href="http://tools.ietf.org/html/rfc2045#section-6.7">RFC 2045 section 6.7</a>
      */
-    public const MimeQuotedPrintableLineLen = 76;
+    public const int MimeQuotedPrintableLineLen = 76;
     #/@}
 
     /** @defgroup MimeEncodingFunctions MIME Encoding Functions
@@ -1457,36 +1457,36 @@ public namespace Mime {
      */
     #/@{
     #! for form data (http://tools.ietf.org/html/rfc1867, http://tools.ietf.org/html/rfc2388)
-    public const MPT_FORM_DATA   = "form-data";
+    public const string MPT_FORM_DATA   = "form-data";
 
     #! for sending files with different "Content-Type" headers (http://tools.ietf.org/html/rfc2046#section-5.1.3)
-    public const MPT_MIXED       = "mixed";
+    public const string MPT_MIXED       = "mixed";
 
     #! for email/MIME messages with headers (http://tools.ietf.org/html/rfc2046)
-    public const MPT_MESSAGE     = "message";
+    public const string MPT_MESSAGE     = "message";
 
     #! for sending multiple text messages (http://tools.ietf.org/html/rfc2046#section-5.1.5)
-    public const MPT_DIGEST      = "digest";
+    public const string MPT_DIGEST      = "digest";
 
     #! for sending multiple "alternatives" of the same content (http://tools.ietf.org/html/rfc2046#section-5.1.4)
-    public const MPT_ALTERNATIVE = "alternative";
+    public const string MPT_ALTERNATIVE = "alternative";
 
     #! for sending multiple components of an aggregated whole (http://tools.ietf.org/html/rfc2387)
-    public const MPT_RELATED     = "related";
+    public const string MPT_RELATED     = "related";
 
     #! to attach a digital signature to a message (http://tools.ietf.org/html/rfc1847#section-2.1)
-    public const MPT_SIGNED      = "signed";
+    public const string MPT_SIGNED      = "signed";
 
     #! for sending encrypted messages (http://tools.ietf.org/html/rfc1847#section-2.2)
-    public const MPT_ENCRYPTED   = "encrypted";
+    public const string MPT_ENCRYPTED   = "encrypted";
 
     #! for sending noncontiguous byte ranges of a single message (http://tools.ietf.org/html/rfc2616)
-    public const MPT_BYTERANGES  = "byteranges";
+    public const string MPT_BYTERANGES  = "byteranges";
     #/@}
 
     #! MultiPartMessage class implementation
     public class MultiPartMessage {
-        const MP_DEFAULT_MSG = "This is a MIME multipart message";
+        const string MP_DEFAULT_MSG = "This is a MIME multipart message";
 
         private {
             #! the type of multi-part message: see @ref MultiPartConstants for possible values
@@ -1505,8 +1505,8 @@ public namespace Mime {
             hash<auto> hdr;
 
             #! constants for parsing MIME multipart messages
-            const ASCII_CR = 13;
-            const ASCII_LF = 10;
+            const int ASCII_CR = 13;
+            const int ASCII_LF = 10;
         }
 
         #! creates the object

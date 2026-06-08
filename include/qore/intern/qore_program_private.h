@@ -510,6 +510,12 @@ public:
     RootQoreNamespace* RootNS = nullptr;
     QoreNamespace* QoreNS = nullptr;
 
+    // when true, parse errors and warnings are also captured as structured diagnostics (machine-readable
+    // form for tooling / AI coding assistants); see Program::setParseDiagnosticsCollected()
+    bool collect_diagnostics = false;
+    // structured diagnostics captured during the current/last parse action (cleared on each parse start)
+    std::vector<QoreDiagnostic> diagnostics;
+
     // top level statements
     TopLevelStatementBlock sb;
 
@@ -742,7 +748,10 @@ public:
 #endif
 
     DLLLOCAL const QoreProgramLocation* getLocation(int sline, int eline);
+    DLLLOCAL const QoreProgramLocation* getLocation(int sline, int eline, int scol, int ecol);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline);
+    DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline,
+        int scol, int ecol);
 
     DLLLOCAL void startThread(ExceptionSink& xsink);
 
@@ -1321,11 +1330,42 @@ public:
         pwo.warn_mask = wm;
         parseSink = xsink;
 
+        // structured diagnostics are scoped to a single parse action
+        if (collect_diagnostics) {
+            diagnostics.clear();
+        }
+
         if (pendingParseSink) {
             parseSink->assimilate(pendingParseSink);
             pendingParseSink = nullptr;
         }
     }
+
+    //! enables or disables structured parse-diagnostic collection; disabling also clears any collected data
+    DLLLOCAL void setParseDiagnosticsCollected(bool collect) {
+        collect_diagnostics = collect;
+        if (!collect) {
+            diagnostics.clear();
+        }
+    }
+
+    //! returns true if structured parse-diagnostic collection is enabled
+    DLLLOCAL bool parseDiagnosticsCollected() const {
+        return collect_diagnostics;
+    }
+
+    //! returns the structured diagnostics collected during the last parse action as a
+    //! list<hash<ParseDiagnosticInfo>> (implemented in QoreProgram.cpp); never returns nullptr
+    DLLLOCAL QoreListNode* getParseDiagnosticList() const;
+
+    //! returns the collected structured diagnostics serialized as a JSON array (implemented in QoreProgram.cpp);
+    //! used by the standalone interpreter's --diag-format=json mode for external tooling
+    DLLLOCAL std::string getParseDiagnosticsJSON() const;
+
+    //! renders the collected diagnostics as human-readable code frames (source line + caret under the span)
+    //! to the given stream; \a source_text provides the source lines for the main input (may be nullptr).
+    //! Returns the number of error (not warning) diagnostics rendered.  Implemented in QoreProgram.cpp.
+    DLLLOCAL unsigned renderParseDiagnosticFrames(const char* source_text, FILE* os) const;
 
     DLLLOCAL int checkParse(ExceptionSink* xsink) const {
         // For REPL mode (PO_ALLOW_REPARSE), ensure no threads are running in the Program
@@ -2043,6 +2083,10 @@ public:
 
     DLLLOCAL void makeParseException(const QoreProgramLocation& loc, const char* err, QoreStringNode* desc) {
         QORE_TRACE("QoreProgram::makeParseException()");
+
+        if (collect_diagnostics) {
+            diagnostics.push_back(QoreDiagnostic(true, err, -1, loc, desc->c_str()));
+        }
 
         QoreStringNodeHolder d(desc);
         if (!requires_exception) {
@@ -2763,6 +2807,9 @@ public:
             if (!rc)
                 break;
         }
+        if (pgm->priv->collect_diagnostics) {
+            pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
+        }
         QoreException *ne = new ParseException(loc, warn, desc);
         pgm->priv->warnSink->raiseException(ne);
     }
@@ -2777,6 +2824,9 @@ public:
             return;
         }
 
+        if (pgm->priv->collect_diagnostics) {
+            pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
+        }
         QoreException *ne = new ParseException(loc, warn, desc);
         pgm->priv->warnSink->raiseException(ne);
     }
@@ -3458,5 +3508,14 @@ private:
 };
 
 DLLLOCAL TypedHashDecl* init_hashdecl_SourceLocationInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
+
+//! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
+//! exported so the standalone interpreter (--diag-format=json) can emit them
+DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
+
+//! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
+//! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
+DLLEXPORT unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os);
 
 #endif

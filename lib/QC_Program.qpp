@@ -68,11 +68,59 @@ hashdecl SourceLocationInfo {
     //! the ending source line number
     int endline;
 
+    //! the starting source column number, or -1 if unknown
+    /** @since %Qore 2.3
+    */
+    int column;
+
+    //! the ending source column number, or -1 if unknown
+    /** @since %Qore 2.3
+    */
+    int endcolumn;
+
     //! the source object or file name tag (used when multiple source objects are defined from the same source)
     *string source;
 
     //! the offset line in the source (for when multiple source objects are defined from the same source)
     int offset;
+}
+
+//! structured parse diagnostic information (a machine-readable parse error or warning)
+/** Returned by @ref Qore::Program::getParseDiagnostics() when structured diagnostic collection is enabled;
+    provides a machine-readable form of parse diagnostics for tooling and AI coding assistants.
+
+    @since %Qore 2.3
+*/
+hashdecl ParseDiagnosticInfo {
+    //! the severity: \c "error" or \c "warning"
+    string severity;
+
+    //! a stable identifier for the diagnostic (the exception error code for errors, or the warning name for warnings)
+    string code;
+
+    //! for warnings, the @ref warning_constants "warning code" bit; @ref nothing for errors
+    *int warningCode;
+
+    //! the source file name or parse label, if known
+    *string file;
+
+    //! the source object or file name tag, if any
+    *string source;
+
+    //! the starting source line number
+    int startLine;
+
+    //! the ending source line number
+    int endLine;
+
+    //! the starting source column number, or -1 if unknown
+    int startColumn;
+
+    //! the ending source column number, or -1 if unknown
+    int endColumn;
+
+    //! the human-readable diagnostic message (may include a "did you mean ...?" suggestion)
+    string message;
 }
 
 /** @defgroup import_visibility_constants Import Visibility Constants
@@ -1104,6 +1152,16 @@ const WARN_BROKEN_LOGIC_PRECEDENCE = QP_WARN_BROKEN_LOGIC_PRECEDENCE;
     @since %Qore 1.0
 */
 const WARN_INVALID_CATCH = QP_WARN_INVALID_CATCH;
+
+//! This warns when a @ref switch "switch statement" over an @ref enums "enum" value does not handle all of the enum's values and has no \c default label
+/** Adding a \c default label silences the warning.  This helps catch unhandled values, for example when a
+    new member is added to an enum but an existing \c switch over that enum is not updated.
+
+    @see @ref non-exhaustive-switch
+
+    @since %Qore 2.3
+*/
+const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
 ///@}
 
 //! Program objects allow %Qore programs to support subprograms with the option to restrict capabilities, for example, to support user-defined logic for application actions
@@ -1417,6 +1475,63 @@ while (exists wh) {
 
     QoreException *e = wsink.catchException();
     return e->makeExceptionObjectAndDelete(xsink);
+}
+
+//! Enables or disables collection of structured parse diagnostics on this %Program object
+/** When enabled, parse errors and warnings raised during subsequent parse actions on this %Program are
+    captured in machine-readable form and can be retrieved with @ref Qore::Program::getParseDiagnostics().
+    This is intended for tooling and AI coding assistants that need to consume diagnostics
+    programmatically rather than parsing exception text.  Collection is disabled by default and has no
+    effect on how errors and warnings are otherwise reported.  The collected list is cleared at the start
+    of each parse action; disabling collection also clears any collected data.
+
+    @par Example:
+    @code{.py}
+pgm.setParseDiagnosticsCollected(True);
+try { pgm.parse(src, "<input>", WARN_DEFAULT); } catch (hash<ExceptionInfo> ex) {}
+foreach hash<ParseDiagnosticInfo> d in (pgm.getParseDiagnostics()) {
+    printf("%s %s:%d:%d %s: %s\n", d.severity, d.file, d.startLine, d.startColumn, d.code, d.message);
+}
+    @endcode
+
+    @param collect @ref True to enable collection, @ref False to disable it
+
+    @see
+    - @ref Qore::Program::getParseDiagnostics()
+    - @ref Qore::Program::parseDiagnosticsCollected()
+
+    @since %Qore 2.3
+*/
+nothing Program::setParseDiagnosticsCollected(bool collect = True) {
+    qore_program_private::get(*p)->setParseDiagnosticsCollected(collect);
+}
+
+//! Returns @ref True if structured parse-diagnostic collection is enabled on this %Program object
+/** @return @ref True if collection is enabled, @ref False if not
+
+    @see @ref Qore::Program::setParseDiagnosticsCollected()
+
+    @since %Qore 2.3
+*/
+bool Program::parseDiagnosticsCollected() [flags=RET_VALUE_ONLY] {
+    return qore_program_private::get(*p)->parseDiagnosticsCollected();
+}
+
+//! Returns the structured parse diagnostics (errors and warnings) collected during the last parse action
+/** Structured diagnostic collection must be enabled with @ref Qore::Program::setParseDiagnosticsCollected()
+    before parsing; if it is not enabled, or if no diagnostics were raised, an empty list is returned.  The
+    diagnostics are returned in the order in which they were raised.
+
+    @return a list of @ref ParseDiagnosticInfo hashes, one per parse error or warning collected
+
+    @see
+    - @ref Qore::Program::setParseDiagnosticsCollected()
+    - @ref ParseDiagnosticInfo
+
+    @since %Qore 2.3
+*/
+list<hash<ParseDiagnosticInfo>> Program::getParseDiagnostics() [flags=RET_VALUE_ONLY] {
+    return qore_program_private::get(*p)->getParseDiagnosticList();
 }
 
 //! Rolls back pending parse changes to preserve the Program object's committed state

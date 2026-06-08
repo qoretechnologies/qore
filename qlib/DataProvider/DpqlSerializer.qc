@@ -70,7 +70,7 @@ public class DpqlSerializer {
         *hash<string, bool> reserved_identifiers;
 
         #! Map of operators to their precedence
-        const OperatorPrecedence = {
+        const hash<auto> OperatorPrecedence = {
             DP_OP_OR: DPQL_PREC_OR,
             DP_OP_AND: DPQL_PREC_AND,
             DP_SEARCH_OP_EQ: DPQL_PREC_COMPARISON,
@@ -94,7 +94,7 @@ public class DpqlSerializer {
         };
 
         #! Map of operators to their DPQL symbols
-        const OperatorSymbols = {
+        const hash<string, string> OperatorSymbols = {
             DP_OP_OR: "||",
             DP_OP_AND: "&&",
             DP_SEARCH_OP_EQ: "==",

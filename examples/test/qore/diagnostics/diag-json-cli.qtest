@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DiagJsonCliTest
+
+#! Tests the standalone interpreter's --diag-format=json structured-diagnostics emitter
+public class DiagJsonCliTest inherits QUnit::Test {
+    constructor() : Test("DiagJsonCliTest", "1.0") {
+        addTestCase("json error output", \testJsonError());
+        addTestCase("json empty for clean program", \testJsonClean());
+        addTestCase("json via environment variable", \testJsonEnv());
+        set_return_value(main());
+    }
+
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    private string runDiag(string src, *hash<string, string> env_over) {
+        string env_prefix = "";
+        if (exists env_over) {
+            foreach string k in (keys env_over) {
+                env_prefix += sprintf("%s=%s ", k, env_over{k});
+            }
+        }
+        # capture stdout only (diagnostics mode prints the JSON array to stdout and suppresses text output)
+        string cmd = sprintf("%s%s --diag-format=json -e %s 2>/dev/null",
+            env_prefix, qoreBin(), shellQuote(src));
+        return backquote(cmd);
+    }
+
+    private string runEnv(string src) {
+        string cmd = sprintf("QORE_DIAG_FORMAT=json %s -e %s 2>/dev/null",
+            qoreBin(), shellQuote(src));
+        return backquote(cmd);
+    }
+
+    testJsonError() {
+        string out = runDiag("class MyWidget {} MyWidget sub f() { return new MyWidgett(); }");
+        assertRegex("\"severity\":\"error\"", out);
+        assertRegex("\"code\":\"PARSE-EXCEPTION\"", out);
+        assertRegex("undefined class 'MyWidgett'; did you mean 'MyWidget'", out);
+        # a real column span must be present (a positive integer)
+        assertRegex("\"startColumn\":[0-9]+", out);
+        assertFalse(out =~ /"startColumn":-1/, "the error should carry a real column");
+    }
+
+    testJsonClean() {
+        string out = runDiag("int sub f() { return 1; }");
+        assertEq("[]", trim(out), "clean program emits an empty JSON array");
+    }
+
+    testJsonEnv() {
+        string out = runEnv("int sub f() { return undefinedxyz; }");
+        assertRegex("\"severity\":\"error\"", out);
+        assertRegex("cannot resolve bareword 'undefinedxyz'", out);
+    }
+}

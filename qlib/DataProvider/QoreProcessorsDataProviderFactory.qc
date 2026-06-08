@@ -31,7 +31,7 @@ public class QoreProcessorsDataProviderFactory inherits AbstractDataProviderFact
         static Class cls = new Class("QoreProcessorsDataProvider");
 
         #! Factory info
-        const FactoryInfo = <DataProviderFactoryInfo>{
+        const hash<DataProviderFactoryInfo> FactoryInfo = <DataProviderFactoryInfo>{
             "name": "qore-processors",
             "desc": "Factory for built-in Qore data pipeline processors",
         };
