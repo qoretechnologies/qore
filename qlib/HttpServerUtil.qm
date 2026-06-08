@@ -244,10 +244,10 @@ public const string HttpServerVersion = "1.2";
 public const string HttpServerString = sprintf("Qore-HTTP-Server/%s", HttpServerVersion);
 
 #! default timeout in ms
-public const date DefaultTimeout = 30s;  # recvs timeout after 30 seconds
+public const date<relative> DefaultTimeout = 30s;  # recvs timeout after 30 seconds
 
 #! read timeout in ms
-public const date ReadTimeout = DefaultTimeout;
+public const date<relative> ReadTimeout = DefaultTimeout;
 
 #! maximum X.509 and private key file length
 /** there is no real maximum size for these files, however an upper limit is used here to ensure that
