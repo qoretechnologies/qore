@@ -344,7 +344,7 @@ int ConstantEntry::parseCommitRuntimeInit() {
     }
 
     int err = 0;
-    bool defer_external_stub = false;
+    bool defer_runtime_init = false;
 
     // evaluate expression
     ExceptionSink xsink;
@@ -372,15 +372,24 @@ int ConstantEntry::parseCommitRuntimeInit() {
             QoreValue ex_err = xsink.getExceptionErr();
             if (ex_err.getType() == NT_STRING) {
                 QoreStringValueHelper ex_err_str(ex_err);
-                defer_external_stub = !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT");
+                // The init expression references a constant whose value is not
+                // available at compile time: either a qcc --stub constant
+                // (EXTERNAL-STUB-CONSTANT) supplied by the runtime host, or an
+                // AOT-deserialized shell from a dependency object whose
+                // __const_init function has not run yet (AOT-PENDING-CONSTANT).
+                // Both cases are resolved identically: defer this constant to its
+                // own runtime __const_init (the preserved aot_init_expr), where the
+                // register-time round-retry resolves the dependency ordering.
+                defer_runtime_init = !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
+                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT");
             }
-            if (!defer_external_stub) {
+            if (!defer_runtime_init) {
                 typeInfo = nothingTypeInfo;
             }
         }
     }
 
-    if (defer_external_stub) {
+    if (defer_runtime_init) {
         xsink.clear();
         external_stub_dependent = true;
         saved_val.discard(nullptr);

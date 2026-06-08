@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTCrossFileHashdeclConstRefTest
+
+# Regression test for AOT-PENDING-CONSTANT on a cross-compilation-unit constant
+# reference.
+#
+# When a constant holds hashdecl-typed values (e.g. `<FieldInfo>{...}`) it cannot
+# be statically folded and instead gets a runtime __const_init function.  A
+# constant in a *separate* AOT compilation unit that references it (the incremental
+# `qcc -c -L <aot-lib>` model used by large projects) used to fail to compile with:
+#
+#   AOT-PENDING-CONSTANT: cannot evaluate AOT-deserialized constant '...' before its
+#   __const_init function has populated the value (while initializing constant '...')
+#
+# because ConstantEntry::parseCommitRuntimeInit() only deferred constants whose init
+# expression depends on an EXTERNAL-STUB-CONSTANT, not on a pending AOT shell.  The
+# dependent constant must instead defer to its own __const_init (resolved by the
+# register-time round-retry).
+class AOTCrossFileHashdeclConstRefTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTCrossFileHashdeclConstRefTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("cross-unit hashdecl-typed constant reference compiles under "
+            "AOT and resolves to the correct value", \testCrossFileHashdeclConstRef());
+
+        set_return_value(main());
+    }
+
+    # standalone class holding a hashdecl-typed constant (needs a runtime
+    # __const_init); compiled into its own AOT object
+    private string baseCode() {
+        return "%new-style
+public hashdecl FieldInfo {
+    string name;
+    *int weight;
+}
+public class BaseFields {
+    public {
+        const Fields = {
+            \"first\": <FieldInfo>{\"name\": \"first\", \"weight\": 1},
+            \"second\": <FieldInfo>{\"name\": \"second\"},
+        };
+    }
+}
+";
+    }
+
+    # a different unit whose constant references BaseFields::Fields and extends it,
+    # then accesses it with `{}` (a lost compile-time type would surface here as
+    # INVALID-OPERATION)
+    private string derivedCode() {
+        return "%new-style
+public class DerivedFields {
+    public {
+        const Fields = BaseFields::Fields + {
+            \"third\": <FieldInfo>{\"name\": \"third\", \"weight\": 3},
+        };
+    }
+    static string describe() {
+        return sort(keys DerivedFields::Fields).join(\",\");
+    }
+    static int thirdWeight() {
+        return DerivedFields::Fields{\"third\"}.weight;
+    }
+}
+";
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    testCrossFileHashdeclConstRef() {
+        TmpDir tmp("qore-aot-cross-file-hashdecl-const-");
+        string tmp_dir = tmp.path;
+        string lib_dir = tmp_dir + "/aotlib";
+        mkdir(lib_dir);
+
+        string base_path = tmp_dir + "/base.qc";
+        string derived_path = tmp_dir + "/derived.qc";
+        {
+            File f();
+            f.open2(base_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(baseCode());
+        }
+        {
+            File f();
+            f.open2(derived_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(derivedCode());
+        }
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        # compile base.qc into its own AOT object
+        string base_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/base.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, base_path));
+        assertTrue(is_file(lib_dir + "/base.qo"),
+            "compiled hashdecl-typed-constant base unit: " + base_out);
+
+        # THE REGRESSION: compile derived.qc against the base AOT object; the
+        # cross-unit reference to the pending BaseFields::Fields constant must NOT
+        # raise AOT-PENDING-CONSTANT
+        string derived_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/derived.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, derived_path));
+        assertEq(-1, derived_out.find("AOT-PENDING-CONSTANT"),
+            "cross-unit hashdecl-typed constant reference compiles without "
+            "AOT-PENDING-CONSTANT: " + derived_out);
+        assertTrue(is_file(lib_dir + "/derived.qo"),
+            "compiled derived unit referencing the pending AOT constant: " + derived_out);
+
+        # value correctness: the same source, run interpreted, yields the expected
+        # merged constant (establishes the semantics the deferred __const_init must
+        # reproduce; the AOT runtime path is covered by the qorus link + AOTSmoke)
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(baseCode() + derivedCode()
+                + "printf(\"%s|%d\\n\", DerivedFields::describe(), DerivedFields::thirdWeight());\n");
+        }
+        string value_out = run(sprintf("%s %s -b --enable-debug %s",
+            env, qore_bin, script_path));
+        assertEq("first,second,third|3\n", value_out,
+            "merged cross-unit hashdecl-typed constant has the expected value: "
+            + value_out);
+    }
+}
