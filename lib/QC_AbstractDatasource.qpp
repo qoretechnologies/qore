@@ -168,7 +168,7 @@ hash<auto> result = db.selectTyped("select id, name from customer where status =
 buffer<int64> ids = result.id;
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 abstract auto AbstractDatasource::selectTyped(string sql, ...);
 
@@ -189,7 +189,7 @@ ColumnarResult result = db.selectColumnar("select id, name from customer where s
 buffer<int64> ids = result.getColumn("id");
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 ColumnarResult AbstractDatasource::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY] {
     ReferenceHolder<QoreListNode> arguments((args->size() > 1 ? args->copyListFrom(1) : nullptr), xsink);
@@ -262,7 +262,7 @@ list<auto> rows = db.selectRowsTyped("select id, name from customer where status
 printf("%d\n", rows[0].id);
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 abstract auto AbstractDatasource::selectRowsTyped(string sql, ...);
 
@@ -305,7 +305,7 @@ abstract auto AbstractDatasource::vselect(string sql, *softlist<auto> arguments)
 
     @see AbstractDatasource::selectTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 abstract auto AbstractDatasource::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS];
 
@@ -321,7 +321,7 @@ abstract auto AbstractDatasource::vselectTyped(string sql, *softlist<auto> argum
 
     @see AbstractDatasource::selectColumnar()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 ColumnarResult AbstractDatasource::vselectColumnar(string sql, *softlist<auto> arguments)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -390,7 +390,7 @@ abstract auto AbstractDatasource::vselectRows(string sql, *softlist<auto> argume
 
     @see AbstractDatasource::selectRowsTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 abstract auto AbstractDatasource::vselectRowsTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS];
 
@@ -634,10 +634,10 @@ if (!(caps & DBI_CAP_TRANSACTION_MANAGEMENT))
     @note
     - this is reimplemented as @ref Qore::SQL::Datasource::getCapabilities() "Datasource::getCapabilities()" and
       @ref Qore::SQL::DatasourcePool::getCapabilities() "DatasourcePool::getCapabilities()"
-    - this method was added as a non-abstract method in %Qore 2.3 to avoid breaking existing subclasses of
+    - this method was added as a non-abstract method in %Qore 3.0 to avoid breaking existing subclasses of
       AbstractDatasource
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int AbstractDatasource::getCapabilities() [flags=RET_VALUE_ONLY] {
     return 0;

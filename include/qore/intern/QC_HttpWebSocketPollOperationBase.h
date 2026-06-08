@@ -50,7 +50,7 @@
     Built-in implementations:
     - WsEchoFrameHandler: echoes text/binary frames back to the sender
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class WsIoThreadFrameHandler : public AbstractPrivateData {
 public:
@@ -87,7 +87,7 @@ public:
         @return pre-encoded response frame(s) to send, or nullptr for no response.
                 Caller takes ownership (must deref).
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL virtual BinaryNode* handleFrameRaw(WsOpcode opcode,
             const void* data, size_t len, ExceptionSink* xsink) {
@@ -110,7 +110,7 @@ public:
 /** Pure C++, zero allocation overhead — reuses the raw frame bytes where
     possible. Runs entirely on the I/O thread.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class WsEchoFrameHandler : public WsIoThreadFrameHandler {
 public:
@@ -148,7 +148,7 @@ public:
     - Channel-based API (sendText, sendBinary, sendPing, getReceivedFrame)
     - Completion context for HttpConnectionPollOperationBase
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class HttpWebSocketPollOperationPriv : public SocketPollOperationBase {
 public:

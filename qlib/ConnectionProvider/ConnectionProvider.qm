@@ -35,7 +35,7 @@
 %requires ProviderIndexUtil
 
 module ConnectionProvider {
-    version = "2.3";
+    version = "3.0";
     desc    = "API for pluggable connection providers to Qore";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -129,7 +129,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
     @section connectionproviderrelnotes Release Notes
 
-    @subsection connectionprovider_2_3 ConnectionProvider 2.3
+    @subsection connectionprovider_3_0 ConnectionProvider 3.0
     - added @ref ConnectionProvider::AbstractConnection::supportsAsyncRequestApi()
       "AbstractConnection::supportsAsyncRequestApi()" and
       @ref ConnectionProvider::AbstractConnection::startPollRequest()

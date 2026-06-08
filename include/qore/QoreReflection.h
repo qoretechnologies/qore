@@ -488,43 +488,43 @@ DLLEXPORT const type_vec_t* qore_type_get_code_param_types(const QoreTypeInfo* t
 DLLEXPORT bool qore_type_code_has_varargs(const QoreTypeInfo* ti);
 
 //! returns true if the type is a parameterized class or hashdecl type
-/** @since %Qore 2.4
+/** @since %Qore 3.0
  */
 DLLEXPORT bool qore_type_is_parameterized(const QoreTypeInfo* ti);
 
 //! returns a pointer to the type arguments for a parameterized class or hashdecl type, or nullptr if not parameterized
 /** @note this returns a pointer to internal storage; do not delete
-    @since %Qore 2.4
+    @since %Qore 3.0
  */
 DLLEXPORT const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti);
 
 //! returns true if the type is a symbolic type parameter
-/** @since %Qore 2.4
+/** @since %Qore 3.0
  */
 DLLEXPORT bool qore_type_is_type_parameter(const QoreTypeInfo* ti);
 
 //! returns the owner class for a symbolic class type parameter, or nullptr if the type is not a class type parameter
-/** @since %Qore 2.4
+/** @since %Qore 3.0
  */
 DLLEXPORT const QoreClass* qore_type_get_type_parameter_owner_class(const QoreTypeInfo* ti);
 
 //! returns the owner hashdecl for a symbolic hashdecl type parameter, or nullptr if the type is not a hashdecl type parameter
-/** @since %Qore 2.4
+/** @since %Qore 3.0
  */
 DLLEXPORT const TypedHashDecl* qore_type_get_type_parameter_owner_hashdecl(const QoreTypeInfo* ti);
 
 //! returns the zero-based index for a symbolic type parameter, or (size_t)-1 if the type is not a type parameter
-/** @since %Qore 2.4
+/** @since %Qore 3.0
  */
 DLLEXPORT size_t qore_type_get_type_parameter_index(const QoreTypeInfo* ti);
 
 //! returns the name for a symbolic type parameter, or nullptr if the type is not a type parameter
-/** @since %Qore 2.4
+/** @since %Qore 3.0
  */
 DLLEXPORT const char* qore_type_get_type_parameter_name(const QoreTypeInfo* ti);
 
 //! returns true if the symbolic type parameter also accepts NOTHING
-/** @since %Qore 2.4
+/** @since %Qore 3.0
  */
 DLLEXPORT bool qore_type_parameter_accepts_nothing(const QoreTypeInfo* ti);
 

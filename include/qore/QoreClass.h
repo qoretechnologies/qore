@@ -415,7 +415,7 @@ public:
 
         Returns @c nullptr for builtin/system classes that have no associated program.
 
-        @since %Qore 2.4.0
+        @since %Qore 3.0.0
     */
     DLLEXPORT QoreProgram* getSourceProgram() const;
 
@@ -708,7 +708,7 @@ public:
 
         @return the object created
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT QoreObject* execConstructor(const QoreListNode* args, const QoreTypeInfo* object_type_info,
         ExceptionSink* xsink) const;
@@ -980,7 +980,7 @@ public:
     //! sets a parameterized virtual base class mapping for a generic builtin class
     /** @param typeInfo a parameterized class type info whose base class is the virtual base class to add
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT void addParameterizedBuiltinVirtualBaseClass(const QoreTypeInfo* typeInfo);
 
@@ -1072,7 +1072,7 @@ public:
     //! adds a formal type parameter to this class
     /** @param name the formal type parameter name
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT void addTypeParameter(const char* name);
 
@@ -1080,7 +1080,7 @@ public:
     /** @param name the formal type parameter name
         @param default_type the default type argument used when the type argument is omitted
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT void addTypeParameter(const char* name, const char* default_type);
 
@@ -1089,7 +1089,7 @@ public:
         @param default_type the default type argument used when the type argument is omitted, or nullptr
         @param bound_type the upper bound type that type arguments must satisfy, or nullptr
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT void addTypeParameter(const char* name, const char* default_type, const char* bound_type);
 
@@ -1097,7 +1097,7 @@ public:
     /** @param raw_accepts_parameterized when true, raw annotations accept parameterized instances
         @param raw_construction_defaults_to_auto when true, raw construction creates the explicit auto instantiation
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT void setLegacyRawGenericCompatibility(bool raw_accepts_parameterized = true,
             bool raw_construction_defaults_to_auto = true);
@@ -1109,7 +1109,7 @@ public:
     DLLEXPORT size_t getTypeParameterCount() const;
 
     //! returns the number of formal type parameters that do not have defaults
-    /** @since %Qore 2.4
+    /** @since %Qore 3.0
     */
     DLLEXPORT size_t getTypeParameterRequiredCount() const;
 
@@ -1118,7 +1118,7 @@ public:
 
         @return the formal type parameter name or nullptr if the index is invalid
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT const char* getTypeParameterName(size_t index) const;
 
@@ -1127,7 +1127,7 @@ public:
 
         @return the default type argument string or nullptr if the parameter has no default or the index is invalid
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT const char* getTypeParameterDefaultType(size_t index) const;
 
@@ -1136,7 +1136,7 @@ public:
 
         @return the bound type string or nullptr if the parameter has no bound or the index is invalid
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT const char* getTypeParameterBoundType(size_t index) const;
 
@@ -1511,7 +1511,7 @@ public:
     //! returns the type info for the parent class declaration
     /** This can differ from getParentClass().getTypeInfo() when the parent is declared as a parameterized class type.
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 

@@ -1,6 +1,6 @@
 # HTTP Streaming Client APIs for MCP
 
-This document describes the new HTTP streaming APIs added to Qore 2.3 for supporting the Model Context Protocol (MCP) and other streaming HTTP use cases like Server-Sent Events (SSE).
+This document describes the new HTTP streaming APIs added to Qore 3.0 for supporting the Model Context Protocol (MCP) and other streaming HTTP use cases like Server-Sent Events (SSE).
 
 ## Overview
 

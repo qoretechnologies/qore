@@ -43,7 +43,7 @@
 %requires reflection
 
 module Util {
-    version = "2.3";
+    version = "3.0";
     desc    = "user module for generally useful routines";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -106,7 +106,7 @@ module Util {
 
     @section utilrelnotes Release Notes
 
-    @subsection util_2_3 Util 2.3
+    @subsection util_3_0 Util 3.0
     - fixed @ref Util::get_bit_string() "get_bit_string()" to properly prepend padding zeros instead of
       overwriting the result
     - fixed @ref Util::lpad() "lpad()" to correctly truncate by keeping the rightmost characters and
@@ -1411,7 +1411,7 @@ string sub parse_to_qore_value_with_yaml_error(string arg, *hash<ExceptionInfo> 
 
     @see parse_to_qore_value()
 
-    @since Util 2.3
+    @since Util 3.0
 */
 public auto sub parse_to_qore_value_with_yaml(string arg) {
     bool yaml_candidate = parse_to_qore_value_yaml_candidate(arg);

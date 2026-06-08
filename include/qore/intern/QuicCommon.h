@@ -60,7 +60,7 @@ constexpr size_t QUIC_COMMON_MAX_PKTLEN = 1500;
     reused across calls.  After warmup, writePackets() + sendQuicPacketsBatch()
     require zero heap allocations per poll cycle.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 struct QuicPacketBatch {
     //! Flat buffer holding all packet data end-to-end
@@ -148,7 +148,7 @@ struct QuicPacketBatch {
 /** Large enough for IP_PKTINFO (28 bytes on Linux), IPV6_PKTINFO (~36 bytes),
     or IP_SENDSRCADDR (macOS/FreeBSD, ~20 bytes), plus CMSG alignment padding.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 constexpr size_t QUIC_SEND_CMSG_BUF_SIZE = 64;
 
@@ -160,7 +160,7 @@ constexpr size_t QUIC_SEND_CMSG_BUF_SIZE = 64;
     @param addr address to check
     @return true if the address is a wildcard, false otherwise
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 inline bool isWildcardAddr(const struct sockaddr* addr) {
     if (addr->sa_family == AF_INET) {
@@ -192,7 +192,7 @@ inline bool isWildcardAddr(const struct sockaddr* addr) {
     @param out_len  [out] set to the total msg_controllen to use, or 0 if no cmsg needed
     @return true if cmsg was built and should be attached, false if not needed
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 inline bool buildSendCmsg(const struct sockaddr* local_addr, socklen_t local_addrlen,
                            void* cmsg_buf, size_t& out_len) {
@@ -275,7 +275,7 @@ inline bool buildSendCmsg(const struct sockaddr* local_addr, socklen_t local_add
     @param local_addrlen local address length, or 0
     @return number of messages sent, or -1 on error (errno set)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
                                 const struct sockaddr* addr, socklen_t addrlen,
@@ -400,7 +400,7 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     @param family address family (AF_INET or AF_INET6)
     @return 0 on success, -1 on failure (errno set)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 inline int enableQuicPktinfo(int fd, int family) {
     int val = 1;
@@ -440,7 +440,7 @@ constexpr size_t QUIC_CMSG_BUF_SIZE = 128;
     @param cmsg_len [in/out] control message buffer length
     @return bytes read, or -1 on error (errno set)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 inline ssize_t recvQuicPacket(int fd, void* buf, size_t buflen, int flags,
                               struct sockaddr* src_addr, socklen_t* src_addrlen,
@@ -486,7 +486,7 @@ inline ssize_t recvQuicPacket(int fd, void* buf, size_t buflen, int flags,
     @param dest_addr [in/out] destination address — IP overwritten on success
     @return true if address was extracted, false if not found (dest_addr unchanged)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 inline bool extractPktinfoAddr(const void* cmsg_buf, size_t cmsg_len,
                                int family, struct sockaddr_storage* dest_addr) {
@@ -525,7 +525,7 @@ inline bool extractPktinfoAddr(const void* cmsg_buf, size_t cmsg_len,
 /** RFC 9113 Section 8.2.2 (HTTP/2), RFC 9114 Section 4.2 (HTTP/3).
     Shared between Http2Session.cpp and QuicSession.cpp.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 inline const std::unordered_set<std::string>& getForbiddenHopByHopHeaders() {
     static const std::unordered_set<std::string> headers = {

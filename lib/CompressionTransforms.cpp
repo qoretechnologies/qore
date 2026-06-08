@@ -33,7 +33,7 @@
 #include <cerrno>
 #include <zlib.h>
 
-// Brotli, Zstd, and LZ4 are required since Qore 2.3
+// Brotli, Zstd, and LZ4 are required since Qore 3.0
 #include <brotli/encode.h>
 #include <brotli/decode.h>
 #include <zstd.h>

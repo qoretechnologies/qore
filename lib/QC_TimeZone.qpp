@@ -221,7 +221,7 @@ date dt = tz.date(date_string: "Sun, 06 Nov 1994 08:49:37 GMT");  # RFC 7231 IMF
 
     @since %Qore 0.8.4
 
-    @since %Qore 2.3.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
+    @since %Qore 3.0.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
  */
 date TimeZone::date(string date_string) [flags=CONSTANT,NAMED_ARGS] {
     return new DateTimeNode(z->get(), date_string->getBuffer());

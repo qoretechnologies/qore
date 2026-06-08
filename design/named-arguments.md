@@ -1,8 +1,8 @@
 # Qore Named Arguments — Design
 
-## Status: **Implemented** (Qore 2.3.0, branch `feature/5164_jit`)
+## Status: **Implemented** (Qore 3.0.0, branch `feature/5164_jit`)
 
-Call-site named arguments are implemented and shipped in Qore 2.3.0. Callers
+Call-site named arguments are implemented and shipped in Qore 3.0.0. Callers
 may bind arguments by parameter name:
 
 ```qore
@@ -35,7 +35,7 @@ in [`design/named-argument-builtin-review-checklist.md`](named-argument-builtin-
 
 User-facing documentation: `@ref function_named_arguments` (functions),
 `@ref overloading_named_arguments` (overloading), `@ref NAMED_ARGS` (code
-flag), and the `qore_2_3_0` release notes.
+flag), and the `qore_3_0_0` release notes.
 
 Tests:
 

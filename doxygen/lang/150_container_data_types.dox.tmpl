@@ -868,7 +868,7 @@ sub test() {
 
     @since As of %Qore 0.8.10 the existence of a closure created within the object no longer prolongs the scope of the object; the closure encapsulate the object's state (along with any local variables referenced within the closure), but if the object goes out of scope while the closure still exists, then any references to the object after the object has been destroyed will cause \c OBJECT-ALREADY-DELETED exceptions to be thrown.  This addresses memory and reference leaks caused by recursive references when closures encapsulating an object's scope are assigned to or accessible from members of the object.
 
-    @since As of %Qore 2.3.0 a closure value created within object scope and scheduled with the @ref background "background operator" is checked before the background thread is started.  If the captured object is still valid, the object's scope is prolonged until the background expression has finished executing.  If the captured object has already been destroyed or is being destroyed, \c BACKGROUND-CLOSURE-INVALID-CAPTURE is thrown before the new thread is started.
+    @since As of %Qore 3.0.0 a closure value created within object scope and scheduled with the @ref background "background operator" is checked before the background thread is started.  If the captured object is still valid, the object's scope is prolonged until the background expression has finished executing.  If the captured object has already been destroyed or is being destroyed, \c BACKGROUND-CLOSURE-INVALID-CAPTURE is thrown before the new thread is started.
 
     @subsection copying_objects Copying Objects
 

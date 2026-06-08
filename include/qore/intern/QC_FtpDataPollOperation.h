@@ -66,7 +66,7 @@ enum class FtpDataState : int {
     goalReached() returns true when the transfer is complete.
     getOutput() returns the received data (for RETR/LIST) as binary.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class FtpDataPollOperationPriv : public SocketPollOperationBase {
 public:

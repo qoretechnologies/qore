@@ -2,81 +2,11 @@
 
     @tableofcontents
 
-    @section qore_2_4_0 Qore 2.4.0
-
-    @par Language and Runtime
-    @parblock
-    - Added the @ref char "char" value type for single Unicode codepoints, including
-      \c c'...' and \c c"..." literals, the @ref char_type "char" and
-      @ref softchar_type "softchar" type restrictions, and the
-      @ref Qore::NT_CHAR "NT_CHAR" type code
-    - Added \c \\u{...} Unicode codepoint escapes in string and char literals
-    - Single-index string access now returns \c *char: \c "abc"[1] returns \c c'b'.
-      String ranges and list indexes still return strings.  Use
-      @ref no-string-index-char "%no-string-index-char" to preserve the historical
-      \c *string single-index behavior
-    - @ref <string>::iterator() "<string>::iterator()" and
-      @ref Qore::StringIterator "StringIterator" now provide lazy char iteration over strings;
-      <tt>iterate string</tt> uses this iterator and yields @ref char values
-    - Added @ref negative-offsets "%negative-offsets" for Python-style from-end list, string,
-      binary, and buffer indexes and slice endpoints; this option is implied by @ref modern "%modern",
-      and @ref no-negative-offsets "%no-negative-offsets" restores legacy negative-index behavior
-    - Added @ref no-char-type "%no-char-type" for code that needs \c char available as a
-      legacy identifier or user-defined type name
-    - \c cast<hash<auto>>(...), \c cast<hash<string,\ auto>>(...), and
-      \c cast<list<auto>>(...) are now parse-time errors because they do not coerce
-      values and are misleading no-op casts; use \c cast<hash>(...) or
-      \c cast<list>(...) for hard container assertions, and
-      \c cast<softlist<auto>>(...) for scalar-to-list coercion
-    - Added \c ?: as an alias for the @ref value_coalescing_operator "\c ?*"
-      value-coalescing operator; the conditional operator remains
-      <tt>condition ? if_true : if_false</tt>
-    - Added typed constant declarations and read-only runtime bindings:
-      constants can now be declared as \c "const Type NAME = expr", and
-      local variables and parameters can be declared with \c const to reject
-      reassignment, removal, mutable references, and lvalue writes rooted at the
-      binding. An explicit constant type may reference a hashdecl or class
-      declared later in the same module (the declared type is resolved during
-      parse commit, like type inference). The standard library modules now
-      declare explicit types for their constants.
-    - Added @ref const_methods "const-qualified instance methods" with trailing
-      \c const syntax. Read-only receivers can call only const methods when
-      method resolution is static, and const-method metadata is available through
-      reflection, QoreApiMetadata, qpp metadata, astparser, and QoreCodeFormat
-    @endparblock
-
-    @par New User Modules
-    @parblock
-    - @ref loggersemanticsearchintro "LoggerSemanticSearch" module
-      - new module providing backend-neutral semantic indexing and search APIs for searchable logger appenders
-        using QoreRagTypes embedders and vector stores
-    - @ref opensearchdataproviderintro "OpenSearchDataProvider" module
-      - new module providing document, index, pipeline, bulk, aggregation, scroll search, k-NN search, neural
-        search, hybrid search, vector-index creation, a QoreRagTypes `opensearch` vector-store backend, and
-        search app-action support for OpenSearch servers
-    - @ref opensearchloggerappenderintro "OpenSearchLoggerAppender" module
-      - new module providing batched OpenSearch Bulk API log appending and generic rendered-event search support
-    - @ref searchindexdataproviderintro "SearchIndexDataProvider" module
-      - new module providing common REST search-index data-provider helpers for backend-specific document search
-        modules
-    @endparblock
-
-    @par Bug Fixes
-    @parblock
-    - JIT/AOT: generated functions now always maintain the frame-pointer chain
-      (previously the frame pointer was omitted at higher optimization levels).
-      On AArch64 this could leave a Qore frame unwalkable, so an external
-      frame-pointer-based stack unwinder running while a Qore frame was on the
-      stack (e.g. V8/Abseil capturing a backtrace during V8 module init) could
-      follow a broken chain and crash with a segfault; this manifested as an
-      AArch64-only crash in AOT-compiled programs that load the \c v8 module
-    @endparblock
-
-    @section qore_2_3_0 Qore 2.3.0
+    @section qore_3_0_0 Qore 3.0.0
 
     @par Release Summary
     @parblock
-    %Qore 2.3.0 is a major release whose central themes are:
+    %Qore 3.0.0 is a major release whose central themes are:
     - <b>Faster execution and reduced memory footprint</b>
     - <b>Scalability</b> for high-concurrency workloads
     - <b>Code sandboxing and execution control</b>
@@ -87,17 +17,32 @@
     <b>Highlights:</b>
 
     <i>Performance and memory:</i>
+    - <b><a href="https://llvm.org/">LLVM</a>-backed @ref execution_modes "execution modes"</b> are the headline feature of this
+      release. A single Qore intermediate-representation (IR) pipeline now backs four ways to run
+      @ref modern "%modern" code, all sharing the same @ref exec_mode_ir "IR" semantic baseline so native
+      paths preserve interpreter behavior exactly:
+      - @ref exec_mode_ir "IR interpreter" &mdash; an Intermediate-Representation interpreter that lowers code to Qore IR and executes it directly,
+        avoiding AST dispatch while keeping startup overhead low (<tt>--exec-mode=ir</tt>)
+      - @ref exec_mode_jit "JIT" &mdash; Just-In-Time compilation that lowers IR to LLVM IR and compiles it to native machine code for
+        long-running or CPU-intensive workloads, with GDB JIT symbol registration for debugging
+        (<tt>--exec-mode=jit</tt>)
+      - @ref exec_mode_tiered "tiered" (the default for @ref modern "%modern" code) &mdash; validates IR
+        lowerability at parse commit, starts fast with cached IR, and adaptively promotes hot function
+        variants to JIT after a configurable call threshold (\c --jit-jit-threshold)
+      - @ref exec_mode_aot "AOT" &mdash; Ahead-Of-Time compilation: the @ref qcc_tool "qcc" compiler produces standalone native
+        executables, binary user modules (<tt>.qmod</tt>), relocatable objects (<tt>.qo</tt>), and archives
+        (<tt>.qoa</tt>) ahead of time, eliminating parse-time overhead and allowing source text to be stripped
+        from artifacts (each carries QORD metadata with format version, feature flags, and dependencies)
+      - LLVM 16 or later is required for JIT and AOT; see @ref execution_modes "Execution Modes" for
+        full mode semantics, \c qcc options, artifact types, and debugging notes
+    - standard user modules are now built and installed as AOT-compiled <tt>.qmod</tt>
+      artifacts by default for better startup and runtime performance (see
+      @ref exec_mode_aot "AOT Compilation")
     - <a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> reduces value-storage
       overhead from 16 to 8 bytes (50% smaller) with small-string optimisation for short strings
       stored inline
-    - LLVM-backed @ref execution_modes "execution modes" add an IR interpreter,
-      tiered JIT native code for hot paths, and AOT output for standalone executables
-      and binary modules
-    - standard user modules are now built and installed as AOT-compiled \c .qmod
-      artifacts by default for better startup and runtime performance
-    - native fast-path dispatch for the iterator pseudo-method family
-      (@ref <list>::map() "<list>::map()", @ref <list>::select() "<list>::select()",
-      @ref <list>::foldl() "<list>::foldl()", and the hash/object analogues) bypasses
+    - native fast-path dispatch for the @ref map "map", @ref select "select", and
+      @ref foldl "foldl" functional operators (over lists, hashes, and objects) bypasses
       per-element virtual calls for built-in iterators
     - new dense \c buffer<T> values store primitive arrays without per-element boxing and
       new typed DBI select APIs can return numeric, boolean, and string result columns as buffers
@@ -107,8 +52,8 @@
     - regex matching skips per-call UTF-8 re-validation in PCRE2 inner loops
 
     <i>Language features:</i>
-    - new @ref modern "%modern" parse directive, \c .qr file extension, and modern-by-default
-      parsing for non-\c .q source files; together these bundle the recommended parse options
+    - new @ref modern "%modern" parse directive, <tt>.qr</tt> file extension, and modern-by-default
+      parsing for non-<tt>.q</tt> source files; together these bundle the recommended parse options
       into one
     - parse-time type narrowing for @ref hash_type "hash<auto>" / @ref list_type "list<auto>",
       with @ref auto_no_narrow "auto!" opt-out
@@ -117,31 +62,31 @@
     - new @ref function_named_arguments "named-argument call syntax" for parse-time-resolved functions, methods,
       constructors, and base constructors
     - new @ref union_type "union<...>" explicit union type syntax
-    - source-defined generic classes now support generic inheritance,
+    - source-defined @ref generic_classes "generic classes" now support generic inheritance,
       source-level raw compatibility attributes
       (<tt>[legacy_raw_accepts]</tt>, <tt>[legacy_raw_construct]</tt>, and
       <tt>[legacy_raw]</tt>), and AOT metadata preservation for generic base
       and raw-compatibility information
-    - source-defined generic class static methods can now be called with
+    - source-defined @ref generic_classes "generic class" static methods can now be called with
       parameterized receivers such as <tt>Factory&lt;int&gt;::make(...)</tt>, and
-      source-defined hashdecls can now declare type parameters for typed result
+      source-defined @ref hashdecl_generic "hashdecls" can now declare type parameters for typed result
       records such as <tt>hash&lt;Result&lt;int&gt;&gt;</tt>
-    - generic class and hashdecl annotations now support wildcard type
+    - @ref generic_classes "generic class" and @ref hashdecl_generic "hashdecl" annotations now support wildcard type
       arguments with <tt>?</tt>, <tt>? extends Type</tt>, and
       <tt>? super Type</tt> syntax
-    - generic class constructor calls can infer class type arguments from
+    - @ref generic_classes "generic class" constructor calls can infer class type arguments from
       constructor arguments and expected result types, and static factory calls
       can infer a generic receiver from assignment or return context when the
       target type is concrete
-    - generic class, hashdecl, function, method, and static method type
+    - @ref generic_classes "generic class", @ref hashdecl_generic "hashdecl", function, method, and static method type
       parameters can declare defaults and upper bounds; functions and methods
       can also infer method-level type arguments or accept explicit call type
       arguments such as <tt>identity&lt;string&gt;(...)</tt>
-    - IR/JIT execution can internally specialize source generic method and
+    - @ref execution_modes "IR/JIT execution" can internally specialize source @ref generic_classes "generic" method and
       function bodies for concrete receiver and call type arguments, while AOT
       metadata keeps generic type paths and resolves them at runtime
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
-    - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH string-literal escapes
+    - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH @ref string_escape_chars "string-literal escapes"
     - new streaming operators @ref streaming_first "first", @ref streaming_any "any",
       @ref streaming_all "all", @ref streaming_count "count", @ref streaming_take "take",
       @ref streaming_drop "drop", @ref streaming_takewhile "takewhile", and
@@ -152,7 +97,7 @@
       iteration yields @ref char "char" values
     - the @ref find "find" operator now supports \c first, \c last, and \c one modifiers
       for consistent first-match, last-match, and exactly-one-match context queries
-    - new \c %%Y printf format specifier for multi-line pseudo-YAML output
+    - new \c %%Y @ref string_formatting "printf format specifier" for multi-line pseudo-YAML output
     - zero-cost \c \@\@assert / \c \@\@debug statements and the
       @ref Qore::PO_ENABLE_DEBUG "PO_ENABLE_DEBUG" parse option
 
@@ -174,7 +119,7 @@
     - new @ref Qore::SandboxManager "SandboxManager" class providing
       @ref sandbox_filesystem "filesystem", @ref sandbox_network "network",
       @ref sandbox_resources "resource", and @ref sandbox_interrupt "interrupt" controls
-    - SSRF prevention via
+    - <a href="https://en.wikipedia.org/wiki/Server-side_request_forgery">SSRF (server-side request forgery)</a> prevention via
       @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()"
     - I/O interruptibility for file, stream, database, and standard I/O operations
     - security presets: @ref Qore::SandboxManager::createLockdown() "createLockdown()" /
@@ -204,16 +149,16 @@
       @ref Qore::SQL::DatasourcePool::selectColumnar() "DatasourcePool::selectColumnar()" /
       @ref Qore::SQL::SQLStatement::fetchColumnar() "SQLStatement::fetchColumnar()" APIs expose
       query results as ordered typed columns for DataFrame and analytics workloads; drivers without
-      native support use a libqore compatibility fallback, and DataFrame::fromQuery() uses the
-      columnar API automatically when available; ColumnarResult values can now be filtered with
+      native support use a libqore compatibility fallback, and @ref Qore::DataFrame::DataFrame::fromQuery() "DataFrame::fromQuery()" uses the
+      columnar API automatically when available; @ref Qore::SQL::ColumnarResult "ColumnarResult" values can now be filtered with
       dense boolean masks and converted to/from DataFrame without boxing primitive buffer-backed
       columns; date, timestamp, and interval columns use dense \c buffer<int64> microsecond
-      storage when ColumnarResult schema or DBI metadata identifies a temporal column, while
-      row/list APIs materialize normal Qore \c date values; ColumnarResult::fromColumnHash() and
-      ColumnarResult::fromRows() provide explicit
-      constructors for projected or row-compatible columnar blocks; ColumnarResult::stringPredicateMask()
+      storage when @ref Qore::SQL::ColumnarResult "ColumnarResult" schema or DBI metadata identifies a temporal column, while
+      row/list APIs materialize normal Qore \c date values; @ref Qore::SQL::ColumnarResult::fromColumnHash() "ColumnarResult::fromColumnHash()" and
+      @ref Qore::SQL::ColumnarResult::fromRows() "ColumnarResult::fromRows()" provide explicit
+      constructors for projected or row-compatible columnar blocks; @ref Qore::SQL::ColumnarResult::stringPredicateMask() "ColumnarResult::stringPredicateMask()"
       builds dense masks for common string predicates without materializing row hashes
-    - C++ modules can import and export ColumnarResult values through the Arrow C Data Interface
+    - C++ modules can import and export @ref Qore::SQL::ColumnarResult "ColumnarResult" values through the Arrow C Data Interface
       with \c qore_columnar_result_export_arrow_c_data() and
       \c qore_columnar_result_import_arrow_c_data(); fixed-width primitive, boolean, and
       \c decimal128 top-level columns use zero-copy \c buffer<T> storage when host memory is
@@ -223,7 +168,7 @@
       dictionary-encoded values preserve schema and values through owned Arrow-compatible buffers
       or Qore containers
     - DataProvider, DbDataProvider, BulkSqlUtil, and Mapper now support shaped columnar bulk blocks: DB providers can
-      return \c ColumnarResult values from \c getShapedValue(), bulk DB writes can accept \c ColumnarResult and
+      return @ref Qore::SQL::ColumnarResult "ColumnarResult" values from \c getShapedValue(), bulk DB writes can accept @ref Qore::SQL::ColumnarResult "ColumnarResult" and
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
       \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
       autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
@@ -234,9 +179,9 @@
       hash; DPQL/DataProvider generic expressions also support streaming-style prefix operators including
       \c select, \c first, \c any, \c all, \c count, \c take, \c drop, \c takewhile, and \c takeuntil, with
       DataFrame and dense-column filters preserving correctness through row-evaluation fallback where needed
-    - the dataframe benchmark suite shows Qore outperforming pandas for the
+    - the dataframe benchmark suite shows Qore outperforming <a href="https://pandas.pydata.org/">pandas</a> for the
       included typed column construction, filtering, aggregation, join,
-      value counting, missing-data cleanup, reshape, Arrow/Parquet roundtrip,
+      value counting, missing-data cleanup, reshape, <a href="https://arrow.apache.org/">Arrow</a>/<a href="https://parquet.apache.org/">Parquet</a> roundtrip,
       SQL read/write, DataProvider pipeline, and ML analytics cases; the
       fastest SQL-read path requires a DBI driver with native columnar support
     - new experimental @ref plugin_types "plugin-type" registration ABI
@@ -291,10 +236,10 @@
     - dozens of new user modules covering AI/LLM (@ref anthropicrestclientintro "Anthropic",
       @ref huggingfacerestclientintro "HuggingFace", @ref voyagerestclientintro "Voyage",
       @ref sglangrestclientintro "SGLang"), e-commerce, CRM, ERP, observability, ML/DataFrame,
-      Parquet, ONNX, and gRPC/Protobuf integrations — see
-      @ref qore_2_3_0_new_user_modules "New User Modules"
+      Parquet, ONNX, and <a href="https://grpc.io/">gRPC</a>/Protobuf integrations — see
+      @ref qore_3_0_0_new_user_modules "New User Modules"
     - QoreModelRegistry and DataProviderML now support versioned AI model packages
-      with named artifacts, safe HuggingFace/PyTorch metadata inspection,
+      with named artifacts, safe <a href="https://huggingface.co/">HuggingFace</a>/<a href="https://pytorch.org/">PyTorch</a> metadata inspection,
       registry-hosted \c tokenizer.json and \c tokenizer_config.json files,
       normalized ONNX execution plans, preprocessing/postprocessing contracts,
       output-shape and tensor-contract metadata, actionable ONNX diagnostics,
@@ -303,7 +248,7 @@
     - cryptography: new @ref qorecryptointro "QoreCrypto" envelope-encryption module
     - existing modules updated extensively (DataProvider, RestClient, HttpServer,
       WebSocketClient/Handler/Util, Logger, SqlUtil, etc.) — see
-      @ref qore_2_3_0_updated_modules "Updated Modules"
+      @ref qore_3_0_0_updated_modules "Updated Modules"
 
     <i>Tooling:</i>
     - integrated REPL mode in the \c qore binary with the @ref qorereplintro "QoreRepl" module
@@ -319,7 +264,7 @@
     See the sections below for full details on each item.
     @endparblock
 
-    @subsection qore_2_3_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
     @par Parse-Time Type Narrowing
     @parblock
@@ -457,7 +402,7 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
     - @ref Qore::Thread::Promise "Promise<T>"
     - @ref Qore::Thread::Future "Future<T>"
     - @ref Qore::TreeMap "TreeMap<V>" for typed path-prefix maps
-    - <tt>MongoCursor&lt;DocT&gt;</tt> for typed MongoDB
+    - @ref mongodb::MongoCursor "MongoCursor<DocT>" for typed MongoDB
       document cursor iteration in the builtin mongodb module
     - @ref Qore::AbstractIterator "AbstractIterator<T>" and concrete list,
       hash, channel, and single-value iterators
@@ -550,7 +495,7 @@ int echoed = child.echo(value);
     execution.
     @endparblock
 
-    @par Removal of %strict-types Support
+    @par Removal of \%strict-types Support
     @parblock
     The @ref strict-types "%strict-types" parse directive and @ref Qore::PO_STRICT_TYPES "PO_STRICT_TYPES"
     parse option have been removed. The @ref Qore::PO_STRICT_TYPES "PO_STRICT_TYPES" constant remains
@@ -562,10 +507,10 @@ int echoed = child.echo(value);
     JIT requirements more effectively without requiring behavioral changes.
 
     The @ref loose-types "%loose-types" parse directive is also removed (it was only used to disable
-    %strict-types).
+    @ref strict-types "%strict-types").
 
     <b>Impact:</b>
-    - Code using \c %strict-types will parse without error but the directive has no effect
+    - Code using @ref strict-types "%strict-types" will parse without error but the directive has no effect
     - Code checking \c PO_STRICT_TYPES will always evaluate to false
     - Variables will not be auto-initialized with default values based on type
     @endparblock
@@ -587,7 +532,7 @@ int echoed = child.echo(value);
 \if QORE_LANG_FINAL
     The @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue" no-argument constructor now enforces a
 \else
-    The \c Qore::Logger::LoggerAppenderQueue no-argument constructor now enforces a
+    The @ref Qore::Logger::LoggerAppenderQueue "Logger::LoggerAppenderQueue" no-argument constructor now enforces a
 \endif
     default 10 MiB memory limit for backpressure. Previously, the queue was unlimited by default, which could
     cause out-of-memory conditions when log producers outpace consumers.
@@ -597,10 +542,10 @@ int echoed = child.echo(value);
     <b>Workaround:</b>
 \if QORE_LANG_FINAL
     - Use @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "Qore::Logger::LoggerAppenderQueue::constructor(softint)"
-      (for example: \c LoggerAppenderQueue(-1)) to explicitly
+      (for example: @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"(-1)) to explicitly
 \else
-    - Use \c Qore::Logger::LoggerAppenderQueue::constructor(softint)
-      (for example: \c LoggerAppenderQueue(-1)) to explicitly
+    - Use @ref Qore::Logger::LoggerAppenderQueue::constructor "Logger::LoggerAppenderQueue::constructor"(softint)
+      (for example: @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"(-1)) to explicitly
 \endif
       create an unlimited queue (not recommended for production)
     @endparblock
@@ -610,8 +555,7 @@ int echoed = child.echo(value);
     %Qore now strictly rejects SQL NULL values for non-optional soft types
     (@ref softint_type "softint", @ref softnumber_type "softnumber", @ref softstring_type "softstring",
     @ref softbool_type "softbool", @ref softdate_type "softdate", @ref softlist_type "softlist",
-    @ref softhash_type "softhash", @ref softobject_type "softobject", @ref softcoding_type "softcoding",
-    @ref softbinary_type "softbinary"). In pre-2.3 versions, soft types accepted SQL NULL and treated it like
+    @ref softfloat_type "softfloat", @ref softbinary_type "softbinary"). In pre-3.0 versions, soft types accepted SQL NULL and treated it like
     @ref nothing "NOTHING".
 
     Code that relied on soft types accepting NULL will now encounter \c RUNTIME-TYPE-ERROR when NULL values
@@ -619,112 +563,61 @@ int echoed = child.echo(value);
 
     <b>Workarounds:</b>
     - Use optional soft types (e.g., @ref softint_or_nothing_type "*softint") to accept NULL values
-    - Use the @ref broken-soft-types "%broken-soft-types" parse directive to restore pre-2.3 behavior (AST-only)
+    - Use the @ref broken-soft-types "%broken-soft-types" parse directive to restore pre-3.0 behavior (AST-only)
     - Use @ref Qore::QoreParseOptions::BROKEN_SOFT_TYPES "QoreParseOptions::BROKEN_SOFT_TYPES" when setting up a
       @ref Qore::Program "Program" object (AST-only)
 
     <b>Note:</b> The @ref broken-soft-types "%broken-soft-types" option is AST-only and not supported in IR/JIT execution modes.
     @endparblock
 
-    @par %modern Is Now the Default for Non-.q Files
+    @par \%modern Is Now the Default for Non-.q Files
     @parblock
-    Starting with %Qore 2.3, source files with any extension other than \c .q (for example \c .qr, \c .qc,
-    \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore), as well as files with no extension at all,
+    Starting with %Qore 3.0, source files with any extension other than <tt>.q</tt> (for example <tt>.qr</tt>, <tt>.qc</tt>,
+    <tt>.qm</tt>, <tt>.qtest</tt>, <tt>.qsd</tt>, <tt>.qfd</tt>, <tt>.qrd</tt>, <tt>.qore</tt>), as well as files with no extension at all,
     automatically enable @ref modern "%modern" mode (plus all non-strict warnings) during parsing. Only
-    files whose name ends in exactly \c .q stay in legacy mode by default, preserving the pre-2.3 behavior
+    files whose name ends in exactly <tt>.q</tt> stay in legacy mode by default, preserving the pre-3.0 behavior
     for the large corpus of existing scripts.
 
     Code that previously relied on files without explicit parse directives parsing in legacy mode will now
-    encounter parse errors such as "\c reference to variable ... with the '$' sign is not allowed when
-    parse option 'allow-bare-refs' is set" or "\c local variable ... declared without '$' prefix..." depending
+    encounter parse errors such as <tt>reference to variable ... with the '$' sign is not allowed when
+    parse option 'allow-bare-refs' is set</tt> or <tt>local variable ... declared without '$' prefix...</tt> depending
     on which style the legacy code assumed.
 
     <b>Workarounds:</b>
-    - Rename the affected script to end in \c .q to opt it back into legacy mode
+    - Rename the affected script to end in <tt>.q</tt> to opt it back into legacy mode
     - Set the environment variable \c QORE_OLD_STYLE_DEFAULT to any non-empty value (for example \c 1) to
-      disable the extension-based auto-enable globally; under this setting only explicit \c \%modern
+      disable the extension-based auto-enable globally; under this setting only explicit @ref modern "%modern"
       directives, the \c -M command-line flag, or a programmatic @ref Qore::PO_MODERN option will enable
       modern mode. This is the recommended approach for users migrating large legacy code bases forward
       without renaming every source file.
-    - Add an explicit \c \%old-style or \c \%require-dollar directive at the top of the script to override
-      the automatic \c \%new-style bits selectively
+    - Add an explicit @ref old-style "%old-style" or @ref require-dollar "%require-dollar" directive at the top of the script to override
+      the automatic @ref new-style "%new-style" bits selectively
 
     <b>Note:</b> This change only affects scripts loaded via the command-line binary and
     @ref Qore::Program::parseFile "Program::parseFile()". Module loading via @ref Qore::load_module
-    "load_module()" or \c %%requires is unaffected — modules continue to control their own parse options
-    through directives inside the \c .qm file.
+    "load_module()" or @ref requires "%requires" is unaffected — modules continue to control their own parse options
+    through directives inside the <tt>.qm</tt> file.
     @endparblock
 
-    @par summarize Statement Rejected Under %modern
+    @par summarize Statement Rejected Under \%modern
     @parblock
     The @ref context "summarize" statement is now rejected at parse time when @ref modern "%modern" is in effect.
-    \c %modern now implies the new @ref no-summarize "%no-summarize" parse option. Code that uses \c summarize
-    inside a program parsed with \c %modern, via the \c -M command-line flag, the \c .qr file extension, or
+    @ref modern "%modern" now implies the new @ref no-summarize "%no-summarize" parse option. Code that uses \c summarize
+    inside a program parsed with @ref modern "%modern", via the \c -M command-line flag, the <tt>.qr</tt> file extension, or
     @ref Qore::PO_MODERN will now fail parse with a \c PARSE-EXCEPTION.
 
     <b>Workarounds:</b>
-    - Drop \c %modern and use @ref new-style "%new-style" (plus other directives) directly — \c summarize
-      remains available without \c %modern
+    - Drop @ref modern "%modern" and use @ref new-style "%new-style" (plus other directives) directly — \c summarize
+      remains available without @ref modern "%modern"
     - Rewrite the \c summarize block as a plain @ref context "context" loop with manual grouping
     @endparblock
 
-    @par HTTP/2 Server Socket API Is Now Async-Safe
-    @parblock
-    The server-side HTTP/2 \c Socket API has been reworked end-to-end so
-    that handler threads never hold the socket wrapper lock during frame
-    submission.  Every surviving server-side method now acquires
-    @c priv->m only briefly to copy the @ref Qore::Http2Session shared
-    pointer and then does its actual work under the session's own
-    recursive mutex.  This eliminates the close-vs-poll lock inversion
-    and the handler-vs-I/O-thread contention that the previous sync
-    design suffered from.
-
-    The following server-side \c Socket methods were removed outright
-    (their functionality is covered by the @ref HttpServerAsyncIo
-    "HttpServerAsyncIo" stack — \c register_body_queue for inbound DATA,
-    plus the renamed response methods below):
-    \c readHttp2StreamData(), \c readHttp2StreamDataBlock(),
-    \c isHttp2StreamComplete(), \c flushHttp2(),
-    \c queueHttp2StreamData(), \c setHttp2ActiveStream(), and
-    \c getHttp2ActiveStream().
-
-    The following server-side \c Socket methods kept their names but
-    switched to the async-safe implementation described above:
-\if QORE_LANG_FINAL
-    @ref Qore::Socket::submitHttp2StreamingResponseHeaders() "submitHttp2StreamingResponseHeaders()",
-    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()",
-    @ref Qore::Socket::sendHttp2Trailers() "sendHttp2Trailers()",
-    @ref Qore::Socket::cleanupHttp2Stream() "cleanupHttp2Stream()", and
-    @ref Qore::Socket::resetHttp2Stream() "resetHttp2Stream()".
-\else
-    \c submitHttp2StreamingResponseHeaders(), \c sendHttp2StreamData(),
-    \c sendHttp2Trailers(), \c cleanupHttp2Stream(), and
-    \c resetHttp2Stream().
-\endif
-    Because the underlying frames are enqueued on the session and not
-    pushed to the wire synchronously, callers should follow each call
-    with \c io_wake() (provided by @ref HttpServerAsyncIo via
-    \c cx."header-info".io_wake) to flush promptly; under the
-    @ref HttpServerAsyncIo controller the flush is driven by the I/O
-    thread's existing HTTP/2 flush poll operation.
-
-    For inbound DATA on body-streaming dispatches, handlers opt in by
-    registering a @ref Queue "Queue" via
-    \c cx."header-info".register_body_queue; the I/O thread pushes one
-    binary chunk per DATA frame and a @ref nothing sentinel at
-    END_STREAM — no handler-thread socket reads.
-
-    \c HTTPClient HTTP/2 client-side methods (\c sendHttp2StreamData(),
-    \c isHttp2StreamClosed() etc.) are unaffected — this change only
-    reshapes the server-side \c Socket bindings.
-    @endparblock
-
-    @subsection qore_2_3_0_new_features New Features in Qore
+    @subsection qore_3_0_0_new_features New Features in Qore
     @par New Required Libraries and Async Networking Stack
     @parblock
     The async networking stack &mdash; \c nghttp2 (HTTP/2), \c ngtcp2 +
     \c ngtcp2_crypto_ossl + \c nghttp3 (QUIC/HTTP/3), and
-    <a href="https://c-ares.org/">\c c-ares</a> (asynchronous DNS resolution for socket I/O,
+    <a href="https://c-ares.org/"><tt>c-ares</tt></a> (asynchronous DNS resolution for socket I/O,
     so hostname lookups do not block async I/O controller threads) &mdash; is now required.
     %Qore prefers an adequate <b>system installation</b> of each; when a system package is
     <b>missing or older than the minimum supported version</b>, %Qore automatically downloads
@@ -783,7 +676,7 @@ int echoed = child.echo(value);
     - @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2"
     - @ref Qore::Option::HAVE_HTTP3 "Option::HAVE_HTTP3"
 
-    Optional <a href="https://onnxruntime.ai/">ONNX Runtime</a> support enables the \c OnnxModel class for
+    Optional <a href="https://onnxruntime.ai/">ONNX Runtime</a> support enables the @ref Qore::ML::OnnxModel "OnnxModel" class for
     running pre-trained ONNX models. Without ONNX Runtime, all native ML algorithms are still available.
 
     Install ONNX Runtime development packages where available:
@@ -798,7 +691,7 @@ int echoed = child.echo(value);
 
     @par LLVM-backed Execution and AOT Compilation
     @parblock
-    %Qore now uses a shared IR pipeline for the IR interpreter, LLVM JIT,
+    %Qore now uses a shared IR pipeline for the IR interpreter, <a href="https://llvm.org/">LLVM</a> JIT,
     tiered execution, and AOT compilation.  @ref modern "%modern" code
     defaults to @ref exec_mode_tiered "tiered", which validates IR
     lowerability during parsing, starts quickly with cached IR, and can
@@ -806,8 +699,8 @@ int echoed = child.echo(value);
     execution for compatibility.
 
     The new @ref qcc_tool "qcc" compiler provides the full AOT workflow:
-    script executables, binary user modules (\c .qmod), relocatable Qore
-    objects (\c .qo), static archives (\c .qoa), generated link-mode
+    script executables, binary user modules (<tt>.qmod</tt>), relocatable Qore
+    objects (<tt>.qo</tt>), static archives (<tt>.qoa</tt>), generated link-mode
     executables, dependency files, and artifact inspection with
     \c --dump-info.
 
@@ -819,9 +712,9 @@ int echoed = child.echo(value);
 
     @par AOT-compiled User Modules by Default
     @parblock
-    The standard CMake build now compiles user modules to \c .qmod artifacts
+    The standard CMake build now compiles user modules to <tt>.qmod</tt> artifacts
     with \c qcc and installs those compiled artifacts in the
-    architecture-specific module directory.  Source \c .qm modules remain
+    architecture-specific module directory.  Source <tt>.qm</tt> modules remain
     installed in the user-module source directory.  \c QORE_BUILD_AOT_MODULES
     defaults to \c ON.
 
@@ -832,8 +725,8 @@ int echoed = child.echo(value);
     workflows.
 
     Disable this behavior with \c -DQORE_BUILD_AOT_MODULES=OFF.  See
-    @ref qore_modules "Qore Modules" and @ref exec_mode_aot "AOT
-    Compilation" for details.
+    @ref qore_modules "Qore Modules" and
+    @ref exec_mode_aot "AOT Compilation" for details.
     @endparblock
 
     @par Program-owned Module Path Directives
@@ -855,7 +748,7 @@ int echoed = child.echo(value);
     JIT, and AOT pipeline instead of falling back to AST execution.
 
     This is a semantic-preserving change that allows modules using
-    \c context loops to be AOT-compiled to \c .qmod.  See @ref context
+    \c context loops to be AOT-compiled to <tt>.qmod</tt>.  See @ref context
     and @ref execution_modes "Execution Modes" for details.
     @endparblock
 
@@ -908,15 +801,15 @@ cargo install tree-sitter-cli@0.26.5
       - \c @@assert supports sprintf-style formatting: \c @@assert(condition, "format", arg1, arg2, ...)
       - \c @@debug(expression) evaluates an expression for its side effects (e.g., logging)
       - \c @@debug \c { \c ... \c } executes a block of statements only when debugging is enabled
-      - both statements are completely skipped at parse time when \c %%enable-debug is not set, providing
+      - both statements are completely skipped at parse time when @ref enable-debug "%enable-debug" is not set, providing
         zero runtime overhead
-      - use \c %%enable-debug / \c %%disable-debug parse directives or @ref Qore::PO_ENABLE_DEBUG "PO_ENABLE_DEBUG" parse option
+      - use @ref enable-debug "%enable-debug" / @ref disable-debug "%disable-debug" parse directives or @ref Qore::PO_ENABLE_DEBUG "PO_ENABLE_DEBUG" parse option
         (<a href="https://github.com/qoretechnologies/qore/issues/5018">issue 5018</a>)
-    - <b>New @ref modern "%modern" parse directive and \c .qr file extension</b>
+    - <b>New @ref modern "%modern" parse directive and <tt>.qr</tt> file extension</b>
       - new @ref modern "%modern" parse directive combines all recommended parse options into one:
         @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args",
         @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings
-      - files with the \c .qr extension automatically enable @ref modern "%modern" mode without any
+      - files with the <tt>.qr</tt> extension automatically enable @ref modern "%modern" mode without any
         parse directive required
       - new @ref Qore::PO_MODERN "PO_MODERN" parse option constant
       - this is now the recommended way to write new %Qore code
@@ -928,20 +821,20 @@ cargo install tree-sitter-cli@0.26.5
     - new @ref enums "enum" keyword for type-safe enumerated constants
       - syntax: \c public \c enum \c Status \c : \c string \c { \c Active \c = \c "active", \c Inactive \c = \c "inactive" \c }
       - supports \c int, \c string, \c float, and \c number base types
-      - enum constants are accessed with \c :: syntax: \c Status::Active
+      - enum constants are accessed with \c :: syntax: @ref Status::Active "Status::Active"
       - strict type enforcement: base type values require explicit \c cast<enum<Name>>() to convert to enum type
       - runtime validation: cast operations verify that the value is a valid enum member
       - enum names can be used directly as type names: \c Status \c s or \c enum&lt;Status&gt; \c s (equivalent)
       - or-nothing support: \c *Status, \c *enum&lt;Status&gt;, and \c cast&lt;*enum&lt;Status&gt;&gt;()
       - namespace support: enums can be declared in namespaces
-      - reflection support via \c Qore::Reflection::Enum and \c Qore::Reflection::EnumMember classes
+      - reflection support via @ref Qore::Reflection::Enum "Reflection::Enum" and @ref Qore::Reflection::EnumMember "Reflection::EnumMember" classes
       - can be disabled with @ref no-enum "%no-enum" parse directive or @ref Qore::PO_NO_ENUM "PO_NO_ENUM"
     - new @ref typedef_keyword "typedef" keyword for type aliases
       - syntax: \c typedef \c MyType \c = \c int; or \c typedef \c IntList \c = \c list<int>;
       - supports all type declarations including complex types, hashdecls, and classes
       - can be declared \c public for module exports
       - works in namespaces with standard scoping rules
-      - can be disabled with \c %%no-typedef parse directive or @ref Qore::PO_NO_TYPEDEF "PO_NO_TYPEDEF"
+      - can be disabled with @ref no-typedef "%no-typedef" parse directive or @ref Qore::PO_NO_TYPEDEF "PO_NO_TYPEDEF"
     - new @ref code_complex_type "code<ReturnType(ParamTypes...)>" typed callable syntax
       (<a href="https://github.com/qoretechnologies/qore/issues/5089">issue 5089</a>)
       - syntax: \c code<int(string)> for a callable returning int and taking a string parameter
@@ -1001,7 +894,7 @@ cargo install tree-sitter-cli@0.26.5
     - <b><a href="https://datatracker.ietf.org/doc/html/rfc9113">HTTP/2</a> and
       <a href="https://datatracker.ietf.org/doc/html/rfc9114">HTTP/3</a> support with full asynchronous I/O</b>
       @parblock
-      %Qore 2.3 introduces end-to-end support for HTTP/2 over TLS (via
+      %Qore 3.0 introduces end-to-end support for HTTP/2 over TLS (via
       <a href="https://datatracker.ietf.org/doc/html/rfc7301">ALPN</a> negotiation) and HTTP/3 over
       <a href="https://datatracker.ietf.org/doc/html/rfc9000">QUIC</a>, both backed by an async I/O controller
       that drives non-blocking poll operations across HTTP/1.x, HTTP/2, and HTTP/3.  Existing
@@ -1039,18 +932,18 @@ cargo install tree-sitter-cli@0.26.5
       @ref Qore::Socket::setAlpnProtocols() "setAlpnProtocols()",
       @ref Qore::Socket::getAlpnProtocol() "getAlpnProtocol()",
       @ref Qore::Socket::isHttp2() "isHttp2()" — appear in the
-      @ref qore_2_3_0_new_features "new builtin methods" listing later in this section.
+      @ref qore_3_0_0_new_features "new builtin methods" listing later in this section.
 
       Higher-level user modules wrap the new infrastructure: @ref httpclientiointro "HttpClientIo"
       (unified async client I/O across HTTP/1.x, HTTP/2, HTTP/3), @ref ftpclientiointro "FtpClientIo"
       (async FTP via poll operations), @ref httputilintro "HttpUtil" (shared
       <a href="https://datatracker.ietf.org/doc/html/rfc6265">RFC 6265</a> cookie handling), and the async
-      WebSocket / SSE / REST clients listed in @ref qore_2_3_0_updated_modules "Updated Modules" and
-      @ref qore_2_3_0_new_user_modules "New User Modules".  HttpServer support for HTTP/2 and HTTP/3 is
+      WebSocket / SSE / REST clients listed in @ref qore_3_0_0_updated_modules "Updated Modules" and
+      @ref qore_3_0_0_new_user_modules "New User Modules".  HttpServer support for HTTP/2 and HTTP/3 is
       controlled by the \c http_version listener option.
 
-      For full protocol details and worked examples, see the @ref qore_2_3_0_updated_modules "Updated"
-      and @ref qore_2_3_0_new_user_modules "new user-module" sections (@ref httpclientiointro,
+      For full protocol details and worked examples, see the @ref qore_3_0_0_updated_modules "Updated"
+      and @ref qore_3_0_0_new_user_modules "new user-module" sections (@ref httpclientiointro,
       @ref restclientiointro, @ref httpserverintro, @ref websocketclientintro,
       @ref serversenteventclientintro), the @ref Qore::HTTPClient "HTTPClient" class reference, and
       the @ref Qore::Socket "Socket" non-blocking poll-operation methods.
@@ -1058,7 +951,7 @@ cargo install tree-sitter-cli@0.26.5
     - new @ref Qore::SandboxManager "SandboxManager" class for comprehensive code sandboxing
       - @ref sandbox_filesystem "filesystem access control" with sandbox roots, allow/deny lists, and access modes
       - @ref sandbox_network "network access control" with CIDR-based IP ranges, hostname patterns, and port restrictions
-      - SSRF prevention with @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" preset
+      - <a href="https://en.wikipedia.org/wiki/Server-side_request_forgery">SSRF</a> prevention with @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" preset
       - @ref sandbox_resources "resource limits" for memory, CPU time, wall time, threads, and recursion
       - @ref sandbox_interrupt "safe interrupt mechanism" for stopping runaway code in loops and blocking operations
       - I/O interruptibility: all file, stream, database, and standard I/O operations respect interrupt requests
@@ -1173,7 +1066,7 @@ cargo install tree-sitter-cli@0.26.5
         (parse directive: @ref no-new "%no-new")
     - updated module ABI and the @ref Qore::Program "Program" container to allow for better sandboxing
     - <b>ReadOnlyFile short reads</b>
-      - new \c ReadOnlyFile::readShortBinary() method returns immediately with any available data without trying to
+      - new @ref ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to
         fill the requested size
     - \c qpp (the %Qore pre-processor) now supports \c --metadata / \c -m to emit structured
       \c .meta.json metadata files during the build, providing machine-readable documentation for
@@ -1202,11 +1095,11 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::Scanner "Scanner" - cursor-based byte/codepoint reader for tokenizers and parsers,
         with peek/advance/match primitives and zero-allocation byte fast paths for ASCII input
       - @ref Qore::StringCharIterator "StringCharIterator" - codepoint iterator over a string, used
-        as the lazy iterator returned by @ref <string>::codePointIterator() and @ref <string>::splitChars()
+        as the lazy iterator returned by @ref <string>::codePointIterator() "<string>::codePointIterator()" and @ref <string>::splitChars() "<string>::splitChars()"
       - @ref Qore::StringSplitIterator "StringSplitIterator" - lazy delimiter-based string split iterator
-        backing @ref <string>::splitString() and @ref <string>::splitLines()
+        backing @ref <string>::splitString() "<string>::splitString()" and @ref <string>::splitLines() "<string>::splitLines()"
       - @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator" - lazy regex-based string split
-        iterator backing @ref <string>::splitLinesRegex()
+        iterator backing @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()"
     - new builtin methods:
       - static @ref Qore::Program::getAllDefines() "Program::getAllDefines()"
       - @ref Qore::Thread::Queue::tryGet() "Queue::tryGet()": non-blocking get that returns a hash with a
@@ -1221,15 +1114,15 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
         response in non-blocking mode with proper \c Content-Length header handling
       - @ref Qore::Socket::startPollSendHttpResponseWithStream() "Socket::startPollSendHttpResponseWithStream()":
-        sends an HTTP response with an \c InputStream body in non-blocking mode for HTTP/1.x
+        sends an HTTP response with an @ref Qore::InputStream "InputStream" body in non-blocking mode for HTTP/1.x
       - @ref Qore::Socket::startPollSendHttpResponseWithStreamAndReadHeader() "Socket::startPollSendHttpResponseWithStreamAndReadHeader()":
-        sends an HTTP response with an \c InputStream body and waits for the next request (keep-alive) in HTTP/1.x
+        sends an HTTP response with an @ref Qore::InputStream "InputStream" body and waits for the next request (keep-alive) in HTTP/1.x
       - @ref Qore::Socket::startPollSendHttp2StreamingResponse() "Socket::startPollSendHttp2StreamingResponse()":
-        sends an HTTP/2 response with an \c InputStream body via the I/O thread
+        sends an HTTP/2 response with an @ref Qore::InputStream "InputStream" body via the I/O thread
       - @ref Qore::Socket::submitHttp2StreamingResponseWithStream() "Socket::submitHttp2StreamingResponseWithStream()":
-        hands off an \c InputStream to the HTTP/2 I/O thread for incremental DATA frame streaming
+        hands off an @ref Qore::InputStream "InputStream" to the HTTP/2 I/O thread for incremental DATA frame streaming
       - @ref Qore::Socket::submitQuicStreamingResponseWithStream() "Socket::submitQuicStreamingResponseWithStream()":
-        hands off an \c InputStream to the HTTP/3 I/O thread for incremental DATA frame streaming
+        hands off an @ref Qore::InputStream "InputStream" to the HTTP/3 I/O thread for incremental DATA frame streaming
       - @ref Qore::Socket::setAlpnProtocols() "Socket::setAlpnProtocols()": sets ALPN protocols for TLS negotiation
       - @ref Qore::Socket::getAlpnProtocol() "Socket::getAlpnProtocol()": returns the negotiated ALPN protocol
       - @ref Qore::Socket::isHttp2() "Socket::isHttp2()": returns True if HTTP/2 was negotiated via ALPN
@@ -1294,9 +1187,51 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::thread_cancelled() "thread_cancelled()": returns @ref True if cancellation has been requested
         for the current thread
 
+    @par Language and Runtime
+    @parblock
+    - Added the @ref char "char" value type for single Unicode codepoints, including
+      \c c'...' and \c c"..." literals, the @ref char_type "char" and
+      @ref softchar_type "softchar" type restrictions, and the
+      @ref Qore::NT_CHAR "NT_CHAR" type code
+    - Added \c \\u{...} Unicode codepoint escapes in string and char literals
+    - Single-index string access now returns \c *char: \c "abc"[1] returns \c c'b'.
+      String ranges and list indexes still return strings.  Use
+      @ref no-string-index-char "%no-string-index-char" to preserve the historical
+      \c *string single-index behavior
+    - @ref <string>::iterator() "<string>::iterator()" and
+      @ref Qore::StringIterator "StringIterator" now provide lazy char iteration over strings;
+      <tt>iterate string</tt> uses this iterator and yields @ref char values
+    - Added @ref negative-offsets "%negative-offsets" for Python-style from-end list, string,
+      binary, and buffer indexes and slice endpoints; this option is implied by @ref modern "%modern",
+      and @ref no-negative-offsets "%no-negative-offsets" restores legacy negative-index behavior
+    - Added @ref no-char-type "%no-char-type" for code that needs \c char available as a
+      legacy identifier or user-defined type name
+    - \c cast<hash<auto>>(...), \c cast<hash<string,\ auto>>(...), and
+      \c cast<list<auto>>(...) are now parse-time errors because they do not coerce
+      values and are misleading no-op casts; use \c cast<hash>(...) or
+      \c cast<list>(...) for hard container assertions, and
+      \c cast<softlist<auto>>(...) for scalar-to-list coercion (the
+      @ref broken-auto-cast "%broken-auto-cast" parse directive restores the old accepting behavior)
+    - Added \c ?: as an alias for the @ref value_coalescing_operator "\c ?*"
+      value-coalescing operator; the conditional operator remains
+      <tt>condition ? if_true : if_false</tt>
+    - Added typed constant declarations and read-only runtime bindings:
+      constants can now be declared as \c "const Type NAME = expr", and
+      local variables and parameters can be declared with \c const to reject
+      reassignment, removal, mutable references, and lvalue writes rooted at the
+      binding. An explicit constant type may reference a hashdecl or class
+      declared later in the same module (the declared type is resolved during
+      parse commit, like type inference). The standard library modules now
+      declare explicit types for their constants.
+    - Added @ref const_methods "const-qualified instance methods" with trailing
+      \c const syntax. Read-only receivers can call only const methods when
+      method resolution is static, and const-method metadata is available through
+      reflection, QoreApiMetadata, qpp metadata, astparser, and QoreCodeFormat
+    @endparblock
+
     @par Fast Text Processing APIs
     @parblock
-    %Qore 2.3 introduces a coordinated set of zero-allocation text-scanning primitives aimed at
+    %Qore 3.0 introduces a coordinated set of zero-allocation text-scanning primitives aimed at
     tokenizers, parsers, log scrubbers, and any other code that traverses large strings on a hot
     path.  See @ref fast_text_processing for the full overview, design rationale, and worked
     examples.
@@ -1317,9 +1252,8 @@ cargo install tree-sitter-cli@0.26.5
 
     @par Iterator Native Fast-Path Dispatch
     @parblock
-    The pseudo-class iterator family (@ref <list>::map() "<list>::map()",
-    @ref <list>::select() "<list>::select()", @ref <list>::foldl() "<list>::foldl()", and the
-    corresponding hash and object variants) now dispatches eligible iterators through a native C++
+    The @ref map "map", @ref select "select", and @ref foldl "foldl" functional operators
+    (over lists, hashes, and objects) now dispatch eligible iterators through a native C++
     fast path that bypasses per-element @ref Qore::AbstractIterator "AbstractIterator" virtual calls
     when the iterator is a known built-in type with stable element semantics.
 
@@ -1376,7 +1310,7 @@ list<*float> boxed = scores.toList();
     points explicit when an API requires raw host memory. Writes preserve value
     semantics by detaching provider-owned storage into an owned host buffer.
     \c buffer<T> remains a primitive dense-vector type; nested arrays and
-    structs are carried by ColumnarResult schema metadata with list/hash values
+    structs are carried by @ref Qore::SQL::ColumnarResult "ColumnarResult" schema metadata with list/hash values
     and by Arrow/Parquet round-trip metadata.
 
     Buffers support elementwise arithmetic and comparisons. Numeric buffers can be combined with another numeric
@@ -1417,7 +1351,7 @@ buffer<*string> names = result.customer_name;     # text columns can remain dens
     Drivers can advertise native support with @ref Qore::SQL::DBI_CAP_HAS_TYPED_SELECT
     "DBI_CAP_HAS_TYPED_SELECT".
 
-    ColumnarResult blocks also support dense mask filtering and native mask composition:
+    @ref Qore::SQL::ColumnarResult "ColumnarResult" blocks also support dense mask filtering and native mask composition:
     @code{.py}
 ColumnarResult result = db.selectColumnar(
     "select id, score, active from customer_scores");
@@ -1438,7 +1372,7 @@ ColumnarResult again = df.toColumnarResult();
     @endcode
 
     C++ modules can use \c QORE_HAVE_ARROW_C_DATA_INTEROP to detect libqore's
-    Arrow C Data Interface bridge for ColumnarResult and
+    Arrow C Data Interface bridge for @ref Qore::SQL::ColumnarResult "ColumnarResult" and
     \c QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS to detect dense temporal buffer
     support.  The bridge allows Arrow,
     Flight, JDBC, and other binary modules to exchange columnar blocks without
@@ -1477,8 +1411,8 @@ if (qore_register_plugin_types_v1(&plugin_ctx, &my_plugin_registration, &xsink))
 
     Qore code can inspect committed registrations:
     @code{.py}
-%modern
-%requires reflection
+@ref modern "%modern"
+@ref requires "%requires" reflection
 
 PluginRegistry registry = PluginRegistry::getProcessRegistry();
 foreach string module_name in (registry.getProcessModules()) {
@@ -1495,7 +1429,7 @@ foreach string module_name in (registry.getProcessModules()) {
     registration, dispatch, verification, QORD, and operation-resolution
     decisions. \c QORE_PLUGIN_FALLBACK_BUFFER controls the capacity of each
     Program's rolling fallback-site buffer used by
-    \c PluginRegistry::getRecentFallbackSites(). Dense-buffer helper dispatch
+    @ref Qore::Reflection::PluginRegistry::getRecentFallbackSites() "PluginRegistry::getRecentFallbackSites()". Dense-buffer helper dispatch
     now has dedicated IR opcodes that validate \c buffer<T> operands before
     passing raw frames to module helpers. Plugin value nodes can be wrapped with
     \c qore_plugin_make_value_v1(), serialized as \c VT_PLUGIN_INSTANCE in QORD,
@@ -1510,7 +1444,7 @@ foreach string module_name in (registry.getProcessModules()) {
     pattern matchers so IR lowering can emit plugin-dispatch IR before generic
     \c any fallback; claimed-node \c NotApplicable results fail with
     \c PLUGIN-LOWERING-CLAIM-VIOLATED.
-    \c PluginRegistry::getOperations() now reflects whether a lowering callback
+    @ref Qore::Reflection::PluginRegistry::getOperations() "PluginRegistry::getOperations()" now reflects whether a lowering callback
     or accepted LLVM codegen hook is registered for each operation, allowing
     descriptor tools to verify optimization coverage.
     See @ref plugin_types for the complete module-author
@@ -1534,7 +1468,7 @@ foreach string module_name in (registry.getProcessModules()) {
     RFC 7231 dates (with \c GMT or \c UTC timezone) are always returned as UTC. RFC 2822 numeric
     offsets (e.g. \c +0530) are converted to UTC.
 
-    @subsection qore_2_3_0_deprecated Deprecated Features
+    @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
       produce a warning when used, as the underlying parse options were never enforced:
       - \c --no-class-defs (@ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS") - would have disallowed class definitions
@@ -1542,13 +1476,19 @@ foreach string module_name in (registry.getProcessModules()) {
       now defined as 0 (no-op). These parse options were documented but never enforced in the parser. Code that
       set these options will continue to work but the restrictions will not be applied.
 
-    @subsection qore_2_3_0_known_limitations Known Limitations
+    @subsection qore_3_0_0_known_limitations Known Limitations
     - The integrated REPL in the \c qore binary provides line editing via the built-in
       @ref linenoiseintro "linenoise" module (arrow key navigation, command history recall, reverse
       search with Ctrl+R, tab completion). For a full-featured ncurses TUI REPL, see the
       <a href="https://github.com/qoretechnologies/module-ncurses">module-ncurses</a> \c qrepl application.
 
-    @subsection qore_2_3_0_bug_fixes Bug Fixes in Qore
+    @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+    - JIT and AOT code generation
+      - generated functions now always maintain the frame-pointer chain (previously the frame pointer was
+        omitted at higher optimization levels). On AArch64 this could leave a Qore frame unwalkable, so an
+        external frame-pointer-based stack unwinder running while a Qore frame was on the stack (e.g.
+        V8/Abseil capturing a backtrace during V8 module init) could follow a broken chain and crash with a
+        segfault; this manifested as an AArch64-only crash in AOT-compiled programs that load the \c v8 module
     - Core language
       - improved @ref Qore::system() "system()" on Linux to use \c posix_spawn(), restore an unblocked signal mask
         in child processes, and terminate the entire process group on sandbox interrupts
@@ -1562,15 +1502,15 @@ foreach string module_name in (registry.getProcessModules()) {
         (<a href="https://github.com/qoretechnologies/qore/issues/40">issue 40</a>)
       - fixed calls to member closures defined as class fields
         (<a href="https://github.com/qoretechnologies/qore/issues/39">issue 39</a>)
-      - added parse warnings for ambiguous namespace function resolution when \c %require-types is enabled
+      - added parse warnings for ambiguous namespace function resolution when @ref require-types "%require-types" is enabled
         (<a href="https://github.com/qoretechnologies/qore/issues/55">issue 55</a>)
-      - added parse warnings for ambiguous method overloads across class hierarchies when \c %require-types is enabled
+      - added parse warnings for ambiguous method overloads across class hierarchies when @ref require-types "%require-types" is enabled
         (<a href="https://github.com/qoretechnologies/qore/issues/188">issue 188</a>)
       - ambiguous overload and call resolution warnings are now strict warnings and are excluded from \c WARN_ALL;
         enable them explicitly with \c WARN_STRICT when needed
-      - \c %enable-all-warnings and \c %modern now enable only non-strict warnings; use \c --strict-warnings or
+      - @ref enable-all-warnings "%enable-all-warnings" and @ref modern "%modern" now enable only non-strict warnings; use \c --strict-warnings or
         \c WARN_STRICT to include ambiguous overload/call warnings
-      - added \c %strict-warnings to enable strict warnings from parse directives
+      - added @ref strict-warnings "%strict-warnings" to enable strict warnings from parse directives
       - added \c -M / \c --modern and \c -G / \c --enable-debug short command-line options
       - unqualified symbol resolution now prioritizes \c ::Qore entries to prevent user namespace overrides of
         system symbols
@@ -1633,7 +1573,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
 
-    @subsection qore_2_3_0_updated_modules Updated Modules
+    @subsection qore_3_0_0_updated_modules Updated Modules
     @par Comprehensive Regular Expression Improvements
     @parblock
     The @ref qore_regex "regular expression" subsystem has been significantly enhanced:
@@ -1740,7 +1680,7 @@ foreach string module_name in (registry.getProcessModules()) {
         canonical RequiredOptions error fires
       - new connection / opts knobs: \c aws_role_arn, \c aws_role_session_name,
         \c aws_external_id, \c aws_sts_endpoint, \c aws_imds_url, \c aws_imds_disabled
-      - new static helpers: \c AwsRestClientBase::applyEnvCredentials(),
+      - new static helpers: @ref AwsRestClientBase::applyEnvCredentials() "AwsRestClientBase::applyEnvCredentials()",
         \c assumeRole(), \c getImdsCredentials(), \c getEcsCredentials()
       - fixed pre-existing \c buildResponse arity bug in
         @ref AwsRestClient::AwsRestClientIo::restDoRequest() "AwsRestClientIo::restDoRequest()"
@@ -1748,7 +1688,7 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref cdsrestclientintro "CdsRestClient" module
       - added support for Microsoft Dynamics 365 Business Central
-        - new \c CdsRestClient::BusinessCentralRestConnection class for BC connections
+        - new @ref CdsRestClient::BusinessCentralRestConnection "CdsRestClient::BusinessCentralRestConnection" class for BC connections
         - API profile support for BC-specific URL construction and OAuth2 scopes
         - new \c bcrests connection scheme
 
@@ -1758,24 +1698,24 @@ foreach string module_name in (registry.getProcessModules()) {
         contains, startsWith, endsWith, null, and notNull operators
 
     - @ref connectionproviderintro "ConnectionProvider" module
-      - added the \c ConnectionProvider::RestartableIoHelper class
-      - new \c http_version option in \c ConnectionProvider::HttpConnection for HTTP version control ("auto", "1.0", "1.1", "2.0", "3.0")
-      - \c RestClient::RestConnection inherits the \c http_version option from \c ConnectionProvider::HttpConnection
+      - added the @ref ConnectionProvider::RestartableIoHelper "ConnectionProvider::RestartableIoHelper" class
+      - new \c http_version option in @ref ConnectionProvider::HttpConnection "ConnectionProvider::HttpConnection" for HTTP version control ("auto", "1.0", "1.1", "2.0", "3.0")
+      - @ref RestClient::RestConnection "RestClient::RestConnection" inherits the \c http_version option from @ref ConnectionProvider::HttpConnection "ConnectionProvider::HttpConnection"
       - added \c amqp and \c amqps connection scheme registrations for the
         <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
 
     - @ref dataproviderintro "DataProvider" module
       - added DPQL (Data Provider Query Language) for human/AI-readable query expressions
-        - new \c DataProvider::DpqlTokenizer class for lexical analysis
-        - new \c DataProvider::DpqlParser class for parsing DPQL strings to \c DataProviderExpression hashes
-        - new \c DataProvider::DpqlSerializer class for converting expressions back to DPQL strings
-        - new \c DataProvider::DpqlCompletionProvider class for IDE/editor autocomplete
-        - static API methods: \c DataProvider::DataProvider::parseDpqlExpression(),
-          \c DataProvider::DataProvider::parseDpqlExpressionWithInfo(),
-          \c DataProvider::DataProvider::serializeDpqlExpression(),
-          \c DataProvider::DataProvider::getDpqlTokens(),
-          \c DataProvider::DataProvider::getDpqlCompletions(),
-          \c DataProvider::DataProvider::validateDpqlExpression()
+        - new @ref DataProvider::DpqlTokenizer "DataProvider::DpqlTokenizer" class for lexical analysis
+        - new @ref DataProvider::DpqlParser "DataProvider::DpqlParser" class for parsing DPQL strings to \c DataProviderExpression hashes
+        - new @ref DataProvider::DpqlSerializer "DataProvider::DpqlSerializer" class for converting expressions back to DPQL strings
+        - new @ref DataProvider::DpqlCompletionProvider "DataProvider::DpqlCompletionProvider" class for IDE/editor autocomplete
+        - static API methods: @ref DataProvider::DataProvider::parseDpqlExpression() "DataProvider::DataProvider::parseDpqlExpression()",
+          @ref DataProvider::DataProvider::parseDpqlExpressionWithInfo() "DataProvider::DataProvider::parseDpqlExpressionWithInfo()",
+          @ref DataProvider::DataProvider::serializeDpqlExpression() "DataProvider::DataProvider::serializeDpqlExpression()",
+          @ref DataProvider::DataProvider::getDpqlTokens() "DataProvider::DataProvider::getDpqlTokens()",
+          @ref DataProvider::DataProvider::getDpqlCompletions() "DataProvider::DataProvider::getDpqlCompletions()",
+          @ref DataProvider::DataProvider::validateDpqlExpression() "DataProvider::DataProvider::validateDpqlExpression()"
         - DPQL syntax example:
           @code{.py}
 @name == "John" && @age > 18
@@ -1785,10 +1725,10 @@ foreach string module_name in (registry.getProcessModules()) {
         - the \c qdp CLI accepts \c - or \c {} as an empty DPQL expression to search without filters
         - new \c qdp --dpql-help output with DPQL syntax and examples
         - DPQL now supports ISO-8601 date literals, binary literals (\c &lt;deadbeef&gt;), list/hash literals, and unquoted string values
-      - added \c http3 field to \c DataProvider::DataProviderDebugInfo hashdecl for HTTP/3 connection tracking
+      - added \c http3 field to @ref DataProvider::DataProviderDebugInfo "DataProvider::DataProviderDebugInfo" hashdecl for HTTP/3 connection tracking
       - added \c requires_action_context and \c action_context fields to
-        \c DataProvider::DataProviderActionInfo for context-sensitive action filtering and propagation
-      - added \c amqp factory registration to \c DataProvider::FactoryMap for the
+        @ref DataProvider::DataProviderActionInfo "DataProvider::DataProviderActionInfo" for context-sensitive action filtering and propagation
+      - added \c amqp factory registration to @ref DataProvider::FactoryMap "DataProvider::FactoryMap" for the
         <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
       - added 67 generic DPQL expressions for arithmetic, string, type conversion, encoding,
         cryptographic, regex, date/time, collection, and serialization operations
@@ -1801,7 +1741,7 @@ foreach string module_name in (registry.getProcessModules()) {
         functions (registered when the corresponding modules are available)
       - added \c dp_get_all_expression_info() public function to retrieve all expression metadata
       - \c QoreFilterRecordsProcessor now accepts direct DPQL string filters through \c dpql_where and string-valued
-        \c where_cond constructor options and shares DataFrame / ColumnarResult expression execution with
+        \c where_cond constructor options and shares DataFrame / @ref Qore::SQL::ColumnarResult "ColumnarResult" expression execution with
         DataFrame-backed providers
 
     - <a href="../../modules/DbDataProvider/html/index.html#dbdataproviderintro">DbDataProvider</a> module
@@ -1840,25 +1780,25 @@ foreach string module_name in (registry.getProcessModules()) {
         - enables handling many more concurrent connections with fewer threads
         - sub-millisecond response latency for simple requests
         - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
-        - new \c HttpServer::queueAsyncResponse() method for async response sending
+        - new @ref HttpServer::queueAsyncResponse() "HttpServer::queueAsyncResponse()" method for async response sending
         - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
-      - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive;
+      - fixed I/O thread blocking on @ref Socket::getPeerInfo() "Socket::getPeerInfo()" calls that could cause the server to become unresponsive;
         async request contexts now get numeric \c "peer-info" immediately and expose optional
         \c "peer-info-future" for handlers that need reverse DNS
       - QUIC/HTTP/3 listener support via \c addQuicListener() for serving HTTP/3 over UDP
-      - InputStream streaming response support: handlers can return an \c InputStream as the response body
+      - InputStream streaming response support: handlers can return an @ref Qore::InputStream "InputStream" as the response body
         for memory-efficient streaming across HTTP/1.x, HTTP/2, and HTTP/3
-        - pollable InputStreams (e.g. \c FileInputStream) are read by the I/O thread using event-loop integration
+        - pollable InputStreams (e.g. @ref Qore::FileInputStream "FileInputStream") are read by the I/O thread using event-loop integration
         - non-pollable InputStreams are read by the handler thread with backpressure-aware retry
         - \c Content-Length mismatch detection raises \c HTTP-STREAM-ERROR if the InputStream provides fewer
           bytes than declared
-      - true incremental streaming for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
-        - handlers returning a Qore-defined \c InputStream subclass (including \c CallbackInputStream)
+      - true incremental streaming for non-I/O-thread-safe @ref Qore::InputStream "InputStream" response bodies on HTTP/2 and HTTP/3
+        - handlers returning a Qore-defined @ref Qore::InputStream "InputStream" subclass (including \c CallbackInputStream)
           are now streamed chunk-by-chunk by a dedicated
 \if QORE_LANG_FINAL
           @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
 \else
-          \c HttpServer::StreamResponseProducer
+          @ref HttpServer::StreamResponseProducer "HttpServer::StreamResponseProducer"
 \endif
           worker thread — no materialization, memory bounded by the peer's flow-control window,
           time-to-first-byte ≈ one RTT after the handler produces its first chunk
@@ -1880,7 +1820,7 @@ foreach string module_name in (registry.getProcessModules()) {
 \if QORE_LANG_FINAL
         @ref HttpServer::HttpServer::removeHandler(string) "HttpServer::removeHandler()"
 \else
-        \c HttpServer::removeHandler()
+        @ref HttpServer::removeHandler() "HttpServer::removeHandler()"
 \endif
         method (with name and handler-reference overloads) to complement \c setHandler() for dynamic
         handler registration
@@ -1893,29 +1833,29 @@ foreach string module_name in (registry.getProcessModules()) {
 \if QORE_LANG_FINAL
         @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
 \else
-        \c HttpServer::StreamResponseProducer
+        @ref HttpServer::StreamResponseProducer "HttpServer::StreamResponseProducer"
 \endif
         class: worker-thread response-body streamer used by the \c HttpServer / \c HttpServerAsyncIo
-        pipeline for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
+        pipeline for non-I/O-thread-safe @ref Qore::InputStream "InputStream" response bodies on HTTP/2 and HTTP/3
 
     - @ref loggerintro "Logger" module
 \if QORE_LANG_FINAL
       - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue"
 \else
-      - added memory-based backpressure support to \c Qore::Logger::LoggerAppenderQueue
+      - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Logger::LoggerAppenderQueue"
 \endif
         to prevent unbounded memory growth when log producers outpace consumers
 \if QORE_LANG_FINAL
         - new @ref Qore::Logger::LoggerAppenderQueue::constructor(softint) "Qore::Logger::LoggerAppenderQueue::constructor(softint)" with
 \else
-        - new \c Qore::Logger::LoggerAppenderQueue::constructor(softint) with
+        - new @ref Qore::Logger::LoggerAppenderQueue::constructor "Logger::LoggerAppenderQueue::constructor"(softint) with
 \endif
           configurable memory limit (default: 10 MiB, -1 for unlimited)
-        - updated \c Qore::Logger::LoggerAppenderQueue::push() with optional timeout parameter for
+        - updated @ref Qore::Logger::LoggerAppenderQueue::push() "Logger::LoggerAppenderQueue::push()" with optional timeout parameter for
           backpressure control: block indefinitely (0), block with timeout (>0), or drop immediately (<0)
-        - new monitoring methods: \c Qore::Logger::LoggerAppenderQueue::maxBytes(),
-          \c Qore::Logger::LoggerAppenderQueue::currentBytes(),
-          \c Qore::Logger::LoggerAppenderQueue::isFull()
+        - new monitoring methods: @ref Qore::Logger::LoggerAppenderQueue::maxBytes() "Logger::LoggerAppenderQueue::maxBytes()",
+          @ref Qore::Logger::LoggerAppenderQueue::currentBytes() "Logger::LoggerAppenderQueue::currentBytes()",
+          @ref Qore::Logger::LoggerAppenderQueue::isFull() "Logger::LoggerAppenderQueue::isFull()"
       - added \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
         constructor for memory-limited thread pool logging
 
@@ -1942,8 +1882,8 @@ foreach string module_name in (registry.getProcessModules()) {
           helper functions for accurate bracket counting in Qore code
 
     - new classes and methods in the @ref reflectionintro "reflection" module:
-      - \c Qore::Reflection::Enum class for enum reflection
-      - \c Qore::Reflection::EnumMember class for enum member reflection
+      - @ref Qore::Reflection::Enum "Reflection::Enum" class for enum reflection
+      - @ref Qore::Reflection::EnumMember "Reflection::EnumMember" class for enum member reflection
       - @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" to list enums in a namespace
       - @ref Qore::Reflection::Namespace::getEnum() "Namespace::getEnum()" to get an enum by name
       - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
@@ -1954,36 +1894,36 @@ foreach string module_name in (registry.getProcessModules()) {
         @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
 
     - <a href="../../modules/Schema/html/index.html#schemaintro">Schema</a> module
-      - added \c Schema::DataSchema class for pure data schema definitions from YAML (\c .ysm) or
+      - added @ref Schema::DataSchema "Schema::DataSchema" class for pure data schema definitions from YAML (\c .ysm) or
         JSON (\c .jsm) files — enables schema management without writing Qore code
-      - added \c Schema::DataSchemaLoader class for loading, validating, and normalizing data schema
+      - added @ref Schema::DataSchemaLoader "Schema::DataSchemaLoader" class for loading, validating, and normalizing data schema
         files against a JSON Schema (Draft 2020-12) meta-schema
-      - added \c Schema::MigrationExecutor class for data-driven migration actions with access level
+      - added @ref Schema::MigrationExecutor "Schema::MigrationExecutor" class for data-driven migration actions with access level
         enforcement and dependency-based step ordering (17 action types supported)
       - added \c qschema CLI tool for schema management: \c align, \c drop, \c diff, \c validate,
         \c info, \c export commands with colorized output and dry-run support
-      - separated module into individual \c .qc files for maintainability
+      - separated module into individual <tt>.qc</tt> files for maintainability
 
     - <a href="../../modules/SchemaReverse/html/index.html#schemareverseintro">SchemaReverse</a> module
       - added \c toYaml() and \c toJson() methods on \c AbstractReverseObject and \c SchemaReverse
         for exporting database schemas to \c .ysm/\c .jsm format
-      - added \c SchemaReverse::toQore() for structured hash output compatible with \c DataSchema
+      - added @ref SchemaReverse::toQore() "SchemaReverse::toQore()" for structured hash output compatible with \c DataSchema
       - fixed numeric scale extraction and trigger accumulation bugs
 
     - @ref serversenteventclientintro "ServerSentEventClient" module
       - added \c "3.0" to the \c http_version data provider option for HTTP/3 SSE connections
 
     - @ref sqlutilintro "SqlUtil" module
-      - added \c SqlUtil::generate_auto_triggers() for generating standard database triggers
+      - added @ref SqlUtil::generate_auto_triggers() "SqlUtil::generate_auto_triggers()" for generating standard database triggers
         (created/modified timestamps, sequence-based ID columns) for PostgreSQL, Oracle, MySQL, and MSSQL
-      - added \c SqlUtil::generate_auto_triggers_all_drivers() for cross-driver trigger definitions
+      - added @ref SqlUtil::generate_auto_triggers_all_drivers() "SqlUtil::generate_auto_triggers_all_drivers()" for cross-driver trigger definitions
       - implemented support for specifying the columns to use for upserts separately from the row data
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
-      - fixed a silent mis-alignment in \c SqlUtil::Tables::populate() where a referring
+      - fixed a silent mis-alignment in @ref SqlUtil::Tables::populate() "SqlUtil::Tables::populate()" where a referring
         table placed before its foreign-key target in the input hash caused the target to
         be pre-cached from the live database during FK resolution and then skipped on its
         own turn, leaving the cache out of sync with the template and producing zero-change
-        \c AbstractSchema::align() output for structurally divergent tables; \c populate()
+        @ref AbstractSchema::align() "AbstractSchema::align()" output for structurally divergent tables; \c populate()
         now processes tables in foreign-key topological order and throws a clear
         \c ALIGN-TABLE-ERROR if an FK cycle among template tables is detected
 
@@ -2032,7 +1972,7 @@ foreach string module_name in (registry.getProcessModules()) {
         - new @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
           permessage-deflate compression
 
-    @subsection qore_2_3_0_new_builtin_modules New Builtin Modules
+    @subsection qore_3_0_0_new_builtin_modules New Builtin Modules
     - @ref dataframeintro "dataframe" module
       - new builtin module providing a columnar DataFrame with typed columns (int64, float64,
         string, bool, date) and null/missing value support
@@ -2049,8 +1989,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - native plugin-operator access: \c df["column"] returns a column list, \c df[row]
         returns a row hash, and \c df[start..stop] returns an inclusive row-range DataFrame
       - native plugin predicate operators: \c df.column("column") returns a
-        \c ColumnRef, comparisons such as \c df.column("score") >= 90.0 return
-        a \c RowMask, and row masks can filter frames with \c df[mask] or
+        @ref Qore::DataFrame::ColumnRef "ColumnRef", comparisons such as \c df.column("score") >= 90.0 return
+        a @ref Qore::DataFrame::RowMask "RowMask", and row masks can filter frames with \c df[mask] or
         \c df.filter(mask); row masks can be composed with \c &, \c |, \c ^,
         and \c ~ or with the named \c intersect(), \c unionWith(),
         \c symmetricDifference(), and \c invert() methods before filtering;
@@ -2059,25 +1999,25 @@ foreach string module_name in (registry.getProcessModules()) {
         while retaining the normal runtime-helper fallback
       - dense columnar interop: DataFrames can be constructed from \c buffer<T>
         columns, expose primitive columns with \c getColumnBuffer(), round-trip
-        through \c ColumnarResult with \c toColumnarResult() and
+        through @ref Qore::SQL::ColumnarResult "ColumnarResult" with \c toColumnarResult() and
         \c fromColumnarResult(), and preserve buffer-backed columns under Qore
-        copy-on-write semantics where possible; temporal ColumnarResult columns
+        copy-on-write semantics where possible; temporal @ref Qore::SQL::ColumnarResult "ColumnarResult" columns
         use \c buffer<int64> microsecond storage with schema metadata and
         materialize Qore \c date values when read as rows/lists
       - optimized typed-column construction, dense predicate masks, direct
-        ColumnarResult conversion, and native columnar DBI reads are designed
+        @ref Qore::SQL::ColumnarResult "ColumnarResult" conversion, and native columnar DBI reads are designed
         for production ETL and analytics workloads that benefit from keeping
         data columnar instead of materializing row hashes
-      - \c ColumnarResult::filter(), \c ColumnarResult::slice(),
-        \c ColumnarResult::take(), \c DataFrame::takeRows(),
-        \c ColumnarResult::combineMasks(), \c ColumnarResult::invertMask(),
-        \c ColumnarResult::nullMask(), and \c ColumnarResult::stringPredicateMask()
+      - @ref Qore::SQL::ColumnarResult::filter() "ColumnarResult::filter()", @ref Qore::SQL::ColumnarResult::slice() "ColumnarResult::slice()",
+        @ref Qore::SQL::ColumnarResult::take() "ColumnarResult::take()", @ref Qore::DataFrame::DataFrame::takeRows() "DataFrame::takeRows()",
+        @ref Qore::SQL::ColumnarResult::combineMasks() "ColumnarResult::combineMasks()", @ref Qore::SQL::ColumnarResult::invertMask() "ColumnarResult::invertMask()",
+        @ref Qore::SQL::ColumnarResult::nullMask() "ColumnarResult::nullMask()", and @ref Qore::SQL::ColumnarResult::stringPredicateMask() "ColumnarResult::stringPredicateMask()"
         provide dense filtering, contiguous slicing, ordered row gathering,
         boolean-mask composition, and native string-predicate masks for
         SQL/DataFrame analytics flows
       - DataFrame-backed DataProvider searches accept DPQL strings and structured
         \c hash<DataProviderExpression> filters directly while preserving \c DataFrameBlock shape for bulk reads
-      - \c DataFrame::concat(axis:1) implements horizontal concat with row-count
+      - @ref Qore::DataFrame::DataFrame::concat() "DataFrame::concat(axis:1)" implements horizontal concat with row-count
         validation, duplicate-column diagnostics, and shared column storage
         where possible
       - streaming CSV reader with type inference from first 100 rows
@@ -2111,7 +2051,7 @@ foreach string module_name in (registry.getProcessModules()) {
         metadata state handling, layered JSON catalog loading, and \c QORE_CATALOG_DIR discovery
       - automatic Unicode bidi isolation of interpolated placeholder values for RTL requested locales
       - CLDR plural APIs: \c plural_category(), \c plural_form(), and catalog \c tn() entries with exact-value
-        selectors and per-locale plural forms while keeping \c Util::plural() as an English two-form helper
+        selectors and per-locale plural forms while keeping @ref Util::plural() "Util::plural()" as an English two-form helper
       - BCP 47 locale canonicalization, likely-subtag expansion, \c Accept-Language parsing, and effective-locale
         negotiation for HTTP/API workflows
       - explicit-locale number parsing/formatting, currency formatting, date/time style and skeleton formatting,
@@ -2239,7 +2179,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
         regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
         Davies-Bouldin, Calinski-Harabasz), and CrossValidator for k-fold cross-validation
-      - DataFrame and columnar workflows are supported through DataFrame::toMatrix()
+      - DataFrame and columnar workflows are supported through @ref Qore::DataFrame::DataFrame::toMatrix() "DataFrame::toMatrix()"
         for direct model APIs and through shape-aware DataProviderML processors for
         DataProvider pipelines
 
@@ -2255,7 +2195,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - automatic BSON to Qore value conversion (hashes, lists, dates, binary, ObjectId, etc.)
 
     - @ref ocrintro "ocr" module
-      - new builtin module providing text extraction from images using Tesseract OCR
+      - new builtin module providing text extraction from images using <a href="https://github.com/tesseract-ocr/tesseract">Tesseract</a> OCR
       - TesseractEngine class with extractText() and extractTextWithMetadata()
       - block-level bounding boxes and confidence scores
       - supports PNG, JPEG, TIFF, BMP, GIF input formats
@@ -2285,7 +2225,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - Precompiled normalizer supporting SentencePiece Darts DoubleArray trie format
       - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
 
-    @subsection qore_2_3_0_new_user_modules New User Modules
+    @subsection qore_3_0_0_new_user_modules New User Modules
     - @ref aftershipdataproviderintro "AftershipDataProvider" module
       - new module providing a data provider API for <a href="https://www.aftership.com/">Aftership</a> tracking and returns services
 
@@ -2335,9 +2275,9 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref asyncapiintro "AsyncApi" module
       - new module supporting AsyncAPI 3.0 schemas for protocol-agnostic event-driven API validation
       - supports WebSocket, MQTT, Kafka, AMQP and other protocols through protocol-specific bindings
-      - new \c AsyncApi::AsyncApiSchemaGenerator class for generating AsyncAPI 3.0.0 schemas from Qore source code
-      - new \c AsyncApi::AsyncApiSchemaTokenizer class for parsing \@EVENT and \@WEBSOCKET documentation blocks
-      - new \c AsyncApi::AsyncApiTypeMapper class for mapping Qore types to JSON Schema types
+      - new @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApi::AsyncApiSchemaGenerator" class for generating AsyncAPI 3.0.0 schemas from Qore source code
+      - new @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApi::AsyncApiSchemaTokenizer" class for parsing \@EVENT and \@WEBSOCKET documentation blocks
+      - new @ref AsyncApi::AsyncApiTypeMapper "AsyncApi::AsyncApiTypeMapper" class for mapping Qore types to JSON Schema types
       - new \c qore-asyncapi-gen CLI tool for generating schemas from source files
 
     - @ref asyncapidataproviderintro "AsyncApiDataProvider" module
@@ -2636,12 +2576,12 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing DataProvider integration for the dataframe binary module
       - wraps DataFrame as a record-oriented DataProvider for data pipeline integration
       - supports searchRecords with hash-based where conditions (equality and comparison operators)
-      - DataProvider pipelines recognize \c ColumnarResult values as
+      - DataProvider pipelines recognize @ref Qore::SQL::ColumnarResult "ColumnarResult" values as
         \c BufferColumns shape and can convert between BufferColumns,
         DataFrameBlock, HashOfLists, and RowRecords
       - QoreFilterRecordsProcessor compiles supported DataProvider/DPQL filters
         over DataFrameBlock and BufferColumns values to vectorized DataFrame
-        row masks or dense ColumnarResult boolean masks, including computed
+        row masks or dense @ref Qore::SQL::ColumnarResult "ColumnarResult" boolean masks, including computed
         scalar comparisons, expression-to-expression comparisons, numeric,
         trim/concat/null-handling, case-folding, date-part, and row-independent
         date arithmetic expressions, structured strict equality/inequality,
@@ -2651,7 +2591,7 @@ foreach string module_name in (registry.getProcessModules()) {
         membership predicates, list/hash accessors, structured ternary values,
         and BufferColumns \c like, \c =~, and \c !~ predicates; unsupported expressions fall back to
         generic row semantics
-      - QoreGroupByProcessor preserves BufferColumns output for ColumnarResult
+      - QoreGroupByProcessor preserves BufferColumns output for @ref Qore::SQL::ColumnarResult "ColumnarResult"
         inputs when used through shape-aware pipeline flushing
       - QoreSelectFieldsProcessor, QoreRemoveFieldsProcessor, and
         QoreRecordLimitProcessor preserve DataFrameBlock and BufferColumns
@@ -2966,7 +2906,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing async I/O support classes for the @ref httpserverintro "HttpServer" module
         (<a href="https://github.com/qoretechnologies/qore/issues/5019">issue 5019</a>)
       - new @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" class for HTTP/2 server connection handling
-      - new \c Http3ServerPollOperation class for QUIC/HTTP/3 server connection handling
+      - new @ref Qore::Http3ServerPollOperation "Http3ServerPollOperation" class for QUIC/HTTP/3 server connection handling
       - \c HttpAsyncSocketIoController supports HTTP/2 and HTTP/3 via \c http_version option
       - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" now emits periodic
         SSE heartbeat comments (configured via
@@ -3150,6 +3090,10 @@ foreach string module_name in (registry.getProcessModules()) {
       - registers a `llama-parse` chunker strategy in @ref qoreragutilsintro "QoreRagUtils" via `LlamaParseChunker` — split-at-section-boundary markdown chunker that either extracts the source via LlamaParse (when given a URL) or splits inline markdown directly
       - provides LlamaParseRestConnection for connection management with \c llamaparse:// URL scheme
 
+    - @ref loggersemanticsearchintro "LoggerSemanticSearch" module
+      - new module providing backend-neutral semantic indexing and search APIs for searchable logger appenders
+        using QoreRagTypes embedders and vector stores
+
     - @ref mailgundataproviderintro "MailgunDataProvider" module
       - new module providing a data provider API for <a href="https://www.mailgun.com/">Mailgun</a> email services
       - send emails, validate addresses, manage domains, routes, and mailing lists
@@ -3255,6 +3199,14 @@ foreach string module_name in (registry.getProcessModules()) {
         request type \c body field
       - response bodies including schemas with multiple content types are supported
 
+    - @ref opensearchdataproviderintro "OpenSearchDataProvider" module
+      - new module providing document, index, pipeline, bulk, aggregation, scroll search, k-NN search, neural
+        search, hybrid search, vector-index creation, a QoreRagTypes `opensearch` vector-store backend, and
+        search app-action support for <a href="https://opensearch.org/">OpenSearch</a> servers
+
+    - @ref opensearchloggerappenderintro "OpenSearchLoggerAppender" module
+      - new module providing batched <a href="https://opensearch.org/">OpenSearch</a> Bulk API log appending and generic rendered-event search support
+
     - @ref pdfcodataproviderintro "PdfCoDataProvider" module
       - new module providing a data provider API for <a href="https://pdf.co/">PDF.co</a> document processing
       - PDF conversion (PDF to CSV, JSON, Text, HTML, XML, Excel, Images and vice versa)
@@ -3305,7 +3257,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - code lens (reference counts), selection range, folding range
       - document formatting via @ref qorecodeformatintro "QoreCodeFormat", on-type formatting
         (auto-indent)
-      - code actions: sort imports, add @c %modern directive
+      - code actions: sort imports, add @ref modern "%modern" directive
       - document highlight for all occurrences of symbol under cursor
       - installed as @c qls system command, usable from any editor supporting LSP
 
@@ -3453,7 +3405,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - QoreModelRegistry ModelExecutableAdapter ONNX execution methods accept
         selected output names for registry-backed multi-output ONNX packages
       - DataProviderML ONNX processors and QoreModelRegistry ModelExecutableAdapter
-        tensor execution paths reuse \c ML::OnnxIoBinding for stable input/output
+        tensor execution paths reuse @ref ML::OnnxIoBinding "ML::OnnxIoBinding" for stable input/output
         signatures and expose binding diagnostics for optimized registry-backed
         inference
       - ONNX package manifests now expose a complete deployment contract for
@@ -3488,7 +3440,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - exports trained ML models to ONNX format (11 algorithms including tree ensembles)
       - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
-      - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+      - enables interoperability with Python/<a href="https://www.tensorflow.org/">TensorFlow</a>/PyTorch via standard ONNX files
 
     - @ref qoreonnxtoolsintro "QoreOnnxTools" module
       - new module providing ONNX deployment tooling helpers for quantization workflows
@@ -3515,7 +3467,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a composable abstraction layer for retrieval-augmented generation (RAG)
       - defines abstract embedder, vector store, reranker, and chunker building blocks plus a \c RagPipeline orchestrator
       - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c BgeM3FastApiEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
-      - adds \c PgVectorRagProvider — vector-store backend `pgvector` wrapping any \c AbstractDatasource pointing at a PostgreSQL database with the [pgvector](https://github.com/pgvector/pgvector) extension; supports cosine, L2, and inner-product distance operators with pass-through SQL filtering
+      - adds \c PgVectorRagProvider — vector-store backend `pgvector` wrapping any @ref Qore::SQL::AbstractDatasource "AbstractDatasource" pointing at a PostgreSQL database with the [pgvector](https://github.com/pgvector/pgvector) extension; supports cosine, L2, and inner-product distance operators with pass-through SQL filtering
       - adds the chunker factory registry: \c AbstractChunkerFactory + \c ChunkerModuleMap + \c registerChunkerFactory() / \c getChunkerFactoryEx() / \c createChunker() / \c knownChunkerStrategies() on \c RagProviderRegistry, parallel to the existing embedder/reranker/vector-store registries; built-in \c StructuredChunkerFactory and \c FixedChunkerFactory registered automatically by \c QoreRagUtils so chunkers are now constructible via \c ChunkerConfig.strategy lookup (enables lazy-loaded ingestion chunkers shipped by other modules)
 
     - @ref qorereplintro "QoreRepl" module
@@ -3534,7 +3486,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - @ref QoreSpeechUtils::SpeechProviderRegistry "SpeechProviderRegistry"
         with lazy-loaded `TranscriberModuleMap` + `SynthesizerModuleMap` — callers
         select backends by name (\c "deepgram", \c "assemblyai", ...) without
-        having to `%requires` every provider module up front
+        having to @ref requires "%requires" every provider module up front
       - @ref deepgramrestclientintro "DeepgramRestClient" registers transcriber
         + synthesizer backends; @ref assemblyairestclientintro "AssemblyAiRestClient"
         registers a transcriber backend
@@ -3551,7 +3503,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - EmbeddingModel and CrossEncoderReranker accept in-memory ONNX model artifacts
         from registries in addition to filesystem paths
       - EmbeddingModel and CrossEncoderReranker now feed local ONNX models with
-        dense \c ML::Tensor token inputs and skip optional tokenizer tensors that
+        dense @ref ML::Tensor "ML::Tensor" token inputs and skip optional tokenizer tensors that
         are not declared by the model
       - EmbeddingModel and CrossEncoderReranker accept \c session_config for
         ONNX Runtime provider, threading, and graph-optimization settings
@@ -3584,6 +3536,10 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref restschemadataproviderintro "RestSchemaDataProvider" module
       - new module providing a unified data provider API for both Swagger 2.0 and OpenAPI 3.0 / 3.1 REST schemas
+
+    - @ref searchindexdataproviderintro "SearchIndexDataProvider" module
+      - new module providing common REST search-index data-provider helpers for backend-specific document search
+        modules
 
     - @ref sendclouddataproviderintro "SendCloudDataProvider" module
       - new module providing a data provider API for <a href="https://www.sendcloud.com/">SendCloud</a> shipping services
@@ -3698,7 +3654,7 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref stabilityairestclientintro "StabilityAiRestClient" module
       - new module providing a REST client for <a href="https://stability.ai">Stability AI</a> v2beta endpoints
       - supports Bearer-token authentication
-      - registers a `stability-ai` image-generator backend in @ref qoremediautilsintro "QoreMediaUtils" — callable via `MediaProviderRegistry::createImageGenerator()` without an explicit `%requires` for this module
+      - registers a `stability-ai` image-generator backend in @ref qoremediautilsintro "QoreMediaUtils" — callable via `MediaProviderRegistry::createImageGenerator()` without an explicit @ref requires "%requires" for this module
       - provides StabilityAiRestConnection for connection management with \c stability-ai:// URL scheme
 
     - @ref systemeio_dataproviderintro "SystemeIoDataProvider" module
@@ -4033,7 +3989,7 @@ foreach string module_name in (registry.getProcessModules()) {
       (<a href="https://github.com/qoretechnologies/qore/issues/4981">issue 4981</a>)
     - fixed a crash when creating a \c LoggerEvent with a missing \c categoryName in the logger_bin module
       (<a href="https://github.com/qoretechnologies/qore/issues/4979">issue 4979</a>)
-    - fixed @ref Qore::parse_url() "parse_url() logic for paths with \c @ chars
+    - fixed @ref Qore::parse_url() "parse_url()" logic for paths with \c @ chars
       (<a href="https://github.com/qoretechnologies/qore/issues/4978">issue 4978</a>)
     - fixed a memory error handling typed hash data exported from deleted containers
       (<a href="https://github.com/qoretechnologies/qore/issues/4976">issue 4976</a>)
@@ -4228,19 +4184,19 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - New Date-Time Output Format Code
       - \c "@" was added as a @ref date_formatting "date/time output format code"
     - New Pseudo-Methods
-      - @ref <callref>::uniqueHash()
-      - @ref <date>::getEpochMicroseconds()
-      - @ref <date>::getEpochMilliseconds()
-      - @ref <string>::contains()
-      - @ref <string>::endsWith()
-      - @ref <string>::startsWith()
+      - @ref <callref>::uniqueHash() "<callref>::uniqueHash()"
+      - @ref <date>::getEpochMicroseconds() "<date>::getEpochMicroseconds()"
+      - @ref <date>::getEpochMilliseconds() "<date>::getEpochMilliseconds()"
+      - @ref <string>::contains() "<string>::contains()"
+      - @ref <string>::endsWith() "<string>::endsWith()"
+      - @ref <string>::startsWith() "<string>::startsWith()"
     - New options supported in the @ref Qore::HTTPClient "HTTPClient" class and subclasses:
       - \c username
       - \c password
     - The thousands separator can be suppressed in number formatting using the special character \c ? in
-      - @ref <float>::format(string)
-      - @ref <int>::format(string)
-      - @ref <number>::format(string)
+      - @ref <float>::format(string) "<float>::format()"
+      - @ref <int>::format(string) "<int>::format()"
+      - @ref <number>::format(string) "<number>::format()"
       - @ref Qore::format_number(string, softfloat) "format_number(string, softfloat)"
     - Types can now return hashes with simple types for accept and returning types for compatibility reasons
       (<a href="https://github.com/qoretechnologies/qore/issues/4876">issue 4876</a>)
@@ -4444,8 +4400,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
         (<a href="https://github.com/qoretechnologies/qore/issues/4776">issue 4776</a>)
     - added the following function and methods to support base64-url encoding of data:
       - @ref Qore::make_base64_url_string() "make_base64_url_string()"
-      - @ref <string>::toBase64Url()
-      - @ref <binary>::toBase64Url()
+      - @ref <string>::toBase64Url() "<string>::toBase64Url()"
+      - @ref <binary>::toBase64Url() "<binary>::toBase64Url()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4783">issue 4783</a>)
     - added the following class and new methods to support OAuth2 and non-blocking polling functionality:
       - @ref Qore::FilePollOperation "FilePollOperation" class
@@ -5717,7 +5673,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - @ref Qore::PO_NO_INHERIT_PROGRAM_DATA "PO_NO_INHERIT_PROGRAM_DATA"
       - @ref Qore::WARN_INVALID_CATCH "WARN_INVALID_CATCH"
     - updated methods:
-      - @ref <value>::fullType()
+      - @ref <value>::fullType() "<value>::fullType()"
     - type errors with function and method resolution will report the full namespace paths of class and hashdecl
       types
     - %Qore builds now support outputting javadoc for %Qore sources to support code completion in Java IDEs for
@@ -6533,7 +6489,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - fixed inconsistent handling of the @ref plus_equals_operator "+= operator" with
       @ref list_or_nothing_type "*list<...>" types with element types
       (<a href="https://github.com/qoretechnologies/qore/issues/3586">issue 3586</a>)
-    - <string>::split(string, string, bool) and Qore::split(string, string, string, bool) now properly handle double
+    - @ref <string>::split() "<string>::split(string, string, bool)" and Qore::split(string, string, string, bool) now properly handle double
       quote characters as an alternative way to include quotes in fields
       (<a href="https://github.com/qoretechnologies/qore/issues/3550">issue 3550</a>)
     - the @ref cast "cast<>" operator can now cast directly to "or nothing" types: ex:
@@ -6669,7 +6625,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - added the following new functions:
       - @ref Qore::auto_cast() "auto_cast()"
       - @ref Qore::digest() "digest()"
-      - @ref Qore::get_digests() "get_digests()
+      - @ref Qore::get_digests() "get_digests()"
       - @ref Qore::hmac() "hmac()"
     - added the following new constants:
       - @ref Qore::DigestMap "DigestMap"
@@ -6992,13 +6948,13 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - @ref Qore::get_netif_list() "get_netif_list()"
       - @ref Qore::get_stack_size() "get_stack_size()"
       - @ref Qore::get_thread_name() "get_thread_name()"
-      - @ref Qore::load_module_warn() "load_module_warn()
+      - @ref Qore::load_module_warn() "load_module_warn()"
       - @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()"
       - @ref Qore::set_module_option() "set_module_option()"
       - @ref Qore::set_thread_name() "set_thread_name()"
     - Updated functions:
       - @ref Qore::get_ex_pos() "get_ex_pos()": \c lang info was added to the result string if available
-      - @ref Qore::load_module() "load_module(): added an optional \c warning_mask parameter
+      - @ref Qore::load_module() "load_module()": added an optional \c warning_mask parameter
     - New modules:
       - <a href="../../modules/FsUtil/html/index.html#fsutilintro">FsUtil</a>
       - <a href="../../modules/Logger/html/index.html#loggerintro">Logger</a>
@@ -8100,7 +8056,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - added the <a href="../../modules/SalesforceRestClient/html/index.html#salesforcerestclientintro">SalesforceRestClient</a> module for communicating with Salesforce.com using the REST APIs
     - module <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a>
       - has support for native default values in tables (<a href="https://github.com/qoretechnologies/qore/issues/1428">issue 1428</a>)
-      - has support for Oracle named types (eg. spatial types) for Schema.qm and SchemaReverse.qm. (<a href="https://github.com/qoretechnologies/qore/issues/1465">issue 1465</a>)
+      - has support for Oracle named types (eg. spatial types) for <tt>Schema.qm</tt> and <tt>SchemaReverse.qm</tt>. (<a href="https://github.com/qoretechnologies/qore/issues/1465">issue 1465</a>)
 
     @subsection qore_08125_bug_fixes Bug Fixes in Qore
 
@@ -8326,15 +8282,15 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - @ref Qore::string()
       - @ref Qore::strmul()
     - new pseudo-methods:
-      - @ref <date>::dayNumber()
-      - @ref <date>::dayOfWeek()
-      - @ref <date>::durationSecondsFloat()
-      - @ref <date>::isoDayOfWeek()
-      - @ref <date>::isoWeekHash()
-      - @ref <date>::isoWeekString()
-      - @ref <object>::uniqueHash()
-      - @ref <string>::getDecoded()
-      - @ref <string>::getEncoded()
+      - @ref <date>::dayNumber() "<date>::dayNumber()"
+      - @ref <date>::dayOfWeek() "<date>::dayOfWeek()"
+      - @ref <date>::durationSecondsFloat() "<date>::durationSecondsFloat()"
+      - @ref <date>::isoDayOfWeek() "<date>::isoDayOfWeek()"
+      - @ref <date>::isoWeekHash() "<date>::isoWeekHash()"
+      - @ref <date>::isoWeekString() "<date>::isoWeekString()"
+      - @ref <object>::uniqueHash() "<object>::uniqueHash()"
+      - @ref <string>::getDecoded() "<string>::getDecoded()"
+      - @ref <string>::getEncoded() "<string>::getEncoded()"
     - the following functions were moved from the <a href="../../modules/Util/html/index.html#utilintro">Util</a> module to %Qore:
       - @ref Qore::absolute_path()
       - @ref Qore::absolute_path_windows()
@@ -8377,7 +8333,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - @ref Qore::FtpClient updates:
       - added @ref Qore::FtpClient::getMode()
     - Performance improvements:
-      - @ref Qore::HashPairIterator and @ref Qore::ObjectPairIterator objects (returned by @ref <hash>::pairIterator() and @ref <object>::pairIterator(), respectively and the associated reverse iterators) have had their performance improved by approximately 70% by reusing the hash iterator object when possible
+      - @ref Qore::HashPairIterator and @ref Qore::ObjectPairIterator objects (returned by @ref <hash>::pairIterator() "<hash>::pairIterator()" and @ref <object>::pairIterator() "<object>::pairIterator()", respectively and the associated reverse iterators) have had their performance improved by approximately 70% by reusing the hash iterator object when possible
     - module directory handling changed
       - user modules are now stored in prefix/share/qore-modules/version
       - prefix/share/qore-modules is also added to the module path
@@ -8523,7 +8479,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - assignment of a variable to itself is now illegal (<a href="https://github.com/qoretechnologies/qore/issues/526">issue 526</a>)
     - extended qpp to support the 'final' class flag (<a href="https://github.com/qoretechnologies/qore/issues/876">issue 876</a>)
     - extended qpp to support private members (<a href="https://github.com/qoretechnologies/qore/issues/924">issue 924</a>)
-    - added @ref <float>::infp() and @ref <float>::nanp() predicates to @ref float_type (<a href="https://github.com/qoretechnologies/qore/issues/909">issue 909</a>)
+    - added @ref <float>::infp() "<float>::infp()" and @ref <float>::nanp() "<float>::nanp()" predicates to @ref float_type (<a href="https://github.com/qoretechnologies/qore/issues/909">issue 909</a>)
 
     @subsection qore_0812_bug_fixes Bug Fixes in Qore
     - fixed format of octal constant - there was an error if a string contained octal constant that is shorter than 3 digit
@@ -8661,7 +8617,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - on Windows when used with a directory
       - on UNIX to return a value for the current permissions the program is running under
     - fixed a bug in @ref Qore::regex_extract() and in the @ref regex_extract_operator where the result buffer was not resized when it was too small, limiting regular expressions to nine subpatterns; the maximum has been raised to between 90 and 100 before an exception is raised (since the subpattern buffer is allocated on the stack, we need to enforce a limit)
-    - fixed a bug with the @ref cast "cast<>() operator where compatible classes were not recognized at runtime that would otherwise be recognized correctly without the cast
+    - fixed a bug with the @ref cast "cast<>()" operator where compatible classes were not recognized at runtime that would otherwise be recognized correctly without the cast
     - fixed the return type in @ref Qore::getcwd() to @ref string_or_nothing_type "*string"
     - fixed a bug in the @ref return "return statement" where the runtime return type was used at parse time which did not work when parsing embedded code
     - fixed a bug validating return values in method evaluation that could lead to a qore crash
@@ -8703,7 +8659,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - fixed a bug where the @ref push "push" and @ref unshift "unshift" operators applied to a variable declared as softlist did not use the default value
     - fixed a bug where calls to @ref Qore::HTTPClient::setConnectTimeout() had no effect (<a href="https://github.com/qoretechnologies/qore/issues/323">issue 323</a>)
     - fixed several bugs with logical comparison operators and arbitrary-precision numeric values (<a href="https://github.com/qoretechnologies/qore/issues/330">issue 330</a>)
-    - fixed a bug where @ref Qore::HashListIterator (and therefore @ref <hash>::contextIterator()) would not iterate a simple hash with non-list values once but would instead silently ignore the hash (<a href="https://github.com/qoretechnologies/qore/issues/336">issue 336</a>)
+    - fixed a bug where @ref Qore::HashListIterator (and therefore @ref <hash>::contextIterator() "<hash>::contextIterator()") would not iterate a simple hash with non-list values once but would instead silently ignore the hash (<a href="https://github.com/qoretechnologies/qore/issues/336">issue 336</a>)
     - fixed a bug where a warning was not always issued when square brackets were used on unsuitable types (<a href="https://github.com/qoretechnologies/qore/issues/184">issue 184</a>), internally ported the square bracket operator to the C++ QoreOperatorNode hierarchy
     - fixed a bug handling return type information for method and pseudo-method calls; uninitialized memory could be used which could cause a runtime crash (<a href="https://github.com/qoretechnologies/qore/issues/364">issue 364</a>)
     - corrected the name of the @ref modulo_operator "modulo operator" (was incorrectly referred to as the "modula" operator earlier: <a href="">issue 389</a>)
@@ -8928,8 +8884,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - return a 400 \c "Bad Request" error if an unsupported HTTP method is used in a REST Call
     - added new \c UpsertInsertOnly upsert strategy to <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a>
     - new pseudo-methods:
-      - @ref <value>::sizep(): returns @ref True "True" if the type can return a non-zero size (@ref True "True" for containers including @ref binary "binary objects" and @ref string "strings", @ref False "False" for everything else)
-      - @ref <string>::getLine(): finds lines in a string buffer
+      - @ref <value>::sizep() "<value>::sizep()": returns @ref True "True" if the type can return a non-zero size (@ref True "True" for containers including @ref binary "binary objects" and @ref string "strings", @ref False "False" for everything else)
+      - @ref <string>::getLine() "<string>::getLine()": finds lines in a string buffer
     - <a href="../../modules/Mime/html/index.html#mimeintro">Mime</a> module updates:
       - added mime type for WSDL files (\c "application/wsdl+xml")
       - added mappings for \c "xls" and \c "xlst" extensions to MimeTypeXml
@@ -9090,7 +9046,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - all @ref data_type_declarations "data type declarations" that optionally accept @ref nothing also now accept @ref null and map @ref null to @ref nothing; this makes direct assignments from values derived from SQL queries much easier
     - added an optional reference to an integer to the @ref Qore::backquote() function to return the return code of the program executed
     - @ref implicit_index "implicit index" references now work in the @ref map "map" and @ref select "select" operators with lists and iterators
-    - the @ref regex_extract_operator now accepts an optional \c g specifier to extract all occurrences of the pattern(s) in a string; also @ref Qore::regex_extract "regex_extract()" and <string>::regexExtract(string, int) now accept @ref Qore::RE_Global to extract all occurrences of the pattern(s) in a string
+    - the @ref regex_extract_operator now accepts an optional \c g specifier to extract all occurrences of the pattern(s) in a string; also @ref Qore::regex_extract "regex_extract()" and @ref <string>::regexExtract() "<string>::regexExtract(string, int)" now accept @ref Qore::RE_Global to extract all occurrences of the pattern(s) in a string
     - the @ref splice "splice" and @ref extract "extract" operators were extended to work on @ref binary "binary objects" as well as lists and strings
     - printing out binary values with the \c "%y" @ref string_formatting "format specifier" now produces YAML-like output for the binary value
     - added path name to error messages in @ref Qore::Dir "Dir" class exception strings
@@ -9499,7 +9455,7 @@ class MyConcreteClass inherits MyAbstractClass {
     - the @ref Qore::ReadOnlyFile::readLine() "ReadOnlyFile::readLine()" method (formerlly a method of the @ref Qore::File class) was enhanced to accept 2 optional arguments, allowing the end of line character(s) to be stripped from the line returned, and also to allow the end of line characters to be specified.  If no end of line characters are specified, then the method automatically determines the end of line characters (can be \c "\n", \c "\r", or \c "\r\n"; the last one only if the underlying file is not a TTY in order to avoid stalling I/O on an interactive TTY)
     - the @ref file_stat_constants were moved from the @ref Qore::File class to the @ref Qore::ReadOnlyFile class
     - added a new @ref Qore::FileLineIterator "FileLineIterator" iterator class
-    - added a new optional parameter to <string>::split(string, string, bool) and Qore::split(string, string, string, bool) to allow for automatic stripping unquoted fields of leading and trailing whitespace (the default is the old behavior; i.e. leave the whitespace as it is read)
+    - added a new optional parameter to @ref <string>::split() "<string>::split(string, string, bool)" and Qore::split(string, string, string, bool) to allow for automatic stripping unquoted fields of leading and trailing whitespace (the default is the old behavior; i.e. leave the whitespace as it is read)
     - added a new @ref Qore::TimeZone "TimeZone" method for parsing string dates in a specific @ref Qore::TimeZone "TimeZone": @ref Qore::TimeZone::date(string, string)
     - added a new function for parsing text as a boolean value: @ref Qore::parse_boolean() "parse_boolean()"
     - as mentioned above, the new <a href="../../modules/CsvUtil/html/index.html#csvutilintro">CsvUtil</a> module was added, implementing the CsvFileIterator class that allows for easy parsing of csv-like text files
@@ -9553,7 +9509,7 @@ class MyConcreteClass inherits MyAbstractClass {
     - fixed bugs handling non-blocking reads in the @ref Qore::Socket "Socket" class; the timeout setting was only enforced for the first read; subsequent reads were made as blocking reads
     - fixed a bug in the @ref Qore::Socket "Socket" class when the SSL session requires renegotiation during non-blocking I/O
     - @ref Qore::File::constructor() "File::constructor()" now throws an exception if called with a tty target and @ref no-terminal-io "%no-terminal-io" is set
-    - fixed a bug in split with quote (<string>::split(string, string, bool) and Qore::split(string, string, string, bool)) if the separator pattern was not found and the single field was not quoted either
+    - fixed a bug in split with quote (@ref <string>::split() "<string>::split(string, string, bool)" and Qore::split(string, string, string, bool)) if the separator pattern was not found and the single field was not quoted either
     - fixed a bug handling nested @ref ifdef "%ifdef" and @ref ifndef "%ifndef" blocks with @ref else "%else" in the inside block
     - fixed a crashing due to the failure to clear the "PF_TOP_LEVEL" flag when initializing statements, this could cause temporary variables in a statement to be marked as the start of the global thread-local variable list, and then after such variables are deleted, then a crash happens when trying to access the global thread-local variable list
     - fixed a crashing bug at parse time merging function lists in namespaces declared multiple times

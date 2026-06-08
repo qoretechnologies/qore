@@ -458,7 +458,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     #! Returns @ref True since HTTP connections support the async request API
     /** @return @ref True
 
-        @since ConnectionProvider 2.3
+        @since ConnectionProvider 3.0
     */
     bool supportsAsyncRequestApi() {
         return True;
@@ -473,7 +473,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
 
         @return a poll operation for the async request
 
-        @since ConnectionProvider 2.3
+        @since ConnectionProvider 3.0
     */
     Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
             *hash<auto> headers, *Logger::LoggerInterface logger) {

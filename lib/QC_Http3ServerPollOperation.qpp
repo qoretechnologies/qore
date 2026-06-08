@@ -781,7 +781,7 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
     @note QUIC uses UDP, so this operation works with a UDP socket bound via
     @ref Qore::Socket::bindINET() "Socket::bindINET()" with SOCK_DGRAM.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore; vparent=SocketPollOperationBase<*hash<auto>>; private_members=object sock,string goal,auto data_save];
 
@@ -990,7 +990,7 @@ nothing Http3ServerPollOperation::abort() {
     @param certificate the new X.509 certificate
     @param private_key the new private key
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http3ServerPollOperation::reloadCertificate(SSLCertificate[QoreSSLCertificate] certificate,
         SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
@@ -1228,7 +1228,7 @@ list<string> Http3ServerPollOperation::getAndClearDataReadyStreams() [flags=RET_
     @param session_id the QUIC session ID
     @param queue the persistent-session Queue
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http3ServerPollOperation::registerPersistentSessionQueue(int session_id, Queue[Queue] queue) {
     // Hold the QoreObject ref in a member hash so the raw Queue* stays valid
@@ -1268,7 +1268,7 @@ nothing Http3ServerPollOperation::registerPersistentSessionQueue(int session_id,
 
     @param session_id the QUIC session ID
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http3ServerPollOperation::deregisterPersistentSessionQueue(int session_id) {
     // Erase the C++ map entry first (under op_lock) so a concurrent I/O-thread
@@ -1294,7 +1294,7 @@ nothing Http3ServerPollOperation::deregisterPersistentSessionQueue(int session_i
 /** Called when the H3 connection dies. Each listener's notifyIo() detects
     the closed stream context and cleans up, unblocking handler threads.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http3ServerPollOperation::notifyStreamListenersClosed() {
     std::vector<QoreObject*> listeners_to_notify;

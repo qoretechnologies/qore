@@ -277,7 +277,7 @@ string str = make_datasource_string({
     - @ref Qore::SQL::parse_datasource() "parse_datasource()"
     - @ref Qore::SQL::Datasource::makeConfigString() "Datasource::makeConfigString()"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 string make_datasource_string(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return makeConfigString(config, xsink);

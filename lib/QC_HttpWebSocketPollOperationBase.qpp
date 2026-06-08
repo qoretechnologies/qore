@@ -839,7 +839,7 @@ void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
     - Completion context for HttpConnectionPollOperationBase
     - Channel integration for the WebSocket handler
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass HttpWebSocketPollOperationBase [
     private_members=object sock,string goal,object recv_queue,object send_queue;
@@ -993,7 +993,7 @@ nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason
 //! Sets the maximum frame/message size in bytes
 /** Frames larger than this are rejected with close code 1009 (Message Too Big).
     @param max_frame_size the maximum size in bytes (0 = unlimited, default = 16MB)
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing HttpWebSocketPollOperationBase::setMaxFrameSize(int max_frame_size) [flags=NAMED_ARGS] {
     priv->setMaxFrameSize(max_frame_size > 0 ? static_cast<size_t>(max_frame_size) : WS_DEFAULT_MAX_FRAME_SIZE);
@@ -1118,7 +1118,7 @@ int HttpWebSocketPollOperationBase::getSendTimeout() [flags=RET_VALUE_ONLY] {
 
     @param heartbeat_interval_ms the heartbeat interval in milliseconds (0 = disabled)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing HttpWebSocketPollOperationBase::setHeartbeat(int heartbeat_interval_ms) [flags=NAMED_ARGS] {
     priv->setHeartbeat(static_cast<int64>(heartbeat_interval_ms));
@@ -1135,7 +1135,7 @@ nothing HttpWebSocketPollOperationBase::setHeartbeat(int heartbeat_interval_ms) 
     @param enabled True to enable echo mode, False to disable (back to
     normal recv_queue + worker dispatch path)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing HttpWebSocketPollOperationBase::setEchoMode(bool enabled) [flags=NAMED_ARGS] {
     if (enabled) {
@@ -1150,7 +1150,7 @@ nothing HttpWebSocketPollOperationBase::setEchoMode(bool enabled) [flags=NAMED_A
     Subclasses overriding this method must call the base implementation to
     dispatch any callback registered with @ref setFrameCallback().
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing HttpWebSocketPollOperationBase::onPollComplete() {
     priv->dispatchFrameCallback(xsink);

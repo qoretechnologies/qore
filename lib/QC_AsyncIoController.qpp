@@ -57,7 +57,7 @@ static AsyncIoControllerPriv* get_singleton(QoreObject*& obj, ExceptionSink* xsi
 //! Socket polling operation info hash
 /** Contains all the information needed to submit an async I/O operation
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hashdecl Qore::SocketPollOperationInfo {
     //! Pollable I/O object (Socket, EventNotifier, or any AbstractPollableIoObjectBase subclass)
@@ -98,7 +98,7 @@ hashdecl Qore::SocketPollOperationInfo {
     /** Allows several operations with distinct cache keys to be routed to the same
         I/O thread for coordinated cancellation and readiness barriers.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     *string thread_key;
 
@@ -106,7 +106,7 @@ hashdecl Qore::SocketPollOperationInfo {
     /** Works around C++/Qore multiple inheritance method resolution order issues where
         findMethod("onComplete") returns the base no-op from the wrong parent class.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     bool has_on_complete = False;
 }
@@ -114,7 +114,7 @@ hashdecl Qore::SocketPollOperationInfo {
 //! Socket poll result info hash
 /** Contains the result of a completed async I/O operation
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hashdecl Qore::SocketPollResultInfo {
     //! The pollable I/O object that completed the operation
@@ -161,7 +161,7 @@ hashdecl Qore::SocketPollResultInfo {
 
     @note This class is not available with the @ref PO_NO_NETWORK parse option
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass AsyncIoController [dom=NETWORK; arg=AsyncIoControllerPriv* ctrl; ns=Qore];
 
@@ -216,7 +216,7 @@ AsyncIoController::copy() {
 
     @throw ASYNC-IO-ERROR if the controller is shutting down or the info hash is invalid
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,
         *bool replace_existing)
@@ -248,7 +248,7 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
     or the operation uses an @ref AbstractPollOperation::onComplete() "onComplete()"
     callback, or if called from the async I/O thread
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperationInfo> operation_info,
         *bool replace_existing) [flags=NAMED_ARGS] {
@@ -265,7 +265,7 @@ static hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperati
 //! Cancels an operation by socket on the global singleton
 /** @param io_object the I/O object whose operation should be canceled
     @return @ref True "True" if an operation was found and canceled
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static bool AsyncIoController::cancel(AbstractPollableIoObjectBase[AbstractPollableIoObjectBase] io_object)
         [flags=NAMED_ARGS] {
@@ -287,7 +287,7 @@ static bool AsyncIoController::cancel(AbstractPollableIoObjectBase[AbstractPolla
     @param io_object the I/O object whose operation should be canceled and then closed
     @return @ref True "True" if an operation was found and canceled
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[AbstractPollableIoObjectBase] io_object)
         [flags=NAMED_ARGS] {
@@ -304,7 +304,7 @@ static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[Abstr
 //! Cancels an operation by key on the global singleton
 /** @param key the operation key to cancel
     @return @ref True "True" if an operation was found and canceled
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static bool AsyncIoController::cancelByKey(string key) [flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -320,7 +320,7 @@ static bool AsyncIoController::cancelByKey(string key) [flags=NAMED_ARGS] {
 //! Cancels all operations for an owner on the global singleton
 /** @param owner the owner identifier whose operations should be canceled
     @return the number of operations canceled
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static int AsyncIoController::cancelByOwner(string owner) [flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -340,7 +340,7 @@ static int AsyncIoController::cancelByOwner(string owner) [flags=NAMED_ARGS] {
 
     @param io_object the I/O object whose operation needs re-polling
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::wakeSocket(AbstractPollableIoObjectBase[AbstractPollableIoObjectBase] io_object)
         [flags=NAMED_ARGS] {
@@ -366,7 +366,7 @@ static nothing AsyncIoController::wakeSocket(AbstractPollableIoObjectBase[Abstra
     waiting for handler threads that are waiting for onComplete() to
     signal their done counter.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::flushCallbacks() {
     QoreObject* obj;
@@ -393,7 +393,7 @@ static nothing AsyncIoController::flushCallbacks() {
 
     @param owner the owner identifier to wait for
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::flushCallbacksByOwner(string owner) [flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -409,7 +409,7 @@ static nothing AsyncIoController::flushCallbacksByOwner(string owner) [flags=NAM
 //! Waits for the global singleton's I/O thread to be ready
 /** @param timeout_ms timeout for waiting; use 0 to wait indefinitely
     @return @ref True "True" if the I/O thread is ready within the timeout
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static bool AsyncIoController::waitReady(*timeout timeout_ms) [flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -428,7 +428,7 @@ static bool AsyncIoController::waitReady(*timeout timeout_ms) [flags=NAMED_ARGS]
 
     @throw ASYNC-IO-ERROR if called from an async I/O controller I/O thread
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static bool AsyncIoController::waitForProcessing(*timeout timeout_ms) [flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -443,7 +443,7 @@ static bool AsyncIoController::waitForProcessing(*timeout timeout_ms) [flags=NAM
 
 //! Returns true if the global singleton's I/O thread is running
 /** @return @ref True "True" if the I/O thread is running
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static bool AsyncIoController::running() {
     QoreObject* obj;
@@ -458,7 +458,7 @@ static bool AsyncIoController::running() {
 
 //! Returns the number of cached operations on the global singleton
 /** @return the number of active operations in the cache
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static int AsyncIoController::getCacheSize() {
     QoreObject* obj;
@@ -473,7 +473,7 @@ static int AsyncIoController::getCacheSize() {
 
 //! Sets the autostop flag on the global singleton
 /** @param auto_stop if @ref True "True", the I/O thread will exit when all operations complete
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::setAutostop(bool auto_stop = True) [flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -488,7 +488,7 @@ static nothing AsyncIoController::setAutostop(bool auto_stop = True) [flags=NAME
 
 //! Returns the autostop flag from the global singleton
 /** @return @ref True "True" if autostop is enabled
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static bool AsyncIoController::getAutostop() {
     QoreObject* obj;
@@ -503,7 +503,7 @@ static bool AsyncIoController::getAutostop() {
 
 //! Returns info about the global singleton's state
 /** @return a hash with controller state information
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static hash<auto> AsyncIoController::getInfo() {
     QoreObject* obj;
@@ -519,7 +519,7 @@ static hash<auto> AsyncIoController::getInfo() {
 //! Sets the logger on the global singleton
 /** @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object for logging,
     or @ref nothing "NOTHING" to disable per-controller logging
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -547,7 +547,7 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) [flags=
     @param user_data either a closure/call-reference to dispatch, or arbitrary user data
         to deliver through the @ref setTimerCallback() handler
     @return the unique timer ID
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static int AsyncIoController::addTimer(date deadline, auto user_data) [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -572,7 +572,7 @@ static int AsyncIoController::addTimer(date deadline, auto user_data) [dom=NETWO
         to deliver through the @ref setTimerCallback() handler
     @param owner the owner identifier to tag the timer's callback dispatch with
     @return the unique timer ID
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 static int AsyncIoController::addTimer(date deadline, auto udata, string owner) [dom=NETWORK,PROCESS] {
     QoreObject* obj;
@@ -588,7 +588,7 @@ static int AsyncIoController::addTimer(date deadline, auto udata, string owner) 
 //! Cancels a timer on the global singleton
 /** @param timer_id the timer ID returned by @ref addTimer()
     @return @ref True "True" if the timer was found and canceled
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -610,7 +610,7 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,PROCESS;fl
     @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
         @ref nothing to disable timer event delivery for non-callable \c user_data
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
     QoreObject* obj;
@@ -630,7 +630,7 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
 
     @throw ASYNC-IO-ERROR if the controller's thread pool has been stopped
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing()> cancel_callback)
         [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
@@ -655,7 +655,7 @@ static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing
     @param max_workers the maximum number of workers; 0 = auto (hardware_concurrency() * 4,
     capped at 512, fallback 4)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0)
         [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
@@ -677,7 +677,7 @@ static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0)
 
     Must be called before the first submit() or from Qore startup code.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static nothing AsyncIoController::setMaxIoThreads(int max_threads = 0) [dom=NETWORK,PROCESS;flags=NAMED_ARGS] {
     QoreObject* obj;

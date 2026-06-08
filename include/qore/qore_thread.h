@@ -292,7 +292,7 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg = nullptr);
 
     @return the new TID or -1 if an error occurred
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size, int flags = 0);
 
@@ -308,7 +308,7 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
 
     @return the new TID or -1 if an error occurred
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 DLLEXPORT int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags);
 

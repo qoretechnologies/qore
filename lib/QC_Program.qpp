@@ -69,12 +69,12 @@ hashdecl SourceLocationInfo {
     int endline;
 
     //! the starting source column number, or -1 if unknown
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     int column;
 
     //! the ending source column number, or -1 if unknown
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     int endcolumn;
 
@@ -89,7 +89,7 @@ hashdecl SourceLocationInfo {
 /** Returned by @ref Qore::Program::getParseDiagnostics() when structured diagnostic collection is enabled;
     provides a machine-readable form of parse diagnostics for tooling and AI coding assistants.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hashdecl ParseDiagnosticInfo {
     //! the severity: \c "error" or \c "warning"
@@ -268,7 +268,7 @@ const DOM_REFLECTION = QDOM_REFLECTION;
     These are the possible code flags that can be returned by @ref Reflection::AbstractVariant::getCodeFlags()
     "AbstractVariant::getCodeFlags()" to describe variant attributes.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 ///@{
 //! indicates no code flags are set
@@ -406,7 +406,7 @@ const PO_NEW_STYLE = PO_NEW_STYLE;
 
     @see @ref modern "%modern"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const PO_MODERN = PO_MODERN;
 
@@ -435,7 +435,7 @@ Program pgm(opts);
 
     @see @ref no-class-defs "%no-class-defs"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const PO_NO_CLASS_DEFS = PO_NO_CLASS_DEFS;
 
@@ -452,7 +452,7 @@ Program pgm(opts);
 
     @see @ref no-constant-defs "%no-constant-defs"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const PO_NO_CONSTANT_DEFS = PO_NO_CONSTANT_DEFS;
 
@@ -530,7 +530,7 @@ Program pgm(opts);
 
     @see @ref no-namespace-defs "%no-namespace-defs"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const PO_NO_NAMESPACE_DEFS = PO_NO_NAMESPACE_DEFS;
 
@@ -558,7 +558,7 @@ Program pgm(opts);
 
     @see @ref no-new "%no-new"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 const PO_NO_NEW = PO_NO_NEW;
 
@@ -877,7 +877,7 @@ const PO_ALLOW_DEBUGGER = PO_ALLOW_DEBUGGER;
     @see @ref Qore::Program::parseCommit() "Program::parseCommit()"
     @see @ref Qore::Program::parseRollback() "Program::parseRollback()"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 const PO_ALLOW_REPARSE = PO_ALLOW_REPARSE;
 
@@ -920,7 +920,7 @@ const PO_BROKEN_CAST = PO_BROKEN_CAST;
 */
 const PO_ALLOW_RETURNS = PO_ALLOW_RETURNS;
 
-//! @deprecated support removed in %Qore 2.3; remains defined as 0 for backward compatibility
+//! @deprecated support removed in %Qore 3.0; remains defined as 0 for backward compatibility
 /** The @ref strict-types "%strict-types" functionality was intended to prepare for JIT compilation by
     enforcing stricter typing and automatically initializing typed variables with default values.
     However, the NaN-boxing optimization for \c QoreValue addressed JIT requirements more effectively
@@ -950,14 +950,14 @@ const PO_BROKEN_VARARGS = PO_BROKEN_VARARGS;
 //! enables \@assert and \@debug statements (otherwise ignored at parse time)
 /** @see @ref enable-debug "%enable-debug"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const PO_ENABLE_DEBUG = PO_ENABLE_DEBUG;
 
 //! Disables the @ref typedef_keyword "typedef" keyword
 /** @see @ref no-typedef "%no-typedef"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const PO_NO_TYPEDEF = PO_NO_TYPEDEF;
 
@@ -966,7 +966,7 @@ const PO_NO_TYPEDEF = PO_NO_TYPEDEF;
 
     @see @ref auto_type "auto! syntax"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const PO_BROKEN_NARROWED_TYPES = PO_BROKEN_NARROWED_TYPES;
 
@@ -974,7 +974,7 @@ const PO_BROKEN_NARROWED_TYPES = PO_BROKEN_NARROWED_TYPES;
 /**
     @see @ref no-enum "%no-enum"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const PO_NO_ENUM = PO_NO_ENUM;
 ///@}
@@ -989,7 +989,7 @@ const PO_NO_ENUM = PO_NO_ENUM;
     @see Program::setExecMode()
     @see Program::getExecMode()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 enum Qore::ExecMode : int {
     //! AST execution mode - traditional tree-walking interpreter; most mature, no compilation overhead
@@ -1159,7 +1159,7 @@ const WARN_INVALID_CATCH = QP_WARN_INVALID_CATCH;
 
     @see @ref non-exhaustive-switch
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
 ///@}
@@ -1500,7 +1500,7 @@ foreach hash<ParseDiagnosticInfo> d in (pgm.getParseDiagnostics()) {
     - @ref Qore::Program::getParseDiagnostics()
     - @ref Qore::Program::parseDiagnosticsCollected()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Program::setParseDiagnosticsCollected(bool collect = True) {
     qore_program_private::get(*p)->setParseDiagnosticsCollected(collect);
@@ -1511,7 +1511,7 @@ nothing Program::setParseDiagnosticsCollected(bool collect = True) {
 
     @see @ref Qore::Program::setParseDiagnosticsCollected()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool Program::parseDiagnosticsCollected() [flags=RET_VALUE_ONLY] {
     return qore_program_private::get(*p)->parseDiagnosticsCollected();
@@ -1528,7 +1528,7 @@ bool Program::parseDiagnosticsCollected() [flags=RET_VALUE_ONLY] {
     - @ref Qore::Program::setParseDiagnosticsCollected()
     - @ref ParseDiagnosticInfo
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 list<hash<ParseDiagnosticInfo>> Program::getParseDiagnostics() [flags=RET_VALUE_ONLY] {
     return qore_program_private::get(*p)->getParseDiagnosticList();
@@ -1569,7 +1569,7 @@ pgm.parseCommit();
     @throw PROGRAM-PARSE-ERROR this exception is thrown if any parse actions are started while the Program
     object has running threads
 
-    @since %Qore 2.3 This method has been un-deprecated and now provides atomic rollback preserving
+    @since %Qore 3.0 This method has been un-deprecated and now provides atomic rollback preserving
     committed state when used with @ref PO_ALLOW_REPARSE
  */
 nothing Program::parseRollback() {
@@ -1882,7 +1882,7 @@ pgm.importClass("MyNamespace::MyClass");
     - This method was first implemented in %Qore 0.8.7
     - %Qore 0.8.12 added the \a import_as and \a inject parameters
     - %Qore 0.9.3 added the \a module_visibility parameter
-    - %Qore 2.4 added the \a reexport parameter
+    - %Qore 3.0 added the \a reexport parameter
  */
 nothing Program::importClass(string class_name, *string import_as, *softbool inject,
         int module_visibility = CSP_UNCHANGED, bool reexport = False) [flags=NAMED_ARGS] {
@@ -1925,7 +1925,7 @@ pgm.importHashDecl("MyNamespace::MyHash");
 
     @since
     - %Qore 0.8.13
-    - %Qore 2.4 added the \a reexport parameter
+    - %Qore 3.0 added the \a reexport parameter
  */
 nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool reexport = False) [flags=NAMED_ARGS] {
     TempEncodingHelper tmp(hashdecl_name, QCS_DEFAULT, xsink);
@@ -2341,7 +2341,7 @@ pgm.setExecMode(EM_JIT);
 
     @see Program::getExecMode()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 nothing Program::setExecMode(enum<ExecMode> mode) [flags=NAMED_ARGS] {
    p->setExecMode(static_cast<qore_exec_mode_t>(mode), true);
@@ -2360,7 +2360,7 @@ if (mode == EM_JIT) {
 
     @see Program::setExecMode()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 enum<ExecMode> Program::getExecMode() [flags=CONSTANT] {
    return static_cast<int64>(p->getExecMode());
@@ -3007,7 +3007,7 @@ int count = pgm.getThreadCount();
 
     @return the number of threads currently active in this Program
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Program::getThreadCount() [flags=CONSTANT] {
     return p->getThreadCount();
@@ -3188,7 +3188,7 @@ if (Program::hasParseOption("broken-soft-types")) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 static bool Program::hasParseOption(string name) [flags=CONSTANT,NAMED_ARGS] {
     QoreParseOptions opts = runtime_get_parse_options();
@@ -3211,7 +3211,7 @@ if (po.hasAny("broken-soft-types")) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 static ParseOptions Program::getFullParseOptions() [flags=CONSTANT] {
     QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
@@ -3229,7 +3229,7 @@ static ParseOptions Program::getFullParseOptions() [flags=CONSTANT] {
 
     @note A parse define may be defined with no value then values may have nothing values
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 static *hash<auto> Program::getAllDefines() [flags=CONSTANT;dom=PROCESS] {
    return qore_program_private::runTimeGetAllDefines(getProgram());

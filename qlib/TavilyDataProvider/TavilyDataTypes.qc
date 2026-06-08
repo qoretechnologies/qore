@@ -33,7 +33,7 @@ public class TavilySearchRequestDataType inherits HashDataType {
                     "the web.",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "example_value": "Qore 2.3 release date",
+                "example_value": "Qore 3.0 release date",
             },
             "search_depth": {
                 "display_name": "Search Depth",

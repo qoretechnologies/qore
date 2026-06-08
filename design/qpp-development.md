@@ -169,7 +169,7 @@ The naming pattern is `obj_<parameter_name>`:
 ### Setting Member Values in QPP Constructors
 
 Both `self->setValue("member", val, xsink)` and `self->setMemberValue("member", cls, val, xsink)`
-have consuming ownership semantics (as of %Qore 2.3) — the reference in `val` is transferred
+have consuming ownership semantics (as of %Qore 3.0) — the reference in `val` is transferred
 to the object.  For regular (non-`private:internal`) members, `setValue` is preferred because
 it is slightly cheaper and does not require a class argument; from inside a constructor,
 `runtime_get_class()` is the class being constructed, so `setValue` can reach every member of
@@ -229,7 +229,7 @@ QPP supports Qore enum declarations. Add a documentation comment and a line star
 
 ```cpp
 //! HTTP/2 mode enum
-/** @since %Qore 2.3 */
+/** @since %Qore 3.0 */
 enum HTTP2Mode : int {
     //! HTTP/2 disabled
     Disabled = 0,

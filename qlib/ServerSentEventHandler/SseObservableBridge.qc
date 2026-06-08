@@ -88,7 +88,7 @@ public namespace ServerSentEventHandler {
     response-writer thread.  The Condition variable handshake ensures the
     writer never busy-waits.
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 public class SseObservableBridge inherits DataProvider::Observer {
     public {
@@ -360,7 +360,7 @@ public class SseObservableBridge inherits DataProvider::Observer {
     @return an @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo"
     ready to be returned from the handler
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 public hash<HttpServer::HttpHandlerResponseInfo> sub sseObservableResponse(
         DataProvider::Observable source, *hash<auto> opts) {

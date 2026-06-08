@@ -1953,7 +1953,7 @@ hashdecl Qore::SseMessageInfo {
 /** Used by poll operations that need to monitor additional fds
     (e.g., InputStream fds for streaming responses).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hashdecl Qore::ExtraPollFdInfo {
     //! The file descriptor to monitor
@@ -1979,7 +1979,7 @@ hashdecl Qore::SocketPollInfo {
     /** When set, @ref Qore::Socket::poll() "Socket::poll()" and the I/O controller should wake up no later than this
         many milliseconds from now, even if no socket events occur, to allow protocol timer processing.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     *int poll_timeout_ms;
 
@@ -1988,7 +1988,7 @@ hashdecl Qore::SocketPollInfo {
         main pollable object.  When any extra fd becomes ready, the operation's continuePoll() is called.  Used for
         InputStream and OutputStream fds during streaming operations.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     *list<hash<ExtraPollFdInfo>> extra_fds;
 }
@@ -1996,7 +1996,7 @@ hashdecl Qore::SocketPollInfo {
 //! UDP datagram receive result info
 /** Contains the data and source address information from a recvfrom() operation.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hashdecl Qore::DatagramInfo {
     //! The received datagram data
@@ -2019,7 +2019,7 @@ hashdecl Qore::DatagramInfo {
 /** Contains the GOAWAY state for a QUIC session, as returned by
     @ref Qore::Socket::getQuicSessionGoawayState() "Socket::getQuicSessionGoawayState()".
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hashdecl Qore::QuicGoawayStateInfo {
     //! True if the final GOAWAY has been queued via @ref Qore::Socket::submitQuicShutdown() "submitQuicShutdown()"
@@ -2055,7 +2055,7 @@ const SOCK_POLLOUT = SOCK_POLLOUT;
 const SOCK_POLLERR = SOCK_POLLERR;
 
 //! (output only) indicates a timer event
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 const SOCK_POLLTIMER = SOCK_POLLTIMER;
 ///@}
@@ -2707,7 +2707,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
 
     @throw SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR invalid status code or unsupported body type
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
         string http_version, *hash<auto> headers, *data body, timeout idle_timeout) [flags=NAMED_ARGS] {
@@ -2787,7 +2787,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
     Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
         string status_description, string http_version, *hash<auto> headers,
@@ -2880,7 +2880,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
 
     @return an @ref AbstractPollOperation object
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
         string status_description, string http_version, *hash<auto> headers,
@@ -2974,7 +2974,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
     Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int status_code,
         string status_description, string http_version, *hash<auto> headers,
@@ -3061,7 +3061,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
 
     @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR invalid status code or non-I/O-safe InputStream
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(int status_code,
         string status_description, string http_version, *hash<auto> headers,
@@ -3240,7 +3240,7 @@ AbstractPollOperation<auto> Socket::startPollRecvData() {
 
     @throw SOCKET-STARTPOLLREADHTTPBODY-ERROR invalid parameter combination
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollReadHttpBody(int content_length, bool chunked,
         bool connection_close) [flags=NAMED_ARGS] {
@@ -3329,7 +3329,7 @@ AbstractPollOperation<auto> Socket::startPollRecvUntilBytesBinary(string pattern
 
     @note The socket must be bound to a local address with @ref bindINET() before calling this method
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollRecvFrom(*int max_size) [flags=NAMED_ARGS; dom=NETWORK] {
     size_t ms = max_size ? (size_t)max_size : 65535;
@@ -3363,7 +3363,7 @@ AbstractPollOperation<auto> Socket::startPollRecvFrom(*int max_size) [flags=NAME
 
     @note The socket must be bound to a local address with @ref bindINET() before calling this method
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendTo(
         string host, int port, binary data, *int family) [flags=NAMED_ARGS; dom=NETWORK] {
@@ -5916,7 +5916,7 @@ bool Socket::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     @return 1 if application data is available, 0 if the socket is still idle,
         -1 if the connection is closed or unusable
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::checkIdleDataForAsyncPoll() {
     return s->checkIdleDataForAsyncPoll(xsink);
@@ -6284,7 +6284,7 @@ sock.setUserTimeout(30000); # 30s — kernel reports a dead/unreachable peer
 
     @see Socket::getUserTimeout()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::setUserTimeout(int timeout_ms) [flags=NAMED_ARGS] {
     return s->setUserTimeout((int)timeout_ms);
@@ -6306,7 +6306,7 @@ int ms = sock.getUserTimeout();
 
     @see Socket::setUserTimeout() for a description of the option
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::getUserTimeout() [flags=CONSTANT] {
     return s->getUserTimeout();
@@ -6690,7 +6690,7 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     @throw QOREADDRINFO-GETINFO-ERROR error looking up either nodename or servicename (or not known)
     @throw ASYNC-IO-ERROR called from the async I/O thread or the global async I/O controller is unavailable
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 static list<hash<auto>> Socket::resolveAddrInfo(*string node, *softstring service,
         softint family = AF_UNSPEC, softint flags = 0, softint socket_type = SOCK_STREAM, softint protocol = 0,
@@ -6789,7 +6789,7 @@ static list<hash<SocketPollInfo>> Socket::poll(
 
     @see isHttp2()
 
-    @since %Qore 2.1 (headers_only option added in %Qore 2.3)
+    @since %Qore 2.1 (headers_only option added in %Qore 3.0)
 */
 AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
@@ -7004,7 +7004,7 @@ nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> 
 
     @param enabled @ref True to advertise ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::setHttp2ConnectProtocolEnabled(bool enabled = True) [flags=NAMED_ARGS] {
     s->setHttp2ConnectProtocolEnabled(enabled);
@@ -7025,7 +7025,7 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enabled = True) [flags=NAMED
 
     @throw HTTP2-ERROR no HTTP/2 session active or submission failed
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -7067,7 +7067,7 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw HTTP2-ERROR HTTP/2 CONNECT response submission failed or stream is not a CONNECT request
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -7122,7 +7122,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream
 
     @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "waitForHttp2StreamDrain", xsink);
@@ -7148,7 +7148,7 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) [fla
 
     @throw HTTP2-ERROR if no HTTP/2 session is active or submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -7169,7 +7169,7 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
     @throw HTTP2-FLOW-CONTROL raised when the stream's send buffer is full; the
     caller should drain via @ref waitForHttp2StreamDrain() and retry
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) [flags=NAMED_ARGS] {
     s->sendHttp2StreamDataAsync((int32_t)stream_id, data, (bool)end_stream, xsink);
@@ -7192,7 +7192,7 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 
     @throw HTTP2-ERROR if no HTTP/2 session is active or trailer submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) [flags=NAMED_ARGS] {
     s->sendHttp2TrailersAsync((int32_t)stream_id, trailers, xsink);
@@ -7204,7 +7204,7 @@ nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) 
 
     @param stream_id the HTTP/2 stream ID to remove
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::cleanupHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->cleanupHttp2StreamAsync((int32_t)stream_id);
@@ -7219,7 +7219,7 @@ nothing Socket::cleanupHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
 
     @throw HTTP2-ERROR if the RST_STREAM submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::resetHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->resetHttp2StreamAsync((int32_t)stream_id, xsink);
@@ -7245,7 +7245,7 @@ nothing Socket::resetHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
 
     @throw HTTP2-ERROR if no HTTP/2 session is available or submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_code,
         *hash<auto> headers, InputStream[InputStream] body) [flags=NAMED_ARGS] {
@@ -7290,7 +7290,7 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
 
     @throw SOCKET-NOT-OPEN The socket is not connected
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollHttp2Flush() {
     s->ref();
@@ -7341,7 +7341,7 @@ AbstractPollOperation<auto> Socket::startPollHttp2Flush() {
     @note This operation is designed for use with \c Http2ClientConnectionManager which handles
     stream callback registration and request submission.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollHttp2ClientMultiplex() {
     s->ref();
@@ -7374,7 +7374,7 @@ AbstractPollOperation<auto> Socket::startPollHttp2ClientMultiplex() {
     @note This method requires an active HTTP/2 client session, typically established via
     @ref startPollHttp2ClientMultiplex()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
@@ -7399,7 +7399,7 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
 
     @throw HTTP2-ERROR if no HTTP/2 session is active or an error occurs
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->cancelHttp2Stream(stream_id, xsink);
@@ -7436,7 +7436,7 @@ nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
 
     @note Requires a UDP socket bound with @ref bindINET() before calling this method
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, int family = AF_INET) [flags=NAMED_ARGS] {
     if (port < 1 || port > 65535) {
@@ -7532,7 +7532,7 @@ AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, 
 
     @note Requires a UDP socket bound with @ref bindINET() before calling this method
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
@@ -7582,7 +7582,7 @@ AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [fl
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or no session with the given ID exists
     @throw SOCKET-NOT-OPEN if the socket is not open
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
         *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
@@ -7634,7 +7634,7 @@ AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, in
 
     @return @ref True if the socket has an active QUIC session
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool Socket::isQuic() [flags=CONSTANT] {
     return s->isQuic();
@@ -7661,7 +7661,7 @@ bool Socket::isQuic() [flags=CONSTANT] {
     @note This method requires an active QUIC session, typically established via
     @ref startPollQuicConnect()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body,
         bool suppress_wake = False) [flags=NAMED_ARGS] {
@@ -7702,7 +7702,7 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
 
     @throw QUIC-ERROR if no QUIC session is active or an error occurs
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers,
         bool suppress_wake = False) [flags=NAMED_ARGS] {
@@ -7725,7 +7725,7 @@ int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> h
 
     @return @ref True if the session is closed or absent
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool Socket::isQuicSessionClosed() [flags=CONSTANT] {
     return s->isQuicSessionClosed();
@@ -7750,7 +7750,7 @@ bool Socket::isQuicSessionClosed() [flags=CONSTANT] {
 
     @throw QUIC-ERROR if no QUIC session is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) [flags=NAMED_ARGS] {
     if (stream_id < 0) {
@@ -7787,7 +7787,7 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
 
     @throw QUIC-ERROR if no QUIC session is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicClientStreamDrain", xsink);
@@ -7813,7 +7813,7 @@ int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s)
 
     @return the session ID of the first (or only) QUIC session
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::getQuicSessionId() {
     return s->getFirstQuicSessionId(xsink);
@@ -7830,7 +7830,7 @@ int Socket::getQuicSessionId() {
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::cancelQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -7872,7 +7872,7 @@ nothing Socket::cancelQuicStream(int session_id, int stream_id) [flags=NAMED_ARG
 
     @see cancelQuicStream(), readQuicStreamDataBlock()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
     if (session_id <= 0) {
@@ -7903,7 +7903,7 @@ nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
     @note This method requires an active QUIC server session, typically established via
     @ref startPollQuicAccept()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
@@ -7944,7 +7944,7 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
     @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
     @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::submitQuicShutdownNotice(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -7969,7 +7969,7 @@ nothing Socket::submitQuicShutdownNotice(int session_id) [flags=NAMED_ARGS] {
     @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
     @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::submitQuicShutdown(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -7995,7 +7995,7 @@ nothing Socket::submitQuicShutdown(int session_id) [flags=NAMED_ARGS] {
     @throw QUIC-ERROR if the session_id is invalid (<= 0)
     @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -8021,7 +8021,7 @@ hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) [fla
 
     @return True if a GOAWAY has been received, False otherwise
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -8051,7 +8051,7 @@ bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
     @throw QUIC-ERROR if the session_id is invalid (<= 0)
     @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *SSLCertificate Socket::getQuicPeerCertificate(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -8086,7 +8086,7 @@ bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
     ID exists
     @throw SOCKET-NOT-OPEN if the socket is not open
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
         int status_code, *hash<auto> headers, InputStream[InputStream] body,
@@ -8159,7 +8159,7 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
     @throw QUIC-ERROR if no QUIC session with the given ID is active
     @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized or submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -8202,7 +8202,7 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
     @throw QUIC-ERROR if no QUIC session with the given ID is active
     @throw QUIC-HTTP3-ERROR if no streaming response for the given stream
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
         softbool end_stream = False) [flags=NAMED_ARGS] {
@@ -8246,7 +8246,7 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
 
     @throw QUIC-ERROR if the session or stream is not found or submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
         int status_code, *hash<auto> headers, InputStream[InputStream] body) [flags=NAMED_ARGS] {
@@ -8304,7 +8304,7 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
         timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
@@ -8337,7 +8337,7 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
     @throw QUIC-HTTP3-ERROR if the HTTP/3 layer is not initialized, stream is not a CONNECT request,
         or submission fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -8367,7 +8367,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *binary Socket::readQuicConnectStreamData(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -8492,7 +8492,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
     @see @ref isQuicStreamComplete()
     @see \c wantsBodyStreaming()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *binary Socket::readQuicStreamDataBlock(int session_id, int stream_id,
         timeout timeout_ms = 30s) [flags=NAMED_ARGS] {
@@ -8533,7 +8533,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @see @ref readQuicStreamDataBlock()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     if (session_id <= 0 || stream_id < 0) {
@@ -8577,7 +8577,7 @@ bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT
 
     @see @ref readQuicStreamDataBlock()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::cleanupQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -8606,7 +8606,7 @@ nothing Socket::cleanupQuicStream(int session_id, int stream_id) [flags=NAMED_AR
 
     @throw QUIC-ERROR if session_id or stream_id is invalid
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id,
         Queue[Queue] queue) [flags=NAMED_ARGS] {
@@ -8633,7 +8633,7 @@ nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id,
 /** @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -8660,7 +8660,7 @@ nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) 
 
     @throw QUIC-ERROR if session_id or stream_id is invalid
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_id,
         Queue[Queue] queue) [flags=NAMED_ARGS] {
@@ -8683,7 +8683,7 @@ nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_i
 }
 
 //! Deregister the WebSocket frame state machine for an HTTP/3 CONNECT tunnel
-/** @since %Qore 2.4 */
+/** @since %Qore 3.0 */
 nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         return QoreValue();
@@ -8706,7 +8706,7 @@ nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Socket::resetQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
@@ -8736,7 +8736,7 @@ nothing Socket::resetQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS
     @throw QUIC-DATAGRAM-NOT-SUPPORTED if the remote peer does not support QUIC datagrams
     @throw QUIC-DATAGRAM-SIZE-ERROR if the payload exceeds the maximum datagram size
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref readQuicDatagram()
     @see @ref getQuicMaxDatagramSize()
@@ -8765,7 +8765,7 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active or parameters are invalid
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref submitQuicDatagram()
 */
@@ -8799,7 +8799,7 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref unregisterQuicDatagramQueue()
     @see @ref readQuicDatagram()
@@ -8835,7 +8835,7 @@ nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id,
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref registerQuicDatagramQueue()
 */
@@ -8863,7 +8863,7 @@ nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [flag
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active or parameters are invalid
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref submitQuicDatagram()
     @see @ref isQuicDatagramSupported()
@@ -8890,7 +8890,7 @@ int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [flags=NAMED_A
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref submitQuicDatagram()
     @see @ref getQuicMaxDatagramSize()

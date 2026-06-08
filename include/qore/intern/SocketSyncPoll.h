@@ -41,7 +41,7 @@
     HTTPClient/FtpClient sync entry points that block waiting for
     controller completion.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketSyncPoll {
 public:

@@ -793,7 +793,7 @@ void WebSocketClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     - Raw frame callback
     - on_poll_complete callback via worker dispatch
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass WebSocketClientPollOperationBase [
     private_members=object sock,string goal,object recv_queue,object send_queue;
@@ -1121,7 +1121,7 @@ nothing WebSocketClientPollOperationBase::setHasExtensions(bool enabled = True) 
 /** Override in subclasses to process received frames on a worker thread.
     The default implementation does nothing.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing WebSocketClientPollOperationBase::onPollComplete() {
     // Default: no-op; subclasses override to drain recv_queue
@@ -1144,7 +1144,7 @@ Socket WebSocketClientPollOperationBase::getSocket() {
 
     @param heartbeat_interval_ms the heartbeat interval in milliseconds (0 = disabled)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing WebSocketClientPollOperationBase::setHeartbeat(int heartbeat_interval_ms) [flags=NAMED_ARGS] {
     priv->setHeartbeat(static_cast<int64>(heartbeat_interval_ms));
@@ -1162,7 +1162,7 @@ nothing WebSocketClientPollOperationBase::setHeartbeat(int heartbeat_interval_ms
 
     @param idle_timeout_ms the idle timeout in milliseconds (0 = disabled)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing WebSocketClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags=NAMED_ARGS] {
     priv->setIdleTimeout(static_cast<int64>(idle_timeout_ms));
@@ -1176,7 +1176,7 @@ nothing WebSocketClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [f
 
     @return the close cause tag (e.g. @c "idle-timeout") or empty string
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 string WebSocketClientPollOperationBase::getCloseCause() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(priv->getCloseCause());

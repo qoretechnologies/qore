@@ -434,7 +434,7 @@ public:
         same batch as HEADERS.
 
         @param v True to enable headers-only mode
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void setHeadersOnlyMode(bool v);
 
@@ -449,7 +449,7 @@ public:
 
         @return a copy of the stream info (with empty body), or nullptr if no headers-ready
         stream exists
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeHeadersReadyStreamCopy();
 
@@ -464,7 +464,7 @@ public:
         @c Socket::close() can then acquire @c priv->m and perform the
         actual teardown without waiting on the stuck sync consumer.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void markClosed() {
         session_closed_.store(true, std::memory_order_release);
@@ -479,7 +479,7 @@ public:
     /** @param stream_id the stream to check
         @return True if the stream state is Closed (via END_STREAM + response, RST_STREAM,
         or GOAWAY), or if the stream is not found
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL bool isStreamClosed(int32_t stream_id) const;
 
@@ -490,7 +490,7 @@ public:
 
         @param stream_id the stream to check
         @return True if the remote peer has sent END_STREAM, or if the stream is not found
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL bool isStreamRemoteClosed(int32_t stream_id) const;
 
@@ -510,7 +510,7 @@ public:
 
     //! Remove stream from map (cleanup after handler finishes)
     /** @param stream_id the stream to remove
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void cleanupStream(int32_t stream_id);
 
@@ -520,14 +520,14 @@ public:
         delivered as intermediate body data via hasStreamingData()/takeStreamData().
 
         @param stream_id the HTTP/2 stream ID
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void setStreamStreaming(int32_t stream_id);
 
     //! Returns true if there's a CONNECT stream with headers ready and not yet dispatched
     /** Lightweight check to avoid calling takeHeadersReadyStreamCopy() unconditionally,
         which marks the stream as dispatched and would break non-CONNECT response processing.
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL bool hasHeadersReadyConnectStream();
 
@@ -535,7 +535,7 @@ public:
     /** Used by client multiplex to deliver intermediate body data for streaming streams.
         @param stream_id [out] set to the stream ID with data, if found
         @return true if a streaming stream with body data was found
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL bool hasStreamingData(int32_t& stream_id);
 
@@ -554,7 +554,7 @@ public:
         @param trailers_out [out] set to a heap-allocated copy of the trailers hash, or nullptr
             if no trailers were sent
         @return true if a stream with pending end-of-stream was found and marked
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL bool takeStreamingEndStream(int32_t& stream_id, QoreHashNode** trailers_out);
 
@@ -571,7 +571,7 @@ public:
 
         @return a copy of the stream info (headers, status_code, empty body, trailers) or
         nullptr if no such stream exists
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeStreamingHeadersReadyCopy();
 
@@ -659,7 +659,7 @@ public:
         read side so peer WINDOW_UPDATE frames can re-open the window
         and let the next @c session_mem_send pull from the data provider.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL bool hasUnsentStreamData() const {
         std::lock_guard<std::recursive_mutex> lg(m);
@@ -830,7 +830,7 @@ private:
         void* user_data);
 
     //! Info about an InputStream being streamed on an HTTP/2 response
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     struct StreamInputStreamInfo {
         SimpleRefHolder<InputStream> input_stream;
@@ -912,25 +912,25 @@ private:
 
 public:
     //! Store an InputStream for a stream (I/O thread will read from it)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink,
         int64_t content_length = -1);
 
     //! Returns true if there are active InputStreams being processed
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL bool hasActiveStreamInputStreams() const {
         return has_active_input_streams_.load(std::memory_order_acquire);
     }
 
     //! Process one chunk from each active InputStream (called by I/O thread)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
 
     //! Get extra fds for all active pollable InputStreams
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
 
@@ -944,7 +944,7 @@ public:
         @param timeout_ms ignored; retained for internal call-site compatibility
         @return 0 if buffer drained, 1 if it is still full, -1 if stream not found or closed
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL int waitForStreamDrain(int32_t stream_id, int timeout_ms);
 
@@ -952,24 +952,24 @@ public:
     /** Called by dataProviderReadCallback and onStreamCloseCallback.
         Must be called while holding the session mutex m.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void notifyStreamDrain();
 
     //! Register a controller socket operation waiting for stream drain notifications
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void registerStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 
     //! Unregister a controller socket operation waiting for stream drain notifications
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void unregisterStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 
 #if defined(__linux__) && defined(HAVE_IO_URING)
     //! Set the io_uring instance for async file reads
     /** @param u pointer to QoreIoUring (non-owning, owned by QoreEventLoop)
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void setIoUring(QoreIoUring* u) { io_uring = u; }
 
@@ -983,7 +983,7 @@ public:
         @param length bytes read
         @param error errno value (0 on success)
         @param xsink exception sink
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void handleAsyncReadCompletion(int32_t stream_id, const char* data,
                                             size_t length, int error,

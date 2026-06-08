@@ -59,7 +59,7 @@
     - TRANSFORM -> C++ function modifies context (no I/O)
     - DELIVER_RESULT -> execute AbstractAsyncAction
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class PollPipelinePriv : public SocketPollOperationBase {
 public:
@@ -315,7 +315,7 @@ public:
 
         @param sizer function that returns frame size (bytes) or 0 if incomplete
         @return the step index
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int addRecvFramed(FrameSizeFunc sizer);
 
@@ -323,14 +323,14 @@ public:
     /** The Queue is owned by the pipeline and cleaned up automatically.
         Used with addPushQueue() and addDrainQueueSend().
         @return the queue ID (index into internal queue table)
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int addQueue();
 
     //! Adds a step that pushes ctx.last_output to an internal Queue
     /** @param queue_id the queue ID returned by addQueue()
         @return the step index
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int addPushQueue(int queue_id);
 
@@ -339,7 +339,7 @@ public:
         sends via SocketSendPollOperation. If queue is empty, completes immediately.
         @param queue_id the queue ID returned by addQueue()
         @return the step index
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int addDrainQueueSend(int queue_id);
 
@@ -349,7 +349,7 @@ public:
         Enables persistent I/O loops (e.g., WebSocket bidirectional I/O).
         @param resume_step the step index to resume at on next continuePoll
         @return the step index
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int addYield(int resume_step);
 
@@ -359,7 +359,7 @@ public:
     /** @param queue_id the queue ID
         @param xsink exception sink
         @return the item or QoreValue() if empty
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreValue getQueueItem(int queue_id, ExceptionSink* xsink);
 
@@ -368,7 +368,7 @@ public:
         @param timeout_ms timeout in milliseconds (0 = wait forever)
         @param xsink exception sink
         @return the item or QoreValue() if timed out
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreValue getQueueItemBlocking(int queue_id, int timeout_ms, ExceptionSink* xsink);
 
@@ -376,21 +376,21 @@ public:
     /** @param queue_id the queue ID
         @param item the value to push (ref taken)
         @param xsink exception sink
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void pushQueueItem(int queue_id, QoreValue item, ExceptionSink* xsink);
 
     //! Returns true if an internal Queue has items
     /** @param queue_id the queue ID
         @return true if items are available
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool queueHasItems(int queue_id) const;
 
     //! Returns the size of an internal Queue
     /** @param queue_id the queue ID
         @return number of items in the queue
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int getQueueSize(int queue_id) const;
 
@@ -399,7 +399,7 @@ public:
         @param step_idx the BRANCH step index
         @param true_step the step index for the true condition
         @param false_step the step index for the false condition
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void setStepTarget(int step_idx, int true_step, int false_step) {
         assert(step_idx >= 0 && step_idx < (int)steps.size());

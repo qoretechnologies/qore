@@ -104,8 +104,8 @@ public class TavilyRestClientTest inherits QUnit::Test {
     private dispatcherSearchTest() {
         FakeTavilyRestClientIo fake();
         fake.response_body = {
-            "query": "Qore 2.3 release date",
-            "answer": "Qore 2.3 is in development...",
+            "query": "Qore 3.0 release date",
+            "answer": "Qore 3.0 is in development...",
             "results": (
                 {"title": "Qore", "url": "https://qore.org", "score": 0.95},
             ),
@@ -113,15 +113,15 @@ public class TavilyRestClientTest inherits QUnit::Test {
 
         code dispatcher = TavilyRestClient::TavilyAgentTools::makeDispatcher(fake);
         hash<auto> result = dispatcher("tavily_search", {
-            "query": "Qore 2.3 release date",
+            "query": "Qore 3.0 release date",
             "max_results": 3,
         });
 
         assertEq("POST", fake.last_method);
         assertEq("/search", fake.last_path);
-        assertEq("Qore 2.3 release date", fake.last_request.query);
+        assertEq("Qore 3.0 release date", fake.last_request.query);
         assertEq(3, fake.last_request.max_results);
-        assertEq("Qore 2.3 release date", result.query);
+        assertEq("Qore 3.0 release date", result.query);
         assertEq("https://qore.org", result.results[0].url);
     }
 

@@ -97,7 +97,7 @@
 #define PO_BROKEN_SPRINTF                   (1LL << 55)  //!< enables pre-0.9 broken sprintf handling
 #define PO_BROKEN_CAST                      (1LL << 56)  //!< enables pre-0.9.4 broken cast<> operator handling
 #define PO_ALLOW_RETURNS                    (1LL << 57)  //!< allows the use of the deprecated "returns" keyword
-//! @deprecated support removed in %Qore 2.3; remains defined as 0 for backward compatibility
+//! @deprecated support removed in %Qore 3.0; remains defined as 0 for backward compatibility
 #define PO_STRICT_TYPES                     0
 #define PO_BROKEN_NAMESPACE_RESOLUTION      (1LL << 58)  //!< enables legacy namespace resolution behavior
 #define PO_BROKEN_RANGE                     (1LL << 59)  //!< allow for old pre-%Qore 0.9.5 "range()" and "xrange()" behavior where the upper limit was included in the result
@@ -158,7 +158,7 @@
     \c PO_NO_SUMMARIZE is an extended parse option (bit 69); its macro value is \c 0 here
     for qpp/int64 compatibility, so the bit is also applied implicitly wherever \c PO_MODERN
     is materialised (parse-option application, \c \%modern directive, CLI \c -M).
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 #define PO_MODERN                     (PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS|PO_STRONG_ENCAPSULATION \
     |PO_NO_SUMMARIZE)

@@ -66,7 +66,7 @@ RegexSubst digit_match("\\d+", "NUM");
 printf("%s\n", digit_match.subst("test 123 example", "X"));  # "test X example"
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 qclass RegexSubst [arg=QoreRegexSubstClass* r; dom=DEFAULT];
 
@@ -212,7 +212,7 @@ string result = r.subst("abc 123 def 456", string sub (hash<RegexMatchInfo> m) {
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
     @throw REGEX-SUBST-ERROR infinite recursion detected with global substitution on empty pattern
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 string RegexSubst::subst(string subject, code<string(hash<RegexMatchInfo>)> callback) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->substCallback(subject, callback, xsink);

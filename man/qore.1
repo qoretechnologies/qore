@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QORE 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
+.TH QORE 1 "2026 May 14" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qore \- interpreter for the Qore programming language
 .SH SYNOPSIS
@@ -157,6 +157,28 @@ Compile a \fB.qm\fP user module to a native shared-library binary module.
 For full AOT workflows, including \fB.qo\fP relocatable objects,
 \fB.qoa\fP archives, split-module compilation, dependency files, metadata
 inspection, and source/debug stripping options, use \fBqcc\fP(1).
+.SS "Diagnostic Options"
+These options make Qore's parse-time diagnostics available in machine-readable
+or rendered form for editors, build tools, and AI coding assistants.
+Both are \fIparse-only\fP: Qore parses the source, emits the diagnostics, and
+exits \fBwithout executing the program\fP.
+The exit status is 2 if any parse error was reported and 0 otherwise (a clean
+parse, or one with only warnings, exits 0).
+.TP
+.B \-\-diag\-format =\fIfmt\fP
+Parse only and emit the collected parse diagnostics in the given format to
+standard output, suppressing the normal human-readable error/warning output.
+The only supported format is \fBjson\fP, which prints a JSON array whose objects
+contain the fields \fIseverity\fP, \fIcode\fP, \fIwarningCode\fP, \fIfile\fP,
+\fIsource\fP, \fIstartLine\fP, \fIendLine\fP, \fIstartColumn\fP, \fIendColumn\fP,
+and \fImessage\fP (a column of \-1 means unknown).
+Equivalent to setting \fBQORE_DIAG_FORMAT\fP=\fIjson\fP.
+.TP
+.B \-\-code\-frames
+Parse only and render the collected parse diagnostics as Rust-style code frames
+(a \fIfile:line:col\fP header, the offending source line, and a caret span) to
+standard error, suppressing the normal output.
+Equivalent to setting \fBQORE_CODE_FRAMES\fP.
 .SS "Module and Path Information"
 .TP
 .B \-\-module\-dir
@@ -235,10 +257,21 @@ Default character encoding if not specified with \fB\-c\fP.
 .TP
 .B TZ
 Fallback time zone if not specified with \fB\-z\fP.
+.TP
+.B QORE_DIAG_FORMAT
+If set to \fBjson\fP, parse the program and emit its parse diagnostics as a JSON
+array on standard output instead of executing it, as with \fB\-\-diag\-format\fP=\fIjson\fP.
+Intended for tooling that drives \fBqore\fP but cannot control its command line.
+.TP
+.B QORE_CODE_FRAMES
+If set (to any value), parse the program and render its parse diagnostics as code
+frames on standard error instead of executing it, as with \fB\-\-code\-frames\fP.
 .SH EXIT STATUS
 \fBqore\fR returns 0 on success.
 A non-zero exit status indicates an error occurred during parsing or execution,
 or reflects the value passed to \fBexit()\fP by the program.
+In the parse-only diagnostic modes (\fB\-\-diag\-format\fP and \fB\-\-code\-frames\fP),
+the exit status is 2 if any parse error was reported and 0 otherwise.
 .SH FILES
 .TP
 .I /usr/local/bin/qore
@@ -272,6 +305,16 @@ Run only the AST interpreter:
 Run with explicit JIT compilation:
 .RS
 .B qore --exec-mode=jit myprog.qr
+.RE
+.PP
+Emit parse diagnostics as JSON for tooling (parse only, no execution):
+.RS
+.B qore --diag-format=json myprog.qr
+.RE
+.PP
+Render parse diagnostics as code frames for human review:
+.RS
+.B qore --code-frames myprog.qr
 .RE
 .PP
 Compile a script to a native executable:

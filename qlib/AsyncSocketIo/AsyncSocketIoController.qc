@@ -279,7 +279,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @param sock the socket whose operation should be canceled and then closed
         @return @ref True "True" if an operation was found and canceled
 
-        @since Qore 2.3
+        @since Qore 3.0
     */
     bool cancelAndClose(Socket sock) {
         return Qore::AsyncIoController::cancelAndClose(io_object: sock);

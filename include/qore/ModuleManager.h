@@ -272,7 +272,7 @@ public:
         @return the module's owning QoreProgram, or nullptr if the module is not
                 loaded, is not a user module, or cannot be resolved
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT static QoreProgram* findUserModuleProgram(const char* name);
 

@@ -449,7 +449,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @ref close() still wins (transitions to @ref STATE_DISCONNECTED
         and closes the socket immediately for error paths).
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     close() {
         lockState("close");

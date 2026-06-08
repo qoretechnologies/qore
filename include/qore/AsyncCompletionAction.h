@@ -48,7 +48,7 @@
     Actions are ref-counted. The poll operation holds a ref; deref when the
     stream completes or the operation is cancelled.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class AbstractAsyncAction : public QoreReferenceCounter {
 public:
@@ -97,7 +97,7 @@ public:
     Future::get() and receives the result when the I/O thread resolves
     the Promise.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class PromiseAction : public AbstractAsyncAction {
 public:
@@ -145,7 +145,7 @@ private:
 //! Decrements a QoreCounter
 /** Used for synchronization — e.g., wait for N operations to complete.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class CounterAction : public AbstractAsyncAction {
 public:
@@ -177,7 +177,7 @@ private:
 /** Used to combine actions — e.g., PromiseAction + CounterAction for
     synchronous request with completion signaling.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class CompositeAction : public AbstractAsyncAction {
 public:

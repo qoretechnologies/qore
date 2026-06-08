@@ -497,7 +497,7 @@ public:
 
         @note this method performs a single read and may return fewer bytes than requested
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT BinaryNode* readShortBinary(qore_offset_t size, int timeout_ms, ExceptionSink* xsink);
 

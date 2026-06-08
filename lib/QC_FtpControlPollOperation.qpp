@@ -646,7 +646,7 @@ QoreHashNode* FtpControlPollOperationPriv::execOnController(ExceptionSink* xsink
 /** @endcond */
 
 //! @defgroup ftp_control_poll_operation_constants FTP Control Poll Operation Constants
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 ///@{
 ///@}
@@ -671,7 +671,7 @@ QoreHashNode* FtpControlPollOperationPriv::execOnController(ExceptionSink* xsink
     hash<auto> resp = op.getOutput();
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass FtpControlPollOperation [
     private_members=object sock,string goal;
@@ -1067,7 +1067,7 @@ QoreObject* FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xs
 
 //! FTP PORT mode accept poll operation for async I/O
 /** Composite operation: accept incoming connection + optional SSL upgrade.
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass FtpPortAcceptPollOperation [
     private_members=object sock,string goal;

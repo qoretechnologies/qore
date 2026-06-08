@@ -506,7 +506,7 @@ string path = t.getPathName();
 
     @see getName()
 
-    @since %Qore 2.4
+    @since %Qore 3.0
  */
 string Type::getPathName() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(qore_type_get_path(t->typeInfo));
@@ -824,7 +824,7 @@ bool b = new Type("Queue<int>").isParameterized();
 
     @return @ref Qore::True "True" if this type is a parameterized class type, @ref Qore::False "False" if not
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 bool Type::isParameterized() [flags=CONSTANT] {
     return qore_type_is_parameterized(t->typeInfo);
@@ -839,7 +839,7 @@ list<Type> args = new Type("Queue<int>").getTypeArguments();
 
     @return the type arguments for a parameterized class type, if any, otherwise returns @ref nothing
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 *list<Type> Type::getTypeArguments() [flags=CONSTANT] {
     const type_vec_t* type_args = qore_type_get_type_arguments(t->typeInfo);

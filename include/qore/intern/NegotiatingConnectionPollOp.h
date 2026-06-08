@@ -77,7 +77,7 @@ class NegotiatingHttpClientConnection;
     hand-off between threads goes through atomic state + the connection
     priv's condition variable.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class NegotiatingConnectionPollOpPriv : public SocketPollOperationBase {
 public:
@@ -237,7 +237,7 @@ private:
        passing ownership of the socket priv.
     4. Return the concrete connection.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class NegotiatingHttpClientConnection : public HttpClientConnectionBase {
 public:

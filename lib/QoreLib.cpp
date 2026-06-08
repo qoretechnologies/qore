@@ -480,7 +480,7 @@ const qore_option_s qore_option_list_l[] = {
      false
 #endif
    },
-   // Brotli, Zstd, and LZ4 are required since Qore 2.3
+   // Brotli, Zstd, and LZ4 are required since Qore 3.0
    { QORE_OPT_FUNC_BROTLI,
      "HAVE_BROTLI",
      QO_FUNCTION,

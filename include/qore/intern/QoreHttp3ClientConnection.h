@@ -63,7 +63,7 @@ class QoreSSLPrivateKey;
     polls the UDP fd for readability and calls continuePoll on the H3
     poll op when data arrives.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLLOCAL Http3ClientConnection : public HttpClientConnectionBase {
 public:
@@ -113,33 +113,33 @@ public:
         ExceptionSink* xsink) override;
 
     //! Submits a request with a caller-provided completion action.
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT int64_t submitRequestWithAction(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink) override;
 
     //! Submits a streaming request: response delivered incrementally via Channel.
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT int64_t submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink) override;
 
     //! Submits a request with streaming send (H3 DATA frames pushed incrementally)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
         QoreChannel*& channel_out, ExceptionSink* xsink) override;
 
     //! Push body data for a streaming send request (H3 DATA frame via QUIC)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT void pushSendData(const void* data, size_t len, ExceptionSink* xsink) override;
 
     //! Set HTTP trailers for a streaming send request (H3 TRAILERS)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) override;
 
@@ -153,7 +153,7 @@ public:
         are aborted, and the base class transitions to @c READY.
         Subsequent calls (from already-canceled attempts) are no-ops.
         @param inner the poll op priv whose handshake just completed
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void onInnerHandshakeReady(Http3ClientPollOperationPriv* inner);
 
@@ -166,7 +166,7 @@ public:
         @param inner the poll op priv whose handshake failed
         @param err short error code (e.g. "QUIC-HANDSHAKE-TIMEOUT")
         @param desc human-readable description
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void onInnerHandshakeFailed(Http3ClientPollOperationPriv* inner,
         const char* err, const char* desc);

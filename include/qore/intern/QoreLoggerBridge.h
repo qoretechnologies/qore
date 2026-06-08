@@ -42,7 +42,7 @@
     Used by AsyncIoControllerPriv (per-controller logger) and the global
     async I/O logger singleton.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class QoreLoggerBridge : public QoreAbstractLoggerInterface {
 public:

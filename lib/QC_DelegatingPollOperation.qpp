@@ -242,7 +242,7 @@ bool qore_delegating_poll_op_scan_members(QoreObject& qobj, RObject& obj,
     Use this for C++ operations we don't control (SSL upgrade, send/recv, connect)
     that need completion handling.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass DelegatingPollOperation [
     private_members=object sock,string goal,auto data_save;
@@ -401,7 +401,7 @@ nothing DelegatingPollOperation::onComplete(hash<SocketPollResultInfo> result) [
 //! Called by the I/O controller when items have been pushed during continuePoll
 /** Forwards to the inner operation's onPollComplete method.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing DelegatingPollOperation::onPollComplete() {
     if (poll->inner_obj) {

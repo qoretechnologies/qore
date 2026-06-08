@@ -56,16 +56,16 @@ extern "C" {
 
     @return the class pointer, or @ref nullptr if @c sshutil is not yet initialized
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 DLLEXPORT QoreClass* sshutil_get_abstract_ssh_client_identity_provider_class();
 
 //! returns the @c sshutil module's @c AbstractSshServerHostKeyProvider class
-/** @since %Qore 2.4 */
+/** @since %Qore 3.0 */
 DLLEXPORT QoreClass* sshutil_get_abstract_ssh_server_host_key_provider_class();
 
 //! returns the @c sshutil module's @c AbstractSshHostKeyStore class
-/** @since %Qore 2.4 */
+/** @since %Qore 3.0 */
 DLLEXPORT QoreClass* sshutil_get_abstract_ssh_host_key_store_class();
 
 }

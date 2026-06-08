@@ -332,7 +332,7 @@ const char* HttpClientPingPollOperationPriv::getStateImpl() const {
     auto ping = new HttpClientPingPollOperationBase(inner, 200, 299, "HTTP-PING-ERROR");
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass HttpClientPingPollOperationBase [
     private_members=string goal;

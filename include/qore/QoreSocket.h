@@ -184,7 +184,7 @@ public:
 
         @return a socket poll state object or nullptr in case of an exception or an immediate connection
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT AbstractPollState* startConnectINET(ExceptionSink* xsink, const char* host, const char* service,
             int family = Q_AF_UNSPEC, int socktype = Q_SOCK_STREAM, int protocol = 0);
@@ -197,7 +197,7 @@ public:
 
         @return a socket poll state object or nullptr in case of an exception or an immediate connection
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT AbstractPollState* startConnectUNIX(ExceptionSink* xsink, const char* path,
             int socktype = Q_SOCK_STREAM, int protocol = 0);
@@ -269,7 +269,7 @@ public:
 
         @return a socket poll state object or nullptr in case of an exception or an immediate receive
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT AbstractPollState* startRecvSome(ExceptionSink* xsink, size_t size);
 
@@ -302,7 +302,7 @@ public:
 
         @return a socket poll state object or nullptr in case of an exception
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT AbstractPollState* startRecvFrom(ExceptionSink* xsink, size_t max_size);
 
@@ -314,7 +314,7 @@ public:
 
         @return a socket poll state object or nullptr in case of an exception
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT AbstractPollState* startSendTo(ExceptionSink* xsink, BinaryNode* bin,
         const struct sockaddr* dest_addr, socklen_t dest_addr_len);
@@ -1989,7 +1989,7 @@ public:
         @param xsink exception sink for Qore-language exceptions
         @return 0 on success, -1 on error (exception raised)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int submitHttp2Response(int32_t stream_id, int status_code,
             const QoreHashNode* headers, const void* body, size_t body_len,
@@ -2010,7 +2010,7 @@ public:
         @param xsink exception sink for error reporting
         @return 0 on success, -1 on error
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int submitHttp2ConnectResponse(int32_t stream_id, int status_code,
             const QoreHashNode* headers, ExceptionSink* xsink);
@@ -2024,7 +2024,7 @@ public:
 
         @return the stream ID assigned to this request, or -1 on error
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int32_t submitHttp2Request(const QoreHashNode* headers, const void* body,
             size_t body_len, ExceptionSink* xsink, bool streaming = false);
@@ -2033,7 +2033,7 @@ public:
     /** @param stream_id the stream ID to cancel
         @param xsink exception sink for error reporting
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
 
@@ -2045,7 +2045,7 @@ public:
 
         @param enable \c true to advertise ENABLE_CONNECT_PROTOCOL (default), \c false to disable
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
 
@@ -2063,7 +2063,7 @@ public:
         @param xsink exception sink for error reporting
         @return 0 on success, -1 on error
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
@@ -2073,7 +2073,7 @@ public:
         @return true if the stream state is Closed (via END_STREAM + response, RST_STREAM,
         or GOAWAY), or if the stream is not found
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp2StreamClosed(int32_t stream_id) const;
 
@@ -2081,7 +2081,7 @@ public:
     /** @param stream_id the HTTP/2 stream ID
         @return true if the remote peer has sent END_STREAM on this stream, or stream not found
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp2StreamRemoteClosed(int32_t stream_id) const;
 
@@ -2093,7 +2093,7 @@ public:
         @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
         @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms);
     DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);

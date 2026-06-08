@@ -601,7 +601,7 @@ QoreObject* FtpDataPollOperationPriv::submitToController(ExceptionSink* xsink, c
     - Optional TLS upgrade (if FTPS data channel encryption was negotiated)
     - Data transfer: receive until EOF (RETR/LIST) or send all data (STOR)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass FtpDataPollOperation [
     private_members=object sock,string goal;

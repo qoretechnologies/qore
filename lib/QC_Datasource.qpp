@@ -277,7 +277,7 @@ const DBI_CAP_HAS_RESULTSET_OUTPUT = DBI_CAP_HAS_RESULTSET_OUTPUT;
 /** Drivers without this capability still support Datasource::selectTyped() and Datasource::selectRowsTyped() through
     libqore's compatibility fallback.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 const DBI_CAP_HAS_TYPED_SELECT = DBI_CAP_HAS_TYPED_SELECT;
 
@@ -285,7 +285,7 @@ const DBI_CAP_HAS_TYPED_SELECT = DBI_CAP_HAS_TYPED_SELECT;
 /** Drivers without this capability still support Datasource::selectColumnar(), DatasourcePool::selectColumnar(), and
     SQLStatement::fetchColumnar() through libqore's compatibility fallback.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 const DBI_CAP_HAS_COLUMNAR_SELECT = DBI_CAP_HAS_COLUMNAR_SELECT;
 ///@}
@@ -810,7 +810,7 @@ list<*string> names = result.name;
     - Datasource::vselectTyped()
     - Datasource::select()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 auto Datasource::selectTyped(string sql, ...) {
     ReferenceHolder<QoreListNode> argl((args->size() > 1 ? args->copyListFrom(1) : 0), xsink);
@@ -842,7 +842,7 @@ list<*string> names = result.getColumn("name");
     - Datasource::select()
     - Datasource::selectTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 ColumnarResult Datasource::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY] {
     ReferenceHolder<QoreListNode> argl((args->size() > 1 ? args->copyListFrom(1) : 0), xsink);
@@ -940,7 +940,7 @@ foreach hash<auto> row in (rows) {
     - Datasource::vselectRowsTyped()
     - Datasource::selectRows()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 auto Datasource::selectRowsTyped(string sql, ...) {
     ReferenceHolder<QoreListNode> argl((args->size() > 1 ? args->copyListFrom(1) : 0), xsink);
@@ -1002,7 +1002,7 @@ buffer<int64> ids = result.id;
 
     @see Datasource::selectTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 auto Datasource::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     return ds->selectTyped(sql, arguments, xsink);
@@ -1020,7 +1020,7 @@ auto Datasource::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAME
 
     @see Datasource::selectColumnar()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 ColumnarResult Datasource::vselectColumnar(string sql, *softlist<auto> arguments) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_columnar_result_to_object(ds->selectColumnar(sql, arguments, xsink), xsink);
@@ -1105,7 +1105,7 @@ printf("%d\n", rows[0].id);
 
     @see Datasource::selectRowsTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 auto Datasource::vselectRowsTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     return ds->selectRowsTyped(sql, arguments, xsink);
@@ -1718,7 +1718,7 @@ string str = Datasource::makeConfigString({
     - @ref Qore::SQL::parse_datasource() "parse_datasource()"
     - @ref Qore::SQL::make_datasource_string() "make_datasource_string()"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 static string Datasource::makeConfigString(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return makeConfigString(config, xsink);

@@ -128,14 +128,14 @@ struct QoreBreakpointList_t : public bkp_list_t {
 /** Used by the reflection module to break reference cycles for Type objects (issue #4816)
     @param pgm the program being destroyed
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 typedef void (*qore_program_cleanup_callback_t)(QoreProgram* pgm);
 
 //! Registers a callback to be called before program namespace data is cleared
 /** @param callback the callback function to register
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLEXPORT void qore_register_program_cleanup_callback(qore_program_cleanup_callback_t callback);
 
@@ -144,7 +144,7 @@ DLLEXPORT void qore_register_program_cleanup_callback(qore_program_cleanup_callb
 
     @param pgm the program to clean up
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLEXPORT void qore_call_program_cleanup_callback(QoreProgram* pgm);
 
@@ -443,7 +443,7 @@ public:
         @see QoreProgram::parsePending()
         @see QoreProgram::parseCommit()
 
-        @since Qore 2.3 provides atomic rollback preserving committed state when used with PO_ALLOW_REPARSE
+        @since Qore 3.0 provides atomic rollback preserving committed state when used with PO_ALLOW_REPARSE
     */
     DLLEXPORT int parseRollback(ExceptionSink* xsink);
 
@@ -722,7 +722,7 @@ public:
     //! returns the number of threads currently active in this Program object
     /** @return the number of threads currently active in this Program object
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT unsigned getThreadCount() const;
 

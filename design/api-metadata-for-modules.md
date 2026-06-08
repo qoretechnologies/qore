@@ -449,7 +449,7 @@ Two changes to `CMakeLists.txt`:
 
 No additional changes needed. The `qore_external_user_module()` macro automatically
 extracts metadata from each `.qm` and `.qc` file when `QORE_QM_METADATA_EXECUTABLE`
-is available (set by `QoreConfig.cmake` when Qore >= 2.3 is installed).
+is available (set by `QoreConfig.cmake` when Qore >= 3.0 is installed).
 
 ### QM metadata via standalone macro (optional)
 

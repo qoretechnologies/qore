@@ -45,7 +45,7 @@
     @note The consumer (pop/drain) must be called from exactly ONE thread.
     Multiple threads may call push() concurrently.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 template <typename T>
 class MpscQueue {

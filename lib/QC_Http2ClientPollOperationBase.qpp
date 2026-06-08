@@ -1479,7 +1479,7 @@ void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* que
     The Qore Http2ClientPollOperation class inherits from this base to get
     the C++ fast path while providing the high-level HTTP/2 API.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass Http2ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
@@ -1601,7 +1601,7 @@ nothing Http2ClientPollOperationBase::abort() {
 
     @param idle_timeout_ms timeout in milliseconds; <= 0 disables the proactive timeout
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags=NAMED_ARGS] {
     priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
@@ -1621,7 +1621,7 @@ nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags
 
     @param ping_interval_ms interval in milliseconds (0 or negative = disabled)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2ClientPollOperationBase::setPingInterval(int ping_interval_ms) [flags=NAMED_ARGS] {
     priv->setPingInterval(ping_interval_ms > 0 ? (int64_t)ping_interval_ms * 1000 : -1);
@@ -1729,7 +1729,7 @@ int Http2ClientPollOperationBase::submitRequest(string method, string path,
     @param max_streams maximum concurrent streams (0 = unlimited)
     @return the stream ID assigned to this request
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Http2ClientPollOperationBase::submitRequestWithNotifier(string method, string path,
         *hash<auto> headers, *data body, Promise[QorePromise] promise,
@@ -1862,7 +1862,7 @@ int Http2ClientPollOperationBase::submitRequestStreaming(string method, string p
 
     @return the stream ID assigned to this request
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
         *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams,
@@ -1948,7 +1948,7 @@ nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
 
     @note Must be called on the I/O controller thread before the handler starts reading.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
         Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
@@ -1971,7 +1971,7 @@ nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
 /** Pushes NOTHING sentinels to all registered queues and notifies all
     EventNotifiers so handler threads wake up and see the stream is closed.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2ClientPollOperationBase::clearStreamQueues() {
     priv->clearStreamQueues(xsink);
@@ -2001,7 +2001,7 @@ nothing Http2ClientPollOperationBase::clearStreamQueues() {
            complete
     @throw HTTPCLIENT-STATE-ERROR if the stream's action is not a ChannelAction
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2ClientPollOperationBase::installFrameState(int stream_id,
         Queue[Queue] message_queue) [flags=NAMED_ARGS] {
@@ -2017,7 +2017,7 @@ nothing Http2ClientPollOperationBase::installFrameState(int stream_id,
     @param initial_body optional body bytes already received before installing
         the SSE parser
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2ClientPollOperationBase::installSseState(int stream_id,
         Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,

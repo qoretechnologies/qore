@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.14)
 
 # NOTE: Qore should always use semantic versioning: https://semver.org/
-set(VERSION_MAJOR 2)
-set(VERSION_MINOR 3)
+set(VERSION_MAJOR 3)
+set(VERSION_MINOR 0)
 set(VERSION_SUB 0)
 #set(VERSION_PATCH 0)
 
@@ -466,6 +466,7 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/218_enums.dox.tmpl
     doxygen/lang/220_threading.dox.tmpl
     doxygen/lang/222_sandboxing.dox.tmpl
+    doxygen/lang/223_execution_modes.dox.tmpl
     doxygen/lang/224_plugin_types.dox.tmpl
     doxygen/lang/225_exception_handling.dox.tmpl
     doxygen/lang/226_ai_model_deployment.dox.tmpl

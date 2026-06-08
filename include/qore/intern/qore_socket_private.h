@@ -795,7 +795,7 @@ private:
     Returns data as a BinaryNode and source address info as a QoreHashNode
     via takeOutput() (returns a list: [binary data, hash address_info]).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketRecvFromPollState : public AbstractPollState {
 public:
@@ -834,7 +834,7 @@ private:
 //! Non-blocking sendto() for UDP datagram sockets
 /** Sends a datagram to the specified address.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketSendToPollState : public AbstractPollState {
 public:
@@ -979,7 +979,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         fall back to holding the (non-existent) lock — no contamination
         concern because there is no outer lock to contend for.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     QoreThreadLock* outer_lock = nullptr;
 
@@ -993,7 +993,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         Mirrors @ref SocketPollOperationBase::getFdGeneration() at the
         socket level rather than the poll-op level.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     uint32_t fd_generation = 0;
 
@@ -1005,7 +1005,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         the same raw socket while still allowing nested helper calls from the
         owning thread.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     mutable QoreThreadLock async_sequence_m;
     int async_sequence_owner_tid[3] = {-1, -1, -1};
@@ -1022,7 +1022,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         @note DEBUG builds only.  The hook is unconditionally ignored
         in release builds because the member does not exist there.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     bool debug_force_fd_swap_next_wait = false;
 #endif
@@ -1407,7 +1407,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         thread actually issues the shutdown/mark-closed side effects even
         if multiple concurrent @c close() calls arrive.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void prepareForClose() {
         bool expected = false;

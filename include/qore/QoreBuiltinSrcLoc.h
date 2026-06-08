@@ -53,7 +53,7 @@
     is bounded by the number of distinct builtin registration sites,
     not by the number of times the library is loaded.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class QoreBuiltinSrcLocHelper {
 public:
@@ -64,7 +64,7 @@ public:
             on the variant remains valid indefinitely
         @param line the declaring line number within the file
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreBuiltinSrcLocHelper(const char* file, int line);
 

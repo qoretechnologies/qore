@@ -188,7 +188,7 @@ DLLEXPORT int64 q_get_monotonic_us();
     measuring elapsed durations and enforcing timeouts.  Falls back to the wall clock if no monotonic
     clock is available.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLEXPORT int64 q_clock_getmicros_monotonic();
 

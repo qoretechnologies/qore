@@ -1196,7 +1196,7 @@ list<auto> results = map $1.get(), futures;
     @see @ref Qore::Thread::Promise "Promise"
     @see @ref parallel_map()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL] {
     // Get the code reference (callable is const ResolvedCallReferenceNode* from QPP)
@@ -1421,7 +1421,7 @@ list<auto> hashes = parallel_map(auto sub(auto pw) {
     @see @ref parallel_foreach()
     @see @ref call_async()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 list<auto> parallel_map(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
     const QoreListNode* l = items;
@@ -1564,7 +1564,7 @@ try {
     @see @ref parallel_map()
     @see @ref call_async()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing parallel_foreach(code callable, list<auto> items, int thread_count = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
     const QoreListNode* l = items;
@@ -1746,7 +1746,7 @@ auto result = channel_select((
 
     @see @ref Qore::Thread::Channel "Channel"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS;dom=THREAD_CLASS,THREAD_CONTROL] {
     const QoreListNode* case_list = cases;

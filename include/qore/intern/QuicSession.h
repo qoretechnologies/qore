@@ -449,7 +449,7 @@ public:
         (same pattern as CONNECT tunnels) so the ChannelAction receives data
         incrementally instead of waiting for END_STREAM.
         @param stream_id the stream to mark
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void setStreamStreaming(int64_t stream_id);
 
@@ -891,7 +891,7 @@ public:
         @note Any datagrams already buffered in the internal deque at registration time
         are drained into the Queue in arrival order, so no frame is lost in the switch.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void registerDatagramQueue(int64_t stream_id, Queue* queue, ExceptionSink* xsink);
 
@@ -903,7 +903,7 @@ public:
         @param stream_id the HTTP/3 stream ID
         @param xsink exception sink for Queue deref
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void unregisterDatagramQueue(int64_t stream_id, ExceptionSink* xsink);
 
@@ -973,7 +973,7 @@ public:
     }
 
     //! Info about an InputStream being streamed on an HTTP/3 response
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     struct StreamInputStreamInfo {
         SimpleRefHolder<InputStream> input_stream;
@@ -989,27 +989,27 @@ public:
     };
 
     //! Store an InputStream for a stream (I/O thread will read from it)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void setStreamInputStream(int64_t stream_id, InputStream* is, ExceptionSink* xsink);
 
     //! Returns true if there are active InputStreams being processed
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL bool hasActiveStreamInputStreams() const;
 
     //! Process one chunk from each active InputStream (called by I/O thread)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void processStreamInputStreams(ExceptionSink* xsink);
 
     //! Clean up all InputStreams (called on session destruction)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void cleanupStreamInputStreams(ExceptionSink* xsink);
 
     //! Get extra fds for all active pollable InputStreams
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
 
@@ -1414,7 +1414,7 @@ private:
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
 
     //! InputStream storage for I/O thread streaming (set by handler, read by I/O thread)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     std::unordered_map<int64_t, StreamInputStreamInfo> stream_input_streams_;
 
@@ -1470,7 +1470,7 @@ private:
         reference is owned by this session (ref'd on register, deref'd on unregister / session
         teardown / destructor).  Populated and consumed under @ref datagram_mutex_.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     std::unordered_map<int64_t, Queue*> datagram_qqueues_;
 

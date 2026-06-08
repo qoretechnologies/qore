@@ -192,7 +192,7 @@ bool b = boolean(1); # returns True
 
     @note this function behaves differently when @ref strict-bool-eval "%strict-bool-eval" is set
 */
-bool boolean(any value) [flags=CONSTANT,NAMED_ARGS] {
+bool boolean(auto value) [flags=CONSTANT,NAMED_ARGS] {
    return value.getAsBool();
 }
 

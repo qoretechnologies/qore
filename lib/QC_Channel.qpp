@@ -56,7 +56,7 @@ static const TypedHashDecl* get_channel_try_result_hashdecl(const QoreTypeInfo* 
 *hash<ChannelTryResult<int>> result = ch.tryRecv();
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 hashdecl Qore::Thread::ChannelTryResult<T> {
     //! The value received from the Channel
@@ -215,7 +215,7 @@ foreach auto result in (result_ch.iterator()) {
 
     @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 qclass Channel<T> [dom=THREAD_CLASS; arg=QoreChannel* ch; ns=Qore::Thread; legacy_raw];
 
@@ -232,7 +232,7 @@ Channel<int> unlimited(-1);  # unlimited buffer (like Queue but with close seman
 
     @throw CHANNEL-ERROR capacity less than -1
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 Channel::constructor(int capacity = 0) [flags=NAMED_ARGS] {
     if (capacity < -1) {

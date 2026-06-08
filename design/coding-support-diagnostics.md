@@ -37,7 +37,7 @@ These appear in ordinary error/warning output with no flag:
   (`q_edit_distance`) plus `QoreSuggestionList`. Threshold is `min(2, max(1,
   len/3))`. Suggestions only ever name identifiers that actually exist in scope
   and respect visibility; a pure capitalization difference is flagged specially
-  ("case mismatch").
+  ("(check capitalization)").
 - **`non-exhaustive-switch` warning** (`QP_WARN_NONEXHAUSTIVE_SWITCH`, bit
   `1<<20`, in the default + module warning masks `QP_WARN_ALL` /
   `QP_WARN_MODULES`) — fires when a `switch` over an enum-typed value omits

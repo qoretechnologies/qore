@@ -221,7 +221,7 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     - @ref getHttp3Mode()
     - @ref isHttp3Active()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @section httpclient_async_io Multiplexed I/O and Connection Pooling
 
@@ -249,7 +249,7 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     - @ref restclientio_intro "RestClientIo module"
     - @ref asyncsocketiointro "AsyncSocketIo module"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @section httpclient_get_with_body HTTP GET Requests With a Message Body
 
@@ -403,7 +403,7 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - %Qore 2.0 added the following options:
       - \c username
       - \c password
-    - %Qore 2.3 added the following option:
+    - %Qore 3.0 added the following option:
       - \c http3_mode
 */
 HTTPClient::constructor(hash<auto> options) [flags=NAMED_ARGS] {
@@ -576,7 +576,7 @@ nothing HTTPClient::setHttp2Mode(string mode) [flags=NAMED_ARGS] {
 //! Sets the HTTP/2 protocol mode
 /** @param mode the HTTP/2 mode as an enum
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing HTTPClient::setHttp2Mode(enum<HTTP2Mode> mode) [flags=NAMED_ARGS] {
     int64 mode_int = mode.getAsBigInt();
@@ -915,7 +915,7 @@ if (httpclient.hasHttp2StreamData(stream_id)) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool HTTPClient::hasHttp2StreamData(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     return client->hasHttp2StreamData((int32_t)stream_id);
@@ -937,7 +937,7 @@ while (!httpclient.isHttp2StreamClosed(stream_id)) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool HTTPClient::isHttp2StreamClosed(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     return client->isHttp2StreamClosed((int32_t)stream_id);
@@ -959,7 +959,7 @@ while (!httpclient.isHttp3StreamClosed(stream_id)) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool HTTPClient::isHttp3StreamClosed(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     return client->isHttp3StreamClosed((int64_t)stream_id);
@@ -985,7 +985,7 @@ if (httpclient.isHttp2DataAvailable(stream_id, 1000)) {
     @throw HTTP2-ERROR if HTTP/2 is active but there is no active CONNECT stream for the given
     HTTPClient
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool HTTPClient::isHttp2DataAvailable(int stream_id, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return client->isHttp2DataAvailable((int32_t)stream_id, (int)timeout_ms, xsink);
@@ -1025,7 +1025,7 @@ httpclient.setHttp3Mode(HTTP3Mode::Auto);
 
     @throw HTTP3-MODE-ERROR invalid mode value
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see getHttp3Mode()
 */
@@ -1045,7 +1045,7 @@ nothing HTTPClient::setHttp3Mode(string mode) [flags=NAMED_ARGS] {
 
     @throw HTTP3-MODE-ERROR if the mode value is invalid
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see getHttp3Mode()
 */
@@ -1067,7 +1067,7 @@ string mode = httpclient.getHttp3Mode();
 printf("HTTP/3 mode: %s\n", mode);
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see setHttp3Mode()
 */
@@ -1094,7 +1094,7 @@ if (httpclient.isHttp3Active()) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool HTTPClient::isHttp3Active() [flags=CONSTANT] {
     return client->isHttp3Active();
@@ -1257,7 +1257,7 @@ AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object whose output has the same shape as
     @ref startPollSendRecv() after response headers are received
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, string body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -1268,7 +1268,7 @@ AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *s
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send a message and complete after response headers
 /** @see startPollSendAndStream(string, *string, string, *hash<auto>)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, *binary body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
@@ -1468,7 +1468,7 @@ if (resp.status_code == 200) {
       to read the body incrementally
     - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *hash<auto> headers,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
@@ -1494,7 +1494,7 @@ hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *h
     @return @ref True if a conn_mgr connection or streaming channel is active,
         or the underlying socket is open
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool HTTPClient::isOpen() [flags=CONSTANT] {
     return client->isOpen();
@@ -1508,7 +1508,7 @@ bool HTTPClient::isOpen() [flags=CONSTANT] {
     @param timeout_ms 0 for a non-blocking check; non-zero for a timed wait on the raw socket
     @return @ref True if data is available on the streaming channel or the raw socket
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool HTTPClient::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return client->isDataAvailable((int)timeout_ms, xsink);
@@ -1522,7 +1522,7 @@ bool HTTPClient::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
     @return a hash with the "body" key containing the chunk data, or an empty hash for EOF
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
@@ -1540,7 +1540,7 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
 /** @param content_encoding optional content-encoding for decompression
     @param timeout_ms timeout for the read operation
     @return SseMessageInfo hash or NOTHING for EOF
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *hash<SseMessageInfo> HTTPClient::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1)
         [flags=NAMED_ARGS] {
@@ -1559,7 +1559,7 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
 //! Reads a Server-Sent Event; overrides Socket::readServerSentEvent to support conn_mgr streaming
 /** @param timeout_ms timeout for the read operation
     @return SseMessageInfo hash or NOTHING for EOF
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *hash<SseMessageInfo> HTTPClient::readServerSentEvent(timeout timeout_ms = -1) {
     ReferenceHolder<QoreHashNode> rv(
@@ -1577,7 +1577,7 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
 //! Reads a full HTTP chunked body; overrides Socket::readHTTPChunkedBody to support conn_mgr
 /** @param timeout_ms timeout for the read operation
     @return hash with "body" key containing the accumulated body
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyConnMgr(timeout_ms, xsink), xsink);
@@ -1593,7 +1593,7 @@ hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED
 //! Reads a full HTTP chunked body as binary; overrides Socket::readHTTPChunkedBodyBinary
 /** @param timeout_ms timeout for the read operation
     @return hash with "body" key containing the accumulated binary body
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyBinaryConnMgr(timeout_ms, xsink), xsink);
@@ -1614,7 +1614,7 @@ hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags
     @param timeout_ms timeout for the read operation
     @return binary data
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 binary HTTPClient::recvBinary(softint size = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyBinaryConnMgr(timeout_ms, xsink), xsink);
@@ -2690,7 +2690,7 @@ int HTTPClient::getConnectTimeout() [flags=CONSTANT] {
 
     @param enabled ignored
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing HTTPClient::setUseConnectionManager(softbool enabled = True) [flags=NAMED_ARGS] {
     client->setUseConnectionManager(enabled);
@@ -2699,7 +2699,7 @@ nothing HTTPClient::setUseConnectionManager(softbool enabled = True) [flags=NAME
 //! Returns @ref True because async connection manager dispatch is always enabled
 /** @return @ref True
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool HTTPClient::getUseConnectionManager() [flags=CONSTANT] {
     return client->getUseConnectionManager();

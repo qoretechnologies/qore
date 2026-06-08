@@ -64,7 +64,7 @@ DLLLOCAL QoreClass* initFutureClass(QoreNamespace& ns);
     @note The returned value is owned by the caller and must be
         dereferenced when no longer needed.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLLOCAL QoreValue q_future_get_blocking(QoreObject* future_obj,
         int64 timeout_ms, ExceptionSink* xsink);

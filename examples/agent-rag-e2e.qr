@@ -49,7 +49,7 @@ class AgentRagE2E {
         if (!validateEnv()) {
             exit(0);
         }
-        query = getenv("QUERY") ?? "What new AI providers landed in Qore 2.3?";
+        query = getenv("QUERY") ?? "What new AI providers landed in Qore 3.0?";
 
         printf("Query: %s\n", query);
 

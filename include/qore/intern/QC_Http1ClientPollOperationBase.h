@@ -56,7 +56,7 @@
     Thread safety: continuePoll() runs on the I/O thread. submitRequest() runs
     on application threads. Shared state is protected by stream_lock.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLLOCAL Http1ClientPollOperationPriv : public SocketPollOperationBase {
 public:
@@ -112,7 +112,7 @@ public:
         @param connection_priv the owning C++ connection priv
             (raw pointer — @ref setSelf takes the Qore ref separately)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL Http1ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
             bool ssl_required, std::string target_host, int target_port,
@@ -126,7 +126,7 @@ public:
 
         @param xsink exception sink
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void initAdoptedReady(ExceptionSink* xsink);
 
@@ -135,7 +135,7 @@ public:
     //! Disarms the raw connection_priv back-pointer under stream_lock.
     /** @see Http2ClientPollOperationPriv::disarmConnectionPriv for the
         rationale — same cancel-vs-destroy race pattern.
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void disarmConnectionPriv() {
         AutoLocker al(stream_lock);

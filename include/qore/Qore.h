@@ -54,7 +54,7 @@ DLLEXPORT extern QoreCounter thread_counter;
 //! global counter for threads with external lifecycle management (e.g. ThreadPool)
 /** These threads are not counted in thread_counter and don't block QoreProgramHelper
     shutdown. They are waited on after program data destruction.
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLEXPORT extern QoreCounter tp_thread_counter;
 

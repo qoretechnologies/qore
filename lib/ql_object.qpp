@@ -145,7 +145,7 @@ list<string> get_method_list(object object_value) [flags=CONSTANT,NAMED_ARGS] {
 
 //! Calls a method of an object, passing the remainder of the arguments to the function as arguments to the method
 /**
-    @param object_value the object to use for the call
+    @param obj the object to use for the call
     @param method the method to call
     @param ... any additional arguments to the method
 
@@ -185,7 +185,7 @@ nothing callObjectMethod() [flags=RUNTIME_NOOP,DEPRECATED] {
 
 //! Calls a method of an object, passing the remainder of the arguments to the function as arguments to the method
 /**
-    @param obj the object to use for the call
+    @param object_value the object to use for the call
     @param method the method to call
     @param ... any additional arguments to the method
 
@@ -224,9 +224,9 @@ auto call_object_method(object object_value, string method, ...) {
 
 //! Calls a method of an object, using the optional third argument as the argument list to the method
 /**
-    @param object_value the object to use for the call
+    @param obj the object to use for the call
     @param method the method to call
-    @param arguments any additional arguments to the method
+    @param varg any additional arguments to the method
 
     @return the value returned by the method call
 
@@ -251,9 +251,9 @@ nothing callObjectMethodArgs() [flags=RUNTIME_NOOP,DEPRECATED] {
 
 //! Calls a method of an object, using the optional third argument as the argument list to the method
 /**
-    @param obj the object to use for the call
+    @param object_value the object to use for the call
     @param method the method to call
-    @param varg any additional arguments to the method
+    @param arguments any additional arguments to the method
 
     @return the value returned by the method call
 
@@ -360,7 +360,7 @@ auto call_static_method_args(string class_name, string method, *softlist<auto> a
 
     @since %Qore 0.8.5
  */
- auto call_pseudo(any value, string method, ...) {
+ auto call_pseudo(auto value, string method, ...) {
     ReferenceHolder<QoreListNode> nargs(xsink);
     if (args->size() > 2)
         nargs = args->copyListFrom(2);
@@ -381,7 +381,7 @@ auto call_static_method_args(string class_name, string method, *softlist<auto> a
 
     @since %Qore 0.8.8
  */
-auto call_pseudo_args(any value, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+auto call_pseudo_args(auto value, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     return pseudo_classes_eval(value, method->getBuffer(), arguments, xsink);
 }
 

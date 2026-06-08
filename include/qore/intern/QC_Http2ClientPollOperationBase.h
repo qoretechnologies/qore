@@ -61,7 +61,7 @@
     lock is never held while submitRequest() waits for controller-backed socket
     work to finish.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLLOCAL Http2ClientPollOperationPriv : public SocketPollOperationBase {
 public:
@@ -111,7 +111,7 @@ public:
         @param target_port target TCP port
         @param connection_priv the owning C++ connection priv
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL Http2ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
             std::string target_host, int target_port,
@@ -125,7 +125,7 @@ public:
 
         @param xsink exception sink
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void initAdoptedMultiplex(ExceptionSink* xsink);
 
@@ -138,7 +138,7 @@ public:
         nullptr and skip the setClosed() call, eliminating the race where
         abort() dereferences a destroyed connection.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void disarmConnectionPriv() {
         AutoLocker al(stream_lock);
@@ -213,7 +213,7 @@ public:
         @param xsink        exception sink (raises HTTPCLIENT-STREAM-CLOSED if
                             the stream is not found or already complete)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void installFrameState(int32_t stream_id, Queue* msg_queue,
         ExceptionSink* xsink);
@@ -270,7 +270,7 @@ public:
         PING ACK automatically; if the connection is dead, the next recv()
         fails and existing error handling evicts it.
         @param interval_us ping interval in microseconds (-1 = disabled)
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void setPingInterval(int64_t interval_us) {
         ping_interval_us = interval_us;
@@ -357,7 +357,7 @@ public:
         @return @c true if a lock error forces the scan transaction to
             be aborted (per the scanCheck contract)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL bool scanMembers(RObject& obj, RSetHelper& rsh);
 

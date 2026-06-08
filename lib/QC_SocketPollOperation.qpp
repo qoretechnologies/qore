@@ -150,7 +150,7 @@ SocketPollOperation::copy() {
     @throw QUIC-MIGRATION-ERROR if the operation is not a QUIC client poll operation,
     the session is not initialized, the socket is not open, or migration fails
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing SocketPollOperation::migrateQuicConnection() [dom=NETWORK] {
     auto* quic_op = dynamic_cast<SocketQuicClientPollOperation*>(op);

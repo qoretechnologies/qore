@@ -38,7 +38,7 @@
 #include <atomic>
 
 //! Thread creation flags (bitfield)
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 ///@{
 //! Default thread behavior

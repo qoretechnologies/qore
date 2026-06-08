@@ -25,7 +25,7 @@
 %modern
 
 # make sure we have the required qore version
-%requires qore >= 2.3
+%requires qore >= 3.0
 
 # try importing JSON and YAML modules
 %try-module json

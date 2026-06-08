@@ -162,8 +162,8 @@ public class AgentRagE2ETest inherits QUnit::Test {
 
         string markdown = "# Section One\n\nFirst paragraph "
             "of the document.\n\n# Section Two\n\nSecond section "
-            "with content about Qore 2.3.\n";
-        string query = "What does Qore 2.3 cover?";
+            "with content about Qore 3.0.\n";
+        string query = "What does Qore 3.0 cover?";
 
         # Step 3 in the demo: chunk markdown (use the StructuredChunker via the
         # factory registry to exercise the Commit 0 prereq path)
@@ -230,7 +230,7 @@ public class AgentRagE2ETest inherits QUnit::Test {
         hash<QoreLlmUtils::ChatResponse> resp = llm.chat(messages);
         assertEq("Answered using context.", resp.content);
         # Verify the LLM saw the reranked context
-        assertTrue(llm.last_grounded_ctx =~ /Question: What does Qore 2.3 cover/);
+        assertTrue(llm.last_grounded_ctx =~ /Question: What does Qore 3.0 cover/);
         # And the context contains at least one chunk from the reranked set
         assertTrue(llm.last_grounded_ctx =~ /Section/);
     }

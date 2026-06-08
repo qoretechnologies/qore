@@ -214,7 +214,7 @@ public class HttpAsyncSocketIoController {
 
         @param new_logger the new logger to use (NOTHING disables logging)
 
-        @since Qore 2.3.0
+        @since Qore 3.0.0
     */
     setLogger(*LoggerInterface new_logger) {
         logger = new_logger;
@@ -940,7 +940,7 @@ public class HttpAsyncSocketIoController {
         @throw CONTROLLER-RELOAD-CERT-ERROR listener is not registered, was not
         registered with SSL, or controller has been stopped
 
-        @since Qore 2.3.0
+        @since Qore 3.0.0
     */
     #! Updates the SSL certificate and private key for the QUIC paired listener
     #! whose async controller registration was made with the given
@@ -973,7 +973,7 @@ public class HttpAsyncSocketIoController {
 
         @return @ref True if a matching entry was updated, @ref False otherwise
 
-        @since Qore 2.3.0
+        @since Qore 3.0.0
     */
     bool reloadListenerCertificateByHttpListener(HttpServer::HttpListenerInterface http_listener,
             auto cert, auto key) {

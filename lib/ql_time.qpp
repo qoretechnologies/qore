@@ -1207,7 +1207,7 @@ nothing get_midnight() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer representing the ordinal day number in the year (corresponding to the <a href="http://en.wikipedia.org/wiki/ISO_8601#Ordinal_dates">ISO-8601 day number</a>) for the @ref absolute_dates "absolute date" value passed
 /**
-    @param date_value an @ref absolute_dates "absolute date" value to get the ordinal day number
+    @param dt an @ref absolute_dates "absolute date" value to get the ordinal day number
 
     @return an integer representing the ordinal day number in the year (corresponding to the <a href="http://en.wikipedia.org/wiki/ISO_8601#Ordinal_dates">ISO-8601 day number</a>) for the @ref absolute_dates "absolute date" value passed; if a @ref relative_dates "relative date" value is passed, then this function will return 0
 
@@ -1496,7 +1496,7 @@ int s = clock_getseconds();
     - clock_getmicros()
     - clock_getnanos()
 
-    @since %Qore 2.3.0
+    @since %Qore 3.0.0
 */
 int clock_getseconds() [flags=CONSTANT] {
     return q_epoch();
@@ -1588,7 +1588,7 @@ int elapsed_us = clock_get_monotonic_us() - start;
     - clock_getmicros_monotonic()
     - now_us()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int clock_get_monotonic_us() [flags=CONSTANT] {
     return q_get_monotonic_us();
@@ -1613,7 +1613,7 @@ int elapsed_us = clock_getmicros_monotonic() - start;
     @see
     - clock_getmicros()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int clock_getmicros_monotonic() [flags=CONSTANT] {
     return q_clock_getmicros_monotonic();
@@ -1889,7 +1889,7 @@ date d = date("Mon, 06 Nov 1994 08:49:37 +0500");
 
     @since %Qore 0.8.12.4 \c INVALID-DATE exceptions are thrown if the date is invalid
 
-    @since %Qore 2.3.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
+    @since %Qore 3.0.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
  */
 date date(string date_string) [flags=CONSTANT,NAMED_ARGS] {
     DateTimeNodeValueHelper date(date_string, xsink);

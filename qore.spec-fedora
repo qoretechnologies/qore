@@ -2,7 +2,7 @@
 %global user_module_dir %{_datadir}/qore-modules/
 
 Name: qore
-Version: 2.3.0
+Version: 3.0.0
 Release: 4%{?dist}
 Summary: Multithreaded Programming Language
 
@@ -242,7 +242,7 @@ export QORE_MODULE_DIR=../qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}
 %{_mandir}/man1/qdbg-vsc-adapter.1.*
 
 %changelog
-* Thu May 14 2026 David Nichols <david@qore.org> 2.3.0-4
+* Thu May 14 2026 David Nichols <david@qore.org> 3.0.0-4
 - tightened libnghttp2 BuildRequires to >= 1.68.1 (CVE-2026-27135)
 - added qdiff and qpatch to misc-tools package (were installed but unpackaged)
 - switched to out-of-source build under build/ so doxygen's relative
@@ -252,16 +252,16 @@ export QORE_MODULE_DIR=../qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}
 - fixed CMAKE_PREFIX_PATH shell-var typo (${_prefix} -> %{_prefix})
 - fixed SINGLE_COMPILATION_UNIT argument parsing (was "1." now "1" + source dir)
 
-* Mon Feb 9 2026 David Nichols <david@qore.org> 2.3.0-3
+* Mon Feb 9 2026 David Nichols <david@qore.org> 3.0.0-3
 - added required build dependencies: rust, cargo (for tree-sitter-cli)
 - added qfmt to misc-tools package
 
-* Fri Feb 6 2026 David Nichols <david@qore.org> 2.3.0-2
+* Fri Feb 6 2026 David Nichols <david@qore.org> 3.0.0-2
 - updated module-abi to 2.0 (Binary Module API 2.0)
 - added required build dependencies: nghttp2, brotli, zstd, lz4
 
-* Fri Aug 1 2025 David Nichols <david@qore.org> 2.3.0-1
-- updated version to 2.3.0-1
+* Fri Aug 1 2025 David Nichols <david@qore.org> 3.0.0-1
+- updated version to 3.0.0-1
 - updated libqore version to 12.7.0
 
 * Fri Jun 13 2025 David Nichols <david@qore.org> 2.2.0-1

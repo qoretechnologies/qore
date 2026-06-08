@@ -72,7 +72,7 @@ AutoGate ag(gate);
     @throw THREAD-DEADLOCK a deadlock was detected while trying to acquire the lock
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the constructor is blocked; the method polls for interrupt requests every 500ms
 
-    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
+    @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 AutoGate::constructor(Gate[QoreGate] gate) [flags=NAMED_ARGS] {
     // Always poll for cancel/interrupt checking

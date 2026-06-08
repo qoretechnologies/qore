@@ -2359,7 +2359,7 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
     The Qore Http1ClientPollOperation class inherits from this base to get
     the C++ fast path while providing the high-level HTTP/1.1 API.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass Http1ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
@@ -2471,7 +2471,7 @@ nothing Http1ClientPollOperationBase::abort() {
 
     @param idle_timeout_ms timeout in milliseconds; <= 0 disables the proactive timeout
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http1ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags=NAMED_ARGS] {
     priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
@@ -2500,7 +2500,7 @@ bool Http1ClientPollOperationBase::isReady() [flags=RET_VALUE_ONLY] {
 
 //! Returns True if the connection is in protocol-switched state (after 101)
 /** @return True if the HTTP protocol has been switched (e.g., WebSocket upgrade)
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool Http1ClientPollOperationBase::isProtocolSwitched() [flags=RET_VALUE_ONLY] {
     return priv->isProtocolSwitched();
@@ -2511,7 +2511,7 @@ bool Http1ClientPollOperationBase::isProtocolSwitched() [flags=RET_VALUE_ONLY] {
     whenever raw data is dispatched in PROTOCOL_SWITCHED state (after 101).
 
     @param listener an object with a \c notifyIo() method
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http1ClientPollOperationBase::setProtocolSwitchedListener(object listener) [flags=NAMED_ARGS] {
     priv->setProtocolSwitchedListener(const_cast<QoreObject*>(listener), xsink);
@@ -2598,7 +2598,7 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
     @param max_streams maximum concurrent streams (should be 1 for HTTP/1.1)
     @return the stream ID assigned to this request
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, string path,
         *hash<auto> headers, *data body, Promise[QorePromise] promise,
@@ -2666,7 +2666,7 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
     holding the action for the lifetime of the connection
     @return the stream ID assigned to this request
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Http1ClientPollOperationBase::submitRequestStreaming(string method, string path,
         *hash<auto> headers, *data body, object channel, int max_streams,
@@ -2741,7 +2741,7 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
     @param data the chunk to send (string or binary); pass \c NOTHING to
         signal end-of-stream
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http1ClientPollOperationBase::pushSendData(*data data) [flags=NAMED_ARGS] {
     if (!data) {
@@ -2770,7 +2770,7 @@ nothing Http1ClientPollOperationBase::pushSendData(*data data) [flags=NAMED_ARGS
     @param trailers map of trailer header name to value; pass \c NOTHING
         to clear
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http1ClientPollOperationBase::setTrailers(*hash<string, string> trailers) [flags=NAMED_ARGS] {
     priv->setTrailers(trailers, xsink);
@@ -2790,7 +2790,7 @@ nothing Http1ClientPollOperationBase::setTrailers(*hash<string, string> trailers
 
     @return the stream ID assigned to this request
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
         *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams,
@@ -2852,7 +2852,7 @@ bool Http1ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS
     @param initial_body optional body bytes already received before installing
         the SSE parser
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http1ClientPollOperationBase::installSseState(int stream_id, Queue[Queue] queue,
         *EventNotifier[QoreEventNotifier] notifier, *data initial_body) [flags=NAMED_ARGS] {

@@ -59,7 +59,7 @@ RegexExtract numbers("(\\d+)", RE_Global);
 # nums = ("123", "456", "789")
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 qclass RegexExtract [arg=QoreRegexExtractClass* r; dom=DEFAULT];
 
@@ -185,7 +185,7 @@ int n = r.count("abc 123 def 456"); # returns 2
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int RegexExtract::count(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->countMatches(subject, xsink);
@@ -213,7 +213,7 @@ auto h = r.extractNamedGroups("2026-04-08");
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 auto RegexExtract::extractNamedGroups(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->extractNamedGroups(subject, xsink);
@@ -239,7 +239,7 @@ RegexExtract r("(\\d+)", RE_Global);
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *list<hash<RegexMatchInfo>> RegexExtract::extractDetailed(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->extractDetailed(subject, xsink);

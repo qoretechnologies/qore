@@ -153,7 +153,7 @@ const char* HttpIdlePollOperationPriv::getStateImpl() const {
     - Connection close by peer
     - Timeout expiration
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass HttpIdlePollOperationBase [
     private_members=object sock,string goal;

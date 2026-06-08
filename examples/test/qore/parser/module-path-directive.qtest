@@ -9,7 +9,7 @@
 %exec-class ModulePathDirectiveTest
 
 # Regression coverage for the %prepend-module-path / %append-module-path parse
-# directives introduced in Qore 2.3.  See
+# directives introduced in Qore 3.0.  See
 # design/parse-directive-prepend-module-path.md for the specification.
 class ModulePathDirectiveTest inherits QUnit::Test {
     private {
@@ -204,7 +204,7 @@ class ModulePathDirectiveTest inherits QUnit::Test {
 
     testAppendLegacyForm() {
         # Legacy unquoted, colon-separated, $VAR-style argument still targets
-        # the process-global list.  Kept for backward compatibility with pre-2.3
+        # the process-global list.  Kept for backward compatibility with pre-3.0
         # scripts (including Qorus entrypoint scripts).
         string src = "%new-style\n"
             "%append-module-path " + moddir + "\n"

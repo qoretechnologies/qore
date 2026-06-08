@@ -82,7 +82,7 @@ class Queue;
       processPending() on the I/O thread; the caller must be prepared
       to send (or enqueue for later send) without blocking.
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 class DLLLOCAL WebSocketStreamFrameState {
 public:

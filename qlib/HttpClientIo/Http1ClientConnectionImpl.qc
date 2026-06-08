@@ -198,7 +198,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
 
         @throw HTTP1-STATE-ERROR if the connection is not READY
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     sendStreamData(int stream_id, data data, bool end_stream = False) {
         if (!self.isReady()) {
@@ -232,7 +232,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param trailers map of trailer header name to value; pass \c NOTHING
             to clear
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     setTrailers(*hash<string, string> trailers) {
         poll_op.setTrailers(trailers);

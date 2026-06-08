@@ -36,7 +36,7 @@
 #include <climits>
 #include <zlib.h>
 
-// Brotli, Zstd, and LZ4 are required since Qore 2.3
+// Brotli, Zstd, and LZ4 are required since Qore 3.0
 #include <brotli/encode.h>
 #include <brotli/decode.h>
 #include <zstd.h>
@@ -1228,7 +1228,7 @@ binary bin = deflate_raw(str_data);
     @throw ZLIB-LEVEL-ERROR level must be between 1 - 9 or -1
     @throw ZLIB-ERROR zlib returned an error while processing
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 binary deflate_raw(string data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
@@ -1260,7 +1260,7 @@ binary bin = deflate_raw(bin_data);
     @throw ZLIB-LEVEL-ERROR level must be between 1 - 9 or -1
     @throw ZLIB-ERROR zlib returned an error while processing
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 binary deflate_raw(binary data, int level = Z_DEFAULT_COMPRESSION) [flags=NAMED_ARGS] {
    if ((level < 1 && level != -1) || level > 9)
@@ -1296,7 +1296,7 @@ string str = inflate_raw_to_string(bin, "utf-8");
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 string inflate_raw_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
@@ -1326,7 +1326,7 @@ binary bin = inflate_raw_to_binary(data);
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 binary inflate_raw_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
    return qore_inflate_raw_to_binary(compressed_data, xsink);

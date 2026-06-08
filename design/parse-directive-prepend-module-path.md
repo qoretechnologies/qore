@@ -167,7 +167,7 @@ search-path stack).
 | `${SCRIPT_NAME}`   | basename of the file containing the directive                  |
 | `${SCRIPT_PATH}`   | absolute path of the file containing the directive             |
 | `${PROGRAM_DIR}`   | absolute directory of the **top-level** program file           |
-| `${QORE_VERSION}`  | libqore version string (e.g. `2.3.0`)                          |
+| `${QORE_VERSION}`  | libqore version string (e.g. `3.0.0`)                          |
 | `${QORE_PREFIX}`   | libqore install prefix (e.g. `/usr`)                           |
 | `${QORE_MODULE_VERSION}` | module API version (e.g. `2.0`) — useful for vendored module dirs |
 
@@ -304,7 +304,7 @@ want to vendor modules should be able to do so.
 | `lib/QoreAOTRuntime.cpp` | reader; re-applies lists before `%requires`-equivalent deps load |
 | `include/qore/QoreParseOptions.h` | new bit `PO_NO_MODULE_PATH_DIRECTIVES` |
 | `doxygen/lang/245_parse_directives.dox.tmpl` | documentation entry |
-| `doxygen/lang/900_release_notes.dox.tmpl` | release-notes entry under `qore_2_3_0` (or 2.4 if cut by then) |
+| `doxygen/lang/900_release_notes.dox.tmpl` | release-notes entry under `qore_3_0_0` (or a later release if cut by then) |
 | `examples/test/qore/parser/module-path-directive.qtest` | new regression test (parse-time + runtime + AOT round-trip + sandbox + macro coverage) |
 
 ## Migration path for Qorus

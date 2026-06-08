@@ -7088,6 +7088,20 @@ public:
             nn += "zzz9";
             fprintf(fp, "class %s", nn.c_str());
         }
+        else if (!type_params.empty()) {
+            // emit a generic class as a doxygen class template ("template <typename T> class Name")
+            // rather than the specialization-like form "class Name<T>"; the latter registers only a
+            // specialization, leaving the primary class name unresolvable so that "@ref Namespace::Name"
+            // references fail with "unable to resolve reference"
+            fputs("template <", fp);
+            for (unsigned i = 0; i < type_params.size(); ++i) {
+                if (i) {
+                    fputs(", ", fp);
+                }
+                fprintf(fp, "typename %s", type_params[i].c_str());
+            }
+            fprintf(fp, "> class %s", name.c_str());
+        }
         else {
             std::string display_name = getQoreName();
             fprintf(fp, "class %s", display_name.c_str());

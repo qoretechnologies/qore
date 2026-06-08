@@ -355,7 +355,7 @@ public:
 
         @return true if @a mod is a contributor to this namespace, false otherwise
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT bool isFromModule(const char* mod) const;
 
@@ -370,7 +370,7 @@ public:
 
         @return the number of contributing modules
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT size_t getModuleCount() const;
 

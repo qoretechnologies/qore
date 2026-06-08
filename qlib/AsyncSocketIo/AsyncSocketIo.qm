@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore module
-%requires qore >= 2.3
+%requires qore >= 3.0
 
 %modern
 

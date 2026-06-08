@@ -261,7 +261,7 @@ public:
 
         @return the current signal generation counter value
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT uint64_t getSignalGen() const;
 

@@ -86,7 +86,7 @@ public:
         cut the per-element dispatch cost by ~5-10x when iterated through
         map/select/foldl/foreach.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
      */
     DLLEXPORT virtual bool supportsNativeIteration() const {
         return false;
@@ -98,7 +98,7 @@ public:
         returns true if a value is available via nativeGetValue(), false at end
         of iteration.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
      */
     DLLEXPORT virtual bool nativeNext(ExceptionSink* xsink) {
         return false;
@@ -110,7 +110,7 @@ public:
         method: returns the current element.  May raise INVALID-ITERATOR via
         xsink if the iterator is not positioned on a valid element.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
      */
     DLLEXPORT virtual QoreValue nativeGetValue(ExceptionSink* xsink) {
         return QoreValue();
@@ -132,7 +132,7 @@ public:
     For classes that yield via @c getReferencedValue (the @c ConstListIterator
     family), use @ref QORE_NATIVE_FAST_PATH_REFVAL.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 #define QORE_NATIVE_FAST_PATH_DEFAULT()                                         \
     DLLLOCAL bool supportsNativeIteration() const override { return true; }     \
@@ -150,7 +150,7 @@ public:
     }
 
 //! Fast-path variant where @c next() takes an @c ExceptionSink*.
-/** @since %Qore 2.3 */
+/** @since %Qore 3.0 */
 #define QORE_NATIVE_FAST_PATH_NEXT_XSINK()                                      \
     DLLLOCAL bool supportsNativeIteration() const override { return true; }     \
     DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {                   \
@@ -168,7 +168,7 @@ public:
 
 //! Fast-path variant for ConstListIterator-style classes that expose
 //! @c getReferencedValue() (the wrapped iterator's terminal accessor).
-/** @since %Qore 2.3 */
+/** @since %Qore 3.0 */
 #define QORE_NATIVE_FAST_PATH_REFVAL()                                          \
     DLLLOCAL bool supportsNativeIteration() const override { return true; }     \
     DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {                   \
@@ -192,7 +192,7 @@ public:
     the Qore-class level.  Without this override the inherited
     @ref QORE_NATIVE_FAST_PATH_REFVAL would silently iterate forward.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 #define QORE_NATIVE_FAST_PATH_REVERSE_REFVAL()                                  \
     DLLLOCAL bool supportsNativeIteration() const override { return true; }     \

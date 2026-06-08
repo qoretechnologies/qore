@@ -116,7 +116,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             were supplied
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
 
-        @since %Qore 2.3 (the \c body_streaming = \c True path was added in
+        @since %Qore 3.0 (the \c body_streaming = \c True path was added in
             this release; previously the method threw \c HTTP1-STREAMING-ERROR
             on \c sendData())
     */
@@ -406,7 +406,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTPCLIENT-STREAM-CLOSED if the underlying H1 connection
             has been closed
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     sendData(data data, bool end_stream = False) {
         int sid;
@@ -468,7 +468,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
         @throw HTTPCLIENT-STATE-ERROR if not in streaming mode
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     setTrailers(*hash<string, string> trailers) {
         {

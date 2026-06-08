@@ -48,7 +48,7 @@
 
     Thread safety: all methods are thread-safe (internal locking).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class QoreDatagramDispatcher {
 public:

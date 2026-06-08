@@ -380,7 +380,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         /*! All inherited classes must implement this method to get
             all required DB metadata in proper format
          */
-        abstract any toQore();
+        abstract auto toQore();
 
         #! Make a string with Qore code from a structure prepared by AbstractReverseObject::toQore().
         /*! @return string with final Qore source code
@@ -590,7 +590,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             return ret;
         }
 
-        any columnToQore(AbstractColumn c) {
+        auto columnToQore(AbstractColumn c) {
             hash ret = {};
             #printf("%Y\n", c);
             switch (c.native_type) {

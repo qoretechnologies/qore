@@ -53,7 +53,7 @@ constexpr int64_t DEFAULT_HEADER_READ_TIMEOUT_US = 5000000LL;
     When data arrives during idle, transitions to header reading inline
     (no return to controller).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class HttpKeepAlivePollOperationPriv : public SocketPollOperationBase {
 public:

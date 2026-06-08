@@ -50,7 +50,7 @@ public:
 
         @param xsink exception sink
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     virtual void closeIo(ExceptionSink* xsink) = 0;
 
@@ -62,7 +62,7 @@ public:
 
         @param fd the write end of the notification pipe, or -1 to clear
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     virtual void setPollNotifyFd(int fd) {}
 #endif
@@ -77,7 +77,7 @@ public:
 
         @return true if buffered data is available
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual bool hasPendingData() const { return false; }
 
@@ -87,7 +87,7 @@ public:
 
         @return unique hash string
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL const std::string& getUniqueHash() const { return io_unique_hash; }
 
@@ -98,7 +98,7 @@ public:
 
         @return stable async I/O identity hash
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     virtual const std::string& getIoIdentityHash() const { return io_unique_hash; }
 

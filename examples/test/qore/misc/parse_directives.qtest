@@ -443,7 +443,7 @@ int sub test() { return 0; }
         }
     }
 
-    # Test that PO_STRICT_TYPES is 0 (support removed in Qore 2.3) and %strict-types/%loose-types
+    # Test that PO_STRICT_TYPES is 0 (support removed in Qore 3.0) and %strict-types/%loose-types
     # parse directives are silently ignored
     strictTypesTest() {
         # verify PO_STRICT_TYPES constant is 0

@@ -32,7 +32,7 @@
 %requires Util
 
 module FileLocationHandler {
-    version = "2.3";
+    version = "3.0";
     desc = "user module for reading and writing file data based on URL-like location strings";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -96,7 +96,7 @@ module FileLocationHandler {
 
     @section filelocationhandler_relnotes Release Notes
 
-    @subsection filelocationhandler_v2_3 FileLocationHandler v2.3
+    @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
     - implemented support for non-blocking I/O from file handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
 

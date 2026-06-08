@@ -320,7 +320,7 @@ string Class::getPathName() [flags=RET_VALUE_ONLY] {
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 *list<string> Class::getTypeParameters() [flags=RET_VALUE_ONLY] {
     // get read access to program object
@@ -352,7 +352,7 @@ string Class::getPathName() [flags=RET_VALUE_ONLY] {
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 *hash<string, string> Class::getTypeParameterDefaults() [flags=RET_VALUE_ONLY] {
     // get read access to program object
@@ -396,7 +396,7 @@ string Class::getPathName() [flags=RET_VALUE_ONLY] {
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 *hash<string, string> Class::getTypeParameterBounds() [flags=RET_VALUE_ONLY] {
     // get read access to program object
@@ -1312,7 +1312,7 @@ object q = cls.callConstructor((), (IntType,));
     @note see the class documentation for the class to be instantiated for a list of additional exceptions that can be
     thrown
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 
     @see
     - newObject()
@@ -1610,7 +1610,7 @@ ClassConstant con = cls.getConstant(name);
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
-    @since %Qore 2.3.0 this method searches the class hieararchy
+    @since %Qore 3.0.0 this method searches the class hieararchy
 */
 ClassConstant Class::getConstant(string name) [flags=RET_VALUE_ONLY] {
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);

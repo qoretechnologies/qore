@@ -426,7 +426,7 @@ public:
 
         @return a referenced QoreStringNode with the unique hash
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreStringNode* getUniqueHash() const;
 
@@ -463,7 +463,7 @@ public:
 
         @return true if the object is valid and not in the process of being destroyed
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isCurrent() const;
 

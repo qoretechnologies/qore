@@ -2,7 +2,7 @@
 
 ## Status
 
-The named-arguments feature is **implemented and shipped in Qore 2.3.0**; see
+The named-arguments feature is **implemented and shipped in Qore 3.0.0**; see
 [`design/named-arguments.md`](named-arguments.md) for the feature design
 (syntax, binder, overload resolution, evaluation order, reflection, `QCF_NAMED_ARGS`
 gating). This document is the **operational companion**: the review process and

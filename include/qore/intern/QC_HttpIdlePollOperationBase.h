@@ -42,7 +42,7 @@
     - Connection close by peer
     - Timeout expiration
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class HttpIdlePollOperationPriv : public SocketPollOperationBase {
 public:

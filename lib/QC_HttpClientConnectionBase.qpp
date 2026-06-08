@@ -48,7 +48,7 @@ extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
     and destructor run (not the parent's).  The child's @c setPrivate tags
     the priv with both the child's and parent's CID.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass HttpClientConnectionBase [
     ns=Qore;

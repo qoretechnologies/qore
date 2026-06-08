@@ -171,7 +171,7 @@ typedef QoreValue (*q_dbi_select_rows_t)(Datasource* ds, const QoreString* str, 
     @param xsink if any errors occur, error information should be added to this object
     @return a typed column-oriented result hash or another driver-specific value
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 typedef QoreValue (*q_dbi_select_typed_t)(Datasource* ds, const QoreString* str, const QoreListNode* args,
     ExceptionSink* xsink);
@@ -184,7 +184,7 @@ typedef QoreValue (*q_dbi_select_typed_t)(Datasource* ds, const QoreString* str,
     @param xsink if any errors occur, error information should be added to this object
     @return a typed row-oriented result list or another driver-specific value
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 typedef QoreValue (*q_dbi_select_rows_typed_t)(Datasource* ds, const QoreString* str, const QoreListNode* args,
     ExceptionSink* xsink);
@@ -197,7 +197,7 @@ typedef QoreValue (*q_dbi_select_rows_typed_t)(Datasource* ds, const QoreString*
     @param xsink if any errors occur, error information should be added to this object
     @return a columnar result; caller owns the reference
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 typedef QoreColumnarResult* (*q_dbi_select_columnar_t)(Datasource* ds, const QoreString* str,
     const QoreListNode* args, ExceptionSink* xsink);
@@ -343,7 +343,7 @@ typedef QoreHashNode* (*q_dbi_describe_t)(Datasource* ds, const QoreString* str,
     @param xsink if any errors occur, error information should be added to this object
     @return a typed hashdecl-backed column result; caller owns the reference
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLEXPORT QoreHashNode* qore_dbi_make_typed_select_result(Datasource* ds, const QoreHashNode* columns,
     const QoreHashNode* desc, ExceptionSink* xsink);
@@ -355,7 +355,7 @@ DLLEXPORT QoreHashNode* qore_dbi_make_typed_select_result(Datasource* ds, const 
     @param xsink if any errors occur, error information should be added to this object
     @return a list of typed hashdecl-backed rows; caller owns the reference
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLEXPORT QoreListNode* qore_dbi_make_typed_select_rows_result(Datasource* ds, const QoreListNode* rows,
     const QoreHashNode* desc, ExceptionSink* xsink);
@@ -537,7 +537,7 @@ DLLEXPORT QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink);
 
     @return the datasource connection string
 
-    @since Qore 2.3
+    @since Qore 3.0
 */
 DLLEXPORT QoreStringNode* makeConfigString(const QoreHashNode* h, ExceptionSink* xsink);
 

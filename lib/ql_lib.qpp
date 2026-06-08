@@ -362,7 +362,7 @@ const QLO_MINIMUM_TLS_13 = QLO_MINIMUM_TLS_13;
 //! disable HTTP/2 support globally (may be set at runtime with qore_set_library_options())
 /** When set, HTTPClient objects will not use HTTP/2 even if enabled in the object
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 const QLO_DISABLE_HTTP2 = QLO_DISABLE_HTTP2;
 
@@ -875,7 +875,7 @@ sleep(10s);
 
     @see usleep() for a similar function supporting microsecond resolution
 
-    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
+    @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int sleep(softint seconds) [flags=NAMED_ARGS;dom=PROCESS] {
    if (!seconds) {
@@ -923,7 +923,7 @@ usleep(5000);
 
     @note both sleep() and usleep() are implemented internally by calls to nanosleep() (2) if available on the current platform, otherwise both are implemented by calls to usleep() (3)
 
-    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
+    @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int usleep(softint microseconds) [flags=NAMED_ARGS;dom=PROCESS] {
    if (!microseconds) {
@@ -965,7 +965,7 @@ usleep(250ms);
 
     @note both sleep() and usleep() are implemented internally by calls to nanosleep() (2) if available on the current platform, otherwise both are implemented by calls to usleep() (3)
 
-    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
+    @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 int usleep(date duration) [flags=NAMED_ARGS;dom=PROCESS] {
    int64 usecs = duration->getRelativeMicroseconds();
@@ -1545,7 +1545,7 @@ list<hash<auto>> l = f.get();
 
     @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
    QoreFuture* future = qore_socket_resolve_addrinfo_asyncio_future(xsink, node ? node->c_str() : 0,
@@ -1575,7 +1575,7 @@ hash<auto> peer_info = f.get(100ms);
     @throw QOREADDRINFO-GETNAMEINFO-ERROR invalid address information
     @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 Future getnameinfo_async(string address, softint family = AF_INET, softint port = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
    struct sockaddr_storage sa;
@@ -1789,7 +1789,7 @@ int qore_get_library_options() [dom=PROCESS] {
     @see set_global_http2_mode(enum<HTTP2Mode>)
     @see get_global_http2_mode()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing set_global_http2_mode(string mode) [flags=NAMED_ARGS;dom=PROCESS] {
     const char* mode_str = mode->c_str();
@@ -1820,7 +1820,7 @@ nothing set_global_http2_mode(string mode) [flags=NAMED_ARGS;dom=PROCESS] {
     @see set_global_http2_mode(string)
     @see get_global_http2_mode()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing set_global_http2_mode(enum<HTTP2Mode> mode) [flags=NAMED_ARGS;dom=PROCESS] {
     int64 mode_val = mode.getAsBigInt();
@@ -1838,7 +1838,7 @@ nothing set_global_http2_mode(enum<HTTP2Mode> mode) [flags=NAMED_ARGS;dom=PROCES
 
     @see set_global_http2_mode()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 string get_global_http2_mode() [dom=PROCESS] {
     int mode = qore_global_http2_mode.load(std::memory_order_relaxed);

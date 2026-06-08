@@ -521,28 +521,28 @@ const RE_Global = QRE_GLOBAL;
 const RE_Unicode = PCRE2_UCP;
 
 //! makes quantifiers ungreedy by default (individual quantifiers can be made greedy by appending \c ?), equivalent to <tt>/U</tt>
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 const RE_Ungreedy = PCRE2_UNGREEDY;
 
 //! makes \c $ match only the end of the string (not before a final newline); without this option, \c $ also matches immediately before a newline at the end of the string
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 const RE_DollarEndOnly = PCRE2_DOLLAR_ENDONLY;
 
 //! anchors the pattern; the pattern is forced to match only at the start of the subject string, equivalent to prefixing with \c ^
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 const RE_Anchored = PCRE2_ANCHORED;
 
 //! allows duplicate named subpatterns; by default, PCRE2 requires named subpatterns to have unique names
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 const RE_DupNames = PCRE2_DUPNAMES;
 ///@}
 
 //! Hash returned by regex_extract_detailed() and related methods providing detailed match information
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 hashdecl Qore::RegexMatchInfo {
     //! Full match text (\c $0)
@@ -1438,7 +1438,7 @@ string result = regex_subst("abc 123 def 456", "\\d+", string sub (hash<RegexMat
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
     @throw REGEX-SUBST-ERROR infinite recursion detected with global substitution on empty pattern
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 string regex_subst(string str, string pattern, code<string(hash<RegexMatchInfo>)> callback, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     bool do_global;
@@ -1515,7 +1515,7 @@ int n = regex_count("abc 123 def 456", "\\d+"); # returns 2
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int regex_count(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
@@ -1547,7 +1547,7 @@ auto h = regex_extract_named("2026-04-08", "(?<year>\\d{4})-(?<month>\\d{2})-(?<
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 auto regex_extract_named(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
@@ -1579,7 +1579,7 @@ auto regex_extract_named(string str, string pattern, int options = 0) [flags=RET
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *list<hash<RegexMatchInfo>> regex_extract_detailed(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*pattern, options, xsink);
@@ -1602,7 +1602,7 @@ auto regex_extract_named(string str, string pattern, int options = 0) [flags=RET
 string escaped = regex_escape("price: $100 (USD)"); # returns "price\\:\\ \\$100\\ \\(USD\\)"
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 string regex_escape(string str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_regex_escape_string(str, xsink);
@@ -2405,7 +2405,7 @@ bool b = parse_boolean(i);
 
     @return the first value passed as a boolean
  */
-bool parse_boolean(any value) [flags=CONSTANT,NAMED_ARGS] {
+bool parse_boolean(auto value) [flags=CONSTANT,NAMED_ARGS] {
    return value.getAsBool();
 }
 

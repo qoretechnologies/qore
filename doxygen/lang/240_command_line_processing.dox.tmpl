@@ -134,6 +134,162 @@ qcc -c --output-dir=build/aot src/lib.qr src/main.qr
 qcc -o myapp build/aot/*.qo
     @endcode
 
+    <b>Diagnostic Command-Line Parameters</b>
+
+    These options make %Qore's parse-time diagnostics (errors, warnings, and the
+    "did you mean ...?" suggestions described in @ref identifier_suggestions) available in
+    machine-readable or rendered form, primarily for editors, build tools, and
+    AI-driven coding assistants. Both options are <em>parse-only</em>: %Qore parses
+    the source, emits the diagnostics, and exits <b>without executing the program</b>.
+    The process exit status is \c 2 if any parse error was reported and \c 0
+    otherwise (so a clean parse, or one with only warnings, exits \c 0). Each option
+    has an equivalent environment variable (see @ref environment_variables) for
+    tooling that cannot control the command line.
+
+    |!Long Param|!Short|!Description
+    |<tt>--diag-format=</tt><em>fmt</em>|n/a|Parse only and emit the collected parse diagnostics in the given format to \c stdout, suppressing the normal human-readable error/warning output. The only supported format is \c json. Equivalent to the \c QORE_DIAG_FORMAT environment variable
+    |<tt>--code-frames</tt>|n/a|Parse only and render the collected parse diagnostics as Rust-style code frames (a <tt>file:line:col</tt> header, the offending source line, and a caret span) to \c stderr, suppressing the normal output. Equivalent to the \c QORE_CODE_FRAMES environment variable
+
+    @section diag_json_format JSON Diagnostic Format
+
+    With <tt>--diag-format=json</tt>, %Qore prints a JSON array to \c stdout in
+    which each element is an object whose fields correspond exactly to the
+    @ref Qore::ParseDiagnosticInfo "ParseDiagnosticInfo" hashdecl, so the
+    command-line emitter and the embedded
+    @ref Qore::Program::getParseDiagnostics() "Program::getParseDiagnostics()" API
+    return the same information. The fields are \c severity (<tt>"error"</tt> or
+    <tt>"warning"</tt>), \c code (a stable diagnostic id), \c warningCode (the
+    @ref warnings "warning bit" for warnings, \c null for errors), \c file,
+    \c source, \c startLine, \c endLine, \c startColumn, \c endColumn (a column of
+    \c -1 means the column is unknown), and \c message. Suggestions and hints are
+    included in the \c message text.
+
+    For example, given the following file \c bad.q with two errors (an undefined
+    class and a function-name typo):
+
+    @code
+%modern
+class Widget {}
+
+int sub calculateTotal(int a, int b) {
+    return a + b;
+}
+
+Widget w = new widget();
+int result = calculateTotl(2, 3);
+    @endcode
+
+    running:
+
+    @code{.sh}
+qore --diag-format=json bad.q
+    @endcode
+
+    prints (formatted here for readability; the real output is a single line):
+
+    @code{.json}
+[
+  {
+    "severity": "error",
+    "code": "PARSE-EXCEPTION",
+    "warningCode": null,
+    "file": "bad.q",
+    "source": null,
+    "startLine": 8,
+    "endLine": 8,
+    "startColumn": 12,
+    "endColumn": 24,
+    "message": "reference to undefined class 'widget'; did you mean 'Widget'? (check capitalization)"
+  },
+  {
+    "severity": "error",
+    "code": "PARSE-EXCEPTION",
+    "warningCode": null,
+    "file": "bad.q",
+    "source": null,
+    "startLine": 9,
+    "endLine": 9,
+    "startColumn": -1,
+    "endColumn": -1,
+    "message": "function 'calculateTotl()' cannot be found; did you mean 'calculateTotal'?"
+  }
+]
+    @endcode
+
+    Warnings are captured the same way once they are enabled (for example with
+    \c -W / @ref enable-all-warnings). Given a non-exhaustive @ref switch "switch"
+    over an @ref enums "enum" (see @ref non-exhaustive-switch):
+
+    @code
+%modern
+%enable-all-warnings
+enum Color {
+    RED = 0,
+    GREEN = 1,
+    BLUE = 2,
+}
+
+int sub describe(Color c) {
+    switch (c) {
+        case Color::RED: return 1;
+        case Color::GREEN: return 2;
+    }
+    return 0;
+}
+    @endcode
+
+    @code{.sh}
+qore --diag-format=json warn.q
+    @endcode
+
+    emits a single warning element and exits \c 0 (a warning is not an error):
+
+    @code{.json}
+[
+  {
+    "severity": "warning",
+    "code": "NON-EXHAUSTIVE-SWITCH",
+    "warningCode": 1048576,
+    "file": "warn.q",
+    "source": null,
+    "startLine": 10,
+    "endLine": 13,
+    "startColumn": -1,
+    "endColumn": -1,
+    "message": "switch over enum 'Color' does not handle 1 of its values (BLUE); add the missing case or a default: label"
+  }
+]
+    @endcode
+
+    @section diag_code_frames Code Frames
+
+    With <tt>--code-frames</tt>, %Qore renders each diagnostic to \c stderr as a
+    code frame: a <tt>file:line:column</tt> header tagged with the severity and
+    stable code, the offending source line, and a caret span (<tt>^~~~</tt>)
+    underlining the reported columns. This is useful for human review and for tools
+    that surface compiler output directly. For the \c bad.q example above:
+
+    @code{.sh}
+qore --code-frames bad.q
+    @endcode
+
+    @verbatim
+bad.q:8:12: error[PARSE-EXCEPTION]: reference to undefined class 'widget'; did you mean 'Widget'? (check capitalization)
+  Widget w = new widget();
+              ^~~~~~~~~~~~
+bad.q:9: error[PARSE-EXCEPTION]: function 'calculateTotl()' cannot be found; did you mean 'calculateTotal'?
+  int result = calculateTotl(2, 3);
+    @endverbatim
+
+    When a diagnostic's columns are unknown (column \c -1) the header omits the
+    column and no caret span is drawn, as in the second frame above.
+
+    @note Structured diagnostics are also available to embedded code via the
+    @ref Qore::Program::setParseDiagnosticsCollected() "Program::setParseDiagnosticsCollected()"
+    and @ref Qore::Program::getParseDiagnostics() "Program::getParseDiagnostics()"
+    methods, which return @ref Qore::ParseDiagnosticInfo "ParseDiagnosticInfo"
+    hashes equivalent to the JSON above.
+
     There are two additional options available with debugging versions of %Qore as follows:
 
     <b>Description of Debugging Command-Line Parameters</b>

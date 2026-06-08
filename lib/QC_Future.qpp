@@ -69,7 +69,7 @@ class TransformingFuture<T> inherits Future<T> {
 
     @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 qclass Future<T> [dom=THREAD_CLASS; arg=AbstractFuture* f; ns=Qore::Thread; legacy_raw];
 
@@ -110,6 +110,6 @@ abstract bool Future::isError();
 
     @return @ref True if the Future was cancelled, @ref False if already complete
 
-    @since %Qore 2.4
+    @since %Qore 3.0
  */
 abstract bool Future::cancel();

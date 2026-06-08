@@ -50,7 +50,7 @@ class HttpClientConnectionManagerBase;
 class AbstractAsyncAction;
 
 //! HTTP client protocol version
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 enum class HttpClientProtocol {
     H1,         //!< HTTP/1.1 over TCP or TCP+TLS
@@ -80,7 +80,7 @@ enum class HttpClientProtocol {
     dropping the ref.  Dropping the last ref without calling
     @ref closeConnection triggers an implicit close in the destructor.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class HttpClientConnectionBase : public AbstractHttpPollConnectionPriv {
 public:
@@ -142,7 +142,7 @@ public:
 
         @return @c true on success, @c false at capacity
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool tryReserveStream(bool streaming_send = false);
 
@@ -153,7 +153,7 @@ public:
         @param streaming_send true when releasing a reservation created
             with @ref tryReserveStream(true)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void releaseStreamReservation(bool streaming_send = false);
 
@@ -164,7 +164,7 @@ public:
 
         @return @c true if the caller owns the streaming-send slot
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool beginStreamingSend();
 
@@ -173,7 +173,7 @@ public:
         connection eligible for another incremental request body after
         @ref pushSendData(nullptr, 0) has closed the previous one.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void finishStreamingSend();
 
@@ -200,7 +200,7 @@ public:
         the I/O thread could fire @ref AbstractHttpPollConnectionPriv::onClosedHook
         on a manager that is mid-destruction (UAF).
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void setManager(HttpClientConnectionManagerBase* mgr);
 
@@ -213,7 +213,7 @@ public:
         needed (e.g., a protocol-specific notification beyond the
         manager dispatch).
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void onClosedHook() override;
 
@@ -258,7 +258,7 @@ public:
         @param xsink exception sink
         @return stream ID on success; -1 on error
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual int64_t submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
@@ -286,7 +286,7 @@ public:
 
         @return stream id on success, -1 on failure
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual int64_t submitRequestWithAction(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
@@ -306,7 +306,7 @@ public:
         @param xsink exception sink
         @return result hash on success, nullptr on error
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
@@ -317,7 +317,7 @@ public:
         @param len data length (0 when data is nullptr)
         @param xsink exception sink
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual void pushSendData(const void* data, size_t len, ExceptionSink* xsink);
 
@@ -327,7 +327,7 @@ public:
         @param trailers hash of trailer key-value pairs
         @param xsink exception sink
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
 
@@ -348,7 +348,7 @@ protected:
         guard sends an end-of-body sentinel with a private exception sink
         before releasing the active flag.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     class DLLEXPORT StreamingSendSetupGuard {
     public:
@@ -410,12 +410,12 @@ public:
     //! Sets the pool key for O(1) eviction by the connection manager
     /** Called by the manager when inserting the connection into the pool.
         @param key the pool key string
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void setPoolKey(const std::string& key);
 
     //! Returns the pool key (empty if not in a pool)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT const std::string& getPoolKey() const;
 
@@ -426,7 +426,7 @@ public:
         externally by async poll wrappers when the connection transitions
         to CLOSED.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual QoreHashNode* getReferencedErrorInfo() {
         return nullptr;
@@ -486,7 +486,7 @@ public:
           - Destructor waits for the specific in-flight calls that were
             already running; it never preempts a live method body.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     static constexpr uint32_t INVALIDATED_BIT = 0x80000000u;
     static constexpr uint32_t IN_FLIGHT_MASK  = 0x7FFFFFFFu;
@@ -503,7 +503,7 @@ public:
         mutex): nested calls each add one to the count and each release
         subtracts one.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     class DLLEXPORT MethodGuard {
     public:
@@ -531,7 +531,7 @@ public:
         @return the prior @c lifetime_state_ value; the caller can mask
             with @ref IN_FLIGHT_MASK to observe how many calls were
             in flight at the moment of invalidation.
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT uint32_t markInvalidated();
 
@@ -540,7 +540,7 @@ public:
         would keep acquiring while the caller waits).  Returns promptly
         when no call was in flight at invalidation time.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void drainInFlight();
 

@@ -51,7 +51,7 @@
     If trySend() returns false (channel full — backpressure), the value is
     discarded and a warning is logged. The I/O thread must never block.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLLOCAL ChannelAction : public AbstractAsyncAction {
 public:
@@ -275,7 +275,7 @@ private:
 /** Used for ping operations and poll-based integrations where the caller
     just needs to know the operation completed, not the result data.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class EventNotifierAction : public AbstractAsyncAction {
 public:
@@ -312,7 +312,7 @@ private:
     response data and simultaneously signals the notifier so the caller's
     poll loop wakes up.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class PromiseNotifierAction : public AbstractAsyncAction {
 public:
@@ -431,7 +431,7 @@ DLLLOCAL QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf
     Zero thread hops — parsing happens in the I/O thread's continuePoll() cycle.
     The Queue consumer (Qore SseObservable) runs on the I/O controller's worker pool.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SseAction : public AbstractAsyncAction {
 public:
@@ -570,7 +570,7 @@ inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* noti
     (auto-pong, close-echo on error) are emitted via the send callback the
     frame state was constructed with.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLLOCAL FrameStateAction : public AbstractAsyncAction {
 public:

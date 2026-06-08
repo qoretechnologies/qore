@@ -53,7 +53,7 @@ The shared layer is therefore a Qore-level contract plus typed key-material and 
 
 ## 6. Module
 
-A new generic binary module **`sshutil`** (namespace `Qore::SshUtil`) defines the typed SSH provider contract. It provides namespace-scoped abstract classes, typed hashes, string-backed enums, descriptor-only default filesystem implementations, and a registration registry. The module is delivered with Qore and targets `%requires qore >= 2.3`.
+A new generic binary module **`sshutil`** (namespace `Qore::SshUtil`) defines the typed SSH provider contract. It provides namespace-scoped abstract classes, typed hashes, string-backed enums, descriptor-only default filesystem implementations, and a registration registry. The module is delivered with Qore and targets `%requires qore >= 3.0`.
 
 The contract is intentionally a binary module rather than a qlib module because downstream QPP/C++ code must be able to reference the provider/store class types directly. This allows `module-ssh` and `module-ssh2` to expose typed APIs instead of accepting generic `object` values and duck-typing method names.
 
@@ -183,7 +183,7 @@ For identity keys the binary module derives canonical `SshPublicKeyInfo` from th
 | 13 | Default filesystem store format | v1: OpenSSH `known_hosts` only; alternative serialization deferred | Interoperable, matches current behavior, no new on-disk format; locks §7.3 normalization to OpenSSH |
 | 14 | Resolved peer IPs as store context | Not in v1; logical host only | Avoids implicit DNS/reverse-DNS trust expansion |
 | 15 | Serialized provider/store reference model | Stable registry name + runtime resolution via registration registry | Mirrors `ConnectionSchemeCache`/`registerFactory`; no object/secret serialization |
-| 16 | Min Qore version / compile guards | Qore `%requires qore >= 2.3`; `module-ssh` and `module-ssh2` hard-depend on `sshutil`; guards `HAVE_LIBSSH2_KNOWNHOST_API`, `HAVE_LIBSSH2_PUBLICKEY_FROMMEMORY`; `module-ssh` in-memory host-key import needs libssh `ssh_pki_import_privkey_base64` | QPP/C++ module APIs need binary-module class types; `sshutil` is shipped with Qore 2.3 |
+| 16 | Min Qore version / compile guards | Qore `%requires qore >= 3.0`; `module-ssh` and `module-ssh2` hard-depend on `sshutil`; guards `HAVE_LIBSSH2_KNOWNHOST_API`, `HAVE_LIBSSH2_PUBLICKEY_FROMMEMORY`; `module-ssh` in-memory host-key import needs libssh `ssh_pki_import_privkey_base64` | QPP/C++ module APIs need binary-module class types; `sshutil` is shipped with Qore 3.0 |
 
 ## 11. Remaining (implementation-time, not design-blocking)
 

@@ -296,7 +296,7 @@ public:
         @param args query arguments for %s, %n, %d placeholders
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreValue selectTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
 
@@ -307,7 +307,7 @@ public:
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @return a columnar result; caller owns the reference
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreColumnarResult* selectColumnar(const QoreString* query_str, const QoreListNode* args,
         ExceptionSink* xsink);
@@ -326,7 +326,7 @@ public:
         @param args query arguments for %s, %n, %d placeholders
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreValue selectRowsTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink);
 

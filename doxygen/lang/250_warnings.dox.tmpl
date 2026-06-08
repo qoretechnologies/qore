@@ -98,7 +98,55 @@
     <hr>
     @section non-exhaustive-switch non-exhaustive-switch
     Raised when a @ref switch "switch statement" whose argument has an @ref enums "enum" type does not handle all of the enum's values and has no \c default label; adding the missing \c case labels or a \c default label silences the warning. This helps catch unhandled values, for example when a new member is added to an enum but an existing \c switch over that enum is not updated. Only simple \c case labels (not relational case expressions) are considered when determining coverage.
-    @since %Qore 2.3
+
+    For example, the following \c switch omits the \c BLUE member and has no \c default label:
+
+    @code
+enum Color {
+    RED = 0,
+    GREEN = 1,
+    BLUE = 2,
+}
+
+int sub describe(Color c) {
+    switch (c) {
+        case Color::RED: return 1;
+        case Color::GREEN: return 2;
+    }
+    return 0;
+}
+    @endcode
+
+    and produces:
+
+    @verbatim
+NON-EXHAUSTIVE-SWITCH: switch over enum 'Color' does not handle 1 of its values (BLUE); add the missing case or a default: label
+    @endverbatim
+
+    The warning is silenced either by handling the missing member explicitly:
+
+    @code
+    switch (c) {
+        case Color::RED: return 1;
+        case Color::GREEN: return 2;
+        case Color::BLUE: return 3;
+    }
+    @endcode
+
+    or by adding a \c default label, which makes the intent to ignore the remaining
+    values explicit:
+
+    @code
+    switch (c) {
+        case Color::RED: return 1;
+        case Color::GREEN: return 2;
+        default: return 0;
+    }
+    @endcode
+
+    This warning is also captured by the @ref diag_json_format "structured diagnostics"
+    facility, so editors and coding tools can surface it programmatically.
+    @since %Qore 3.0
 
     <hr>
     @section non-existent-method-call non-existent-method-call

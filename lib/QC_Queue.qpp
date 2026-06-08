@@ -81,7 +81,7 @@ static int queue_check_timeout(bool to, int timeout_ms, ExceptionSink* xsink) {
 *hash<QueueTryResult<int>> result = queue.tryGet();
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 hashdecl Qore::Thread::QueueTryResult<T> {
     //! The value received from the Queue
@@ -214,7 +214,7 @@ nothing Queue::insert(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     @throw QUEUE-TIMEOUT-ERROR the timeout value must be >= -2147483648 and <= 2147483647 or this exception is thrown
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
 
-    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
+    @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 T Queue::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
@@ -293,7 +293,7 @@ T Queue::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     @throw QUEUE-TIMEOUT-ERROR the timeout value must be >= -2147483648 and <= 2147483647 or this exception is thrown
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method polls for interrupt requests every 500ms
 
-    @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
+    @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 T Queue::pop(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
@@ -376,7 +376,7 @@ if (exists result) {
     @see get()
     @see tryPop()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 *hash<QueueTryResult<T>> Queue::tryGet() {
     bool to;
@@ -424,7 +424,7 @@ if (exists result) {
     @see pop()
     @see tryGet()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 *hash<QueueTryResult<T>> Queue::tryPop() {
     bool to;

@@ -2,7 +2,7 @@
 
 **Status:** Implemented.
 
-**Target:** Qore 2.4.
+**Target:** Qore 3.0.
 
 ## Summary
 

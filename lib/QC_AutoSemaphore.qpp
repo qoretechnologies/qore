@@ -80,7 +80,7 @@ Semaphore sem(1);
 
     @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 qclass AutoSemaphore [dom=THREAD_CLASS; arg=QoreAutoSemaphore* as; ns=Qore::Thread];
 

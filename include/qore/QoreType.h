@@ -224,17 +224,17 @@ DLLEXPORT const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo
 // @since %Qore 0.8.13
 DLLEXPORT const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInfo* valueTypeInfo);
 
-// @since %Qore 2.3
+// @since %Qore 3.0
 DLLEXPORT const QoreTypeInfo* qore_get_complex_buffer_type(QoreBufferElementType elementType,
     bool nullable_elements = false);
-// @since %Qore 2.3
+// @since %Qore 3.0
 DLLEXPORT const QoreTypeInfo* qore_get_complex_buffer_or_nothing_type(QoreBufferElementType elementType,
     bool nullable_elements = false);
 
-// @since %Qore 2.3
+// @since %Qore 3.0
 DLLEXPORT const QoreTypeInfo* qore_get_complex_code_type(const QoreTypeInfo* return_type,
     const type_vec_t& param_types, bool varargs = false, bool or_nothing = false);
-// @since %Qore 2.3
+// @since %Qore 3.0
 DLLEXPORT const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* return_type,
     const type_vec_t& param_types, bool varargs = false);
 
@@ -246,7 +246,7 @@ DLLEXPORT const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owne
     @param or_nothing if true, the union type also accepts NOTHING (i.e. \c *union<...>)
     @return the union type info, or nullptr on error (such as fewer than 2 member types)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLEXPORT const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types,
     bool or_nothing = false);
@@ -254,7 +254,7 @@ DLLEXPORT const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types
 //! Creates or retrieves a cached \c *union<...> type for the given member types
 /** Convenience wrapper for qore_get_union_type() with \c or_nothing=true.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 DLLEXPORT const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types);
 

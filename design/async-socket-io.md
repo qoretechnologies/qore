@@ -555,7 +555,7 @@ Known failure modes include:
   The `setSelf()` method is safe because `QoreObjectWeakRefHolder::reset()` stores the pointer
   without tRef, then adds exactly one tRef in the body.
 - **`setValue` vs `setMemberValue` in QPP constructors**: Both APIs now have consuming ownership
-  semantics (as of %Qore 2.3), so either may be used to initialize Qore members from a QPP
+  semantics (as of %Qore 3.0), so either may be used to initialize Qore members from a QPP
   constructor body.  `setValue` is the simpler call when the member is not `private:internal`
   — it uses `runtime_get_class()` as the access context, which from inside a constructor is the
   class being constructed and therefore has access to every member.  `setMemberValue(cls, ...)`

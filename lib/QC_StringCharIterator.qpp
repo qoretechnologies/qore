@@ -234,7 +234,7 @@ foreach int cp in (text.codePointIterator()) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass StringCharIterator [arg=StringCharIterator* i; ns=Qore; vparent=AbstractIterator<int>];
 
@@ -303,7 +303,7 @@ foreach char c in (text.iterator()) {
 }
     @endcode
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 qclass StringIterator [arg=StringIterator* i; ns=Qore; vparent=AbstractIterator<char>];
 

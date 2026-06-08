@@ -70,7 +70,7 @@ class WebSocketStreamFrameState;
     - Completion context (setCompletionContext, onComplete)
     - Push promises (pushResource, getPushResourceCallback)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLLOCAL Http2PollOperationPriv : public SocketPollOperationBase {
 public:

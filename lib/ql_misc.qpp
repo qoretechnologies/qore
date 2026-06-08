@@ -674,7 +674,7 @@ set_async_io_logger(logger);
 
     @param logger a @ref Qore::LoggerInterfaceBase "LoggerInterfaceBase" object, or @ref nothing "NOTHING" to clear
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS;flags=NAMED_ARGS] {
     qore_set_async_io_logger(const_cast<QoreObject*>(logger), xsink);
@@ -688,7 +688,7 @@ nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS;flags=NAME
 
     @return the logger object or @ref nothing "NOTHING"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *object get_async_io_logger() [flags=CONSTANT;dom=PROCESS] {
     return qore_get_async_io_logger_object();  // already referenced
@@ -1385,8 +1385,8 @@ nothing backquote() [flags=RUNTIME_NOOP;dom=EXTERNAL_PROCESS] {
 //! Returns a base64-encoded representation of a string
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param data the string to encode
-    @param max_line_length the maximum length of a line in the resulting output string in bytes; if this value is > 0 then output lines will be separated by CRLF characters
+    @param str the string to encode
+    @param maxlinelen the maximum length of a line in the resulting output string in bytes; if this value is > 0 then output lines will be separated by CRLF characters
 
     @return the base64-encoded string of the data passed
 
@@ -1527,7 +1527,7 @@ string make_base64_url_string(binary data) [flags=CONSTANT,NAMED_ARGS] {
 //! Parses a base64 encoded string and returns a binary object of the decoded data
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param base64_string the base64-encoded input data to decode
+    @param str the base64-encoded input data to decode
 
     @return a binary object of the decoded data
 
@@ -1552,7 +1552,7 @@ nothing parseBase64String() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Parses a base64 encoded string and returns a binary object of the decoded data
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param str the base64-encoded input data to decode
+    @param base64_string the base64-encoded input data to decode
 
     @return a binary object of the decoded data
 
@@ -1576,7 +1576,7 @@ binary parse_base64_string(string base64_string) [flags=RET_VALUE_ONLY,NAMED_ARG
 //! Parses a base64 encoded string and returns a string of the decoded data
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param base64_string the base64-encoded input data to decode
+    @param str the base64-encoded input data to decode
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return a string of the decoded data tagged with the given encoding
@@ -1605,7 +1605,7 @@ nothing parseBase64StringToString() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Parses a base64 encoded string and returns a string of the decoded data
 /** Implementation based on <a href="http://www.ietf.org/rfc/rfc1421.txt">RFC-1421</a> and <a href="http://www.ietf.org/rfc/rfc2045.txt">RFC-2045</a>
 
-    @param str the base64-encoded input data to decode
+    @param base64_string the base64-encoded input data to decode
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
 
     @return a string of the decoded data tagged with the given encoding
@@ -1927,7 +1927,7 @@ bool has_key(object container, string key) [flags=NAMED_ARGS] {
 
 //! Returns the byte value at the given byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /**
-    @param data the string data to process
+    @param str the string data to process
     @param offset the byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the byte value at the given byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -1978,7 +1978,7 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 16-bit integer value at the given 2-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Most_significant_bit">MSB byte order</a> when retrieving the value from the data
 
-    @param str the string data to process
+    @param data the string data to process
     @param offset the 2-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 16-bit integer value at the given 2-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2082,7 +2082,7 @@ nothing getByte() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Most_significant_bit">MSB byte order</a> when retrieving the value from the data
 
-    @param data the string data to process
+    @param str the string data to process
     @param offset the 4-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 32-bit integer value at the given 4-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2132,7 +2132,7 @@ nothing getWord32() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns the 64-bit integer value at the given 8-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
 /** This function assumes <a href="http://en.wikipedia.org/wiki/Most_significant_bit">MSB byte order</a> when retrieving the value from the data
 
-    @param str the string data to process
+    @param data the string data to process
     @param offset the 8-byte offset of the data to retrieve (the first value is at offset 0)
 
     @return the 64-bit integer value at the given 8-byte offset (the first value is at offset 0) or @ref nothing if the offset is not legal for the given data
@@ -2457,7 +2457,7 @@ nothing splice() [flags=RUNTIME_NOOP] {
 }
 
 //! Returns a hex-encoded representation of a string
-/** @param data the string to encode
+/** @param str the string to encode
 
     @return a string of hex digits repsenting the bytes of the argument passed
 
@@ -2499,7 +2499,7 @@ nothing makeHexString() [flags=RUNTIME_NOOP,DEPRECATED] {
 }
 
 //! Returns a hex-encoded representation of a string
-/** @param str the string to encode
+/** @param data the string to encode
 
     @return a string of hex digits repsenting the bytes of the argument passed
 
@@ -3442,7 +3442,7 @@ int hash_size = get_value_byte_size({"a": 1, "b": "test"});  # returns ~13
     For hashes and lists, the function recursively calculates the total size of contained data.
     For simple types (int, float, bool, date, number), fixed estimates are used.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int get_value_byte_size(auto value) [flags=CONSTANT,NAMED_ARGS] {
     return q_get_value_byte_size(value, xsink);
@@ -3467,7 +3467,7 @@ if (stats_before && stats_after) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *hash<auto> get_io_uring_debug_stats() {
 #if defined(DEBUG) && defined(__linux__) && defined(HAVE_IO_URING)

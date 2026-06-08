@@ -225,7 +225,7 @@ module Logger {
 
     @par Enabling Backpressure
 
-    Starting with %Qore 2.3, backpressure is enabled by default with a 10 MiB limit:
+    Starting with %Qore 3.0, backpressure is enabled by default with a 10 MiB limit:
     @code{.py}
 # Create queue with default 10MB limit (recommended)
 LoggerAppenderQueue laq();
@@ -1375,7 +1375,7 @@ public class LoggerAppenderQueueThreadPool inherits LoggerAppenderQueue {
         - 0 = use default limit (10 MiB)
         - >0 = maximum bytes before backpressure is applied
 
-        @since %Qore 2.3 added max_bytes parameter
+        @since %Qore 3.0 added max_bytes parameter
     */
     constructor(ThreadPool tp, int max_threads = -1, softint max_bytes = 0) : LoggerAppenderQueue(max_bytes) {
         threadPool = tp;

@@ -533,7 +533,7 @@ try {
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
     @since %Qore 0.8.8 added the \a full parameter
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::list(bool full) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, 0, 0, full);
@@ -604,7 +604,7 @@ try {
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
     @throw REGEX-COMPILATION-ERROR error in regular expression
 
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::list(string regex, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, regex, 0, full);
@@ -625,7 +625,7 @@ union<list<string>, list<hash<DirStatInfo>>> Dir::list(string regex, softbool fu
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
     @since %Qore 0.8.8 added the \a full parameter
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listNames() or Dir::listInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::list(string regex, softint regex_options, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, regex, (int)regex_options, full);
@@ -643,7 +643,7 @@ list<string> entries = d.listNames();
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<string> Dir::listNames() {
    return d->list(xsink, -1, 0, 0, false);
@@ -666,7 +666,7 @@ list<string> text_entries = d.listNames(regex: "\\.txt$", regex_options: RE_Case
     @throw REGEX-COMPILATION-ERROR error in regular expression
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<string> Dir::listNames(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, regex, (int)regex_options, false);
@@ -686,7 +686,7 @@ foreach hash<DirStatInfo> entry in (d.listInfo()) {
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<hash<DirStatInfo>> Dir::listInfo() {
    return d->list(xsink, -1, 0, 0, true);
@@ -711,7 +711,7 @@ foreach hash<DirStatInfo> entry in (d.listInfo(regex: "\\.txt$")) {
     @throw REGEX-COMPILATION-ERROR error in regular expression
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<hash<DirStatInfo>> Dir::listInfo(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, regex, (int)regex_options, true);
@@ -753,7 +753,7 @@ foreach hash<DirStatInfo> file in (d.listFiles(full: True)) {
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
     @since %Qore 0.8.8 added the \a full parameter
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::listFiles(bool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, 0, 0, full);
@@ -808,7 +808,7 @@ list<string> Dir::listFiles(string regex, softint regex_options) [flags=NAMED_AR
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
     @throw REGEX-COMPILATION-ERROR error in regular expression
 
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::listFiles(string regex, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, regex, 0, full);
@@ -829,7 +829,7 @@ union<list<string>, list<hash<DirStatInfo>>> Dir::listFiles(string regex, softbo
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
     @since %Qore 0.8.8 added the \a full parameter
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listFileNames() or Dir::listFileInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::listFiles(string regex, softint regex_options, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, regex, (int)regex_options, full);
@@ -847,7 +847,7 @@ ListIterator<string> it = d.listFileNames().iterator();
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<string> Dir::listFileNames() {
    return d->list(xsink, S_IFMT^S_IFDIR, 0, 0, false);
@@ -870,7 +870,7 @@ list<string> text_files = d.listFileNames(regex: "\\.txt$", regex_options: RE_Ca
     @throw REGEX-COMPILATION-ERROR error in regular expression
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<string> Dir::listFileNames(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, regex, (int)regex_options, false);
@@ -888,7 +888,7 @@ list<hash<DirStatInfo>> files = d.listFileInfo();
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<hash<DirStatInfo>> Dir::listFileInfo() {
    return d->list(xsink, S_IFMT^S_IFDIR, 0, 0, true);
@@ -913,7 +913,7 @@ foreach hash<DirStatInfo> file in (d.listFileInfo(regex: "\\.log$")) {
     @throw REGEX-COMPILATION-ERROR error in regular expression
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<hash<DirStatInfo>> Dir::listFileInfo(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, regex, (int)regex_options, true);
@@ -948,7 +948,7 @@ list<string> Dir::listDirs() {
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
     @since %Qore 0.8.8 added the \a full parameter
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::listDirs(bool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFDIR, 0, 0, full);
@@ -996,7 +996,7 @@ list<string> Dir::listDirs(string regex, softint regex_options) [flags=NAMED_ARG
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
     @throw REGEX-COMPILATION-ERROR error in regular expression
 
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::listDirs(string regex, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFDIR, regex, 0, full);
@@ -1017,7 +1017,7 @@ union<list<string>, list<hash<DirStatInfo>>> Dir::listDirs(string regex, softboo
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
     @since %Qore 0.8.8 added the \a full parameter
-    @since %Qore 2.3 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
+    @since %Qore 3.0 returns <tt>union&lt;list&lt;string&gt;, list&lt;hash&lt;DirStatInfo&gt;&gt;&gt;</tt>; use Dir::listDirNames() or Dir::listDirInfo() for a concrete return type
  */
 union<list<string>, list<hash<DirStatInfo>>> Dir::listDirs(string regex, softint regex_options, softbool full) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFDIR, regex, (int)regex_options, full);
@@ -1037,7 +1037,7 @@ foreach string dir_name in (d.listDirNames()) {
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<string> Dir::listDirNames() {
    return d->list(xsink, S_IFDIR, 0, 0, false);
@@ -1060,7 +1060,7 @@ list<string> data_dirs = d.listDirNames(regex: "^data-", regex_options: RE_Casel
     @throw REGEX-COMPILATION-ERROR error in regular expression
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<string> Dir::listDirNames(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFDIR, regex, (int)regex_options, false);
@@ -1080,7 +1080,7 @@ foreach hash<DirStatInfo> dir_info in (d.listDirInfo()) {
     @throw DIR-READ-ERROR no directory is set
     @throw DIR-READ-FAILURE error reading directory (\c arg will be assigned to the errno value)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<hash<DirStatInfo>> Dir::listDirInfo() {
    return d->list(xsink, S_IFDIR, 0, 0, true);
@@ -1105,7 +1105,7 @@ foreach hash<DirStatInfo> dir_info in (d.listDirInfo(regex: "^data-")) {
     @throw REGEX-COMPILATION-ERROR error in regular expression
     @throw REGEX-OPTION-ERROR regex option argument contains invalid option bits
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 list<hash<DirStatInfo>> Dir::listDirInfo(string regex, softint regex_options = 0) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFDIR, regex, (int)regex_options, true);

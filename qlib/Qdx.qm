@@ -166,7 +166,7 @@ while (!tok.atEnd()) {
             #! Input text
             string input;
             #! Current position (byte index)
-            /** Switched from a character index to a byte index in %Qore 2.3 to
+            /** Switched from a character index to a byte index in %Qore 3.0 to
                 eliminate the O(N) UTF-8 walk that @c input[pos] performed on
                 every call (was O(N^2) over a tokenizer scan).  All accesses
                 go through @ref Qore::zzz8stringzzz9::getByte() which is O(1)

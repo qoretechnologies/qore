@@ -2,7 +2,7 @@
 
 ## Overview
 
-Qore 2.3.0 introduces a set of higher-level threading primitives that complement the existing low-level synchronization classes (Mutex, RWLock, Gate, Condition, Counter, Queue, ThreadPool). These primitives address common multi-threaded programming patterns that previously required manual wiring of multiple low-level components.
+Qore 3.0.0 introduces a set of higher-level threading primitives that complement the existing low-level synchronization classes (Mutex, RWLock, Gate, Condition, Counter, Queue, ThreadPool). These primitives address common multi-threaded programming patterns that previously required manual wiring of multiple low-level components.
 
 | Primitive | Purpose | Analogy |
 |-----------|---------|---------|

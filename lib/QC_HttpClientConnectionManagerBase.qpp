@@ -42,7 +42,7 @@
     cookies); the C++ base's pool is used by standalone C++ callers
     (Phase P10+).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass HttpClientConnectionManagerBase [
     ns=Qore;

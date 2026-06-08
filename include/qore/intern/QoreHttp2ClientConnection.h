@@ -66,7 +66,7 @@ class Http2ClientPollOperationPriv;
     @c HttpClientConnectionManager has — that lives in Phase P6 / the
     Qore subclass.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLLOCAL Http2ClientConnection : public HttpClientConnectionBase {
 public:
@@ -128,7 +128,7 @@ public:
         @param xsink exception sink — set on construction failure
         @param mgr optional owning manager
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL Http2ClientConnection(QoreObject* adopted_sock_obj,
         QoreSocketObject* adopted_sock_priv,
@@ -172,7 +172,7 @@ public:
         @c PromiseNotifierAction so the response wakes an EventNotifier
         and resolves a Future.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int64_t submitRequestWithAction(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
@@ -181,26 +181,26 @@ public:
     //! Submits a streaming request: response delivered incrementally via Channel.
     /** Creates an unbounded Channel, submits with streaming=true, and returns
         the Channel to the caller for incremental response reading.
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int64_t submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink) override;
 
     //! Submits a request with streaming send (H2 DATA frames pushed incrementally)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
         QoreChannel*& channel_out, ExceptionSink* xsink) override;
 
     //! Push body data for a streaming send request (H2 DATA frame)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT void pushSendData(const void* data, size_t len, ExceptionSink* xsink) override;
 
     //! Set HTTP trailers for a streaming send request (H2 TRAILERS frame)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) override;
 

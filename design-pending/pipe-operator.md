@@ -1,18 +1,18 @@
 # `|>` Pipe Operator — Lazy Chain Sugar
 
-**Status:** Design. **Recommendation: defer to a release after 2.3.**
+**Status:** Design. **Recommendation: defer to a release after 3.0.**
 This document captures the proposal so we have it on file; the
 substantive wins are delivered by the streaming operators now documented
 in `doxygen/lang/180_operators.dox.tmpl`, and pipe syntax is pure surface
 sugar that can be added later additively without breaking compatibility.
 
-**Target if accepted:** post-2.3. Pipe lowers at parse time to the same
+**Target if accepted:** post-3.0. Pipe lowers at parse time to the same
 streaming-operator AST and IR lowering used by the keyword forms.
 
 **Companions:**
 - [`char-type.md`](../design/char-type.md) — implemented `char` value type
 - [`streaming-operators.md`](../design/streaming-operators.md) — implemented
-  for 2.3; see
+  for 3.0; see
   `doxygen/lang/180_operators.dox.tmpl` for the `iterate` keyword,
   keyword operators, and fusion behavior this sugar would chain
 
@@ -20,7 +20,7 @@ streaming-operator AST and IR lowering used by the keyword forms.
 
 ## 1. What this proposal adds
 
-With the streaming operators in Qore 2.3, chains of streaming keyword
+With the streaming operators in Qore 3.0, chains of streaming keyword
 operators (`first`, `any`, `all`, `take`, `drop`, `takewhile`,
 `takeuntil`, `count`) can already execute through native streaming IR.
 The functionality is present in nested keyword form; the `iterate`
@@ -182,7 +182,7 @@ Pipe sugar adds:
 - A second way to write what already works in nested form.
 
 The maintenance cost of two parallel syntaxes is permanent; the user
-benefit is speculative. **Don't ship pipe in 2.3.**
+benefit is speculative. **Don't ship pipe in 3.0.**
 
 If usage patterns evolve toward longer chains in a future release —
 for example, if data-pipeline modules become common in Qore code —

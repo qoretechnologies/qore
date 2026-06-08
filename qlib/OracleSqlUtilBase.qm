@@ -3596,7 +3596,7 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
     /** @param fmt the Qore date format string (e.g., "YYYY-MM-DD HH:mm:SS.us")
         @return the equivalent Oracle format string (e.g., "YYYY-MM-DD HH24:MI:SS.FF6")
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     static string convertDateFormat(string fmt) {
         # use negative lookahead to avoid double-replacing "HH24" -> "HH2424"

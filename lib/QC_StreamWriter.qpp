@@ -131,14 +131,14 @@ nothing StreamWriter::printf(string[doc] format, ...) {
 sw.vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello there: 2\n", exceeding field width
     @endcode
 
-    @param fmt the format string; see @ref string_formatting for more information about the format string
-    @param fmt_args the single argument or list of arguments that will be used as the argument list for the format string. If a single argument is passed instead of a list, it will be used as the first argument as if a list were passed
+    @param format the format string; see @ref string_formatting for more information about the format string
+    @param format_args the single argument or list of arguments that will be used as the argument list for the format string. If a single argument is passed instead of a list, it will be used as the first argument as if a list were passed
 
     @throw ENCODING-CONVERSION-ERROR error converting from the string's @ref character_encoding "character encoding" to the StreamWriter's @ref character_encoding "character encoding"
 
     @see StreamWriter::f_vprintf() for a similar method that enforces field widths
  */
-nothing StreamWriter::vprintf(string[doc] format, any[doc] format_args) [flags=NAMED_ARGS] {
+nothing StreamWriter::vprintf(string[doc] format, auto[doc] format_args) [flags=NAMED_ARGS] {
    sw->vprintf(args, xsink);
 }
 
@@ -168,14 +168,14 @@ nothing StreamWriter::f_printf(string[doc] format, ...) {
 sw.f_vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello: 2\n", enforcing field width
     @endcode
 
-    @param fmt the format string; see @ref string_formatting for more information about the format string
-    @param fmt_args the single argument or list of arguments that will be used as the argument list for the format string. If a single argument is passed instead of a list, it will be used as the first argument as if a list were passed
+    @param format the format string; see @ref string_formatting for more information about the format string
+    @param format_args the single argument or list of arguments that will be used as the argument list for the format string. If a single argument is passed instead of a list, it will be used as the first argument as if a list were passed
 
     @throw ENCODING-CONVERSION-ERROR error converting from the string's @ref character_encoding "character encoding" to the StreamWriter's @ref character_encoding "character encoding"
 
     @see StreamWriter::printf() for a similar method that does not enforce field widths
  */
-nothing StreamWriter::f_vprintf(string[doc] format, any[doc] format_args) [flags=NAMED_ARGS] {
+nothing StreamWriter::f_vprintf(string[doc] format, auto[doc] format_args) [flags=NAMED_ARGS] {
    sw->f_vprintf(args, xsink);
 }
 

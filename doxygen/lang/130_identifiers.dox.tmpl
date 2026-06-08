@@ -23,4 +23,48 @@
     |\c 1a|Does not start with an alphabetic character
     |\c this-and-that|Contains "-" characters
     |\c Start#10|Contains "#" character
+
+    @section identifier_suggestions "Did You Mean ...?" Suggestions
+
+    When an identifier cannot be resolved at parse time, %Qore looks for a closely
+    matching name that is actually visible at the point of the error and, if it
+    finds one, appends a <em>"did you mean ...?"</em> suggestion to the error
+    message. This applies across the identifier surface: unresolved barewords,
+    undefined classes, types, functions, constants, namespaces, hashdecl members,
+    methods/members, and named arguments. Suggestions are always names that are
+    legally usable in the current scope (respecting visibility), so they can be
+    trusted by both humans and tooling.
+
+    A simple typo of an existing function name:
+
+    @code
+int sub calculateTotal(int a, int b) {
+    return a + b;
+}
+
+int result = calculateTotl(2, 3);
+    @endcode
+
+    @verbatim
+PARSE-EXCEPTION: function 'calculateTotl()' cannot be found; did you mean 'calculateTotal'?
+    @endverbatim
+
+    A difference only in capitalization is flagged specially, since %Qore
+    identifiers are case-sensitive (see above):
+
+    @code
+class Widget {}
+Widget w = new widget();
+    @endcode
+
+    @verbatim
+PARSE-EXCEPTION: reference to undefined class 'widget'; did you mean 'Widget'? (check capitalization)
+    @endverbatim
+
+    When no name is close enough, no suggestion is offered (an arbitrary unknown
+    name produces the plain "cannot be found" / "undefined" error). These
+    suggestions are part of the normal error text and are also available in
+    machine-readable form via the @ref diag_json_format "structured diagnostics"
+    facility.
+    @since %Qore 3.0
 */

@@ -86,7 +86,7 @@ QoreObject* qore_new_future_impl_object(QoreProgram* pgm, QoreFuture* future, co
     @ref Qore::Thread::Promise::getFuture() "Promise::getFuture()" and
     @ref call_async().  It is not intended to be created directly by user code.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 qclass FutureImpl<T> [dom=THREAD_CLASS; arg=QoreFuture* f; ns=Qore::Thread; vparent=Future<T>; legacy_raw];
 
@@ -141,7 +141,7 @@ bool FutureImpl::isError() [flags=CONSTANT] {
 
     @return True if cancelled, False if already resolved or rejected
 
-    @since %Qore 2.4
+    @since %Qore 3.0
  */
 bool FutureImpl::cancel() {
     return f->cancel();

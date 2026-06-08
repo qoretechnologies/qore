@@ -120,7 +120,7 @@ wg.wait();  # wait for all dynamically added tasks
 
     @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 qclass WaitGroup [dom=THREAD_CLASS; arg=QoreWaitGroup* wg; ns=Qore::Thread];
 
@@ -194,7 +194,7 @@ if (wg.wait(timeout_ms: 5000))
     @throw WAITGROUP-ERROR WaitGroup has been deleted in another thread
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 int WaitGroup::wait(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return wg->wait(timeout_ms, xsink);

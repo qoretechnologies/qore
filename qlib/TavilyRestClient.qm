@@ -76,7 +76,7 @@ code dispatcher = TavilyAgentTools::makeDispatcher(client);
 
 QoreAgentStrategies::SimpleAgentStrategy agent(llm_backend);
 hash<AgentResult> result = agent.execute(<AgentContext>{
-    "message": "What's the latest on Qore 2.3?",
+    "message": "What's the latest on Qore 3.0?",
     "tools": (search_tool,),
     "tool_dispatch": dispatcher,
 });

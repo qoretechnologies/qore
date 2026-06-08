@@ -68,7 +68,7 @@ enum Http2Mode {
 };
 
 //! HTTP/3 protocol mode options
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 enum Http3Mode {
     HTTP3_MODE_DISABLED = 0,  //!< Never use HTTP/3
@@ -105,7 +105,7 @@ public:
             const QoreHashNode* headers, const QoreEncoding* enc = nullptr);
 
     //! Starts a non-blocking, polling HTTP send operation that completes after response headers
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT QoreObject* startPollSendAndStream(ExceptionSink* xsink, QoreObject* self,
             const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save,
@@ -354,7 +354,7 @@ public:
 
         @return true if the stream has buffered data, false otherwise
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool hasHttp2StreamData(int32_t stream_id) const;
 
@@ -368,7 +368,7 @@ public:
         connection-manager stream channel. If HTTP/2 is not active, the method falls back to
         the inherited Socket data-availability check for HTTP/1 upgraded connections.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
@@ -377,7 +377,7 @@ public:
 
         @return true if the stream is closed or does not exist
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp2StreamClosed(int32_t stream_id) const;
 
@@ -386,7 +386,7 @@ public:
 
         @return true if the stream is complete or does not exist
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp3StreamClosed(int64_t stream_id) const;
 
@@ -423,21 +423,21 @@ public:
 
         @note The default mode is HTTP3_MODE_AUTO, which uses HTTP/3 if advertised via Alt-Svc
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void setHttp3Mode(int mode, ExceptionSink* xsink);
 
     //! Returns the current HTTP/3 protocol mode
     /** @return the current HTTP/3 mode: HTTP3_MODE_DISABLED, HTTP3_MODE_AUTO, or HTTP3_MODE_REQUIRED
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int getHttp3Mode() const;
 
     //! Returns \c true if the connection is currently using HTTP/3 (QUIC)
     /** @return \c true if HTTP/3 is active on the current connection
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp3Active() const;
 
@@ -447,7 +447,7 @@ public:
 
         @return the file descriptor to use for polling, or -1 if not open
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int getPollableDescriptor() const override;
 
@@ -599,7 +599,7 @@ public:
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @return response headers without body; caller owns the QoreHashNode reference returned (nullptr on error)
         @note The response body is NOT read; use readHTTPChunk() or readServerSentEvent() to read it
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* sendAndStream(const char* meth, const char* path, const QoreHashNode* headers,
             const void* data, unsigned size, QoreHashNode* info, ExceptionSink* xsink);
@@ -613,7 +613,7 @@ public:
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @return response headers without body; caller owns the QoreHashNode reference returned (nullptr on error)
         @note The response body is NOT read; use readHTTPChunk() or readServerSentEvent() to read it
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* sendAndStream(const char* meth, const char* path, const QoreHashNode* headers,
             const QoreStringNode& body, QoreHashNode* info, ExceptionSink* xsink);
@@ -665,7 +665,7 @@ public:
         @param xsink exception sink
         @return hash with "body" key, or empty hash for EOF
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink);
 
@@ -675,7 +675,7 @@ public:
         @param xsink exception sink
         @return SseMessageInfo hash or nullptr for EOF
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* readServerSentEventConnMgr(const QoreStringNode* content_encoding,
         int timeout_ms, ExceptionSink* xsink);
@@ -685,7 +685,7 @@ public:
         @param xsink exception sink
         @return hash with "body" key containing accumulated body
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* readHTTPChunkedBodyConnMgr(int timeout_ms, ExceptionSink* xsink);
 
@@ -694,7 +694,7 @@ public:
         @param xsink exception sink
         @return hash with "body" key containing accumulated binary body
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* readHTTPChunkedBodyBinaryConnMgr(int timeout_ms, ExceptionSink* xsink);
 
@@ -704,7 +704,7 @@ public:
         @ref isDataAvailable waits on the channel instead of probing the
         legacy socket.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool hasStreamingChannel() const;
 
@@ -714,7 +714,7 @@ public:
         @c true whenever a conn_mgr connection or streaming channel is active;
         otherwise it falls through to the legacy socket check.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isOpen() const;
 
@@ -731,7 +731,7 @@ public:
         @param timeout_ms wait budget in milliseconds; @c 0 = non-blocking
         @param xsink exception sink
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool isDataAvailable(int timeout_ms, ExceptionSink* xsink) const;
 
@@ -843,14 +843,14 @@ public:
 
         @param enable ignored
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void setUseConnectionManager(bool enable);
 
     //! Returns true because async connection manager dispatch is always enabled
     /** @return true
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool getUseConnectionManager() const;
 
@@ -965,7 +965,7 @@ public:
     DLLLOCAL static void static_init();
 
     //! Returns the standard HTTP reason phrase for a status code.
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL static const char* getHttpStatusMessage(int code);
 

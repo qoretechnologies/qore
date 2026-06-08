@@ -2604,7 +2604,7 @@ struct qore_httpclient_priv {
 };
 
 // setup default headers
-// Brotli, Zstd, and LZ4 are required since Qore 2.3
+// Brotli, Zstd, and LZ4 are required since Qore 3.0
 #define QORE_HTTP_ACCEPT_ENCODING "br,zstd,deflate,gzip,bzip2"
 
 header_map_t qore_httpclient_priv::static_default_headers = {

@@ -74,7 +74,7 @@
     - SocketRecvFromPollOperation (UDP)
     - SocketSendToPollOperation (UDP)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 
 //! Connection poll goals
@@ -98,7 +98,7 @@ struct qore_socket_private;
     closes the socket.  All concrete socket poll operations that work on a
     connected socket inherit from this class.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketPollSocketOperationBase : public SocketPollOperationBase {
 public:
@@ -139,7 +139,7 @@ protected:
 //! Non-blocking TCP connect (with optional TLS upgrade)
 /** State machine: none -> connecting -> [connecting-ssl ->] connected
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketConnectPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -262,7 +262,7 @@ private:
 //! Non-blocking send operation (string or binary data)
 /** State machine: sending -> sent
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketSendPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -325,7 +325,7 @@ private:
     Subclasses provide the specific receive strategy (fixed size, available
     data, or pattern-terminated).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketRecvPollOperationBase : public SocketPollSocketOperationBase {
 public:
@@ -373,7 +373,7 @@ protected:
 };
 
 //! Receives exactly N bytes non-blockingly
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 class SocketRecvPollOperation : public SocketRecvPollOperationBase {
 public:
@@ -403,7 +403,7 @@ private:
 };
 
 //! Receives up to N bytes non-blockingly
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 class SocketRecvSomePollOperation : public SocketRecvPollOperationBase {
 public:
@@ -434,7 +434,7 @@ private:
 };
 
 //! Receives all available data non-blockingly
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 class SocketRecvDataPollOperation : public SocketRecvPollOperationBase {
 public:
@@ -461,7 +461,7 @@ private:
 };
 
 //! Receives data until a byte pattern is matched
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 class SocketRecvUntilBytesPollOperation : public SocketRecvPollOperationBase {
 public:
@@ -494,7 +494,7 @@ private:
 //! Non-blocking client-side TLS handshake upgrade
 /** Upgrades an already-connected plaintext socket to TLS.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketUpgradeClientSslPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -536,7 +536,7 @@ private:
 /** Reads HTTP response or request headers from a connected socket.
     Output is a hash with header information.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketReadHttpHeaderPollOperation : public SocketRecvPollOperationBase {
 public:
@@ -571,7 +571,7 @@ private:
 //! Non-blocking Server-Sent Event reader
 /** Reads a single Server-Sent Event message from a connected socket.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketReadServerSentEventPollOperation : public SocketRecvPollOperationBase {
 public:
@@ -633,7 +633,7 @@ private:
     OutputStream variants remain caller-thread orchestration paths because they
     run Qore callbacks or stream methods.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketReadHttpChunkedBodyPollOperation : public SocketRecvPollOperationBase {
 public:
@@ -709,7 +709,7 @@ private:
         status_code, content_length, chunked, connection_close, is_head);
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketReadHttpBodyPollOperation : public SocketPollOperationBase {
 public:

@@ -39,7 +39,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "2.3.0";
+    version = "3.0.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -114,7 +114,7 @@ module SqlUtil {
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
-    @subsection sqlutilv2_3_0 SqlUtil v2.3.0
+    @subsection sqlutilv3_0_0 SqlUtil v3.0.0
     - implemented support for specifying the columns to use for upserts separately from the row data
       (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
     - implemented support for \c NULLS \c FIRST / \c NULLS \c LAST qualifiers in the
@@ -2229,7 +2229,7 @@ public namespace SqlUtil {
     }
 
     #! Partition lookup status codes
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     public enum PartitionLookupStatus : string {
         #! The partition was found
@@ -2241,7 +2241,7 @@ public namespace SqlUtil {
     }
 
     #! Indicates how an ensurePartition() result was verified
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     public enum PartitionVerifiedBy : string {
         #! The partition was verified by comparing partition bounds
@@ -2253,7 +2253,7 @@ public namespace SqlUtil {
     }
 
     #! Partitioning strategy hash
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionStrategy {
         #! Partitioning method; Phase 1 supports \c "range"
@@ -2267,7 +2267,7 @@ public namespace SqlUtil {
     }
 
     #! Partition definition or lookup specification hash
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionSpec {
         #! Canonical partition name
@@ -2299,7 +2299,7 @@ public namespace SqlUtil {
     }
 
     #! Partition introspection hash
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionInfo inherits PartitionSpec {
         #! Ordinal in the listPartitions() result
@@ -2307,7 +2307,7 @@ public namespace SqlUtil {
     }
 
     #! Partition lookup result hash
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionLookupResult {
         #! Lookup status
@@ -2319,7 +2319,7 @@ public namespace SqlUtil {
     }
 
     #! Partition ensure result hash
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionEnsureResult {
         #! True if a physical partition was created
@@ -3568,7 +3568,7 @@ select first_value(row_value) over (partition by row_type order by id) as "first
 
         @since %SqlUtil 1.4.0
     */
-    public hash<ColumnOperatorInfo> sub cop_first_value(any column) {
+    public hash<ColumnOperatorInfo> sub cop_first_value(auto column) {
         return make_cop(COP_FIRST_VALUE, column);
     }
 
@@ -3601,7 +3601,7 @@ select last_value(row_value) over (partition by row_type order by id) as "last_v
 
         @since %SqlUtil 1.4.0
     */
-    public hash<ColumnOperatorInfo> sub cop_last_value(any column) {
+    public hash<ColumnOperatorInfo> sub cop_last_value(auto column) {
         return make_cop(COP_LAST_VALUE, column);
     }
 

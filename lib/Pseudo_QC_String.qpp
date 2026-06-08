@@ -519,7 +519,7 @@ list<string> <string>::split(string separator, bool with_separator = False) [con
 int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 AbstractIterator<string> <string>::splitString(string separator) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // Convert separator encoding if needed; use c_str()/size() on the source
@@ -550,7 +550,7 @@ AbstractIterator<string> <string>::splitString(string separator) [const;flags=RE
 int digits = foldl $1 + ($2 =~ /[0-9]/ ? 1 : 0), 0, str.splitChars();
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 AbstractIterator<string> <string>::splitChars() [const;flags=CONSTANT] {
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
@@ -581,7 +581,7 @@ foreach int cp in (text.codePointIterator()) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 AbstractIterator<int> <string>::codePointIterator() [const;flags=CONSTANT] {
     return new QoreObject(QC_STRINGCHARITERATOR, 0, new StringCharIterator(str));
@@ -605,7 +605,7 @@ foreach char c in (text.iterator()) {
 }
     @endcode
 
-    @since %Qore 2.4
+    @since %Qore 3.0
  */
 AbstractIterator<char> <string>::iterator() [const;flags=CONSTANT] {
     return new QoreObject(QC_STRINGITERATOR, 0, new StringIterator(str));
@@ -625,7 +625,7 @@ AbstractIterator<char> <string>::iterator() [const;flags=CONSTANT] {
 int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitLines();
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 AbstractIterator<string> <string>::splitLines() [const;flags=CONSTANT] {
     QoreString nl("\n");
@@ -659,7 +659,7 @@ AbstractIterator<string> <string>::splitLines() [const;flags=CONSTANT] {
                       $1 =~ /FATAL/);
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int options = 0,
         bool with_separator = False) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -738,7 +738,7 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
     @since %Qore 1.0.7
-    @since %Qore 2.3 added the \a limit parameter
+    @since %Qore 3.0 added the \a limit parameter
  */
 list<string> <string>::splitRegex(string separator_pattern, int options = 0, bool with_separator = False, int limit = -1) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreRegex qr(*separator_pattern, options, xsink);
@@ -773,7 +773,7 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
     @since %Qore 1.0.7
-    @since %Qore 2.3 added the \a limit parameter
+    @since %Qore 3.0 added the \a limit parameter
  */
 list<string> <string>::splitRegex(string separator_pattern, bool with_separator = False, int limit = -1) [const;flags=RET_VALUE_ONLY] {
     QoreRegex qr(*separator_pattern, 0, xsink);
@@ -872,7 +872,7 @@ int n = "abc 123 def 456".regexCount("\\d+"); # returns 2
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see regex_count()
 */
@@ -905,7 +905,7 @@ auto h = "2026-04-08".regexExtractNamed("(?<year>\\d{4})-(?<month>\\d{2})-(?<day
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see regex_extract_named()
 */
@@ -938,7 +938,7 @@ auto <string>::regexExtractNamed(string pattern, int options = 0) [const;flags=R
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see regex_extract_detailed()
 */
@@ -961,7 +961,7 @@ auto <string>::regexExtractNamed(string pattern, int options = 0) [const;flags=R
 string escaped = "price: $100".regexEscape(); # returns "price\\:\\ \\$100"
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see regex_escape()
 */
@@ -1412,7 +1412,7 @@ if (b == ord("#")) { ... }
     @return the raw byte at the offset (0..255), or @ref nothing if the offset is
             out of range
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *int <string>::getByte(int byte_offset) [const;flags=CONSTANT,NAMED_ARGS] {
     int64 sz = (int64)str->size();

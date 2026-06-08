@@ -30,7 +30,7 @@ public namespace HttpServerAsyncIo {
     (Http2PollOperation, HttpIdlePollOperation, HttpKeepAlivePollOperation,
     HttpSseStreamPollOperation, HttpWebSocketPollOperation) inherit from this.
 
-    @since Qore 2.3
+    @since Qore 3.0
 */
 public class HttpConnectionPollOperationBase inherits AbstractPollOperation<auto> {
     private {

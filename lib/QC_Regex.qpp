@@ -56,7 +56,7 @@ Regex parts_re("(\\w+)@(\\w+)\\.(\\w+)");
 # parts = ("user", "example", "com")
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 qclass Regex [arg=QoreRegexClass* r; dom=DEFAULT];
 
@@ -169,7 +169,7 @@ int n = r.count("abc 123 def 456"); # returns 2
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int Regex::count(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->countMatches(subject, xsink);
@@ -197,7 +197,7 @@ auto h = r.extractNamedGroups("2026-04-08");
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 auto Regex::extractNamedGroups(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->extractNamedGroups(subject, xsink);
@@ -223,7 +223,7 @@ Regex r("(?<word>\\w+)", RE_Global);
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *list<hash<RegexMatchInfo>> Regex::extractDetailed(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->extractDetailed(subject, xsink);

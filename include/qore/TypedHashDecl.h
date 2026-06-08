@@ -58,7 +58,7 @@ public:
 
         @return the type info object for the parameterized hashdecl, or nullptr if the type arguments are invalid
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT const QoreTypeInfo* getTypeInfo(const type_vec_t& type_args, bool or_nothing = false) const;
 
@@ -67,7 +67,7 @@ public:
 
         @return the parameterized hashdecl, or nullptr if the type arguments are invalid
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT const TypedHashDecl* getParameterizedHashDecl(const type_vec_t& type_args) const;
 
@@ -76,7 +76,7 @@ public:
 
         @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void addTypeParameter(const char* param);
 
@@ -86,7 +86,7 @@ public:
 
         @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT void addTypeParameter(const char* param, const char* default_type);
 
@@ -97,7 +97,7 @@ public:
 
         @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT void addTypeParameter(const char* param, const char* default_type, const char* bound_type);
 
@@ -108,7 +108,7 @@ public:
 
         @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT const char* getTypeParameterDefaultType(size_t index) const;
 
@@ -119,17 +119,17 @@ public:
 
         @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT const char* getTypeParameterBoundType(size_t index) const;
 
     //! returns true if this hashdecl declares formal type parameters
-    /** @since %Qore 2.4
+    /** @since %Qore 3.0
     */
     DLLEXPORT bool hasTypeParameters() const;
 
     //! returns the number of formal type parameters declared by this hashdecl
-    /** @since %Qore 2.4
+    /** @since %Qore 3.0
     */
     DLLEXPORT size_t getTypeParameterCount() const;
 
@@ -138,14 +138,14 @@ public:
 
         @return the formal type parameter name, or nullptr if the index is invalid
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT const char* getTypeParameterName(size_t index) const;
 
     //! returns the number of built-in hashdecl type parameters that do not have defaults
     /** @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.4
+        @since %Qore 3.0
     */
     DLLEXPORT size_t getTypeParameterRequiredCount() const;
 
@@ -158,7 +158,7 @@ public:
 
         @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT const QoreTypeInfo* getTypeParameterType(size_t index, const char* name,
         bool or_nothing = false) const;
@@ -221,7 +221,7 @@ public:
     //! Returns the parent hashdecl if this hashdecl inherits from another, or nullptr if none
     /** @return the parent hashdecl or nullptr
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT const TypedHashDecl* getParentHashDecl() const;
 
@@ -230,7 +230,7 @@ public:
 
         @return true if this hashdecl is a descendant of the given hashdecl, false otherwise
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool inheritsFrom(const TypedHashDecl* parent) const;
 
@@ -239,7 +239,7 @@ public:
 
         @note This method is intended for use by system hashdecls only
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void setParent(const TypedHashDecl* parent);
 
@@ -326,12 +326,12 @@ DLLEXPORT extern const TypedHashDecl* hashdeclIsoWeekInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclCallStackInfo;
 
 //! QueueTryResult hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclQueueTryResult;
 
 //! ChannelTryResult hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclChannelTryResult;
 
@@ -342,7 +342,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclExceptionInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclStatementInfo;
 
 //! KeyValueInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclKeyValueInfo;
 
@@ -353,7 +353,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclNetIfInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclSourceLocationInfo;
 
 //! ParseDiagnosticInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclParseDiagnosticInfo;
 
@@ -393,7 +393,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclUrlInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclFtpResponseInfo;
 
 //! ExtraPollFdInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclExtraPollFdInfo;
 
@@ -403,12 +403,12 @@ DLLEXPORT extern const TypedHashDecl* hashdeclExtraPollFdInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollInfo;
 
 //! DatagramInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclDatagramInfo;
 
 //! QuicGoawayStateInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclQuicGoawayStateInfo;
 
@@ -423,52 +423,52 @@ DLLEXPORT extern const TypedHashDecl* hashdeclPipeInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclSseMessageInfo;
 
 //! PortRangeInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclPortRangeInfo;
 
 //! FilesystemPathInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclFilesystemPathInfo;
 
 //! FilesystemSecurityConfigInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclFilesystemSecurityConfigInfo;
 
 //! NetworkSecurityConfigInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclNetworkSecurityConfigInfo;
 
 //! SandboxConfigInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSandboxConfigInfo;
 
 //! SocketPollOperationInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollOperationInfo;
 
 //! SocketPollResultInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 
 //! EventPollInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclEventPollInfo;
 
 //! TimerEventInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclTimerEventInfo;
 
 //! RegexMatchInfo hashdecl
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclRegexMatchInfo;
 

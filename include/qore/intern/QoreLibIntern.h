@@ -548,7 +548,7 @@ DLLLOCAL int q_edit_distance(const char* a, const char* b, int max = -1);
     tools.  Candidates within a length-scaled edit-distance threshold of the target are retained; a pure
     capitalization difference is always retained and flagged specially.  Only names actually found in a real
     container should be added, so suggestions never invent identifiers.
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class QoreSuggestionList {
 public:
@@ -581,7 +581,7 @@ private:
 /** Captured at the parse error/warning chokepoints when structured diagnostic collection is enabled
     on a Program (see Program::setParseDiagnosticsCollected()).  Provides a machine-readable form of
     parse diagnostics for tooling and AI coding assistants.
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 struct QoreDiagnostic {
     bool error = true;          //!< true for an error, false for a warning

@@ -60,7 +60,7 @@
     };
     @endcode
 
-    @since %Qore 1.12 (public API since %Qore 2.3)
+    @since %Qore 1.12 (public API since %Qore 3.0)
 */
 class SocketPollOperationBase : public AbstractPrivateData {
 public:
@@ -129,7 +129,7 @@ public:
         if it returns true, the controller dispatches via the worker pool instead.
 
         @return false by default (safe to call on the I/O thread)
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual bool needsWorkerDispatch() const {
         return false;
@@ -152,7 +152,7 @@ public:
         The default returns false (socket is not auto-closed).
 
         @return true if the socket should be closed on completion
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual bool needsCloseOnComplete() const {
         return false;
@@ -167,7 +167,7 @@ public:
         @param xsink exception sink
         @return true if the completion was handled and default queue/onComplete
             delivery can be skipped when no explicit queue or callback exists
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink) {
         return false;
@@ -182,7 +182,7 @@ public:
         Implementations must reset the counter to 0 when called.
 
         @return the number of items pushed since the last call
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual int getAndClearItemsPushed() {
         return 0;
@@ -196,7 +196,7 @@ public:
         revents, such as Socket::poll(), can override it.
 
         @param events socket poll event mask
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual void setReadyEvents(int events) {
     }
@@ -208,7 +208,7 @@ public:
         after swapping the underlying socket fd.
 
         @return monotonically increasing generation counter
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT uint32_t getFdGeneration() const {
         return fd_generation.load(std::memory_order_acquire);
@@ -219,7 +219,7 @@ protected:
     /** Call this after operations that change the underlying fd (e.g. QUIC
         connection migration) so the controller re-registers the new fd in
         kqueue/epoll.
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void bumpFdGeneration() {
         fd_generation.fetch_add(1, std::memory_order_release);
@@ -232,7 +232,7 @@ protected:
         No-op if the controller back-reference is not set.
 
         @param xsink exception sink
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT void wakeIoThread(ExceptionSink* xsink);
 
@@ -268,7 +268,7 @@ public:
     }
 
     //! Returns a SocketPollInfo hash with extra file descriptors to monitor
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* getSocketPollInfoHash(ExceptionSink* xsink, int events,
             const std::vector<std::pair<int, int>>& extra_fds) const {

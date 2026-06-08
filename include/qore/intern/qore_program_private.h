@@ -2745,7 +2745,7 @@ public:
         cross-program copy ctor, so a multi-level chain (host → A → B → C)
         continues to propagate.
 
-        @since %Qore 2.4
+        @since %Qore 3.0
      */
     DLLLOCAL static void inheritParseImports(QoreProgram& child, QoreProgram& parent, ExceptionSink* xsink);
 

@@ -61,7 +61,7 @@ class Http3ClientConnection;
     Shared state is protected by stream_lock with careful lock ordering:
     sock->priv->m (held by inner continuePoll) -> stream_lock.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLLOCAL Http3ClientPollOperationPriv : public SocketPollOperationBase {
 public:
@@ -86,7 +86,7 @@ public:
 
     //! Disarms the raw connection_priv back-pointer under stream_lock.
     /** @see Http2ClientPollOperationPriv::disarmConnectionPriv
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void disarmConnectionPriv() {
         // Release the explicit reference taken in the constructor; see the
@@ -123,7 +123,7 @@ public:
 
         @param owner non-null raw back-pointer; lifetime must outlive
             this poll op
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void armHappyEyeballsOwner(Http3ClientConnection* owner) {
         AutoLocker al(stream_lock);
@@ -199,7 +199,7 @@ public:
         @param xsink        exception sink (raises HTTPCLIENT-STREAM-CLOSED if
                             the stream is not found or already complete)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void installFrameState(int64_t stream_id, Queue* msg_queue,
         ExceptionSink* xsink);

@@ -794,7 +794,7 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
     The Qore wrapper (Http2PollOperation) adds stream queue management,
     completion context, and push promise support.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass Http2PollOperationBase [
     private_members=object sock,string goal;
@@ -1074,7 +1074,7 @@ nothing Http2PollOperationBase::continueReading() {
 
     @note Must be called on the I/O controller thread before the handler starts reading.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
         Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
@@ -1105,7 +1105,7 @@ nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
 
     @param queue the persistent-session Queue
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2PollOperationBase::registerPersistentSessionQueue(Queue[Queue] queue) {
     Queue* queue_ptr = queue.release();
@@ -1117,7 +1117,7 @@ nothing Http2PollOperationBase::registerPersistentSessionQueue(Queue[Queue] queu
 /** Called by the async-I/O controller when the persistent session ends (clean
     commit, explicit end, or after a delivered close).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2PollOperationBase::deregisterPersistentSessionQueue() {
     priv->deregisterPersistentSessionQueue(xsink);
@@ -1141,7 +1141,7 @@ nothing Http2PollOperationBase::deregisterPersistentSessionQueue() {
     @note Must be called on the I/O controller thread before the handler
     starts reading.
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 */
 nothing Http2PollOperationBase::registerStreamFrameState(int stream_id,
         Queue[Queue] queue) [flags=NAMED_ARGS] {
@@ -1163,7 +1163,7 @@ nothing Http2PollOperationBase::registerStreamFrameState(int stream_id,
 
     Called by the Qore wrapper in abort() and cleanup paths.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2PollOperationBase::clearStreamQueues() {
     priv->clearStreamQueues(xsink);
@@ -1181,7 +1181,7 @@ nothing Http2PollOperationBase::clearStreamQueues() {
     @note This is NOT called on the I/O thread — it runs on the controller's
     worker pool thread, safe for Qore method calls.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http2PollOperationBase::onStreamData(int stream_id) [flags=NAMED_ARGS] {
     // Default no-op — Qore subclass overrides to wake handler

@@ -36,7 +36,7 @@
 DLLLOCAL void init_compression_functions(QoreNamespace& ns);
 
 // Decompression functions for HTTP content-encoding support
-// Brotli, Zstd, and LZ4 are required since Qore 2.3
+// Brotli, Zstd, and LZ4 are required since Qore 3.0
 DLLLOCAL BinaryNode* qore_unbrotli_to_binary(const BinaryNode* b, ExceptionSink* xsink);
 DLLLOCAL QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink);
 

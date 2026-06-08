@@ -92,7 +92,7 @@ class QoreSSLPrivateKey;
     pool/lifecycle primitives provided here.  Member visibility is
     @c protected to support that.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class HttpClientConnectionManagerBase : public AbstractPrivateData {
 public:
@@ -225,7 +225,7 @@ public:
         @return a borrowed connection pointer (do NOT @c deref);
             @c nullptr on error (@a xsink set)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionForStreamingSend(
         const char* scheme, const char* host, int port,
@@ -251,7 +251,7 @@ public:
             connection may be in CONNECTING or READY state.  @c nullptr
             on error (@a xsink set).
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionAsync(
         const char* scheme, const char* host, int port,
@@ -298,7 +298,7 @@ public:
         has established at least one H2 connection.
         @param proto the protocol to check for
         @return true if at least one pooled connection reports @a proto
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool hasProtocolInPool(HttpClientProtocol proto) const;
 
@@ -316,7 +316,7 @@ public:
         this HTTPClient ever speak HTTP/2 over this manager?"
         @param proto the protocol to check for
         @return true if @a proto has been observed at least once
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool hasEverObservedProtocol(HttpClientProtocol proto) const;
 
@@ -330,7 +330,7 @@ public:
         evicted by the asynchronous @c onConnectionClosed hook or the next
         @c acquireConnection-time @c evictDeadLocked sweep.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int getOpenPoolSize() const;
 
@@ -385,7 +385,7 @@ public:
         @return hash with "stream_id" and "channel" (QoreChannel*, ref'd);
             nullptr on error.  Caller must deref channel when done.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     //! @param channel_out receives a ref'd QoreChannel* for reading
     //!     streaming response data.  Caller must deref when done.
@@ -493,7 +493,7 @@ protected:
 
         @return a new connection (caller owns one ref); @c nullptr on error
 
-        @since %Qore 2.3 @c wait_for_ready parameter
+        @since %Qore 3.0 @c wait_for_ready parameter
     */
     DLLLOCAL virtual HttpClientConnectionBase* createConnection(
         const std::string& key, const char* host, int port,

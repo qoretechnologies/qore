@@ -70,7 +70,7 @@ class QoreObject;
     Http{2,3}ClientPollOperationPriv::stream_lock (inner).
     onConnectionReady() only acquires this lock, never stream_lock.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class AbstractHttpPollConnectionPriv : public AbstractPrivateData {
 public:
@@ -161,7 +161,7 @@ public:
         on idle timeout and the app thread on @c closeConnection), the
         hook fires once on the first call.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT virtual void onClosedHook() {}
 
@@ -177,7 +177,7 @@ public:
         peer closed quickly" (success) from "connect failed before ever readying"
         (failure) when racing with @ref setClosed.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT bool wasReady() const {
         return was_ready.load(std::memory_order_acquire);

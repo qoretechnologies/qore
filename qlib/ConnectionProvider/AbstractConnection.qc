@@ -847,7 +847,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         @see
         - \c startPollRequest()
 
-        @since ConnectionProvider 2.3
+        @since ConnectionProvider 3.0
     */
     bool supportsAsyncRequestApi() {
         return False;
@@ -866,7 +866,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
 
         @see supportsAsyncRequestApi()
 
-        @since ConnectionProvider 2.3
+        @since ConnectionProvider 3.0
     */
     Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
             *hash<auto> headers, *Logger::LoggerInterface logger) {

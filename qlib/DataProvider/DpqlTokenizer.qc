@@ -230,7 +230,7 @@ public class DpqlTokenizer {
         #! Input text
         string input;
         #! Current position (byte index)
-        /** Switched from a character index to a byte index in %Qore 2.3 to
+        /** Switched from a character index to a byte index in %Qore 3.0 to
             eliminate the O(N) UTF-8 walk that @c input[pos] performed on
             every call.  Hot paths use @ref Qore::zzz8stringzzz9::getByte()
             (O(1)).  DPQL source is ASCII for tokens; UTF-8 inside string

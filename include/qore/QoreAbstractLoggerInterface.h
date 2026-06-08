@@ -39,7 +39,7 @@
 /** This provides a logging interface that can be used by C++ classes in libqore
     without depending on the Logger module.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class QoreAbstractLoggerInterface : public AbstractPrivateData {
 public:

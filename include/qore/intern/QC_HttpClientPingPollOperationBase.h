@@ -53,7 +53,7 @@
     just delegates continuePoll() to the inner op and validates the response
     when it completes.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class HttpClientPingPollOperationPriv : public SocketPollOperationBase {
 public:

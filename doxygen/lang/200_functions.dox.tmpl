@@ -245,7 +245,7 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
     The return type of the function can be given by placing a type declaration before the <tt><b>sub</b></tt> keyword (the older syntax with the <tt><b>returns</b></tt> keyword after the parameter list is still accepted as well).
 
     @note Parameter and return types are required when the @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set.
-    @note If the return type is missing, it is assumed to be of type @ref any_type "any". In case @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set, and the return type is missing from function's declaration, it is assumed to be of type @ref nothing.
+    @note If the return type is missing, it is assumed to be of type @ref auto_type "auto" (not @ref any_type "any", which would strip complex type information). In case @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_REQUIRE_PROTOTYPES parse options are set, and the return type is missing from function's declaration, it is assumed to be of type @ref nothing.
 
     Functions use the @ref return "return statement" to provide a return value to the caller.
 

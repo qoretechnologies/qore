@@ -205,7 +205,7 @@ public:
 
 #if defined(__linux__) && defined(HAVE_IO_URING)
     //! Returns the io_uring instance (nullptr if unavailable)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL QoreIoUring* getIoUring() { return io_uring_.get(); }
 #endif

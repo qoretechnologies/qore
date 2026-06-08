@@ -175,7 +175,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! partition strategy options
-        /** @since SqlUtil 2.4
+        /** @since SqlUtil 3.0.0
         */
         const hash<auto> PartitionStrategyOptions = {
             "method": Type::String,
@@ -185,7 +185,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! partition specification options
-        /** @since SqlUtil 2.4
+        /** @since SqlUtil 3.0.0
         */
         const hash<auto> PartitionSpecOptions = {
             "name": Type::String,
@@ -204,7 +204,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         };
 
         #! options for getDescriptionHash()
-        /** @since SqlUtil 2.4
+        /** @since SqlUtil 3.0.0
         */
         const hash<auto> GetDescriptionOptions = {
             "with_partitions": Type::Boolean,
@@ -823,7 +823,7 @@ table.setStatsPreferencesCommit({"incremental": True, "granularity": "AUTO"});
         @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
         @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     setStatsPreferencesCommit(hash<auto> preferences, *hash<auto> opt) {
         on_success ds.commit();
@@ -845,7 +845,7 @@ table.setStatsPreferences({"incremental": True, "granularity": "AUTO"});
         @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
         @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     setStatsPreferences(hash<auto> preferences, *hash<auto> opt) {
         map ds.execRaw($1), getSetStatsPreferencesSql(preferences, opt);
@@ -865,7 +865,7 @@ list<auto> sql = table.getSetStatsPreferencesSql({"incremental": True, "granular
         @throw STATS-PREFERENCES-NOT-SUPPORTED the database driver does not support table statistics preferences
         @throw OPTION-ERROR invalid or unsupported option, or no preferences were provided
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     list<auto> getSetStatsPreferencesSql(hash<auto> preferences, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getStatsPreferencesOptions(), \opt);
@@ -3328,7 +3328,7 @@ table.insert(row);
 
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
 
-        @since SqlUtil 2.3.0
+        @since SqlUtil 3.0.0
     */
     int bulkInsert(hash<auto> data, *hash<auto> opt) {
         int rows = 1;
@@ -6540,28 +6540,28 @@ table.clear();
     }
 
     #! returns @ref True "True" if this table supports table partitioning
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     bool supportsPartitions() {
         return supportsPartitionsImpl();
     }
 
     #! returns @ref True "True" if this table supports partition detach operations
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     bool supportsPartitionDetach() {
         return supportsPartitions() && supportsPartitionDetachImpl();
     }
 
     #! returns @ref True "True" if this table supports automatic partition materialization
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     bool supportsAutoPartitioning() {
         return supportsPartitions() && supportsAutoPartitioningImpl();
     }
 
     #! returns this table's partitioning strategy or @ref nothing if the table is not partitioned
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     *hash<PartitionStrategy> getPartitionStrategy() {
         l.lock();
@@ -6571,7 +6571,7 @@ table.clear();
     }
 
     #! returns partition descriptions keyed by canonical partition name
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     hash<string, PartitionInfo> listPartitions() {
         l.lock();
@@ -6581,7 +6581,7 @@ table.clear();
     }
 
     #! finds a partition matching the given specification
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     hash<PartitionLookupResult> findPartitionBySpec(hash<auto> spec) {
         l.lock();
@@ -6592,7 +6592,7 @@ table.clear();
     }
 
     #! returns SQL to add a partition
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     string getAddPartitionSql(hash<auto> spec, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6613,7 +6613,7 @@ table.clear();
     }
 
     #! adds a partition without transaction management
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     hash<PartitionInfo> addPartition(hash<auto> spec, *hash<auto> opt) {
         string sql;
@@ -6648,7 +6648,7 @@ table.clear();
     }
 
     #! adds a partition and commits the transaction
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     hash<PartitionInfo> addPartitionCommit(hash<auto> spec, *hash<auto> opt) {
         on_exit ds.commit();
@@ -6657,7 +6657,7 @@ table.clear();
     }
 
     #! returns SQL to drop a partition
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     string getDropPartitionSql(string partition_name, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6684,7 +6684,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     string getDropPartitionSql(hash<auto> spec, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6702,7 +6702,7 @@ table.clear();
     }
 
     #! drops a partition without transaction management
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     dropPartition(string partition_name, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6741,7 +6741,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     dropPartition(hash<auto> spec, *hash<auto> opt) {
         string partition_name;
@@ -6758,7 +6758,7 @@ table.clear();
     }
 
     #! drops a partition and commits the transaction
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     dropPartitionCommit(string partition_name, *hash<auto> opt) {
         on_exit ds.commit();
@@ -6775,7 +6775,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     dropPartitionCommit(hash<auto> spec, *hash<auto> opt) {
         on_exit ds.commit();
@@ -6784,7 +6784,7 @@ table.clear();
     }
 
     #! returns SQL to truncate a partition
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     string getTruncatePartitionSql(string partition_name, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6808,7 +6808,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     string getTruncatePartitionSql(hash<auto> spec, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6823,7 +6823,7 @@ table.clear();
     }
 
     #! truncates a partition without transaction management
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     truncatePartition(string partition_name, *hash<auto> opt) {
         string sql = getTruncatePartitionSql(partition_name, opt);
@@ -6839,7 +6839,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     truncatePartition(hash<auto> spec, *hash<auto> opt) {
         string sql = getTruncatePartitionSql(spec, opt);
@@ -6847,7 +6847,7 @@ table.clear();
     }
 
     #! truncates a partition and commits the transaction
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     truncatePartitionCommit(string partition_name, *hash<auto> opt) {
         on_exit ds.commit();
@@ -6864,7 +6864,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     truncatePartitionCommit(hash<auto> spec, *hash<auto> opt) {
         on_exit ds.commit();
@@ -6873,7 +6873,7 @@ table.clear();
     }
 
     #! returns SQL to detach a partition
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     string getDetachPartitionSql(string partition_name, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6900,7 +6900,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     string getDetachPartitionSql(hash<auto> spec, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6929,7 +6929,7 @@ table.clear();
 
         @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     AbstractTable detachPartition(string partition_name, *hash<auto> opt) {
         validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
@@ -6976,7 +6976,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     AbstractTable detachPartition(hash<auto> spec, *hash<auto> opt) {
         string partition_name;
@@ -6997,7 +6997,7 @@ table.clear();
 
         @throw PARTITION-NOT-SUPPORTED the database driver does not support detaching partitions
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     AbstractTable detachPartitionCommit(string partition_name, *hash<auto> opt) {
         on_exit ds.commit();
@@ -7016,7 +7016,7 @@ table.clear();
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
         @throw OPTION-ERROR invalid or unsupported option
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     AbstractTable detachPartitionCommit(hash<auto> spec, *hash<auto> opt) {
         on_exit ds.commit();
@@ -7025,7 +7025,7 @@ table.clear();
     }
 
     #! ensures that a partition matching the given specification exists
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     hash<PartitionEnsureResult> ensurePartition(hash<auto> spec, *hash<auto> opt) {
         hash<PartitionSpec> ps;
@@ -7091,7 +7091,7 @@ table.clear();
 
         @note the table lock must be held when calling this method
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     private *hash<PartitionEnsureResult> resolveExistingPartitionUnlocked(hash<PartitionSpec> ps) {
         hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
@@ -7128,7 +7128,7 @@ table.clear();
     }
 
     #! ensures that a partition matching the given specification exists and commits the transaction if it was created
-    /** @since SqlUtil 2.4
+    /** @since SqlUtil 3.0.0
     */
     hash<PartitionEnsureResult> ensurePartitionCommit(hash<auto> spec, *hash<auto> opt) {
         on_exit ds.commit();
@@ -9528,7 +9528,7 @@ on_exit printf("SQL> %s\n", sql);
     /** detach-capable drivers override this to derive the standalone relation's name from the partition name;
         used by detachPartition() to construct the returned @ref AbstractTable
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     private string getDetachedTableNameImpl(string partition_name) {
         throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
@@ -9539,7 +9539,7 @@ on_exit printf("SQL> %s\n", sql);
     /** used by ensurePartition() to treat a concurrent duplicate-create race as success; partition-capable
         drivers override this to recognize the driver-specific "relation/partition already exists" error
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     private bool isPartitionExistsErrorImpl(hash<ExceptionInfo> ex) {
         return False;
@@ -9552,7 +9552,7 @@ on_exit printf("SQL> %s\n", sql);
         re-resolving; drivers that auto-commit DDL (Oracle, MySQL) inherit the default @ref False, where a failed
         statement leaves the transaction usable and no savepoint is needed
 
-        @since SqlUtil 2.4
+        @since SqlUtil 3.0.0
     */
     private bool partitionDdlIsTransactionalImpl() {
         return False;

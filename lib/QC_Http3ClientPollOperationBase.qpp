@@ -1105,7 +1105,7 @@ void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* d
     The Qore Http3ClientPollOperation class inherits from this base to get
     the C++ fast path while providing the high-level HTTP/3 API.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass Http3ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
@@ -1303,7 +1303,7 @@ bool Http3ClientPollOperationBase::isGoawayReceived() [flags=RET_VALUE_ONLY] {
 /** Queued QUIC packets are produced and sent by the controller's I/O
     thread; this method only wakes the controller.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http3ClientPollOperationBase::flushPendingWrites() {
     ReferenceHolder<QoreObject> sock_obj(priv->getReferencedSocket(), xsink);
@@ -1423,7 +1423,7 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) [flags=N
 
     @return hash with: "need_cancel" (bool)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithPromiseAndNotifier(
         int stream_id, Promise[QorePromise] promise,
@@ -1536,7 +1536,7 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) [flags=N
 
     @return hash with: "need_cancel" (bool)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithQueue(int stream_id, Queue[Queue] queue,
         *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
@@ -1621,7 +1621,7 @@ Socket Http3ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
 
     @param stream_id the QUIC stream ID
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) [flags=NAMED_ARGS] {
     priv->registerStreamNotify(stream_id);
@@ -1650,7 +1650,7 @@ nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) [flags
            complete
     @throw HTTPCLIENT-STATE-ERROR if the stream's action is not a ChannelAction
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http3ClientPollOperationBase::installFrameState(int stream_id,
         Queue[Queue] message_queue) [flags=NAMED_ARGS] {
@@ -1665,7 +1665,7 @@ nothing Http3ClientPollOperationBase::installFrameState(int stream_id,
     @param initial_body optional body bytes already received before installing
         the SSE parser
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 nothing Http3ClientPollOperationBase::installSseState(int stream_id,
         Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,

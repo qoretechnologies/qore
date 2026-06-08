@@ -40,7 +40,7 @@
     producers outpace consumers. When a maximum byte limit is set, the push() method will block
     or drop events based on the timeout parameter when the queue exceeds the limit.
 
-    @since %Qore 2.3 added memory-based backpressure support
+    @since %Qore 3.0 added memory-based backpressure support
 */
 qclass LoggerAppenderQueue [ns=Qore::Logger; arg=QoreLoggerAppenderQueue* q; internal_members=Queue q];
 
@@ -48,11 +48,11 @@ qclass LoggerAppenderQueue [ns=Qore::Logger; arg=QoreLoggerAppenderQueue* q; int
 /** This constructor enforces memory-based backpressure by default to prevent unbounded
     memory growth.
 
-    @note Prior to %Qore 2.3, this constructor created an unlimited queue. Starting with
-    %Qore 2.3, the default is 10 MiB to ensure safe memory management. Use
+    @note Prior to %Qore 3.0, this constructor created an unlimited queue. Starting with
+    %Qore 3.0, the default is 10 MiB to ensure safe memory management. Use
     @ref constructor(softint) "constructor(-1)" explicitly if unlimited behavior is required.
 
-    @since %Qore 2.3 changed default from unlimited to 10 MiB for safe memory management
+    @since %Qore 3.0 changed default from unlimited to 10 MiB for safe memory management
 */
 LoggerAppenderQueue::constructor() {
     Queue* queue = new Queue(-1);
@@ -80,7 +80,7 @@ LoggerAppenderQueue laq(0);
 LoggerAppenderQueue laq(-1);
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 LoggerAppenderQueue::constructor(softint max_bytes) {
     int64 effective_max = max_bytes;
@@ -112,7 +112,7 @@ LoggerAppenderQueue::constructor(softint max_bytes) {
 
     @note When the queue has no memory limit (-1), the event is always added immediately
 
-    @since %Qore 2.3 added timeout_ms parameter for backpressure support
+    @since %Qore 3.0 added timeout_ms parameter for backpressure support
 */
 bool LoggerAppenderQueue::push(LoggerAppender[QoreLoggerAppender] appender, int type, auto params,
         timeout timeout_ms = 0) {
@@ -163,7 +163,7 @@ private *hash<auto> LoggerAppenderQueue::getEvent(timeout ms) {
     - -1 = unlimited (no backpressure)
     - >0 = maximum bytes before backpressure is applied
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int LoggerAppenderQueue::maxBytes() [flags=CONSTANT] {
     return q->getMaxBytes();
@@ -172,7 +172,7 @@ int LoggerAppenderQueue::maxBytes() [flags=CONSTANT] {
 //! Returns the current number of bytes in the queue
 /** @return the current queued bytes (approximate, based on param sizes)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 int LoggerAppenderQueue::currentBytes() [flags=CONSTANT] {
     return q->getCurrentBytes();
@@ -183,7 +183,7 @@ int LoggerAppenderQueue::currentBytes() [flags=CONSTANT] {
 
     @note Always returns @ref False if the queue has no memory limit (-1)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool LoggerAppenderQueue::isFull() [flags=CONSTANT] {
     return q->isFull();

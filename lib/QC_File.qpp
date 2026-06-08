@@ -690,7 +690,7 @@ f.vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello there: 2\n", exceed
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::vprintf(string[doc] format, any[doc] values) [flags=NAMED_ARGS] {
+int File::vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::vprintf", xsink))
       return QoreValue();
 
@@ -771,7 +771,7 @@ f.f_vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello: 2\n", enforcing 
 
     @since %Qore 0.8.7 this method throws exceptions on I/O errors to avoid silent write errors in Qore code
  */
-int File::f_vprintf(string[doc] format, any[doc] values) [flags=NAMED_ARGS] {
+int File::f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS] {
    if (check_terminal_io(self, "File::f_vprintf", xsink))
       return QoreValue();
 

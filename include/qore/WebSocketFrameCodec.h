@@ -74,7 +74,7 @@ struct WsFrame {
 
 //! WebSocket frame decoder -- accumulates data and parses complete frames
 /** Thread safety: NOT thread-safe. Use from a single thread (I/O thread).
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLEXPORT WebSocketFrameDecoder {
 public:
@@ -113,7 +113,7 @@ private:
 
 //! WebSocket frame encoder -- builds frame bytes from payload
 /** Thread safety: all methods are stateless (thread-safe).
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLEXPORT WebSocketFrameEncoder {
 public:
@@ -140,7 +140,7 @@ public:
 
 //! WebSocket fragmented message reassembler
 /** Accumulates fragments until the final frame (FIN=1) arrives.
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class DLLEXPORT WebSocketFrameReassembler {
 public:

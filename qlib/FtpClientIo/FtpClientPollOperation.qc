@@ -69,7 +69,7 @@ public hashdecl FtpCommandResult {
     binary data = op.getTransferResult().data;
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 public class FtpClientPollOperation {
     private {

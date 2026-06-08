@@ -79,7 +79,7 @@ enum class FtpCtrlPhase : int {
     be called only when the operation is NOT in the async controller (between
     goalReached() and re-submission).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class FtpControlPollOperationPriv : public SocketPollOperationBase {
 public:
@@ -219,7 +219,7 @@ DLLLOCAL QoreClass* initFtpControlPollOperationClass(QoreNamespace& ns);
 //! Composite poll operation for FTP PORT mode: accept + optional SSL upgrade
 /** State machine: ACCEPTING → [SSL_UPGRADE →] COMPLETE
     Follows the same pattern as HttpAcceptPollOperationPriv.
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class FtpPortAcceptPollOperationPriv : public SocketPollOperationBase {
 public:

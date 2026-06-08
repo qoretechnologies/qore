@@ -44,7 +44,7 @@ static void AbstractPoolableResource_deserializer(QoreObject& self, const QoreHa
 }
 
 //! Pool configuration options
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 hashdecl ConnectionPoolOptions {
     //! Minimum pool size -- resources created at startup (default: 0)
@@ -58,7 +58,7 @@ hashdecl ConnectionPoolOptions {
 }
 
 //! Pool statistics
-/** @since %Qore 2.3
+/** @since %Qore 3.0
 */
 hashdecl ConnectionPoolStats {
     //! Current pool size (total allocated resources)
@@ -90,7 +90,7 @@ class MyConnection inherits AbstractPoolableResource {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass AbstractPoolableResource [
     arg=AbstractQorePoolableResource* apr;
@@ -148,7 +148,7 @@ on_exit pool.release();
 # ... use resource ...
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass AbstractConnectionPool [dom=THREAD_CLASS; arg=ConnectionPool* cp; ns=Qore::Thread];
 
@@ -362,7 +362,7 @@ nothing AbstractConnectionPool::clearWarningCallback() {
         @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()"
         is called while the method is blocked
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 bool AbstractConnectionPool::waitForWaiters(int n, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (n < 1) {

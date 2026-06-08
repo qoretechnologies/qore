@@ -1034,7 +1034,7 @@ bool inlist() [flags=NOOP] {
 /** It is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore
     type errors in arguments
 */
-bool inlist(any[doc] arg, nothing[doc] x) [flags=NOOP] {
+bool inlist(auto[doc] arg, nothing[doc] x) [flags=NOOP] {
    return false;
 }
 
@@ -1070,7 +1070,7 @@ bool inlist_hard() [flags=NOOP] {
 /** It is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore
     type errors in arguments
 */
-bool inlist_hard(any[doc] arg, nothing[doc] x) [flags=NOOP] {
+bool inlist_hard(auto[doc] arg, nothing[doc] x) [flags=NOOP] {
    return false;
 }
 

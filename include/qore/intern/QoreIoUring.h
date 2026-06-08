@@ -59,7 +59,7 @@ constexpr size_t IOURING_READ_SIZE = 65536;
     This is used to avoid blocking the I/O event loop thread when streaming
     responses backed by regular files (e.g., FileInputStream) over HTTP/2.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class QoreIoUring {
 public:

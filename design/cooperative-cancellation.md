@@ -352,7 +352,7 @@ The old symbol must remain exported until compatible module rebuilds are no long
     cancel_thread(tid, "timeout exceeded");
     @endcode
 
-    @since Qore 2.3
+    @since Qore 3.0
 
     @see thread_cancelled()
     @see clear_thread_cancel()
@@ -360,14 +360,14 @@ The old symbol must remain exported until compatible module rebuilds are no long
 bool cancel_thread(int tid, *string reason);
 
 #! Returns True if cancellation has been requested for the current thread
-/** @since Qore 2.3 */
+/** @since Qore 3.0 */
 bool thread_cancelled();
 
 #! Clears the cancellation flag for the current thread
 /** Call this after catching a THREAD-CANCELLED exception if the thread
     should continue running (e.g., to complete cleanup operations).
 
-    @since Qore 2.3
+    @since Qore 3.0
 */
 nothing clear_thread_cancel();
 ```
@@ -776,13 +776,13 @@ do_io_operation();  # Works normally, no overhead
 ### Phase 5: Documentation
 - Remove `interruptible-io-module-guide.md` and `safe-thread-cancellation.md` (replaced by this document)
 - Update module developer guide
-- Release notes for Qore 2.3
+- Release notes for Qore 3.0
 
 ## Open Questions
 
 1. **Naming**: `cancel_thread()` vs `interrupt_thread()`? Using "cancel" is clearer than "interrupt" (avoids confusion with OS signals) and matches `pthread_cancel` terminology while being safe/cooperative.
 
-2. **Mutex/RWLock cancellation**: Should `cancel_thread()` wake threads blocked in `Mutex::lock()`? With broadcast-on-cancel (Qore 2.3), this no longer requires timed waits — SmartMutex/RWLock can register `waiting_on` around their internal `wait()` calls and be woken by broadcast.  Deferred to a future phase.
+2. **Mutex/RWLock cancellation**: Should `cancel_thread()` wake threads blocked in `Mutex::lock()`? With broadcast-on-cancel (Qore 3.0), this no longer requires timed waits — SmartMutex/RWLock can register `waiting_on` around their internal `wait()` calls and be woken by broadcast.  Deferred to a future phase.
 
 3. **`join_thread(tid)`**: Currently there's no way to wait for a background thread to finish. `cancel_thread()` is more useful when paired with a join. Could be implemented separately using a per-thread condition variable signaled at thread exit.
 
@@ -794,4 +794,4 @@ do_io_operation();  # Works normally, no overhead
 
 - **Qore 2.0**: Initial implementation of program interrupt infrastructure
 - **Qore 2.1**: Added `QoreSandboxManagerHelper` RAII class for safe access; removed raw `QoreSandboxManager*` from public API to prevent use-after-free; modules audited and updated for interruptible I/O and sandboxing
-- **Qore 2.3**: Unified cancellation API (`qore_check_cancel`); added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`); replaced 500ms polling in `QoreCondition::waitWithInterrupt` with broadcast-on-cancel (`ThreadEntry::waiting_on`), eliminating O(N) wakeup contention when many threads share a single condition variable
+- **Qore 3.0**: Unified cancellation API (`qore_check_cancel`); added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`); replaced 500ms polling in `QoreCondition::waitWithInterrupt` with broadcast-on-cancel (`ThreadEntry::waiting_on`), eliminating O(N) wakeup contention when many threads share a single condition variable

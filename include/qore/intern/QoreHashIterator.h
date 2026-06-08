@@ -52,7 +52,7 @@ public:
         getValue().  The QPP ctor for each variant calls setView() so the
         fast path returns the right shape.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     enum HashView {
         VIEW_VALUE = 0,  ///< default; matches HashIterator::getValue()

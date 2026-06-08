@@ -9,7 +9,7 @@
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
     - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings
 
-    Alternatively, files with any extension except \c .q (for example \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore), as well as files with no extension at all, automatically enable @ref modern "%modern" mode without any parse directive. Only files whose filename ends in exactly \c .q stay in legacy mode by default. The environment variable \c QORE_OLD_STYLE_DEFAULT (set to any non-empty value other than \c "0") globally disables this auto-enable, restoring the pre-2.3 opt-in-only default.
+    Alternatively, files with any extension except \c .q (for example \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore), as well as files with no extension at all, automatically enable @ref modern "%modern" mode without any parse directive. Only files whose filename ends in exactly \c .q stay in legacy mode by default. The environment variable \c QORE_OLD_STYLE_DEFAULT (set to any non-empty value other than \c "0") globally disables this auto-enable, restoring the pre-3.0 opt-in-only default.
 
     @note The individual parse directives (@ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref enable-all-warnings "%enable-all-warnings", @ref strict-warnings "%strict-warnings") are still supported for backward compatibility and fine-grained control.
 
@@ -21,9 +21,9 @@
     |@ref allow-returns "%allow-returns"|Allows the use of the deprecated \c returns keyword<br><br>Since %Qore 0.9.4
     |@ref allow-weak-references "%allow-weak-references"|Allows the use of the @ref weak_assignment_operator "weak assignment operator (:=)"<br><br>Since %Qore 0.8.13
     |@ref append-include-path "%append-include-path"|Appends the given directories to qore's include path; also performs environment variable substitution
-    |@ref append-module-path "%append-module-path"|Appends a directory to the module search path.  Two forms are supported: the legacy unquoted colon-separated form (writes to the process-global path, pre-2.3 behavior, \c $VAR env-var substitution) and the new quoted single-path form (writes to the per-Program appended list, with \c ${NAME} macro + env-var expansion).<br><br>Since %Qore 0.8.6; new quoted form since %Qore 2.3
-    |@ref prepend-module-path "%prepend-module-path"|Prepends a directory to the current @ref Qore::Program "Program" object's module search path.  Takes a single quoted path with \c ${NAME} macro + env-var expansion (macros: \c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR, \c QORE_VERSION, \c QORE_PREFIX, \c QORE_MODULE_VERSION).  Prepended paths are consulted before \c QORE_MODULE_DIR and the built-in defaults.<br><br>Since %Qore 2.3
-    |@ref no-module-path-directives "%no-module-path-directives"|Disallows use of the @ref prepend-module-path "%prepend-module-path" and @ref append-module-path "%append-module-path" parse directives.  Intended for embedders that want to prevent programs from extending their own module search path.  Equivalent to @ref Qore::QoreParseOptions::NO_MODULE_PATH_DIRECTIVES.<br><br>Since %Qore 2.3
+    |@ref append-module-path "%append-module-path"|Appends a directory to the module search path.  Two forms are supported: the legacy unquoted colon-separated form (writes to the process-global path, pre-3.0 behavior, \c $VAR env-var substitution) and the new quoted single-path form (writes to the per-Program appended list, with \c ${NAME} macro + env-var expansion).<br><br>Since %Qore 0.8.6; new quoted form since %Qore 3.0
+    |@ref prepend-module-path "%prepend-module-path"|Prepends a directory to the current @ref Qore::Program "Program" object's module search path.  Takes a single quoted path with \c ${NAME} macro + env-var expansion (macros: \c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR, \c QORE_VERSION, \c QORE_PREFIX, \c QORE_MODULE_VERSION).  Prepended paths are consulted before \c QORE_MODULE_DIR and the built-in defaults.<br><br>Since %Qore 3.0
+    |@ref no-module-path-directives "%no-module-path-directives"|Disallows use of the @ref prepend-module-path "%prepend-module-path" and @ref append-module-path "%append-module-path" parse directives.  Intended for embedders that want to prevent programs from extending their own module search path.  Equivalent to @ref Qore::QoreParseOptions::NO_MODULE_PATH_DIRECTIVES.<br><br>Since %Qore 3.0
     |@ref assume-global "%assume-global"|Resets the default %Qore behavior of assuming global variable scope when variables are first referenced if no @ref my "my" or @ref our "our" is present; use after @ref assume-local "%assume-local" to reset the default parsing behavior.<br><br>This parse option is also set with @ref old-style "%old-style" <br><br>Since %Qore 0.8.4
     |@ref assume-local "%assume-local"|Assume local variable scope when variables are first referenced if no @ref my "my" or @ref our "our" is present. When used with @ref allow-bare-refs "%allow-bare-refs", local variables without @ref my "my" must be declared with a data type restriction (can be @ref any_type "any").<br><br>This parse option is set by default with @ref new-style "%new-style"; see also @ref assume-global "%assume-global" <br><br>Since %Qore 0.8.1
     |@ref broken-cast "%broken-cast"|Use old pre-0.9.4 broken @ref cast "cast<>" operator handling where @ref nothing would be accepted without an error
@@ -33,11 +33,11 @@
     |@ref broken-logic-precedence "%broken-logic-precedence"|Use old pre-0.8.12 precedence of logical and bitwise operators
     |@ref broken-namespace-resolution "%broken-namespace-resolution"|Use legacy namespace resolution behavior
     |@ref broken-loop-statement "%broken-loop-statement"|Accept @ref break "break" and @ref continue "continue" outside of loops as with pre-0.8.13
-    |@ref broken-narrowed-types "%broken-narrowed-types"|Disable parse-time type narrowing for \c auto, \c hash<auto>, and \c list<auto> variables <br><br>Since %Qore 2.3
+    |@ref broken-narrowed-types "%broken-narrowed-types"|Disable parse-time type narrowing for \c auto, \c hash<auto>, and \c list<auto> variables <br><br>Since %Qore 3.0
     |@ref broken-operators "%broken-operators"|Accept spaces in multi-character operators as with pre-0.8.12
     |@ref broken-range "%broken-range"|Include the upper limit in @ref Qore::range() "range()" and @ref Qore::xrange() "xrange()" as with pre-0.9.5
     |@ref broken-references "%broken-references"|Do not enforce @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions as with pre-0.8.13
-    |@ref broken-soft-types "%broken-soft-types"|Allow soft types (e.g., @ref softint_type "softint", @ref softnumber_type "softnumber") to accept SQL NULL values and treat them like @ref nothing "NOTHING" as with pre-2.4 behavior. This is an AST-only option for backward compatibility; IR/JIT modes will enforce strict NULL rejection.<br><br>Since %Qore 2.4
+    |@ref broken-soft-types "%broken-soft-types"|Allow soft types (e.g., @ref softint_type "softint", @ref softnumber_type "softnumber") to accept SQL NULL values and treat them like @ref nothing "NOTHING" as with pre-3.0 behavior. This is an AST-only option for backward compatibility; IR/JIT modes will enforce strict NULL rejection.<br><br>Since %Qore 3.0
     |@ref broken-sprintf "%broken-sprintf"|Use pre-0.9 sprintf format handling where no argument is handled differently than @ref nothing
     |@ref broken-varargs "%broken-varargs"|Assume varargs for all @ref abstract "abstract" methods as with pre-1.17
     |@ref correct-cast "%correct-cast"|revert the effect of the @ref broken-cast "%broken-cast" parse option
@@ -47,7 +47,7 @@
     |@ref correct-logic-precedence "%correct-logic-precedence"|revert the effect of the @ref broken-logic-precedence "%broken-logic-precedence" parse option
     |@ref correct-namespace-resolution "%correct-namespace-resolution"|revert the effect of the @ref broken-namespace-resolution "%broken-namespace-resolution" parse option
     |@ref correct-loop-statement "%correct-loop-statement"|revert the effect of the @ref broken-loop-statement "%broken-loop-statement" parse option
-    |@ref correct-narrowed-types "%correct-narrowed-types"|revert the effect of the @ref broken-narrowed-types "%broken-narrowed-types" parse option <br><br>Since %Qore 2.3
+    |@ref correct-narrowed-types "%correct-narrowed-types"|revert the effect of the @ref broken-narrowed-types "%broken-narrowed-types" parse option <br><br>Since %Qore 3.0
     |@ref correct-operators "%correct-operators"|revert the effect of the @ref broken-operators "%broken-operators" parse option
     |@ref correct-range "%correct-range"|revert the effect of the @ref broken-range "%broken-range" parse option
     |@ref correct-references "%correct-references"|revert the effect of the @ref broken-references "%broken-references" parse option
@@ -61,13 +61,13 @@
     |@ref elif "%elif" <em>expression</em>|Allows for testing additional conditions in a @ref conditional_parsing "conditionally-parsed" block started by @ref parse_if "%if"; uses the same expression syntax as @ref parse_if "%if"
     |@ref else "%else"|Allows for parsing an alternate block when used with the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br><br>Since %Qore 0.8.3
     |@ref enable-all-warnings "%enable-all-warnings"|Turns on all non-strict @ref warnings "warnings"
-    |@ref strict-warnings "%strict-warnings"|Enables strict warnings (ambiguous overload/call resolution)<br><br>Since %Qore 2.3
+    |@ref strict-warnings "%strict-warnings"|Enables strict warnings (ambiguous overload/call resolution)<br><br>Since %Qore 3.0
     |@ref enable-debug "%enable-debug"|Enables @@assert and @@debug statements; without this directive, these statements are skipped at parse time with no runtime overhead; equivalent to parse option @ref Qore::PO_ENABLE_DEBUG<br><br>Since %Qore 2.1
     |@ref enable-warning "%enable-warning" <em>@ref warnings "warning-code"</em>|Enables the named @ref warnings "warning"
     |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br><br>Since %Qore 0.8.6
     |@ref exec-class "%exec-class" <em>@ref qore_classes "class_name"</em>|Instantiates the named class as the application class; also turns on @ref no-top-level "%no-top-level". If the program is read from stdin or from the command line, an argument must be given specifying the class name. Any top level statements before this directive are silently ignored
-    |@ref fp-fast-math "%fp-fast-math"|Allows optimizers to use IEEE-unsafe floating-point reassociation and contraction, but only for operations whose metadata also opts in. Set programmatically with the string \c "fp-fast-math" on @ref ParseOptions<br><br>Since %Qore 2.3
+    |@ref fp-fast-math "%fp-fast-math"|Allows optimizers to use IEEE-unsafe floating-point reassociation and contraction, but only for operations whose metadata also opts in. Set programmatically with the string \c "fp-fast-math" on @ref ParseOptions<br><br>Since %Qore 3.0
     |@ref parse_if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators
     |@ref ifdef "%ifdef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
     |@ref ifndef "%ifndef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the @ref ifndef "%ifndef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
@@ -76,14 +76,14 @@
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
-    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than \c .q (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br><br>Since %Qore 2.3
-    |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 2.3; this directive has no effect
+    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than \c .q (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br><br>Since %Qore 3.0
+    |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br><br>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br><br>Since %Qore 0.8.4
     |@ref no-debugging "%no-debugging"|Forbids debugging of the current @ref Qore::Program "Program" object <br><br>Since %Qore 0.8.13
-    |@ref no-class-defs "%no-class-defs"|Disallows @ref qore_classes "class definitions"; equivalent to @ref Qore::PO_NO_CLASS_DEFS and the <tt>-</tt><tt>-no-class-defs</tt> command line option<br><br>Since %Qore 2.3
+    |@ref no-class-defs "%no-class-defs"|Disallows @ref qore_classes "class definitions"; equivalent to @ref Qore::PO_NO_CLASS_DEFS and the <tt>-</tt><tt>-no-class-defs</tt> command line option<br><br>Since %Qore 3.0
     |@ref no-child-restrictions "%no-child-restrictions"|Allows child program objects to have parse option restrictions that are not a strict subset of the parents'; equivalent to parse option @ref Qore::PO_NO_CHILD_PO_RESTRICTIONS and the <tt>-</tt><tt>-no-child-restrictions</tt> command line option
-    |@ref no-constant-defs "%no-constant-defs"|Disallows @ref constants "constant definitions"; @ref readonly_local_variables "read-only local variables" and @ref readonly_function_parameters "read-only parameters" remain allowed because they are runtime local bindings, not constants; equivalent to parse option @ref Qore::PO_NO_CONSTANT_DEFS and the <tt>-</tt><tt>-no-constant-defs</tt> command line option<br><br>Since %Qore 2.3
+    |@ref no-constant-defs "%no-constant-defs"|Disallows @ref constants "constant definitions"; @ref readonly_local_variables "read-only local variables" and @ref readonly_function_parameters "read-only parameters" remain allowed because they are runtime local bindings, not constants; equivalent to parse option @ref Qore::PO_NO_CONSTANT_DEFS and the <tt>-</tt><tt>-no-constant-defs</tt> command line option<br><br>Since %Qore 3.0
     |@ref no-database "%no-database"|Disallows access to database functionality (for example the @ref Qore::SQL::Datasource "Datasource class"; equivalent to parse option @ref Qore::PO_NO_DATABASE and the <tt>-</tt><tt>-no-database</tt> command line option
     |@ref no-external-access "%no-external-access"|made up of @ref no-process-control "%no-process-control", @ref no-network "%no-network", @ref no-filesystem "%no-filesystem", @ref no-database "%no-database", @ref no-external-info "%no-external-info", and @ref no-modules "%no-modules"; equivalent to parse option @ref Qore::PO_NO_EXTERNAL_ACCESS and the <tt>-</tt><tt>-no-external-access</tt> command line option
     |@ref no-external-info "%no-external-info"|Disallows any access to functionality that provides external information (see @ref no-external-info "%no-external-info" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_EXTERNAL_INFO and the <tt>-</tt><tt>-no-external-info</tt> command line option
@@ -94,37 +94,37 @@
     |@ref no-io "%no-io"|Made up of @ref no-gui "%no-gui" \| @ref no-terminal-io "%no-terminal-io" \| @ref no-filesystem "%no-filesystem" \| @ref no-network "%no-network" \| @ref no-database "%no-database"; equivalent to parse option @ref Qore::PO_NO_IO and the \c --no-io command line option
     |@ref no-locale-control "%no-locale-control"|Disallows access to functionality that changes locale information (see %no-locale-control for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_LOCALE_CONTROL and the <tt>-</tt><tt>-no-locale-control</tt> command line option
     |@ref no-modules "%no-modules"|Disallows loading @ref qore_modules "modules" with the @ref requires "%requires", @ref try-module "%try-module", and @ref try-reexport-module "%try-reexport-module" parse directive or at runtime with load_module(); equivalent to @ref Qore::PO_NO_MODULES and the <tt>-pno-modules</tt> command line option <br><br>Since %Qore 0.8.4
-    |@ref no-namespace-defs "%no-namespace-defs"|Disallows new @ref qore_namespaces "namespace definitions"; equivalent to @ref Qore::PO_NO_NAMESPACE_DEFS and the <tt>-</tt><tt>-no-namespace-defs</tt> command line option<br><br>Since %Qore 2.3
+    |@ref no-namespace-defs "%no-namespace-defs"|Disallows new @ref qore_namespaces "namespace definitions"; equivalent to @ref Qore::PO_NO_NAMESPACE_DEFS and the <tt>-</tt><tt>-no-namespace-defs</tt> command line option<br><br>Since %Qore 3.0
     |@ref no-network "%no-network"|Disallows access to the network; equivalent to parse option @ref Qore::PO_NO_NETWORK and the <tt>-</tt><tt>-no-network</tt> command line option
-    |@ref no-new "%no-new"|Disallows use of the @ref new "new operator"; equivalent to parse option @ref Qore::PO_NO_NEW and the <tt>-</tt><tt>-no-new</tt> command line option<br><br>Since %Qore 2.3
-    |@ref no-iterate "%no-iterate"|Disables the <tt>iterate</tt> streaming keyword; equivalent to \c QoreParseOptions::NO_ITERATE<br><br>Since %Qore 2.3
-    |@ref no-first "%no-first"|Disables the @ref streaming_first "first" streaming keyword and the \c find \c first modifier; equivalent to @ref Qore::QoreParseOptions::NO_FIRST<br><br>Since %Qore 2.3
-    |@ref no-any-operator "%no-any-operator"|Disables the @ref streaming_any "any" streaming operator keyword without disabling the @ref any_type "any" type name; equivalent to @ref Qore::QoreParseOptions::NO_ANY_OPERATOR<br><br>Since %Qore 2.3
-    |@ref no-all-operator "%no-all-operator"|Disables the @ref streaming_all "all" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_ALL_OPERATOR<br><br>Since %Qore 2.3
-    |@ref no-count "%no-count"|Disables the @ref streaming_count "count" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_COUNT<br><br>Since %Qore 2.3
-    |@ref no-take "%no-take"|Disables the @ref streaming_take "take" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_TAKE<br><br>Since %Qore 2.3
-    |@ref no-drop "%no-drop"|Disables the @ref streaming_drop "drop" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_DROP<br><br>Since %Qore 2.3
-    |@ref no-takewhile "%no-takewhile"|Disables the @ref streaming_takewhile "takewhile" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_TAKEWHILE<br><br>Since %Qore 2.3
-    |@ref no-takeuntil "%no-takeuntil"|Disables the @ref streaming_takeuntil "takeuntil" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_TAKEUNTIL<br><br>Since %Qore 2.3
-    |@ref no-find-modifiers "%no-find-modifiers"|Disables the \c find \c first, \c find \c last, and \c find \c one modifiers; equivalent to @ref Qore::QoreParseOptions::NO_FIND_MODIFIERS<br><br>Since %Qore 2.3
-    |@ref no-stream-fusion "%no-stream-fusion"|Disables streaming-operator IR/JIT/AOT fusion while leaving streaming operators available; equivalent to @ref Qore::QoreParseOptions::NO_STREAM_FUSION<br><br>Since %Qore 2.3
-    |@ref streaming-any "%streaming-any"|Treats ambiguous \c any expressions such as \c "any values" as the @ref streaming_any "any" streaming operator in expression contexts. The @ref any_type "any" type name remains available in declarations for compatibility, but modern unrestricted declarations should use @ref auto_type "auto"; @ref no-any-operator "%no-any-operator" disables the operator.<br><br>Since %Qore 2.3
-    |@ref no-streaming-operators "%no-streaming-operators"|Disables all streaming operator keywords and new find modifiers; equivalent to @ref Qore::QoreParseOptions::NO_STREAMING_OPERATORS<br><br>Since %Qore 2.3
-    |@ref no-char-type "%no-char-type"|Disables the @ref char_type "char" builtin type name and \c c'...' / \c c"..." char literals for source compatibility; equivalent to @ref Qore::QoreParseOptions::NO_CHAR_TYPE<br><br>Since %Qore 2.4
-    |@ref no-string-index-char "%no-string-index-char"|Preserves historical \c string[i] behavior where a single string index returns \c *string instead of \c *char; equivalent to @ref Qore::QoreParseOptions::NO_STRING_INDEX_CHAR<br><br>Since %Qore 2.4
-    |@ref negative-offsets "%negative-offsets"|Interprets negative list, string, binary, and buffer indexes and slice endpoints as offsets from the end; implied by @ref modern "%modern"; equivalent to @ref Qore::QoreParseOptions::NEGATIVE_OFFSETS<br><br>Since %Qore 2.4
-    |@ref no-negative-offsets "%no-negative-offsets"|Restores legacy behavior where negative list, binary, and buffer indexes are not from-end offsets and negative range endpoints are literal values; use this after @ref modern "%modern" for compatibility with old code<br><br>Since %Qore 2.4
+    |@ref no-new "%no-new"|Disallows use of the @ref new "new operator"; equivalent to parse option @ref Qore::PO_NO_NEW and the <tt>-</tt><tt>-no-new</tt> command line option<br><br>Since %Qore 3.0
+    |@ref no-iterate "%no-iterate"|Disables the <tt>iterate</tt> streaming keyword; equivalent to \c QoreParseOptions::NO_ITERATE<br><br>Since %Qore 3.0
+    |@ref no-first "%no-first"|Disables the @ref streaming_first "first" streaming keyword and the \c find \c first modifier; equivalent to @ref Qore::QoreParseOptions::NO_FIRST<br><br>Since %Qore 3.0
+    |@ref no-any-operator "%no-any-operator"|Disables the @ref streaming_any "any" streaming operator keyword without disabling the @ref any_type "any" type name; equivalent to @ref Qore::QoreParseOptions::NO_ANY_OPERATOR<br><br>Since %Qore 3.0
+    |@ref no-all-operator "%no-all-operator"|Disables the @ref streaming_all "all" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_ALL_OPERATOR<br><br>Since %Qore 3.0
+    |@ref no-count "%no-count"|Disables the @ref streaming_count "count" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_COUNT<br><br>Since %Qore 3.0
+    |@ref no-take "%no-take"|Disables the @ref streaming_take "take" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_TAKE<br><br>Since %Qore 3.0
+    |@ref no-drop "%no-drop"|Disables the @ref streaming_drop "drop" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_DROP<br><br>Since %Qore 3.0
+    |@ref no-takewhile "%no-takewhile"|Disables the @ref streaming_takewhile "takewhile" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_TAKEWHILE<br><br>Since %Qore 3.0
+    |@ref no-takeuntil "%no-takeuntil"|Disables the @ref streaming_takeuntil "takeuntil" streaming keyword; equivalent to @ref Qore::QoreParseOptions::NO_TAKEUNTIL<br><br>Since %Qore 3.0
+    |@ref no-find-modifiers "%no-find-modifiers"|Disables the \c find \c first, \c find \c last, and \c find \c one modifiers; equivalent to @ref Qore::QoreParseOptions::NO_FIND_MODIFIERS<br><br>Since %Qore 3.0
+    |@ref no-stream-fusion "%no-stream-fusion"|Disables streaming-operator IR/JIT/AOT fusion while leaving streaming operators available; equivalent to @ref Qore::QoreParseOptions::NO_STREAM_FUSION<br><br>Since %Qore 3.0
+    |@ref streaming-any "%streaming-any"|Treats ambiguous \c any expressions such as \c "any values" as the @ref streaming_any "any" streaming operator in expression contexts. The @ref any_type "any" type name remains available in declarations for compatibility, but modern unrestricted declarations should use @ref auto_type "auto"; @ref no-any-operator "%no-any-operator" disables the operator.<br><br>Since %Qore 3.0
+    |@ref no-streaming-operators "%no-streaming-operators"|Disables all streaming operator keywords and new find modifiers; equivalent to @ref Qore::QoreParseOptions::NO_STREAMING_OPERATORS<br><br>Since %Qore 3.0
+    |@ref no-char-type "%no-char-type"|Disables the @ref char_type "char" builtin type name and \c c'...' / \c c"..." char literals for source compatibility; equivalent to @ref Qore::QoreParseOptions::NO_CHAR_TYPE<br><br>Since %Qore 3.0
+    |@ref no-string-index-char "%no-string-index-char"|Preserves historical \c string[i] behavior where a single string index returns \c *string instead of \c *char; equivalent to @ref Qore::QoreParseOptions::NO_STRING_INDEX_CHAR<br><br>Since %Qore 3.0
+    |@ref negative-offsets "%negative-offsets"|Interprets negative list, string, binary, and buffer indexes and slice endpoints as offsets from the end; implied by @ref modern "%modern"; equivalent to @ref Qore::QoreParseOptions::NEGATIVE_OFFSETS<br><br>Since %Qore 3.0
+    |@ref no-negative-offsets "%no-negative-offsets"|Restores legacy behavior where negative list, binary, and buffer indexes are not from-end offsets and negative range endpoints are literal values; use this after @ref modern "%modern" for compatibility with old code<br><br>Since %Qore 3.0
     |@ref no-process-control "%no-process-control"|Disallows access to functions that would affect the current process (see @ref no-process-control "%no-process-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_PROCESS_CONTROL and the <tt>-</tt><tt>-no-process-control</tt> command line option
     |@ref no-reflection "%no-reflection"|Disallows access to the reflection API provided by the <a href="../../modules/reflection/html/index.html#reflectionintro">reflection</a> module; equivalent to parse option @ref Qore::PO_NO_REFLECTION<br><br>Since %Qore 0.9
     |@ref no-subroutine-defs "%no-subroutine-defs"|Disallows subroutine (function) definitions; equivalent to parse option @ref Qore::PO_NO_SUBROUTINE_DEFS and the <tt>-</tt><tt>-no-subroutine-defs</tt> command line option
-    |@ref no-summarize "%no-summarize"|Disallows the \c summarize statement; implied by @ref modern "%modern". Set programmatically via the string \c "no-summarize" on @ref ParseOptions<br><br>Since %Qore 2.4
+    |@ref no-summarize "%no-summarize"|Disallows the \c summarize statement; implied by @ref modern "%modern". Set programmatically via the string \c "no-summarize" on @ref ParseOptions<br><br>Since %Qore 3.0
     |@ref no-terminal-io "%no-terminal-io"|Disallows access to terminal I/O (see @ref no-terminal-io "%no-terminal-io" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_TERMINAL_IO and the <tt>-pno-terminal-io</tt> command line option
     |@ref no-thread-classes "%no-thread-classes"|Disallows access to thread classes (see @ref no-thread-classes "%no-thread-classes" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_CLASSES and the <tt>-</tt><tt>-no-thread-classes</tt> command line option
     |@ref no-thread-control "%no-thread-control"|Disallows access to thread control operations (see @ref no-thread-control "%no-thread-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_CONTROL and the <tt>-</tt><tt>-no-thread-control</tt> command line option
     |@ref no-thread-info "%no-thread-info"|Disallows any access to functionality that provides threading information (see @ref no-thread-info "%no-thread-info" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_INFO and the <tt>-</tt><tt>-no-thread-info</tt> command line option
     |@ref no-threads "%no-threads"|Disallows access to all thread control operations and thread classes (equivalent to <tt>-</tt><tt>-no-thread-control</tt> and <tt>-</tt><tt>-no-thread-classes</tt> together); equivalent to parse option @ref Qore::PO_NO_THREADS and the <tt>-</tt><tt>-no-threads</tt> command line option
-    |@ref no-typedef "%no-typedef"|Disables the \c typedef keyword; equivalent to parse option @ref Qore::PO_NO_TYPEDEF <br><br>Since %Qore 2.3
-    |@ref no-enum "%no-enum"|Disables the \c enum keyword; equivalent to parse option @ref Qore::PO_NO_ENUM <br><br>Since %Qore 2.3
+    |@ref no-typedef "%no-typedef"|Disables the \c typedef keyword; equivalent to parse option @ref Qore::PO_NO_TYPEDEF <br><br>Since %Qore 3.0
+    |@ref no-enum "%no-enum"|Disables the \c enum keyword; equivalent to parse option @ref Qore::PO_NO_ENUM <br><br>Since %Qore 3.0
     |@ref no-top-level "%no-top-level"|Disallows any further top level code; equivalent to parse option @ref Qore::PO_NO_TOP_LEVEL_STATEMENTS and the <tt>-</tt><tt>-no-top-level</tt> command line option
     |@ref no-transient "%no-transient"|Removes the @ref transient keyword for backwards-compatibility; equivalent to parse option @ref Qore::PO_NO_TRANSIENT
     |@ref no-uncontrolled-apis "%no-uncontrolled-apis"|Disallows access to uncontrolled APIs such as external language bindings or direct generic system call APIs that could bypass %Qore's sandboxing controls
@@ -138,7 +138,7 @@
     |@ref set-time-zone "%set-time-zone"|Sets the time zone for the current program from a UTC offset (with format \c "+/-[00[:00[:00]]"; \c ":" characters are optional) or a time zone region name (ex: \c "Europe/Prague") <br><br>Since %Qore 0.8.3
     |@ref strict-args "%strict-args"|Prohibits access to builtin functions and methods flagged with @ref RUNTIME_NOOP and also causes errors to be raised if excess arguments are given to functions that do not access excess arguments and if a non-list lvalue is passed to the @ref push, @ref pop, or @ref shift <br><br>Since %Qore 0.8.0
     |@ref strict-bool-eval "%strict-bool-eval"|Sets qore's default strict mathematic boolean evaluation mode, where any value converted to 0 is @ref False "False" and otherwise it's is @ref True "True"; this was how qore behaved by default prior to v0.8.6. <br><br>Equivalent to parse option @ref Qore::PO_STRICT_BOOLEAN_EVAL and the <tt>-pstrict-bool-eval</tt> command line option. <br><br>See also @ref perl-bool-eval "%perl-bool-eval"<br><br>Since %Qore 0.8.6
-    |@ref strict-types "%strict-types"|Deprecated: support removed in %Qore 2.3; this directive has no effect
+    |@ref strict-types "%strict-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref strong-encapsulation "%strong-encapsulation"|Disallows out-of-line class and namespace declarations. <br><br>Since %Qore 0.8.13
     |@ref try-module "%try-module" [(@ref variable_declarations "var_decl")] <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|If the named feature is not already present in %Qore, then the \c QORE_MODULE_DIR environment variable is used to provide a list of directories to seach for a module with the same name (<em>feature</em><tt>[-api-</tt><em>x</em><tt>.</tt><em>y</em><tt>].qmod</tt> for binary modules or <em>feature</em><tt>.qm</tt> for user modules). If the module is not found, then the qore default module directory is checked.<br><br>If an error occurs loading the module, then the @ref variable_declarations "variable" declared after <tt>%%try-module</tt> is instantiated with the exception information, and the code up to the @ref endtry "%endtry" parse declaration is parsed into the program, allowing for the qore script/program to handle module loading errors at parse time for modules that must be loaded at parse time.<br><br>If version information is provided, then it is compared with the module's version information, and if it does not match a parse exception is raised that is handled like any other load error.<br><br>See also @ref Qore::load_module() for a function providing run-time module loading and @ref requires "%requires" for a similar declaration that does not allow for parse-time module loading error handling.<br><br>Since %Qore 0.8.6
     |@ref try-reexport-module "%try-reexport-module" [(@ref variable_declarations "var_decl")] <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|The same as @ref try-module "%try-module" except that if used in a @ref user_modules "user module", the module is reexported to the importing code<br><br>Since %Qore 0.8.13
@@ -294,8 +294,8 @@
       to the path. Shared across every @ref Qore::Program "Program" in the process.
       \n\n
     - **New-style form** (quoted, single path): appends the given path to the
-      <em>current Program's</em> @ref prepend-module-path "per-Program appended module
-      path list". Supports \c ${NAME} expansion against a table of predefined macros
+      <em>current Program's</em>
+      @ref prepend-module-path "per-Program appended module path list". Supports \c ${NAME} expansion against a table of predefined macros
       (\c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR, \c QORE_VERSION,
       \c QORE_PREFIX, \c QORE_MODULE_VERSION) and, as a fallback, the process
       environment. Unknown macros / unset env vars raise a parse error — there is no
@@ -317,7 +317,7 @@
 %append-module-path "${HOME}/.qore-modules-fallback"
     @endcode
 
-    @since %Qore 0.8.6 (legacy form); new quoted form since %Qore 2.3
+    @since %Qore 0.8.6 (legacy form); new quoted form since %Qore 3.0
 
     @see @ref prepend-module-path "%prepend-module-path", @ref no-module-path-directives "%no-module-path-directives", @ref append-include-path "%append-include-path"
 
@@ -358,7 +358,7 @@
     | <tt>${SCRIPT_NAME}</tt> | basename of the file containing the directive |
     | <tt>${SCRIPT_PATH}</tt> | absolute path of the file containing the directive |
     | <tt>${PROGRAM_DIR}</tt> | absolute directory of the top-level program file |
-    | <tt>${QORE_VERSION}</tt> | \%Qore library version string (e.g. \c "2.3.0") |
+    | <tt>${QORE_VERSION}</tt> | \%Qore library version string (e.g. \c "3.0.0") |
     | <tt>${QORE_PREFIX}</tt> | \%Qore install prefix (e.g. \c "/usr") |
     | <tt>${QORE_MODULE_VERSION}</tt> | module API version (e.g. \c "2.0") |
 
@@ -385,7 +385,7 @@
 %requires MyVendoredHelper
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref append-module-path "%append-module-path", @ref no-module-path-directives "%no-module-path-directives", @ref requires "%requires"
 
@@ -426,6 +426,27 @@
     @since %Qore 0.8.1
 
     @see @ref assume-global "%assume-global"
+
+    <hr>
+    @section broken-auto-cast %broken-auto-cast
+
+    @par Parse Directive:
+    <tt>%%broken-auto-cast</tt>
+
+    @par Command Line:
+    <tt>-pbroken-auto-cast</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::QoreParseOptions::BROKEN_AUTO_CAST (string name: \c "broken-auto-cast")
+
+    @par Description:
+    Accept the misleading no-op casts \c cast<hash<auto>>(...), \c cast<list<auto>>(...), and their
+    \c "or nothing" variants instead of raising a parse error.  These casts do not coerce values, so they
+    were made parse-time errors in %Qore 3.0; this option restores the old accepting behavior for backward
+    compatibility.  New code should use \c cast<hash>(...) / \c cast<list>(...) for hard container
+    assertions instead.  Not included in @ref modern "%modern".
+
+    @since %Qore 3.0
 
     <hr>
     @section broken-cast %broken-cast
@@ -556,7 +577,7 @@
 
     @see @ref correct-namespace-resolution "%correct-namespace-resolution"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section broken-loop-statement %broken-loop-statement
@@ -608,7 +629,7 @@ val = "string";      # PARSE-TYPE-ERROR without %broken-narrowed-types
     @see @ref correct-narrowed-types "%correct-narrowed-types"
     @see @ref auto_no_narrow "auto!" syntax for per-variable control
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section broken-operators %broken-operators
@@ -691,6 +712,25 @@ i+ =4;
     Do not enforce @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions as with pre-0.8.13; when this option is in effect, the @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions are ignored and have no type restrictions.
 
     @since %Qore 0.8.3
+
+    <hr>
+    @section broken-soft-types %broken-soft-types
+
+    @par Parse Directive:
+    <tt>%%broken-soft-types</tt>
+
+    @par Command Line:
+    <tt>-</tt><tt>-pbroken-soft-types</tt>
+
+    @par Parse Option Constant:
+    @ref Qore::QoreParseOptions::BROKEN_SOFT_TYPES
+
+    @par Description:
+    Allow soft types (e.g., @ref softint_type "softint", @ref softnumber_type "softnumber") to accept SQL \c NULL values and treat them like @ref nothing "NOTHING" as with pre-3.0 behavior.  This is an AST-only option for backward compatibility; IR and JIT execution modes always enforce strict \c NULL rejection.
+
+    @see @ref correct-soft-types "%correct-soft-types"
+
+    @since %Qore 3.0
 
     <hr>
     @section broken-sprintf %broken-sprintf
@@ -843,7 +883,7 @@ i+ =4;
 
     @see @ref broken-namespace-resolution "%broken-namespace-resolution"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section correct-narrowed-types %correct-narrowed-types
@@ -863,7 +903,7 @@ i+ =4;
 
     @see @ref broken-narrowed-types "%broken-narrowed-types"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section correct-loop-statement %correct-loop-statement
@@ -940,6 +980,25 @@ i+ =4;
     @see @ref broken-references "%broken-references"
 
     @since %Qore 0.8.13
+
+    <hr>
+    @section correct-soft-types %correct-soft-types
+
+    @par Parse Directive:
+    <tt>%%correct-soft-types</tt>
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Reverts the effect of the @ref broken-soft-types "%broken-soft-types" parse option, restoring strict SQL \c NULL rejection for soft types.
+
+    @see @ref broken-soft-types "%broken-soft-types"
+
+    @since %Qore 3.0
 
     <hr>
     @section correct-sprintf %correct-sprintf
@@ -1104,7 +1163,7 @@ i+ =4;
     Enables strict warnings (ambiguous overload and call resolution) while parsing. See @ref warnings for more
     information.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section enable-debug %enable-debug
@@ -1221,7 +1280,7 @@ sub validate_input(int value, int max_value) {
     the string name \c "fp-fast-math" with the @ref ParseOptions class when setting parse
     options programmatically.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref plugin_types
 
@@ -1443,7 +1502,7 @@ sub validate_input(int value, int max_value) {
     n/a
 
     @par Description:
-    Deprecated: support removed in %Qore 2.3; this directive has no effect
+    Deprecated: support removed in %Qore 3.0; this directive has no effect
 
     @see strict-types "%strict-types"
 
@@ -1469,7 +1528,7 @@ sub validate_input(int value, int max_value) {
     Because @ref streaming-any "%streaming-any" is enabled, \c any is parsed as the @ref streaming_any "any streaming operator" in expression contexts while remaining available as the @ref any_type "any" type name in declarations for compatibility. In @ref modern "%modern" code, use @ref auto_type "auto" for unrestricted declarations unless complex runtime type stripping is specifically required.
 
     @par File Extension:
-    Starting with %Qore 2.3, files with any extension except \c .q automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore, as well as files with no extension at all. Only files whose filename ends in exactly \c .q stay in legacy mode by default, preserving backward compatibility for existing scripts.
+    Starting with %Qore 3.0, files with any extension except \c .q automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore, as well as files with no extension at all. Only files whose filename ends in exactly \c .q stay in legacy mode by default, preserving backward compatibility for existing scripts.
 
     @code{.py}
     # hello.qr - no parse directives needed!
@@ -1488,7 +1547,7 @@ sub validate_input(int value, int max_value) {
     - All declarations require type information.
     - Use \c "any (expr)" for the streaming operator in syntactically ambiguous positions such as direct function-call arguments.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section new-style %new-style
@@ -1580,7 +1639,7 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disallows new class definitions. Any use of the reserved word \c class will result in a parse exception.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-constant-defs %no-constant-defs
@@ -1597,7 +1656,7 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disallows new @ref constants "constant definitions". \c const remains valid in statement and parameter contexts for @ref readonly_local_variables "read-only local variables" and @ref readonly_function_parameters "read-only parameters", because those declarations create runtime local bindings rather than parse-time constants.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-database %no-database
@@ -1846,7 +1905,7 @@ sub validate_input(int value, int max_value) {
     Not included in @ref modern "%modern" — modern scripts that legitimately
     want to vendor modules should be able to do so.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see @ref prepend-module-path "%prepend-module-path", @ref append-module-path "%append-module-path"
 
@@ -1865,7 +1924,7 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disallows new @ref qore_namespaces "namespace definitions".
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-network %no-network
@@ -1900,7 +1959,7 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disallows use of the @ref new "new operator".
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-iterate %no-iterate
@@ -1917,7 +1976,7 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disables the <tt>iterate</tt> streaming keyword so the token can be used as an identifier in legacy code.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-first %no-first
@@ -1934,7 +1993,7 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disables the @ref streaming_first "first" streaming keyword and the \c find \c first modifier.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-any-operator %no-any-operator
@@ -1953,7 +2012,7 @@ sub validate_input(int value, int max_value) {
 
     Use this option only for source compatibility with code where unparenthesized \c any expressions must never be interpreted as streaming operators.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section streaming-any %streaming-any
@@ -1995,7 +2054,7 @@ bool sub hasValuesArg(list<int> values) {
     - Use @ref no-any-operator "%no-any-operator" to disable the \c any streaming operator entirely.
     - The \c any type is retained for backward compatibility but is not recommended for new modern declarations; use @ref auto_type "auto" unless complex type stripping is required.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-all-operator %no-all-operator
@@ -2012,7 +2071,7 @@ bool sub hasValuesArg(list<int> values) {
     @par Description:
     Disables the @ref streaming_all "all" streaming keyword.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-count %no-count
@@ -2029,7 +2088,7 @@ bool sub hasValuesArg(list<int> values) {
     @par Description:
     Disables the @ref streaming_count "count" streaming keyword.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-take %no-take
@@ -2046,7 +2105,7 @@ bool sub hasValuesArg(list<int> values) {
     @par Description:
     Disables the @ref streaming_take "take" streaming keyword.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-drop %no-drop
@@ -2063,7 +2122,7 @@ bool sub hasValuesArg(list<int> values) {
     @par Description:
     Disables the @ref streaming_drop "drop" streaming keyword.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-takewhile %no-takewhile
@@ -2080,7 +2139,7 @@ bool sub hasValuesArg(list<int> values) {
     @par Description:
     Disables the @ref streaming_takewhile "takewhile" streaming keyword.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-takeuntil %no-takeuntil
@@ -2097,7 +2156,7 @@ bool sub hasValuesArg(list<int> values) {
     @par Description:
     Disables the @ref streaming_takeuntil "takeuntil" streaming keyword.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-find-modifiers %no-find-modifiers
@@ -2114,7 +2173,7 @@ bool sub hasValuesArg(list<int> values) {
     @par Description:
     Disables the \c find \c first, \c find \c last, and \c find \c one modifiers. The legacy @ref find "find" form remains available.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-stream-fusion %no-stream-fusion
@@ -2138,7 +2197,7 @@ bool sub hasValuesArg(list<int> values) {
 int total = count (take 100, values);
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-char-type %no-char-type
@@ -2168,7 +2227,7 @@ string sub c(string s) {
 string value = c("legacy");
     @endcode
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 
     <hr>
     @section no-string-index-char %no-string-index-char
@@ -2192,7 +2251,7 @@ string value = c("legacy");
 *string s = "abc"[1];  # "b"
     @endcode
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 
     <hr>
     @section negative-offsets %negative-offsets
@@ -2226,7 +2285,7 @@ string suffix = "qore"[-2..];       # "re"
 binary b = <102030>[-2..-1];        # <2030>
     @endcode
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 
     @see @ref list_element_operator "[] operator", @ref no-negative-offsets "%no-negative-offsets"
 
@@ -2254,7 +2313,7 @@ assertEq(NOTHING, (10, 20, 30)[-1]);
 assertEq((), (10, 20, 30)[..-1]);
     @endcode
 
-    @since %Qore 2.4
+    @since %Qore 3.0
 
     @see @ref negative-offsets "%negative-offsets"
 
@@ -2284,7 +2343,7 @@ sub legacy() {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-process-control %no-process-control
@@ -2381,7 +2440,7 @@ sub legacy() {
     parse-option space; use the string name \c "no-summarize" with the @ref ParseOptions
     class when setting parse options programmatically.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-terminal-io %no-terminal-io
@@ -2548,7 +2607,7 @@ sub legacy() {
 
     @see @ref enums "Enums: Type-Safe Enumerated Constants"
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     <hr>
     @section no-top-level %no-top-level
@@ -2823,7 +2882,7 @@ if (str)
     @ref Qore::PO_STRICT_TYPES
 
     @par Description:
-    Deprecated: support removed in %Qore 2.3; this directive has no effect. The @ref Qore::PO_STRICT_TYPES constant
+    Deprecated: support removed in %Qore 3.0; this directive has no effect. The @ref Qore::PO_STRICT_TYPES constant
     remains defined as 0 for backward compatibility; code referencing it will compile but the option has no effect.
 
     The %strict-types functionality was intended to prepare for JIT compilation by enforcing stricter typing and

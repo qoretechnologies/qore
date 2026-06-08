@@ -79,7 +79,7 @@ public class HttpPingPollOperation inherits Qore::PollPipeline {
     returns the full response hash (code, headers, body) for any HTTP status code, allowing
     the caller to handle the response.
 
-    @since ConnectionProvider 2.3
+    @since ConnectionProvider 3.0
 */
 public class HttpRequestPollOperation inherits Qore::PollPipeline {
     #! Creates the poll operation for an async HTTP request
@@ -192,7 +192,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
     #! Returns @ref True since HTTP-based connections support the async request API
     /** @return @ref True
 
-        @since ConnectionProvider 2.3
+        @since ConnectionProvider 3.0
     */
     bool supportsAsyncRequestApi() {
         return True;
@@ -207,7 +207,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
 
         @return a poll operation for the async request
 
-        @since ConnectionProvider 2.3
+        @since ConnectionProvider 3.0
     */
     Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
             *hash<auto> headers, *Logger::LoggerInterface logger) {

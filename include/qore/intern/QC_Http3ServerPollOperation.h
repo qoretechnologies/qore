@@ -72,7 +72,7 @@ class QoreSSLPrivateKey;
     - getOutput() transfers cached_request ownership to caller
     - Stream queue and listener objects are stored as QoreObject* refs in the QPP layer
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class Http3ServerPollOperationPriv : public SocketPollOperationBase {
 public:

@@ -70,7 +70,7 @@
     |\c g|makes global substitutions or global extractions (only applicable with the substitution and extraction \
         operators)
     |\c U|makes quantifiers ungreedy by default; individual quantifiers can be made greedy by appending \c ? \
-        (since %Qore 2.3)
+        (since %Qore 3.0)
 
     @section qore_regex_brace_delimiters Brace-Delimited Regular Expressions
 
@@ -112,7 +112,7 @@
     @note Inside <tt>[...]</tt> character classes, use <tt>\\{</tt> and <tt>\\}</tt> instead of literal braces
     when using brace delimiters, since the scanner does not track character class boundaries.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @section qore_regex_functions Qore Regular Expression Functions
 
@@ -123,14 +123,14 @@
     |!Function|!Description
     |regex()|Returns @ref True "True" if the regular expression matches a string
     |regex_subst()|Substitutes a pattern in a string based on regular expressions and returns the new string; \
-        also supports a callback variant for dynamic replacements (since %Qore 2.3)
+        also supports a callback variant for dynamic replacements (since %Qore 3.0)
     |regex_extract()|Returns a list of substrings in a string based on matching patterns defined by a regular \
         expression
-    |regex_extract_named()|Returns named capture groups as a hash (since %Qore 2.3)
+    |regex_extract_named()|Returns named capture groups as a hash (since %Qore 3.0)
     |regex_extract_detailed()|Returns detailed match info including positions, groups, and named groups as a \
-        list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes (since %Qore 2.3)
-    |regex_count()|Returns the number of non-overlapping matches (since %Qore 2.3)
-    |regex_escape()|Escapes all non-alphanumeric characters for use as a literal regex pattern (since %Qore 2.3)
+        list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes (since %Qore 3.0)
+    |regex_count()|Returns the number of non-overlapping matches (since %Qore 3.0)
+    |regex_escape()|Escapes all non-alphanumeric characters for use as a literal regex pattern (since %Qore 3.0)
 
     @section qore_regex_escape_patterns Qore Regular Expression Escape Codes
 
@@ -158,7 +158,7 @@
     |\\\\|\c \\|\c 134|\c 092|\c 5C|a literal backslash character
     |\\[0-7][0-7][0-7]|-|-|-|-|the ASCII character represented by the octal code
 
-    <b>Case Conversion Escape Codes (since %Qore 2.3)</b>
+    <b>Case Conversion Escape Codes (since %Qore 3.0)</b>
     |!Escape|!Description
     |\\U|Converts all following replacement text to uppercase until \\E
     |\\L|Converts all following replacement text to lowercase until \\E
@@ -181,7 +181,7 @@
     @section qore_regex_backreferences Qore Regular Expression Backreferences
 
     Qore uses <tt>$</tt><i>num</i> for backreferences in regular expression substitution expressions.  The first
-    backreference is \c $1, the second $2, and so on.  \c $0 refers to the entire match (since %Qore 2.3).
+    backreference is \c $1, the second $2, and so on.  \c $0 refers to the entire match (since %Qore 3.0).
 
     @par Example
     @code{.py}
@@ -212,7 +212,7 @@
 
     Use the @ref RE_DupNames constant to allow duplicate named subpatterns in the same regex.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @section qore_regex_detailed_extraction Detailed Match Extraction
 
@@ -228,7 +228,7 @@
     # matches[1] = {"match": "456", "offset": 12, "length": 3}
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @section qore_regex_callback_subst Callback-Based Substitution
 
@@ -244,5 +244,5 @@
     # result = "abc 246 def 912"
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */

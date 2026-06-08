@@ -41,7 +41,7 @@ class qore_future_private;
 /** Future objects allow a thread to block until a result is available from another thread.
     A Future can only be created by calling QorePromise::getFuture().
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see QorePromise
 */
@@ -67,7 +67,7 @@ public:
 
         @return true if cancelled, false if already complete
 
-        @since Qore 2.4
+        @since Qore 3.0
     */
     DLLEXPORT bool cancel();
 
@@ -100,7 +100,7 @@ private:
     If a Promise is destroyed without being resolved or rejected, the Future will receive a
     \c PROMISE-ERROR exception.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 
     @see QoreFuture
 */

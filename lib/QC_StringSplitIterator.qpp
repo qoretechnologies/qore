@@ -198,7 +198,7 @@ const QoreTypeInfo* StringSplitIterator::getElementType() const {
 int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass StringSplitIterator [arg=StringSplitIterator* i; ns=Qore; vparent=AbstractIterator<string>];
 

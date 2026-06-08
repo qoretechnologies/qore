@@ -270,7 +270,7 @@ DLLEXPORT QoreColumnarResult* qore_columnar_result_from_value(const QoreValue& v
     exported as their decoded value type.
 
     @return 0 on success, non-zero on error
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 DLLEXPORT int qore_columnar_result_export_arrow_c_data(const QoreColumnarResult* result, ArrowSchema* schema,
     ArrowArray* array, ExceptionSink* xsink);
@@ -287,7 +287,7 @@ DLLEXPORT int qore_columnar_result_export_arrow_c_data(const QoreColumnarResult*
     recursive schema metadata.
 
     @return a new QoreColumnarResult, or nullptr on error
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 DLLEXPORT QoreColumnarResult* qore_columnar_result_import_arrow_c_data(ArrowSchema* schema, ArrowArray* array,
     ExceptionSink* xsink);

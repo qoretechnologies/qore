@@ -279,7 +279,7 @@ while (!s.atEnd()) {
 }
     @endcode
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 qclass Scanner [arg=QoreScanner* s; ns=Qore];
 

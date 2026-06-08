@@ -75,7 +75,7 @@ const NT_NUMBER = NT_NUMBER;
 const NT_STRING = NT_STRING;
 
 //! type code for @ref char "char values"
-/** @since %Qore 2.4
+/** @since %Qore 3.0
  */
 const NT_CHAR = NT_CHAR;
 
@@ -471,7 +471,7 @@ const HTTP2_MODE_H2C_UPGRADE = HTTP2_MODE_H2C_UPGRADE;
 //! HTTP/2 mode enum for type-safe use with HTTPClient::setHttp2Mode()
 /** The enum values match the HTTP2_MODE_* constants.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 enum HTTP2Mode : int {
     //! HTTP/2 disabled mode - only use HTTP/1.x, never attempt HTTP/2
@@ -489,7 +489,7 @@ enum HTTP2Mode : int {
 /** @defgroup http3_mode_constants HTTP/3 Mode Constants
     These constants can be used with HTTPClient::setHttp3Mode() to control HTTP/3 behavior
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 ///@{
 //! HTTP/3 disabled mode - never use HTTP/3
@@ -505,7 +505,7 @@ const HTTP3_MODE_REQUIRED = HTTP3_MODE_REQUIRED;
 //! HTTP/3 mode enum for type-safe use with HTTPClient::setHttp3Mode()
 /** The enum values match the HTTP3_MODE_* constants.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 enum HTTP3Mode : int {
     //! HTTP/3 disabled mode - never use HTTP/3

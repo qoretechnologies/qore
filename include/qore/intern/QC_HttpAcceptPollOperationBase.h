@@ -56,7 +56,7 @@
     The Qore wrapper class (HttpAcceptPollOperation) adds completion context and onComplete()
     callback dispatch.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class HttpAcceptPollOperationPriv : public SocketPollOperationBase {
 public:

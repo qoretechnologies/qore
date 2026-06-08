@@ -72,7 +72,7 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
     Workers are lazily created up to \c max_workers when work arrives.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class AsyncIoControllerPriv;  // forward declaration for DT_CONTINUE_POLL
 
@@ -302,7 +302,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
     Thread safety: all public methods are thread-safe. Internal state is protected
     by a single mutex with careful lock ordering to avoid deadlocks.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
@@ -321,7 +321,7 @@ public:
         adding latency that can cause QUIC handshake timeouts on
         resource-constrained systems.
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     static constexpr int64 AUTOSTOP_GRACE_US = 2000000LL;
 
@@ -856,7 +856,7 @@ private:
     //! Per-I/O-thread context — each thread owns its own event loop, cache, and socket state
     /** Multiple IoThreadContext instances enable nginx-style per-thread isolation with
         zero lock contention during normal I/O processing.
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     struct IoThreadContext {
         MpscQueue<Command> cmdq;          //!< Lock-free command queue for this thread
@@ -945,7 +945,7 @@ private:
             taking over the fd from the HCIO poll op) and is accepted.  The
             TTL is decremented each processCommands() cycle and the entry
             erased at zero; it is only a memory-hygiene bound.
-            @since %Qore 2.3
+            @since %Qore 3.0
         */
         std::unordered_map<std::string, CancelInfo> cancelled_keys;
 
@@ -1183,13 +1183,13 @@ private:
         int thread_idx);
 
     //! Update extra fd registrations for an operation
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void updateExtraFds(IoThreadContext& t, const std::string& key, QoreObject* socket,
         QoreHashNode* poll_info, ExceptionSink* xsink);
 
     //! Unregister extra fds for an operation
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL void unregisterExtraFds(IoThreadContext& t, const std::string& key, ExceptionSink* xsink);
 
@@ -1218,7 +1218,7 @@ private:
         @param old_fd the fd to release
         @param expected_hash the sock_hash that should currently own \c old_fd
         @param xsink exception sink
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void releaseFdIfOwner(IoThreadContext& t, int old_fd,
         const std::string& expected_hash, ExceptionSink* xsink);

@@ -139,7 +139,7 @@ public:
       *
       * @return true if write() will never block
       *
-      * @since %Qore 2.3
+      * @since %Qore 3.0
       */
     virtual bool isIoThreadSafe() const { return supportsNonBlockingIo(); }
 

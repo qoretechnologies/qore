@@ -708,7 +708,7 @@ buffer<int64> ids = result.getColumn("id");
     - Drivers with @ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT can fill the result directly; other drivers use the
       compatibility fallback based on SQLStatement::fetchColumns()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 ColumnarResult SQLStatement::fetchColumnar(softint rows = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return qore_columnar_result_to_object(stmt->fetchColumnar((int)rows, xsink), xsink);

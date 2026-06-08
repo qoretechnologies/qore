@@ -116,7 +116,7 @@ public:
 
     //! Throws an exception if the socket is owned by async controller execution
     /** @return 0 if sync I/O is allowed, -1 if not (exception raised on @a xsink)
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL int checkSyncAllowed(ExceptionSink* xsink) {
         // must be called with the lock held
@@ -463,7 +463,7 @@ public:
     DLLLOCAL static void setAccept(QoreSocketObject& sock, QoreObject* o);
 
     //! Returns the my_socket_priv pointer for a QoreSocketObject (for internal use)
-    /** @since %Qore 2.3
+    /** @since %Qore 3.0
     */
     DLLLOCAL static my_socket_priv* getPriv(QoreSocketObject& sock) {
         return sock.priv;

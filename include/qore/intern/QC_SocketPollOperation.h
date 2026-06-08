@@ -799,7 +799,7 @@ private:
     - H2F_FLUSHING: Calling sendPendingData() to write pending data to socket
     - H2F_DONE: All pending data has been written
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketHttp2FlushPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -858,7 +858,7 @@ private:
     This eliminates the overhead of separate send, addIdleConnection, and header
     read operations in the keep-alive path.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketSendAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -913,7 +913,7 @@ private:
 //! Poll operation to send InputStream data over a socket
 /** State machine: reading-chunk -> sending-chunk -> done
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketSendInputStreamPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -1007,7 +1007,7 @@ private:
 //! Poll operation to send an InputStream as HTTP chunked body data
 /** State machine: reading-chunk -> sending-chunk -> done
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketSendHttpChunkedInputStreamPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -1103,7 +1103,7 @@ private:
 //! Poll operation to receive socket data and write it to an OutputStream
 /** State machine: receiving-chunk -> writing-chunk -> done
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketRecvOutputStreamPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -1197,7 +1197,7 @@ private:
 //! Poll operation to write already-received data to an OutputStream
 /** State machine: writing -> done
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketWriteOutputStreamPollOperation : public SocketPollOperationBase {
 public:
@@ -1272,7 +1272,7 @@ private:
     SendHeaders -> StreamBody -> [Idle -> ReadingHeader -> Complete | Timeout]  (fused=true)
                               -> [Complete]                                     (fused=false)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketSendStreamAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -1376,7 +1376,7 @@ constexpr int H2C_CLOSED = 5;
     - Supports continuous reading mode for true multiplexing
     - goalReached() returns true when a response is ready or connection closed
 
-    @since Qore 2.3
+    @since Qore 3.0
 */
 class SocketHttp2ClientMultiplexPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -1471,7 +1471,7 @@ private:
     Output is a hash with: data (binary), address (string), port (int),
     family (int), familystr (string).
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketRecvFromPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -1520,7 +1520,7 @@ private:
 //! Poll operation for non-blocking UDP sendto()
 /** Sends a datagram to the specified destination address.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketSendToPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -1589,7 +1589,7 @@ enum class QCS : int {
 /** Creates a QUIC connection, performs the TLS 1.3 handshake over QUIC,
     sets up HTTP/3, submits a request, and reads the response.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketQuicClientPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -1821,7 +1821,7 @@ private:
     creates new sessions for Initial packets, and reads HTTP/3 requests.
     Supports multiple concurrent QUIC connections on a single UDP socket.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketQuicServerPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -2026,7 +2026,7 @@ private:
 //! Poll operation to send an HTTP/3 response over QUIC
 /** Queues an HTTP/3 response and flushes all pending QUIC packets.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketQuicSendResponsePollOperation : public SocketPollSocketOperationBase {
 public:
@@ -2139,7 +2139,7 @@ enum class QCS_SS : int {
                                                   |
                                             QCS_SS_RECV_ACK (backpressure/flow control)
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class SocketQuicSendStreamingResponsePollOperation : public SocketPollSocketOperationBase {
 public:

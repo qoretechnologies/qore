@@ -525,7 +525,7 @@ buffer<int64> ids = result.id;
     - DatasourcePool::vselectTyped()
     - Datasource::selectTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 auto DatasourcePool::selectTyped(string sql, ...) {
    ReferenceHolder<QoreListNode> vargs(args->size() > 1 ? args->copyListFrom(1) : 0, xsink);
@@ -555,7 +555,7 @@ buffer<int64> ids = result.getColumn("id");
     - DatasourcePool::vselectColumnar()
     - Datasource::selectColumnar()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 ColumnarResult DatasourcePool::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY] {
    ReferenceHolder<QoreListNode> vargs(args->size() > 1 ? args->copyListFrom(1) : 0, xsink);
@@ -640,7 +640,7 @@ printf("%d\n", rows[0].id);
     - DatasourcePool::vselectRowsTyped()
     - Datasource::selectRowsTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 auto DatasourcePool::selectRowsTyped(string sql, ...) {
    ReferenceHolder<QoreListNode> vargs(args->size() > 1 ? args->copyListFrom(1) : 0, xsink);
@@ -699,7 +699,7 @@ buffer<int64> ids = result.id;
 
     @see DatasourcePool::selectTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 auto DatasourcePool::vselectTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
    return ds->selectTyped(sql, arguments, xsink);
@@ -717,7 +717,7 @@ auto DatasourcePool::vselectTyped(string sql, *softlist<auto> arguments) [flags=
 
     @see DatasourcePool::selectColumnar()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 ColumnarResult DatasourcePool::vselectColumnar(string sql, *softlist<auto> arguments)
         [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -797,7 +797,7 @@ printf("%d\n", rows[0].id);
 
     @see DatasourcePool::selectRowsTyped()
 
-    @since %Qore 2.3
+    @since %Qore 3.0
  */
 auto DatasourcePool::vselectRowsTyped(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
    return ds->selectRowsTyped(sql, arguments, xsink);

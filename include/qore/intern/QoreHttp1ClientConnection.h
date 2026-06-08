@@ -49,7 +49,7 @@ class Http1ClientPollOperationPriv;
     race where the I/O thread starts the SSL handshake before configureSsl()
     can run.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 struct Http1SslConfig {
     int verify_mode = 0;        //!< SSL_VERIFY_NONE or SSL_VERIFY_PEER etc.
@@ -67,7 +67,7 @@ struct Http1SslConfig {
     The connection starts in CONNECTING state; callers must call
     @ref waitForReadyOrError before @ref submitRequest.
 
-    @since %Qore 2.3
+    @since %Qore 3.0
 */
 class Http1ClientConnection : public HttpClientConnectionBase {
 public:
@@ -110,7 +110,7 @@ public:
         @param mgr optional owning manager
         @param ssl_config SSL configuration applied before submission
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL Http1ClientConnection(const char* target_host, int target_port,
         bool ssl_required, const char* proxy_host, int proxy_port,
@@ -153,7 +153,7 @@ public:
         @param mgr optional owning manager — registered via
             @ref setManager before controller submission
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL Http1ClientConnection(QoreObject* adopted_sock_obj,
         QoreSocketObject* adopted_sock_priv,
@@ -180,7 +180,7 @@ public:
             hash; must outlive this connection (or be copied internally —
             this implementation copies)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void setOwner(const char* owner) {
         if (owner) {
@@ -198,7 +198,7 @@ public:
         @param cert client certificate for mutual TLS (will be ref'd; nullptr = none)
         @param key client private key for mutual TLS (will be ref'd; nullptr = none)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL void configureSsl(int verify_mode, bool accept_all,
         QoreSSLCertificate* cert, QoreSSLPrivateKey* key);
@@ -266,7 +266,7 @@ public:
         @param xsink exception sink
         @return stream_id on success, -1 on error
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLEXPORT int64_t submitRequestWithAction(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
@@ -290,7 +290,7 @@ public:
         @param xsink exception sink
         @return 0 on success, -1 on failure (exception raised)
 
-        @since %Qore 2.3
+        @since %Qore 3.0
     */
     DLLLOCAL int takeSocket(QoreObject*& sock_obj_out,
         QoreSocketObject*& sock_priv_out, ExceptionSink* xsink);
