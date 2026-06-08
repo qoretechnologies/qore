@@ -536,11 +536,10 @@ AbstractIterator<string> <string>::splitString(string separator) [const;flags=RE
 /** Each element is a zero-copy @ref Qore::StringSplitIterator "StringSplitIterator"
     view covering one codepoint of the source string.  Works with any encoding
     Qore supports (the iterator walks codepoints using
-    @ref QoreString::getUnicodePointFromBytePos()).
+    \c QoreString::getUnicodePointFromBytePos()).
 
-    Streaming counterpart of iterating over @ref <string>::toList or of
-    iterating over `str.chars()`-style composition; the intermediate list is
-    never materialised.
+    Streaming counterpart of the eager list-returning @ref <string>::split() "<string>::split()"
+    pseudo-methods; the intermediate list is never materialised.
 
     @return a @ref Qore::StringSplitIterator "StringSplitIterator" in
             SPLIT_CHARS mode
@@ -560,7 +559,7 @@ AbstractIterator<string> <string>::splitChars() [const;flags=CONSTANT] {
 //! Returns a lazy iterator yielding each Unicode codepoint of the string as an integer.
 /** Each yielded value is the codepoint at the iterator's current position
     (decoded from the source string's encoding via
-    @ref QoreString::getUnicodePointFromBytePos()).  Designed for
+    \c QoreString::getUnicodePointFromBytePos()).  Designed for
     character-aware tokenizers and parsers.
 
     For pure ASCII / byte-oriented work,
@@ -589,7 +588,7 @@ AbstractIterator<int> <string>::codePointIterator() [const;flags=CONSTANT] {
 
 //! Returns a lazy iterator yielding each Unicode codepoint of the string as a char value.
 /** Each yielded value is a @ref char decoded from the source string's
-    encoding via @ref QoreString::getUnicodePointFromBytePos().  This is the
+    encoding via \c QoreString::getUnicodePointFromBytePos().  This is the
     pseudo-method used by `iterate string`.
 
     For integer codepoints, use
@@ -677,8 +676,9 @@ AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int
 
 //! Splits a string into a list of components based on a separator string and a quote character
 /** The quote character can appear as the first part of a field, in which case it is assumed to designate the entire
-    field. If instances of the quote character are found in the field preceded by a backquote character (\c "\"), then
-    these quote characters are included as part of the field's text and not treated as quote characters.
+    field. If instances of the quote character are found in the field preceded by a backquote character
+    (<tt>"&#92;"</tt>), then these quote characters are included as part of the field's text and not treated as quote
+    characters.
     Also the separator character can appear as a part of a field with this variant.
     This variant is useful for parsing CSV files, for example.
 
@@ -885,7 +885,7 @@ int <string>::regexCount(string pattern, int options = 0) [const;flags=RET_VALUE
 }
 
 //! Extracts named capture groups from the string using a regular expression pattern
-/** Named groups are defined with \c (?<name>...) or \c (?P<name>...) syntax.
+/** Named groups are defined with <tt>(?&lt;name&gt;...)</tt> or <tt>(?P&lt;name&gt;...)</tt> syntax.
 
     @param pattern the regular expression pattern containing named groups
     @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to extract all matches
@@ -1392,7 +1392,7 @@ int <string>::getUnicode(int offset = 0) [const;flags=RET_VALUE_ONLY,NAMED_ARGS]
 }
 
 //! Returns the raw byte at the given byte offset, or @ref nothing if the offset is out of range.
-/** Unlike @ref Qore::zzz8stringzzz9::operator[]() "string[]" which allocates a fresh
+/** Unlike \c string[] which allocates a fresh
     one-character QoreStringNode per call, this pseudo-method returns the byte as an
     integer (0..255) with no allocation.  Designed for hot byte-oriented scan loops
     (tokenizers, simple parsers) where the per-call string allocation dominates.

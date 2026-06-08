@@ -172,7 +172,7 @@
       hash-of-\c buffer<T> input, DataFrame-backed providers can search with DPQL while preserving
       \c DataFrameBlock output, and Mapper can consume columnar input from \c mapAuto(), \c mapAutoInput(), and
       autonomous provider-to-provider runs; dense DPQL filtering includes scalar, computed scalar, and
-      expression-to-expression predicates such as \c @amount \c >= \c @target, numeric, trim/concat/null-handling,
+      expression-to-expression predicates such as \c \@amount \c >= \c \@target, numeric, trim/concat/null-handling,
       case-folding, date-part, and row-independent date arithmetic expressions, native string predicates including
       \c containsAny, list membership predicates, list/hash accessors, structured ternary values, and
       ICU-backed locale-sensitive string predicates when a DataProvider expression passes an \c i18n locale options
@@ -215,8 +215,8 @@
     - @ref <binary>::toHexArray() "<binary>::toHexArray()" general-purpose hex formatter
 
     <i>Regular expressions:</i>
-    - new options @ref RE_Ungreedy "RE_Ungreedy", @ref RE_DollarEndOnly "RE_DollarEndOnly",
-      @ref RE_Anchored "RE_Anchored", @ref RE_DupNames "RE_DupNames"
+    - new options @ref Qore::RE_Ungreedy "RE_Ungreedy", @ref Qore::RE_DollarEndOnly "RE_DollarEndOnly",
+      @ref Qore::RE_Anchored "RE_Anchored", @ref Qore::RE_DupNames "RE_DupNames"
     - named capture groups via @ref Qore::regex_extract_named() "regex_extract_named()" /
       @ref <string>::regexExtractNamed() "<string>::regexExtractNamed()"
     - detailed match extraction with @ref Qore::RegexMatchInfo "RegexMatchInfo" hashdecl
@@ -757,9 +757,9 @@ int echoed = child.echo(value);
     The @ref Qore::ExecMode "ExecMode" enum and @ref Qore::Program "Program" class methods provide
     type-safe programmatic control over execution modes:
 
-    - new @ref Qore::ExecMode "ExecMode" enum with values @ref Qore::ExecMode::EM_AST "EM_AST",
-      @ref Qore::ExecMode::EM_IR "EM_IR", @ref Qore::ExecMode::EM_JIT "EM_JIT", and
-      @ref Qore::ExecMode::EM_TIERED "EM_TIERED"
+    - new @ref Qore::ExecMode "ExecMode" enum with values \c EM_AST,
+      \c EM_IR, \c EM_JIT, and
+      \c EM_TIERED
     - new @ref Qore::Program::setExecMode() "Program::setExecMode(enum<ExecMode>)" method to set the
       execution mode for a @ref Qore::Program "Program" object
     - new @ref Qore::Program::getExecMode() "Program::getExecMode()" method to query the current
@@ -1250,6 +1250,83 @@ cargo install tree-sitter-cli@0.26.5
       (\c stripAnsi, tokenizer scans).
     @endparblock
 
+    @par Comprehensive Regular Expression Improvements
+    @parblock
+    The @ref qore_regex "regular expression" subsystem has been significantly enhanced:
+
+    <b>Bug Fixes:</b>
+    - \c $0 backreference in substitution replacement strings now correctly references the full match text
+      (previously \c $0 was silently ignored)
+    - @ref Qore::RE_Ungreedy "RE_Ungreedy" (\c QRE_UNGREEDY) is now accepted by the regex API (previously defined
+      in the public header but rejected at runtime)
+
+    <b>New Options and Constants:</b>
+    - @ref Qore::RE_Ungreedy "RE_Ungreedy" constant and \c /U scanner flag for ungreedy quantifiers
+    - @ref Qore::RE_DollarEndOnly "RE_DollarEndOnly" constant — \c $ matches only at true end of string
+    - @ref Qore::RE_Anchored "RE_Anchored" constant — forces anchored matching
+    - @ref Qore::RE_DupNames "RE_DupNames" constant — allows duplicate named subpatterns
+
+    <b>Named Capture Groups:</b>
+    - New @ref Qore::Regex::extractNamedGroups() "Regex::extractNamedGroups()" and
+      @ref Qore::RegexExtract::extractNamedGroups() "RegexExtract::extractNamedGroups()" methods
+    - New @ref Qore::regex_extract_named() "regex_extract_named()" function
+    - New @ref <string>::regexExtractNamed() "<string>::regexExtractNamed()" pseudo-method
+    - Supports <tt>(?&lt;name&gt;...)</tt> and <tt>(?P&lt;name&gt;...)</tt> syntax; returns a hash keyed by group name
+
+    <b>Detailed Match Extraction:</b>
+    - New @ref Qore::RegexMatchInfo "RegexMatchInfo" hashdecl with match text, byte offset, length,
+      captured groups, and named groups
+    - New @ref Qore::Regex::extractDetailed() "Regex::extractDetailed()" and
+      @ref Qore::RegexExtract::extractDetailed() "RegexExtract::extractDetailed()" methods
+    - New @ref Qore::regex_extract_detailed() "regex_extract_detailed()" function and
+      @ref <string>::regexExtractDetailed() "<string>::regexExtractDetailed()" pseudo-method
+
+    <b>Callback-Based Substitution:</b>
+    - New @ref Qore::RegexSubst::subst() "RegexSubst::subst(str, callback)" overload accepting a
+      \c code<string(hash<RegexMatchInfo>)> callback for dynamic replacement computation
+    - New @ref Qore::regex_subst() "regex_subst()" overload with callback parameter
+
+    <b>New Utility Functions:</b>
+    - @ref Qore::regex_count() "regex_count()" function, @ref Qore::Regex::count() "Regex::count()" /
+      @ref Qore::RegexExtract::count() "RegexExtract::count()" methods,
+      and @ref <string>::regexCount() "<string>::regexCount()" pseudo-method for efficient match counting
+    - @ref Qore::regex_escape() "regex_escape()" built-in function and
+      @ref <string>::regexEscape() "<string>::regexEscape()" pseudo-method for escaping
+      regex metacharacters
+    - @ref <string>::splitRegex() "<string>::splitRegex()" now accepts an optional \a limit parameter
+      to cap the number of splits
+    - Perl-style case conversion escape sequences in regex replacement strings: \c \\U (uppercase until
+      \c \\E), \c \\L (lowercase until \c \\E), \c \\u (uppercase next char), \c \\l (lowercase next char),
+      \c \\E (end case conversion); all Unicode-aware
+    @endparblock
+
+    @par Unicode Case Conversion Fixes
+    @parblock
+    - Fixed a bug in 2-byte UTF-8 encoding in \c concatUTF8FromUnicode() that corrupted all codepoints in
+      the U+0080-U+07FF range (Cyrillic, Armenian, Hebrew, Arabic, etc.) during case conversion
+    - @ref QoreString::toupr() "QoreString::toupr()" and @ref QoreString::tolwr() "QoreString::tolwr()"
+      are now Unicode-aware (previously ASCII-only)
+    - Added 1-to-many uppercase mappings: ß→SS, ﬁ→FI, ﬂ→FL, ﬃ→FFI, ﬄ→FFL, ﬅ→ST, ﬆ→ST
+    @endparblock
+
+    @par Brace-Delimited Regular Expressions
+    @parblock
+    All regular expression operators now support brace (<tt>{}</tt>) delimiters as an alternative to
+    forward slashes.  This is particularly useful when patterns contain literal forward slashes (URLs,
+    file paths), avoiding the need to escape them:
+    - <tt>m{pattern}flags</tt> — match
+    - <tt>s{pattern}{replacement}flags</tt> — substitution
+    - <tt>x{pattern}flags</tt> — extraction
+    - <tt>tr{source}{target}</tt> — transliteration
+    - <tt>case m{pattern}:</tt> — case matching
+
+    Brace nesting in PCRE2 quantifiers (e.g., <tt>\\d{3}</tt>, <tt>a{2,5}</tt>) is handled automatically
+    via depth tracking.  The \c m prefix is required for brace-delimited match (bare <tt>{</tt> is not
+    supported to avoid ambiguity with blocks).
+
+    See @ref qore_regex_brace_delimiters for more information.
+    @endparblock
+
     @par Iterator Native Fast-Path Dispatch
     @parblock
     The @ref map "map", @ref select "select", and @ref foldl "foldl" functional operators
@@ -1423,38 +1500,42 @@ foreach string module_name in (registry.getProcessModules()) {
 }
     @endcode
 
-    Trace variables such as \c QORE_PLUGIN_REGISTER_TRACE,
-    \c QORE_PLUGIN_DISPATCH_TRACE, \c QORE_PLUGIN_VERIFY_TRACE,
-    \c QORE_PLUGIN_QORD_TRACE, and \c QORE_PLUGIN_CROSS_TYPE_TRACE expose
-    registration, dispatch, verification, QORD, and operation-resolution
-    decisions. \c QORE_PLUGIN_FALLBACK_BUFFER controls the capacity of each
-    Program's rolling fallback-site buffer used by
-    @ref Qore::Reflection::PluginRegistry::getRecentFallbackSites() "PluginRegistry::getRecentFallbackSites()". Dense-buffer helper dispatch
-    now has dedicated IR opcodes that validate \c buffer<T> operands before
-    passing raw frames to module helpers. Plugin value nodes can be wrapped with
-    \c qore_plugin_make_value_v1(), serialized as \c VT_PLUGIN_INSTANCE in QORD,
-    and round-tripped through \c Serializable using the registered plugin
-    serializer callbacks. Modules can opt into inline LLVM lowering with the
-    \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension from
-    \c <qore/QorePluginLLVM.h>; callbacks receive operation metadata plus the
-    gated \c fp_reassociation_enabled decision, incompatible optional LLVM
-    extensions fall back to runtime-helper dispatch, and required mismatches
-    fail registration.
-    Registered operations can also provide \c QorePluginLoweringCallback
-    pattern matchers so IR lowering can emit plugin-dispatch IR before generic
-    \c any fallback; claimed-node \c NotApplicable results fail with
+    <b>Tracing and diagnostics</b>: the following environment variables expose internal decisions:
+    - \c QORE_PLUGIN_REGISTER_TRACE - registration
+    - \c QORE_PLUGIN_DISPATCH_TRACE - dispatch
+    - \c QORE_PLUGIN_VERIFY_TRACE - verification
+    - \c QORE_PLUGIN_QORD_TRACE - QORD
+    - \c QORE_PLUGIN_CROSS_TYPE_TRACE - operation resolution
+
+    \c QORE_PLUGIN_FALLBACK_BUFFER controls the capacity of each Program's rolling fallback-site buffer used by
+    @ref Qore::Reflection::PluginRegistry::getRecentFallbackSites() "PluginRegistry::getRecentFallbackSites()".
+
+    <b>Values and serialization</b>:
+    - Dense-buffer helper dispatch now has dedicated IR opcodes that validate \c buffer<T> operands before passing
+      raw frames to module helpers.
+    - Plugin value nodes can be wrapped with \c qore_plugin_make_value_v1(), serialized as \c VT_PLUGIN_INSTANCE in
+      QORD, and round-tripped through \c Serializable using the registered plugin serializer callbacks.
+
+    <b>Inline LLVM lowering</b>: modules can opt in with the \c QORE_PLUGIN_LLVM_CODEGEN_EXTENSION_ID extension from
+    \c <qore/QorePluginLLVM.h>:
+    - callbacks receive operation metadata plus the gated \c fp_reassociation_enabled decision;
+    - incompatible <em>optional</em> LLVM extensions fall back to runtime-helper dispatch;
+    - <em>required</em> mismatches fail registration.
+
+    Registered operations can also provide \c QorePluginLoweringCallback pattern matchers so IR lowering can emit
+    plugin-dispatch IR before the generic \c any fallback; claimed-node \c NotApplicable results fail with
     \c PLUGIN-LOWERING-CLAIM-VIOLATED.
-    @ref Qore::Reflection::PluginRegistry::getOperations() "PluginRegistry::getOperations()" now reflects whether a lowering callback
-    or accepted LLVM codegen hook is registered for each operation, allowing
-    descriptor tools to verify optimization coverage.
-    See @ref plugin_types for the complete module-author
-    overview, current limitations, the
-    \c examples/plugins/sample-buffer reference module, and the advisory
-    \c examples/plugins/qore-plugin-lint descriptor linter. The
-    \c tools/plugin-type-verify.sh runner combines the registry smoke test,
-    descriptor linting, and optional AST/IR/JIT/tiered consumer workloads;
-    the in-tree dataframe consumer is available through the
-    \c plugin-type-verify-dataframe CMake target.
+    @ref Qore::Reflection::PluginRegistry::getOperations() "PluginRegistry::getOperations()" now reflects whether a
+    lowering callback or accepted LLVM codegen hook is registered for each operation, allowing descriptor tools to
+    verify optimization coverage.
+
+    <b>References and tooling</b>: see @ref plugin_types for the complete module-author overview and current
+    limitations, along with:
+    - \c examples/plugins/sample-buffer - reference module;
+    - \c examples/plugins/qore-plugin-lint - advisory descriptor linter;
+    - \c tools/plugin-type-verify.sh - runner combining the registry smoke test, descriptor linting, and optional
+      AST/IR/JIT/tiered consumer workloads;
+    - \c plugin-type-verify-dataframe - CMake target for the in-tree dataframe consumer.
     @endparblock
 
     @par RFC 7231 / RFC 2822 Date Parsing
@@ -1483,12 +1564,6 @@ foreach string module_name in (registry.getProcessModules()) {
       <a href="https://github.com/qoretechnologies/module-ncurses">module-ncurses</a> \c qrepl application.
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
-    - JIT and AOT code generation
-      - generated functions now always maintain the frame-pointer chain (previously the frame pointer was
-        omitted at higher optimization levels). On AArch64 this could leave a Qore frame unwalkable, so an
-        external frame-pointer-based stack unwinder running while a Qore frame was on the stack (e.g.
-        V8/Abseil capturing a backtrace during V8 module init) could follow a broken chain and crash with a
-        segfault; this manifested as an AArch64-only crash in AOT-compiled programs that load the \c v8 module
     - Core language
       - improved @ref Qore::system() "system()" on Linux to use \c posix_spawn(), restore an unblocked signal mask
         in child processes, and terminate the entire process group on sandbox interrupts
@@ -1574,83 +1649,6 @@ foreach string module_name in (registry.getProcessModules()) {
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
 
     @subsection qore_3_0_0_updated_modules Updated Modules
-    @par Comprehensive Regular Expression Improvements
-    @parblock
-    The @ref qore_regex "regular expression" subsystem has been significantly enhanced:
-
-    <b>Bug Fixes:</b>
-    - \c $0 backreference in substitution replacement strings now correctly references the full match text
-      (previously \c $0 was silently ignored)
-    - @ref RE_Ungreedy "RE_Ungreedy" (\c QRE_UNGREEDY) is now accepted by the regex API (previously defined
-      in the public header but rejected at runtime)
-
-    <b>New Options and Constants:</b>
-    - @ref RE_Ungreedy "RE_Ungreedy" constant and \c /U scanner flag for ungreedy quantifiers
-    - @ref RE_DollarEndOnly "RE_DollarEndOnly" constant — \c $ matches only at true end of string
-    - @ref RE_Anchored "RE_Anchored" constant — forces anchored matching
-    - @ref RE_DupNames "RE_DupNames" constant — allows duplicate named subpatterns
-
-    <b>Named Capture Groups:</b>
-    - New @ref Qore::Regex::extractNamedGroups() "Regex::extractNamedGroups()" and
-      @ref Qore::RegexExtract::extractNamedGroups() "RegexExtract::extractNamedGroups()" methods
-    - New @ref Qore::regex_extract_named() "regex_extract_named()" function
-    - New @ref <string>::regexExtractNamed() "<string>::regexExtractNamed()" pseudo-method
-    - Supports \c (?<name>...) and \c (?P<name>...) syntax; returns a hash keyed by group name
-
-    <b>Detailed Match Extraction:</b>
-    - New @ref Qore::RegexMatchInfo "RegexMatchInfo" hashdecl with match text, byte offset, length,
-      captured groups, and named groups
-    - New @ref Qore::Regex::extractDetailed() "Regex::extractDetailed()" and
-      @ref Qore::RegexExtract::extractDetailed() "RegexExtract::extractDetailed()" methods
-    - New @ref Qore::regex_extract_detailed() "regex_extract_detailed()" function and
-      @ref <string>::regexExtractDetailed() "<string>::regexExtractDetailed()" pseudo-method
-
-    <b>Callback-Based Substitution:</b>
-    - New @ref Qore::RegexSubst::subst() "RegexSubst::subst(str, callback)" overload accepting a
-      \c code<string(hash<RegexMatchInfo>)> callback for dynamic replacement computation
-    - New @ref Qore::regex_subst() "regex_subst()" overload with callback parameter
-
-    <b>New Utility Functions:</b>
-    - @ref Qore::regex_count() "regex_count()" function, @ref Qore::Regex::count() "Regex::count()" /
-      @ref Qore::RegexExtract::count() "RegexExtract::count()" methods,
-      and @ref <string>::regexCount() "<string>::regexCount()" pseudo-method for efficient match counting
-    - @ref Qore::regex_escape() "regex_escape()" built-in function and
-      @ref <string>::regexEscape() "<string>::regexEscape()" pseudo-method for escaping
-      regex metacharacters
-    - @ref <string>::splitRegex() "<string>::splitRegex()" now accepts an optional \a limit parameter
-      to cap the number of splits
-    - Perl-style case conversion escape sequences in regex replacement strings: \c \\U (uppercase until
-      \c \\E), \c \\L (lowercase until \c \\E), \c \\u (uppercase next char), \c \\l (lowercase next char),
-      \c \\E (end case conversion); all Unicode-aware
-    @endparblock
-
-    @par Unicode Case Conversion Fixes
-    @parblock
-    - Fixed a bug in 2-byte UTF-8 encoding in \c concatUTF8FromUnicode() that corrupted all codepoints in
-      the U+0080-U+07FF range (Cyrillic, Armenian, Hebrew, Arabic, etc.) during case conversion
-    - @ref QoreString::toupr() "QoreString::toupr()" and @ref QoreString::tolwr() "QoreString::tolwr()"
-      are now Unicode-aware (previously ASCII-only)
-    - Added 1-to-many uppercase mappings: ß→SS, ﬁ→FI, ﬂ→FL, ﬃ→FFI, ﬄ→FFL, ﬅ→ST, ﬆ→ST
-    @endparblock
-
-    @par Brace-Delimited Regular Expressions
-    @parblock
-    All regular expression operators now support brace (<tt>{}</tt>) delimiters as an alternative to
-    forward slashes.  This is particularly useful when patterns contain literal forward slashes (URLs,
-    file paths), avoiding the need to escape them:
-    - <tt>m{pattern}flags</tt> — match
-    - <tt>s{pattern}{replacement}flags</tt> — substitution
-    - <tt>x{pattern}flags</tt> — extraction
-    - <tt>tr{source}{target}</tt> — transliteration
-    - <tt>case m{pattern}:</tt> — case matching
-
-    Brace nesting in PCRE2 quantifiers (e.g., <tt>\\d{3}</tt>, <tt>a{2,5}</tt>) is handled automatically
-    via depth tracking.  The \c m prefix is required for brace-delimited match (bare <tt>{</tt> is not
-    supported to avoid ambiguity with blocks).
-
-    See @ref qore_regex_brace_delimiters for more information.
-    @endparblock
-
     - @ref astparserintro "astparser" module
       - added a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based parser backend
         for Qore source code analysis, providing a full concrete syntax tree (CST) for accurate formatting and
@@ -1932,7 +1930,7 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref voyagerestclientintro "VoyageRestClient" module
       - @ref QoreRagUtils::VoyageReranker::rerank() "VoyageReranker::rerank()" updated
-        for the new optional \c *hash<auto> opts parameter on
+        for the new optional <tt>*hash&lt;auto&gt;</tt> opts parameter on
         @ref QoreRagUtils::AbstractReranker "AbstractReranker"; forwards
         \c truncation, \c max_chunks_per_doc, and \c return_documents to Voyage
 
@@ -2186,8 +2184,8 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref mongodbintro "mongodb" module
       - new builtin module providing <a href="https://www.mongodb.com/">MongoDB</a> client connectivity using libmongoc
       - provides MongoClient, MongoDatabase, MongoCollection, MongoCursor, and ObjectId classes
-      - MongoCursor is now generic as <tt>MongoCursor<DocT: hash<auto> = hash<auto>></tt>; MongoCollection::find()
-        and MongoCollection::aggregate() return <tt>MongoCursor<hash<auto>></tt>, and cursor next()/toList() preserve
+      - MongoCursor is now generic as <tt>MongoCursor&lt;DocT: hash&lt;auto&gt; = hash&lt;auto&gt;&gt;</tt>; MongoCollection::find()
+        and MongoCollection::aggregate() return <tt>MongoCursor&lt;hash&lt;auto&gt;&gt;</tt>, and cursor next()/toList() preserve
         the document type parameter
       - full CRUD operations support (insertOne, insertMany, find, findOne, updateOne, updateMany, deleteOne,
         deleteMany)
@@ -3457,7 +3455,7 @@ foreach string module_name in (registry.getProcessModules()) {
       - separated from QoreRagUtils so REST client modules can supply embedder
         and reranker implementations without forming a dependency cycle
       - @ref QoreRagUtils::AbstractReranker::rerank() "AbstractReranker::rerank()" gains a
-        trailing optional \c *hash<auto> opts parameter so cloud rerankers (Cohere, Voyage,
+        trailing optional <tt>*hash&lt;auto&gt;</tt> opts parameter so cloud rerankers (Cohere, Voyage,
         Jina) can accept per-call options (\c max_chunks_per_doc, \c rank_fields,
         \c truncation) without each defining a private API; existing subclasses updated
       - \c EmbedderModuleMap extended with lazy-load entries for \c bedrock and \c vertex-ai;
@@ -4194,9 +4192,9 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - \c username
       - \c password
     - The thousands separator can be suppressed in number formatting using the special character \c ? in
-      - @ref <float>::format(string) "<float>::format()"
-      - @ref <int>::format(string) "<int>::format()"
-      - @ref <number>::format(string) "<number>::format()"
+      - @ref <float>::format() "<float>::format()"
+      - @ref <int>::format() "<int>::format()"
+      - @ref <number>::format() "<number>::format()"
       - @ref Qore::format_number(string, softfloat) "format_number(string, softfloat)"
     - Types can now return hashes with simple types for accept and returning types for compatibility reasons
       (<a href="https://github.com/qoretechnologies/qore/issues/4876">issue 4876</a>)
@@ -7881,7 +7879,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - fixed bugs where calls to @ref Qore::Socket::upgradeClientToSSL() "Socket::upgradeClientToSSL()" and @ref Qore::Socket::upgradeServerToSSL() "Socket::upgradeServerToSSL()" were ignored with no exception thrown if the socket was not connected (<a href="https://github.com/qoretechnologies/qore/issues/1258">issue 1258</a>)
     - fixed a bug where a closure created in an object scope could not be called if the object had been deleted, even if the closure did not refer to the object (<a href="https://github.com/qoretechnologies/qore/issues/1303">issue 1303</a>)
     - fixed a bug where @ref Qore::ord() "ord()" would return negative numbers for bytes with the high bit set with compilers where <tt>char</tt> is the same as <tt>signed char</tt> (<a href="https://github.com/qoretechnologies/qore/issues/1385">issue 1385</a>)
-    - fixed a bug where @ref Qore::int(softint) "int(number)" returned rounded value instead of the integer part (while @ref Qore::int(softint) "int(float)" behaved correctly; also cf. initializing a softint value from a number vs. from a float) (<a href="https://github.com/qoretechnologies/qore/issues/1463">issue 1463</a>)
+    - fixed a bug where \c int(number) returned rounded value instead of the integer part (while \c int(float) behaved correctly; also cf. initializing a softint value from a number vs. from a float) (<a href="https://github.com/qoretechnologies/qore/issues/1463">issue 1463</a>)
     - @ref Qore::File::read() "File::read()" now uses character semantics for the length argument (<a href="https://github.com/qoretechnologies/qore/issues/1548">issue 1548</a>)
     - fixed a bug with strongly-typed lvalue assignments with classes created in different @ref Qore::Program "Program" objects (<a href="https://github.com/qoretechnologies/qore/issues/1551">issue 1551</a>)
     - fixed a bug where an ASCII string and the same string in a different encoding and with diacritics could incorrectly be marked as equal (<a href="https://github.com/qoretechnologies/qore/issues/1579">issue 1579</a>)
@@ -9330,7 +9328,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     whereas the new logic will return @ref True "True".  Note that in the case of a string with a single \c "0", both the old and
     new boolean logic returns @ref False "False".\n\n
     Basically with this option set, qore's boolean evaluation becomes like perl's and Python's, whereas any expression that has the following values is @ref False "False": @ref nothing, @ref string "string" \c "0" and @ref string "empty strings", @ref integer "integer", @ref float "float", and @ref number "number" \c 0 (zero), @ref absolute_dates "absolute date" \c 1970-01-01Z (ie the start of the epoch with an offset of 0), @ref relative_dates "relative date" \c 0s (or any  @ref relative_dates "relative date" with a 0 duration), @ref null, @ref binary "empty binary objects", @ref hash "empty hashes", and @ref list "empty lists".  All other values are @ref True "True".
-    @note also affects the @ref Qore::boolean(any) "boolean(any)" function
+    @note also affects the @ref Qore::boolean(auto) "boolean(auto)" function
 
     @par Changes in the Socket Class
     The @ref Qore::Socket "Socket" class was enhanced to support timeouts with non-blocking I/O on all send operations;

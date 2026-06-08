@@ -424,7 +424,7 @@ const PO_NO_CHILD_PO_RESTRICTIONS = PO_NO_CHILD_PO_RESTRICTIONS;
 
 //! Disallows class definitions
 /** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
-    Use @ref ParseOptions with the string name \c "no-class-defs" or the @ref no-class-defs "%no-class-defs"
+    Use @ref Qore::ParseOptions with the string name \c "no-class-defs" or the @ref no-class-defs "%no-class-defs"
     parse directive to enable this option.
 
     @par Example:
@@ -441,7 +441,7 @@ const PO_NO_CLASS_DEFS = PO_NO_CLASS_DEFS;
 
 //! Disallows constant definitions
 /** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
-    Use @ref ParseOptions with the string name \c "no-constant-defs" or the @ref no-constant-defs "%no-constant-defs"
+    Use @ref Qore::ParseOptions with the string name \c "no-constant-defs" or the @ref no-constant-defs "%no-constant-defs"
     parse directive to enable this option.
 
     @par Example:
@@ -519,7 +519,7 @@ const PO_NO_LOCALE_CONTROL = PO_NO_LOCALE_CONTROL;
 
 //! Disallows new namespace definitions
 /** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
-    Use @ref ParseOptions with the string name \c "no-namespace-defs" or the @ref no-namespace-defs "%no-namespace-defs"
+    Use @ref Qore::ParseOptions with the string name \c "no-namespace-defs" or the @ref no-namespace-defs "%no-namespace-defs"
     parse directive to enable this option.
 
     @par Example:
@@ -547,7 +547,7 @@ Mutex m();
     @endcode
 
     @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
-    Use @ref ParseOptions with the string name \c "no-new" or the @ref no-new "%no-new"
+    Use @ref Qore::ParseOptions with the string name \c "no-new" or the @ref no-new "%no-new"
     parse directive to enable this option.
 
     @par Example:
@@ -981,10 +981,10 @@ const PO_NO_ENUM = PO_NO_ENUM;
 
 //! Execution mode for @ref Qore::Program "Program" objects
 /** This enum determines how code is executed:
-    - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
-    - @ref EM_IR: Bytecode interpreter (good balance of startup time and speed)
-    - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
-    - @ref EM_TIERED: Adaptive compilation for modern code (starts with cached IR, promotes hot code to JIT)
+    - \c EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
+    - \c EM_IR: Bytecode interpreter (good balance of startup time and speed)
+    - \c EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
+    - \c EM_TIERED: Adaptive compilation for modern code (starts with cached IR, promotes hot code to JIT)
 
     @see Program::setExecMode()
     @see Program::getExecMode()
@@ -1240,7 +1240,7 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
 }
 
 //! Creates a new Program object with parse options from a ParseOptions object
-/** @param parse_options A @ref ParseOptions object specifying parse options (supports extended options beyond 64 bits)
+/** @param parse_options A @ref Qore::ParseOptions object specifying parse options (supports extended options beyond 64 bits)
     @param independent create an independent Program object with no connection or imports from the calling context
 
     @par Example:
@@ -1976,7 +1976,7 @@ int Program::getParseOptions() [flags=CONSTANT] {
 }
 
 //! Returns the full parse options as a ParseOptions object (including extended options beyond 64 bits)
-/** @return a @ref ParseOptions object with all parse options
+/** @return a @ref Qore::ParseOptions object with all parse options
 
     @par Example:
     @code{.py}
@@ -2034,7 +2034,7 @@ nothing Program::setParseOptions(softint parse_options = PO_DEFAULT) [flags=NAME
 }
 
 //! Sets parse options from a ParseOptions object
-/** @param parse_options A @ref ParseOptions object with the parse options to set
+/** @param parse_options A @ref Qore::ParseOptions object with the parse options to set
 
     @par Example:
     @code{.py}
@@ -2076,7 +2076,7 @@ nothing Program::disableParseOptions(softint parse_options) [flags=NAMED_ARGS] {
 }
 
 //! Disables parse options from a ParseOptions object
-/** @param parse_options A @ref ParseOptions object with the parse options to disable
+/** @param parse_options A @ref Qore::ParseOptions object with the parse options to disable
 
     @par Example:
     @code{.py}
@@ -2321,10 +2321,10 @@ if (sm) {
 
 //! Sets the execution mode for the Program object
 /** The execution mode determines how code is executed:
-    - @ref EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
-    - @ref EM_IR: Bytecode interpreter (good balance of startup time and speed)
-    - @ref EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
-    - @ref EM_TIERED: Adaptive compilation for modern code (starts with cached IR, promotes hot code to JIT)
+    - \c EM_AST: Traditional tree-walking interpreter (most mature, no compilation overhead)
+    - \c EM_IR: Bytecode interpreter (good balance of startup time and speed)
+    - \c EM_JIT: LLVM JIT compilation (fastest execution, but has compilation overhead)
+    - \c EM_TIERED: Adaptive compilation for modern code (starts with cached IR, promotes hot code to JIT)
 
     @param mode The execution mode to set
 
@@ -3175,7 +3175,7 @@ static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
 //! Checks if a parse option is set in the current Program by name
 /** @param name the name of the parse option to check (e.g., "broken-soft-types", "require-types", etc.)
 
-    @return @ref TRUE if the parse option is set in the current Program, @ref FALSE otherwise
+    @return @ref True if the parse option is set in the current Program, @ref False otherwise
 
     @throw PARSE-OPTION-ERROR if the parse option name is not recognized
 
@@ -3201,7 +3201,7 @@ static bool Program::hasParseOption(string name) [flags=CONSTANT,NAMED_ARGS] {
 }
 
 //! Returns the full parse options as a ParseOptions object (including extended options)
-/** @return a @ref ParseOptions object with all parse options for the current Program
+/** @return a @ref Qore::ParseOptions object with all parse options for the current Program
 
     @par Example:
     @code{.py}

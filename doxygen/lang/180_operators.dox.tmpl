@@ -187,9 +187,9 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     Retrieves the value of a hash key or object member using a literal identifier or an expression.
 
     @par Syntax
-    <em>@ref expressions "hash_or_object_expression"</em> <tt>.</tt> <i>identifier</i> \n
-    <em>@ref expressions "object_expression"</em> <tt>.</tt> \a method_name<tt>(</tt><em>[args ...]</em><tt>)</tt>\n
-    <em>@ref expressions "hash_or_object_expression"</em> <tt>.</tt> <i>expression</i> \n
+    <em>@ref expressions "hash_or_object_expression"</em> <tt>.</tt> <i>identifier</i> <br>
+    <em>@ref expressions "object_expression"</em> <tt>.</tt> \a method_name<tt>(</tt><em>[args ...]</em><tt>)</tt><br>
+    <em>@ref expressions "hash_or_object_expression"</em> <tt>.</tt> <i>expression</i> <br>
 
     @par Return Type
     @ref any_type "any"
@@ -231,10 +231,10 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     Note that this operator is not supported with multiple values and/or ranges between the square brackets on the left-hand side of an assignment expression.
 
     @par Syntax
-    <em>@ref expressions "list_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt>\n
-    <em>@ref expressions "string_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt>\n
-    <em>@ref expressions "binary_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt>\n
-    <em>@ref expressions "buffer_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt>\n
+    <em>@ref expressions "list_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt><br>
+    <em>@ref expressions "string_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt><br>
+    <em>@ref expressions "binary_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt><br>
+    <em>@ref expressions "buffer_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt><br>
 
     @par Return Type
     @ref any_type "any"
@@ -450,11 +450,11 @@ list<int> l1 = new list<int>(2);
     @subsection delete Delete Operator (delete)
 
     @par Synopsis
-    The delete operator deletes the contents of an lvalue. If the delete operator is called on an object, the object will be destroyed unconditionally. The delete operator does not return any value.\n\n
-    When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n\n
-    The delete operator will delete multiple keys from a hash (i.e. delete a slice from a hash) when called on a hash dereferenced by a list of strings, giving the keys to delete (see example below).\n\n
-    The delete operator will also remove characters from strings, bytes from binary objects, and elements from lists as well.\n\n
-    In the case the delete operator operates on an object, any exception can be thrown that is thrown by the class' destructor.\n\n
+    The delete operator deletes the contents of an lvalue. If the delete operator is called on an object, the object will be destroyed unconditionally. The delete operator does not return any value.\n<br>
+    When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
+    The delete operator will delete multiple keys from a hash (i.e. delete a slice from a hash) when called on a hash dereferenced by a list of strings, giving the keys to delete (see example below).\n<br>
+    The delete operator will also remove characters from strings, bytes from binary objects, and elements from lists as well.\n<br>
+    In the case the delete operator operates on an object, any exception can be thrown that is thrown by the class' destructor.\n<br>
     For a similar operator that returns the value that is removed from the data structure, and does not delete objects, see the @ref remove "remove operator".
 
     @par Syntax
@@ -483,11 +483,11 @@ delete l[2,5..7,8];
     @subsection remove Remove Operator (remove)
 
     @par Synopsis
-    The remove operator removes a value from a data structure, or, in the case the operand of the remove operator is a simple value, the value itself is removed from the variable and returned. The remove operator returns the value removed from the \a lvalue.\n\n
-    When called on a hash key, the key is removed from the hash entirely, and the value returned is the value of the key removed from the hash; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n\n
-    The remove operator will remove and return a slice from a hash when called on a hash dereferenced by a list of strings, giving the keys to remove (see example below).\n\n
-    The remove operator will also remove characters from strings, bytes from binary objects, and elements from lists as well; when removing invalid or non-existant indices from strings and binary objects, no data is written to the output value, however in the case of a list lvalue, @ref nothing is written to the output list in these cases.  In case the same index is referenced multiple times, the value is repeated in the output value.\n\n
-    The remove operator does not call destructors when operating on objects, but if removing an object from an lvalue or from a data structure within the \a lvalue causes the object to go out of scope, it will be destroyed, and then its destructor could throw an exception.\n\n
+    The remove operator removes a value from a data structure, or, in the case the operand of the remove operator is a simple value, the value itself is removed from the variable and returned. The remove operator returns the value removed from the \a lvalue.\n<br>
+    When called on a hash key, the key is removed from the hash entirely, and the value returned is the value of the key removed from the hash; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
+    The remove operator will remove and return a slice from a hash when called on a hash dereferenced by a list of strings, giving the keys to remove (see example below).\n<br>
+    The remove operator will also remove characters from strings, bytes from binary objects, and elements from lists as well; when removing invalid or non-existant indices from strings and binary objects, no data is written to the output value, however in the case of a list lvalue, @ref nothing is written to the output list in these cases.  In case the same index is referenced multiple times, the value is repeated in the output value.\n<br>
+    The remove operator does not call destructors when operating on objects, but if removing an object from an lvalue or from a data structure within the \a lvalue causes the object to go out of scope, it will be destroyed, and then its destructor could throw an exception.\n<br>
     For a similar operator that deletes the value that is removed from the data structure, see the @ref delete "delete operator".
 
     @par Syntax
@@ -724,7 +724,7 @@ if (!exists error_code)
     @subsection chomp Chomp Operator (chomp)
 
     @par Synopsis
-    Removes the end-of-line marker(s) (\c '\\n' or \c '\\r\\n') from a string, or each string element in a list, or each hash key value in a hash (if the value is a string) and returns the number of characters removed.\n\n
+    Removes the end-of-line marker(s) (\c '\\n' or \c '\\r\\n') from a string, or each string element in a list, or each hash key value in a hash (if the value is a string) and returns the number of characters removed.\n<br>
     To perform this operation on a non-lvalue expression, see the chomp() function.
 
     @par Syntax
@@ -748,8 +748,8 @@ if (!exists error_code)
     @subsection trim Trim Operator (trim)
 
     @par Synopsis
-    Removes whitespace characters from the beginning and end of a string, or each string element in a list, or each hash key value in a hash (if the value is a string) and returns the value processed (string, list, or hash).\n\n
-    To perform this operation on a non-lvalue expression, see the trim() function.\n\n
+    Removes whitespace characters from the beginning and end of a string, or each string element in a list, or each hash key value in a hash (if the value is a string) and returns the value processed (string, list, or hash).\n<br>
+    To perform this operation on a non-lvalue expression, see the trim() function.\n<br>
     The following whitespace characters are removed from the beginning and end of strings: <tt>' '</tt> (blank spaces), \c '\\n', \c '\\r', \c '\\t', \c '\\v' (vertical tab, ASCII 11), and \c '\\0' (null character).
 
     @par Syntax
@@ -773,10 +773,10 @@ if (!exists error_code)
     @subsection map Map Operator (map)
 
     @par Synopsis
-    Executes (or maps) an expression on a list and returns the result. An optional select expression can be given to filter elements out from the result list.\n\n
-    If the first argument is a single element hash expression using curly brackets, then the @ref hmap "hash variant of the map operator" is used instead.\n\n
-    If the second argument (<em>@ref expressions "iterator_expression"</em>) is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class, the <b><tt>map</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()", and the implicit argument <tt>$1</tt> in the <em>@ref expressions "map_expression"</em> and any optional <em>@ref expressions "select_expression"</em> is the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()".\n\n
-    If the second argument is not a list or an object inheriting @ref Qore::AbstractIterator "AbstractIterator", then <em>@ref expressions "map_expression"</em> is executed on the single value and the result is returned (assuming that any <em>@ref expressions "select_expression"</em> accepts the value).\n\n
+    Executes (or maps) an expression on a list and returns the result. An optional select expression can be given to filter elements out from the result list.\n<br>
+    If the first argument is a single element hash expression using curly brackets, then the @ref hmap "hash variant of the map operator" is used instead.\n<br>
+    If the second argument (<em>@ref expressions "iterator_expression"</em>) is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class, the <b><tt>map</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()", and the implicit argument <tt>$1</tt> in the <em>@ref expressions "map_expression"</em> and any optional <em>@ref expressions "select_expression"</em> is the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()".\n<br>
+    If the second argument is not a list or an object inheriting @ref Qore::AbstractIterator "AbstractIterator", then <em>@ref expressions "map_expression"</em> is executed on the single value and the result is returned (assuming that any <em>@ref expressions "select_expression"</em> accepts the value).\n<br>
     If possible, <em>@ref expressions "iterator_expression"</em> is evaluated using @ref op_functional "lazy functional evaluation".
 
     @par Return Type
@@ -813,10 +813,10 @@ map printf("%s\n", $1), hash.keyIterator();
     @subsection hmap Hash Map Operator (map)
 
     @par Synopsis
-    This variant of the map operator builds a hash from a list or iterator argument and can be differentiated from the standard list @ref map "map" operator by the use of curly brackets in the initial expression; in this case the hash version of the map operator is used.  This operator executes (or maps) an expression on a list and returns the result in form of a hash. An optional select expression can be given to filter elements out from the result hash.\n\n
-    If the first argument is anything other than a single element hash expression using curly brackets, then the @ref map "list variant of the map operator" is used instead.\n\n
-    If the third argument (<em>@ref expressions "iterator_expression"</em>) is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class, the <b><tt>map</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()", and the implicit argument <tt>$1</tt> in the <em>@ref expressions "key_expression"</em> and <em>@ref expressions "value_expression"</em> and any optional <em>@ref expressions "select_expression"</em> is the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()".\n\n
-    If the third argument is not a list or an object inheriting @ref Qore::AbstractIterator "AbstractIterator", then <em>@ref expressions "key_expression"</em> and <em>@ref expressions "value_expression"</em> are executed on the single value and the result is returned as a single element hash (assuming that any <em>@ref expressions "select_expression"</em> accepts the value).\n\n
+    This variant of the map operator builds a hash from a list or iterator argument and can be differentiated from the standard list @ref map "map" operator by the use of curly brackets in the initial expression; in this case the hash version of the map operator is used.  This operator executes (or maps) an expression on a list and returns the result in form of a hash. An optional select expression can be given to filter elements out from the result hash.\n<br>
+    If the first argument is anything other than a single element hash expression using curly brackets, then the @ref map "list variant of the map operator" is used instead.\n<br>
+    If the third argument (<em>@ref expressions "iterator_expression"</em>) is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class, the <b><tt>map</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()", and the implicit argument <tt>$1</tt> in the <em>@ref expressions "key_expression"</em> and <em>@ref expressions "value_expression"</em> and any optional <em>@ref expressions "select_expression"</em> is the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()".\n<br>
+    If the third argument is not a list or an object inheriting @ref Qore::AbstractIterator "AbstractIterator", then <em>@ref expressions "key_expression"</em> and <em>@ref expressions "value_expression"</em> are executed on the single value and the result is returned as a single element hash (assuming that any <em>@ref expressions "select_expression"</em> accepts the value).\n<br>
 
     @par Return Type
     @ref hash in case of a <em>@ref expressions "iterator_expression"</em> with a value, otherwise @ref nothing
@@ -851,9 +851,9 @@ hash h = map {$1 : $1 * 2}, (1, 2, 3), $1 > 1;
     @subsection foldl Fold Left Operator (foldl)
 
     @par Synopsis
-    Folds an operation on a list from left to right and returns the result. The result of each individual operation is used as the first argument in the foldl expression for the next element in the list. The first operation of the fold is made by executing the fold expression on the first and second elements of the list, from this point onwards, the result of each successive operation is used as the first argument for the next operation, the second argument being the next element in the list.\n\n
-    If the second argument (\a iterator_expression) is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class, the <b><tt>foldl</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()", and the implicit arguments <tt>$1</tt> and <tt>$2</tt> in \a expression are the container values returned by @ref Qore::AbstractBidirectionalIterator::getValue() "AbstractBidirectionalIterator::getValue()".\n\n
-    If the \a iterator_expression does not evaluate to a list or an object inheriting @ref Qore::AbstractIterator "AbstractIterator", then the evaluated argument is returned immediately with no processing by the <b><tt>foldl</tt></b> expression.\n\n
+    Folds an operation on a list from left to right and returns the result. The result of each individual operation is used as the first argument in the foldl expression for the next element in the list. The first operation of the fold is made by executing the fold expression on the first and second elements of the list, from this point onwards, the result of each successive operation is used as the first argument for the next operation, the second argument being the next element in the list.\n<br>
+    If the second argument (\a iterator_expression) is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class, the <b><tt>foldl</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()", and the implicit arguments <tt>$1</tt> and <tt>$2</tt> in \a expression are the container values returned by @ref Qore::AbstractBidirectionalIterator::getValue() "AbstractBidirectionalIterator::getValue()".\n<br>
+    If the \a iterator_expression does not evaluate to a list or an object inheriting @ref Qore::AbstractIterator "AbstractIterator", then the evaluated argument is returned immediately with no processing by the <b><tt>foldl</tt></b> expression.\n<br>
     If possible, \a iterator_expression is evaluated using @ref op_functional "lazy functional evaluation".
 
     @par Syntax
@@ -885,9 +885,9 @@ string str = foldl $1 + ", " + $2, list;
     @subsection foldr Fold Right Operator (foldr)
 
     @par Synopsis
-    Folds an operation on a list from right to left and returns the result. The result of each individual operation is used as the first argument in the foldr expression for the next element in the list in reverse order. The first operation of the right fold is made by executing the fold expression on the last and penultimate elements of the list, from this point onwards, the result of each successive operation is used as the first argument for the next operation, the second argument being the next element in the list in reverse order.\n\n
-    If the second argument (\a iterator_expression) is an object inheriting the @ref Qore::AbstractBidirectionalIterator "AbstractBidirectionalIterator" class, the <b><tt>foldr</tt></b> operator iterates the object by calling @ref Qore::AbstractBidirectionalIterator::prev() "AbstractBidirectionalIterator::prev()", and the implicit arguments <tt>$1</tt> and <tt>$2</tt> in \a expression are the container values returned by @ref Qore::AbstractBidirectionalIterator::getValue() "AbstractBidirectionalIterator::getValue()".\n\n
-    If the \a iterator_expression does not evaluate to a list or an object inheriting @ref Qore::AbstractBidirectionalIterator "AbstractBidirectionalIterator", then the evaluated argument is returned immediately with no processing by the <b><tt>foldr</tt></b> expression.\n\n
+    Folds an operation on a list from right to left and returns the result. The result of each individual operation is used as the first argument in the foldr expression for the next element in the list in reverse order. The first operation of the right fold is made by executing the fold expression on the last and penultimate elements of the list, from this point onwards, the result of each successive operation is used as the first argument for the next operation, the second argument being the next element in the list in reverse order.\n<br>
+    If the second argument (\a iterator_expression) is an object inheriting the @ref Qore::AbstractBidirectionalIterator "AbstractBidirectionalIterator" class, the <b><tt>foldr</tt></b> operator iterates the object by calling @ref Qore::AbstractBidirectionalIterator::prev() "AbstractBidirectionalIterator::prev()", and the implicit arguments <tt>$1</tt> and <tt>$2</tt> in \a expression are the container values returned by @ref Qore::AbstractBidirectionalIterator::getValue() "AbstractBidirectionalIterator::getValue()".\n<br>
+    If the \a iterator_expression does not evaluate to a list or an object inheriting @ref Qore::AbstractBidirectionalIterator "AbstractBidirectionalIterator", then the evaluated argument is returned immediately with no processing by the <b><tt>foldr</tt></b> expression.\n<br>
     If possible, \a iterator_expression is evaluated using @ref op_functional "lazy functional evaluation".
 
     @par Syntax
@@ -915,9 +915,9 @@ foldr $1 - $2, (10, 4, 1);
     @subsection select Select From List Operator (select)
 
     @par Synopsis
-    Selects elements from a list that meet the given criteria and returns the new list.\n\n
-    If the first argument (\a iterator_expression) is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class, the <b><tt>select</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()", and the implicit argument <tt>$1</tt> in \a expression is the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()"; in this case the operator always returns a list (which may be empty if \a expression returns @ref False "False" for all elements in the iterator object or if the iterator object is empty), and the value of the object in the list returned is the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()".\n\n
-    If the list expression does not evaluate to a list or an object inheriting @ref Qore::AbstractIterator "AbstractIterator", then the select expression is evaluated using the value of the list expression as an argument, if it evaluates to @ref True "True", then the value is returned, otherwise, no value is returned.\n\n
+    Selects elements from a list that meet the given criteria and returns the new list.\n<br>
+    If the first argument (\a iterator_expression) is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class, the <b><tt>select</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()", and the implicit argument <tt>$1</tt> in \a expression is the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()"; in this case the operator always returns a list (which may be empty if \a expression returns @ref False "False" for all elements in the iterator object or if the iterator object is empty), and the value of the object in the list returned is the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()".\n<br>
+    If the list expression does not evaluate to a list or an object inheriting @ref Qore::AbstractIterator "AbstractIterator", then the select expression is evaluated using the value of the list expression as an argument, if it evaluates to @ref True "True", then the value is returned, otherwise, no value is returned.\n<br>
     If possible, \a expression is evaluated using @ref op_functional "lazy functional evaluation".
 
     @par Syntax
@@ -948,7 +948,7 @@ select (1, 2, 3, 4, 5, 6), !($1 % 2);
     @subsection streaming_iterate_operator_section Iterate Operator (iterate)
 
     @par Synopsis
-    Creates an iterator over the natural element type of an expression. This is a uniform entry point for values that can be processed by functional and streaming operators.\n\n
+    Creates an iterator over the natural element type of an expression. This is a uniform entry point for values that can be processed by functional and streaming operators.\n<br>
     The <b><tt>iterate</tt></b> operator supports lists, hashes, strings, binaries, integers, ranges, and @ref Qore::AbstractIterator "AbstractIterator" objects. String sources yield @ref char values decoded according to the string's encoding.
 
     @par Syntax
@@ -984,7 +984,7 @@ list<int> cps = map $1.ord(), iterate "café";  # (99, 97, 102, 233)
     Returns the first element from an iterable source, or the first element whose predicate evaluates to @ref True "True". The operator stops iterating as soon as the result is known.
 
     @par Syntax
-    <tt><b>first</b></tt> \a iterable_expression\n
+    <tt><b>first</b></tt> \a iterable_expression<br>
     <tt><b>first</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
 
     @par Return Type
@@ -1008,8 +1008,8 @@ list<int> cps = map $1.ord(), iterate "café";  # (99, 97, 102, 233)
     Returns @ref True "True" if the iterable yields at least one element, or if at least one element matches the predicate. The operator short-circuits on the first matching element.
 
     @par Syntax
-    <tt><b>any</b></tt> \a iterable_expression\n
-    <tt><b>any</b> (</tt>\a iterable_expression<tt>)</tt>\n
+    <tt><b>any</b></tt> \a iterable_expression<br>
+    <tt><b>any</b> (</tt>\a iterable_expression<tt>)</tt><br>
     <tt><b>any</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
 
     @par Return Type
@@ -1063,7 +1063,7 @@ bool all_positive = all $1 > 0, scores;
     Counts all elements in an iterable source, or all elements whose predicate evaluates to @ref True "True".
 
     @par Syntax
-    <tt><b>count</b></tt> \a iterable_expression\n
+    <tt><b>count</b></tt> \a iterable_expression<br>
     <tt><b>count</b></tt> \a predicate_expression<tt>,</tt> \a iterable_expression
 
     @par Return Type
@@ -1365,8 +1365,8 @@ foreach string key in (keys hash)
     @subsection minus_operator Minus Operator (-)
 
     @par Synopsis
-    With @ref float "float", @ref integer "integer", or @ref number "number" arguments, subtracts one number from another.\n\n
-    With @ref date "date" arguments, subtracts one date from another; if both date arguments are @ref absolute_dates "absolute dates", the result is a @ref relative_dates "relative date" (duration) giving the time between them; if the first date argument is an @ref absolute_dates "absolute date" and the second is a @ref relative_dates "relative date" (duration), then the result is an @ref absolute_dates "absolute date". If both date arguments are @ref relative_dates "relative dates", then the result is a @ref relative_dates "relative date". If the first argument is a @ref relative_dates "relative date" and the second date is an @ref absolute_dates "absolute date", the @ref absolute_dates "absolute date"'s epoch offset (offset in seconds and microseconds from \c 1970-01-01Z) is used to perform the calculation, and a @ref relative_dates "relative date/time value" is produced.\n\n
+    With @ref float "float", @ref integer "integer", or @ref number "number" arguments, subtracts one number from another.\n<br>
+    With @ref date "date" arguments, subtracts one date from another; if both date arguments are @ref absolute_dates "absolute dates", the result is a @ref relative_dates "relative date" (duration) giving the time between them; if the first date argument is an @ref absolute_dates "absolute date" and the second is a @ref relative_dates "relative date" (duration), then the result is an @ref absolute_dates "absolute date". If both date arguments are @ref relative_dates "relative dates", then the result is a @ref relative_dates "relative date". If the first argument is a @ref relative_dates "relative date" and the second date is an @ref absolute_dates "absolute date", the @ref absolute_dates "absolute date"'s epoch offset (offset in seconds and microseconds from \c 1970-01-01Z) is used to perform the calculation, and a @ref relative_dates "relative date/time value" is produced.\n<br>
     However, if the left-hand side is a @ref hash "hash", and the right-hand side is a string, then the result will be a new hash with the hash key represented by the string removed. If the left-hand side is a hash and the right-hand side is a list, then a new hash will be produced and each element from the list will be converted to a string key and any hash item with a matching key will be deleted from the new hash. Having both left and right arguments hashes is an invalid operation which does not modify the hashes in any way and silently returns @ref nothing.
 
     @par Syntax
@@ -1754,11 +1754,11 @@ if (x !== y)
     @subsection regex_match_operator Regular Expression Match Operator (=~)
 
     @par Synopsis
-    Checks for a regular expression match; returns @ref True "True" if the expression matches the string, @ref False "False" if not. See @ref qore_regex_options for the meaning of the \c i, \c s, \c x, and \c m options after the regular expression.\n\n
+    Checks for a regular expression match; returns @ref True "True" if the expression matches the string, @ref False "False" if not. See @ref qore_regex_options for the meaning of the \c i, \c s, \c x, and \c m options after the regular expression.\n<br>
     See @ref qore_regex for more information about regular expression support in %Qore.
 
     @par Syntax
-    \a expression <tt>=~ [m]/</tt><em>regex</em><tt>/[isxmuU]</tt>\n
+    \a expression <tt>=~ [m]/</tt><em>regex</em><tt>/[isxmuU]</tt><br>
     \a expression <tt>=~ m{</tt><em>regex</em><tt>}[isxmuU]</tt>
 
     @par Return Type
@@ -1785,7 +1785,7 @@ if (url =~ m{https?://[\w.]+/\w+})
     @subsection regex_no_match_operator Regular Expression No Match Operator (!~)
 
     @par Synopsis
-    Checks for a regular expression non match; returns @ref True "True" if the expression does not match the string, @ref False "False" if it does. See @ref qore_regex_options for the meaning of the \c i, \c s, \c x, and \c m options after the regular expression.\n\n
+    Checks for a regular expression non match; returns @ref True "True" if the expression does not match the string, @ref False "False" if it does. See @ref qore_regex_options for the meaning of the \c i, \c s, \c x, and \c m options after the regular expression.\n<br>
     See @ref qore_regex for more information about regular expression support in %Qore.
 
     @par Syntax
@@ -1810,11 +1810,11 @@ if (str !~ /hello/)
     @subsection regex_subst_operator Regular Expression Substitution Operator
 
     @par Synopsis
-    Looks for a regular expression match in a string, and, if found, substitutes the matched string with a new string. Subpattern backreferences are supported in the target string, <tt>$1</tt>=first subpattern, <tt>$2</tt>=second subpattern, etc... See @ref qore_regex_options for the meaning of the \c i, \c s, \c x, and \c m options after the regular expression.\n\n
+    Looks for a regular expression match in a string, and, if found, substitutes the matched string with a new string. Subpattern backreferences are supported in the target string, <tt>$1</tt>=first subpattern, <tt>$2</tt>=second subpattern, etc... See @ref qore_regex_options for the meaning of the \c i, \c s, \c x, and \c m options after the regular expression.\n<br>
     See @ref qore_regex for more information about regular expression support in %Qore.
 
     @par Syntax
-    \a lvalue <tt>=~ s/</tt><em>regex_pattern</em><tt>/</tt><em>target_string</em><tt>/[isxmugU]</tt>\n
+    \a lvalue <tt>=~ s/</tt><em>regex_pattern</em><tt>/</tt><em>target_string</em><tt>/[isxmugU]</tt><br>
     \a lvalue <tt>=~ s{</tt><em>regex_pattern</em><tt>}{</tt><em>target_string</em><tt>}[isxmugU]</tt>
 
     @par Return Type
@@ -1840,11 +1840,11 @@ str =~ s{http://old\.example\.com}{https://new.example.com}g;
     @subsection regex_extract_operator Regular Expression Pattern Extraction Operator
 
     @par Synopsis
-    Matches regular expression patterns (enclosed in parentheses) in a string and returns a list giving the text matched for each pattern. If the regular expression does not match, then no value (@ref nothing) is returned. See @ref qore_regex_options for the meaning of the \c i, \c s, \c x, and \c m options after the regular expression.\n\n
+    Matches regular expression patterns (enclosed in parentheses) in a string and returns a list giving the text matched for each pattern. If the regular expression does not match, then no value (@ref nothing) is returned. See @ref qore_regex_options for the meaning of the \c i, \c s, \c x, and \c m options after the regular expression.\n<br>
     See @ref qore_regex for more information about regular expression support in %Qore.
 
     @par Syntax
-    \a string <tt>=~ x/</tt><em>regex_with_patterns</em><tt>/[isxmugU]</tt>\n
+    \a string <tt>=~ x/</tt><em>regex_with_patterns</em><tt>/[isxmugU]</tt><br>
     \a string <tt>=~ x{</tt><em>regex_with_patterns</em><tt>}[isxmugU]</tt>
 
     @par Return Type
@@ -1869,7 +1869,7 @@ list =~ x/(.*)\.(.*)/;
     Makes character substitutions in an lvalue; character ranges can also be used.
 
     @par Syntax
-    \a lvalue <tt>=~ tr/</tt><em>source_chars</em><tt>/</tt><em>target_chars</em><tt>/</tt>\n
+    \a lvalue <tt>=~ tr/</tt><em>source_chars</em><tt>/</tt><em>target_chars</em><tt>/</tt><br>
     \a lvalue <tt>=~ tr{</tt><em>source_chars</em><tt>}{</tt><em>target_chars</em><tt>}</tt>
 
     @par Return Type
@@ -2137,8 +2137,8 @@ if (x || y)
     @subsection splice Splice Operator (splice)
 
     @par Synopsis
-    Removes and optionally inserts elements in lists, strings, and binary objects and returns the \a lvalue after processing. For a similar operator that returns the values removed, see the @ref extract "extract operator".\n\n
-    Works on strings, lists, and binary data in a similar way; removes elements from a list, characters from a string, or bytes from binary data and optionally inserts new ones. If no \a length_expression is given, splice removes all elements/characters/bytes from the list, string, or binary data lvalue starting at \a offset_expression (offsets begin at 0). Otherwise, a number of elements/characters/bytes equal to \a length_expression is removed (or up to the end of the list/string/data if applicable). If \a substitution_expression is present, then the removed elements/characters/bytes are substituted with the elements/string/bytes given by this expression.\n\n
+    Removes and optionally inserts elements in lists, strings, and binary objects and returns the \a lvalue after processing. For a similar operator that returns the values removed, see the @ref extract "extract operator".\n<br>
+    Works on strings, lists, and binary data in a similar way; removes elements from a list, characters from a string, or bytes from binary data and optionally inserts new ones. If no \a length_expression is given, splice removes all elements/characters/bytes from the list, string, or binary data lvalue starting at \a offset_expression (offsets begin at 0). Otherwise, a number of elements/characters/bytes equal to \a length_expression is removed (or up to the end of the list/string/data if applicable). If \a substitution_expression is present, then the removed elements/characters/bytes are substituted with the elements/string/bytes given by this expression.\n<br>
     Note that string splice takes character offsets, which may not be the same as byte offsets for multi-byte character encodings, such as \c UTF-8
 
     @par Syntax
@@ -2163,9 +2163,9 @@ if (x || y)
     @subsection extract Extract Operator (extract)
 
     @par Synopsis
-    Removes and optionally inserts elements in lists and strings. For a similar operator that removes values from an lvalue and returns the \a lvalue (instead of the value removed), see the @ref splice "splice operator".\n\n
-    Works on either strings, lists, and binary data in a similar way; removes elements from a list, characters from a string, and bytes from binary data and optionally inserts new ones. If no length_expression is given, extract removes all elements/characters/bytes from the \a lvalue starting at \a offset_expression (offsets begin at 0). Otherwise, a number of elements/characters/bytes equal to \a length_expression is removed (or up to the end of the data if applicable). If \a substitution_expression is present, then the removed elements/characters/bytes are substituted with the data given by this expression.\n\n
-    When operating on lists, a list is returned of any elements extracted (if no elements are extracted, then an empty list is returned); when operating on strings, a string is extracted of all characters extracted from the string (if no characters are extracted, then an empty string is returned).  When operating on binary data, a binary object is returned.\n\n
+    Removes and optionally inserts elements in lists and strings. For a similar operator that removes values from an lvalue and returns the \a lvalue (instead of the value removed), see the @ref splice "splice operator".\n<br>
+    Works on either strings, lists, and binary data in a similar way; removes elements from a list, characters from a string, and bytes from binary data and optionally inserts new ones. If no length_expression is given, extract removes all elements/characters/bytes from the \a lvalue starting at \a offset_expression (offsets begin at 0). Otherwise, a number of elements/characters/bytes equal to \a length_expression is removed (or up to the end of the data if applicable). If \a substitution_expression is present, then the removed elements/characters/bytes are substituted with the data given by this expression.\n<br>
+    When operating on lists, a list is returned of any elements extracted (if no elements are extracted, then an empty list is returned); when operating on strings, a string is extracted of all characters extracted from the string (if no characters are extracted, then an empty string is returned).  When operating on binary data, a binary object is returned.\n<br>
     Note that string extract takes character offsets, which may not be the same as byte offsets for multi-byte character encodings, such as \c UTF-8
 
     @par Syntax
@@ -2214,7 +2214,7 @@ if (x || y)
     do not extend the life of an object and also do not participate in object graph cycles (i.e. recursive
     references) and therefore can be used to break up large graphs of objects to improve garbage collector
     performance with such graphs, however the programmer must ensure that the object has a valid
-    strong reference elsewhere or the object will go out of scope.\n\n
+    strong reference elsewhere or the object will go out of scope.\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox
     permission is set.

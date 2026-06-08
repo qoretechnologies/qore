@@ -72,7 +72,7 @@ int <char>::ord() [const;flags=CONSTANT] {
 //! Returns the Unicode codepoint as an integer
 /**
     This pseudo-method is provided for backwards compatibility with code that
-    called <string>[<n>].getUnicode() before single string indexes returned
+    called &lt;string&gt;[&lt;n&gt;].getUnicode() before single string indexes returned
     @ref char values by default.
 
     @return the Unicode codepoint stored by the char

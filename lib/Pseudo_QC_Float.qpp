@@ -124,11 +124,11 @@ string nstr = f.format(".,3"); # returns "-48.392.093.894,235"
     @note equivalent to format_number(string, softfloat)
 
     @see
-    - @ref <int>::format(string)
-    - @ref <number>::format(string)
-    - @ref <int>::format(int, string, string)
-    - @ref <float>::format(int, string, string)
-    - @ref <number>::format(int, string, string)
+    - @ref <int>::format() "<int>::format(string)"
+    - @ref <number>::format() "<number>::format(string)"
+    - @ref <int>::format() "<int>::format(int, string, string)"
+    - @ref <float>::format() "<float>::format(int, string, string)"
+    - @ref <number>::format() "<number>::format(int, string, string)"
 
     @since
     - %Qore 0.8.6
@@ -152,11 +152,11 @@ string nstr = n.format(3, ".", ","); # returns "-48.392.093.894,235"
     @endcode
 
     @see
-    - @ref <number>::format(int, string, string)
-    - @ref <int>::format(int, string, string)
-    - @ref <number>::format(string)
-    - @ref <float>::format(string)
-    - @ref <int>::format(string)
+    - @ref <number>::format() "<number>::format(int, string, string)"
+    - @ref <int>::format() "<int>::format(int, string, string)"
+    - @ref <number>::format() "<number>::format(string)"
+    - @ref <float>::format() "<float>::format(string)"
+    - @ref <int>::format() "<int>::format(string)"
 
     @since %Qore 0.8.13
  */
@@ -242,8 +242,8 @@ float <float>::abs() [const;flags=CONSTANT] {
 
     @throw INVALID-BASE the base is invalid; must be 2 - 36 inclusive
 
-    @see \link <int>::toBase(int base) \endlink
-    @see \link <number>::toBase(int base) \endlink
+    @see @ref <int>::toBase() "<int>::toBase()"
+    @see @ref <number>::toBase() "<number>::toBase()"
 
     @since %Qore 0.8.13
 */

@@ -67,7 +67,7 @@
     |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br><br>Since %Qore 0.8.6
     |@ref exec-class "%exec-class" <em>@ref qore_classes "class_name"</em>|Instantiates the named class as the application class; also turns on @ref no-top-level "%no-top-level". If the program is read from stdin or from the command line, an argument must be given specifying the class name. Any top level statements before this directive are silently ignored
-    |@ref fp-fast-math "%fp-fast-math"|Allows optimizers to use IEEE-unsafe floating-point reassociation and contraction, but only for operations whose metadata also opts in. Set programmatically with the string \c "fp-fast-math" on @ref ParseOptions<br><br>Since %Qore 3.0
+    |@ref fp-fast-math "%fp-fast-math"|Allows optimizers to use IEEE-unsafe floating-point reassociation and contraction, but only for operations whose metadata also opts in. Set programmatically with the string \c "fp-fast-math" on @ref Qore::ParseOptions<br><br>Since %Qore 3.0
     |@ref parse_if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators
     |@ref ifdef "%ifdef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
     |@ref ifndef "%ifndef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the @ref ifndef "%ifndef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br><br>Since %Qore 0.8.3
@@ -117,7 +117,7 @@
     |@ref no-process-control "%no-process-control"|Disallows access to functions that would affect the current process (see @ref no-process-control "%no-process-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_PROCESS_CONTROL and the <tt>-</tt><tt>-no-process-control</tt> command line option
     |@ref no-reflection "%no-reflection"|Disallows access to the reflection API provided by the <a href="../../modules/reflection/html/index.html#reflectionintro">reflection</a> module; equivalent to parse option @ref Qore::PO_NO_REFLECTION<br><br>Since %Qore 0.9
     |@ref no-subroutine-defs "%no-subroutine-defs"|Disallows subroutine (function) definitions; equivalent to parse option @ref Qore::PO_NO_SUBROUTINE_DEFS and the <tt>-</tt><tt>-no-subroutine-defs</tt> command line option
-    |@ref no-summarize "%no-summarize"|Disallows the \c summarize statement; implied by @ref modern "%modern". Set programmatically via the string \c "no-summarize" on @ref ParseOptions<br><br>Since %Qore 3.0
+    |@ref no-summarize "%no-summarize"|Disallows the \c summarize statement; implied by @ref modern "%modern". Set programmatically via the string \c "no-summarize" on @ref Qore::ParseOptions<br><br>Since %Qore 3.0
     |@ref no-terminal-io "%no-terminal-io"|Disallows access to terminal I/O (see @ref no-terminal-io "%no-terminal-io" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_TERMINAL_IO and the <tt>-pno-terminal-io</tt> command line option
     |@ref no-thread-classes "%no-thread-classes"|Disallows access to thread classes (see @ref no-thread-classes "%no-thread-classes" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_CLASSES and the <tt>-</tt><tt>-no-thread-classes</tt> command line option
     |@ref no-thread-control "%no-thread-control"|Disallows access to thread control operations (see @ref no-thread-control "%no-thread-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_CONTROL and the <tt>-</tt><tt>-no-thread-control</tt> command line option
@@ -1277,7 +1277,7 @@ sub validate_input(int value, int max_value) {
 
     @note This is an extended parse option (bit 71). The Qore constant \c PO_FP_FAST_MATH
     is defined as \c 0 for compatibility with the legacy 64-bit parse-option space; use
-    the string name \c "fp-fast-math" with the @ref ParseOptions class when setting parse
+    the string name \c "fp-fast-math" with the @ref Qore::ParseOptions class when setting parse
     options programmatically.
 
     @since %Qore 3.0
@@ -2424,7 +2424,7 @@ sub legacy() {
     <tt>-</tt><tt>-set-parse-option=no-summarize</tt>
 
     @par Parse Option Constant:
-    <tt>"no-summarize"</tt> (via @ref ParseOptions)
+    <tt>"no-summarize"</tt> (via @ref Qore::ParseOptions)
 
     @par Description:
     Disallows the \c summarize statement at parse time. When this option is set, any
@@ -2437,7 +2437,7 @@ sub legacy() {
 
     @note This is an extended parse option (bit 69). The Qore constant \c PO_NO_SUMMARIZE
     is defined as \c 0 for backward compatibility with the legacy 64-bit integer
-    parse-option space; use the string name \c "no-summarize" with the @ref ParseOptions
+    parse-option space; use the string name \c "no-summarize" with the @ref Qore::ParseOptions
     class when setting parse options programmatically.
 
     @since %Qore 3.0
@@ -2680,7 +2680,7 @@ if (str)
     With this option set (the default), the above prints out: @verbatim string is: "hello"@endverbatim When it's not set (i.e. @ref strict-bool-eval "%strict-bool-eval" is set), nothing is printed out as the string expression evaluates to @ref False "False" due to qore's old strict mathematical boolean evaluation.\n\n
     Basically with this option set, qore's boolean evaluation becomes like perl's and Python's, whereas any expression that has the following values is @ref False "False": @ref nothing, @ref string "string" \c "0" and @ref string "empty strings", @ref integer "integer", @ref float "float", and @ref number "number" \c 0 (zero), @ref absolute_dates "absolute date" \c 1970-01-01Z (ie the start of the epoch with an offset of 0), @ref relative_dates "relative date" \c PT0H (ie any  @ref relative_dates "relative date" with a 0 duration), @ref null, @ref binary "empty binary objects", @ref hash "empty hashes", and @ref list "empty lists".  All other values are @ref True "True".
 
-    @note also affects the @ref Qore::boolean(any) "boolean(any)" function
+    @note also affects the @ref Qore::boolean(auto) "boolean(auto)" function
 
     @see @ref strict-bool-eval "%strict-bool-eval"
 
@@ -2866,7 +2866,7 @@ if (str)
     If <tt>%%strict-bool-eval</tt> is set, then %Qore's boolean evaluation will evaluate \c "hello" in a strict mathematical sense and convert it to 0, which is @ref False "False", so nothing would be printed out, but when <tt>%%perl-bool-eval</tt> is enabled, this will be @ref True "True" (following the rules for <string>::val()).\n\n
     %Qore's strict mathematical boolean evaluation was the default prior to %Qore 0.8.6, however it was considered non-intuitive and a design bug, and therefore the default behavior of the language was changed to a more intuitive form of boolean evaluation as documented in @ref perl-bool-eval "%perl-bool-eval".
 
-    @note also affects the @ref Qore::boolean(any) "boolean(any)" function
+    @note also affects the @ref Qore::boolean(auto) "boolean(auto)" function
 
     @see @ref perl-bool-eval "perl-bool-eval"
 

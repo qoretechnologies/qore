@@ -38,7 +38,7 @@
 
     These C++ builtins provide O(n) performance for WebSocket frame encoding
     and masking/unmasking, replacing the Qore-language implementations that
-    had O(n\u00b2) byte-by-byte binary concatenation.
+    had O(n<sup>2</sup>) byte-by-byte binary concatenation.
 */
 ///@{
 
@@ -92,7 +92,7 @@ binary ws_encode_frame(data message, int opcode, softbool masked, softbool fin =
 }
 
 //! Applies or removes a WebSocket mask to/from binary data (XOR with 4-byte key)
-/** This is an O(n) C++ implementation that replaces the O(n\u00b2) Qore byte-by-byte
+/** This is an O(n) C++ implementation that replaces the O(n<sup>2</sup>) Qore byte-by-byte
     loop used for masking and unmasking WebSocket frame payloads.
 
     The same function works for both masking and unmasking since XOR is its own inverse.

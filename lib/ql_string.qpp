@@ -1526,7 +1526,7 @@ int regex_count(string str, string pattern, int options = 0) [flags=RET_VALUE_ON
 }
 
 //! Extracts named capture groups from a string using a regular expression pattern
-/** Named groups are defined with \c (?<name>...) or \c (?P<name>...) syntax.
+/** Named groups are defined with <tt>(?&lt;name&gt;...)</tt> or <tt>(?P&lt;name&gt;...)</tt> syntax.
 
     @param str the string to match against
     @param pattern the regular expression pattern containing named groups

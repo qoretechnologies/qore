@@ -199,7 +199,7 @@ bool boolean(auto value) [flags=CONSTANT,NAMED_ARGS] {
 //! Converts the string to an integer value with respect to the <b>base</b>.
 /** If a character is out of range of the corresponding <b>base</b> only the substring preceeding the character is taken into account.\n
     Base 0 means to interpret as a code literal, so that the actual base is 8, 10, or 16.\n
-    (Does the same as \link <string>::toInt(int base) \endlink).
+    (Does the same as @ref <string>::toInt() "<string>::toInt()").
 
     @param value the string to convert to an integer
     @param base the base of the integer in the string; this value must be 0 or 2 - 36 inclusive or an \c INVALID-BASE exception will be thrown
@@ -221,7 +221,7 @@ int("0x21", 0);  // returns 33 (base = 16)
 
     @throw INVALID-BASE the base is invalid; must be 0 or 2 - 36 inclusive
 
-    @see \link <string>::toInt(int base) \endlink
+    @see @ref <string>::toInt() "<string>::toInt()"
 
     @since %Qore 0.8.5, this variant with the <b>base</b> argument is supported
   */

@@ -199,7 +199,7 @@
 
     @section qore_regex_named_groups Named Capture Groups
 
-    %Qore supports PCRE2 named capture groups using \c (?<name>...) or \c (?P<name>...) syntax.  Named groups
+    %Qore supports PCRE2 named capture groups using <tt>(?&lt;name&gt;...)</tt> or <tt>(?P&lt;name&gt;...)</tt> syntax.  Named groups
     can be extracted as hash values using regex_extract_named(), the @ref Qore::Regex::extractNamedGroups()
     "Regex::extractNamedGroups()" method, or the @ref Qore::RegexExtract::extractNamedGroups()
     "RegexExtract::extractNamedGroups()" method.
@@ -210,7 +210,7 @@
     # h = {"year": "2026", "month": "04", "day": "08"}
     @endcode
 
-    Use the @ref RE_DupNames constant to allow duplicate named subpatterns in the same regex.
+    Use the @ref Qore::RE_DupNames constant to allow duplicate named subpatterns in the same regex.
 
     @since %Qore 3.0
 
@@ -219,7 +219,7 @@
     The @ref Qore::RegexMatchInfo "RegexMatchInfo" hashdecl provides detailed information about each match including
     the full match text, byte offset, length, captured groups, and named groups.  Use regex_extract_detailed(),
     @ref Qore::Regex::extractDetailed() "Regex::extractDetailed()", or
-    <tt>\<string\>::regexExtractDetailed()</tt> to get this information.
+    <tt>&lt;string&gt;::regexExtractDetailed()</tt> to get this information.
 
     @par Example:
     @code{.py}

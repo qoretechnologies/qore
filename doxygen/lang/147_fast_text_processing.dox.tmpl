@@ -102,8 +102,8 @@ sc.advance();                          # consume ';'
 
     @par Iterator native fast-path dispatch
     @parblock
-    The @ref <list>::map() "<list>::map()", @ref <list>::select() "<list>::select()", and
-    @ref <list>::foldl() "<list>::foldl()" pseudo-methods (and their hash/object analogues)
+    The @ref map "map", @ref select "select", and
+    @ref foldl "foldl" functional operators (and their hash/object analogues)
     detect these iterators and dispatch them through a native C++ fast path that bypasses
     @ref Qore::AbstractIterator "AbstractIterator" virtual calls per element.  Iterator
     subclasses written in %Qore retain the original dispatch path, so the fast path is opt-in

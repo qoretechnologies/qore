@@ -6785,7 +6785,7 @@ static list<hash<SocketPollInfo>> Socket::poll(
     - \c headers_only (bool): if @ref True "True", the poll completes when HEADERS are received
       (before END_STREAM); the stream stays in the session for incremental reading via the
       @ref HttpServerAsyncIo "HttpServerAsyncIo" @c register_body_queue closure (the I/O
-      thread pushes inbound DATA chunks to a Qore @ref Queue "Queue").
+      thread pushes inbound DATA chunks to a Qore @ref Qore::Thread::Queue "Queue").
 
     @see isHttp2()
 
@@ -8782,7 +8782,7 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
     return s->readQuicDatagram(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
-//! Registers a @ref Queue to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
+//! Registers a @ref Qore::Thread::Queue "Queue" to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
 /** Async-path replacement for @ref readQuicDatagram() — once registered, incoming
     datagrams for @a stream_id are pushed to @a queue (as a @ref binary) by the
     I/O thread; handlers block on @c Queue::get(timeout) for delivery.  A
@@ -8827,7 +8827,7 @@ nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id,
     return QoreValue();
 }
 
-//! Unregisters the @ref Queue previously registered via @ref registerQuicDatagramQueue()
+//! Unregisters the @ref Qore::Thread::Queue "Queue" previously registered via @ref registerQuicDatagramQueue()
 /** Subsequent datagrams for @a stream_id fall back to the internal buffered path
     used by legacy @ref readQuicDatagram() callers.  Idempotent — calling this
     without a prior register (or on a session that no longer exists) is a no-op.
