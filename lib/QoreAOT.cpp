@@ -311,6 +311,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Object/Binary.h>
 #include <llvm/Object/ObjectFile.h>
 #include <llvm/Object/ELFObjectFile.h>
+#include <llvm/Object/SymbolSize.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
@@ -6949,7 +6950,17 @@ static bool readQoFragmentBlobs(const std::string& qo_path,
         return false;
     }
 
-    for (const llvm::object::SymbolRef& sym : obj->symbols()) {
+    // Compute symbol sizes portably.  On ELF this returns st_size; on
+    // Mach-O (and other formats with no symbol-size field) the size is
+    // derived from the address delta to the next symbol.  We must NOT
+    // use ELFSymbolRef::getSize() directly — it mis-reads non-ELF
+    // objects, so on macOS every fragment blob would get a bogus size.
+    std::vector<std::pair<llvm::object::SymbolRef, uint64_t>> sym_sizes =
+        llvm::object::computeSymbolSizes(*obj);
+
+    for (const auto& sym_size : sym_sizes) {
+        const llvm::object::SymbolRef& sym = sym_size.first;
+        uint64_t size = sym_size.second;
         auto name_or = sym.getName();
         if (!name_or) {
             llvm::consumeError(name_or.takeError());
@@ -6958,10 +6969,16 @@ static bool readQoFragmentBlobs(const std::string& qo_path,
         llvm::StringRef name = *name_or;
         // Fragment blobs use the prefix scheme from emitFragmentSymbols:
         //   qore_aot_<sanmod>_<sanfile>_fragment_blob
-        if (!name.ends_with("_fragment_blob")) {
+        // Mach-O mangles every symbol with a leading underscore, so the
+        // on-disk name is `_qore_aot_..._fragment_blob`; strip one
+        // optional leading underscore so the match is format-independent
+        // (the emitted logical name never starts with an underscore).
+        llvm::StringRef logical = name;
+        logical.consume_front("_");
+        if (!logical.ends_with("_fragment_blob")) {
             continue;
         }
-        if (!name.starts_with("qore_aot_")) {
+        if (!logical.starts_with("qore_aot_")) {
             continue;
         }
 
@@ -6990,7 +7007,6 @@ static bool readQoFragmentBlobs(const std::string& qo_path,
         llvm::StringRef contents = *contents_or;
 
         uint64_t offset = sym_addr - sec_addr;
-        uint64_t size = llvm::object::ELFSymbolRef(sym).getSize();
         if (offset + size > contents.size()) {
             error = "fragment blob symbol '" + name.str() + "' exceeds section "
                 "bounds in '" + qo_path + "'";
