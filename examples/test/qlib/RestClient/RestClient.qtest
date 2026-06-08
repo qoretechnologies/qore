@@ -155,6 +155,7 @@ public class Main inherits QUnit::Test {
         addTestCase("issue 3472", \issue3472());
         addTestCase("connection tests", \connectionTests());
         addTestCase("negotiate auth options", \negotiateAuthOptionsTest());
+        addTestCase("ping_body view hint", \pingBodyViewHintTest());
         addTestCase("OPTIONS tests", \methodOptionsTest());
         addTestCase("DELETE tests", \methodDeleteTest());
         addTestCase("GET tests", \methodGetTest());
@@ -641,6 +642,19 @@ public class Main inherits QUnit::Test {
             assertTrue(cinfo.features{AbstractConnection::CF_UPDATE_OPTIONS});
             assertTrue(cinfo.features{RestConnection::RCF_OAUTH2_AUTH_CODE});
         }
+    }
+
+    pingBodyViewHintTest() {
+        # the ping body value type is intentionally permissive ("auto") because a ping body can be a hash, a string,
+        # etc., but the overwhelmingly common case is a JSON object (hash); the scheme carries a "hash" ui_type hint
+        # so a UI opens a hash editor by default instead of forcing the operator to pick a data type first (qorus#281)
+        hash<ConnectionOptionInfo> ping_body = RestConnection::ConnectionScheme.options.ping_body;
+        assertEq("auto", ping_body.type, "ping_body value type stays permissive");
+        assertEq("hash", ping_body.ui_type, "ping_body carries a hash UI view hint");
+        # the sibling typed options are unchanged
+        assertEq("hash", RestConnection::ConnectionScheme.options.ping_headers.type);
+        assertEq("string", RestConnection::ConnectionScheme.options.ping_method.type);
+        assertEq("string", RestConnection::ConnectionScheme.options.ping_path.type);
     }
 
     negotiateAuthOptionsTest() {

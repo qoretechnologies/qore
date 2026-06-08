@@ -3872,6 +3872,10 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                     "display_name": "Ping Body",
                     "short_desc": "The message body to send with pings",
                     "type": "auto",
+                    # the value type is intentionally permissive ("auto"), but a ping body is overwhelmingly a hash
+                    # (a JSON request body), so hint the UI to open a hash editor by default instead of forcing the
+                    # operator to pick a data type first
+                    "ui_type": "hash",
                     "desc": "Any message body to send when performing an advanced ping operation; ignored if either "
                         "one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
                 },
