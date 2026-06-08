@@ -796,6 +796,7 @@ cargo install tree-sitter-cli@0.26.5
     needs to be pre-installed.
     @endparblock
 
+    @par Language and Runtime
     - new zero-cost assertion and debug statements
       - \c @@assert(condition) and \c @@assert(condition, message) throw \c ASSERTION-ERROR when condition is false
       - \c @@assert supports sprintf-style formatting: \c @@assert(condition, "format", arg1, arg2, ...)
@@ -1187,8 +1188,6 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::thread_cancelled() "thread_cancelled()": returns @ref True if cancellation has been requested
         for the current thread
 
-    @par Language and Runtime
-    @parblock
     - Added the @ref char "char" value type for single Unicode codepoints, including
       \c c'...' and \c c"..." literals, the @ref char_type "char" and
       @ref softchar_type "softchar" type restrictions, and the
@@ -1227,7 +1226,6 @@ cargo install tree-sitter-cli@0.26.5
       \c const syntax. Read-only receivers can call only const methods when
       method resolution is static, and const-method metadata is available through
       reflection, QoreApiMetadata, qpp metadata, astparser, and QoreCodeFormat
-    @endparblock
 
     @par Fast Text Processing APIs
     @parblock
