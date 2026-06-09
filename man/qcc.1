@@ -58,6 +58,10 @@ May be repeated.
 Write compile-only output to \fIdir\fP.
 Required for batch mode with multiple sources and mutually exclusive with
 \fB\-o\fP.
+Each \fB.qo\fP object is written atomically by compiling to a temporary file
+and renaming it into place, so independent per-file \fB\-c\fP jobs writing into
+the same directory may run in parallel (for example under \fBmake \-j\fP) and a
+concurrent \fB\-L\fP sibling scan never observes a half-written object.
 .TP
 .B \-\-from\-objects
 Aggregate mode.
@@ -181,6 +185,13 @@ specified.
 .B QORE_AOT_NO_DEBUG_INFO
 If set to 1, disables AOT debug information unless overridden by command-line
 options.
+.TP
+.B QORE_AOT_BATCH_JOBS
+Number of worker threads used to emit \fB.qo\fP objects in batch
+(\fB\-\-output\-dir\fP) mode.
+The sources are parsed once on a single thread, then each object's code
+generation runs on the pool, parallelizing the dominant \fB\-O3\fP backend.
+Defaults to the number of hardware threads; set to 1 to emit serially.
 .SH EXAMPLES
 Compile a script to a native executable:
 .RS

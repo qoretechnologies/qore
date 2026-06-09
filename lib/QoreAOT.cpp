@@ -42,12 +42,15 @@
 
 #include <sys/stat.h>
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <mutex>
 #include <set>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <unistd.h>
@@ -3792,52 +3795,75 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         fflush(stderr);
     }
 
-    std::error_code EC;
-    llvm::raw_fd_ostream dest(path, EC, llvm::sys::fs::OF_None);
-    if (EC) {
-        error = "failed to open output file: " + EC.message();
-        delete tm;
-        return false;
-    }
-
-    if (debug_opt) {
-        fprintf(stderr, "AOT: Creating legacy PassManager for code generation\n");
-        fflush(stderr);
-    }
-
-    llvm::legacy::PassManager emit_pm;
-    if (tm->addPassesToEmitFile(emit_pm, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-        error = "target machine cannot emit object files";
-        delete tm;
-        return false;
-    }
-
-    if (debug_opt) {
-        fprintf(stderr, "AOT: Running code generation pass manager...\n");
-        fflush(stderr);
-    }
-
-    // Phase 1 instrumentation: wrap backend codegen in a TimeTraceScope so the
-    // bulk of compile time (SelectionDAG + MachineInstr passes + RegAlloc +
-    // assembly emission) appears as a single coarse event in the Chrome trace.
-    // Sub-phases within the backend emit their own scopes if they call
-    // llvm::TimeTraceScope — legacy backend passes don't, but the total here
-    // gives us a clear picture of backend vs middle-end split.
+    // Emit to a temporary file in the same directory, then atomically
+    // rename it into place.  A concurrent `-L` sibling scan in another qcc
+    // process (the script-context preload in compileScriptFile) must never
+    // observe a half-written `.qo`: with the atomic rename, a reader sees
+    // either the previous complete object or the new one, so per-file `.qo`
+    // compilation can run in parallel without an external lock.  The temp
+    // name does not end in `.qo`, so a concurrent sibling scan (regex
+    // `.+\.qo$`) skips it.  Same idiom as linkSharedLib's atomic replace.
+    std::string tmp_path = path + ".tmp." + std::to_string(getpid());
     {
-        llvm::TimeTraceScope backend_scope("BackendCodegen",
-                module.getName().str());
-        emit_pm.run(module);
+        std::error_code EC;
+        llvm::raw_fd_ostream dest(tmp_path, EC, llvm::sys::fs::OF_None);
+        if (EC) {
+            error = "failed to open output file: " + EC.message();
+            delete tm;
+            return false;
+        }
+
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Creating legacy PassManager for code generation\n");
+            fflush(stderr);
+        }
+
+        llvm::legacy::PassManager emit_pm;
+        if (tm->addPassesToEmitFile(emit_pm, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
+            error = "target machine cannot emit object files";
+            remove(tmp_path.c_str());
+            delete tm;
+            return false;
+        }
+
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Running code generation pass manager...\n");
+            fflush(stderr);
+        }
+
+        // Phase 1 instrumentation: wrap backend codegen in a TimeTraceScope so
+        // the bulk of compile time (SelectionDAG + MachineInstr passes +
+        // RegAlloc + assembly emission) appears as a single coarse event in the
+        // Chrome trace.  Sub-phases within the backend emit their own scopes if
+        // they call llvm::TimeTraceScope — legacy backend passes don't, but the
+        // total here gives us a clear picture of backend vs middle-end split.
+        {
+            llvm::TimeTraceScope backend_scope("BackendCodegen",
+                    module.getName().str());
+            emit_pm.run(module);
+        }
+
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Code generation completed, flushing output\n");
+            fflush(stderr);
+        }
+
+        dest.flush();
+
+        if (dest.has_error()) {
+            error = "LLVM code generation failed writing to " + tmp_path;
+            remove(tmp_path.c_str());
+            delete tm;
+            return false;
+        }
+        // `dest` closes here (end of scope) so all bytes are on disk in the
+        // temp file before the rename below.
     }
 
-    if (debug_opt) {
-        fprintf(stderr, "AOT: Code generation completed, flushing output\n");
-        fflush(stderr);
-    }
-
-    dest.flush();
-
-    if (dest.has_error()) {
-        error = "LLVM code generation failed writing to " + path;
+    if (rename(tmp_path.c_str(), path.c_str()) != 0) {
+        error = "failed to replace output object '" + path + "' with temporary object '"
+            + tmp_path + "': " + strerror(errno);
+        remove(tmp_path.c_str());
         delete tm;
         return false;
     }
@@ -7111,9 +7137,15 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         size_t module_cmd_end = std::numeric_limits<size_t>::max(),
         int* compiled_count_out = nullptr,
         bool report_artifact = true) {
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    // Global LLVM target init is process-wide and not safe to call
+    // concurrently; run it exactly once so this emit can be invoked from a
+    // batch worker-thread pool (compileScriptFilesBatch parallel codegen).
+    static std::once_flag llvm_native_init_once;
+    std::call_once(llvm_native_init_once, [] {
+        llvm::InitializeNativeTarget();
+        llvm::InitializeNativeTargetAsmPrinter();
+        llvm::InitializeNativeTargetAsmParser();
+    });
 
     llvm::LLVMContext ctx;
     std::string mod_name_san = scriptBatchSourceId(target_canon);
@@ -7616,34 +7648,115 @@ bool QoreAOT::compileScriptFilesBatch(
         wsink.handleWarnings();
     }
 
-    // Now emit one .qo per target using the shared parsed program.
+    // Now emit one .qo per target using the shared parsed program.  Each
+    // emit is independent — its own LLVMContext/Module, file-filtered codegen
+    // (compile_file=e.canon), local result vectors, and a distinct output
+    // path written atomically (temp + rename) — and reads (does not mutate)
+    // the committed program.  So the emits run on a worker-thread pool to
+    // parallelize the otherwise single-threaded -O3 LLVM backend, which
+    // dominates clean-build time.  The shared parse/commit above stays
+    // single-threaded.  QORE_AOT_BATCH_JOBS overrides the worker count
+    // (default: hardware concurrency; 1 = serial, identical to the old path).
     const bool trace_emit = getenv("QORE_AOT_TRACE_BATCH_EMIT") != nullptr;
-    int total_compiled_count = 0;
-    for (auto& e : entries) {
-        if (trace_emit) {
-            fprintf(stderr, "[aot-trace] emit start: %s\n",
-                e.canon.c_str());
-            fflush(stderr);
+    unsigned jobs;
+    {
+        unsigned hw = std::thread::hardware_concurrency();
+        jobs = hw ? hw : 1;
+        if (const char* j = getenv("QORE_AOT_BATCH_JOBS")) {
+            long v = strtol(j, nullptr, 10);
+            jobs = v > 0 ? (unsigned)v : 1;
         }
-        std::string per_err;
-        int per_file_compiled_count = 0;
-        if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
-                e.out_path, opt_level, target_triple, include_source,
-                per_err, e.module_cmd_begin, e.module_cmd_end,
-                &per_file_compiled_count, report_artifacts)) {
-            error = per_err;
-            return false;
+        if (jobs > entries.size()) {
+            jobs = (unsigned)entries.size();
         }
-        total_compiled_count += per_file_compiled_count;
-        if (report_artifacts && qccAOTVerbose()) {
-            printf("%sbatch-compiled script-context .qo (-O%d%s): %s\n",
-                QCC_LOG_PREFIX, opt_level,
-                include_source ? ", include-source" : "", e.out_path.c_str());
+        if (!jobs) {
+            jobs = 1;
         }
     }
 
+    std::atomic<size_t> next_index{0};
+    std::atomic<int> total_compiled_count{0};
+    std::atomic<bool> stop{false};
+    std::mutex err_mutex;   // guards first_error
+    std::mutex io_mutex;    // serializes diagnostic output across workers
+    std::string first_error;
+
+    auto worker = [&]() {
+        // A batch worker is a fresh OS thread; register it as a foreign Qore
+        // thread so it has the thread context Qore APIs touched during codegen
+        // expect.  (Run inline with jobs==1 on the main thread, which is
+        // already registered -> q_register returns QFT_REGISTERED, no-op.)
+        int reg = q_register_foreign_thread();
+        if (reg != QFT_OK && reg != QFT_REGISTERED) {
+            std::lock_guard<std::mutex> l(err_mutex);
+            if (first_error.empty()) {
+                first_error = "failed to register AOT batch worker thread";
+            }
+            stop.store(true);
+            return;
+        }
+        int local_compiled = 0;
+        for (;;) {
+            if (stop.load()) {
+                break;
+            }
+            size_t i = next_index.fetch_add(1);
+            if (i >= entries.size()) {
+                break;
+            }
+            auto& e = entries[i];
+            if (trace_emit) {
+                std::lock_guard<std::mutex> l(io_mutex);
+                fprintf(stderr, "[aot-trace] emit start: %s\n", e.canon.c_str());
+                fflush(stderr);
+            }
+            std::string per_err;
+            int per_file_compiled_count = 0;
+            if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
+                    e.out_path, opt_level, target_triple, include_source,
+                    per_err, e.module_cmd_begin, e.module_cmd_end,
+                    &per_file_compiled_count, report_artifacts)) {
+                std::lock_guard<std::mutex> l(err_mutex);
+                if (first_error.empty()) {
+                    first_error = per_err;
+                }
+                stop.store(true);
+                break;
+            }
+            local_compiled += per_file_compiled_count;
+            if (report_artifacts && qccAOTVerbose()) {
+                std::lock_guard<std::mutex> l(io_mutex);
+                printf("%sbatch-compiled script-context .qo (-O%d%s): %s\n",
+                    QCC_LOG_PREFIX, opt_level,
+                    include_source ? ", include-source" : "", e.out_path.c_str());
+            }
+        }
+        total_compiled_count.fetch_add(local_compiled);
+        if (reg == QFT_OK) {
+            q_deregister_foreign_thread();
+        }
+    };
+
+    if (jobs == 1) {
+        worker();
+    } else {
+        std::vector<std::thread> pool;
+        pool.reserve(jobs);
+        for (unsigned t = 0; t < jobs; ++t) {
+            pool.emplace_back(worker);
+        }
+        for (auto& th : pool) {
+            th.join();
+        }
+    }
+
+    if (!first_error.empty()) {
+        error = first_error;
+        return false;
+    }
+
     if (compiled_count_out) {
-        *compiled_count_out = total_compiled_count;
+        *compiled_count_out = total_compiled_count.load();
     }
 
     return true;

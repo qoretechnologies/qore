@@ -139,6 +139,13 @@ qcc -c -L build/aot --output-dir=build/aot src/worker.qr
 qcc -o app build/aot/*.qo
     @endcode
 
+    Each \c .qo object is written atomically: \c qcc compiles to a temporary
+    file in the output directory and renames it into place on success.  A
+    concurrent \c -L sibling scan therefore only ever observes a complete
+    object, never a half-written one, so independent per-file \c qcc \c -c
+    jobs writing into the same output directory may run in parallel (for
+    example under <tt>make -j</tt> or \c ninja) without an external lock.
+
     @subsection aot_modules AOT-Compiled User Modules
 
     Standard user modules are compiled to \c .qmod during the CMake build when
