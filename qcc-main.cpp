@@ -406,6 +406,39 @@ static bool write_depfile(const char* path, const std::string& output,
     return true;
 }
 
+// Write a Make-style depfile from an explicit, already-canonicalized
+// dependency list (used by script `-c -L` mode, where compileScriptFile
+// reports the exact set of source files it parsed — the target plus its
+// `%include` closure — so the build rebuilds the `.qo` when any of them
+// changes).
+static bool write_depfile_list(const char* path, const std::string& output,
+                               const std::vector<std::string>& deps) {
+    FILE* f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "error: --depfile: cannot open '%s' for writing: %s\n",
+            path, strerror(errno));
+        return false;
+    }
+    auto escape = [](const std::string& s) {
+        std::string out;
+        out.reserve(s.size());
+        for (char c : s) {
+            if (c == ' ' || c == '\\') {
+                out += '\\';
+            }
+            out += c;
+        }
+        return out;
+    };
+    fprintf(f, "%s:", escape(output).c_str());
+    for (const auto& dep : deps) {
+        fprintf(f, " \\\n    %s", escape(dep).c_str());
+    }
+    fputc('\n', f);
+    fclose(f);
+    return true;
+}
+
 // Program options
 static const char* output_path = nullptr;
 static int opt_level = 3;
@@ -3955,6 +3988,7 @@ int main(int argc, char** argv) {
     if (script_mode) {
         // Compile a single script-style source with
         // optional sibling-.qo decl preload.
+        std::vector<std::string> parsed_files;
         if (!QoreAOT::compileScriptFile(
                 source_file,
                 script_lib_dirs,
@@ -3966,7 +4000,8 @@ int main(int argc, char** argv) {
                 include_source,
                 load_modules,
                 stub_files,
-                parse_defines)) {
+                parse_defines,
+                depfile_path ? &parsed_files : nullptr)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
@@ -3976,10 +4011,11 @@ int main(int argc, char** argv) {
                     script_lib_dirs.size() == 1 ? "" : "s",
                     source_mode_suffix(include_source), output.c_str());
             }
-            // deps = target source only (script mode has no
-            // --context dir; -L preload is a linker-style decl path,
-            // not a parser-opened source set).  Not yet wired in cmake.
-            if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
+            // deps = the target source plus its `%include` closure, as
+            // reported by compileScriptFile (the same set it used to filter
+            // the `-L` preload).  This lets the build rebuild the `.qo` when
+            // any `%include`d file changes — not just the target itself.
+            if (depfile_path && !write_depfile_list(depfile_path, output, parsed_files)) {
                 rc = 1;
             }
         }

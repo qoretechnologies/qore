@@ -687,6 +687,10 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             constantTypeInfo = i->second->typeInfo;
             access = i->second->getAccess();
             found = true;
+            // AOT incremental dependency: see ConstantEntry::get().  Records
+            // the defining source file so a folded cross-unit constant/enum
+            // reference still triggers a rebuild when that file changes.
+            qore_aot_note_referenced_decl(i->second->loc);
             return i->second->val;
         }
         constantTypeInfo = nothingTypeInfo;

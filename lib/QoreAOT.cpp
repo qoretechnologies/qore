@@ -34,6 +34,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreDir.h"
+#include "qore/intern/qore_aot_deps.h"
 #include <qore/QoreRegexInterface.h>
 #include <qore/QoreObject.h>
 #include <qore/Qore.h>
@@ -180,6 +181,28 @@
 #include <qore/QoreNothingNode.h>
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
+
+// AOT incremental-dependency sink (see qore_aot_deps.h).  Thread-local so the
+// batch worker pool can run independent single-file compiles concurrently; null
+// for every normal program, so the resolution-path hooks are a single pointer
+// test off the hot path.
+static thread_local std::unordered_set<std::string>* aot_dep_sink = nullptr;
+
+void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink) {
+    aot_dep_sink = sink;
+}
+
+void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
+    if (!aot_dep_sink || !loc) {
+        return;
+    }
+    const char* f = loc->getFile();
+    // Skip synthetic locations ("<builtin>", "<run-time>", …) — only real
+    // source files are build dependencies.
+    if (f && *f && *f != '<') {
+        aot_dep_sink->insert(f);
+    }
+}
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -8139,7 +8162,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                                 bool include_source,
                                 const std::vector<std::string>& require_modules,
                                 const std::vector<std::string>& stub_files,
-                                const std::vector<std::string>& parse_defines) {
+                                const std::vector<std::string>& parse_defines,
+                                std::vector<std::string>* parsed_files) {
     if (!target_file || !*target_file) {
         error = "compileScriptFile: target_file is required";
         return false;
@@ -8200,6 +8224,85 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         return false;
     }
 
+    // Compute the set of source files the target will declare into — the
+    // target itself plus every file it `%include`s — so that the `-L`
+    // preload below can SKIP sibling `.qo`s for those files.  When the
+    // real target parse runs (further down, after the preload), it
+    // re-declares everything in these files; if a sibling `.qo` for one
+    // of them had been preloaded, that parse would re-register the same
+    // hashdecl/class and abort with e.g. "hashdecl 'AppenderParams' is
+    // already defined in namespace '::'".  The target's own stale `.qo`
+    // (label == target_canon) is in this set too, so it never shadows the
+    // freshly parsed declarations.
+    //
+    // The set is computed with a THROWAWAY parse in a separate program:
+    // the real program must keep the original "shells first, parse
+    // second" ordering so that cross-unit barewords in NON-`%include`d
+    // siblings (an enum member, a `Class::CONST`, a static var) resolve
+    // at parse time against the preloaded shells — parsing the real
+    // program first would break that.  The `%include` graph (hence the
+    // declared-file set) is fixed by the scanner and the parse defines
+    // alone; it does not depend on the preloaded modules/stubs, so a
+    // minimal throwaway parse yields the same file set.
+    std::unordered_set<std::string> parsed_decl_files_canon;
+    parsed_decl_files_canon.insert(target_canon);
+    {
+        QoreParseOptions probe_po = parse_options;
+        ExceptionSink probe_xsink;
+        ExceptionSink probe_wsink;
+        QoreProgramHelper probe_pgm(probe_po, probe_xsink);
+        if (!probe_xsink.isException()) {
+            probe_pgm->setScriptPath(target_canon.c_str());
+            apply_parse_defines(*probe_pgm, parse_defines);
+            // Best-effort: collect whatever declarations were registered,
+            // even if the parse reports errors (an unresolved type, a
+            // missing `%include`, …).  The real compile below reports the
+            // authoritative error; here we only need the file set.
+            probe_pgm->parsePending(source_text.c_str(), target_canon.c_str(),
+                &probe_xsink, &probe_wsink, QP_WARN_NONE);
+            std::unordered_set<std::string> probe_files;
+            qore_program_private* pp_probe = qore_program_private::get(**probe_pgm);
+            collectDeclaredSourceFiles(qore_ns_private::get(*pp_probe->RootNS),
+                probe_files);
+            for (const std::string& f : probe_files) {
+                char* rp = realpath(f.c_str(), nullptr);
+                if (rp) {
+                    parsed_decl_files_canon.insert(rp);
+                    free(rp);
+                } else {
+                    parsed_decl_files_canon.insert(f);
+                }
+            }
+        }
+        // Discard any parse diagnostics from the throwaway program.
+        probe_wsink.clear();
+        probe_xsink.clear();
+    }
+
+    // Canonical source labels of the siblings actually preloaded below (filled
+    // by the `-L` scan).  Used to narrow the dependency sink to true siblings.
+    std::unordered_set<std::string> sibling_source_labels;
+
+    // AOT incremental dependency sink: collects the source file of every
+    // declaration the TARGET resolves while it is parsed and committed —
+    // including compile-time constants/enum members it folds, which leave no
+    // trace in the emitted `.qo`.  Only armed (around the target parse+commit
+    // below) when the caller wants a dependency list; the RAII guard clears the
+    // thread-local on every exit path.  It is deliberately NOT armed during the
+    // sibling preload/resolution phases, whose cross-references are not the
+    // target's dependencies.
+    std::unordered_set<std::string> aot_referenced_files;
+    std::unordered_set<std::string>* aot_dep_sink_arg =
+        parsed_files ? &aot_referenced_files : nullptr;
+    struct AOTDepSinkGuard {
+        explicit AOTDepSinkGuard(std::unordered_set<std::string>* sink) {
+            qore_aot_set_dep_sink(sink);
+        }
+        ~AOTDepSinkGuard() {
+            qore_aot_set_dep_sink(nullptr);
+        }
+    };
+
     // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
     // Each path is scanned for `*.qo` files (non-recursive).  For
     // every `.qo` whose `_fragment_blob` symbol we can read, the blob
@@ -8254,6 +8357,53 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                     return false;
                 }
             }
+        }
+
+        // Drop siblings whose source file the target parse already
+        // declared (the target plus its `%include`d files).  Their
+        // declarations already exist in the program from the parse
+        // above; preloading the corresponding `.qo` shells would
+        // re-register the same hashdecl/class and abort the parse.  The
+        // target's own bootstrap `.qo` is dropped here too (its label is
+        // target_canon), so a stale self-`.qo` in the `-L` dir cannot
+        // shadow the freshly parsed declarations.
+        if (!extracted_frags.empty()) {
+            std::vector<QoreAOTExtractedFragment> kept;
+            kept.reserve(extracted_frags.size());
+            for (auto& frag : extracted_frags) {
+                std::string label;
+                {
+                    QoreAOTBinaryReader lbl_reader;
+                    std::string lbl_err;
+                    if (lbl_reader.open(frag.bytes.data(),
+                            static_cast<uint32_t>(frag.bytes.size()), lbl_err)) {
+                        const char* l = lbl_reader.getLabel();
+                        if (l) {
+                            label = l;
+                        }
+                    }
+                }
+                bool skip = false;
+                if (!label.empty()) {
+                    char* rp = realpath(label.c_str(), nullptr);
+                    const std::string key = rp ? std::string(rp) : label;
+                    if (rp) {
+                        free(rp);
+                    }
+                    skip = parsed_decl_files_canon.count(key) != 0;
+                    if (!skip) {
+                        // Remember the canonical source label of every PRELOADED
+                        // sibling so the dependency sink (which records the
+                        // source file of every declaration the target resolves)
+                        // can be narrowed to just these siblings for the depfile.
+                        sibling_source_labels.insert(key);
+                    }
+                }
+                if (!skip) {
+                    kept.push_back(std::move(frag));
+                }
+            }
+            extracted_frags = std::move(kept);
         }
 
         // Phase 1 via multi-deserializer.  Only create sibling shells here.
@@ -8320,11 +8470,16 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
 
-    // Parse + commit the target source.  With siblings preloaded,
-    // `class Foo inherits Bar` (where Bar is in a sibling `.qo`)
-    // resolves via parseFindClassIntern's namespace-tree walk.
-    qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
-        &wsink, QP_WARN_DEFAULT);
+    // Parse the target source.  With siblings preloaded (minus the ones
+    // for the target's own `%include`d files, which were filtered out of
+    // the preload set above), `class Foo inherits Bar` and cross-unit
+    // barewords (`SomeEnum::Member`, `SomeClass::CONST`) resolve at parse
+    // time via parseFindClassIntern's namespace-tree walk over the shells.
+    {
+        AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
+            &wsink, QP_WARN_DEFAULT);
+    }
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "parse error in target file: " + target_canon;
@@ -8352,7 +8507,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
 
-    qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    {
+        AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    }
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "parse commit failed: " + target_canon;
@@ -8609,6 +8767,44 @@ bool QoreAOT::compileScriptFile(const char* target_file,
 
     reportAOTArtifactStats("script-context .qo", opt_level, include_source,
         compiled_count, total_funcs, failed_count, target_triple, output_path);
+
+    // Hand back the source files this compile depends on so the caller can emit
+    // a build dependency file:
+    //   1. the target + its `%include` closure (parsed_decl_files_canon), and
+    //   2. preloaded sibling sources whose declarations the target actually
+    //      referenced — captured by the dependency sink during parse+commit and
+    //      narrowed to the real sibling set.  (2) is what closes the silent-
+    //      staleness hole: a folded cross-unit `Sibling::CONST`/enum member
+    //      leaves no trace in the `.qo`, so without this a change to that
+    //      sibling would not rebuild this `.qo`.
+    if (parsed_files) {
+        std::unordered_set<std::string> deps = parsed_decl_files_canon;
+        // Add the preloaded siblings whose compile-time constants/enum members
+        // the target folded (captured by the dependency sink during
+        // parse+commit).  Folded values are baked into this `.qo` with no trace,
+        // so without these the `.qo` would silently keep a stale value when the
+        // sibling changes.  This is the ONLY cross-`-L` reference that requires a
+        // dependency: empirically, every other cross-unit reference (calls,
+        // inherited methods/members, base-class structure) is resolved by name
+        // at load/register time, so a stale dependent picks up the new sibling
+        // automatically, and incompatible changes surface as loud load/runtime
+        // errors rather than silent corruption.
+        for (const std::string& f : aot_referenced_files) {
+            std::string key = f;
+            char* rp = realpath(f.c_str(), nullptr);
+            if (rp) {
+                key = rp;
+                free(rp);
+            }
+            // Keep only real preloaded siblings (drops modules, builtins, and the
+            // target's own `%include` closure, which is already in `deps`).
+            if (sibling_source_labels.count(key)) {
+                deps.insert(key);
+            }
+        }
+        parsed_files->assign(deps.begin(), deps.end());
+        std::sort(parsed_files->begin(), parsed_files->end());
+    }
 
     return true;
 }

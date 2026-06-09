@@ -847,6 +847,14 @@ bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::strin
 bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
         std::string& error);
 
+//! Collect the set of source files that contributed user declarations to the
+//! program rooted at @p ns (used by the single-file `-L` preload to avoid
+//! re-registering declarations the target parse already produced).
+/** @param ns root namespace to walk recursively
+    @param files receives the (raw, parse-recorded) source file paths
+*/
+void collectDeclaredSourceFiles(qore_ns_private* ns, std::unordered_set<std::string>& files);
+
 //! Serialize reexported module names into the REEXPORT_MODULES binary section
 /** Writes the list of modules that should be reexported when this module is imported.
     When a compiled module is loaded as a binary module, the reexport mechanism from

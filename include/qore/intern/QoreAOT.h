@@ -866,7 +866,8 @@ public:
                                   bool include_source = false,
                                   const std::vector<std::string>& require_modules = {},
                                   const std::vector<std::string>& stub_files = {},
-                                  const std::vector<std::string>& parse_defines = {});
+                                  const std::vector<std::string>& parse_defines = {},
+                                  std::vector<std::string>* parsed_files = nullptr);
 
     //! Package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`

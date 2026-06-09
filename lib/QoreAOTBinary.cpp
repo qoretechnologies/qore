@@ -6333,6 +6333,111 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 
 } // anonymous namespace
 
+//! Phase 4 slice 10c (single-file `-L` preload): collect the set of source
+//! files that contributed user declarations to the program rooted at @p ns.
+/** The single-file incremental compiler (`qcc -c -L <dir>`) parses the target
+    source — which textually pulls in its `%include`d files — BEFORE preloading
+    sibling `.qo`s.  Any sibling whose source file is in this set has already
+    been declared by that parse, so preloading its `.qo` shells would
+    re-register the same declarations and raise a duplicate-definition parse
+    error (e.g. "hashdecl 'AppenderParams' is already defined").  The caller
+    skips those siblings.
+
+    The per-item location accessors mirror collectItems() so the file
+    attribution matches exactly what each per-file `.qo` was emitted for (each
+    batch `.qo` carries only its own source file's declarations — see the
+    `compile_file` filter in collectItems). */
+void collectDeclaredSourceFiles(qore_ns_private* ns, std::unordered_set<std::string>& files) {
+    auto add_file = [&files](const QoreProgramLocation* loc) {
+        if (loc) {
+            const char* f = loc->getFile();
+            if (f && *f) {
+                files.insert(f);
+            }
+        }
+    };
+
+    // classes
+    {
+        ClassListIterator cli(ns->classList);
+        while (cli.next()) {
+            qore_class_private* priv = qore_class_private::get(*cli.get());
+            if (!priv->sys) {
+                add_file(priv->loc);
+            }
+        }
+    }
+    // hashdecls
+    {
+        HashDeclListIterator hdi(ns->hashDeclList);
+        while (hdi.next()) {
+            TypedHashDecl* hd = hdi.get();
+            if (!hd->isSystem()) {
+                add_file(typed_hash_decl_private::get(*hd)->getParseLocation());
+            }
+        }
+    }
+    // enums
+    {
+        EnumListIterator eli(ns->enumList);
+        while (eli.next()) {
+            QoreEnumDecl* ed = eli.get();
+            if (!ed->isSystem()) {
+                add_file(qore_enum_decl_private::get(*ed)->getParseLocation());
+            }
+        }
+    }
+    // typedefs
+    for (auto& ti : ns->typedefMap) {
+        if (ti.second->typeInfo) {
+            add_file(ti.second->loc);
+        }
+    }
+    // constants
+    {
+        ConstantListIterator cli(ns->constant);
+        while (cli.next()) {
+            ConstantEntry* ce = cli.getEntry();
+            if (!ce->isSystem() && !ce->isExternalStub()) {
+                add_file(ce->loc);
+            }
+        }
+    }
+    // global variables
+    for (auto& vi : ns->var_list.vmap) {
+        Var* var = vi.second;
+        if (!var->isImported() && !var->isBuiltin()) {
+            add_file(var->getParseLocation());
+        }
+    }
+    // functions (per user variant — overloads can legally live in different files)
+    for (auto fi = ns->func_list.begin(), fe = ns->func_list.end(); fi != fe; ++fi) {
+        FunctionEntry* entry = fi->second;
+        QoreFunction* func = entry->getFunction();
+        if (func && !entry->hasBuiltin()) {
+            QoreFunctionIterator vit(*func);
+            while (vit.next()) {
+                const AbstractQoreFunctionVariant* v = vit.getVariant();
+                UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(v)->getUserVariantBase();
+                if (!uvb) {
+                    continue;
+                }
+                const UserSignature* sig = uvb->getUserSignature();
+                if (sig) {
+                    add_file(sig->getParseLocation());
+                }
+            }
+        }
+    }
+    // recurse into child namespaces
+    for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
+        QoreNamespace* child_ns = ni->second;
+        if (child_ns) {
+            collectDeclaredSourceFiles(qore_ns_private::get(*child_ns), files);
+        }
+    }
+}
+
 bool qoreAOTWriteDefaultArgValuePayload(QoreAOTBinaryWriter& writer, const QoreValue& v,
         const char* owner_kind, const char* owner_name, const char* param_name,
         std::string* error, const std::vector<AOTLocalSlotId>* parent_locals) {

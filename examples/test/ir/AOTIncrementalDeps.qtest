@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTIncrementalDepsTest
+
+# Phase 1 of cross-unit AOT incremental dependency tracking.
+#
+# When `qcc -c -L <dir>` compiles a target that references a declaration in a
+# *sibling* `.qo` (not `%include`d), some references are erased from the emitted
+# object:
+#   - a compile-time constant (`Sibling::CONST`) is folded to a literal;
+#   - an enum member (`SiblingEnum::Member`) folds the same way.
+# No symbol, string, or metadata path survives, so a depfile built from the
+# output alone would miss the dependency — editing the sibling would leave a
+# stale `.qo` with the old folded value.
+#
+# qcc now records the source file of every constant/enum a target resolves while
+# it is parsed+committed (deserialized siblings carry their original source file
+# as their declaration location), and emits those siblings into the depfile.
+#
+# This test compiles one sibling per reference kind into its own `.qo`, then a
+# target that references it, and asserts the depfile names the sibling.  A
+# negative case (a sibling class used only as a type annotation — which does NOT
+# affect the target's output) asserts that pure-type references are NOT treated
+# as dependencies.
+class AOTIncrementalDepsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string lib_dir;
+        string tmp_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTIncrementalDepsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("folded namespace constant", \testNamespaceConstant());
+        addTestCase("folded class constant", \testClassConstant());
+        addTestCase("pure type reference is not a dependency", \testPureTypeNotDep());
+        # NOTE: enum members route through the SAME constant hook — they are
+        # registered as ConstantList entries, so a folded `SiblingEnum::Member`
+        # is captured identically to a constant.  An end-to-end enum case is not
+        # included here because resolving a preloaded sibling enum member under
+        # `-L` currently fails upstream ("cannot resolve bareword '<member>'"),
+        # a separate pre-existing `-L` enum-resolution gap independent of this
+        # dependency tracking.
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    # compile a sibling source into its own .qo inside the preload dir
+    private compileSibling(string name, string body) {
+        string src = tmp_dir + "/" + name + ".qc";
+        write(src, "%new-style\n" + body);
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/%s.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, name, src));
+        assertTrue(is_file(lib_dir + "/" + name + ".qo"), "compiled sibling " + name + ": " + out);
+    }
+
+    # compile a target against the preload dir, returning its depfile contents
+    private string compileTargetDep(string name, string body) {
+        string src = tmp_dir + "/" + name + ".qc";
+        write(src, "%new-style\n" + body);
+        string dep = lib_dir + "/" + name + ".qo.d";
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s -o %s/%s.qo %s",
+            env, qcc_bin, lib_dir, dep, lib_dir, name, src));
+        assertTrue(is_file(lib_dir + "/" + name + ".qo"), "compiled target " + name + ": " + out);
+        assertTrue(is_file(dep), "emitted depfile for " + name + ": " + out);
+        return File::readTextFile(dep);
+    }
+
+    # Establish a fresh temp dir + preload dir for a test; the returned TmpDir
+    # must be held in a method-scoped variable so the directory survives for the
+    # duration of the test case.
+    private TmpDir initDirs() {
+        TmpDir tmp("qore-aot-incr-deps-");
+        tmp_dir = tmp.path;
+        lib_dir = tmp_dir + "/aotlib";
+        mkdir(lib_dir);
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        return tmp;
+    }
+
+    testNamespaceConstant() {
+        TmpDir tmp = initDirs();
+        compileSibling("nsk", "public const NSVAL = 7;");
+        string dep = compileTargetDep("use_ns",
+            "class UseNs { static int f() { return NSVAL * 3 + 1; } }");
+        assertTrue(dep.find("nsk.qc") != -1,
+            "depfile records the sibling defining the folded namespace constant: " + dep);
+    }
+
+    testClassConstant() {
+        TmpDir tmp = initDirs();
+        compileSibling("ck", "public class Ck { public { const CC = 9; } }");
+        string dep = compileTargetDep("use_cc",
+            "class UseCc { static int f() { return Ck::CC + 2; } }");
+        assertTrue(dep.find("ck.qc") != -1,
+            "depfile records the sibling defining the folded class constant: " + dep);
+    }
+
+    testPureTypeNotDep() {
+        TmpDir tmp = initDirs();
+        compileSibling("widget", "public class Widget { int x() { return 1; } }");
+        # A sibling class referenced only as a type, inherited, called, etc. is
+        # NOT a build dependency: every such cross-unit reference is resolved by
+        # name at load/register time, so a stale dependent picks up the new
+        # sibling automatically (verified empirically — base method bodies and
+        # inherited member values both update without recompiling the
+        # dependent).  Only folded compile-time constants/enum members bake a
+        # value with no trace and therefore require a dependency.  Here Widget is
+        # used only as a return-type annotation, so it must NOT appear.
+        string dep = compileTargetDep("use_type",
+            "class UseType { static *Widget make() { return; } }");
+        assertEq(-1, dep.find("widget.qc"),
+            "a pure-type reference is not recorded as a build dependency: " + dep);
+        assertTrue(dep.find("use_type.qc") != -1,
+            "depfile still records the target's own source: " + dep);
+    }
+}
