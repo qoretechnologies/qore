@@ -1765,15 +1765,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
-                    # expand a single trailing list argument so each value is compared individually;
-                    # this keeps the generic (in-memory) implementation consistent with both the
-                    # varargs form and the SqlUtil "in" SQL generation
-                    softlist<auto> vals = exp.args[1..];
-                    if (vals.lsize() == 1 && vals[0].typeCode() == NT_LIST) {
-                        vals = vals[0];
+                    # evaluate each haystack argument, then expand a single trailing list result so
+                    # that each value is compared individually; this keeps the generic (in-memory)
+                    # implementation consistent with both the varargs form and the SqlUtil "in" SQL
+                    # generation.  The expansion must happen after evaluation, because the canonical
+                    # "(field, list)" form may be supplied as a single argument that only resolves to
+                    # a list at evaluation time (for example a template reference)
+                    softlist<auto> needles = map
+                        AbstractDataProvider::evalGenericExpressionValue(rec, $1, template_context),
+                        exp.args[1..];
+                    if (needles.lsize() == 1 && needles[0].typeCode() == NT_LIST) {
+                        needles = needles[0];
                     }
-                    list<auto> needles = map
-                        AbstractDataProvider::evalGenericExpressionValue(rec, $1, template_context), vals;
                     return inlist(
                         AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
                         needles);
