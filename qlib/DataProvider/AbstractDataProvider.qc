@@ -1743,6 +1743,11 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "groups": "Comparison",
                     "render_template": "$arg[0] in ($arg[1])",
                     "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                    # the haystack may be supplied either as a single list argument (the canonical
+                    # "(field, list)" form) or as a variable number of value arguments (the
+                    # "(field, v1, v2, ...)" form that the DPQL parser produces)
+                    "varargs": True,
+                    "min_args": 2,
                     "arg_info": (
                         <DataProviderArgInfo>{
                             "display_name": "Value",
@@ -1760,8 +1765,18 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "return_type": AbstractDataProviderTypeMap."bool",
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
-                    return inlist(AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
-                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context));
+                    # expand a single trailing list argument so each value is compared individually;
+                    # this keeps the generic (in-memory) implementation consistent with both the
+                    # varargs form and the SqlUtil "in" SQL generation
+                    softlist<auto> vals = exp.args[1..];
+                    if (vals.lsize() == 1 && vals[0].typeCode() == NT_LIST) {
+                        vals = vals[0];
+                    }
+                    list<auto> needles = map
+                        AbstractDataProvider::evalGenericExpressionValue(rec, $1, template_context), vals;
+                    return inlist(
+                        AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context),
+                        needles);
                 },
             },
             DP_SEARCH_OP_REGEX: {

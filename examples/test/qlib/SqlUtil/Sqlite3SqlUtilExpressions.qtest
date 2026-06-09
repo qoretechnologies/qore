@@ -94,6 +94,10 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         addTestCase("DP_OP_TERNARY", \testDpOpTernary());
         addTestCase("DP_OP_HAS_VALUE", \testDpOpHasValue());
 
+        # Multi-value list membership tests
+        addTestCase("DP_SEARCH_OP_IN", \testDpOpIn());
+        addTestCase("DP_OP_NOT_IN", \testDpOpNotIn());
+
         # Date/string function tests
         addTestCase("DP_FUNC_FORMAT_DATE", \testDpFuncFormatDate());
         addTestCase("DP_FUNC_SUBSTR", \testDpFuncSubstr());
@@ -490,6 +494,76 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
             expr(DP_OP_HAS_VALUE, (fref("is_active"),)),
         );
         assertEq((1, 2, 3), rows.id);
+    }
+
+    # counts the bind placeholders in generated SQL; guards against the value list being bound to a
+    # single placeholder (which silently mismatches on backends without native list-bind support)
+    private int bindCount(hash<DataProviderExpression> cond) {
+        list<auto> args;
+        string sql = table.getSelectSql({"columns": ("id",), "where": cond}, \args);
+        return sql.split("%v").size() - 1;
+    }
+
+    # evaluates the expression in memory (generic implementation) over the known test rows and
+    # returns the ids that match; used to assert the in-memory and SQL implementations agree
+    private list<int> evalIds(hash<DataProviderExpression> cond) {
+        list<int> rv = ();
+        foreach hash<auto> rec in (table.selectRows({"orderby": "id"})) {
+            if (AbstractDataProvider::evalGenericExpression(rec, cond)) {
+                rv += rec.id;
+            }
+        }
+        return rv;
+    }
+
+    testDpOpIn() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # validated generic form: (field, list); each value must bind to its own placeholder
+        hash<DataProviderExpression> num_in = expr(DP_SEARCH_OP_IN, (fref("id"), (1, 3, 4)));
+        assertEq(3, bindCount(num_in));
+        assertEq((1, 3, 4), selectWhere(num_in).id);
+
+        # string column membership
+        assertEq((2, 3),
+            selectWhere(expr(DP_SEARCH_OP_IN, (fref("name"), ("foo bar", "UPPER CASE")))).id);
+
+        # single-element list
+        assertEq((2,), selectWhere(expr(DP_SEARCH_OP_IN, (fref("id"), (2,)))).id);
+
+        # the varargs form (field, v1, v2, ...) - what the DPQL parser produces - must behave
+        # identically to the (field, list) form and bind each value separately
+        hash<DataProviderExpression> varargs = expr(DP_SEARCH_OP_IN, (fref("id"), 1, 3, 4));
+        assertEq(3, bindCount(varargs));
+        assertEq((1, 3, 4), selectWhere(varargs).id);
+
+        # a DPQL-parsed "in" (which emits the varargs form) must work against a SqlUtil table
+        hash<DataProviderExpression> dpql = DataProvider::parseDpqlExpression("@id in (1, 4)");
+        assertEq(2, bindCount(dpql));
+        assertEq((1, 4), selectWhere(dpql).id);
+
+        # the in-memory (generic) implementation must agree with the SQL implementation for every form
+        assertEq(selectWhere(num_in).id, evalIds(num_in));
+        assertEq(selectWhere(varargs).id, evalIds(varargs));
+        assertEq(selectWhere(dpql).id, evalIds(dpql));
+    }
+
+    testDpOpNotIn() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # numeric column: ids not in (1, 2) -> 3, 4
+        hash<DataProviderExpression> num_not_in = expr(DP_OP_NOT_IN, (fref("id"), (1, 2)));
+        assertEq(2, bindCount(num_not_in));
+        assertEq((3, 4), selectWhere(num_not_in).id);
+
+        # string column
+        assertEq((1, 4),
+            selectWhere(expr(DP_OP_NOT_IN, (fref("name"), ("foo bar", "UPPER CASE")))).id);
+
+        # varargs form (as produced by DPQL) must behave identically
+        hash<DataProviderExpression> varargs = expr(DP_OP_NOT_IN, (fref("id"), 1, 2));
+        assertEq(2, bindCount(varargs));
+        assertEq((3, 4), selectWhere(varargs).id);
     }
 
     # --- Date/string function tests ---
