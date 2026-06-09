@@ -64,20 +64,6 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         #! body + end_stream together, cleared on next readData() call
         bool pending_end_stream = False;
 
-        #! Deferred body: set when a single channel event coalesces response
-        #! metadata (status_code/headers) with the first body chunk
-        /** When the server's response HEADERS and first DATA frame arrive in the
-            same TCP segment, nghttp2 delivers both in one mem_recv batch and the
-            client coalesces them into a single channel event carrying both
-            \c status_code and \c body.  The response metadata must be delivered
-            as a standalone hash first — callers such as the WebSocket
-            extended-CONNECT handshake validate the status code from the returned
-            hash and would otherwise see a \c binary body instead of the
-            response.  The coalesced body is stashed here and returned on the next
-            @ref readData() call so no data is lost.
-        */
-        *binary pending_body;
-
         #! True when the request write side remains open after startStreaming()
         bool request_body_streaming = False;
     }
@@ -262,15 +248,6 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     && data_channel.empty()) {
                 throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
-            # Deliver a deferred body chunk when the previous call returned the
-            # response metadata from a coalesced headers+body event.  This must
-            # be checked before pending_end_stream so the body is delivered
-            # before the completion signal.
-            if (exists pending_body) {
-                binary b = pending_body;
-                remove pending_body;
-                return b;
-            }
             # Deliver a deferred end_stream sentinel when the previous call
             # consumed a body+end_stream coalesced event: the body was
             # returned then and end_stream must surface now so streaming
@@ -325,11 +302,6 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     }
                     return {"error": rv};
                 }
-                # Whether this is the first response-bearing event.  status_code
-                # is cloned into every streaming event (it persists across body
-                # chunks), so this is the only reliable way to tell the response
-                # headers event from a mid-stream body chunk.
-                bool first_response = !exists response;
                 # State transitions (monotonically forward)
                 {
                     AutoLock al(lock);
@@ -356,21 +328,6 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                             pending_end_stream = True;
                         }
                     }
-                }
-                # Coalesced response metadata + first body chunk: the server's
-                # response HEADERS and first DATA frame arrived in one mem_recv
-                # batch (see pending_body).  Deliver the response hash as a
-                # standalone event — callers like the WebSocket extended-CONNECT
-                # handshake validate the status code from this hash — and defer
-                # the body to the next readData() call so the payload is not lost.
-                # Gated on first_response so mid-stream body chunks (which also
-                # carry a persisted status_code) are returned normally.
-                if (first_response && (rv.status_code || rv.headers) && rv.body) {
-                    {
-                        AutoLock al(lock);
-                        pending_body = rv.body;
-                    }
-                    return rv - "body";
                 }
                 # Return body data extracted from the hash
                 if (rv.body) {
