@@ -32,6 +32,16 @@
 #include <qore/Qore.h>
 #include "qore/intern/QC_TermIOS.h"
 
+// NOTE: QC_TermIOS.h is intentionally opaque (it does not include <termios.h>) so that
+// translation units that include both it and LLVM headers (JIT/AOT) are not polluted by
+// termios.h macros.  This .qpp is not such a unit, and the constant definitions below
+// require the real <termios.h> macro values; without this include they all silently fall
+// back to 0 (see the #ifndef guards), which breaks raw-mode terminal handling.
+#ifdef HAVE_TERMIOS_H
+#include <termios.h>
+#include <sys/ioctl.h>
+#endif
+
 /** @defgroup tattr_local_mode_constants Terminal Attribute Local Mode Constants
     If any of the constants in this group is not defined on the host system, then it will be assigned to 0 in Qore.
  */
