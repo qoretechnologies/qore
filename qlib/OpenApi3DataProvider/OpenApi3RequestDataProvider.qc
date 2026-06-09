@@ -91,6 +91,11 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
         return op.method.upr();
     }
 
+    #! Returns the OpenAPI 3 operation object
+    OperationObject getOperation() {
+        return op;
+    }
+
     #! Returns the data provider description
     *string getDesc() {
         string url = rest ? rest.getUrl() : "(no REST client)";

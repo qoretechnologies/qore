@@ -116,6 +116,11 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         return op.method;
     }
 
+    #! Returns the REST schema operation object
+    RestSchemaValidator::AbstractOperationObject getOperation() {
+        return op;
+    }
+
     #! Returns the consumes hash for the operation
     *hash<string, bool> getConsumes() {
         return op.consumes;

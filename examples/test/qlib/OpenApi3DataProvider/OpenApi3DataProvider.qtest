@@ -208,6 +208,8 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         AbstractDataProvider get_pets = pets.getChildProviderEx("GET");
         assertEq("GET", get_pets.getName());
         assertEq("OpenApi3RequestDataProvider", get_pets.getInfo().type);
+        object op3_get_pets = cast<object>(get_pets);
+        assertEq("GET", op3_get_pets.getOperation().method);
 
         # wildcard /pets/{id} has GET and DELETE operations
         AbstractDataProvider pet_by_id = pets.getChildProviderEx("*");

@@ -34,7 +34,9 @@ public class RestSchemaDataProviderFactory inherits AbstractDataProviderFactory 
         const FactoryInfo = <DataProviderFactoryInfo>{
             "name": "restschema",
             "desc": "REST schema data provider factory",
+            "api_management": True,
             "children_can_support_apis": True,
+            "api_profiles": "rest",
         };
     }
 

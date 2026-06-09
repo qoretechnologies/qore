@@ -71,6 +71,8 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
 
         {
             AbstractDataProvider p0 = provider.getChildProviderPath("pet/findByStatus/GET");
+            object rp0 = cast<object>(p0);
+            assertEq("GET", rp0.getOperation().method);
             AbstractDataProviderType req = p0.getRequestType();
             assertEq(NT_HASH, req.getField("query").getType().getBaseTypeCode());
             AbstractDataProviderType resp = p0.getResponseType();
@@ -108,6 +110,8 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         provider = new RestSchemaDataProvider(opts);
         {
             AbstractDataProvider p0 = provider.getChildProviderPath("pet/findByStatus/GET");
+            object rp0 = cast<object>(p0);
+            assertEq("GET", rp0.getOperation().method);
             AbstractDataProviderType req = p0.getRequestType();
             assertEq(NT_HASH, req.getField("query").getType().getBaseTypeCode());
         }
@@ -906,6 +910,8 @@ paths:
         RestSchemaDataProviderFactory factory();
         hash<DataProviderFactoryInfo> info = factory.getInfo();
         assertEq("restschema", info.name);
+        assertTrue(info.api_management);
         assertTrue(info.children_can_support_apis);
+        assertEq(("rest",), info.api_profiles);
     }
 }

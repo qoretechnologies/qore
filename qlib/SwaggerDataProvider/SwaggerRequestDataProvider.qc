@@ -86,6 +86,11 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         return op.method.upr();
     }
 
+    #! Returns the Swagger operation object
+    OperationObject getOperation() {
+        return op;
+    }
+
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Swagger/OpenAPI data provider for URL `%s`, URI path `%s`, and HTTP method `%s`.\n\n"

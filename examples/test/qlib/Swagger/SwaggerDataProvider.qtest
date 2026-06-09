@@ -128,6 +128,8 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
 
         {
             AbstractDataProvider p0 = provider.getChildProviderPath("pet/findByStatus/GET");
+            object sp0 = cast<object>(p0);
+            assertEq("GET", sp0.getOperation().method);
             AbstractDataProviderType req = p0.getRequestType();
             assertEq(NT_HASH, req.getField("query").getType().getBaseTypeCode());
             AbstractDataProviderType resp = p0.getResponseType();
