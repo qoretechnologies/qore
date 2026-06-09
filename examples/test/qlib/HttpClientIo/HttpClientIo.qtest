@@ -297,6 +297,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # State tests
         addTestCase("stream state transitions", \testStreamStateTransitions());
         addTestCase("connection state transitions", \testConnectionStateTransitions());
+        addTestCase("coalesced headers+body split decision", \testCoalescedDeferredBody());
 
         # C++ layer tests
         addTestCase("submitHttp2Request missing headers", \testSubmitHttp2RequestMissingHeaders());
@@ -780,6 +781,58 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(HttpClientIo::HttpClientStreamState::Complete >= 4, "Complete is terminal");
         assertTrue(HttpClientIo::HttpClientStreamState::Cancelled >= 4, "Cancelled is terminal");
         assertTrue(HttpClientIo::HttpClientStreamState::Error >= 4, "Error is terminal");
+    }
+
+    #! Verifies the H2/H3 readData() coalesced headers+body split decision.
+    /** The HTTP/2 and HTTP/3 transports can deliver the response HEADERS and
+        the first DATA frame in a single channel event (when the server sends
+        them in one packet).  readData() must then deliver the response metadata
+        as a standalone hash and defer the body, so consumers that validate the
+        response from the return value — notably the WebSocket extended-CONNECT
+        handshake — see the response hash and not a raw body value.  This tests
+        the shared decision helper directly so the contract is verified
+        deterministically, independent of network packet timing.
+    */
+    testCoalescedDeferredBody() {
+        # The WebSocket extended-CONNECT case: 200 + headers + first body chunk,
+        # no end_stream (the tunnel stays open).  Must defer the body so the
+        # response hash is delivered first.
+        binary welcome = binary("registered-welcome");
+        auto body = HttpClientIo::HttpClientStreamHandle::getCoalescedDeferredBody(
+            {"status_code": 200, "headers": {":status": "200"}, "body": welcome}, True);
+        assertEq(welcome, body, "coalesced 200+body (no end_stream) defers the binary body");
+
+        # Streamed bodies may be strings, not just binaries — the deferred value
+        # must preserve the type (regression: a *binary-typed slot raised
+        # RUNTIME-TYPE-ERROR on a string body).
+        auto sbody = HttpClientIo::HttpClientStreamHandle::getCoalescedDeferredBody(
+            {"status_code": 200, "headers": {}, "body": "text-frame"}, True);
+        assertEq("text-frame", sbody, "coalesced response defers a string body unchanged");
+
+        # A fully-coalesced final response (headers+body+end_stream) must NOT be
+        # split — the original body-then-end_stream order is required so
+        # streaming consumers see the body before the completion signal
+        # (regression: splitting here lost the body for bidi/echo responses).
+        assertNothing(HttpClientIo::HttpClientStreamHandle::getCoalescedDeferredBody(
+            {"status_code": 200, "headers": {}, "body": binary("x"), "end_stream": True}, True),
+            "coalesced response WITH end_stream is not split");
+
+        # A mid-stream body chunk carries a persisted status_code but is not the
+        # first response event — it must be returned normally, not deferred
+        # (regression: gating on status_code alone deferred every chunk).
+        assertNothing(HttpClientIo::HttpClientStreamHandle::getCoalescedDeferredBody(
+            {"status_code": 200, "body": binary("chunk2")}, False),
+            "mid-stream body chunk (not first response) is not deferred");
+
+        # A headers-only response event (no body) is delivered as-is, not split.
+        assertNothing(HttpClientIo::HttpClientStreamHandle::getCoalescedDeferredBody(
+            {"status_code": 200, "headers": {":status": "200"}}, True),
+            "headers-only response event is not split");
+
+        # A pure body event with no response metadata is delivered normally.
+        assertNothing(HttpClientIo::HttpClientStreamHandle::getCoalescedDeferredBody(
+            {"body": binary("data")}, True),
+            "body-only event with no metadata is not split");
     }
 
     testConnectionStateTransitions() {

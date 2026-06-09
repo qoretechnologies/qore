@@ -64,6 +64,13 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         #! body + end_stream together, cleared on next readData() call
         bool pending_end_stream = False;
 
+        #! Deferred body: set when a single channel event coalesces response
+        #! metadata (status_code/headers) with the first body chunk (no
+        #! end_stream).  Returned on the next readData() call so the payload is
+        #! not lost.  Type is *data (not *binary) because streamed bodies may be
+        #! strings as well as binaries.
+        *data pending_body;
+
         #! True when the request write side remains open after startStreaming()
         bool request_body_streaming = False;
     }
@@ -248,6 +255,15 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     && data_channel.empty()) {
                 throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
+            # Deliver a deferred body chunk when the previous call returned the
+            # response metadata from a coalesced headers+body event.  Checked
+            # before pending_end_stream so the body precedes any completion
+            # signal.
+            if (exists pending_body) {
+                data b = pending_body;
+                remove pending_body;
+                return b;
+            }
             # Deliver a deferred end_stream sentinel when the previous call
             # consumed a body+end_stream coalesced event: the body was
             # returned then and end_stream must surface now so streaming
@@ -302,6 +318,11 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     }
                     return {"error": rv};
                 }
+                # Whether this is the first response-bearing event.  status_code
+                # is cloned into every streaming event (it persists across body
+                # chunks), so this is the only reliable way to tell the response
+                # headers event from a mid-stream body chunk.
+                bool first_response = !exists response;
                 # State transitions (monotonically forward)
                 {
                     AutoLock al(lock);
@@ -328,6 +349,19 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                             pending_end_stream = True;
                         }
                     }
+                }
+                # Coalesced response metadata + first body chunk WITHOUT
+                # end_stream (the WebSocket extended-CONNECT case): deliver the
+                # response hash as a standalone event so the handshake can
+                # validate the status code, and defer the body to the next
+                # readData() call.  See getCoalescedDeferredBody() for the gating.
+                *data coalesced_body = getCoalescedDeferredBody(rv, first_response);
+                if (exists coalesced_body) {
+                    {
+                        AutoLock al(lock);
+                        pending_body = coalesced_body;
+                    }
+                    return rv - "body";
                 }
                 # Return body data extracted from the hash
                 if (rv.body) {

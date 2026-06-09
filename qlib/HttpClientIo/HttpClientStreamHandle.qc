@@ -193,6 +193,43 @@ public class HttpClientStreamHandle {
         return response;
     }
 
+    #! Decides whether a streaming \c readData() event coalesces the first
+    #! response metadata with a body chunk that must be split.
+    /** The HTTP/2 and HTTP/3 transports can deliver the response HEADERS and
+        the first DATA frame in a single channel event when the server sends
+        them in one packet (H2: one \c nghttp2 mem_recv batch; H3: the headers
+        and data callbacks run in one \c read_pkt before completed streams are
+        drained).  Consumers that validate the response from the @ref readData()
+        return value — notably the WebSocket extended-CONNECT handshake, which
+        checks the status code on the returned hash — must receive the response
+        metadata as a standalone hash, not a raw body value.  When this method
+        returns a value, the caller delivers the response hash (minus body)
+        first and defers the returned body to the next @ref readData() call.
+
+        Only the first response-bearing event without \c end_stream qualifies:
+        - \c status_code is cloned into every streaming event, so the
+          \a first_response flag (not the mere presence of \c status_code)
+          distinguishes the response headers event from a mid-stream body
+          chunk;
+        - an event that also carries \c end_stream is left on the normal path
+          so the original body-then-\c end_stream delivery order is preserved.
+
+        @param rv the raw channel event hash pushed by the I/O thread
+        @param first_response @ref True if no response metadata has been
+        captured yet (i.e. this is the response headers event)
+
+        @return the body value (\c string or \c binary) to deliver on the next
+        @ref readData() call, or @ref nothing when the event should be delivered
+        through the normal path
+    */
+    static *data getCoalescedDeferredBody(hash<auto> rv, bool first_response) {
+        if (first_response && (rv.status_code || rv.headers) && rv.body
+                && !rv.end_stream) {
+            return rv.body;
+        }
+        return NOTHING;
+    }
+
     #! Returns True if a request has been submitted on this stream
     bool isSubmitted() {
         return exists stream_id;
