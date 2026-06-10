@@ -6784,30 +6784,55 @@ int QoreVarInfo::parseInit(const char* name) {
     return err;
 }
 
+static bool qore_is_deferred_static_init_exception(ExceptionSink* xsink) {
+    if (!xsink || !xsink->isException()) {
+        return false;
+    }
+    QoreValue ex_err = xsink->getExceptionErr();
+    if (ex_err.getType() != NT_STRING) {
+        return false;
+    }
+    QoreStringValueHelper ex_err_str(ex_err);
+    return !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
+        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
+        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
+}
+
 int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
     printd(5, "QoreVarInfo::evalInit() %s committing %s var (exp: %s)\n", name, privpub(access), exp.getFullTypeName());
 
     if (eval_init) {
         return 0;
     }
-    eval_init = true;
 
     if (exp) {
+        eval_init = true;
         // evaluate expression
         ValueEvalOptimizedRefHolder val(exp, xsink);
         if (*xsink) {
+            if (qore_is_deferred_static_init_exception(xsink)) {
+                xsink->clear();
+                eval_init = false;
+                return 0;
+            }
             return -1;
         }
         if (QoreTypeInfo::mayRequireFilter(getTypeInfo(), *val)) {
             val.ensureReferencedValue();
             QoreTypeInfo::acceptInputMember(getTypeInfo(), name, *val, xsink);
             if (*xsink) {
+                if (qore_is_deferred_static_init_exception(xsink)) {
+                    xsink->clear();
+                    eval_init = false;
+                    return 0;
+                }
                 return -1;
             }
         }
 
         discard(assignInit(val.takeReferencedValue()), xsink);
     } else {
+        eval_init = true;
         init();
     }
 

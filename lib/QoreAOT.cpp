@@ -187,9 +187,20 @@
 // for every normal program, so the resolution-path hooks are a single pointer
 // test off the hot path.
 static thread_local std::unordered_set<std::string>* aot_dep_sink = nullptr;
+static thread_local bool aot_source_parse_active = false;
 
 void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink) {
     aot_dep_sink = sink;
+}
+
+bool qore_aot_set_source_parse_active(bool active) {
+    bool old = aot_source_parse_active;
+    aot_source_parse_active = active;
+    return old;
+}
+
+bool qore_aot_source_parse_active() {
+    return aot_source_parse_active;
 }
 
 void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
@@ -8294,6 +8305,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     std::unordered_set<std::string> aot_referenced_files;
     std::unordered_set<std::string>* aot_dep_sink_arg =
         parsed_files ? &aot_referenced_files : nullptr;
+
     struct AOTDepSinkGuard {
         explicit AOTDepSinkGuard(std::unordered_set<std::string>* sink) {
             qore_aot_set_dep_sink(sink);
@@ -8301,6 +8313,14 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         ~AOTDepSinkGuard() {
             qore_aot_set_dep_sink(nullptr);
         }
+    };
+    struct AOTSourceParseGuard {
+        explicit AOTSourceParseGuard(bool active) : old(qore_aot_set_source_parse_active(active)) {
+        }
+        ~AOTSourceParseGuard() {
+            qore_aot_set_source_parse_active(old);
+        }
+        bool old;
     };
 
     // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
@@ -8370,7 +8390,13 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         if (!extracted_frags.empty()) {
             std::vector<QoreAOTExtractedFragment> kept;
             kept.reserve(extracted_frags.size());
+            size_t frag_i = 0;
             for (auto& frag : extracted_frags) {
+                if (frag_i && !(frag_i % 100)
+                        && qore_check_cancel(nullptr, "AOT sibling label collection")) {
+                    error = "operation cancelled during AOT sibling label collection";
+                    return false;
+                }
                 std::string label;
                 {
                     QoreAOTBinaryReader lbl_reader;
@@ -8402,6 +8428,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 if (!skip) {
                     kept.push_back(std::move(frag));
                 }
+                ++frag_i;
             }
             extracted_frags = std::move(kept);
         }
@@ -8477,6 +8504,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // time via parseFindClassIntern's namespace-tree walk over the shells.
     {
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        AOTSourceParseGuard source_guard(sibling_mdes != nullptr);
         qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
             &wsink, QP_WARN_DEFAULT);
     }
@@ -8509,6 +8537,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
 
     {
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        AOTSourceParseGuard source_guard(sibling_mdes != nullptr);
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {

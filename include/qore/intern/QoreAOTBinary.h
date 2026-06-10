@@ -2463,7 +2463,13 @@ public:
                 })) {
             return false;
         }
-        return true;
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+        return runSessionPhase("AOT source-parse BCA resolution",
+            [&error](QoreAOTBinaryDeserializer& sess) {
+                return sess.finalizePostIndex(error);
+            });
     }
 
     //! Finish AOT-only post-commit work after source parseCommit().

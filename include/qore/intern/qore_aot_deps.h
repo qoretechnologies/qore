@@ -58,6 +58,14 @@ class QoreProgramLocation;
 //! destroyed (use an RAII guard).
 DLLLOCAL void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink);
 
+//! Set (or clear) the active sibling-source parse flag for the current thread.
+//! Returns the previous value so callers can restore it.
+DLLLOCAL bool qore_aot_set_source_parse_active(bool active);
+
+//! Returns true while a single-file AOT compile is parsing/committing source
+//! with sibling `.qo` metadata preloaded.
+DLLLOCAL bool qore_aot_source_parse_active();
+
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic
     (e.g. "<builtin>").  Cheap (one thread-local load) on the inactive path. */

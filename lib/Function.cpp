@@ -58,6 +58,8 @@
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/ConstantList.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -84,6 +86,19 @@ static bool qore_is_non_optional_soft_type(const QoreTypeInfo* ti) {
         || ti == softListTypeInfo
         || ti == softAutoListTypeInfo
         || QoreTypeInfo::getUniqueReturnComplexSoftList(ti);
+}
+
+static qore_type_result_e qore_runtime_accepts_call_arg(const QoreTypeInfo* ti, QoreValue arg) {
+    if (ti && QoreTypeInfo::hasType(ti) && arg.getType() == NT_RTCONSTREF) {
+        ConstantEntry* ce = arg.get<const RuntimeConstantRefNode>()->getConstantEntry();
+        if (ce && QoreTypeInfo::hasType(ce->typeInfo)) {
+            qore_type_result_e rc = QoreTypeInfo::parseAccepts(ti, ce->typeInfo);
+            if (rc != QTI_NOT_EQUAL) {
+                return rc;
+            }
+        }
+    }
+    return QoreTypeInfo::runtimeAcceptsValue(ti, arg);
 }
 
 static bool qore_is_defaulted_null_soft_arg(const QoreTypeInfo* ti, const QoreValue& arg, bool has_default) {
@@ -3042,7 +3057,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                         && sig->hasDefaultArg(pi)) {
                     rc = QTI_IGNORE;
                 } else {
-                    rc = QoreTypeInfo::runtimeAcceptsValue(t, n);
+                    rc = qore_runtime_accepts_call_arg(t, n);
                     if (className() && !strcmp(getName(), "constructor") && nargs == 0) {
                         printd(5, "  param[%d] type='%s' hasDefault=%d acceptsNothing=%d rc=%d\n",
                             pi, QoreTypeInfo::getName(t), sig->hasDefaultArg(pi), (int)rc, (int)(rc == QTI_NOT_EQUAL));
@@ -6198,6 +6213,13 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
         // self uninstantiation now handled by SelfInstantiationHelper RAII above
     } else {
         argv = nullptr; // dereference argv now
+        if (qore_aot_source_parse_active()) {
+            xsink->raiseException("AOT-PENDING-FUNCTION",
+                "cannot execute AOT-deserialized function '%s' while sibling "
+                "source parse is still resolving executable metadata",
+                name ? name : "<unknown>");
+            return val;
+        }
     }
 
     // if return value is NOTHING; make sure it's valid; maybe there wasn't a return statement
