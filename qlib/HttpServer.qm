@@ -5084,6 +5084,29 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
+    private static string getSslLogSuffix(Socket s) {
+        string cipher_name = s.getSSLCipherName() ?? "";
+        string cipher_version = s.getSSLCipherVersion() ?? "";
+        trim cipher_name;
+        trim cipher_version;
+        if (cipher_name !~ /[[:alnum:]]/) {
+            cipher_name = "";
+        }
+        if (cipher_version !~ /[[:alnum:]]/) {
+            cipher_version = "";
+        }
+        if (cipher_name.val() && cipher_version.val()) {
+            return sprintf(" %s %s", cipher_name, cipher_version);
+        }
+        if (cipher_name.val()) {
+            return " " + cipher_name;
+        }
+        if (cipher_version.val()) {
+            return " " + cipher_version;
+        }
+        return "";
+    }
+
     logError(string fmt, ...) {
         softlist<auto> args = fmt;
         if (argv) {
@@ -5294,7 +5317,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
             }
             if (ssl) {
-                lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
+                lstr += getSslLogSuffix(s);
             }
             lstr += ")";
             log("%s", lstr);
@@ -6114,7 +6137,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         lstr += sprintf(" Content-Type: %y", req_hdr."_qore_orig_content_type");
                     }
                     if (ssl) {
-                        lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
+                        lstr += getSslLogSuffix(s);
                     }
                     lstr += is_multiplexed ? " [persistent-mux]" : " [persistent-h1]";
                     lstr += ")";
@@ -6327,8 +6350,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         req_hdr."_qore_orig_content_type");
                 }
                 if (ssl) {
-                    lstr += sprintf(" %s %s", s.getSSLCipherName(),
-                        s.getSSLCipherVersion());
+                    lstr += getSslLogSuffix(s);
                 }
                 lstr += " [orphaned-persistent-drain]";
                 lstr += ")";

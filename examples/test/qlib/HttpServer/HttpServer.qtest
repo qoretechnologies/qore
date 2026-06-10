@@ -410,6 +410,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());
         addTestCase("QUIC cert reload", \quicCertReloadTest());
+        addTestCase("HTTP/3 access log omits empty TLS cipher",
+            \http3AccessLogOmitsEmptyTlsCipherTest());
         addTestCase("issue 3116", \issue3116());
         addTestCase("200 no body returns 204", \noBody200Becomes204());
         addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
@@ -847,6 +849,62 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         qServer.reloadListenerCertificate(linfo.id);
         int reload_h3_us = do_h3_connect();
         assertLt(5000000, reload_h3_us, "H3 connect after reload must complete in <5 s");
+    }
+
+    http3AccessLogOmitsEmptyTlsCipherTest() {
+        CapturingLoggerAppender appender();
+        Logger logger("h3-access-log-test", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        on_exit server.stop();
+        server.setHandler("test", "/test", NOTHING, new SimpleStringHandler("ok"));
+        server.setDefaultHandler("test", new SimpleStringHandler("ok"));
+        server.waitForAsyncIo();
+
+        hash<auto> h3info = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        server.waitForAsyncIo();
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 15s,
+                "connect_timeout": 10s,
+            },
+        );
+        on_exit mgr.closeAll();
+
+        try {
+            hash<auto> resp = mgr.request("https://127.0.0.1:" + h3info.port,
+                "GET", "/test", {"User-Agent": "qore-log-test"});
+            assertEq(200, resp.status_code);
+            assertEq("h3", resp.protocol);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP-CLIENT-CONSTRUCTOR-ERROR" && ex.desc =~ /HTTP\/3/) {
+                testSkip("HTTP/3 not compiled in");
+            }
+            rethrow;
+        }
+
+        bool found;
+        foreach string message in (appender.getMessages()) {
+            if (message =~ /GET \/test HTTP\/3 \(agent: "qore-log-test"/) {
+                found = True;
+                assertFalse(message =~ /"qore-log-test"\s{2,}\)/,
+                    "empty TLS cipher values must not add spaces before ')': " + message);
+            }
+        }
+        assertTrue(found, "expected HTTP/3 access log message");
     }
 
     issue3116() {
