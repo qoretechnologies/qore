@@ -290,6 +290,24 @@ X509* QuicSession::getPeerCertificate() const {
     return SSL_get_peer_certificate(ssl_);
 }
 
+std::string QuicSession::getCipherName() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!ssl_ || !SSL_is_init_finished(ssl_)) {
+        return std::string();
+    }
+    const char* cipher = SSL_get_cipher_name(ssl_);
+    return cipher ? cipher : "";
+}
+
+std::string QuicSession::getCipherVersion() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!ssl_ || !SSL_is_init_finished(ssl_)) {
+        return std::string();
+    }
+    const char* version = SSL_get_cipher_version(ssl_);
+    return version ? version : "";
+}
+
 // ===== Timestamp helper =====
 
 ngtcp2_tstamp QuicSession::timestamp() {

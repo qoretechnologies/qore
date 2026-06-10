@@ -1011,6 +1011,8 @@ public:
         GoawayState,
         GoawayReceived,
         PeerCertificate,
+        CipherName,
+        CipherVersion,
         StreamComplete,
         MaxDatagramSize,
         DatagramSupported,
@@ -1070,6 +1072,14 @@ public:
                 setPeerCertificate(xsink);
                 break;
 
+            case Action::CipherName:
+                setCipherName(xsink);
+                break;
+
+            case Action::CipherVersion:
+                setCipherVersion(xsink);
+                break;
+
             case Action::StreamComplete:
                 setStreamComplete();
                 break;
@@ -1113,6 +1123,8 @@ private:
                 return false;
             case Action::GoawayState:
             case Action::PeerCertificate:
+            case Action::CipherName:
+            case Action::CipherVersion:
                 return QoreValue();
         }
         return QoreValue();
@@ -1171,6 +1183,30 @@ private:
         X509* cert = session->getPeerCertificate();
         if (cert) {
             output = new QoreObject(QC_SSLCERTIFICATE, getProgram(), new QoreSSLCertificate(cert));
+        }
+    }
+
+    DLLLOCAL void setCipherName(ExceptionSink* xsink) {
+        std::shared_ptr<QuicSession> session = getSession(xsink, "QUIC-SESSION-ERROR",
+            "no QUIC session with id %lld on this socket");
+        if (*xsink) {
+            return;
+        }
+        setStringValue(session->getCipherName());
+    }
+
+    DLLLOCAL void setCipherVersion(ExceptionSink* xsink) {
+        std::shared_ptr<QuicSession> session = getSession(xsink, "QUIC-SESSION-ERROR",
+            "no QUIC session with id %lld on this socket");
+        if (*xsink) {
+            return;
+        }
+        setStringValue(session->getCipherVersion());
+    }
+
+    DLLLOCAL void setStringValue(const std::string& str) {
+        if (!str.empty()) {
+            output = new QoreStringNode(str.c_str());
         }
     }
 
@@ -6395,6 +6431,28 @@ QoreObject* QoreSocketObject::getQuicPeerCertificate(int64_t session_id, Excepti
         return nullptr;
     }
     return cert->getType() == NT_OBJECT ? cert.release().get<QoreObject>() : nullptr;
+}
+
+QoreStringNode* QoreSocketObject::getQuicSSLCipherName(int64_t session_id, ExceptionSink* xsink) {
+    ValueHolder str(qore_socket_object_exec_quic_query(this,
+        new QoreSocketObjectQuicQueryPollOperation(this,
+            QoreSocketObjectQuicQueryPollOperation::Action::CipherName, session_id),
+        "getQuicSSLCipherName", xsink), xsink);
+    if (*xsink || str->isNothing()) {
+        return nullptr;
+    }
+    return str->getType() == NT_STRING ? str.release().get<QoreStringNode>() : nullptr;
+}
+
+QoreStringNode* QoreSocketObject::getQuicSSLCipherVersion(int64_t session_id, ExceptionSink* xsink) {
+    ValueHolder str(qore_socket_object_exec_quic_query(this,
+        new QoreSocketObjectQuicQueryPollOperation(this,
+            QoreSocketObjectQuicQueryPollOperation::Action::CipherVersion, session_id),
+        "getQuicSSLCipherVersion", xsink), xsink);
+    if (*xsink || str->isNothing()) {
+        return nullptr;
+    }
+    return str->getType() == NT_STRING ? str.release().get<QoreStringNode>() : nullptr;
 }
 
 int QoreSocketObject::submitQuicResponseStreaming(int64_t session_id, int64_t stream_id,

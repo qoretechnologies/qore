@@ -5084,9 +5084,22 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
-    private static string getSslLogSuffix(Socket s) {
-        string cipher_name = s.getSSLCipherName() ?? "";
-        string cipher_version = s.getSSLCipherVersion() ?? "";
+    private static string getSslLogSuffix(Socket s, *hash<auto> header_info) {
+        string cipher_name;
+        string cipher_version;
+        if (header_info && header_info.session_id) {
+            try {
+                cipher_name = s.getQuicSSLCipherName(header_info.session_id) ?? "";
+                cipher_version = s.getQuicSSLCipherVersion(header_info.session_id) ?? "";
+            } catch () {
+                cipher_name = "";
+                cipher_version = "";
+            }
+        }
+        if (!cipher_name.val() && !cipher_version.val()) {
+            cipher_name = s.getSSLCipherName() ?? "";
+            cipher_version = s.getSSLCipherVersion() ?? "";
+        }
         trim cipher_name;
         trim cipher_version;
         if (cipher_name !~ /[[:alnum:]]/) {
@@ -5317,7 +5330,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
             }
             if (ssl) {
-                lstr += getSslLogSuffix(s);
+                lstr += getSslLogSuffix(s, header_info);
             }
             lstr += ")";
             log("%s", lstr);
@@ -6137,7 +6150,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         lstr += sprintf(" Content-Type: %y", req_hdr."_qore_orig_content_type");
                     }
                     if (ssl) {
-                        lstr += getSslLogSuffix(s);
+                        lstr += getSslLogSuffix(s, conn_info.header_info);
                     }
                     lstr += is_multiplexed ? " [persistent-mux]" : " [persistent-h1]";
                     lstr += ")";
@@ -6350,7 +6363,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         req_hdr."_qore_orig_content_type");
                 }
                 if (ssl) {
-                    lstr += getSslLogSuffix(s);
+                    lstr += getSslLogSuffix(s, conn_info.header_info);
                 }
                 lstr += " [orphaned-persistent-drain]";
                 lstr += ")";

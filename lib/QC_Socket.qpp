@@ -8061,6 +8061,63 @@ bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
     return s->getQuicPeerCertificate(session_id, xsink);
 }
 
+//! Returns the negotiated TLS cipher name from a QUIC session
+/** @par Example:
+    @code{.py}
+    *string cipher = sock.getQuicSSLCipherName(session_id);
+    @endcode
+
+    This method exposes the TLS 1.3 cipher negotiated for an HTTP/3 QUIC
+    connection. Use this method for HTTP/3 connections instead of
+    @ref getSSLCipherName(), which reports cipher information for classic TCP
+    TLS sockets.
+
+    @param session_id the QUIC session ID
+
+    @return the cipher name string or @ref nothing if no cipher is available
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 3.0
+*/
+*string Socket::getQuicSSLCipherName(int session_id) [flags=NAMED_ARGS] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
+            static_cast<long long>(session_id));
+        return QoreValue();
+    }
+    return s->getQuicSSLCipherName(session_id, xsink);
+}
+
+//! Returns the negotiated TLS cipher version from a QUIC session
+/** @par Example:
+    @code{.py}
+    *string version = sock.getQuicSSLCipherVersion(session_id);
+    @endcode
+
+    This method exposes the TLS version associated with the cipher negotiated
+    for an HTTP/3 QUIC connection. QUIC requires TLS 1.3, so successful HTTP/3
+    sessions normally return \c "TLSv1.3".
+
+    @param session_id the QUIC session ID
+
+    @return the cipher version string or @ref nothing if no cipher is available
+
+    @throw QUIC-ERROR if the session_id is invalid (<= 0)
+    @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 3.0
+*/
+*string Socket::getQuicSSLCipherVersion(int session_id) [flags=NAMED_ARGS] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
+            static_cast<long long>(session_id));
+        return QoreValue();
+    }
+    return s->getQuicSSLCipherVersion(session_id, xsink);
+}
+
 //! Creates a poll operation for sending an HTTP/3 streaming response via InputStream
 /** @par Example:
     @code{.py}

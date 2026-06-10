@@ -132,6 +132,9 @@
       asynchronous I/O across HTTP/1.x, HTTP/2, and HTTP/3
     - WebSocket-over-HTTP/2 (RFC 8441) and WebSocket-over-HTTP/3 (RFC 9220), Server-Sent Events
       over all three HTTP versions
+    - HTTP/3 QUIC sessions now expose negotiated TLS cipher name and version through
+      \c Socket::getQuicSSLCipherName() and \c Socket::getQuicSSLCipherVersion(); HTTP server
+      access logs use this information for HTTP/3 requests when available
     - server-side HTTP/2 \c Socket methods are now async-safe and integrate with the
       @ref HttpServerAsyncIo "HttpServerAsyncIo" body-streaming queue model
     - @ref Qore::HTTPClient "HTTPClient" automatically uses HTTP/2 via

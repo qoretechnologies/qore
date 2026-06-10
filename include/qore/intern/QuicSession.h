@@ -747,6 +747,14 @@ public:
     */
     DLLLOCAL X509* getPeerCertificate() const;
 
+    //! Get the negotiated TLS cipher name for this QUIC session
+    /** @return the OpenSSL cipher name, or an empty string if no TLS cipher is available */
+    DLLLOCAL std::string getCipherName() const;
+
+    //! Get the negotiated TLS cipher version for this QUIC session
+    /** @return the OpenSSL cipher version, or an empty string if no TLS cipher is available */
+    DLLLOCAL std::string getCipherVersion() const;
+
     //! Get unique session ID (assigned at creation)
     DLLLOCAL int64_t getSessionId() const { return session_id_; }
 

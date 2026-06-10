@@ -981,6 +981,26 @@ public:
     */
     DLLEXPORT QoreObject* getQuicPeerCertificate(int64_t session_id, ExceptionSink* xsink);
 
+    //! Returns the negotiated TLS cipher name for a QUIC session
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return cipher name string, or nullptr if no cipher is available
+        @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreStringNode* getQuicSSLCipherName(int64_t session_id, ExceptionSink* xsink);
+
+    //! Returns the negotiated TLS cipher version for a QUIC session
+    /** @param session_id the QUIC session ID
+        @param xsink exception sink
+        @return cipher version string, or nullptr if no cipher is available
+        @throw QUIC-SESSION-ERROR if no QUIC session with the given ID is active
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreStringNode* getQuicSSLCipherVersion(int64_t session_id, ExceptionSink* xsink);
+
     //! Submits a streaming HTTP/3 response (headers only) on a QUIC session
     /** Data is provided incrementally via submitQuicStreamData().
 

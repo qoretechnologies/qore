@@ -44,6 +44,69 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class QuicCipherInfoHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex m();
+        *hash<auto> report;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    *hash<auto> getReport() {
+        AutoLock al(m);
+        return report;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> header_info = cx."header-info";
+        Socket sock = header_info.sock;
+        int session_id = header_info.session_id;
+        int stream_id = header_info.stream_id;
+        hash<auto> r = {
+            "session_id": session_id,
+            "cipher_name": sock.getQuicSSLCipherName(session_id),
+            "cipher_version": sock.getQuicSSLCipherVersion(session_id),
+        };
+
+        try {
+            sock.getQuicSSLCipherName(0);
+            r.invalid_name_err = "";
+        } catch (hash<ExceptionInfo> ex) {
+            r.invalid_name_err = ex.err;
+        }
+        try {
+            sock.getQuicSSLCipherVersion(0);
+            r.invalid_version_err = "";
+        } catch (hash<ExceptionInfo> ex) {
+            r.invalid_version_err = ex.err;
+        }
+        try {
+            sock.getQuicSSLCipherName(session_id + 1000000);
+            r.unknown_name_err = "";
+        } catch (hash<ExceptionInfo> ex) {
+            r.unknown_name_err = ex.err;
+        }
+        try {
+            sock.getQuicSSLCipherVersion(session_id + 1000000);
+            r.unknown_version_err = "";
+        } catch (hash<ExceptionInfo> ex) {
+            r.unknown_version_err = ex.err;
+        }
+
+        {
+            AutoLock al(m);
+            report = r;
+        }
+        if ((header_info.body_streaming ?? False) && !(header_info.headers_end_stream ?? False)) {
+            while (exists sock.readQuicStreamDataBlock(session_id, stream_id, 10s)) {
+            }
+        }
+        return makeResponse(200, "ok");
+    }
+}
+
 class PeerInfoFutureHandler inherits AbstractHttpRequestHandler {
     private {
         Queue q;
@@ -410,8 +473,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());
         addTestCase("QUIC cert reload", \quicCertReloadTest());
-        addTestCase("HTTP/3 access log omits empty TLS cipher",
-            \http3AccessLogOmitsEmptyTlsCipherTest());
+        addTestCase("HTTP/3 access log includes TLS cipher",
+            \http3AccessLogIncludesTlsCipherTest());
         addTestCase("issue 3116", \issue3116());
         addTestCase("200 no body returns 204", \noBody200Becomes204());
         addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
@@ -851,7 +914,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertLt(5000000, reload_h3_us, "H3 connect after reload must complete in <5 s");
     }
 
-    http3AccessLogOmitsEmptyTlsCipherTest() {
+    http3AccessLogIncludesTlsCipherTest() {
         CapturingLoggerAppender appender();
         Logger logger("h3-access-log-test", LoggerLevel::getLevelInfo());
         logger.addAppender(appender);
@@ -864,7 +927,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "debug": True,
         });
         on_exit server.stop();
-        server.setHandler("test", "/test", NOTHING, new SimpleStringHandler("ok"));
+        QuicCipherInfoHandler handler();
+        server.setHandler("test", "/test", NOTHING, handler);
         server.setDefaultHandler("test", new SimpleStringHandler("ok"));
         server.waitForAsyncIo();
 
@@ -886,7 +950,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
         try {
             hash<auto> resp = mgr.request("https://127.0.0.1:" + h3info.port,
-                "GET", "/test", {"User-Agent": "qore-log-test"});
+                "POST", "/test", {"User-Agent": "qore-log-test"}, "x");
             assertEq(200, resp.status_code);
             assertEq("h3", resp.protocol);
         } catch (hash<ExceptionInfo> ex) {
@@ -896,10 +960,24 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             rethrow;
         }
 
+        *hash<auto> report = handler.getReport();
+        assertTrue(exists report, "expected QUIC cipher API report");
+        hash<auto> r = report ?? {};
+        assertTrue((r.cipher_name ?? "").val(), "expected non-empty QUIC TLS cipher name");
+        assertEq("TLSv1.3", r.cipher_version);
+        assertEq("QUIC-ERROR", r.invalid_name_err);
+        assertEq("QUIC-ERROR", r.invalid_version_err);
+        assertEq("QUIC-SESSION-ERROR", r.unknown_name_err);
+        assertEq("QUIC-SESSION-ERROR", r.unknown_version_err);
+
         bool found;
         foreach string message in (appender.getMessages()) {
-            if (message =~ /GET \/test HTTP\/3 \(agent: "qore-log-test"/) {
+            if (message =~ /POST \/test HTTP\/3 \(agent: "qore-log-test"/) {
                 found = True;
+                assertTrue(message.find(r.cipher_name) >= 0,
+                    "HTTP/3 access log must include QUIC TLS cipher name: " + message);
+                assertTrue(message.find(r.cipher_version) >= 0,
+                    "HTTP/3 access log must include QUIC TLS cipher version: " + message);
                 assertFalse(message =~ /"qore-log-test"\s{2,}\)/,
                     "empty TLS cipher values must not add spaces before ')': " + message);
             }
