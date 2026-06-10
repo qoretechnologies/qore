@@ -2449,6 +2449,12 @@ static std::unique_ptr<QoreIRInstruction> readListIndexStore(
     auto* li = new QoreIRListIndexStoreInstruction(nullptr);
     li->opcode = static_cast<QoreIROpcode>(opcode_raw);
     li->container_slot_id = container_slot_id;
+    // Resolve container LocalVar for the COW branch; the container VarRefNode is
+    // not serialized, so container==nullptr here and the interpreter COW path must
+    // use container_lv instead (see readHashKeyStore).
+    if (LocalVar* lv = ctx.resolveLocalBySlot(container_slot_id)) {
+        li->container_lv = lv;
+    }
     li->result = QoreIRValue(result_id);
     li->operands = operands;
     li->exception_target = exc_target;

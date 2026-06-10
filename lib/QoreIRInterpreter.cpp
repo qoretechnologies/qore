@@ -6559,7 +6559,7 @@ load_local_done:
                         // hash<auto!> etc., leaving new_h in TLS at refcount 1.
                         QoreHashNode* new_h = h->copy();  // refcount 1, unique
                         // Prefer container_lv (set at AOT deser time) over
-                        // container->ref.id (fresh-parse path) — the container
+                        // container->ref.id (fresh-parse path); the container
                         // VarRefNode is not serialized, so AOT-loaded closure
                         // bodies have container==nullptr and must use _lv.
                         LocalVar* lv;
@@ -6839,9 +6839,23 @@ load_local_done:
                         // COW: see HashKeyStore above for rationale on *Transfer variants.
                         // Same bug applies to list<auto!> type coercion in LValueHelper::assign.
                         QoreListNode* new_l = l->copy();  // refcount 1, unique
-                        LocalVar* lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
-                        if (lis_inst->container->getType() == VT_CLOSURE) {
+                        // Prefer container_lv (resolved at AOT deser time) over
+                        // container->ref.id (fresh-parse path); the container
+                        // VarRefNode is not serialized, so AOT-loaded closure
+                        // bodies have container==nullptr and must use _lv.
+                        LocalVar* lv;
+                        bool is_closure;
+                        if (lis_inst->container_lv) {
+                            lv = lis_inst->container_lv;
+                            // Check at runtime: closureUse may be set after AOT
+                            // deser time when a later closure captures this var.
+                            is_closure = lv->closureUse();
+                        } else {
+                            lv = const_cast<LocalVar*>(
+                                reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
+                            is_closure = (lis_inst->container->getType() == VT_CLOSURE);
+                        }
+                        if (is_closure) {
                             assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
@@ -6889,13 +6903,31 @@ load_local_done:
                     // Clear the container slot so cleanup doesn't try to discard it
                     // (it's held by TLS and managed separately)
                     discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
-                        isClosureContainer(nullptr, lis_inst->container));
+                        isClosureContainer(lis_inst->container_lv, lis_inst->container));
                 } else if (list_val.isNothing()) {
                     // Auto-vivify: use container's declared type so the element
                     // type comes out right (softlist<bool> → list<bool>, not list<auto>).
                     // Use *Transfer so typed lvalues (list<auto!>) take the unique
                     // in-place branch — no extra copy.
-                    const QoreTypeInfo* varTI = lis_inst->container->getTypeInfo();
+                    // Prefer container_lv (resolved at AOT deser time) over container:
+                    // AOT-loaded bodies have container==nullptr (see COW branch above).
+                    LocalVar* lv;
+                    bool is_closure;
+                    if (lis_inst->container_lv) {
+                        lv = lis_inst->container_lv;
+                        is_closure = lv->closureUse();
+                    } else {
+                        lv = const_cast<LocalVar*>(
+                            reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
+                        is_closure = (lis_inst->container->getType() == VT_CLOSURE);
+                    }
+                    // Derive the declared lvalue type AOT-safely: from the container
+                    // VarRefNode on the fresh-parse path, else from the LocalVar
+                    // (resolving type parameters, as HashKeyStore auto-vivify does).
+                    const QoreTypeInfo* varTI = lis_inst->container
+                        ? lis_inst->container->getTypeInfo()
+                        : (lv ? qore_substitute_type_params_if_needed(lv->getTypeInfoForLValue())
+                              : nullptr);
                     const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
                     QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
                     {
@@ -6918,9 +6950,7 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
-                    LocalVar* lv = const_cast<LocalVar*>(
-                        reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
-                    if (lis_inst->container->getType() == VT_CLOSURE) {
+                    if (is_closure) {
                         assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
                     } else {
                         assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
@@ -6938,7 +6968,7 @@ load_local_done:
                         locals_slot_cache[csid].discard(xsink);
                     }
                     discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
-                        isClosureContainer(nullptr, lis_inst->container));
+                        isClosureContainer(lis_inst->container_lv, lis_inst->container));
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

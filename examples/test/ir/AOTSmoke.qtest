@@ -347,6 +347,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure typed params defaults", \testClosureTypedParamsDefaults());
         addTestCase("AOT closure multi capture", \testClosureMultiCapture());
         addTestCase("AOT closure strip source", \testClosureStripSource());
+        addTestCase("AOT closure strip source ListIndexStore COW",
+            \testClosureStripSourceListIndexStoreCow());
         addTestCase("AOT closure strip source captured local return",
             \testClosureStripSourceCapturedLocalReturn());
         addTestCase("AOT closure strip source regex substitution",
@@ -9887,6 +9889,29 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "closure-strip-source output matches interpreter");
+    }
+
+    testClosureStripSourceListIndexStoreCow() {
+        string code = "%modern
+hash<auto> sub mutate_captured_list() {
+    list<int> values = (1, 2, 3);
+    list<int> alias = values;
+    code update = sub () {
+        values[1] = 99;
+    };
+    update();
+    return {\"values\": values, \"alias\": alias};
+}
+
+hash<auto> out = mutate_captured_list();
+printf(\"values=%y alias=%y\\n\", out.values, out.alias);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure ListIndexStore COW strip-source: all pre-compiled: " + result.compile_out);
+        assertEq("values=[1, 99, 3] alias=[1, 2, 3]\n", result.run_out,
+            "AOT-deserialized closure ListIndexStore COW uses resolved container local");
     }
 
     testClosureStripSourceCapturedLocalReturn() {

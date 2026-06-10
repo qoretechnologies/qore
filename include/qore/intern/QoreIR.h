@@ -1532,6 +1532,13 @@ public:
 
     const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
     uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
+    //! Pre-resolved container LocalVar* for the COW branch.  Mirrors
+    //! HashKeyStore: the COW path prefers `container_lv` over `container->ref.id`
+    //! when set; fresh IR lowering from AST leaves container_lv null and the COW
+    //! path uses container->ref.id, but the `container` VarRefNode is not
+    //! serialized, so AOT-deserialized instructions have container==nullptr and
+    //! MUST use container_lv (resolved from container_slot_id at deser time).
+    class LocalVar* container_lv = nullptr;
     // operands[0] = list value (from LoadLocal on container)
     // operands[1] = new element value to store
     // operands[2] = index expression

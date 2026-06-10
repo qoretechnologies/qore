@@ -5650,6 +5650,15 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             auto* hi = new QoreIRHashKeyStoreInstruction(nullptr, key_name ? key_name : "");
             hi->opcode = opcode;
             hi->container_slot_id = container_slot_id;
+            // Resolve container LocalVar for the COW branch; the container
+            // VarRefNode is not serialized, so container==nullptr here and the
+            // interpreter COW path must use container_lv (resolved from the slot).
+            if (slot_to_local && container_slot_id != UINT32_MAX) {
+                auto sti = slot_to_local->find(container_slot_id);
+                if (sti != slot_to_local->end()) {
+                    hi->container_lv = sti->second;
+                }
+            }
             inst.reset(hi);
             break;
         }
@@ -5659,6 +5668,13 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             auto* li = new QoreIRListIndexStoreInstruction(nullptr);
             li->opcode = opcode;
             li->container_slot_id = container_slot_id;
+            // Resolve container LocalVar for the COW branch (see HashKeyStore above).
+            if (slot_to_local && container_slot_id != UINT32_MAX) {
+                auto sti = slot_to_local->find(container_slot_id);
+                if (sti != slot_to_local->end()) {
+                    li->container_lv = sti->second;
+                }
+            }
             inst.reset(li);
             break;
         }
@@ -5668,6 +5684,13 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             auto* hi = new QoreIRHashKeyStoreDynamicInstruction(nullptr);
             hi->opcode = opcode;
             hi->container_slot_id = container_slot_id;
+            // Resolve container LocalVar for the COW branch (see HashKeyStore above).
+            if (slot_to_local && container_slot_id != UINT32_MAX) {
+                auto sti = slot_to_local->find(container_slot_id);
+                if (sti != slot_to_local->end()) {
+                    hi->container_lv = sti->second;
+                }
+            }
             inst.reset(hi);
             break;
         }
