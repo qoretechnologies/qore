@@ -5236,7 +5236,7 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
     // that could have come from type narrowing of hash<auto>
     if (!strcmp(arg_type, "lvalue") && isSimpleTypeNarrowed()) {
         desc->concat("; this may be due to type narrowing from hash<auto>; to store values of "
-            "different types, use 'hash<auto!> h()' or 'hash h = cast<hash>({...})'");
+            "different types, use 'hash<auto!> h' to avoid type narrowing in assignment");
     }
     xsink->raiseException("RUNTIME-TYPE-ERROR", desc);
     return -1;
