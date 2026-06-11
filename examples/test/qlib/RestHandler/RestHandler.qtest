@@ -466,6 +466,10 @@ public class RestHandlerTest inherits QUnit::Test {
             assertEq({"arg": "hello~0"}, rest.put("/test/echo?arg=hello%7E0").body);
             assertEq({"arg": "hello`0"}, rest.put("/test/echo?arg=hello%600").body);
             assertEq({"arg": "hello^0"}, rest.put("/test/echo?arg=hello%5E0").body);
+            assertEq({"arg": "Compliance & Audit", "limit": "100"},
+                rest.put("/test/echo?arg=Compliance%20%26%20Audit&limit=100").body);
+            assertEq({"arg": "a=b;c%", "limit": "100"},
+                rest.put("/test/echo?arg=a%3Db%3Bc%25&limit=100").body);
 
             assertThrows("URL-ENCODING-ERROR", "path\\[0\\]", \rest.get(), "path[0]");
             assertThrows("URL-ENCODING-ERROR", \rest.get(), "path{0}");

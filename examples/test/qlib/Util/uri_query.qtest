@@ -20,6 +20,22 @@ public class UriQueryTest inherits QUnit::Test {
         assertEq(("method": "path", "params": ("k": ("1", "2"))), parse_uri_query("path?k=1&k=2"));
         assertEq(("method": "path", "params": ("k": True)), parse_uri_query("path?k;k"));
         assertEq(("method": "path", "params": ("k": True)), parse_uri_query("path?k&k"));
+        assertEq(("method": "path", "params": ("category": "Compliance & Audit", "limit": "100")),
+            parse_uri_query("path?category=Compliance%20%26%20Audit&limit=100"));
+        assertEq(("method": "path", "params": ("x": "a=b", "y": "z")),
+            parse_uri_query("path?x=a%3Db&y=z"));
+        assertEq(("method": "path", "params": ("x": "a;b", "y": "z")),
+            parse_uri_query("path?x=a%3Bb&y=z"));
+        assertEq(("method": "path", "params": ("x": "a;b", "y": "z")),
+            parse_uri_query("path?x=a%3Bb;y=z"));
+        assertEq(("method": "path", "params": ("x": "100%", "y": "a%b")),
+            parse_uri_query("path?x=100%25&y=a%b"));
+        assertEq(("method": "path", "params": ("a&b": "1", "flag=key": True)),
+            parse_uri_query("path?a%26b=1&flag%3Dkey"));
+        assertEq(("method": "path", "params": ("category": "Compliance ", " Audit": True, "limit": "100")),
+            parse_uri_query("path?category=Compliance & Audit&limit=100"));
+        assertEq(("method": "path", "params": ("x": "a", "b&y": "z")),
+            parse_uri_query("path?x=a;b&y=z"));
 
         assertEq("path?k=1;k=2", make_uri_query(parse_uri_query("path?k=1;k=2")));
         assertEq("path?k=1;k=2", make_uri_query(parse_uri_query("path?k=1&k=2")));
@@ -27,7 +43,11 @@ public class UriQueryTest inherits QUnit::Test {
         assertEq("path?k=1&k=2", make_uri_query(parse_uri_query("path?k=1&k=2"), "&"));
         assertEq("path?k=1", make_uri_query(parse_uri_query("path?k;k")));
         assertEq("path?k=1", make_uri_query(parse_uri_query("path?k&k")));
+        assertEq("path?category=Compliance%20%26%20Audit;limit=100",
+            make_uri_query(parse_uri_query("path?category=Compliance%20%26%20Audit&limit=100")));
+        assertEq("path?x=a%3Db%3Bc%25",
+            make_uri_query(cast<hash<UriQueryInfo>>(("method": "path", "params": ("x": "a=b;c%")))));
 
-        assertEq("path?k=1;k=a\nb\nc", make_uri_query(parse_uri_query("path?k=1;k=a\nb\nc")));
+        assertEq("path?k=1;k=a%0Ab%0Ac", make_uri_query(parse_uri_query("path?k=1;k=a\nb\nc")));
     }
 }

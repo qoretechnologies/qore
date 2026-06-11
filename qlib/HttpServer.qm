@@ -179,6 +179,9 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_6 HttpServer 1.6
+    - fixed request path decoding so the resource path is URL-decoded while the query string remains encoded until
+      parsed with @ref HttpServer::parse_uri_query() "parse_uri_query()", preventing encoded query separators such as
+      \c "%26", \c "%3D", and \c "%3B" from corrupting query parameters
     - HTTP/2 server-side request and response handling fully migrated to
       the async-safe @c Socket HTTP/2 primitives under the
       @ref HttpServerAsyncIo "HttpServerAsyncIo" controller.  The handler
@@ -5225,6 +5228,26 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return id;
     }
 
+    #! URL-decodes the resource path while preserving the raw query string
+    private string decodeRequestPath(string path) {
+        int i = path.find("?");
+        if (i == -1) {
+            return decode_url(path);
+        }
+        return decode_url(path.substr(0, i)) + path.substr(i);
+    }
+
+    #! Returns a masked copy of the request path without changing handler-visible path semantics
+    private string maskRequestPath(string raw_path) {
+        string path = raw_path;
+        try {
+            path = decode_url(raw_path);
+        } catch () {
+            # Keep log masking best-effort; request validation happens on the handler-visible path.
+        }
+        return serv.maskData(path);
+    }
+
     #! Processes an HTTP request natively for async I/O
     /** This method performs context setup, calls handleRequest() with async response capture,
         and translates the result to HttpRequestResultInfo for the controller to send.
@@ -5278,12 +5301,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             info.desc += ":" + info.port;
         }
 
-        # Process path: decode URL-encoded characters
+        # Process path: decode URL-encoded characters in the resource path only
         cx.raw_path = hdr.path;
-        hdr.path = decode_url(hdr.path);
+        hdr.path = decodeRequestPath(hdr.path);
         cx += {
             "orig_path": hdr.path,
-            "masked_path": serv.maskData(hdr.path),
+            "masked_path": maskRequestPath(cx.raw_path),
         };
 
         # Remove leading / if present in path
@@ -6114,10 +6137,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 # Context setup — mirrors processNativeRequest()
                 cx.raw_path = req_hdr.path;
-                req_hdr.path = decode_url(req_hdr.path);
+                req_hdr.path = decodeRequestPath(req_hdr.path);
                 cx += {
                     "orig_path": req_hdr.path,
-                    "masked_path": serv.maskData(req_hdr.path),
+                    "masked_path": maskRequestPath(cx.raw_path),
                 };
                 if (req_hdr.path =~ /^\//) {
                     splice req_hdr.path, 0, 1;
@@ -6326,10 +6349,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
             cx = cx_listener;
             cx.raw_path = req_hdr.path;
-            req_hdr.path = decode_url(req_hdr.path);
+            req_hdr.path = decodeRequestPath(req_hdr.path);
             cx += {
                 "orig_path": req_hdr.path,
-                "masked_path": serv.maskData(req_hdr.path),
+                "masked_path": maskRequestPath(cx.raw_path),
             };
             if (req_hdr.path =~ /^\//) {
                 splice req_hdr.path, 0, 1;

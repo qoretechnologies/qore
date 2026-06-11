@@ -1789,7 +1789,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
-        - \c path: the HTTP path given in the request, after processing by decode_url() (Qore function)
+        - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
+          percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
         @param b message body, if any
 

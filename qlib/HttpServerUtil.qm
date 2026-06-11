@@ -114,8 +114,8 @@ module HttpServerUtil {
     |\c listener-id|int|a unique ID for the listener serving the request
     |\c listener-name|string|a unique name for the listener serving the request
     |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
-    |\c masked_path|string|the URI path after URL decoding and masking for sensitive information
-    |\c orig_path|string|the URI path in the request after URL decoding
+    |\c masked_path|string|the URI path after URL decoding the resource path and masking sensitive information
+    |\c orig_path|string|the URI path in the request after URL decoding the resource path; the query string remains percent-encoded until parsed
     |\c peer-info|hash|information about the remote socket as returned by @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()"
     |\c peer-info-future|@ref Qore::Thread::Future "Future"|optional Future resolving to peer information with reverse DNS hostname fields; handlers may wait on it if hostname resolution is required
     |\c raw_path|string|the raw URI request path in the request
@@ -124,11 +124,15 @@ module HttpServerUtil {
     |\c socket|string|the bind address used to bind the listener (\c "socket-info" provides more detailed information)
     |\c socket-info|hash|information about the listening socket as returned by @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()"
     |\c ssl|*bool|@ref True "True" if the request was encrypted with HTTPS
-    |\c url|hash|a hash with a \c path key giving the URI path in the request
+    |\c url|hash|a hash with a \c path key giving the URI path in the request after URL decoding the resource path
     |\c user|*string|set by the authenticator if the request was authenticated to a specific user
     |\c uctx|*hash|any user thread context for the listener (see @ref HttpServer::HttpListenerInterface::addUserThreadContext() "HttpListenerInterface::addUserThreadContext()")
 
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
+
+    @subsection httputil1_6 HttpServerUtil 1.6
+    - documented that request paths have URL decoding applied only to the resource path; the query string remains
+      percent-encoded until parsed with @ref HttpServer::parse_uri_query() "parse_uri_query()"
 
     @subsection httputil1_5 HttpServerUtil 1.5
     - added extension points to @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" for
@@ -1651,7 +1655,8 @@ public class AbstractStreamRequest {
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
-        - \c path: the HTTP path given in the request, after processing by @ref Qore::decode_uri_request()
+        - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
+          percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
         @param body any message body in the request already received from the incoming socket
     */
@@ -2872,7 +2877,8 @@ public class AbstractHttpRequestHandler {
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
-        - \c path: the HTTP path given in the request, after processing by @ref Qore::decode_uri_request()
+        - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
+          percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
 
         @return a hash with the following keys:
@@ -2897,7 +2903,8 @@ public class AbstractHttpRequestHandler {
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
-        - \c path: the HTTP path given in the request, after processing by @ref Qore::decode_uri_request()
+        - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
+          percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
         @param body message body, if any
 

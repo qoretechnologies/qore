@@ -183,6 +183,19 @@ class ReqHandler inherits AbstractHttpRequestHandler {
             return makeResponse(200, body, {"Content-Type": "application/octet-stream"});
         }
 
+        if (rpath =~ /^query path\?/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "body": hdr.method + ", " + rpath + ", " + cx.raw_path,
+            };
+        }
+        if (rpath =~ /^masked path\?/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "body": cx.masked_path,
+            };
+        }
+
         if (hdr.method == "POST") {
             return makeResponse(200, "POST, " + body + ", " + rpath + ", " + cx.raw_path);
         } else {
@@ -1210,6 +1223,25 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     misc() {
         assertEq(("method": "path", "params": ("a": "1", "b": "2")), parse_uri_query("path?a=1;b=2"));
         assertEq(("method": "path", "params": ("a": "1", "b": True)), parse_uri_query("path?a=1;b"));
+
+        Socket sock();
+        sock.connect("localhost:" + port);
+        on_exit sock.close();
+        sock.send("GET /query%20path?category=Compliance%20%26%20Audit&limit=100 HTTP/1.1\r\n"
+            "Host: localhost\r\nConnection: close\r\n\r\n");
+        hash<auto> resp = readRawHttpResponse(sock);
+        assertEq(200, resp.status_code);
+        assertEq("GET, query path?category=Compliance%20%26%20Audit&limit=100, "
+            "/query%20path?category=Compliance%20%26%20Audit&limit=100", resp.body);
+
+        Socket mask_sock();
+        mask_sock.connect("localhost:" + port);
+        on_exit mask_sock.close();
+        mask_sock.send("GET /masked%20path?p%61ssword=secret&limit=100 HTTP/1.1\r\n"
+            "Host: localhost\r\nConnection: close\r\n\r\n");
+        resp = readRawHttpResponse(mask_sock);
+        assertEq(200, resp.status_code);
+        assertEq("/masked path?password=<masked>...", resp.body);
     }
 
     private multipartFormDataBinaryFileTest() {

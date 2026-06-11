@@ -107,6 +107,11 @@ module Util {
     @section utilrelnotes Release Notes
 
     @subsection util_3_0 Util 3.0
+    - fixed @ref Util::parse_uri_query() "parse_uri_query()" to split URI query strings before URL-decoding
+      keys and values, so encoded separators such as \c "%26", \c "%3D", and \c "%3B" inside values are handled
+      correctly
+    - updated @ref Util::make_uri_query() "make_uri_query()" to URL-encode query keys and values when serializing
+      query strings
     - fixed @ref Util::get_bit_string() "get_bit_string()" to properly prepend padding zeros instead of
       overwriting the result
     - fixed @ref Util::lpad() "lpad()" to correctly truncate by keeping the rightmost characters and
@@ -310,11 +315,13 @@ public hashdecl UriQueryInfo {
     string method;
 
     #! Query parameters
-    /** The part of the path after the first \c "?" character; arguments should be separated by ";" characters
+    /** The decoded query parameters from the part of the path after the first \c "?" character; arguments should be
+        separated by ";" characters
         (according to a w3c recommendation:
         http://www.w3.org/TR/1999/REC-html401-19991224/appendix/notes.html#h-B.2.2), however this function supports
         both \c ";" and \c "&" as argument separators; if the arguments are not key=value, then each element without a
-        value is assigned @ref True "True"
+        value is assigned @ref True "True".  Separators are detected and applied before URL-decoding keys and values,
+        so encoded separators such as \c "%26", \c "%3D", and \c "%3B" are treated as data.
 
         @note Only present if a "?" character is present in the input)
     */
@@ -1493,12 +1500,14 @@ public string sub serialize_to_string(auto val) {
     throw "SERIALIZATION-ERROR", sprintf("cannot serialize values of type %y", val.type());
 }
 
-#! parses a URI path for a arguments and a method; where the method is the part of the path before the first \c "?" character, and arguments are after
+#! parses a URI path for arguments and a method; where the method is the part of the path before the first \c "?" character, and arguments are after
 /** @param path the URI path to parse
 
     @return a @ref UriQueryInfo hash
 
-    @note the \a params output key value is always returned as a hash
+    @note
+    - the \a params output key value is always returned as a hash
+    - the query string is split into parameters before URL-decoding each key and value
 
     @since Util 1.3
 */
@@ -1526,16 +1535,21 @@ public hash<UriQueryInfo> sub parse_uri_query(string path) {
         if (arg.val()) {
             (*string key, *string value) = (arg =~ x/([^=]+)=(.*)$/ms);
             if (exists key) {
+                key = decode_url(key);
+                value = decode_url(value);
                 reference kv = \h.params{key};
                 if (exists kv) {
-                    if (kv.typeCode() != NT_LIST)
+                    if (kv.typeCode() != NT_LIST) {
                         kv = (kv, value);
-                    else
+                    } else {
                         kv += value;
-                } else
+                    }
+                } else {
                     kv = value;
-            } else
-                h.params{arg} = True;
+                }
+            } else {
+                h.params{decode_url(arg)} = True;
+            }
         }
     }
     return h;
@@ -1545,16 +1559,22 @@ public hash<UriQueryInfo> sub parse_uri_query(string path) {
 /** @param h the UriQueryInfo hash to serialize
     @param arg_separator the character to use to separate URI query arguments
 
+    @note query keys and values are URL-encoded in the returned string
+
     @since Util 1.3
 */
 public string sub make_uri_query(hash<UriQueryInfo> h, string arg_separator = ";") {
-    if (!h.params)
+    if (!h.params) {
         return h.method ?? "";
+    }
     string str;
     foreach hash<auto> ph in (h.params.pairIterator()) {
-        if (exists str)
+        if (exists str) {
             str += arg_separator;
-        str += foldl $1 + arg_separator + $2, (map sprintf("%s=%s", ph.key, $1), ph.value);
+        }
+        string key = encode_url(ph.key, True);
+        str += foldl $1 + arg_separator + $2,
+            (map sprintf("%s=%s", key, encode_url(string($1), True)), ph.value);
     }
     return h.method + "?" + str;
 }

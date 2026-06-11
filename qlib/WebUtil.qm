@@ -1111,7 +1111,8 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
-        - \c path: the HTTP path given in the request, after processing by @ref Qore::decode_url()
+        - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
+          percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
         @param body message body, if any
 
@@ -1811,7 +1812,8 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
           URI query parameters as returned in the \a params key from @ref HttpServer::parse_uri_query()
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
-        - \c path: the HTTP path given in the request, after processing by @ref Qore::decode_url()
+        - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
+          percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
         - \c params: holds the URI query parameters as returned in the \a params key from @ref HttpServer::parse_uri_query()
         @param body message body, if any
