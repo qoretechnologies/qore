@@ -247,6 +247,14 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "link map includes provided Qore method: " + link_map);
         assertTrue(link_map.find("\"resolved_call_relocations\"") != -1,
             "link map includes resolved call relocations: " + link_map);
+        assertTrue(link_map.find("\"call_relocation_summary\"") != -1,
+            "link map includes call relocation summary: " + link_map);
+        assertTrue(link_map.find("\"resolution\": \"resolved\"") != -1,
+            "link map includes call relocation resolution: " + link_map);
+        assertTrue(link_map.find("\"reason\": \"resolved\"") != -1,
+            "link map includes call relocation reason: " + link_map);
+        assertTrue(link_map.find("\"fallback_descriptor\"") != -1,
+            "link map includes fallback descriptor metadata: " + link_map);
         assertTrue(link_map.find("\"target_kind\": \"static_method\"") != -1,
             "link map resolves the static method call relocation: " + link_map);
         assertTrue(link_map.find("\"unresolved_imports\": []") != -1,

@@ -3148,8 +3148,11 @@ struct QOLinkCallRelocation {
     uint32_t expr_slot = UINT32_MAX;
     std::string target_kind;
     std::string path;
+    std::string resolution;
+    std::string reason;
     std::string expected;
     std::string native_symbol;
+    std::string fallback_descriptor;
     std::vector<std::string> providers;
 };
 
@@ -3500,8 +3503,11 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             reloc.expr_slot = rec.expr_slot;
             reloc.target_kind = qoreAOTCallRelocationTargetKindName(rec.target_kind);
             reloc.path = rec.qore_path;
+            reloc.fallback_descriptor = rec.fallback_descriptor;
             auto provider_it = providers.find(rec.qore_path);
             if (provider_it == providers.end()) {
+                reloc.resolution = "unresolved";
+                reloc.reason = "provider_not_found";
                 plan.unresolved_call_relocations.push_back(std::move(reloc));
                 continue;
             }
@@ -3514,19 +3520,27 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
                 reloc.providers.push_back(candidates[k]->source_file);
             }
             if (candidates.size() > 1) {
+                reloc.resolution = "ambiguous";
+                reloc.reason = "ambiguous_provider";
                 plan.ambiguous_call_relocations.push_back(std::move(reloc));
                 continue;
             }
 
             const QoreAOTSymbolIndexRecord* provider = candidates.front();
+            reloc.resolution = "resolved";
+            reloc.reason = "resolved";
             bool mismatch = false;
             if (!rec.signature_hash.empty() && rec.signature_hash != provider->signature_hash) {
                 reloc.expected = "signature=" + rec.signature_hash
                     + " actual=" + provider->signature_hash;
+                reloc.resolution = "hash_mismatch";
+                reloc.reason = "signature_hash_mismatch";
                 mismatch = true;
             } else if (!rec.declaration_hash.empty() && rec.declaration_hash != provider->declaration_hash) {
                 reloc.expected = "declaration=" + rec.declaration_hash
                     + " actual=" + provider->declaration_hash;
+                reloc.resolution = "hash_mismatch";
+                reloc.reason = "declaration_hash_mismatch";
                 mismatch = true;
             }
             reloc.native_symbol = provider->native_symbol;
@@ -3664,10 +3678,16 @@ static bool json_file_call_relocation_array(FILE* f, const char* key,
         json_file_string(f, reloc.target_kind);
         fputs(", \"path\": ", f);
         json_file_string(f, reloc.path);
+        fputs(", \"resolution\": ", f);
+        json_file_string(f, reloc.resolution);
+        fputs(", \"reason\": ", f);
+        json_file_string(f, reloc.reason);
         fputs(", \"expected\": ", f);
         json_file_string(f, reloc.expected);
         fputs(", \"native_symbol\": ", f);
         json_file_string(f, reloc.native_symbol);
+        fputs(", \"fallback_descriptor\": ", f);
+        json_file_string(f, reloc.fallback_descriptor);
         fputs(", \"providers\": [", f);
         for (size_t j = 0; j < reloc.providers.size(); ++j) {
             if (!qo_link_check_cancel(j, "AOT qo-link map call-relocation provider write", error)) {
@@ -3685,6 +3705,74 @@ static bool json_file_call_relocation_array(FILE* f, const char* key,
         fputs("  ", f);
     }
     fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool add_qo_link_call_relocation_reason_counts(
+        std::map<std::string, size_t>& reasons,
+        const std::vector<QOLinkCallRelocation>& relocs,
+        const char* operation,
+        std::string& error) {
+    for (size_t i = 0; i < relocs.size(); ++i) {
+        if (!qo_link_check_cancel(i, operation, error)) {
+            return false;
+        }
+        const std::string& reason = relocs[i].reason.empty() ? relocs[i].resolution : relocs[i].reason;
+        ++reasons[reason.empty() ? "unknown" : reason];
+    }
+    return true;
+}
+
+static bool json_file_call_relocation_summary(FILE* f, const QOLinkPlan& plan,
+        std::string& error, const char* comma = ",") {
+    std::map<std::string, size_t> reasons;
+    if (!add_qo_link_call_relocation_reason_counts(reasons, plan.resolved_call_relocations,
+            "AOT qo-link map call-relocation summary write", error)
+            || !add_qo_link_call_relocation_reason_counts(reasons, plan.unresolved_call_relocations,
+                "AOT qo-link map call-relocation summary write", error)
+            || !add_qo_link_call_relocation_reason_counts(reasons, plan.ambiguous_call_relocations,
+                "AOT qo-link map call-relocation summary write", error)
+            || !add_qo_link_call_relocation_reason_counts(reasons, plan.call_relocation_hash_mismatches,
+                "AOT qo-link map call-relocation summary write", error)) {
+        return false;
+    }
+
+    const size_t resolved = plan.resolved_call_relocations.size();
+    const size_t unresolved = plan.unresolved_call_relocations.size();
+    const size_t ambiguous = plan.ambiguous_call_relocations.size();
+    const size_t hash_mismatches = plan.call_relocation_hash_mismatches.size();
+    const size_t total = resolved + unresolved + ambiguous + hash_mismatches;
+    fprintf(f,
+        "  \"call_relocation_summary\": {\n"
+        "    \"total\": %llu,\n"
+        "    \"resolved\": %llu,\n"
+        "    \"unresolved\": %llu,\n"
+        "    \"ambiguous\": %llu,\n"
+        "    \"hash_mismatches\": %llu,\n"
+        "    \"reasons\": [",
+        static_cast<unsigned long long>(total),
+        static_cast<unsigned long long>(resolved),
+        static_cast<unsigned long long>(unresolved),
+        static_cast<unsigned long long>(ambiguous),
+        static_cast<unsigned long long>(hash_mismatches));
+    size_t i = 0;
+    for (const auto& entry : reasons) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map call-relocation reason write", error)) {
+            return false;
+        }
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n      {\"reason\": ", f);
+        json_file_string(f, entry.first);
+        fprintf(f, ", \"count\": %llu}", static_cast<unsigned long long>(entry.second));
+        ++i;
+    }
+    if (!reasons.empty()) {
+        fputc('\n', f);
+        fputs("    ", f);
+    }
+    fprintf(f, "]\n  }%s\n", comma);
     return true;
 }
 
@@ -3784,6 +3872,7 @@ static bool write_qo_link_map(const std::string& path, const std::string& output
             || !json_file_issue_array(f, "unresolved_imports", plan.unresolved_imports, error)
             || !json_file_issue_array(f, "ambiguous_imports", plan.ambiguous_imports, error)
             || !json_file_issue_array(f, "hash_mismatches", plan.hash_mismatches, error)
+            || !json_file_call_relocation_summary(f, plan, error)
             || !json_file_call_relocation_array(f, "resolved_call_relocations",
                 plan.resolved_call_relocations, error)
             || !json_file_call_relocation_array(f, "unresolved_call_relocations",
