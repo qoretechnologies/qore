@@ -815,6 +815,36 @@ public:
             const std::vector<std::string>& parse_option_flags = {},
             int* compiled_count_out = nullptr);
 
+    //! Compile an object-driven script register aggregate for existing `.qo` inputs.
+    /**
+        Emits one relocatable object at @p output_path containing an exported
+        `init_<aggregate_symbol>_qo(QoreProgram*)` function.  The function calls
+        each symbol in @p register_symbols in order.  The generated object is
+        linked alongside the input `.qo` files, so the native linker validates
+        that every per-file register symbol exists.
+
+        This is the first object/index-driven `--link-qo` aggregation form: it
+        avoids reparsing original sources and keeps the per-file metadata
+        registration semantics unchanged.
+
+        @param register_symbols exported `*_script_register` symbols to call
+        @param output_path path for the aggregate relocatable object
+        @param aggregate_symbol C-identifier tail used in
+                `init_<aggregate_symbol>_qo`
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3
+        @param target_triple target triple for cross-compilation
+                (nullptr = native)
+        @return true on success, false on failure
+    */
+    static bool compileScriptRegisterAggregate(
+            const std::vector<std::string>& register_symbols,
+            const std::string& output_path,
+            const std::string& aggregate_symbol,
+            std::string& error,
+            int opt_level = 2,
+            const char* target_triple = nullptr);
+
     //! Compile one file of a Qore application to a
     //! `.qo` in script-context mode (no module wrapper, no `.qm`).
     /**

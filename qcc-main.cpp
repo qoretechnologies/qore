@@ -52,6 +52,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 #include <getopt.h>
 #include <sys/stat.h>
@@ -507,6 +508,11 @@ static std::vector<std::string> parse_option_flags;
 // with an `init_SYMBOL_qo(QoreProgram*)` registration entry.  It is linked
 // alongside the per-file `.qo` objects produced by batch script compilation.
 static const char* script_aggregate_symbol = nullptr;
+// --link-qo emits an object-driven aggregate register object from existing
+// script-context `.qo` inputs, without reparsing the original sources.
+static bool link_qo = false;
+static const char* link_aggregate_symbol = nullptr;
+static const char* qolink_map_path = nullptr;
 // --from-objects signals aggregator mode: the
 // positional inputs are per-file `.qo` objects (produced by
 // `qcc -c --context=DIR <file>`) that get linked together plus a
@@ -690,6 +696,15 @@ static void print_usage(const char* prog) {
            "                         Emit one metadata-only script aggregate .qo\n"
            "                         exposing init_SYM_qo(); link it with the\n"
            "                         per-file .qo objects from batch script mode\n");
+    printf("      --link-qo          Link existing script-context .qo objects into\n"
+           "                         one aggregate register object without reparsing\n"
+           "                         original sources; requires -o and\n"
+           "                         --aggregate-symbol=SYM\n");
+    printf("      --aggregate-symbol=SYM\n"
+           "                         Aggregate symbol tail for --link-qo; emits\n"
+           "                         init_SYM_qo(QoreProgram*)\n");
+    printf("      --qolink-map=FILE  Write --link-qo map JSON to FILE (default:\n"
+           "                         <output>.qolink.json)\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -780,6 +795,9 @@ static struct option long_options[] = {
     {"script-aggregate",  required_argument, nullptr, 0x10a},
     {"depfile-dir",       required_argument, nullptr, 0x10b},
     {"dump-index-json",   no_argument,       nullptr, 0x10c},
+    {"link-qo",           no_argument,       nullptr, 0x10d},
+    {"aggregate-symbol",  required_argument, nullptr, 0x10e},
+    {"qolink-map",        required_argument, nullptr, 0x10f},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -896,6 +914,15 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x10a:  // --script-aggregate
                 script_aggregate_symbol = optarg;
+                break;
+            case 0x10d:  // --link-qo
+                link_qo = true;
+                break;
+            case 0x10e:  // --aggregate-symbol
+                link_aggregate_symbol = optarg;
+                break;
+            case 0x10f:  // --qolink-map
+                qolink_map_path = optarg;
                 break;
             case 'F':
                 from_objects = true;
@@ -2967,6 +2994,8 @@ struct AOTDumpSymbolRow {
     bool qore_relevant = false;
 };
 
+static std::string hex64_string(uint64_t value);
+
 static std::vector<AOTDumpSymbolRow> collect_symbol_rows(const llvm::object::ObjectFile& obj) {
     std::map<std::string, uint64_t> size_by_key;
     for (const auto& [sym, size] : llvm::object::computeSymbolSizes(obj)) {
@@ -2993,6 +3022,584 @@ static std::vector<AOTDumpSymbolRow> collect_symbol_rows(const llvm::object::Obj
         rows.push_back(std::move(row));
     }
     return rows;
+}
+
+static bool string_has_suffix(const std::string& s, const char* suffix) {
+    size_t n = s.size();
+    size_t e = std::strlen(suffix);
+    return n >= e && std::strcmp(s.c_str() + n - e, suffix) == 0;
+}
+
+struct QOLinkInputInfo {
+    std::string path;
+    std::string object_hash;
+    uint64_t object_size = 0;
+    std::vector<std::string> source_text;
+    std::string register_symbol;
+    QoreAOTSymbolIndex index;
+    std::vector<std::string> dependencies;
+    std::vector<std::string> module_path_prepend;
+    std::vector<std::string> module_path_append;
+    std::vector<AOTModuleCommand> module_commands;
+    std::vector<std::string> native_symbols;
+};
+
+struct QOLinkIssue {
+    std::string consumer;
+    std::string path;
+    std::string dependency_class;
+    std::string expected;
+    std::vector<std::string> providers;
+};
+
+struct QOLinkPlan {
+    std::vector<std::string> provided_qore_symbols;
+    std::vector<std::string> native_symbols;
+    std::vector<std::string> external_dependencies;
+    std::vector<std::string> module_path_prepend;
+    std::vector<std::string> module_path_append;
+    std::vector<AOTModuleCommand> module_commands;
+    std::vector<QOLinkIssue> resolved_imports;
+    std::vector<QOLinkIssue> unresolved_imports;
+    std::vector<QOLinkIssue> ambiguous_imports;
+    std::vector<QOLinkIssue> hash_mismatches;
+};
+
+static void add_unique_string(std::vector<std::string>& out, std::set<std::string>& seen,
+        const std::string& value) {
+    if (!value.empty() && seen.insert(value).second) {
+        out.push_back(value);
+    }
+}
+
+static bool qo_link_check_cancel(size_t ordinal, const char* operation, std::string& error) {
+    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+        error = "operation cancelled during ";
+        error += operation ? operation : "AOT qo-link processing";
+        return false;
+    }
+    return true;
+}
+
+static bool collect_qo_link_input(const char* path, QOLinkInputInfo& input,
+        std::string& error) {
+    input = QOLinkInputInfo();
+    input.path = path;
+
+    std::string contents;
+    if (!read_file(path, contents)) {
+        error = std::string("cannot read input object: ") + path;
+        return false;
+    }
+    input.object_size = contents.size();
+    input.object_hash = "xxh64:" + hex64_string(XXH64(contents.data(), contents.size(), 0));
+
+    auto binary_or = llvm::object::createBinary(path);
+    if (!binary_or) {
+        error = "cannot read object file '" + std::string(path) + "': "
+            + llvm::toString(binary_or.takeError());
+        return false;
+    }
+    llvm::object::Binary* binary = binary_or->getBinary();
+    auto* obj = llvm::dyn_cast<llvm::object::ObjectFile>(binary);
+    if (!obj) {
+        error = "input is not a relocatable object file: " + std::string(path);
+        return false;
+    }
+
+    std::vector<std::string> register_symbols;
+    std::vector<AOTDumpSymbolRow> symbol_rows = collect_symbol_rows(*obj);
+    for (size_t i = 0; i < symbol_rows.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link symbol scan", error)) {
+            return false;
+        }
+        const AOTDumpSymbolRow& row = symbol_rows[i];
+        if (row.kind != 'U' && string_has_suffix(row.name, "_script_register")) {
+            register_symbols.push_back(row.name);
+        }
+    }
+    if (register_symbols.empty()) {
+        error = "input has no exported *_script_register symbol: " + std::string(path);
+        return false;
+    }
+    if (register_symbols.size() > 1) {
+        error = "input has multiple exported *_script_register symbols: " + std::string(path);
+        for (const std::string& sym : register_symbols) {
+            error += " " + sym;
+        }
+        return false;
+    }
+    input.register_symbol = register_symbols.front();
+
+    std::vector<AOTDumpMetadataBlob> blobs;
+    std::set<std::string> seen_blobs;
+    extract_aot_metadata_from_object(*obj, blobs, seen_blobs);
+    scan_aot_metadata_blobs(contents, blobs, seen_blobs);
+    if (blobs.empty()) {
+        error = "input has no AOT metadata blob: " + std::string(path);
+        return false;
+    }
+
+    bool have_index = false;
+    std::set<std::string> source_seen;
+    std::set<std::string> dep_seen;
+    std::set<std::string> prepend_seen;
+    std::set<std::string> append_seen;
+    std::set<std::string> module_cmd_seen;
+    std::set<std::string> native_seen;
+    input.index.version = QORE_AOT_SYMBOL_INDEX_VERSION;
+
+    for (size_t i = 0; i < blobs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link metadata scan")) {
+            error = "operation cancelled during AOT qo-link metadata scan";
+            return false;
+        }
+        QoreAOTBinaryReader reader;
+        std::string read_error;
+        if (!reader.open(blobs[i].bytes.data(), static_cast<uint32_t>(blobs[i].bytes.size()), read_error)) {
+            error = "invalid AOT metadata in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        const char* label = reader.getLabel();
+        if (label && *label) {
+            add_unique_string(input.source_text, source_seen, label);
+        }
+
+        QoreAOTSymbolIndex index;
+        if (!readSymbolIndex(reader, index, read_error)) {
+            error = "invalid SYMBOL_INDEX in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        if (index.version) {
+            have_index = true;
+            input.index.context.insert(input.index.context.end(), index.context.begin(), index.context.end());
+            input.index.defined.insert(input.index.defined.end(), index.defined.begin(), index.defined.end());
+            input.index.imported.insert(input.index.imported.end(), index.imported.begin(), index.imported.end());
+            input.index.native.insert(input.index.native.end(), index.native.begin(), index.native.end());
+            for (size_t j = 0; j < index.native.size(); ++j) {
+                if (!qo_link_check_cancel(j, "AOT qo-link native symbol collection", error)) {
+                    return false;
+                }
+                const QoreAOTSymbolIndexRecord& rec = index.native[j];
+                if (!rec.native_symbol.empty()) {
+                    add_unique_string(input.native_symbols, native_seen, rec.native_symbol);
+                }
+            }
+        }
+
+        std::vector<std::string> deps;
+        if (!readDependencies(reader, deps, read_error)) {
+            error = "invalid dependency metadata in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        for (size_t j = 0; j < deps.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link dependency collection", error)) {
+                return false;
+            }
+            add_unique_string(input.dependencies, dep_seen, deps[j]);
+        }
+
+        std::vector<std::string> prepended;
+        std::vector<std::string> appended;
+        if (!readModulePathLists(reader, prepended, appended, read_error)) {
+            error = "invalid module path metadata in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        for (size_t j = 0; j < prepended.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module path collection", error)) {
+                return false;
+            }
+            add_unique_string(input.module_path_prepend, prepend_seen, prepended[j]);
+        }
+        for (size_t j = 0; j < appended.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module path collection", error)) {
+                return false;
+            }
+            add_unique_string(input.module_path_append, append_seen, appended[j]);
+        }
+
+        std::vector<AOTModuleCommand> commands;
+        if (!readModuleCommands(reader, commands, read_error)) {
+            error = "invalid module command metadata in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        for (size_t j = 0; j < commands.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module command collection", error)) {
+                return false;
+            }
+            const AOTModuleCommand& cmd = commands[j];
+            std::string key = cmd.module + "\n" + cmd.command;
+            if (module_cmd_seen.insert(key).second) {
+                input.module_commands.push_back(cmd);
+            }
+        }
+    }
+
+    if (!have_index) {
+        error = "input has no SYMBOL_INDEX section: " + std::string(path);
+        return false;
+    }
+    return true;
+}
+
+static bool is_owned_qore_provider(const QoreAOTSymbolIndexRecord& rec) {
+    return !rec.qore_path.empty() && !rec.source_file.empty();
+}
+
+static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
+        QOLinkPlan& plan, std::string& error) {
+    std::map<std::string, std::vector<const QoreAOTSymbolIndexRecord*>> providers;
+    std::set<std::string> provided_seen;
+    std::set<std::string> native_seen;
+    std::set<std::string> dep_seen;
+    std::set<std::string> prepend_seen;
+    std::set<std::string> append_seen;
+    std::set<std::string> module_cmd_seen;
+
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link provider collection")) {
+            error = "operation cancelled during AOT qo-link provider collection";
+            return false;
+        }
+        const QOLinkInputInfo& input = inputs[i];
+        for (size_t j = 0; j < input.index.defined.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link provider collection", error)) {
+                return false;
+            }
+            const QoreAOTSymbolIndexRecord& rec = input.index.defined[j];
+            if (is_owned_qore_provider(rec)) {
+                providers[rec.qore_path].push_back(&rec);
+                add_unique_string(plan.provided_qore_symbols, provided_seen, rec.qore_path);
+            }
+        }
+        for (size_t j = 0; j < input.native_symbols.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link native symbol plan", error)) {
+                return false;
+            }
+            add_unique_string(plan.native_symbols, native_seen, input.native_symbols[j]);
+        }
+        for (size_t j = 0; j < input.dependencies.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link dependency plan", error)) {
+                return false;
+            }
+            add_unique_string(plan.external_dependencies, dep_seen, input.dependencies[j]);
+        }
+        for (size_t j = 0; j < input.module_path_prepend.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module path plan", error)) {
+                return false;
+            }
+            add_unique_string(plan.module_path_prepend, prepend_seen, input.module_path_prepend[j]);
+        }
+        for (size_t j = 0; j < input.module_path_append.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module path plan", error)) {
+                return false;
+            }
+            add_unique_string(plan.module_path_append, append_seen, input.module_path_append[j]);
+        }
+        for (size_t j = 0; j < input.module_commands.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module command plan", error)) {
+                return false;
+            }
+            const AOTModuleCommand& cmd = input.module_commands[j];
+            std::string key = cmd.module + "\n" + cmd.command;
+            if (module_cmd_seen.insert(key).second) {
+                plan.module_commands.push_back(cmd);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link import validation", error)) {
+            return false;
+        }
+        const QOLinkInputInfo& input = inputs[i];
+        for (size_t j = 0; j < input.index.imported.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link import validation", error)) {
+                return false;
+            }
+            const QoreAOTSymbolIndexRecord& rec = input.index.imported[j];
+            if (rec.qore_path.empty()) {
+                continue;
+            }
+            QoreAOTDependencyClass dep_class = rec.dependency_class;
+            if (dep_class == QoreAOTDependencyClass::MODULE_API
+                    || dep_class == QoreAOTDependencyClass::MODULE_RUNTIME
+                    || dep_class == QoreAOTDependencyClass::NATIVE_BODY) {
+                continue;
+            }
+
+            QOLinkIssue issue;
+            issue.consumer = input.path;
+            issue.path = rec.qore_path;
+            issue.dependency_class = qoreAOTDependencyClassName(dep_class);
+            auto provider_it = providers.find(rec.qore_path);
+            if (provider_it == providers.end()) {
+                plan.unresolved_imports.push_back(std::move(issue));
+                continue;
+            }
+
+            const auto& candidates = provider_it->second;
+            for (size_t k = 0; k < candidates.size(); ++k) {
+                if (!qo_link_check_cancel(k, "AOT qo-link provider validation", error)) {
+                    return false;
+                }
+                issue.providers.push_back(candidates[k]->source_file);
+            }
+            if (candidates.size() > 1) {
+                plan.ambiguous_imports.push_back(std::move(issue));
+                continue;
+            }
+
+            const QoreAOTSymbolIndexRecord* provider = candidates.front();
+            bool mismatch = false;
+            if (!rec.signature_hash.empty() && rec.signature_hash != provider->signature_hash) {
+                issue.expected = "signature=" + rec.signature_hash
+                    + " actual=" + provider->signature_hash;
+                mismatch = true;
+            } else if (!rec.declaration_hash.empty() && rec.declaration_hash != provider->declaration_hash) {
+                issue.expected = "declaration=" + rec.declaration_hash
+                    + " actual=" + provider->declaration_hash;
+                mismatch = true;
+            } else if (!rec.value_hash.empty() && rec.value_hash != provider->value_hash) {
+                issue.expected = "value=" + rec.value_hash + " actual=" + provider->value_hash;
+                mismatch = true;
+            }
+            if (mismatch) {
+                plan.hash_mismatches.push_back(std::move(issue));
+            } else {
+                plan.resolved_imports.push_back(std::move(issue));
+            }
+        }
+    }
+
+    std::sort(plan.provided_qore_symbols.begin(), plan.provided_qore_symbols.end());
+    std::sort(plan.native_symbols.begin(), plan.native_symbols.end());
+    std::sort(plan.external_dependencies.begin(), plan.external_dependencies.end());
+    std::sort(plan.module_path_prepend.begin(), plan.module_path_prepend.end());
+    std::sort(plan.module_path_append.begin(), plan.module_path_append.end());
+    std::sort(plan.module_commands.begin(), plan.module_commands.end(),
+        [](const AOTModuleCommand& a, const AOTModuleCommand& b) {
+            return std::tie(a.module, a.command) < std::tie(b.module, b.command);
+        });
+    return true;
+}
+
+static void json_file_string(FILE* f, const std::string& value) {
+    fputc('"', f);
+    for (unsigned char c : value) {
+        switch (c) {
+            case '"': fputs("\\\"", f); break;
+            case '\\': fputs("\\\\", f); break;
+            case '\b': fputs("\\b", f); break;
+            case '\f': fputs("\\f", f); break;
+            case '\n': fputs("\\n", f); break;
+            case '\r': fputs("\\r", f); break;
+            case '\t': fputs("\\t", f); break;
+            default:
+                if (c < 0x20) {
+                    fprintf(f, "\\u%04x", c);
+                } else {
+                    fputc(c, f);
+                }
+                break;
+        }
+    }
+    fputc('"', f);
+}
+
+static bool json_file_string_array(FILE* f, const char* key,
+        const std::vector<std::string>& values, std::string& error, const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map string array write", error)) {
+            return false;
+        }
+        if (i) {
+            fputc(',', f);
+        }
+        fputc('\n', f);
+        fputs("    ", f);
+        json_file_string(f, values[i]);
+    }
+    if (!values.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool json_file_issue_array(FILE* f, const char* key,
+        const std::vector<QOLinkIssue>& issues, std::string& error, const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < issues.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map issue write", error)) {
+            return false;
+        }
+        const QOLinkIssue& issue = issues[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"consumer\": ", f);
+        json_file_string(f, issue.consumer);
+        fputs(", \"path\": ", f);
+        json_file_string(f, issue.path);
+        fputs(", \"dependency_class\": ", f);
+        json_file_string(f, issue.dependency_class);
+        fputs(", \"expected\": ", f);
+        json_file_string(f, issue.expected);
+        fputs(", \"providers\": [", f);
+        for (size_t j = 0; j < issue.providers.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link map issue provider write", error)) {
+                return false;
+            }
+            if (j) {
+                fputs(", ", f);
+            }
+            json_file_string(f, issue.providers[j]);
+        }
+        fputs("]}", f);
+    }
+    if (!issues.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool write_qo_link_map(const std::string& path, const std::string& output,
+        const std::string& aggregate_symbol, const std::vector<QOLinkInputInfo>& inputs,
+        const QOLinkPlan& plan, std::string& error) {
+    FILE* f = fopen(path.c_str(), "w");
+    if (!f) {
+        error = "cannot open qo link map '" + path + "': " + strerror(errno);
+        return false;
+    }
+
+    fprintf(f, "{\n");
+    fputs("  \"format\": 1,\n", f);
+    fputs("  \"output\": ", f);
+    json_file_string(f, output);
+    fputs(",\n  \"aggregate_symbol\": ", f);
+    json_file_string(f, aggregate_symbol);
+    fputs(",\n  \"inputs\": [", f);
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map input write", error)) {
+            fclose(f);
+            return false;
+        }
+        const QOLinkInputInfo& input = inputs[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"path\": ", f);
+        json_file_string(f, input.path);
+        fputs(", \"object_hash\": ", f);
+        json_file_string(f, input.object_hash);
+        fprintf(f, ", \"object_size\": %llu, \"register_symbol\": ",
+            static_cast<unsigned long long>(input.object_size));
+        json_file_string(f, input.register_symbol);
+        fputs(", \"source_text\": [", f);
+        for (size_t j = 0; j < input.source_text.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link map source-text write", error)) {
+                fclose(f);
+                return false;
+            }
+            if (j) {
+                fputs(", ", f);
+            }
+            json_file_string(f, input.source_text[j]);
+        }
+        fputs("]}", f);
+    }
+    if (!inputs.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fputs("],\n", f);
+
+    std::vector<std::string> register_symbols;
+    register_symbols.reserve(inputs.size());
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map register-symbol collection", error)) {
+            fclose(f);
+            return false;
+        }
+        register_symbols.push_back(inputs[i].register_symbol);
+    }
+    if (!json_file_string_array(f, "register_symbols", register_symbols, error)
+            || !json_file_string_array(f, "provided_qore_symbols", plan.provided_qore_symbols, error)
+            || !json_file_string_array(f, "native_symbols", plan.native_symbols, error)
+            || !json_file_string_array(f, "external_dependencies", plan.external_dependencies, error)
+            || !json_file_string_array(f, "module_path_prepend", plan.module_path_prepend, error)
+            || !json_file_string_array(f, "module_path_append", plan.module_path_append, error)) {
+        fclose(f);
+        return false;
+    }
+
+    fputs("  \"module_commands\": [", f);
+    for (size_t i = 0; i < plan.module_commands.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map module-command write", error)) {
+            fclose(f);
+            return false;
+        }
+        const AOTModuleCommand& cmd = plan.module_commands[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"module\": ", f);
+        json_file_string(f, cmd.module);
+        fputs(", \"command\": ", f);
+        json_file_string(f, cmd.command);
+        fputs("}", f);
+    }
+    if (!plan.module_commands.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fputs("],\n", f);
+
+    if (!json_file_issue_array(f, "resolved_imports", plan.resolved_imports, error)
+            || !json_file_issue_array(f, "unresolved_imports", plan.unresolved_imports, error)
+            || !json_file_issue_array(f, "ambiguous_imports", plan.ambiguous_imports, error)
+            || !json_file_issue_array(f, "hash_mismatches", plan.hash_mismatches, error, "")) {
+        fclose(f);
+        return false;
+    }
+    fputs("}\n", f);
+
+    if (fclose(f) != 0) {
+        error = "cannot close qo link map '" + path + "': " + strerror(errno);
+        return false;
+    }
+    return true;
+}
+
+static void print_qo_link_issues(const char* label, const std::vector<QOLinkIssue>& issues) {
+    for (size_t i = 0; i < issues.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link issue reporting")) {
+            fprintf(stderr, "error: operation cancelled during AOT qo-link issue reporting\n");
+            return;
+        }
+        const QOLinkIssue& issue = issues[i];
+        fprintf(stderr, "error: qo-link %s: consumer='%s' symbol='%s' class='%s'",
+            label, issue.consumer.c_str(), issue.path.c_str(), issue.dependency_class.c_str());
+        if (!issue.expected.empty()) {
+            fprintf(stderr, " %s", issue.expected.c_str());
+        }
+        if (!issue.providers.empty()) {
+            fprintf(stderr, " providers=");
+            for (size_t j = 0; j < issue.providers.size(); ++j) {
+                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT qo-link issue provider reporting")) {
+                    fprintf(stderr, "\nerror: operation cancelled during AOT qo-link issue provider reporting\n");
+                    return;
+                }
+                fprintf(stderr, "%s%s", j ? "," : "", issue.providers[j].c_str());
+            }
+        }
+        fputc('\n', stderr);
+    }
 }
 
 static void dump_object_sections(const llvm::object::ObjectFile& obj) {
@@ -3718,6 +4325,117 @@ int main(int argc, char** argv) {
         }
         qore_cleanup();
         return rc;
+    }
+
+    if ((link_aggregate_symbol || qolink_map_path) && !link_qo) {
+        fprintf(stderr,
+            "error: --aggregate-symbol and --qolink-map are only valid with --link-qo\n");
+        return 1;
+    }
+
+    if (link_qo) {
+        if (compile_only || module_mode || archive_mode || from_objects || context_dir
+                || batch_output_dir || script_aggregate_symbol) {
+            fprintf(stderr,
+                "error: --link-qo cannot be combined with compile/module/archive/source aggregate modes\n");
+            return 1;
+        }
+        if (!output_path) {
+            fprintf(stderr, "error: --link-qo requires -o/--output\n");
+            return 1;
+        }
+        if (!link_aggregate_symbol || !*link_aggregate_symbol) {
+            fprintf(stderr, "error: --link-qo requires --aggregate-symbol=SYM\n");
+            return 1;
+        }
+        if (optind >= argc) {
+            fprintf(stderr, "error: --link-qo requires at least one .qo input\n");
+            return 1;
+        }
+
+        std::vector<QOLinkInputInfo> inputs;
+        inputs.reserve(argc - optind);
+        qore_init(QL_GPL, "UTF-8", true);
+        for (int i = optind; i < argc; ++i) {
+            std::string error;
+            if (!qo_link_check_cancel(static_cast<size_t>(i - optind),
+                    "AOT qo-link input collection", error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            if (!has_qo_extension(argv[i])) {
+                fprintf(stderr, "error: --link-qo input '%s' must end in .qo\n", argv[i]);
+                qore_cleanup();
+                return 1;
+            }
+            char* resolved = realpath(argv[i], nullptr);
+            if (!resolved) {
+                fprintf(stderr, "error: cannot resolve '%s': %s\n", argv[i], strerror(errno));
+                qore_cleanup();
+                return 1;
+            }
+            QOLinkInputInfo input;
+            bool ok = collect_qo_link_input(resolved, input, error);
+            free(resolved);
+            if (!ok) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            inputs.push_back(std::move(input));
+        }
+
+        QOLinkPlan plan;
+        std::string error;
+        if (!validate_qo_link_inputs(inputs, plan, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        if (!plan.unresolved_imports.empty() || !plan.ambiguous_imports.empty()
+                || !plan.hash_mismatches.empty()) {
+            print_qo_link_issues("unresolved import", plan.unresolved_imports);
+            print_qo_link_issues("ambiguous import", plan.ambiguous_imports);
+            print_qo_link_issues("hash mismatch", plan.hash_mismatches);
+            qore_cleanup();
+            return 1;
+        }
+
+        std::vector<std::string> register_symbols;
+        register_symbols.reserve(inputs.size());
+        for (size_t i = 0; i < inputs.size(); ++i) {
+            if (!qo_link_check_cancel(i, "AOT qo-link register-symbol collection", error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            register_symbols.push_back(inputs[i].register_symbol);
+        }
+
+        if (!QoreAOT::compileScriptRegisterAggregate(register_symbols, output_path,
+                link_aggregate_symbol, error, opt_level, target_triple)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+
+        std::string map_path = qolink_map_path ? qolink_map_path
+            : std::string(output_path) + ".qolink.json";
+        if (!write_qo_link_map(map_path, output_path, link_aggregate_symbol,
+                inputs, plan, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+
+        if (qcc_output_verbose()) {
+            printf("qcc: linked qo aggregate from %zu .qo input%s (-O%d): %s\n",
+                inputs.size(), inputs.size() == 1 ? "" : "s", opt_level, output_path);
+            printf("qcc: wrote qo link map: %s\n", map_path.c_str());
+        }
+        qore_cleanup();
+        return 0;
     }
 
     // Phase C Item 2: link-mode — `qcc -o <binary> *.qo` emits a

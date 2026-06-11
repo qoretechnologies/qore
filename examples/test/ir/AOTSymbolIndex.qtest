@@ -30,6 +30,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("symbol hash behavior", \testHashBehavior());
         addTestCase("complex constant value hashing", \testComplexConstantValueHashing());
         addTestCase("symbol index JSON dump", \testDumpIndexJson());
+        addTestCase("qo link aggregate", \testQoLinkAggregate());
 
         set_return_value(main());
     }
@@ -185,5 +186,55 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "JSON dump includes constant path: " + json);
         assertTrue(json.find("\"native_body_hash\": \"xxh64:") != -1,
             "JSON dump includes native body hash: " + json);
+    }
+
+    testQoLinkAggregate() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(qo_dir);
+        string lib_src = tmp_dir + "/lib.qc";
+        string main_src = tmp_dir + "/main.qc";
+        string agg = tmp_dir + "/agg.qo";
+
+        write(lib_src,
+            "%new-style\n"
+            "class LinkQoLib {\n"
+            "    static int add(int a, int b) { return a + b; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "class LinkQoMain {\n"
+            "    int run() { return LinkQoLib::add(1, 2); }\n"
+            "}\n");
+
+        string compile_out = run(sprintf("%s %s -c --output-dir=%s %s %s",
+            env, qcc_bin, qo_dir, lib_src, main_src));
+        assertTrue(compile_out.find("script-context .qo") != -1,
+            "batch compile emitted script objects: " + compile_out);
+
+        string link_out = run(sprintf("%s %s --link-qo -o %s --aggregate-symbol=LINK_QO_TEST %s/*.qo",
+            env, qcc_bin, agg, qo_dir));
+        assertTrue(is_file(agg), "qo-link aggregate was created: " + link_out);
+        assertTrue(is_file(agg + ".qolink.json"), "qo-link map was created: " + link_out);
+
+        string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, agg));
+        assertTrue(dump.find("init_LINK_QO_TEST_qo") != -1,
+            "aggregate exports the requested init symbol: " + dump);
+        assertTrue(dump.find("_script_register") != -1,
+            "aggregate references input register symbols: " + dump);
+
+        string link_map = File::readTextFile(agg + ".qolink.json");
+        assertTrue(link_map.find("\"format\": 1") != -1,
+            "link map includes format version: " + link_map);
+        assertTrue(link_map.find("\"aggregate_symbol\": \"LINK_QO_TEST\"") != -1,
+            "link map includes aggregate symbol: " + link_map);
+        assertTrue(link_map.find("LinkQoLib::add(int,int)") != -1,
+            "link map includes provided Qore method: " + link_map);
+        assertTrue(link_map.find("\"unresolved_imports\": []") != -1,
+            "link map has no unresolved imports: " + link_map);
+        assertTrue(link_map.find("\"ambiguous_imports\": []") != -1,
+            "link map has no ambiguous imports: " + link_map);
+        assertTrue(link_map.find("\"hash_mismatches\": []") != -1,
+            "link map has no hash mismatches: " + link_map);
     }
 }

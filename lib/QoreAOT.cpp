@@ -8352,6 +8352,84 @@ bool QoreAOT::compileScriptAggregate(
     return true;
 }
 
+bool QoreAOT::compileScriptRegisterAggregate(
+        const std::vector<std::string>& register_symbols,
+        const std::string& output_path,
+        const std::string& aggregate_symbol,
+        std::string& error,
+        int opt_level,
+        const char* target_triple) {
+    if (register_symbols.empty()) {
+        error = "compileScriptRegisterAggregate: register_symbols is empty";
+        return false;
+    }
+    if (output_path.empty()) {
+        error = "compileScriptRegisterAggregate: output_path is empty";
+        return false;
+    }
+    if (aggregate_symbol.empty()) {
+        error = "compileScriptRegisterAggregate: aggregate_symbol is empty";
+        return false;
+    }
+
+    std::string aggregate_san = sanitizeCIdentifier(aggregate_symbol);
+    if (aggregate_san.empty()) {
+        error = "compileScriptRegisterAggregate: aggregate_symbol is invalid";
+        return false;
+    }
+
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+
+    llvm::LLVMContext ctx;
+    auto module = std::make_unique<llvm::Module>(
+        "qore_aot_qo_link_" + aggregate_san, ctx);
+
+    auto* ptr_type = llvm::PointerType::get(ctx, 0);
+    auto* void_type = llvm::Type::getVoidTy(ctx);
+    auto* register_fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
+
+    std::string register_fn = "init_" + aggregate_san + "_qo";
+    auto* fn = llvm::Function::Create(register_fn_type, llvm::Function::ExternalLinkage,
+        register_fn, *module);
+    fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+    llvm::IRBuilder<> builder(entry_bb);
+    llvm::Value* pgm_arg = &*fn->arg_begin();
+
+    for (size_t i = 0; i < register_symbols.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link register emission")) {
+            error = "operation cancelled during AOT qo-link register emission";
+            return false;
+        }
+        const std::string& symbol = register_symbols[i];
+        if (symbol.empty()) {
+            error = "compileScriptRegisterAggregate: empty register symbol";
+            return false;
+        }
+        auto callee = module->getOrInsertFunction(symbol, register_fn_type);
+        builder.CreateCall(callee, {pgm_arg});
+    }
+    builder.CreateRetVoid();
+
+    std::string verify_error;
+    llvm::raw_string_ostream verify_os(verify_error);
+    if (llvm::verifyModule(*module, &verify_os)) {
+        verify_os.flush();
+        error = "LLVM module verification failed for qo-link aggregate "
+            + aggregate_san + ": " + verify_error;
+        return false;
+    }
+
+    if (getenv("QORE_DUMP_LLVM_IR")) {
+        module->print(llvm::errs(), nullptr);
+    }
+
+    return emitObjectFile(*module, output_path, error, opt_level, target_triple);
+}
+
 // Phase 4 slice 10c: compile a single Qore source file in script
 // context mode (no module wrapper, no `.qm` required).  Sibling
 // `.qo`s found in @p library_paths are preloaded into the compile
