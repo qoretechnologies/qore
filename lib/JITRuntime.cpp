@@ -11274,6 +11274,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_context_init(const char* name, uint64_t ex
     QoreValue where_exp = fromBits(where_bits);
     QoreValue sort_exp = fromBits(sort_bits);
 
+    if (!exp && !get_context_stack()) {
+        if (xsink) {
+            xsink->raiseException("CONTEXT-EXCEPTION",
+                "cannot create a subcontext without an active parent context");
+        }
+        return 0;
+    }
+
     // `new Context(...)` pushes itself on the thread-local stack before
     // evaluating exp/where/sort, matching AST semantics.  On failure,
     // deref() pops the stack and frees (also derefs the data hash on !sub).
@@ -12972,14 +12980,35 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call(
 // pointer.  This lets AOT-loaded modules avoid the qore_rt_invoke_expr_aot AST
 // trampoline for backgrounded calls.
 
-extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
-        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+static const QoreBackgroundOperatorNode* getAOTBackgroundSlotOp(QoreAOTContext* ctx, int32_t slot,
+        const char* helper, ExceptionSink* xsink) {
+    if (!ctx || slot < 0 || slot >= ctx->num_exprs) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "%s received invalid background expression slot %d", helper, slot);
+        return nullptr;
+    }
     QoreValue bg_expr = fromBits(ctx->exprs[slot]);
     auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(bg_expr.getInternalNode());
-    assert(bg_op);
+    if (!bg_op) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "%s cannot resolve background expression slot %d", helper, slot);
+        return nullptr;
+    }
+    return bg_op;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    auto* bg_op = getAOTBackgroundSlotOp(ctx, slot, "qore_rt_background_function_call_aot", xsink);
+    if (!bg_op) {
+        return 0;
+    }
     auto* fcn = dynamic_cast<const FunctionCallNode*>(bg_op->getExp().getInternalNode());
-    assert(fcn);
+    if (!fcn) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "background expression slot %d is not a function call", slot);
+        return 0;
+    }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
     QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
@@ -12989,12 +13018,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
 
 extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_call_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    QoreValue bg_expr = fromBits(ctx->exprs[slot]);
-    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(bg_expr.getInternalNode());
-    assert(bg_op);
+    auto* bg_op = getAOTBackgroundSlotOp(ctx, slot, "qore_rt_background_static_method_call_aot", xsink);
+    if (!bg_op) {
+        return 0;
+    }
     auto* smcn = dynamic_cast<const StaticMethodCallNode*>(bg_op->getExp().getInternalNode());
-    assert(smcn);
+    if (!smcn) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "background expression slot %d is not a static method call", slot);
+        return 0;
+    }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     StaticMethodCallNode* call_node = new StaticMethodCallNode(*smcn, arg_list);
     QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
@@ -13005,14 +13038,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_call_aot(
 extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_call_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t recv_bits,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    QoreValue bg_expr = fromBits(ctx->exprs[slot]);
-    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(bg_expr.getInternalNode());
-    assert(bg_op);
+    auto* bg_op = getAOTBackgroundSlotOp(ctx, slot, "qore_rt_background_dot_eval_call_aot", xsink);
+    if (!bg_op) {
+        return 0;
+    }
     auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(bg_op->getExp().getInternalNode());
-    assert(devn);
+    if (!devn) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "background expression slot %d is not a dot-eval method call", slot);
+        return 0;
+    }
     MethodCallNode* source_m = devn->getMethodCall();
-    assert(source_m);
+    if (!source_m) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "background expression slot %d has no dot-eval method call", slot);
+        return 0;
+    }
     QoreValue recv = fromBits(recv_bits);
     if (recv.hasNode()) {
         recv.refSelf();
@@ -13060,12 +13101,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_value_aot(
 extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t callee_bits,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    QoreValue bg_expr = fromBits(ctx->exprs[slot]);
-    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(bg_expr.getInternalNode());
-    assert(bg_op);
+    auto* bg_op = getAOTBackgroundSlotOp(ctx, slot, "qore_rt_background_call_ref_call_aot", xsink);
+    if (!bg_op) {
+        return 0;
+    }
     auto* crcn = dynamic_cast<const CallReferenceCallNode*>(bg_op->getExp().getInternalNode());
-    assert(crcn);
+    if (!crcn) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "background expression slot %d is not a call-reference call", slot);
+        return 0;
+    }
     QoreValue callee = fromBits(callee_bits);
     if (callee.hasNode()) {
         callee.refSelf();

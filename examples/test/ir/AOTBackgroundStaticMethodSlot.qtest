@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTBackgroundStaticMethodSlotTest
+
+# Standalone-compiled classes using native AOT background-call IR must preserve
+# the background expression slot and its nested static method call.  Otherwise
+# the AOT background helper can see an empty slot at linked-executable startup.
+class AOTBackgroundStaticMethodSlotTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTBackgroundStaticMethodSlotTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("standalone class .qo preserves background static method slot",
+            \testStandaloneBackgroundStaticMethodQoLink());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    testStandaloneBackgroundStaticMethodQoLink() {
+        TmpDir tmp("qore-aot-background-static-");
+        string tmp_dir = tmp.path;
+        string lib_dir = tmp_dir + "/aotlib";
+        mkdir(lib_dir);
+
+        string starter_src = tmp_dir + "/starter.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string starter_qo = lib_dir + "/starter.qo";
+        string main_qo = lib_dir + "/main.qo";
+        string app = tmp_dir + "/background-static";
+
+        write(starter_src, "%new-style
+public class AOTBackgroundStaticStarter {
+    public static string run() {
+        Counter done(1);
+        background worker(done);
+        int rv = done.waitForZero(5s);
+        if (rv) {
+            throw \"BACKGROUND-TIMEOUT\", \"background static worker did not finish\";
+        }
+        return \"ok\";
+    }
+
+    private static worker(Counter done) {
+        done.dec();
+    }
+}
+");
+        write(main_src, "%new-style
+int sub main() {
+    printf(\"%s\\n\", AOTBackgroundStaticStarter::run());
+    return 0;
+}
+
+main();
+");
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        string starter_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, lib_dir, starter_qo, starter_src));
+        assertTrue(is_file(starter_qo), "compiled starter .qo: " + starter_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, lib_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "compiled main .qo: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s",
+            env, qcc_bin, app, starter_qo, main_qo));
+        assertTrue(is_file(app), "linked background executable: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("ok\n", out, "linked executable preserves background static method call: " + out);
+    }
+}

@@ -10831,6 +10831,22 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
         slots.call_relocation_kinds.emplace(bits, kind);
     };
 
+    auto recordContextExprSlots = [&recordExprSlot](const QoreIRContextInstruction* ci) {
+        auto record = [&recordExprSlot](const QoreValue& expr) {
+            if (!expr) {
+                return;
+            }
+
+            uint64_t bits;
+            memcpy(&bits, &expr, sizeof(bits));
+            recordExprSlot(bits, QoreIROpcode::Context);
+        };
+
+        record(ci->exp);
+        record(ci->where_exp);
+        record(ci->sort_exp);
+    };
+
     // Preserve the IR local slot identity in the AOT local table.  Handler IR
     // inherits parent locals by IR slot ID, and AOT handler deserialization uses
     // ctx->locals[slot_id] for those parent slots.  If AOT local slots are
@@ -11212,6 +11228,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     };
                     break;
                 }
+                case QoreIROpcode::Context: {
+                    auto* ci = static_cast<QoreIRContextInstruction*>(inst.get());
+                    recordContextExprSlots(ci);
+                    break;
+                }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
@@ -11314,6 +11335,18 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     std::unordered_set<const void*> seen_stmts;
     std::unordered_set<const void*> seen_regex_cases;
     std::unordered_set<const void*> seen_lv_paths;
+
+    auto countExprSlot = [&seen_exprs, &expr_count](const QoreValue& expr) {
+        if (!expr) {
+            return;
+        }
+
+        uint64_t bits;
+        memcpy(&bits, &expr, sizeof(bits));
+        if (seen_exprs.insert(bits).second) {
+            ++expr_count;
+        }
+    };
 
     for (auto& block : func.blocks) {
         for (auto& inst : block->instructions) {
@@ -11671,6 +11704,13 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                case QoreIROpcode::Context: {
+                    auto* ci = static_cast<QoreIRContextInstruction*>(inst.get());
+                    countExprSlot(ci->exp);
+                    countExprSlot(ci->where_exp);
+                    countExprSlot(ci->sort_exp);
+                    break;
+                }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
                     StatementBlock* code = obei->stmt->getCode();
@@ -11762,6 +11802,19 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     seen_stmts.clear();
     seen_regex_cases.clear();
     seen_lv_paths.clear();
+
+    auto fillExprSlot = [&seen_exprs, &expr_idx, ctx](QoreValue& expr) {
+        if (!expr) {
+            return;
+        }
+
+        uint64_t bits;
+        memcpy(&bits, &expr, sizeof(bits));
+        if (seen_exprs.insert(bits).second) {
+            expr.ref();
+            ctx->exprs[expr_idx++] = bits;
+        }
+    };
 
     for (auto& block : func.blocks) {
         for (auto& inst : block->instructions) {
@@ -12179,6 +12232,13 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                         idmd->expr.ref();
                         ctx->exprs[expr_idx++] = bits;
                     }
+                    break;
+                }
+                case QoreIROpcode::Context: {
+                    auto* ci = static_cast<QoreIRContextInstruction*>(inst.get());
+                    fillExprSlot(ci->exp);
+                    fillExprSlot(ci->where_exp);
+                    fillExprSlot(ci->sort_exp);
                     break;
                 }
                 case QoreIROpcode::OnBlockExit: {

@@ -2892,13 +2892,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 }
                             }
                             ctx->call_targets[i].receiver_type_info = receiver_type_info;
-                            if (sig_text && !receiver_type_info) {
-                                MethodFunctionBase* mfb = qore_method_private::get(
-                                    *const_cast<QoreMethod*>(m))->getFunction();
-                                ctx->call_targets[i].variant = findAOTVariantBySignatureText(mfb, sig_text);
-                                ctx->exprs[i] = toBitsNB(QoreValue());
-                                continue;
-                            }
                             // Create StaticMethodCallNode with parse args + resolveParseArgs
                             QoreParseListNode* pln = nullptr;
                             if (call_args) {
@@ -2919,6 +2912,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                                     *const_cast<QoreMethod*>(m))->getFunction();
                                 if (const AbstractQoreFunctionVariant* v = findAOTVariantBySignatureText(mfb,
                                         sig_text)) {
+                                    ctx->call_targets[i].variant = v;
                                     smcn->setVariant(v);
                                 }
                             }
@@ -10776,6 +10770,9 @@ static void executeInitFunctions(
     // we stop when a round executes zero descriptors (no forward progress), or
     // after a small cap to avoid pathological loops.
     std::vector<bool> desc_done(descriptors.size(), false);
+    std::vector<std::string> last_error(descriptors.size());
+    std::vector<std::string> last_desc(descriptors.size());
+    std::vector<bool> last_error_pending(descriptors.size(), false);
     for (int pass = 0; pass < 2; ++pass) {
     const bool run_module_init = (pass == 1);
     // Between pass 0 (STATIC_VAR / NS_CONSTANT / CLASS_CONSTANT) and pass 1
@@ -10896,22 +10893,26 @@ static void executeInitFunctions(
             QoreStringValueHelper desc_str(desc_val);
             const bool is_pending = (err_val.getType() == NT_STRING
                 && !strcmp(err_str->c_str(), "AOT-PENDING-CONSTANT"));
+            const char* err_cstr = err_val.getType() == NT_STRING ? err_str->c_str() : "?";
+            const char* desc_cstr = desc_val.getType() == NT_STRING ? desc_str->c_str() : "?";
+            last_error[di] = err_cstr;
+            last_desc[di] = desc_cstr;
+            last_error_pending[di] = is_pending;
             if (aotInitTraceEnabled()) {
                 fprintf(stderr, "[aot-init] call exception module=%s name=%s err=%s desc=%s pending=%d\n",
                     mod_name ? mod_name : "<none>", desc.name.c_str(),
-                    err_val.getType() == NT_STRING ? err_str->c_str() : "?",
-                    desc_val.getType() == NT_STRING ? desc_str->c_str() : "?",
-                    (int)is_pending);
+                    err_cstr, desc_cstr, (int)is_pending);
             }
             printd(5, "AOT init: '%s' raised exception: %s: %s%s\n",
-                desc.name.c_str(),
-                err_val.getType() == NT_STRING ? err_str->c_str() : "?",
-                desc_val.getType() == NT_STRING ? desc_str->c_str() : "?",
+                desc.name.c_str(), err_cstr, desc_cstr,
                 is_pending ? " (will retry)" : "");
             xsink.clear();
-            if (is_pending && !run_module_init) {
-                // Leave desc_done[di] false so a later round can retry once
-                // its dependencies have been populated.
+            if (!run_module_init) {
+                // Leave pass-0 init descriptors retryable until the fixpoint
+                // settles.  A lazy static-var read can turn a not-yet-ready
+                // dependency into a normal type/overload error by yielding
+                // NOTHING, so retry all pass-0 exceptions and report the last
+                // one if the descriptor never succeeds.
                 continue;
             }
             desc_done[di] = true;
@@ -10921,6 +10922,9 @@ static void executeInitFunctions(
 
         // Mark completed before store so failed stores still advance.
         desc_done[di] = true;
+        last_error[di].clear();
+        last_desc[di].clear();
+        last_error_pending[di] = false;
         ++this_round_executed;
 
         // Convert raw result to QoreValue
@@ -11161,8 +11165,14 @@ static void executeInitFunctions(
     // caller's tally reflects real problems rather than silently passing.
     for (size_t di = 0; di < descriptors.size(); ++di) {
         if (!desc_done[di] && descriptors[di].target_type != AOTCompiledInitFunc::MODULE_INIT) {
-            printd(0, "AOT init: '%s' remained pending after %d rounds\n",
-                descriptors[di].name.c_str(), 32);
+            if (!last_error[di].empty()) {
+                printd(0, "AOT init: '%s' remained unresolved after %d rounds; last exception: %s: %s%s\n",
+                    descriptors[di].name.c_str(), 32, last_error[di].c_str(), last_desc[di].c_str(),
+                    last_error_pending[di] ? " (pending)" : "");
+            } else {
+                printd(0, "AOT init: '%s' remained pending after %d rounds\n",
+                    descriptors[di].name.c_str(), 32);
+            }
             ++failed;
         }
     }
