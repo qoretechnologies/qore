@@ -36,6 +36,7 @@
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/xxhash.h"
 
 #include <algorithm>
 #include <cctype>
@@ -525,6 +526,7 @@ static bool show_version = false;
 static bool dump_info = false;
 static bool dump_symbols = false;
 static bool dump_sections = false;
+static bool dump_index_json = false;
 
 static bool qcc_output_verbose() {
     const char* verbose_env = getenv("QORE_AOT_VERBOSE");
@@ -721,6 +723,7 @@ static void print_usage(const char* prog) {
            "                         linked AOT executables without executing them\n");
     printf("      --dump-symbols     Include an nm-like symbol table view\n");
     printf("      --dump-sections    Include object and AOT section tables\n");
+    printf("      --dump-index-json  Emit build-consumable AOT symbol-index JSON\n");
     printf("\n");
     printf("Examples:\n");
     printf("  %s script.qr                   # Compile to 'script' executable\n", prog);
@@ -776,6 +779,7 @@ static struct option long_options[] = {
     {"aot-metadata-compression", required_argument, nullptr, 0x109},
     {"script-aggregate",  required_argument, nullptr, 0x10a},
     {"depfile-dir",       required_argument, nullptr, 0x10b},
+    {"dump-index-json",   no_argument,       nullptr, 0x10c},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -875,6 +879,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x107:  // --dump-sections
                 dump_sections = true;
+                break;
+            case 0x10c:  // --dump-index-json
+                dump_index_json = true;
                 break;
             case 0x108:  // --save-temps
                 save_temps = true;
@@ -3073,6 +3080,302 @@ static void inspect_object_file(const char* path,
     }
 }
 
+static void collect_object_metadata_quiet(const char* path,
+        std::vector<AOTDumpMetadataBlob>& blobs, std::set<std::string>& seen) {
+    auto binary_or = llvm::object::createBinary(path);
+    if (!binary_or) {
+        llvm::consumeError(binary_or.takeError());
+        return;
+    }
+
+    llvm::object::Binary* binary = binary_or->getBinary();
+    auto* obj = llvm::dyn_cast<llvm::object::ObjectFile>(binary);
+    if (!obj) {
+        return;
+    }
+
+    extract_aot_metadata_from_object(*obj, blobs, seen);
+}
+
+static std::string hex64_string(uint64_t value) {
+    char buf[17];
+    snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(value));
+    return buf;
+}
+
+static bool json_output_cancelled = false;
+
+static void json_print_string(const std::string& value) {
+    putchar('"');
+    size_t i = 0;
+    for (unsigned char c : value) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT symbol-index JSON string dump")) {
+            fprintf(stderr, "error: operation cancelled during AOT symbol-index JSON string dump\n");
+            json_output_cancelled = true;
+            return;
+        }
+        ++i;
+        switch (c) {
+            case '"':
+                printf("\\\"");
+                break;
+            case '\\':
+                printf("\\\\");
+                break;
+            case '\b':
+                printf("\\b");
+                break;
+            case '\f':
+                printf("\\f");
+                break;
+            case '\n':
+                printf("\\n");
+                break;
+            case '\r':
+                printf("\\r");
+                break;
+            case '\t':
+                printf("\\t");
+                break;
+            default:
+                if (c < 0x20) {
+                    printf("\\u%04x", static_cast<unsigned>(c));
+                } else {
+                    putchar(c);
+                }
+                break;
+        }
+    }
+    putchar('"');
+}
+
+static void json_print_key(const char* key, unsigned indent) {
+    printf("%*s", static_cast<int>(indent), "");
+    json_print_string(key ? key : "");
+    printf(": ");
+}
+
+static void json_print_string_field(const char* key, const std::string& value,
+        unsigned indent, bool comma = true) {
+    json_print_key(key, indent);
+    json_print_string(value);
+    printf("%s\n", comma ? "," : "");
+}
+
+static void json_print_u64_field(const char* key, uint64_t value,
+        unsigned indent, bool comma = true) {
+    json_print_key(key, indent);
+    printf("%llu%s\n", static_cast<unsigned long long>(value), comma ? "," : "");
+}
+
+static bool json_dump_check_cancel(size_t ordinal, const char* operation) {
+    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+        fprintf(stderr, "error: operation cancelled during %s\n",
+            operation ? operation : "AOT symbol-index JSON dump");
+        return false;
+    }
+    return true;
+}
+
+static bool json_print_string_array(const char* key, const std::vector<std::string>& values,
+        unsigned indent, bool comma = true) {
+    json_print_key(key, indent);
+    printf("[");
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT symbol-index JSON string-array dump")) {
+            return false;
+        }
+        if (i) {
+            printf(", ");
+        }
+        json_print_string(values[i]);
+    }
+    printf("]%s\n", comma ? "," : "");
+    return true;
+}
+
+static bool json_print_context_array(const char* key,
+        const std::vector<std::pair<std::string, std::string>>& values,
+        unsigned indent, bool comma = true) {
+    json_print_key(key, indent);
+    printf("[");
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT symbol-index JSON context dump")) {
+            return false;
+        }
+        if (i) {
+            printf(",");
+        }
+        printf("\n%*s{", static_cast<int>(indent + 2), "");
+        json_print_string("key");
+        printf(": ");
+        json_print_string(values[i].first);
+        printf(", ");
+        json_print_string("value");
+        printf(": ");
+        json_print_string(values[i].second);
+        printf("}");
+    }
+    if (!values.empty()) {
+        printf("\n%*s", static_cast<int>(indent), "");
+    }
+    printf("]%s\n", comma ? "," : "");
+    return true;
+}
+
+static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsigned indent) {
+    printf("%*s{", static_cast<int>(indent), "");
+    json_print_string("kind");
+    printf(": ");
+    json_print_string(qoreAOTSymbolKindName(rec.kind));
+    printf(", ");
+    json_print_string("dependency_class");
+    printf(": ");
+    json_print_string(qoreAOTDependencyClassName(rec.dependency_class));
+    printf(", ");
+    json_print_string("flags");
+    printf(": %u, ", rec.flags);
+    json_print_string("metadata_slot");
+    if (rec.metadata_slot == UINT32_MAX) {
+        printf(": null");
+    } else {
+        printf(": %u", rec.metadata_slot);
+    }
+    printf(", ");
+    json_print_string("qore_path");
+    printf(": ");
+    json_print_string(rec.qore_path);
+    printf(", ");
+    json_print_string("source_file");
+    printf(": ");
+    json_print_string(rec.source_file);
+    printf(", ");
+    json_print_string("visibility");
+    printf(": ");
+    json_print_string(rec.visibility);
+    printf(", ");
+    json_print_string("signature_hash");
+    printf(": ");
+    json_print_string(rec.signature_hash);
+    printf(", ");
+    json_print_string("declaration_hash");
+    printf(": ");
+    json_print_string(rec.declaration_hash);
+    printf(", ");
+    json_print_string("value_hash");
+    printf(": ");
+    json_print_string(rec.value_hash);
+    printf(", ");
+    json_print_string("native_symbol");
+    printf(": ");
+    json_print_string(rec.native_symbol);
+    printf(", ");
+    json_print_string("abi_kind");
+    printf(": ");
+    json_print_string(rec.abi_kind);
+    printf(", ");
+    json_print_string("consumer_source_file");
+    printf(": ");
+    json_print_string(rec.consumer_source_file);
+    printf(", ");
+    json_print_string("provider_source_file");
+    printf(": ");
+    json_print_string(rec.provider_source_file);
+    printf("}");
+}
+
+static bool json_print_symbol_array(const char* key,
+        const std::vector<QoreAOTSymbolIndexRecord>& records,
+        unsigned indent, bool comma = true) {
+    json_print_key(key, indent);
+    printf("[");
+    for (size_t i = 0; i < records.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT symbol-index JSON record dump")) {
+            return false;
+        }
+        if (i) {
+            printf(",");
+        }
+        printf("\n");
+        json_print_symbol_record(records[i], indent + 2);
+    }
+    if (!records.empty()) {
+        printf("\n%*s", static_cast<int>(indent), "");
+    }
+    printf("]%s\n", comma ? "," : "");
+    return true;
+}
+
+static int dump_aot_index_json_for_file(const char* path) {
+    json_output_cancelled = false;
+    std::vector<AOTDumpMetadataBlob> blobs;
+    std::set<std::string> seen;
+    collect_object_metadata_quiet(path, blobs, seen);
+
+    std::string contents;
+    if (!read_file(path, contents)) {
+        return 1;
+    }
+    scan_aot_metadata_blobs(contents, blobs, seen);
+
+    QoreAOTSymbolIndex combined;
+    combined.version = QORE_AOT_SYMBOL_INDEX_VERSION;
+    std::vector<std::string> source_text;
+    std::set<std::string> source_seen;
+    for (size_t i = 0; i < blobs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT symbol-index JSON dump")) {
+            fprintf(stderr, "error: operation cancelled during AOT symbol-index JSON dump\n");
+            return 1;
+        }
+        QoreAOTBinaryReader reader;
+        std::string error;
+        if (!reader.open(blobs[i].bytes.data(), static_cast<uint32_t>(blobs[i].bytes.size()), error)) {
+            fprintf(stderr, "error: invalid AOT metadata in '%s': %s\n", path, error.c_str());
+            return 1;
+        }
+        const char* label = reader.getLabel();
+        if (label && source_seen.insert(label).second) {
+            source_text.emplace_back(label);
+        }
+        QoreAOTSymbolIndex index;
+        if (!readSymbolIndex(reader, index, error)) {
+            fprintf(stderr, "error: invalid SYMBOL_INDEX in '%s': %s\n", path, error.c_str());
+            return 1;
+        }
+        if (!index.version) {
+            continue;
+        }
+        combined.context.insert(combined.context.end(), index.context.begin(), index.context.end());
+        combined.defined.insert(combined.defined.end(), index.defined.begin(), index.defined.end());
+        combined.imported.insert(combined.imported.end(), index.imported.begin(), index.imported.end());
+        combined.native.insert(combined.native.end(), index.native.begin(), index.native.end());
+    }
+
+    uint64_t object_hash = XXH64(contents.data(), contents.size(), 0);
+    std::string hash = "xxh64:" + hex64_string(object_hash);
+
+    printf("{\n");
+    json_print_u64_field("format", 1, 2);
+    json_print_string_field("output", path, 2);
+    json_print_string_field("object_hash", hash, 2);
+    json_print_u64_field("object_size", contents.size(), 2);
+    json_print_string_field("source", source_text.empty() ? "" : source_text.front(), 2);
+    if (!json_print_string_array("source_text", source_text, 2)
+            || !json_print_context_array("context", combined.context, 2)
+            || !json_print_symbol_array("defines", combined.defined, 2)
+            || !json_print_symbol_array("provides", combined.defined, 2)
+            || !json_print_symbol_array("requires", combined.imported, 2)
+            || !json_print_symbol_array("native", combined.native, 2)) {
+        return 1;
+    }
+    json_print_string_field("native_body_hash", hash, 2, false);
+    if (json_output_cancelled) {
+        return 1;
+    }
+    printf("}\n");
+    return blobs.empty() ? 1 : 0;
+}
+
 static int dump_aot_info_for_file(const char* path) {
     printf("%s:\n", path);
 
@@ -3387,6 +3690,17 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (dump_index_json) {
+        if (optind + 1 != argc) {
+            fprintf(stderr, "error: --dump-index-json requires exactly one binary/object path\n");
+            return 1;
+        }
+        qore_init(QL_GPL, "UTF-8", true);
+        int rc = dump_aot_index_json_for_file(argv[optind]);
+        qore_cleanup();
+        return rc;
+    }
+
     if (dump_symbols || dump_sections) {
         dump_info = true;
     }
@@ -3395,12 +3709,14 @@ int main(int argc, char** argv) {
             fprintf(stderr, "error: --dump-info requires at least one binary/object path\n");
             return 1;
         }
+        qore_init(QL_GPL, "UTF-8", true);
         int rc = 0;
         for (int i = optind; i < argc; ++i) {
             if (dump_aot_info_for_file(argv[i])) {
                 rc = 1;
             }
         }
+        qore_cleanup();
         return rc;
     }
 

@@ -17,6 +17,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string libqore_dir;
         string env;
         string tmp_dir;
+        string last_out;
     }
 
     constructor() : QUnit::Test("AOTSymbolIndexTest", "1.0", \ARGV) {
@@ -28,6 +29,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("definitions and native symbols", \testDefinitionsAndNativeSymbols());
         addTestCase("symbol hash behavior", \testHashBehavior());
         addTestCase("complex constant value hashing", \testComplexConstantValueHashing());
+        addTestCase("symbol index JSON dump", \testDumpIndexJson());
 
         set_return_value(main());
     }
@@ -57,6 +59,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string compile_out = run(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s",
             env, qcc_bin, out, src));
         assertTrue(is_file(out), "compiled " + name + ": " + compile_out);
+        last_out = out;
 
         string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, out));
         assertTrue(dump.find("symbol index: version=1") != -1,
@@ -161,5 +164,26 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string fields = findSymbolLine(dump, "constant", "T::Fields");
         assertTrue(attr(fields, "value").startsWith("not-foldable:"),
             "complex metadata constants are marked conservatively: " + fields);
+    }
+
+    testDumpIndexJson() {
+        TmpDir tmp = initDirs();
+        compileAndDump("json",
+            "class JsonDumpTest {\n"
+            "    public { const C = 7; }\n"
+            "    int f() { return C; }\n"
+            "}\n");
+
+        string json = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, last_out));
+        assertTrue(json.find("\"format\": 1") != -1,
+            "JSON dump includes format version: " + json);
+        assertTrue(json.find("\"provides\"") != -1,
+            "JSON dump includes provides records: " + json);
+        assertTrue(json.find("\"requires\"") != -1,
+            "JSON dump includes requires records: " + json);
+        assertTrue(json.find("JsonDumpTest::C") != -1,
+            "JSON dump includes constant path: " + json);
+        assertTrue(json.find("\"native_body_hash\": \"xxh64:") != -1,
+            "JSON dump includes native body hash: " + json);
     }
 }

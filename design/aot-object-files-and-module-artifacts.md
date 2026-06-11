@@ -131,9 +131,16 @@ Optional flags:
 
 - `--dump-symbols`: print an nm-like symbol table.
 - `--dump-sections`: print object and AOT section tables.
+- `--dump-index-json`: print build-consumable JSON for the AOT symbol index.
 
 With `--dump-symbols`, AOT metadata dumps also include `SYMBOL_INDEX` defined,
 imported, native, and context records when the section is present.
+
+Build tools can materialize the JSON output next to an object as
+`<object>.idx.json`. The sidecar mirrors the binary index with `defines`,
+`provides`, `requires`, `native`, `source_text`, and `native_body_hash` fields
+so planners can distinguish source/API/value rebuilds from relink-only native
+body changes without parsing the human dump format.
 
 The dump path is for diagnostics only; runtimes ignore `BUILD_INFO` and do not
 require `SYMBOL_INDEX`.
