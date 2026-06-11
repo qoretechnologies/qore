@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTConstructorCallRelocationsTest
+
+# Constructor calls in standalone-compiled classes should carry the same
+# optional call-relocation metadata as direct function/static-method calls.
+# The link map must then resolve the constructor relocation against the
+# provider object's symbol-index record.
+class AOTConstructorCallRelocationsTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTConstructorCallRelocationsTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("standalone constructor call relocation resolves at link time",
+            \testStandaloneConstructorRelocation());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    testStandaloneConstructorRelocation() {
+        TmpDir tmp("qore-aot-ctor-reloc-");
+        string tmp_dir = tmp.path;
+        string lib_dir = tmp_dir + "/aotlib";
+        mkdir(lib_dir);
+
+        string provider_src = tmp_dir + "/provider.qc";
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_qo = lib_dir + "/provider.qo";
+        string consumer_qo = lib_dir + "/consumer.qo";
+        string aggregate_qo = lib_dir + "/aggregate.qo";
+        string map_path = lib_dir + "/aggregate.qolink.json";
+
+        write(provider_src, "%new-style
+public class AOTCtorRelocProvider {
+    public constructor(int value) {
+    }
+}
+");
+        write(consumer_src, "%new-style
+public class AOTCtorRelocConsumer {
+    static AOTCtorRelocProvider make(int value) {
+        return new AOTCtorRelocProvider(value);
+    }
+}
+");
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, lib_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "compiled provider .qo: " + provider_out);
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, lib_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "compiled consumer .qo: " + consumer_out);
+
+        string dump = run(sprintf("%s --dump-info --dump-symbols %s", qcc_bin, consumer_qo));
+        assertTrue(dump.find("call relocations: version=1 records=1") != -1,
+            "consumer .qo has exactly one call relocation: " + dump);
+        assertTrue(dump.find("constructor   AOTCtorRelocProvider::constructor(int)") != -1,
+            "consumer .qo records the constructor relocation path: " + dump);
+
+        string link_out = run(sprintf(
+            "%s --link-qo --aggregate-symbol=AOT_CTOR_RELOC_TEST --qolink-map=%s -o %s %s %s",
+            qcc_bin, map_path, aggregate_qo, provider_qo, consumer_qo));
+        assertTrue(is_file(aggregate_qo), "linked aggregate .qo: " + link_out);
+        assertTrue(is_file(map_path), "wrote link map: " + link_out);
+
+        string link_map = File::readTextFile(map_path);
+        assertTrue(link_map.find("\"target_kind\": \"constructor\"") != -1,
+            "link map records a constructor relocation: " + link_map);
+        assertTrue(link_map.find("\"path\": \"AOTCtorRelocProvider::constructor(int)\"") != -1,
+            "link map records the constructor relocation path: " + link_map);
+        assertTrue(link_map.find("\"provider_kind\": \"constructor\"") != -1,
+            "link map resolves against a constructor provider: " + link_map);
+        assertTrue(link_map.find("\"resolution\": \"resolved\"") != -1,
+            "link map resolves the constructor relocation: " + link_map);
+        assertTrue(link_map.find("\"unresolved\": 0") != -1,
+            "link map has no unresolved call relocations: " + link_map);
+    }
+}

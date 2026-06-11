@@ -506,6 +506,15 @@ static std::string aotRelocMethodDisplayKey(const QoreClass* qc, const char* met
     return variant ? getVariantKey(key.c_str(), variant) : key;
 }
 
+static std::string aotRelocConstructorDisplayKey(const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant) {
+    if (!variant) {
+        return std::string();
+    }
+    const QoreClass* owner = variant->getClass() ? variant->getClass() : qc;
+    return aotRelocMethodDisplayKey(owner, "constructor", variant);
+}
+
 
 QoreAOTContext::~QoreAOTContext() {
     // Deref all held expression values (we took a ref in buildAOTContext)
@@ -11062,6 +11071,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &noi->expr, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
+                    recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::CONSTRUCTOR);
                     break;
                 }
                 case QoreIROpcode::RefForeachInit: {
@@ -11168,6 +11178,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &vrni->expr, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
+                    recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::CONSTRUCTOR);
                     break;
                 }
                 case QoreIROpcode::CallStaticDirect: {
@@ -13558,6 +13569,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
             id.ref2.append(")");
         }
+        id.reloc_qore_path = aotRelocConstructorDisplayKey(qc, variant);
         if (const QoreTypeInfo* object_type_info = no->getObjectTypeInfo()) {
             id.ref3 = getSlotTypePath(object_type_info);
         }
@@ -13591,6 +13603,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 }
                 id.ref2.append(")");
             }
+            id.reloc_qore_path = aotRelocConstructorDisplayKey(qc, variant);
             if (const QoreTypeInfo* object_type_info = vrn->getTypeInfo()) {
                 id.ref3 = getSlotTypePath(object_type_info);
             }
@@ -14201,6 +14214,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
             id.ref2.append(")");
         }
+        id.reloc_qore_path = aotRelocConstructorDisplayKey(sc->oc, variant);
         if (const QoreTypeInfo* object_type_info = sc->getObjectTypeInfo()) {
             id.ref3 = getSlotTypePath(object_type_info);
         }
