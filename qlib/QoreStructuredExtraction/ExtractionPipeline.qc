@@ -42,6 +42,17 @@ public hashdecl ExtractionPipelineOptions {
         @ref background operator is used directly.
     */
     *code<int(code<nothing()>)> start_thread;
+    #! Force the LLM to call the extraction tool; default @ref True
+    /** When @ref True (the default), every chat request carries an OpenAI
+        \c tool_choice forcing the single extraction tool.  Extraction is
+        meaningless without the tool call, and the forced choice also arms
+        provider-side malformed-function-call recovery (providers such as
+        Gemini can otherwise return neither content nor a tool call, e.g.
+        finish reason \c MALFORMED_FUNCTION_CALL, which surfaces here only
+        as an empty response).  Set to @ref False only for backends that
+        reject the \c tool_choice request field.
+    */
+    bool force_tool_choice = True;
 }
 
 #! LLM-based structured information extraction engine
@@ -96,6 +107,8 @@ public class ExtractionPipeline {
         int batch_parallel;
         #! Optional thread-start callable for parallel batch extraction
         *code<int(code<nothing()>)> start_thread;
+        #! Per-request options forcing the extraction tool call (when enabled)
+        *hash<QoreLlmUtils::LlmRequestOptions> request_options;
     }
 
     #! Creates an ExtractionPipeline
@@ -148,6 +161,20 @@ public class ExtractionPipeline {
                 "parameters": json_schema,
             },
         );
+
+        if (options.force_tool_choice ?? True) {
+            # force the extraction tool call: extraction has exactly one
+            # tool that must be called, and the explicit tool_choice arms
+            # provider-side malformed-function-call / no-output recovery
+            request_options = <QoreLlmUtils::LlmRequestOptions>{
+                "body_options": {
+                    "tool_choice": {
+                        "type": "function",
+                        "function": {"name": tools[0].name},
+                    },
+                },
+            };
+        }
     }
 
     #! Extracts structured data from text
@@ -302,7 +329,8 @@ public class ExtractionPipeline {
                 };
             }
 
-            hash<QoreLlmUtils::ChatResponse> resp = llm.chat(effective_messages, tools);
+            hash<QoreLlmUtils::ChatResponse> resp = llm.chat(effective_messages, tools,
+                request_options);
             total_usage = mergeUsage(total_usage, resp.usage);
 
             # Extract data from tool call or text response
@@ -315,7 +343,13 @@ public class ExtractionPipeline {
                     # Text response — parse JSON
                     parsed = parseResponse(resp.content);
                 } else {
-                    last_errors = ("LLM returned empty response",);
+                    # include the stop reason: "max_tokens" here usually
+                    # means a reasoning model burned the output budget on
+                    # thinking, which is invisible without this detail
+                    last_errors = (resp.stop_reason.val()
+                        ? sprintf("LLM returned empty response (stop_reason: %s)",
+                            resp.stop_reason)
+                        : "LLM returned empty response",);
                     if (attempts > max_retries) {
                         return makeResult(parsed ?? {}, False, last_errors,
                             total_usage, attempts);

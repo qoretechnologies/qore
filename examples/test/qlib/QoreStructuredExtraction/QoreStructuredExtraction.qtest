@@ -27,6 +27,8 @@ class MockLlmBackend inherits QoreLlmUtils::LlmBackend {
         int call_count = 0;
         #! List of responses for sequential calls (for retry testing)
         *list<string> sequential_responses;
+        #! Request options captured from the last chat() call
+        *hash<LlmRequestOptions> last_chat_opts;
     }
 
     constructor(string response) : LlmBackend(<LlmBackendConfig>{"mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; }}) {
@@ -60,7 +62,8 @@ class MockLlmBackend inherits QoreLlmUtils::LlmBackend {
 
     #! Override chat() — pipeline now uses chat-based extraction with tools
     hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
-            *list<hash<ToolDefinition>> tools) {
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
+        last_chat_opts = opts;
         string content;
         if (sequential_responses && call_count < sequential_responses.size()) {
             content = sequential_responses[call_count];
@@ -102,6 +105,30 @@ class MockLlmBackend inherits QoreLlmUtils::LlmBackend {
     int getCallCount() {
         return call_count;
     }
+
+    *hash<LlmRequestOptions> getLastChatOpts() {
+        return last_chat_opts;
+    }
+}
+
+#! Mock LLM backend that returns an empty response with a fixed stop reason
+class EmptyResponseLlmBackend inherits QoreLlmUtils::LlmBackend {
+    private {
+        string stop_reason;
+    }
+
+    constructor(string stop_reason_arg)
+            : LlmBackend(<LlmBackendConfig>{"mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; }}) {
+        stop_reason = stop_reason_arg;
+    }
+
+    hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
+        return <ChatResponse>{
+            "stop_reason": stop_reason,
+            "usage": {"total_tokens": 100},
+        };
+    }
 }
 
 public class QoreStructuredExtractionTest inherits QUnit::Test {
@@ -136,6 +163,12 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
         addTestCase("ExtractionPipeline - invalid JSON response", \extractInvalidJsonTest());
         addTestCase("ExtractionPipeline - JSON with code fences", \extractCodeFencesTest());
         addTestCase("ExtractionPipeline - retry on failure", \extractRetryTest());
+        addTestCase("ExtractionPipeline - forced tool_choice sent by default",
+            \extractForcedToolChoiceTest());
+        addTestCase("ExtractionPipeline - force_tool_choice False omits tool_choice",
+            \extractForcedToolChoiceDisabledTest());
+        addTestCase("ExtractionPipeline - empty response reports stop_reason",
+            \extractEmptyResponseStopReasonTest());
         addTestCase("ExtractionPipeline - usage accumulation", \extractUsageTest());
         addTestCase("ExtractionPipeline - extractBatch", \extractBatchTest());
         addTestCase("ExtractionPipeline - array item validation",
@@ -503,6 +536,47 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
         assertTrue(result.valid);
         assertEq(2, result.attempt_count);
         assertEq(2, mock.getCallCount());
+    }
+
+    extractForcedToolChoiceTest() {
+        string response = make_json({"entities": ()});
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema);
+        hash<ExtractionResult> result = pipeline.extractData("Some text");
+
+        assertTrue(result.valid);
+        # the chat request must force the single extraction tool so that
+        # provider-side malformed-function-call recovery can arm
+        *hash<LlmRequestOptions> opts = mock.getLastChatOpts();
+        assertEq(NT_HASH, opts.body_options.tool_choice.typeCode());
+        assertEq("function", opts.body_options.tool_choice.type);
+        assertEq("extract_entities",
+            opts.body_options.tool_choice.function.name);
+    }
+
+    extractForcedToolChoiceDisabledTest() {
+        string response = make_json({"entities": ()});
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"force_tool_choice": False});
+        hash<ExtractionResult> result = pipeline.extractData("Some text");
+
+        assertTrue(result.valid);
+        assertNothing(mock.getLastChatOpts());
+    }
+
+    extractEmptyResponseStopReasonTest() {
+        # neither content nor tool_calls: must fail with a diagnosable
+        # error carrying the provider stop reason
+        EmptyResponseLlmBackend mock("max_tokens");
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"max_retries": 0});
+        hash<ExtractionResult> result = pipeline.extractData("Some text");
+
+        assertFalse(result.valid);
+        assertEq(1, result.validation_errors.size());
+        assertEq("LLM returned empty response (stop_reason: max_tokens)",
+            result.validation_errors[0]);
     }
 
     extractUsageTest() {
