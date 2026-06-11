@@ -439,6 +439,24 @@ std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* v
     return key;
 }
 
+static std::string aotRelocStripLeadingColons(const char* path) {
+    std::string out = path ? path : "";
+    while (out.size() >= 2 && out[0] == ':' && out[1] == ':') {
+        out.erase(0, 2);
+    }
+    return out;
+}
+
+static std::string aotRelocMethodDisplayKey(const QoreClass* qc, const char* method_name,
+        const AbstractQoreFunctionVariant* variant) {
+    std::string key = aotRelocStripLeadingColons(qc ? qc->getPath() : nullptr);
+    if (!key.empty()) {
+        key += "::";
+    }
+    key += method_name ? method_name : "";
+    return variant ? getVariantKey(key.c_str(), variant) : key;
+}
+
 
 QoreAOTContext::~QoreAOTContext() {
     // Deref all held expression values (we took a ref in buildAOTContext)
@@ -869,6 +887,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Phi instructions preserve whether the merged value is a QoreValue or a
     // native representation such as a loop counter.
     flags |= QORE_AOT_FEAT_TYPED_PHI;
+    // Direct-call slot identities are exposed as advisory call relocations for
+    // object-link diagnostics and guarded runtime prelink controls.
+    flags |= QORE_AOT_FEAT_CALL_RELOCATIONS;
     return flags;
 }
 
@@ -10736,6 +10757,10 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
         slots.getExprSlot(bits, makeInvokeOpcodeSource(opcode, invoke_opcode));
     };
 
+    auto recordCallRelocation = [&slots](uint64_t bits, QoreAOTCallRelocationTargetKind kind) {
+        slots.call_relocation_kinds.emplace(bits, kind);
+    };
+
     // Preserve the IR local slot identity in the AOT local table.  Handler IR
     // inherits parent locals by IR slot ID, and AOT handler deserialization uses
     // ctx->locals[slot_id] for those parent slots.  If AOT local slots are
@@ -10799,6 +10824,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
                     recordInvokeExprSlot(bits, inst->opcode, ii->invoke_opcode);
+                    if (ii->invoke_opcode == QoreIROpcode::CallDirect) {
+                        recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::FUNCTION);
+                    } else if (ii->invoke_opcode == QoreIROpcode::CallStaticDirect) {
+                        recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::STATIC_METHOD);
+                    }
                     if (ii->invoke_opcode == QoreIROpcode::CallStatic
                             || ii->invoke_opcode == QoreIROpcode::CallStaticDirect) {
                         slots.static_call_pre_evaluated_bits.insert(bits);
@@ -10836,6 +10866,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &di->expr, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
+                    recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::FUNCTION);
                     break;
                 }
                 case QoreIROpcode::CallMethodDirect: {
@@ -10844,6 +10875,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                         uint64_t bits;
                         memcpy(&bits, &cmdi->expr, sizeof(bits));
                         recordExprSlot(bits, inst->opcode);
+                        recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::METHOD);
                     }
                     break;
                 }
@@ -10853,6 +10885,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                         uint64_t bits;
                         memcpy(&bits, &imdi->expr, sizeof(bits));
                         recordExprSlot(bits, inst->opcode);
+                        recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::METHOD);
                     }
                     break;
                 }
@@ -11081,6 +11114,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &csdi->expr, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
+                    recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::STATIC_METHOD);
                     slots.static_call_pre_evaluated_bits.insert(bits);
                     break;
                 }
@@ -13384,6 +13418,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.ref2 = "sig:";
                 id.ref2 += sig->getSignatureText();
             }
+            id.reloc_qore_path = getVariantKey(id.ref1.c_str(), v);
         }
         return id;
     }
@@ -13403,6 +13438,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
         // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
         id.ref2 = call->getName();
+        if (method && call->getVariant()) {
+            id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
+        }
         return id;
     }
 
@@ -13422,6 +13460,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
                 id.ref2 += "\n";
                 id.ref2 += sig->getSignatureText();
+            }
+            if (method) {
+                id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), v);
             }
         }
         if (!slots.static_call_pre_evaluated_bits.count(bits)) {
@@ -14519,49 +14560,53 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             break;
         }
         for (auto& [bits, slot] : expr_snapshot) {
-        // Grow the output on demand: classifyExpression may run an
-        // ExprTreeSerializer dry-run that calls getExprSlot() and
-        // registers additional expr slots mid-iteration.  The resize
-        // we did before the loop was based on the snapshot max; any
-        // new slot ids introduced by classifyExpression itself can
-        // exceed that bound, so bump the output vector as needed.
-        if (static_cast<size_t>(slot) >= out.exprs.size()) {
-            out.exprs.resize(static_cast<size_t>(slot) + 1);
-        }
-        out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
-        if (isRejectedAOTExprKind(out.exprs[slot].kind)) {
-            out.has_unsupported_exprs = true;
-            std::string detail = "slot ";
-            detail += std::to_string(slot);
-            auto source_it = slots.expr_slot_sources.find(bits);
-            if (source_it != slots.expr_slot_sources.end()) {
-                detail += " from ";
-                detail += source_it->second;
+            // Grow the output on demand: classifyExpression may run an
+            // ExprTreeSerializer dry-run that calls getExprSlot() and
+            // registers additional expr slots mid-iteration.  The resize
+            // we did before the loop was based on the snapshot max; any
+            // new slot ids introduced by classifyExpression itself can
+            // exceed that bound, so bump the output vector as needed.
+            if (static_cast<size_t>(slot) >= out.exprs.size()) {
+                out.exprs.resize(static_cast<size_t>(slot) + 1);
             }
-            if (!out.exprs[slot].ref1.empty()) {
-                detail += ": ";
-                detail += out.exprs[slot].ref1;
-            } else {
-                detail += ": unsupported expression";
+            out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
+            auto reloc_it = slots.call_relocation_kinds.find(bits);
+            if (reloc_it != slots.call_relocation_kinds.end()) {
+                out.exprs[slot].call_relocation_kind = reloc_it->second;
             }
-            out.unsupported_expr_details.push_back(std::move(detail));
-            if (getenv("QORE_AOT_DEBUG")) {
-                QoreValue dbg_v;
-                memcpy(&dbg_v, &bits, sizeof(dbg_v));
-                if (dbg_v.hasNode() && dbg_v.getInternalNode()) {
-                    fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: '%s' (type %d)\n",
-                        func.name.c_str(), slot,
-                        dbg_v.getInternalNode()->getTypeName(),
-                        dbg_v.getInternalNode()->getType());
-                } else {
-                    fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: "
-                        "non-node value (type=%d)\n",
-                        func.name.c_str(), slot, (int)dbg_v.getType());
+            if (isRejectedAOTExprKind(out.exprs[slot].kind)) {
+                out.has_unsupported_exprs = true;
+                std::string detail = "slot ";
+                detail += std::to_string(slot);
+                auto source_it = slots.expr_slot_sources.find(bits);
+                if (source_it != slots.expr_slot_sources.end()) {
+                    detail += " from ";
+                    detail += source_it->second;
                 }
+                if (!out.exprs[slot].ref1.empty()) {
+                    detail += ": ";
+                    detail += out.exprs[slot].ref1;
+                } else {
+                    detail += ": unsupported expression";
+                }
+                out.unsupported_expr_details.push_back(std::move(detail));
+                if (getenv("QORE_AOT_DEBUG")) {
+                    QoreValue dbg_v;
+                    memcpy(&dbg_v, &bits, sizeof(dbg_v));
+                    if (dbg_v.hasNode() && dbg_v.getInternalNode()) {
+                        fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: '%s' (type %d)\n",
+                            func.name.c_str(), slot,
+                            dbg_v.getInternalNode()->getTypeName(),
+                            dbg_v.getInternalNode()->getType());
+                    } else {
+                        fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: "
+                            "non-node value (type=%d)\n",
+                            func.name.c_str(), slot, (int)dbg_v.getType());
+                    }
+                }
+            } else if (out.exprs[slot].kind == AOTExprKind::CLOSURE_CREATE) {
+                out.has_closure_exprs = true;
             }
-        } else if (out.exprs[slot].kind == AOTExprKind::CLOSURE_CREATE) {
-            out.has_closure_exprs = true;
-        }
         }
     }
 

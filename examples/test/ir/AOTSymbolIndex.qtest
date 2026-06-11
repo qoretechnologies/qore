@@ -31,6 +31,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("complex constant value hashing", \testComplexConstantValueHashing());
         addTestCase("symbol index JSON dump", \testDumpIndexJson());
         addTestCase("qo link aggregate", \testQoLinkAggregate());
+        addTestCase("prelinked call disable switch", \testPrelinkedCallDisableSwitch());
 
         set_return_value(main());
     }
@@ -217,6 +218,20 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         assertTrue(is_file(agg), "qo-link aggregate was created: " + link_out);
         assertTrue(is_file(agg + ".qolink.json"), "qo-link map was created: " + link_out);
 
+        string main_qo;
+        foreach string raw_line in (compile_out.split("\n")) {
+            int pos = raw_line.find(qo_dir);
+            if (pos != -1 && raw_line.find("main_qc.qo") != -1) {
+                main_qo = raw_line.substr(pos);
+            }
+        }
+        assertTrue(is_file(main_qo), "batch compile emitted main.qo: " + compile_out);
+        string main_dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, main_qo));
+        assertTrue(main_dump.find("call relocations: version=1") != -1,
+            "main object dump includes call relocations: " + main_dump);
+        assertTrue(main_dump.find("LinkQoLib::add(int,int)") != -1,
+            "main object call relocations include static call target: " + main_dump);
+
         string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, agg));
         assertTrue(dump.find("init_LINK_QO_TEST_qo") != -1,
             "aggregate exports the requested init symbol: " + dump);
@@ -230,11 +245,38 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "link map includes aggregate symbol: " + link_map);
         assertTrue(link_map.find("LinkQoLib::add(int,int)") != -1,
             "link map includes provided Qore method: " + link_map);
+        assertTrue(link_map.find("\"resolved_call_relocations\"") != -1,
+            "link map includes resolved call relocations: " + link_map);
+        assertTrue(link_map.find("\"target_kind\": \"static_method\"") != -1,
+            "link map resolves the static method call relocation: " + link_map);
         assertTrue(link_map.find("\"unresolved_imports\": []") != -1,
             "link map has no unresolved imports: " + link_map);
         assertTrue(link_map.find("\"ambiguous_imports\": []") != -1,
             "link map has no ambiguous imports: " + link_map);
         assertTrue(link_map.find("\"hash_mismatches\": []") != -1,
             "link map has no hash mismatches: " + link_map);
+    }
+
+    testPrelinkedCallDisableSwitch() {
+        TmpDir tmp = initDirs();
+        string src = tmp_dir + "/prelink.qr";
+        string exe = tmp_dir + "/prelink";
+
+        write(src,
+            "%new-style\n"
+            "class PrelinkDisableSmoke {\n"
+            "    static int add(int a, int b) { return a + b; }\n"
+            "}\n"
+            "printf(\"%d\\n\", PrelinkDisableSmoke::add(2, 5));\n");
+
+        string compile_out = run(sprintf("%s %s -o %s %s", env, qcc_bin, exe, src));
+        assertTrue(is_file(exe), "compiled prelink smoke executable: " + compile_out);
+
+        string out = run(sprintf("%s QORE_AOT_DISABLE_PRELINKED_CALLS=1 QORE_AOT_TRACE_LINK_RELOCS=1 %s",
+            env, exe));
+        assertTrue(out.find("7") != -1,
+            "prelinked-call disable fallback preserves result: " + out);
+        assertTrue(out.find("[qore-aot-prelink]") != -1,
+            "prelinked-call trace reports fallback path: " + out);
     }
 }

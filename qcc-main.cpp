@@ -1140,6 +1140,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::PLUGIN_IMPORTS: return "PLUGIN_IMPORTS";
         case QoreAOTSectionType::PLUGIN_HELPER_REFS: return "PLUGIN_HELPER_REFS";
         case QoreAOTSectionType::SYMBOL_INDEX: return "SYMBOL_INDEX";
+        case QoreAOTSectionType::CALL_RELOCATIONS: return "CALL_RELOCATIONS";
     }
     return "UNKNOWN";
 }
@@ -1434,6 +1435,7 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_CONST_METHODS, "const-methods"},
         {QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS, "call-closure-ref-args"},
         {QORE_AOT_FEAT_TYPED_PHI, "typed-phi"},
+        {QORE_AOT_FEAT_CALL_RELOCATIONS, "call-relocations"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -2882,6 +2884,59 @@ static void print_aot_symbol_index(const QoreAOTBinaryReader& reader) {
     }
 }
 
+static bool dump_aot_call_relocations_check_cancel(size_t ordinal, const char* operation) {
+    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+        printf("      cancelled during %s\n", operation ? operation : "AOT call-relocation dump");
+        return false;
+    }
+    return true;
+}
+
+static void print_aot_call_relocations(const QoreAOTBinaryReader& reader) {
+    QoreAOTCallRelocations relocs;
+    std::string error;
+    if (!readCallRelocations(reader, relocs, error)) {
+        printf("    call relocations: error: %s\n", error.c_str());
+        return;
+    }
+
+    if (!relocs.version) {
+        printf("    call relocations: not present\n");
+        return;
+    }
+
+    printf("    call relocations: version=%u records=%zu\n",
+        relocs.version, relocs.records.size());
+    if (!dump_symbols) {
+        return;
+    }
+
+    for (size_t i = 0; i < relocs.records.size(); ++i) {
+        if (!dump_aot_call_relocations_check_cancel(i, "AOT call-relocation dump")) {
+            return;
+        }
+        const QoreAOTCallRelocationRecord& rec = relocs.records[i];
+        printf("      %-13s %s func=%s slot=%u strict=%s",
+            qoreAOTCallRelocationTargetKindName(rec.target_kind),
+            rec.qore_path.empty() ? "(none)" : rec.qore_path.c_str(),
+            rec.function_name.c_str(), rec.expr_slot,
+            rec.strictness == QoreAOTCallRelocationStrictness::REQUIRED ? "required" : "optional");
+        if (!rec.native_symbol.empty()) {
+            printf(" native=%s", rec.native_symbol.c_str());
+        }
+        if (!rec.signature_hash.empty()) {
+            printf(" sig=%s", rec.signature_hash.c_str());
+        }
+        if (!rec.declaration_hash.empty()) {
+            printf(" decl=%s", rec.declaration_hash.c_str());
+        }
+        if (!rec.fallback_descriptor.empty()) {
+            printf(" fallback=%s", rec.fallback_descriptor.c_str());
+        }
+        printf("\n");
+    }
+}
+
 static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index) {
     QoreAOTBinaryReader reader;
     std::string error;
@@ -2971,6 +3026,7 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     print_aot_slot_map_summary(reader);
     print_aot_default_summary(reader);
     print_aot_symbol_index(reader);
+    print_aot_call_relocations(reader);
 
     printf("    sections: %u\n", reader.getSectionCount());
     if (dump_sections) {
@@ -3042,6 +3098,7 @@ struct QOLinkInputInfo {
     std::vector<std::string> module_path_append;
     std::vector<AOTModuleCommand> module_commands;
     std::vector<std::string> native_symbols;
+    std::vector<QoreAOTCallRelocationRecord> call_relocations;
 };
 
 struct QOLinkIssue {
@@ -3049,6 +3106,17 @@ struct QOLinkIssue {
     std::string path;
     std::string dependency_class;
     std::string expected;
+    std::vector<std::string> providers;
+};
+
+struct QOLinkCallRelocation {
+    std::string consumer;
+    std::string function_name;
+    uint32_t expr_slot = UINT32_MAX;
+    std::string target_kind;
+    std::string path;
+    std::string expected;
+    std::string native_symbol;
     std::vector<std::string> providers;
 };
 
@@ -3063,6 +3131,10 @@ struct QOLinkPlan {
     std::vector<QOLinkIssue> unresolved_imports;
     std::vector<QOLinkIssue> ambiguous_imports;
     std::vector<QOLinkIssue> hash_mismatches;
+    std::vector<QOLinkCallRelocation> resolved_call_relocations;
+    std::vector<QOLinkCallRelocation> unresolved_call_relocations;
+    std::vector<QOLinkCallRelocation> ambiguous_call_relocations;
+    std::vector<QOLinkCallRelocation> call_relocation_hash_mismatches;
 };
 
 static void add_unique_string(std::vector<std::string>& out, std::set<std::string>& seen,
@@ -3185,6 +3257,16 @@ static bool collect_qo_link_input(const char* path, QOLinkInputInfo& input,
                     add_unique_string(input.native_symbols, native_seen, rec.native_symbol);
                 }
             }
+        }
+
+        QoreAOTCallRelocations relocs;
+        if (!readCallRelocations(reader, relocs, read_error)) {
+            error = "invalid CALL_RELOCATIONS in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        if (relocs.version) {
+            input.call_relocations.insert(input.call_relocations.end(),
+                relocs.records.begin(), relocs.records.end());
         }
 
         std::vector<std::string> deps;
@@ -3370,6 +3452,57 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
                 plan.resolved_imports.push_back(std::move(issue));
             }
         }
+
+        for (size_t j = 0; j < input.call_relocations.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link call-relocation validation", error)) {
+                return false;
+            }
+            const QoreAOTCallRelocationRecord& rec = input.call_relocations[j];
+            if (rec.qore_path.empty()) {
+                continue;
+            }
+            QOLinkCallRelocation reloc;
+            reloc.consumer = input.path;
+            reloc.function_name = rec.function_name;
+            reloc.expr_slot = rec.expr_slot;
+            reloc.target_kind = qoreAOTCallRelocationTargetKindName(rec.target_kind);
+            reloc.path = rec.qore_path;
+            auto provider_it = providers.find(rec.qore_path);
+            if (provider_it == providers.end()) {
+                plan.unresolved_call_relocations.push_back(std::move(reloc));
+                continue;
+            }
+
+            const auto& candidates = provider_it->second;
+            for (size_t k = 0; k < candidates.size(); ++k) {
+                if (!qo_link_check_cancel(k, "AOT qo-link call-relocation provider validation", error)) {
+                    return false;
+                }
+                reloc.providers.push_back(candidates[k]->source_file);
+            }
+            if (candidates.size() > 1) {
+                plan.ambiguous_call_relocations.push_back(std::move(reloc));
+                continue;
+            }
+
+            const QoreAOTSymbolIndexRecord* provider = candidates.front();
+            bool mismatch = false;
+            if (!rec.signature_hash.empty() && rec.signature_hash != provider->signature_hash) {
+                reloc.expected = "signature=" + rec.signature_hash
+                    + " actual=" + provider->signature_hash;
+                mismatch = true;
+            } else if (!rec.declaration_hash.empty() && rec.declaration_hash != provider->declaration_hash) {
+                reloc.expected = "declaration=" + rec.declaration_hash
+                    + " actual=" + provider->declaration_hash;
+                mismatch = true;
+            }
+            reloc.native_symbol = provider->native_symbol;
+            if (mismatch) {
+                plan.call_relocation_hash_mismatches.push_back(std::move(reloc));
+            } else {
+                plan.resolved_call_relocations.push_back(std::move(reloc));
+            }
+        }
     }
 
     std::sort(plan.provided_qore_symbols.begin(), plan.provided_qore_symbols.end());
@@ -3381,6 +3514,15 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
         [](const AOTModuleCommand& a, const AOTModuleCommand& b) {
             return std::tie(a.module, a.command) < std::tie(b.module, b.command);
         });
+    auto call_reloc_less = [](const QOLinkCallRelocation& a, const QOLinkCallRelocation& b) {
+        return std::tie(a.consumer, a.function_name, a.expr_slot, a.target_kind, a.path)
+            < std::tie(b.consumer, b.function_name, b.expr_slot, b.target_kind, b.path);
+    };
+    std::sort(plan.resolved_call_relocations.begin(), plan.resolved_call_relocations.end(), call_reloc_less);
+    std::sort(plan.unresolved_call_relocations.begin(), plan.unresolved_call_relocations.end(), call_reloc_less);
+    std::sort(plan.ambiguous_call_relocations.begin(), plan.ambiguous_call_relocations.end(), call_reloc_less);
+    std::sort(plan.call_relocation_hash_mismatches.begin(), plan.call_relocation_hash_mismatches.end(),
+        call_reloc_less);
     return true;
 }
 
@@ -3461,6 +3603,51 @@ static bool json_file_issue_array(FILE* f, const char* key,
         fputs("]}", f);
     }
     if (!issues.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool json_file_call_relocation_array(FILE* f, const char* key,
+        const std::vector<QOLinkCallRelocation>& relocs, std::string& error,
+        const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < relocs.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map call-relocation write", error)) {
+            return false;
+        }
+        const QOLinkCallRelocation& reloc = relocs[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"consumer\": ", f);
+        json_file_string(f, reloc.consumer);
+        fputs(", \"function\": ", f);
+        json_file_string(f, reloc.function_name);
+        fprintf(f, ", \"expr_slot\": %u", reloc.expr_slot);
+        fputs(", \"target_kind\": ", f);
+        json_file_string(f, reloc.target_kind);
+        fputs(", \"path\": ", f);
+        json_file_string(f, reloc.path);
+        fputs(", \"expected\": ", f);
+        json_file_string(f, reloc.expected);
+        fputs(", \"native_symbol\": ", f);
+        json_file_string(f, reloc.native_symbol);
+        fputs(", \"providers\": [", f);
+        for (size_t j = 0; j < reloc.providers.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link map call-relocation provider write", error)) {
+                return false;
+            }
+            if (j) {
+                fputs(", ", f);
+            }
+            json_file_string(f, reloc.providers[j]);
+        }
+        fputs("]}", f);
+    }
+    if (!relocs.empty()) {
         fputc('\n', f);
         fputs("  ", f);
     }
@@ -3563,7 +3750,15 @@ static bool write_qo_link_map(const std::string& path, const std::string& output
     if (!json_file_issue_array(f, "resolved_imports", plan.resolved_imports, error)
             || !json_file_issue_array(f, "unresolved_imports", plan.unresolved_imports, error)
             || !json_file_issue_array(f, "ambiguous_imports", plan.ambiguous_imports, error)
-            || !json_file_issue_array(f, "hash_mismatches", plan.hash_mismatches, error, "")) {
+            || !json_file_issue_array(f, "hash_mismatches", plan.hash_mismatches, error)
+            || !json_file_call_relocation_array(f, "resolved_call_relocations",
+                plan.resolved_call_relocations, error)
+            || !json_file_call_relocation_array(f, "unresolved_call_relocations",
+                plan.unresolved_call_relocations, error)
+            || !json_file_call_relocation_array(f, "ambiguous_call_relocations",
+                plan.ambiguous_call_relocations, error)
+            || !json_file_call_relocation_array(f, "call_relocation_hash_mismatches",
+                plan.call_relocation_hash_mismatches, error, "")) {
         fclose(f);
         return false;
     }
