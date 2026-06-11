@@ -335,6 +335,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("pg_get_indexdef parser", \pgIndexDefParserTest());
             addTestCase("populate column backfill", \populateColumnTest());
             addTestCase("tables populate FK ordering", \tablesPopulateFkOrderingTest());
+            addTestCase("foreign key column order introspection", \foreignKeyColumnOrderIntrospectionTest());
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("partition enhancements", \partitionEnhancementsTest());
@@ -1029,6 +1030,81 @@ class PgsqlTest inherits SqlTestBase {
             assertTrue(joined =~ /legacy/i, "alignment SQL drops legacy column on parent");
             assertTrue(joined =~ /display/i, "alignment SQL adds display column on parent");
         }
+    }
+
+    foreignKeyColumnOrderIntrospectionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        string parent_name = "pgsql_fk_column_order_parent";
+        string child_name = "pgsql_fk_column_order_child";
+        string fk_name = "fk_" + child_name + "_parent";
+
+        code drop_if_exists = sub (string n) {
+            PgsqlTable t(ds, n);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        };
+
+        drop_if_exists(child_name);
+        drop_if_exists(parent_name);
+        on_exit {
+            drop_if_exists(child_name);
+            drop_if_exists(parent_name);
+        }
+
+        hash<auto> parent_desc = {
+            "columns": {
+                "file_name": c_varchar(80, True),
+                "releaseid": c_number(14, True),
+            },
+            "primary_key": {"name": "pk_" + parent_name, "columns": ("releaseid", "file_name")},
+        };
+        hash<auto> child_desc = {
+            "columns": {
+                "file_name": c_varchar(80, True),
+                "releaseid": c_number(14, True),
+                "payload": c_varchar(80),
+            },
+            "foreign_constraints": {
+                (fk_name): {
+                    "columns": ("releaseid", "file_name"),
+                    "table": parent_name,
+                    "target_columns": ("releaseid", "file_name"),
+                },
+            },
+        };
+
+        PgsqlTable parent_t(ds, parent_name);
+        parent_t.setupTable(parent_desc);
+        parent_t.createCommit();
+
+        PgsqlTable child_t(ds, child_name);
+        child_t.setupTable(child_desc);
+        child_t.createCommit();
+
+        PgsqlTable live_child(ds, child_name);
+        ForeignConstraints fks = live_child.getForeignConstraints();
+        AbstractForeignConstraint fk = fks.memberGate(fk_name);
+        assertEq(("releaseid", "file_name"), fk.keys(), "source FK order follows declaration order");
+        assertEq(("releaseid", "file_name"), fk.target.columns.keys(),
+            "target FK order follows declaration order");
+
+        AbstractDatabase db = (new Database(ds)).getDatabase();
+        Tables tc();
+        list<string> sql = db.getAlignSql({
+            "tables": {
+                (parent_name): parent_desc,
+                (child_name): child_desc,
+            },
+        }, ("force": True), tc);
+        string joined = sql.join("\n");
+        assertFalse(joined =~ /fk_pgsql_fk_column_order_child_parent/, joined);
     }
 
     rangePartitionLifecycleTest() {

@@ -3600,7 +3600,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "att.attrelid = con.confrelid and att.attnum = con.child join pg_class cl on cl.oid = con.confrelid "
             "join pg_attribute att2 on att2.attrelid = con.conrelid and att2.attnum = con.parent "
             "join pg_namespace ns on cl.relnamespace = ns.oid "
-            "order by att.attnum", name, schema);
+            "order by con.constraint_name, con.rn", name, schema);
         if (qh.constraint_name) {
             hash<auto> ch;
             foreach hash<auto> row in (qh.contextIterator()) {
