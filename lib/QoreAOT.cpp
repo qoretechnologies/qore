@@ -7120,6 +7120,71 @@ static std::string stripIncludeDirectives(const std::string& src) {
     return out;
 }
 
+static std::string canonicalizeDepPath(const std::string& path) {
+    char* r = realpath(path.c_str(), nullptr);
+    if (!r) {
+        return path;
+    }
+    std::string out = r;
+    free(r);
+    return out;
+}
+
+static std::string escapeMakeDepPath(const std::string& path) {
+    std::string out;
+    out.reserve(path.size());
+    for (char c : path) {
+        if (c == ' ' || c == '\\') {
+            out.push_back('\\');
+        }
+        out.push_back(c);
+    }
+    return out;
+}
+
+static bool writeAOTMakeDepfile(const std::string& depfile_path,
+        const std::string& output_path, const std::vector<std::string>& deps,
+        std::string& error, const char* cancel_context) {
+    FILE* f = fopen(depfile_path.c_str(), "w");
+    if (!f) {
+        error = "cannot open depfile '" + depfile_path + "' for writing: " + strerror(errno);
+        return false;
+    }
+
+    auto fail_write = [&](const char* op) {
+        int e = errno;
+        fclose(f);
+        error = std::string("cannot ") + op + " depfile '" + depfile_path + "'";
+        if (e) {
+            error += ": ";
+            error += strerror(e);
+        }
+        return false;
+    };
+
+    if (fprintf(f, "%s:", escapeMakeDepPath(canonicalizeDepPath(output_path)).c_str()) < 0) {
+        return fail_write("write");
+    }
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, cancel_context)) {
+            fclose(f);
+            error = "operation cancelled during AOT depfile emission";
+            return false;
+        }
+        if (fprintf(f, " \\\n    %s", escapeMakeDepPath(deps[i]).c_str()) < 0) {
+            return fail_write("write");
+        }
+    }
+    if (fputc('\n', f) == EOF) {
+        return fail_write("write");
+    }
+    if (fclose(f) != 0) {
+        error = "cannot close depfile '" + depfile_path + "': " + strerror(errno);
+        return false;
+    }
+    return true;
+}
+
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
         qore_program_private* pp, const char* cancel_context, const char* skip_feature) {
     std::vector<std::string> all_deps;
@@ -7543,7 +7608,8 @@ bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& parse_defines,
         const std::vector<std::string>& parse_option_flags,
         int* compiled_count_out,
-        bool report_artifacts) {
+        bool report_artifacts,
+        const std::string* depfile_dir) {
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -7565,17 +7631,42 @@ bool QoreAOT::compileScriptFilesBatch(
         }
     }
 
+    std::string dep_dir;
+    if (depfile_dir) {
+        dep_dir = *depfile_dir;
+        while (dep_dir.size() > 1 && dep_dir.back() == '/') {
+            dep_dir.pop_back();
+        }
+        if (dep_dir.empty()) {
+            dep_dir = ".";
+        }
+        struct stat st;
+        if (stat(dep_dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
+            error = "depfile directory does not exist: " + dep_dir;
+            return false;
+        }
+    }
+
     // Canonicalize + read all target files.  Keep source text alive
     // so fallback serialization per-file has the right bytes.
     struct SrcEntry {
         std::string canon;
         std::string source;
         std::string out_path;
+        std::string depfile_path;
         size_t module_cmd_begin = 0;
         size_t module_cmd_end = 0;
     };
     std::vector<SrcEntry> entries;
     entries.reserve(target_files.size());
+    std::vector<std::string> batch_dep_sources;
+    std::unordered_set<std::string> batch_dep_seen;
+    auto add_batch_dep = [&](const std::string& path) {
+        std::string canon = canonicalizeDepPath(path);
+        if (batch_dep_seen.insert(canon).second) {
+            batch_dep_sources.push_back(std::move(canon));
+        }
+    };
     size_t input_i = 0;
     for (const std::string& f : target_files) {
         if (input_i && !(input_i % 100) && qore_check_cancel(nullptr, "AOT batch input collection")) {
@@ -7597,9 +7688,17 @@ bool QoreAOT::compileScriptFilesBatch(
         }
         e.source = stripIncludeDirectives(e.source);
         e.out_path = out_dir + "/" + scriptBatchSourceId(e.canon) + ".qo";
+        if (!dep_dir.empty()) {
+            e.depfile_path = dep_dir + "/" + fileBasenameKeepExt(e.out_path) + ".d";
+        }
+        add_batch_dep(e.canon);
         entries.push_back(std::move(e));
         ++input_i;
     }
+    for (const std::string& stub : stub_files) {
+        add_batch_dep(stub);
+    }
+    std::sort(batch_dep_sources.begin(), batch_dep_sources.end());
 
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
@@ -7750,6 +7849,16 @@ bool QoreAOT::compileScriptFilesBatch(
                     e.out_path, opt_level, target_triple, include_source,
                     per_err, e.module_cmd_begin, e.module_cmd_end,
                     &per_file_compiled_count, report_artifacts)) {
+                std::lock_guard<std::mutex> l(err_mutex);
+                if (first_error.empty()) {
+                    first_error = per_err;
+                }
+                stop.store(true);
+                break;
+            }
+            if (!e.depfile_path.empty()
+                    && !writeAOTMakeDepfile(e.depfile_path, e.out_path,
+                        batch_dep_sources, per_err, "AOT batch depfile emission")) {
                 std::lock_guard<std::mutex> l(err_mutex);
                 if (first_error.empty()) {
                     first_error = per_err;

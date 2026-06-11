@@ -49,6 +49,7 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("folded namespace constant", \testNamespaceConstant());
         addTestCase("folded class constant", \testClassConstant());
         addTestCase("pure type reference is not a dependency", \testPureTypeNotDep());
+        addTestCase("batch depfile directory emits per-output depfiles", \testBatchDepfileDir());
         # NOTE: enum members route through the SAME constant hook — they are
         # registered as ConstantList entries, so a folded `SiblingEnum::Member`
         # is captured identically to a constant.  An end-to-end enum case is not
@@ -138,5 +139,27 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "a pure-type reference is not recorded as a build dependency: " + dep);
         assertTrue(dep.find("use_type.qc") != -1,
             "depfile still records the target's own source: " + dep);
+    }
+
+    testBatchDepfileDir() {
+        TmpDir tmp = initDirs();
+        string a = tmp_dir + "/batch_a.qc";
+        string b = tmp_dir + "/batch_b.qc";
+        write(a, "%new-style\npublic const BatchMagic = 41;\n");
+        write(b, "%new-style\nclass BatchUser { static int f() { return BatchMagic + 1; } }\n");
+
+        string out = run(sprintf(
+            "%s %s -c --parse-option=PO_MODERN --output-dir=%s --depfile-dir=%s %s %s",
+            env, qcc_bin, lib_dir, lib_dir, a, b));
+        string count = trim(run(sprintf("find %s -maxdepth 1 -name '*.qo.d' | wc -l", lib_dir)));
+        assertEq(2, count.toInt(), "batch compile emitted one depfile per .qo: " + out);
+
+        string deps = run(sprintf("cat %s/*.qo.d", lib_dir));
+        assertTrue(deps.find("batch_a.qc") != -1,
+            "batch depfiles include first batch source: " + deps);
+        assertTrue(deps.find("batch_b.qc") != -1,
+            "batch depfiles include second batch source: " + deps);
+        assertEq(-1, deps.find("qorus-bootstrap-fallback"),
+            "batch depfiles are real qcc depfiles, not wrapper fallback depfiles: " + deps);
     }
 }

@@ -744,6 +744,8 @@ public:
                 emitted Qore code variants
         @param report_artifacts true to report each `.qo` as a user-visible
                 qcc artifact; false when the objects are temporary
+        @param depfile_dir optional directory for one Make depfile per output
+                `.qo`; each depfile is named `<output-basename>.d`
         @return true on success, false on failure
     */
     static bool compileScriptFilesBatch(
@@ -759,7 +761,8 @@ public:
             const std::vector<std::string>& parse_defines = {},
             const std::vector<std::string>& parse_option_flags = {},
             int* compiled_count_out = nullptr,
-            bool report_artifacts = true);
+            bool report_artifacts = true,
+            const std::string* depfile_dir = nullptr);
 
     //! Compile aggregate script metadata for a list of already-compiled
     //! script-context `.qo` objects.
