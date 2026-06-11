@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTSymbolIndexTest
+
+class AOTSymbolIndexTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+        string tmp_dir;
+    }
+
+    constructor() : QUnit::Test("AOTSymbolIndexTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("definitions and native symbols", \testDefinitionsAndNativeSymbols());
+        addTestCase("symbol hash behavior", \testHashBehavior());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private TmpDir initDirs() {
+        TmpDir tmp("qore-aot-symbol-index-");
+        tmp_dir = tmp.path;
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        return tmp;
+    }
+
+    private string compileAndDump(string name, string body) {
+        string src = tmp_dir + "/" + name + ".qc";
+        string out = tmp_dir + "/" + name + ".qo";
+        write(src, "%new-style\n" + body);
+
+        string compile_out = run(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, out, src));
+        assertTrue(is_file(out), "compiled " + name + ": " + compile_out);
+
+        string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, out));
+        assertTrue(dump.find("symbol index: version=1") != -1,
+            "dump includes symbol-index summary: " + dump);
+        return dump;
+    }
+
+    private string findSymbolLine(string dump, string kind, string path) {
+        foreach string raw_line in (dump.split("\n")) {
+            string line = trim(raw_line);
+            if (line.startsWith(kind) && line.find(path) != -1) {
+                return line;
+            }
+        }
+        assertTrue(False, sprintf("missing %s symbol %s in dump:\n%s", kind, path, dump));
+        return "";
+    }
+
+    private string attr(string line, string name) {
+        string key = name + "=";
+        int pos = line.find(key);
+        assertTrue(pos != -1, "missing " + name + " in symbol line: " + line);
+        pos += key.size();
+        int end = line.find(" ", pos);
+        return end == -1 ? line.substr(pos) : line.substr(pos, end - pos);
+    }
+
+    testDefinitionsAndNativeSymbols() {
+        TmpDir tmp = initDirs();
+        string dump = compileAndDump("defs",
+            "class A {\n"
+            "    public { const C = 1; }\n"
+            "    int f(string s) { return s.size(); }\n"
+            "}\n");
+
+        findSymbolLine(dump, "class", "A");
+        string const_line = findSymbolLine(dump, "constant", "A::C");
+        assertTrue(attr(const_line, "value").size() > 0,
+            "class constant has a value hash: " + const_line);
+
+        string method_line = findSymbolLine(dump, "method", "A::f(string)");
+        assertTrue(attr(method_line, "sig").size() > 0,
+            "method has a signature hash: " + method_line);
+        assertTrue(attr(method_line, "native").size() > 0,
+            "method has an associated native symbol: " + method_line);
+        assertTrue(dump.find("AOT native symbols:") != -1,
+            "native symbol table is printed: " + dump);
+    }
+
+    testHashBehavior() {
+        TmpDir tmp = initDirs();
+        string dump1 = compileAndDump("body1",
+            "class A {\n"
+            "    public { const C = 1; }\n"
+            "    int f(string s) { return s.size(); }\n"
+            "}\n");
+        string dump2 = compileAndDump("body2",
+            "class A {\n"
+            "    public { const C = 2; }\n"
+            "    int f(string s) { return s.size() + 1; }\n"
+            "}\n");
+        string dump3 = compileAndDump("sig",
+            "class A {\n"
+            "    public { const C = 1; }\n"
+            "    int f(int s) { return s + 1; }\n"
+            "}\n");
+
+        string method1 = findSymbolLine(dump1, "method", "A::f(string)");
+        string method2 = findSymbolLine(dump2, "method", "A::f(string)");
+        assertEq(attr(method1, "sig"), attr(method2, "sig"),
+            "body-only edits do not change the method signature hash");
+        assertEq(attr(method1, "decl"), attr(method2, "decl"),
+            "body-only edits do not change the method declaration hash");
+
+        string method3 = findSymbolLine(dump3, "method", "A::f(int)");
+        assertTrue(attr(method1, "sig") != attr(method3, "sig"),
+            "signature edits change the method signature hash");
+        assertTrue(attr(method1, "decl") != attr(method3, "decl"),
+            "signature edits change the method declaration hash");
+
+        string const1 = findSymbolLine(dump1, "constant", "A::C");
+        string const2 = findSymbolLine(dump2, "constant", "A::C");
+        assertTrue(attr(const1, "value") != attr(const2, "value"),
+            "folded constant edits change the value hash");
+    }
+}

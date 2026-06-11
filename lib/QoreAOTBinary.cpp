@@ -143,14 +143,17 @@
 #include <qore/QoreBufferNode.h>
 #include <qore/QoreNothingNode.h>
 #include <qore/QoreObject.h>
+#include <qore/QoreStringNode.h>
 
 #include <cassert>
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
 #include <deque>
+#include <iomanip>
 #include <limits>
 #include <numeric>
+#include <sstream>
 #include <cstdlib>
 #include <typeinfo>
 #include <unordered_set>
@@ -4312,6 +4315,7 @@ struct AOTSerializeState {
         const QoreTypeInfo* typeInfo;
         bool pub;
         uint32_t ns_idx;
+        const QoreProgramLocation* loc;
     };
     std::vector<TypedefInfo> typedefs;
 
@@ -4674,7 +4678,8 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             }
             std::string key = makeNamespaceItemKey(ns, ti.first.c_str());
             if (state.typedef_keys.insert(key).second) {
-                state.typedefs.push_back({ti.first, ti.second->typeInfo, ti.second->pub, ns_idx});
+                state.typedefs.push_back({ti.first, ti.second->typeInfo, ti.second->pub, ns_idx,
+                    ti.second->loc});
             }
         }
     }
@@ -4799,6 +4804,908 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         }
     }
 }
+
+} // namespace
+
+const char* qoreAOTSymbolKindName(QoreAOTSymbolKind kind) {
+    switch (kind) {
+        case QoreAOTSymbolKind::NAMESPACE: return "namespace";
+        case QoreAOTSymbolKind::CLASS: return "class";
+        case QoreAOTSymbolKind::HASHDECL: return "hashdecl";
+        case QoreAOTSymbolKind::ENUM: return "enum";
+        case QoreAOTSymbolKind::ENUM_MEMBER: return "enum_member";
+        case QoreAOTSymbolKind::TYPEDEF: return "typedef";
+        case QoreAOTSymbolKind::CONSTANT: return "constant";
+        case QoreAOTSymbolKind::GLOBAL: return "global";
+        case QoreAOTSymbolKind::FUNCTION: return "function";
+        case QoreAOTSymbolKind::METHOD: return "method";
+        case QoreAOTSymbolKind::STATIC_METHOD: return "static_method";
+        case QoreAOTSymbolKind::CONSTRUCTOR: return "constructor";
+        case QoreAOTSymbolKind::STATIC_VAR: return "static_var";
+        case QoreAOTSymbolKind::NATIVE: return "native";
+    }
+    return "unknown";
+}
+
+const char* qoreAOTDependencyClassName(QoreAOTDependencyClass dependency_class) {
+    switch (dependency_class) {
+        case QoreAOTDependencyClass::UNKNOWN: return "unknown";
+        case QoreAOTDependencyClass::SOURCE_TEXT: return "source_text";
+        case QoreAOTDependencyClass::QORE_API: return "qore_api";
+        case QoreAOTDependencyClass::QORE_VALUE: return "qore_value";
+        case QoreAOTDependencyClass::NATIVE_BODY: return "native_body";
+        case QoreAOTDependencyClass::MODULE_API: return "module_api";
+        case QoreAOTDependencyClass::MODULE_RUNTIME: return "module_runtime";
+        case QoreAOTDependencyClass::DYNAMIC: return "dynamic";
+    }
+    return "unknown";
+}
+
+static std::string aotStripLeadingColons(std::string path) {
+    while (path.size() >= 2 && path[0] == ':' && path[1] == ':') {
+        path.erase(0, 2);
+    }
+    return path;
+}
+
+static std::string aotNamespacePath(const AOTSerializeState& state, uint32_t ns_idx) {
+    if (ns_idx >= state.namespaces.size() || !state.namespaces[ns_idx].ns) {
+        return std::string();
+    }
+    return aotStripLeadingColons(state.namespaces[ns_idx].ns->path);
+}
+
+static std::string aotJoinPath(const std::string& scope, const char* name) {
+    if (scope.empty()) {
+        return name ? std::string(name) : std::string();
+    }
+    return scope + "::" + (name ? name : "");
+}
+
+static const char* aotLocationFile(const QoreProgramLocation* loc) {
+    return loc ? loc->getFile() : "";
+}
+
+static std::string aotVisibility(bool pub) {
+    return pub ? "public" : "private";
+}
+
+static std::string aotVisibility(ClassAccess access) {
+    switch (access) {
+        case Public: return "public";
+        case Private: return "private";
+        case Internal: return "private:internal";
+        case Inaccessible: return "inaccessible";
+    }
+    return "unknown";
+}
+
+static uint64_t aotFnv1a64Update(uint64_t h, const void* data, size_t len) {
+    const uint8_t* p = static_cast<const uint8_t*>(data);
+    for (size_t i = 0; i < len; ++i) {
+        h ^= p[i];
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+static void aotHashAppend(uint64_t& h, const std::string& value) {
+    h = aotFnv1a64Update(h, value.data(), value.size());
+    const uint8_t sep = 0xff;
+    h = aotFnv1a64Update(h, &sep, 1);
+}
+
+static std::string aotHashHex(uint64_t h) {
+    std::ostringstream os;
+    os << std::hex << std::setfill('0') << std::setw(16) << h;
+    return os.str();
+}
+
+static std::string aotHashParts(const std::vector<std::string>& parts) {
+    uint64_t h = 1469598103934665603ULL;
+    for (const std::string& part : parts) {
+        aotHashAppend(h, part);
+    }
+    return aotHashHex(h);
+}
+
+static std::string aotHexBytes(const uint8_t* data, size_t size) {
+    std::ostringstream os;
+    os << std::hex << std::setfill('0');
+    for (size_t i = 0; i < size; ++i) {
+        os << std::setw(2) << static_cast<unsigned>(data[i]);
+    }
+    return os.str();
+}
+
+static std::string aotTypePathString(const QoreTypeInfo* ti, bool no_narrow = false) {
+    return getTypePath(ti, no_narrow);
+}
+
+static std::string aotValueHash(const QoreValue& value) {
+    std::string rendered;
+    QoreNodeAsStringHelper str(value, FMT_NONE, nullptr);
+    if (const QoreString* qs = *str) {
+        rendered.assign(qs->c_str(), qs->strlen());
+    }
+
+    QoreString type_scratch;
+    const char* full_type = value.getFullTypeName(true, type_scratch);
+    return aotHashParts({
+        "value",
+        full_type ? full_type : "",
+        std::to_string(value.getType()),
+        rendered,
+    });
+}
+
+static std::string aotValueHashForConstant(const ConstantEntry* ce) {
+    if (!ce) {
+        return std::string();
+    }
+    if (ce->hasInitExpr()) {
+        return "pending";
+    }
+    QoreValue value = ce->getReferencedValue();
+    std::string rv = aotValueHash(value);
+    value.discard(nullptr);
+    return rv;
+}
+
+static std::string aotCallableDisplayKey(const char* name, const AbstractQoreFunctionVariant* variant) {
+    return getVariantKey(name ? name : "", variant);
+}
+
+static std::string aotMethodDisplayKey(const QoreClass* qc, const char* method_name,
+        const AbstractQoreFunctionVariant* variant) {
+    std::string key;
+    if (const char* class_path = qc ? qc->getPath() : nullptr) {
+        key = aotStripLeadingColons(class_path);
+    }
+    key += "::";
+    key += method_name ? method_name : "";
+    return getVariantKey(key.c_str(), variant);
+}
+
+static std::string aotSignatureSurface(const std::string& key,
+        const AbstractQoreFunctionVariant* variant) {
+    std::vector<std::string> parts = {"signature", key};
+    const AbstractFunctionSignature* sig =
+        const_cast<AbstractQoreFunctionVariant*>(variant)->getSignature();
+    if (!sig) {
+        return aotHashParts(parts);
+    }
+
+    parts.push_back(aotTypePathString(sig->getReturnTypeInfo()));
+    parts.push_back(sig->hasVarargs() ? "sig-varargs" : "sig-fixed");
+    parts.push_back(variant && variant->hasVarargs() ? "effective-varargs" : "effective-fixed");
+    parts.push_back(std::to_string(sig->numParams()));
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        parts.push_back(sig->getName(i) ? sig->getName(i) : "");
+        parts.push_back(aotTypePathString(sig->getParamTypeInfo(i)));
+    }
+    return aotHashParts(parts);
+}
+
+static std::string aotFunctionVariantSourceFile(const AbstractQoreFunctionVariant* variant) {
+    const UserVariantBase* uvb = variant
+        ? const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    return aotLocationFile(sig ? sig->getParseLocation() : nullptr);
+}
+
+static std::string aotFunctionVariantDeclHash(const char* kind, const std::string& key,
+        const std::string& visibility, const AbstractQoreFunctionVariant* variant) {
+    std::vector<std::string> parts = {
+        kind ? kind : "",
+        key,
+        visibility,
+        aotSignatureSurface(key, variant),
+    };
+    const UserVariantBase* uvb = variant
+        ? const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase() : nullptr;
+    parts.push_back(uvb && uvb->isSynchronized() ? "synchronized" : "not-synchronized");
+    return aotHashParts(parts);
+}
+
+static std::string aotMethodVariantDeclHash(const std::string& key, const std::string& visibility,
+        const AbstractQoreFunctionVariant* variant, bool is_static) {
+    std::vector<std::string> parts = {
+        is_static ? "static_method" : "method",
+        key,
+        visibility,
+        aotSignatureSurface(key, variant),
+    };
+    const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(variant);
+    const UserVariantBase* uvb = variant
+        ? const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase() : nullptr;
+    parts.push_back(mvb && mvb->isFinal() ? "final" : "not-final");
+    parts.push_back(mvb && mvb->isAbstract() ? "abstract" : "concrete");
+    parts.push_back((mvb && mvb->isMethodSynchronized()) || (uvb && uvb->isSynchronized())
+        ? "synchronized" : "not-synchronized");
+    parts.push_back(mvb && mvb->isConstMethod() ? "const" : "mutable");
+    return aotHashParts(parts);
+}
+
+static std::string aotClassDeclHash(const AOTSerializeState::ClassInfo& ci) {
+    const qore_class_private* priv = ci.priv;
+    if (priv && priv->hash) {
+        return "sha1:" + aotHexBytes(reinterpret_cast<const uint8_t*>(priv->hash.getHash()), SH_SIZE);
+    }
+
+    std::vector<std::string> parts = {
+        "class",
+        priv ? aotStripLeadingColons(priv->path) : "",
+        priv && priv->pub ? "public" : "private",
+        priv && priv->final ? "final" : "not-final",
+    };
+    if (priv && priv->scl) {
+        for (auto* base : *priv->scl) {
+            parts.push_back(base && base->sclass
+                ? aotStripLeadingColons(qore_class_private::get(*base->sclass)->path) : "");
+            parts.push_back(base ? aotVisibility(base->access) : "");
+            parts.push_back(base && base->is_virtual ? "virtual" : "non-virtual");
+        }
+    }
+    return aotHashParts(parts);
+}
+
+static bool aotCheckSymbolIndexCancel(size_t ordinal, std::string* error, const char* operation) {
+    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+        if (error) {
+            *error = "operation cancelled during ";
+            *error += operation ? operation : "AOT symbol-index serialization";
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool aotSymbolRecordLess(const QoreAOTSymbolIndexRecord& a,
+        const QoreAOTSymbolIndexRecord& b) {
+    if (a.qore_path != b.qore_path) {
+        return a.qore_path < b.qore_path;
+    }
+    if (a.kind != b.kind) {
+        return static_cast<uint8_t>(a.kind) < static_cast<uint8_t>(b.kind);
+    }
+    if (a.source_file != b.source_file) {
+        return a.source_file < b.source_file;
+    }
+    return a.native_symbol < b.native_symbol;
+}
+
+static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
+        const QoreAOTSymbolIndexRecord& rec) {
+    writer.writeU8(static_cast<uint8_t>(rec.kind));
+    writer.writeU8(static_cast<uint8_t>(rec.dependency_class));
+    writer.writeU16(rec.flags);
+    writer.writeU32(rec.metadata_slot);
+    writer.writeStringRef(rec.qore_path.c_str());
+    writer.writeStringRef(rec.source_file.c_str());
+    writer.writeStringRef(rec.visibility.c_str());
+    writer.writeStringRef(rec.signature_hash.c_str());
+    writer.writeStringRef(rec.declaration_hash.c_str());
+    writer.writeStringRef(rec.value_hash.c_str());
+    writer.writeStringRef(rec.native_symbol.c_str());
+    writer.writeStringRef(rec.abi_kind.c_str());
+    writer.writeStringRef(rec.consumer_source_file.c_str());
+    writer.writeStringRef(rec.provider_source_file.c_str());
+}
+
+static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
+        std::vector<QoreAOTSymbolIndexRecord>& records, std::string* error,
+        const char* operation) {
+    if (records.size() > std::numeric_limits<uint32_t>::max()) {
+        if (error) {
+            *error = "too many AOT symbol-index records for u32 wire format";
+        }
+        return false;
+    }
+    std::sort(records.begin(), records.end(), aotSymbolRecordLess);
+    writer.writeU32(static_cast<uint32_t>(records.size()));
+    for (size_t i = 0; i < records.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, operation)) {
+            return false;
+        }
+        writeSymbolIndexRecord(writer, records[i]);
+    }
+    return true;
+}
+
+static void aotAddNativeRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
+        const std::string& qore_path, const std::string& native_symbol, const char* abi_kind) {
+    if (native_symbol.empty()) {
+        return;
+    }
+    QoreAOTSymbolIndexRecord rec;
+    rec.kind = QoreAOTSymbolKind::NATIVE;
+    rec.dependency_class = QoreAOTDependencyClass::NATIVE_BODY;
+    rec.flags = QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED;
+    rec.qore_path = qore_path;
+    rec.native_symbol = native_symbol;
+    rec.abi_kind = abi_kind ? abi_kind : "qore_body";
+    native.push_back(std::move(rec));
+}
+
+static bool aotAppendClassMemberRecords(const AOTSerializeState::ClassInfo& ci,
+        uint32_t class_slot, std::vector<QoreAOTSymbolIndexRecord>& defined,
+        std::string* error) {
+    const qore_class_private* priv = ci.priv;
+    if (!priv) {
+        return true;
+    }
+    std::string class_path = aotStripLeadingColons(priv->path);
+
+    size_t var_i = 0;
+    for (auto& vi : priv->vars.member_list) {
+        if (!aotCheckSymbolIndexCancel(var_i++, error, "AOT symbol-index static-var collection")) {
+            return false;
+        }
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::STATIC_VAR;
+        rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+        rec.metadata_slot = class_slot;
+        rec.qore_path = aotJoinPath(class_path, vi.first);
+        rec.source_file = aotLocationFile(vi.second->loc);
+        rec.visibility = aotVisibility(vi.second->getAccess());
+        rec.declaration_hash = aotHashParts({
+            "static_var",
+            rec.qore_path,
+            rec.visibility,
+            aotTypePathString(vi.second->getTypeInfo()),
+        });
+        defined.push_back(std::move(rec));
+    }
+
+    ConstConstantListIterator ccli(priv->constlist);
+    size_t const_i = 0;
+    while (ccli.next()) {
+        if (!aotCheckSymbolIndexCancel(const_i++, error, "AOT symbol-index class-constant collection")) {
+            return false;
+        }
+        const ConstantEntry* ce = ccli.getEntry();
+        if (ce->isSystem() || ce->isExternalStub()) {
+            continue;
+        }
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::CONSTANT;
+        rec.dependency_class = ce->hasInitExpr()
+            ? QoreAOTDependencyClass::QORE_API : QoreAOTDependencyClass::QORE_VALUE;
+        rec.metadata_slot = class_slot;
+        rec.qore_path = getClassConstantPath(priv, ce->getName());
+        rec.source_file = aotLocationFile(ce->loc);
+        rec.visibility = aotVisibility(ce->getAccess());
+        rec.value_hash = aotValueHashForConstant(ce);
+        rec.declaration_hash = aotHashParts({
+            "class_constant",
+            rec.qore_path,
+            rec.visibility,
+            aotTypePathString(ce->typeInfo),
+            ce->hasInitExpr() ? "pending" : "literal",
+        });
+        defined.push_back(std::move(rec));
+    }
+    return true;
+}
+
+bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
+        const char* module_name, const std::unordered_set<std::string>* keep_modules,
+        const char* compile_file,
+        const std::unordered_map<std::string, std::string>* native_symbol_map,
+        const std::unordered_map<std::string, std::string>* init_native_symbol_map,
+        std::string* error,
+        const std::unordered_set<std::string>* compile_files) {
+    if (!root_ns) {
+        if (error) {
+            *error = "missing root namespace for AOT symbol index";
+        }
+        return false;
+    }
+
+    AOTSerializeState state;
+    state.root_ns = root_ns;
+    collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules, compile_file, compile_files);
+
+    if (module_name && !*module_name && keep_modules
+            && !hasAOTBinaryCompileFileFilter(compile_file, compile_files)) {
+        size_t keep_i = 0;
+        for (const std::string& mod : *keep_modules) {
+            if (!aotCheckSymbolIndexCancel(keep_i++, error, "AOT symbol-index local-module collection")) {
+                return false;
+            }
+            QoreProgram* module_pgm = MM.findUserModuleProgram(mod.c_str());
+            if (!module_pgm) {
+                continue;
+            }
+            RootQoreNamespace* module_root = module_pgm->getRootNS();
+            if (!module_root) {
+                continue;
+            }
+            qore_ns_private* module_root_priv = qore_ns_private::get(*module_root);
+            if (module_root_priv != root_ns) {
+                collectItems(state, module_root_priv, UINT32_MAX, mod.c_str(), nullptr, nullptr, nullptr);
+            }
+        }
+    }
+
+    std::vector<QoreAOTSymbolIndexRecord> defined;
+    std::vector<QoreAOTSymbolIndexRecord> imported;
+    std::vector<QoreAOTSymbolIndexRecord> native;
+    std::vector<std::pair<std::string, std::string>> context;
+
+    context.emplace_back("qore_version", std::to_string(QORE_VERSION_MAJOR) + "."
+        + std::to_string(QORE_VERSION_MINOR) + "." + std::to_string(QORE_VERSION_PATCH));
+    context.emplace_back("aot_binary_version", std::to_string(QORE_AOT_BINARY_VERSION));
+    context.emplace_back("symbol_index_version", std::to_string(QORE_AOT_SYMBOL_INDEX_VERSION));
+    context.emplace_back("feature_flags", aotHashHex(writer.feature_flags));
+    context.emplace_back("max_opcode_id", std::to_string(QORE_IR_MAX_OPCODE));
+    context.emplace_back("module_filter", module_name ? module_name : "");
+    context.emplace_back("compile_file", compile_file ? compile_file : "");
+    context.emplace_back("compile_file_count", std::to_string(compile_files ? compile_files->size() : 0));
+
+    for (size_t i = 0; i < state.namespaces.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index namespace collection")) {
+            return false;
+        }
+        qore_ns_private* ns = state.namespaces[i].ns;
+        std::string path = aotNamespacePath(state, static_cast<uint32_t>(i));
+        if (!ns || path.empty()) {
+            continue;
+        }
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::NAMESPACE;
+        rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+        rec.metadata_slot = static_cast<uint32_t>(i);
+        rec.qore_path = std::move(path);
+        rec.visibility = aotVisibility(ns->pub);
+        rec.declaration_hash = aotHashParts({"namespace", rec.qore_path, rec.visibility});
+        defined.push_back(std::move(rec));
+    }
+
+    for (size_t i = 0; i < state.classes.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index class collection")) {
+            return false;
+        }
+        const auto& ci = state.classes[i];
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::CLASS;
+        rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+        rec.metadata_slot = static_cast<uint32_t>(i);
+        rec.qore_path = aotStripLeadingColons(ci.priv->path);
+        rec.source_file = aotLocationFile(ci.priv->loc);
+        rec.visibility = aotVisibility(ci.priv->pub);
+        rec.declaration_hash = aotClassDeclHash(ci);
+        defined.push_back(std::move(rec));
+        if (!aotAppendClassMemberRecords(ci, static_cast<uint32_t>(i), defined, error)) {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < state.hashdecls.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index hashdecl collection")) {
+            return false;
+        }
+        const TypedHashDecl* hd = state.hashdecls[i].hd;
+        const typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::HASHDECL;
+        rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+        rec.metadata_slot = static_cast<uint32_t>(i);
+        rec.qore_path = aotStripLeadingColons(hd->getNamespacePath());
+        rec.source_file = aotLocationFile(hdp->getParseLocation());
+        rec.visibility = aotVisibility(hd->isPublic());
+        std::vector<std::string> parts = {"hashdecl", rec.qore_path, rec.visibility};
+        const HashDeclMemberMap& members = hdp->getMembers();
+        size_t member_i = 0;
+        for (auto& mi : members.member_list) {
+            if (!aotCheckSymbolIndexCancel(member_i++, error, "AOT symbol-index hashdecl-member collection")) {
+                return false;
+            }
+            parts.push_back(mi.first);
+            parts.push_back(aotTypePathString(mi.second->getTypeInfo()));
+        }
+        rec.declaration_hash = aotHashParts(parts);
+        defined.push_back(std::move(rec));
+    }
+
+    for (size_t i = 0; i < state.enums.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index enum collection")) {
+            return false;
+        }
+        const QoreEnumDecl* ed = state.enums[i].ed;
+        const qore_enum_decl_private* edp = qore_enum_decl_private::get(*ed);
+        std::string enum_path = aotStripLeadingColons(ed->getNamespacePath());
+        std::vector<std::string> parts = {
+            "enum",
+            enum_path,
+            aotVisibility(ed->isPublic()),
+            aotTypePathString(ed->getBaseTypeInfo()),
+        };
+        QoreEnumMemberIterator emi(*ed);
+        size_t member_i = 0;
+        while (emi.next()) {
+            if (!aotCheckSymbolIndexCancel(member_i++, error, "AOT symbol-index enum-member collection")) {
+                return false;
+            }
+            QoreValue value = emi.getValue();
+            parts.push_back(emi.getName() ? emi.getName() : "");
+            parts.push_back(aotValueHash(value));
+
+            QoreAOTSymbolIndexRecord member_rec;
+            member_rec.kind = QoreAOTSymbolKind::ENUM_MEMBER;
+            member_rec.dependency_class = QoreAOTDependencyClass::QORE_VALUE;
+            member_rec.metadata_slot = static_cast<uint32_t>(i);
+            member_rec.qore_path = aotJoinPath(enum_path, emi.getName());
+            member_rec.source_file = aotLocationFile(edp->getParseLocation());
+            member_rec.visibility = aotVisibility(ed->isPublic());
+            member_rec.value_hash = aotValueHash(value);
+            member_rec.declaration_hash = aotHashParts({
+                "enum_member",
+                member_rec.qore_path,
+                member_rec.visibility,
+                member_rec.value_hash,
+            });
+            defined.push_back(std::move(member_rec));
+        }
+
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::ENUM;
+        rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+        rec.metadata_slot = static_cast<uint32_t>(i);
+        rec.qore_path = std::move(enum_path);
+        rec.source_file = aotLocationFile(edp->getParseLocation());
+        rec.visibility = aotVisibility(ed->isPublic());
+        rec.declaration_hash = aotHashParts(parts);
+        rec.value_hash = rec.declaration_hash;
+        defined.push_back(std::move(rec));
+    }
+
+    for (size_t i = 0; i < state.typedefs.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index typedef collection")) {
+            return false;
+        }
+        const auto& ti = state.typedefs[i];
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::TYPEDEF;
+        rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+        rec.metadata_slot = static_cast<uint32_t>(i);
+        rec.qore_path = aotJoinPath(aotNamespacePath(state, ti.ns_idx), ti.name.c_str());
+        rec.source_file = aotLocationFile(ti.loc);
+        rec.visibility = aotVisibility(ti.pub);
+        rec.declaration_hash = aotHashParts({
+            "typedef",
+            rec.qore_path,
+            rec.visibility,
+            aotTypePathString(ti.typeInfo),
+        });
+        defined.push_back(std::move(rec));
+    }
+
+    for (size_t i = 0; i < state.constants.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index constant collection")) {
+            return false;
+        }
+        const ConstantEntry* ce = state.constants[i].entry;
+        qore_ns_private* ns = state.constants[i].ns_idx < state.namespaces.size()
+            ? state.namespaces[state.constants[i].ns_idx].ns : nullptr;
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::CONSTANT;
+        rec.dependency_class = ce->hasInitExpr()
+            ? QoreAOTDependencyClass::QORE_API : QoreAOTDependencyClass::QORE_VALUE;
+        rec.metadata_slot = static_cast<uint32_t>(i);
+        rec.qore_path = getNamespaceConstantPath(ns, ce->getName());
+        rec.source_file = aotLocationFile(ce->loc);
+        rec.visibility = aotVisibility(ce->getAccess());
+        rec.value_hash = aotValueHashForConstant(ce);
+        rec.declaration_hash = aotHashParts({
+            "constant",
+            rec.qore_path,
+            rec.visibility,
+            aotTypePathString(ce->typeInfo),
+            ce->hasInitExpr() ? "pending" : "literal",
+        });
+        defined.push_back(std::move(rec));
+    }
+
+    for (size_t i = 0; i < state.globals.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index global collection")) {
+            return false;
+        }
+        Var* var = state.globals[i].var;
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::GLOBAL;
+        rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+        rec.metadata_slot = static_cast<uint32_t>(i);
+        rec.qore_path = aotJoinPath(aotNamespacePath(state, state.globals[i].ns_idx), var->getName());
+        rec.source_file = aotLocationFile(var->getParseLocation());
+        rec.visibility = aotVisibility(var->isPublic());
+        rec.declaration_hash = aotHashParts({
+            "global",
+            rec.qore_path,
+            rec.visibility,
+            aotTypePathString(var->getTypeInfo(), var->isNoNarrowing()),
+            var->isThreadLocal() ? "thread_local" : "global",
+        });
+        defined.push_back(std::move(rec));
+    }
+
+    for (size_t i = 0; i < state.functions.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index function collection")) {
+            return false;
+        }
+        const auto& fi = state.functions[i];
+        std::string base = aotJoinPath(aotNamespacePath(state, fi.ns_idx), fi.entry->getName());
+        QoreFunctionIterator qfi(*fi.func);
+        uint32_t variant_slot = 0;
+        size_t variant_i = 0;
+        while (qfi.next()) {
+            if (!aotCheckSymbolIndexCancel(variant_i++, error, "AOT symbol-index function-variant collection")) {
+                return false;
+            }
+            const AbstractQoreFunctionVariant* v = qfi.getVariant();
+            if (!v->isUser()) {
+                continue;
+            }
+            std::string source_file = aotFunctionVariantSourceFile(v);
+            if (shouldSkipByCompileFile(source_file.empty() ? nullptr : source_file.c_str(),
+                    compile_file, compile_files)) {
+                continue;
+            }
+            std::string key = aotCallableDisplayKey(base.c_str(), v);
+            QoreAOTSymbolIndexRecord rec;
+            rec.kind = QoreAOTSymbolKind::FUNCTION;
+            rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+            rec.metadata_slot = (static_cast<uint32_t>(i) << 16)
+                | std::min<uint32_t>(variant_slot, UINT16_MAX);
+            rec.qore_path = key;
+            rec.source_file = std::move(source_file);
+            rec.visibility = aotVisibility(fi.entry->isPublic());
+            rec.signature_hash = aotSignatureSurface(key, v);
+            rec.declaration_hash = aotFunctionVariantDeclHash("function", key, rec.visibility, v);
+            if (native_symbol_map) {
+                auto it = native_symbol_map->find(key);
+                if (it != native_symbol_map->end()) {
+                    rec.native_symbol = it->second;
+                    aotAddNativeRecord(native, key, it->second, "qore_body");
+                }
+            }
+            defined.push_back(std::move(rec));
+            ++variant_slot;
+        }
+    }
+
+    for (size_t i = 0; i < state.methods.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index method collection")) {
+            return false;
+        }
+        const auto& mi = state.methods[i];
+        if (mi.class_idx >= state.classes.size()) {
+            continue;
+        }
+        const QoreClass* qc = state.classes[mi.class_idx].cls;
+        const QoreMethod* method = mi.method;
+        const qore_method_private* mp = qore_method_private::get(*method);
+        const MethodFunctionBase* mfb = mp->func;
+        QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
+        uint32_t variant_slot = 0;
+        size_t variant_i = 0;
+        while (qfi.next()) {
+            if (!aotCheckSymbolIndexCancel(variant_i++, error, "AOT symbol-index method-variant collection")) {
+                return false;
+            }
+            const AbstractQoreFunctionVariant* v = qfi.getVariant();
+            if (!isAOTSerializableMethodVariant(method, v)) {
+                continue;
+            }
+            std::string source_file = aotFunctionVariantSourceFile(v);
+            if (shouldSkipByCompileFile(source_file.empty() ? nullptr : source_file.c_str(),
+                    compile_file, compile_files)) {
+                continue;
+            }
+            const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
+            bool is_constructor = strcmp(method->getName(), "constructor") == 0;
+            std::string key = aotMethodDisplayKey(qc, method->getName(), v);
+            std::string native_key = getAOTMethodVariantKey(qc, method->getName(), mi.is_static, v);
+            QoreAOTSymbolIndexRecord rec;
+            rec.kind = is_constructor ? QoreAOTSymbolKind::CONSTRUCTOR
+                : (mi.is_static ? QoreAOTSymbolKind::STATIC_METHOD : QoreAOTSymbolKind::METHOD);
+            rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+            rec.metadata_slot = (static_cast<uint32_t>(i) << 16)
+                | std::min<uint32_t>(variant_slot, UINT16_MAX);
+            rec.qore_path = key;
+            rec.source_file = std::move(source_file);
+            rec.visibility = aotVisibility(mvb->getAccess());
+            rec.signature_hash = aotSignatureSurface(key, v);
+            rec.declaration_hash = aotMethodVariantDeclHash(key, rec.visibility, v, mi.is_static);
+            if (native_symbol_map) {
+                auto it = native_symbol_map->find(native_key);
+                if (it != native_symbol_map->end()) {
+                    rec.native_symbol = it->second;
+                    aotAddNativeRecord(native, key, it->second, "qore_body");
+                }
+            }
+            defined.push_back(std::move(rec));
+            ++variant_slot;
+        }
+    }
+
+    if (init_native_symbol_map) {
+        size_t i = 0;
+        for (const auto& entry : *init_native_symbol_map) {
+            if (!aotCheckSymbolIndexCancel(i++, error, "AOT symbol-index init-native collection")) {
+                return false;
+            }
+            aotAddNativeRecord(native, entry.first, entry.second, "init_func");
+        }
+    }
+
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SYMBOL_INDEX);
+    writer.writeU16(QORE_AOT_SYMBOL_INDEX_VERSION);
+    writer.writeU16(0);
+
+    writer.writeU32(static_cast<uint32_t>(context.size()));
+    for (size_t i = 0; i < context.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index context serialization")) {
+            return false;
+        }
+        writer.writeStringRef(context[i].first.c_str());
+        writer.writeStringRef(context[i].second.c_str());
+    }
+
+    if (!writeSymbolIndexRecordVector(writer, defined, error,
+            "AOT symbol-index definition serialization")
+            || !writeSymbolIndexRecordVector(writer, imported, error,
+                "AOT symbol-index import serialization")
+            || !writeSymbolIndexRecordVector(writer, native, error,
+                "AOT symbol-index native serialization")) {
+        return false;
+    }
+
+    writer.endSection(sec_idx);
+    return true;
+}
+
+static bool readSymbolIndexString(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, std::string& out, std::string& error, const char* field) {
+    if (ptr + sizeof(uint32_t) > end) {
+        error = "truncated SYMBOL_INDEX string field '";
+        error += field ? field : "<unknown>";
+        error += "'";
+        return false;
+    }
+    const char* s = reader.readStringRef(ptr);
+    if (!s) {
+        error = "invalid SYMBOL_INDEX string reference in field '";
+        error += field ? field : "<unknown>";
+        error += "'";
+        return false;
+    }
+    out = s;
+    return true;
+}
+
+static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, QoreAOTSymbolIndexRecord& rec, std::string& error) {
+    if (ptr + 8 > end) {
+        error = "truncated SYMBOL_INDEX record header";
+        return false;
+    }
+    rec.kind = static_cast<QoreAOTSymbolKind>(QoreAOTBinaryReader::readU8(ptr));
+    rec.dependency_class = static_cast<QoreAOTDependencyClass>(QoreAOTBinaryReader::readU8(ptr));
+    rec.flags = QoreAOTBinaryReader::readU16(ptr);
+    rec.metadata_slot = QoreAOTBinaryReader::readU32(ptr);
+
+    return readSymbolIndexString(reader, ptr, end, rec.qore_path, error, "qore_path")
+        && readSymbolIndexString(reader, ptr, end, rec.source_file, error, "source_file")
+        && readSymbolIndexString(reader, ptr, end, rec.visibility, error, "visibility")
+        && readSymbolIndexString(reader, ptr, end, rec.signature_hash, error, "signature_hash")
+        && readSymbolIndexString(reader, ptr, end, rec.declaration_hash, error, "declaration_hash")
+        && readSymbolIndexString(reader, ptr, end, rec.value_hash, error, "value_hash")
+        && readSymbolIndexString(reader, ptr, end, rec.native_symbol, error, "native_symbol")
+        && readSymbolIndexString(reader, ptr, end, rec.abi_kind, error, "abi_kind")
+        && readSymbolIndexString(reader, ptr, end, rec.consumer_source_file, error, "consumer_source_file")
+        && readSymbolIndexString(reader, ptr, end, rec.provider_source_file, error, "provider_source_file");
+}
+
+static bool readSymbolIndexRecordVector(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, std::vector<QoreAOTSymbolIndexRecord>& records,
+        std::string& error, const char* label) {
+    if (ptr + sizeof(uint32_t) > end) {
+        error = "truncated SYMBOL_INDEX ";
+        error += label ? label : "record";
+        error += " count";
+        return false;
+    }
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (count > static_cast<uint32_t>((end - ptr) / 48)) {
+        error = "invalid SYMBOL_INDEX ";
+        error += label ? label : "record";
+        error += " count";
+        return false;
+    }
+    records.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT symbol-index read")) {
+            error = "operation cancelled during AOT symbol-index read";
+            return false;
+        }
+        QoreAOTSymbolIndexRecord rec;
+        if (!readSymbolIndexRecord(reader, ptr, end, rec, error)) {
+            return false;
+        }
+        records.push_back(std::move(rec));
+    }
+    return true;
+}
+
+bool readSymbolIndex(const QoreAOTBinaryReader& reader, QoreAOTSymbolIndex& index,
+        std::string& error) {
+    index = QoreAOTSymbolIndex();
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SYMBOL_INDEX);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid SYMBOL_INDEX section data";
+        return false;
+    }
+    const uint8_t* end = ptr + sec->size;
+    if (ptr + 4 > end) {
+        error = "truncated SYMBOL_INDEX header";
+        return false;
+    }
+    index.version = QoreAOTBinaryReader::readU16(ptr);
+    uint16_t reserved = QoreAOTBinaryReader::readU16(ptr);
+    if (reserved != 0) {
+        error = "invalid SYMBOL_INDEX reserved field";
+        return false;
+    }
+    if (index.version != QORE_AOT_SYMBOL_INDEX_VERSION) {
+        error = "unsupported SYMBOL_INDEX version ";
+        error += std::to_string(index.version);
+        return false;
+    }
+
+    if (ptr + sizeof(uint32_t) > end) {
+        error = "truncated SYMBOL_INDEX context count";
+        return false;
+    }
+    uint32_t context_count = QoreAOTBinaryReader::readU32(ptr);
+    if (context_count > static_cast<uint32_t>((end - ptr) / 8)) {
+        error = "invalid SYMBOL_INDEX context count";
+        return false;
+    }
+    index.context.reserve(context_count);
+    for (uint32_t i = 0; i < context_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT symbol-index context read")) {
+            error = "operation cancelled during AOT symbol-index context read";
+            return false;
+        }
+        std::string key;
+        std::string value;
+        if (!readSymbolIndexString(reader, ptr, end, key, error, "context.key")
+                || !readSymbolIndexString(reader, ptr, end, value, error, "context.value")) {
+            return false;
+        }
+        index.context.emplace_back(std::move(key), std::move(value));
+    }
+
+    if (!readSymbolIndexRecordVector(reader, ptr, end, index.defined, error, "defined")
+            || !readSymbolIndexRecordVector(reader, ptr, end, index.imported, error, "imported")
+            || !readSymbolIndexRecordVector(reader, ptr, end, index.native, error, "native")) {
+        return false;
+    }
+    if (ptr != end) {
+        error = "trailing bytes in SYMBOL_INDEX section";
+        return false;
+    }
+    return true;
+}
+
+namespace {
 
 //! Write a function/method variant signature
 static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQoreFunctionVariant* v) {

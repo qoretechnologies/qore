@@ -84,6 +84,43 @@ Every AOT metadata blob carries:
 
 Loaders must reject metadata requiring unsupported features or newer opcodes.
 
+## Symbol Index
+
+Newly generated metadata may also carry an optional `SYMBOL_INDEX` section. The
+section is versioned independently from the core QORD format and is advisory for
+current runtimes: old readers can ignore it, and absence of the section remains
+valid for older `.qo` files.
+
+The first index version records:
+
+- defined Qore symbols: namespaces, classes, hashdecls, enums and enum members,
+  typedefs, constants, globals, functions, methods, constructors, static
+  methods, static vars;
+- known native symbols associated with compiled Qore bodies and init functions;
+- compilation context key/value pairs such as producer Qore version, AOT binary
+  version, feature flags, opcode limit, and source/module filters.
+
+Imports are intentionally conservative in the first version. The index format
+has import fields for provider/consumer source files, required hashes, and
+dependency classes, but the writer omits unsafe guesses until parse/codegen
+sites can report symbol identity precisely.
+
+Hashes are split by use:
+
+- `signature_hash` covers callable name, return type, parameter names/types,
+  and varargs flags;
+- `declaration_hash` covers the API surface relevant to recompilation, such as
+  symbol kind, path, visibility, type surface, callable signature, and method
+  modifiers;
+- `value_hash` covers folded constant and enum values, while runtime-initialized
+  constants are marked as `pending`;
+- implementation/native body changes are represented by the native symbol
+  association and future linker metadata, not by changing API hashes.
+
+Build tools should treat these hashes as a dependency-planning contract. Runtime
+loading still depends on the normal AOT metadata sections, not on the symbol
+index.
+
 ## Inspection
 
 `qcc --dump-info <path>` inspects executables, `.qmod`, `.qo`, `.qoa`, and
@@ -94,7 +131,11 @@ Optional flags:
 - `--dump-symbols`: print an nm-like symbol table.
 - `--dump-sections`: print object and AOT section tables.
 
-The dump path is for diagnostics only; runtimes ignore `BUILD_INFO`.
+With `--dump-symbols`, AOT metadata dumps also include `SYMBOL_INDEX` defined,
+imported, native, and context records when the section is present.
+
+The dump path is for diagnostics only; runtimes ignore `BUILD_INFO` and do not
+require `SYMBOL_INDEX`.
 
 ## Build-System Contract
 

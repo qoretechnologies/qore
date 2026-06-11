@@ -1102,6 +1102,10 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::MODULE_PATH_APPEND: return "MODULE_PATH_APPEND";
         case QoreAOTSectionType::BUILD_INFO: return "BUILD_INFO";
         case QoreAOTSectionType::MODULE_COMMANDS: return "MODULE_COMMANDS";
+        case QoreAOTSectionType::PLUGIN_TYPE_REGISTRY: return "PLUGIN_TYPE_REGISTRY";
+        case QoreAOTSectionType::PLUGIN_IMPORTS: return "PLUGIN_IMPORTS";
+        case QoreAOTSectionType::PLUGIN_HELPER_REFS: return "PLUGIN_HELPER_REFS";
+        case QoreAOTSectionType::SYMBOL_INDEX: return "SYMBOL_INDEX";
     }
     return "UNKNOWN";
 }
@@ -2736,6 +2740,114 @@ static void print_aot_default_summary(const QoreAOTBinaryReader& reader) {
     }
 }
 
+static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool native_record = false) {
+    printf("      %-13s %s", qoreAOTSymbolKindName(rec.kind),
+        rec.qore_path.empty() ? "(none)" : rec.qore_path.c_str());
+    if (!rec.visibility.empty()) {
+        printf(" visibility=%s", rec.visibility.c_str());
+    }
+    if (!rec.source_file.empty()) {
+        printf(" source=%s", rec.source_file.c_str());
+    }
+    if (!rec.signature_hash.empty()) {
+        printf(" sig=%s", rec.signature_hash.c_str());
+    }
+    if (!rec.declaration_hash.empty()) {
+        printf(" decl=%s", rec.declaration_hash.c_str());
+    }
+    if (!rec.value_hash.empty()) {
+        printf(" value=%s", rec.value_hash.c_str());
+    }
+    if (!rec.native_symbol.empty()) {
+        if (native_record) {
+            printf(" %s->%s",
+                (rec.flags & QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED) ? "defined" : "undefined",
+                rec.native_symbol.c_str());
+        } else {
+            printf(" native=%s", rec.native_symbol.c_str());
+        }
+    }
+    if (!rec.abi_kind.empty()) {
+        printf(" abi=%s", rec.abi_kind.c_str());
+    }
+    if (rec.dependency_class != QoreAOTDependencyClass::UNKNOWN) {
+        printf(" dep=%s", qoreAOTDependencyClassName(rec.dependency_class));
+    }
+    if (!rec.consumer_source_file.empty()) {
+        printf(" consumer=%s", rec.consumer_source_file.c_str());
+    }
+    if (!rec.provider_source_file.empty()) {
+        printf(" provider=%s", rec.provider_source_file.c_str());
+    }
+    if (rec.metadata_slot != UINT32_MAX) {
+        printf(" slot=%u", rec.metadata_slot);
+    }
+    printf("\n");
+}
+
+static bool dump_aot_symbol_index_check_cancel(size_t ordinal, const char* operation) {
+    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+        printf("      cancelled during %s\n", operation ? operation : "AOT symbol-index dump");
+        return false;
+    }
+    return true;
+}
+
+static void print_aot_symbol_index(const QoreAOTBinaryReader& reader) {
+    QoreAOTSymbolIndex index;
+    std::string error;
+    if (!readSymbolIndex(reader, index, error)) {
+        printf("    symbol index: error: %s\n", error.c_str());
+        return;
+    }
+
+    if (!index.version) {
+        printf("    symbol index: not present\n");
+        return;
+    }
+
+    printf("    symbol index: version=%u defined=%zu imported=%zu native=%zu\n",
+        index.version, index.defined.size(), index.imported.size(), index.native.size());
+    if (!dump_symbols) {
+        return;
+    }
+
+    if (!index.context.empty()) {
+        printf("    AOT symbol context:\n");
+        for (size_t i = 0; i < index.context.size(); ++i) {
+            if (!dump_aot_symbol_index_check_cancel(i, "AOT symbol-index context dump")) {
+                return;
+            }
+            const auto& [key, value] = index.context[i];
+            printf("      %s: %s\n", key.c_str(), value.c_str());
+        }
+    }
+
+    printf("    AOT defined Qore symbols:%s\n", index.defined.empty() ? " (none)" : "");
+    for (size_t i = 0; i < index.defined.size(); ++i) {
+        if (!dump_aot_symbol_index_check_cancel(i, "AOT symbol-index definition dump")) {
+            return;
+        }
+        print_aot_symbol_record(index.defined[i]);
+    }
+
+    printf("    AOT imported Qore symbols:%s\n", index.imported.empty() ? " (none)" : "");
+    for (size_t i = 0; i < index.imported.size(); ++i) {
+        if (!dump_aot_symbol_index_check_cancel(i, "AOT symbol-index import dump")) {
+            return;
+        }
+        print_aot_symbol_record(index.imported[i]);
+    }
+
+    printf("    AOT native symbols:%s\n", index.native.empty() ? " (none)" : "");
+    for (size_t i = 0; i < index.native.size(); ++i) {
+        if (!dump_aot_symbol_index_check_cancel(i, "AOT symbol-index native dump")) {
+            return;
+        }
+        print_aot_symbol_record(index.native[i], true);
+    }
+}
+
 static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index) {
     QoreAOTBinaryReader reader;
     std::string error;
@@ -2824,6 +2936,7 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
 
     print_aot_slot_map_summary(reader);
     print_aot_default_summary(reader);
+    print_aot_symbol_index(reader);
 
     printf("    sections: %u\n", reader.getSectionCount());
     if (dump_sections) {

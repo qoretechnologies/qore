@@ -195,6 +195,70 @@ enum class QoreAOTSectionType : uint16_t {
     PLUGIN_TYPE_REGISTRY = 23,  //!< Plugin module/type/operation metadata for referenced plugin imports
     PLUGIN_IMPORTS       = 24,  //!< Required plugin modules and local type/operation ids
     PLUGIN_HELPER_REFS   = 25,  //!< AOT plugin helper slot refs to plugin imports
+    SYMBOL_INDEX         = 26,  //!< Optional versioned Qore/native symbol and dependency index
+};
+
+//! Symbol kinds written to the optional SYMBOL_INDEX section.
+enum class QoreAOTSymbolKind : uint8_t {
+    NAMESPACE     = 1,
+    CLASS         = 2,
+    HASHDECL      = 3,
+    ENUM          = 4,
+    ENUM_MEMBER   = 5,
+    TYPEDEF       = 6,
+    CONSTANT      = 7,
+    GLOBAL        = 8,
+    FUNCTION      = 9,
+    METHOD        = 10,
+    STATIC_METHOD = 11,
+    CONSTRUCTOR   = 12,
+    STATIC_VAR    = 13,
+    NATIVE        = 14,
+};
+
+//! Dependency class for symbol-index imports and advisory native records.
+enum class QoreAOTDependencyClass : uint8_t {
+    UNKNOWN        = 0,
+    SOURCE_TEXT    = 1,
+    QORE_API       = 2,
+    QORE_VALUE     = 3,
+    NATIVE_BODY    = 4,
+    MODULE_API     = 5,
+    MODULE_RUNTIME = 6,
+    DYNAMIC        = 7,
+};
+
+//! SYMBOL_INDEX record flag: native symbol is defined by this object.
+constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
+
+//! Version of the optional SYMBOL_INDEX section wire format.
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 1;
+
+//! One record in the optional SYMBOL_INDEX section.
+struct QoreAOTSymbolIndexRecord {
+    QoreAOTSymbolKind kind = QoreAOTSymbolKind::NAMESPACE;
+    QoreAOTDependencyClass dependency_class = QoreAOTDependencyClass::UNKNOWN;
+    uint16_t flags = 0;
+    uint32_t metadata_slot = UINT32_MAX;
+    std::string qore_path;
+    std::string source_file;
+    std::string visibility;
+    std::string signature_hash;
+    std::string declaration_hash;
+    std::string value_hash;
+    std::string native_symbol;
+    std::string abi_kind;
+    std::string consumer_source_file;
+    std::string provider_source_file;
+};
+
+//! Parsed contents of the optional SYMBOL_INDEX section.
+struct QoreAOTSymbolIndex {
+    uint16_t version = 0;
+    std::vector<QoreAOTSymbolIndexRecord> defined;
+    std::vector<QoreAOTSymbolIndexRecord> imported;
+    std::vector<QoreAOTSymbolIndexRecord> native;
+    std::vector<std::pair<std::string, std::string>> context;
 };
 
 //! Value type tags for serialized constant values
@@ -822,6 +886,40 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     const char* compile_file = nullptr,
     std::string* error = nullptr,
     const std::unordered_set<std::string>* compile_files = nullptr);
+
+//! Serialize the optional SYMBOL_INDEX section.
+/** The section is advisory metadata for build tools and future linkers. It is
+    not required by the runtime loader, and absence of the section is valid for
+    older `.qo` files.
+
+    @param writer the binary writer to write to
+    @param root_ns pointer to the root namespace private data
+    @param module_name optional module name filter matching serializeNamespaceTree()
+    @param keep_modules optional allow-list matching serializeNamespaceTree()
+    @param compile_file optional single-source filter matching serializeNamespaceTree()
+    @param native_symbol_map optional Qore body key -> LLVM/native symbol map
+    @param init_native_symbol_map optional init function key -> LLVM/native symbol map
+    @param error optional output diagnostic
+    @param compile_files optional multi-source filter matching serializeNamespaceTree()
+    @return true on success, false on cancellation or serialization failure
+*/
+bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
+    const char* module_name = nullptr,
+    const std::unordered_set<std::string>* keep_modules = nullptr,
+    const char* compile_file = nullptr,
+    const std::unordered_map<std::string, std::string>* native_symbol_map = nullptr,
+    const std::unordered_map<std::string, std::string>* init_native_symbol_map = nullptr,
+    std::string* error = nullptr,
+    const std::unordered_set<std::string>* compile_files = nullptr);
+
+//! Read the optional SYMBOL_INDEX section.
+/** @return true on success or if the section is absent, false on corrupt data
+*/
+bool readSymbolIndex(const QoreAOTBinaryReader& reader, QoreAOTSymbolIndex& index,
+    std::string& error);
+
+const char* qoreAOTSymbolKindName(QoreAOTSymbolKind kind);
+const char* qoreAOTDependencyClassName(QoreAOTDependencyClass dependency_class);
 
 //! Serialize module dependencies into the DEPENDENCIES binary section
 /** Writes all module dependencies (including reexport) so they can be loaded
