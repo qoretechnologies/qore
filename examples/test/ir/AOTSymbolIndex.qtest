@@ -27,6 +27,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
 
         addTestCase("definitions and native symbols", \testDefinitionsAndNativeSymbols());
         addTestCase("symbol hash behavior", \testHashBehavior());
+        addTestCase("complex constant value hashing", \testComplexConstantValueHashing());
 
         set_return_value(main());
     }
@@ -140,5 +141,25 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string const2 = findSymbolLine(dump2, "constant", "A::C");
         assertTrue(attr(const1, "value") != attr(const2, "value"),
             "folded constant edits change the value hash");
+    }
+
+    testComplexConstantValueHashing() {
+        TmpDir tmp = initDirs();
+        string dump = compileAndDump("fields",
+            "%requires DataProvider\n"
+            "class T {\n"
+            "    public {\n"
+            "        const Fields = {\n"
+            "            \"records_affected\": {\n"
+            "                \"type\": IntType,\n"
+            "                \"desc\": \"count\",\n"
+            "            },\n"
+            "        };\n"
+            "    }\n"
+            "}\n");
+
+        string fields = findSymbolLine(dump, "constant", "T::Fields");
+        assertTrue(attr(fields, "value").startsWith("not-foldable:"),
+            "complex metadata constants are marked conservatively: " + fields);
     }
 }

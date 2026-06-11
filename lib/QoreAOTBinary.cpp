@@ -4922,20 +4922,179 @@ static std::string aotTypePathString(const QoreTypeInfo* ti, bool no_narrow = fa
     return getTypePath(ti, no_narrow);
 }
 
-static std::string aotValueHash(const QoreValue& value) {
-    std::string rendered;
-    QoreNodeAsStringHelper str(value, FMT_NONE, nullptr);
-    if (const QoreString* qs = *str) {
-        rendered.assign(qs->c_str(), qs->strlen());
-    }
-
+static std::string aotValueTypeName(const QoreValue& value) {
     QoreString type_scratch;
     const char* full_type = value.getFullTypeName(true, type_scratch);
+    return full_type ? full_type : "";
+}
+
+static std::string aotNonFoldableValueHash(const QoreValue& value, const char* reason) {
+    return "not-foldable:" + aotValueTypeName(value) + ":" + (reason ? reason : "unsupported");
+}
+
+static bool aotCheckValueHashCancel(size_t ordinal) {
+    return ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, "AOT symbol-index value hashing");
+}
+
+static bool aotAppendValueHashParts(const QoreValue& value, std::vector<std::string>& parts,
+        std::unordered_set<const void*>& seen, size_t depth) {
+    if (depth > 64) {
+        parts.push_back(aotNonFoldableValueHash(value, "depth"));
+        return false;
+    }
+
+    parts.push_back("type");
+    parts.push_back(aotValueTypeName(value));
+    parts.push_back(std::to_string(value.getType()));
+
+    if (value.isNothing()) {
+        parts.push_back("nothing");
+        return true;
+    }
+    if (value.isNull()) {
+        parts.push_back("null");
+        return true;
+    }
+    if (value.isBool()) {
+        parts.push_back(value.getBool() ? "true" : "false");
+        return true;
+    }
+    if (value.isInt()) {
+        parts.push_back(std::to_string(value.getInt()));
+        return true;
+    }
+    if (value.isFloat()) {
+        std::ostringstream os;
+        os << std::setprecision(std::numeric_limits<double>::max_digits10) << value.getDouble();
+        parts.push_back(os.str());
+        return true;
+    }
+    if (value.isChar()) {
+        parts.push_back("char");
+        parts.push_back(std::to_string(value.getChar()));
+        return true;
+    }
+    if (value.isShortString()) {
+        char buf[8] = {};
+        value.getShortString(buf);
+        parts.push_back("string");
+        parts.emplace_back(buf, value.shortStringLen());
+        return true;
+    }
+    if (value.isEnum()) {
+        const QoreEnumMember* member = value.getEnumMember();
+        const QoreEnumDecl* decl = member ? member->getEnumDecl() : nullptr;
+        parts.push_back("enum");
+        parts.push_back(decl ? aotStripLeadingColons(decl->getNamespacePath()) : "");
+        parts.push_back(member && member->getName() ? member->getName() : "");
+        if (member) {
+            QoreValue base = member->getValue();
+            return aotAppendValueHashParts(base, parts, seen, depth + 1);
+        }
+        return true;
+    }
+
+    switch (value.getType()) {
+        case NT_STRING:
+        case NT_NUMBER:
+        case NT_DATE: {
+            ExceptionSink xsink;
+            QoreNodeAsStringHelper str(value, FMT_NONE, &xsink);
+            if (xsink) {
+                xsink.handleExceptions();
+                parts.push_back(aotNonFoldableValueHash(value, "string-conversion"));
+                return false;
+            }
+            const QoreString* qs = *str;
+            parts.push_back("scalar");
+            parts.emplace_back(qs ? qs->c_str() : "", qs ? qs->strlen() : 0);
+            return true;
+        }
+        case NT_LIST: {
+            const QoreListNode* list = value.get<const QoreListNode>();
+            if (!list) {
+                parts.push_back(aotNonFoldableValueHash(value, "list"));
+                return false;
+            }
+            if (!seen.insert(list).second) {
+                parts.push_back(aotNonFoldableValueHash(value, "recursive-list"));
+                return false;
+            }
+            parts.push_back("list");
+            parts.push_back(std::to_string(list->size()));
+            bool precise = true;
+            ConstListIterator li(list);
+            size_t i = 0;
+            while (li.next()) {
+                if (aotCheckValueHashCancel(i)) {
+                    parts.push_back(aotNonFoldableValueHash(value, "cancelled"));
+                    precise = false;
+                    break;
+                }
+                parts.push_back(std::to_string(i++));
+                precise = aotAppendValueHashParts(li.getValue(), parts, seen, depth + 1) && precise;
+            }
+            seen.erase(list);
+            return precise;
+        }
+        case NT_HASH: {
+            const QoreHashNode* hash = value.get<const QoreHashNode>();
+            if (!hash) {
+                parts.push_back(aotNonFoldableValueHash(value, "hash"));
+                return false;
+            }
+            if (!seen.insert(hash).second) {
+                parts.push_back(aotNonFoldableValueHash(value, "recursive-hash"));
+                return false;
+            }
+            parts.push_back("hash");
+            parts.push_back(std::to_string(hash->size()));
+            std::vector<std::pair<std::string, QoreValue>> entries;
+            entries.reserve(hash->size());
+            ConstHashIterator hi(hash);
+            size_t i = 0;
+            while (hi.next()) {
+                if (aotCheckValueHashCancel(i++)) {
+                    parts.push_back(aotNonFoldableValueHash(value, "cancelled"));
+                    seen.erase(hash);
+                    return false;
+                }
+                entries.emplace_back(hi.getKey() ? hi.getKey() : "", hi.get());
+            }
+            std::sort(entries.begin(), entries.end(),
+                [](const auto& a, const auto& b) { return a.first < b.first; });
+            bool precise = true;
+            for (size_t i = 0; i < entries.size(); ++i) {
+                if (aotCheckValueHashCancel(i)) {
+                    parts.push_back(aotNonFoldableValueHash(value, "cancelled"));
+                    precise = false;
+                    break;
+                }
+                const auto& entry = entries[i];
+                parts.push_back(entry.first);
+                precise = aotAppendValueHashParts(entry.second, parts, seen, depth + 1) && precise;
+            }
+            seen.erase(hash);
+            return precise;
+        }
+        default:
+            parts.push_back(aotNonFoldableValueHash(value, "unsupported"));
+            return false;
+    }
+}
+
+static std::string aotValueHash(const QoreValue& value) {
+    std::vector<std::string> parts = {"value"};
+    std::unordered_set<const void*> seen;
+    bool precise = aotAppendValueHashParts(value, parts, seen, 0);
+    if (!precise) {
+        return aotNonFoldableValueHash(value, "unsupported");
+    }
     return aotHashParts({
         "value",
-        full_type ? full_type : "",
+        aotValueTypeName(value),
         std::to_string(value.getType()),
-        rendered,
+        aotHashParts(parts),
     });
 }
 

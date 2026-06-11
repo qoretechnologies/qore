@@ -112,8 +112,9 @@ Hashes are split by use:
 - `declaration_hash` covers the API surface relevant to recompilation, such as
   symbol kind, path, visibility, type surface, callable signature, and method
   modifiers;
-- `value_hash` covers folded constant and enum values, while runtime-initialized
-  constants are marked as `pending`;
+- `value_hash` covers folded scalar/container constant and enum values, while
+  runtime-initialized constants are marked as `pending` and complex runtime-backed
+  values are marked as `not-foldable:<type>:<reason>`;
 - implementation/native body changes are represented by the native symbol
   association and future linker metadata, not by changing API hashes.
 
