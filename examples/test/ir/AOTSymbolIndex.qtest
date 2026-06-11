@@ -232,6 +232,14 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         assertTrue(main_dump.find("LinkQoLib::add(int,int)") != -1,
             "main object call relocations include static call target: " + main_dump);
 
+        string main_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, main_qo));
+        assertTrue(main_index.find("\"call_relocations\"") != -1,
+            "index JSON includes call relocation records: " + main_index);
+        assertTrue(main_index.find("\"target_kind\": \"static_method\"") != -1,
+            "index JSON includes call relocation target kind: " + main_index);
+        assertTrue(main_index.find("\"fallback_descriptor\"") != -1,
+            "index JSON includes call relocation fallback descriptor: " + main_index);
+
         string dump = run(sprintf("%s %s --dump-info --dump-symbols %s", env, qcc_bin, agg));
         assertTrue(dump.find("init_LINK_QO_TEST_qo") != -1,
             "aggregate exports the requested init symbol: " + dump);
@@ -257,6 +265,14 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "link map includes fallback descriptor metadata: " + link_map);
         assertTrue(link_map.find("\"target_kind\": \"static_method\"") != -1,
             "link map resolves the static method call relocation: " + link_map);
+        assertTrue(link_map.find("\"path_scope\": \"external_namespace\"") != -1,
+            "link map classifies call relocation path scope: " + link_map);
+        assertTrue(link_map.find("\"dependency_class\": \"qore_api\"") != -1,
+            "link map records provider dependency class: " + link_map);
+        assertTrue(link_map.find("\"provider_kind\": \"static_method\"") != -1,
+            "link map records provider kind: " + link_map);
+        assertTrue(link_map.find("\"provider_source\"") != -1,
+            "link map records provider source: " + link_map);
         assertTrue(link_map.find("\"unresolved_imports\": []") != -1,
             "link map has no unresolved imports: " + link_map);
         assertTrue(link_map.find("\"ambiguous_imports\": []") != -1,

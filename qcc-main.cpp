@@ -3119,6 +3119,11 @@ static bool string_has_suffix(const std::string& s, const char* suffix) {
     return n >= e && std::strcmp(s.c_str() + n - e, suffix) == 0;
 }
 
+static bool string_has_prefix(const std::string& s, const char* prefix) {
+    size_t n = std::strlen(prefix);
+    return s.size() >= n && std::memcmp(s.data(), prefix, n) == 0;
+}
+
 struct QOLinkInputInfo {
     std::string path;
     std::string object_hash;
@@ -3148,9 +3153,13 @@ struct QOLinkCallRelocation {
     uint32_t expr_slot = UINT32_MAX;
     std::string target_kind;
     std::string path;
+    std::string path_scope;
+    std::string dependency_class;
     std::string resolution;
     std::string reason;
     std::string expected;
+    std::string provider_kind;
+    std::string provider_source;
     std::string native_symbol;
     std::string fallback_descriptor;
     std::vector<std::string> providers;
@@ -3364,9 +3373,54 @@ static bool is_owned_qore_provider(const QoreAOTSymbolIndexRecord& rec) {
     return !rec.qore_path.empty() && !rec.source_file.empty();
 }
 
+static const char* qo_link_call_path_scope(const std::string& path) {
+    if (path.empty()) {
+        return "unknown";
+    }
+    if (string_has_prefix(path, "Qore::")) {
+        return "qore_runtime";
+    }
+    if (string_has_prefix(path, "Qorus::") || string_has_prefix(path, "OMQ::")) {
+        return "local";
+    }
+    if (path.find("::") == std::string::npos) {
+        return "global";
+    }
+    return "external_namespace";
+}
+
+static const char* qo_link_unresolved_call_reason(const QOLinkCallRelocation& reloc) {
+    if (reloc.path_scope == "qore_runtime") {
+        return "qore_runtime_provider";
+    }
+    if (reloc.dependency_class == "module_api") {
+        return "external_module_api";
+    }
+    if (reloc.dependency_class == "module_runtime") {
+        return "external_module_runtime";
+    }
+    if (reloc.dependency_class == "native_body") {
+        return "external_native_body";
+    }
+    if (reloc.dependency_class == "dynamic") {
+        return "dynamic_dispatch";
+    }
+    if (reloc.path_scope == "external_namespace") {
+        return "external_namespace_provider";
+    }
+    if (reloc.path_scope == "global") {
+        return "external_global_provider";
+    }
+    if (reloc.path_scope == "local") {
+        return "local_provider_not_in_aggregate";
+    }
+    return "provider_not_found";
+}
+
 static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
         QOLinkPlan& plan, std::string& error) {
     std::map<std::string, std::vector<const QoreAOTSymbolIndexRecord*>> providers;
+    std::map<std::string, QoreAOTDependencyClass> import_classes;
     std::set<std::string> provided_seen;
     std::set<std::string> native_seen;
     std::set<std::string> dep_seen;
@@ -3380,6 +3434,18 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             return false;
         }
         const QOLinkInputInfo& input = inputs[i];
+        for (size_t j = 0; j < input.index.imported.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link import-class collection", error)) {
+                return false;
+            }
+            const QoreAOTSymbolIndexRecord& rec = input.index.imported[j];
+            if (!rec.qore_path.empty() && rec.dependency_class != QoreAOTDependencyClass::UNKNOWN) {
+                auto [it, inserted] = import_classes.emplace(rec.qore_path, rec.dependency_class);
+                if (!inserted && it->second == QoreAOTDependencyClass::UNKNOWN) {
+                    it->second = rec.dependency_class;
+                }
+            }
+        }
         for (size_t j = 0; j < input.index.defined.size(); ++j) {
             if (!qo_link_check_cancel(j, "AOT qo-link provider collection", error)) {
                 return false;
@@ -3503,11 +3569,16 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             reloc.expr_slot = rec.expr_slot;
             reloc.target_kind = qoreAOTCallRelocationTargetKindName(rec.target_kind);
             reloc.path = rec.qore_path;
+            reloc.path_scope = qo_link_call_path_scope(rec.qore_path);
+            auto import_it = import_classes.find(rec.qore_path);
+            if (import_it != import_classes.end()) {
+                reloc.dependency_class = qoreAOTDependencyClassName(import_it->second);
+            }
             reloc.fallback_descriptor = rec.fallback_descriptor;
             auto provider_it = providers.find(rec.qore_path);
             if (provider_it == providers.end()) {
                 reloc.resolution = "unresolved";
-                reloc.reason = "provider_not_found";
+                reloc.reason = qo_link_unresolved_call_reason(reloc);
                 plan.unresolved_call_relocations.push_back(std::move(reloc));
                 continue;
             }
@@ -3529,6 +3600,9 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             const QoreAOTSymbolIndexRecord* provider = candidates.front();
             reloc.resolution = "resolved";
             reloc.reason = "resolved";
+            reloc.dependency_class = qoreAOTDependencyClassName(provider->dependency_class);
+            reloc.provider_kind = qoreAOTSymbolKindName(provider->kind);
+            reloc.provider_source = provider->source_file;
             bool mismatch = false;
             if (!rec.signature_hash.empty() && rec.signature_hash != provider->signature_hash) {
                 reloc.expected = "signature=" + rec.signature_hash
@@ -3678,12 +3752,20 @@ static bool json_file_call_relocation_array(FILE* f, const char* key,
         json_file_string(f, reloc.target_kind);
         fputs(", \"path\": ", f);
         json_file_string(f, reloc.path);
+        fputs(", \"path_scope\": ", f);
+        json_file_string(f, reloc.path_scope);
+        fputs(", \"dependency_class\": ", f);
+        json_file_string(f, reloc.dependency_class);
         fputs(", \"resolution\": ", f);
         json_file_string(f, reloc.resolution);
         fputs(", \"reason\": ", f);
         json_file_string(f, reloc.reason);
         fputs(", \"expected\": ", f);
         json_file_string(f, reloc.expected);
+        fputs(", \"provider_kind\": ", f);
+        json_file_string(f, reloc.provider_kind);
+        fputs(", \"provider_source\": ", f);
+        json_file_string(f, reloc.provider_source);
         fputs(", \"native_symbol\": ", f);
         json_file_string(f, reloc.native_symbol);
         fputs(", \"fallback_descriptor\": ", f);
@@ -4230,6 +4312,71 @@ static bool json_print_symbol_array(const char* key,
     return true;
 }
 
+static void json_print_call_relocation_record(const QoreAOTCallRelocationRecord& rec,
+        unsigned indent) {
+    printf("%*s{", static_cast<int>(indent), "");
+    json_print_string("function");
+    printf(": ");
+    json_print_string(rec.function_name);
+    printf(", ");
+    json_print_string("expr_slot");
+    printf(": %u, ", rec.expr_slot);
+    json_print_string("target_kind");
+    printf(": ");
+    json_print_string(qoreAOTCallRelocationTargetKindName(rec.target_kind));
+    printf(", ");
+    json_print_string("strictness");
+    printf(": ");
+    json_print_string(rec.strictness == QoreAOTCallRelocationStrictness::REQUIRED ? "required" : "optional");
+    printf(", ");
+    json_print_string("qore_path");
+    printf(": ");
+    json_print_string(rec.qore_path);
+    printf(", ");
+    json_print_string("path");
+    printf(": ");
+    json_print_string(rec.qore_path);
+    printf(", ");
+    json_print_string("signature_hash");
+    printf(": ");
+    json_print_string(rec.signature_hash);
+    printf(", ");
+    json_print_string("declaration_hash");
+    printf(": ");
+    json_print_string(rec.declaration_hash);
+    printf(", ");
+    json_print_string("native_symbol");
+    printf(": ");
+    json_print_string(rec.native_symbol);
+    printf(", ");
+    json_print_string("fallback_descriptor");
+    printf(": ");
+    json_print_string(rec.fallback_descriptor);
+    printf("}");
+}
+
+static bool json_print_call_relocation_array(const char* key,
+        const std::vector<QoreAOTCallRelocationRecord>& records,
+        unsigned indent, bool comma = true) {
+    json_print_key(key, indent);
+    printf("[");
+    for (size_t i = 0; i < records.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT call-relocation JSON record dump")) {
+            return false;
+        }
+        if (i) {
+            printf(",");
+        }
+        printf("\n");
+        json_print_call_relocation_record(records[i], indent + 2);
+    }
+    if (!records.empty()) {
+        printf("\n%*s", static_cast<int>(indent), "");
+    }
+    printf("]%s\n", comma ? "," : "");
+    return true;
+}
+
 static int dump_aot_index_json_for_file(const char* path) {
     json_output_cancelled = false;
     std::vector<AOTDumpMetadataBlob> blobs;
@@ -4244,6 +4391,7 @@ static int dump_aot_index_json_for_file(const char* path) {
 
     QoreAOTSymbolIndex combined;
     combined.version = QORE_AOT_SYMBOL_INDEX_VERSION;
+    std::vector<QoreAOTCallRelocationRecord> call_relocations;
     std::vector<std::string> source_text;
     std::set<std::string> source_seen;
     for (size_t i = 0; i < blobs.size(); ++i) {
@@ -4260,6 +4408,14 @@ static int dump_aot_index_json_for_file(const char* path) {
         const char* label = reader.getLabel();
         if (label && source_seen.insert(label).second) {
             source_text.emplace_back(label);
+        }
+        QoreAOTCallRelocations relocs;
+        if (!readCallRelocations(reader, relocs, error)) {
+            fprintf(stderr, "error: invalid CALL_RELOCATIONS in '%s': %s\n", path, error.c_str());
+            return 1;
+        }
+        if (relocs.version) {
+            call_relocations.insert(call_relocations.end(), relocs.records.begin(), relocs.records.end());
         }
         QoreAOTSymbolIndex index;
         if (!readSymbolIndex(reader, index, error)) {
@@ -4289,7 +4445,8 @@ static int dump_aot_index_json_for_file(const char* path) {
             || !json_print_symbol_array("defines", combined.defined, 2)
             || !json_print_symbol_array("provides", combined.defined, 2)
             || !json_print_symbol_array("requires", combined.imported, 2)
-            || !json_print_symbol_array("native", combined.native, 2)) {
+            || !json_print_symbol_array("native", combined.native, 2)
+            || !json_print_call_relocation_array("call_relocations", call_relocations, 2)) {
         return 1;
     }
     json_print_string_field("native_body_hash", hash, 2, false);
