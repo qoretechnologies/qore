@@ -657,6 +657,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         HttpClientIo::HttpClientConnectionManager mgr();
         hash<auto> stats = mgr.getStats();
         assertEq(0, stats.total_connections, "initial total_connections");
+        assertEq(0, stats.total_usable_connections, "initial total_usable_connections");
         assertEq(0, stats.total_active_streams, "initial total_active_streams");
         assertEq(0, stats.hosts, "initial hosts");
         assertEq({}, stats.per_host, "initial per_host empty");
@@ -665,6 +666,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mgr.cleanupIdleConnections();
         stats = mgr.getStats();
         assertEq(0, stats.total_connections, "after cleanup total_connections");
+        assertEq(0, stats.total_usable_connections, "after cleanup total_usable_connections");
     }
 
     # ---- Negative Tests ----
@@ -2383,6 +2385,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         hash<auto> stats = mgr.getStats();
         assertEq(1, stats.total_connections, "one connection exists");
+        assertEq(1, stats.total_usable_connections, "one usable connection exists");
 
         # Get the connection and set it to draining
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
@@ -2398,6 +2401,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         stats = mgr.getStats();
         assertEq(2, stats.total_connections, "second connection created because first is draining");
+        assertEq(1, stats.total_usable_connections, "only the non-draining connection is usable");
     }
 
     # ---- Bidi Streaming Race Condition Tests ----

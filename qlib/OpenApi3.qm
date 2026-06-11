@@ -2992,6 +2992,22 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         }
     }
 
+    #! returns an unencoded URI query path for generated RestClient examples
+    private string makeRestExampleQueryPath(string path, *hash<auto> query) {
+        if (!query) {
+            return path;
+        }
+
+        string str;
+        foreach hash<auto> ph in (query.pairIterator()) {
+            if (exists str) {
+                str += ";";
+            }
+            str += foldl $1 + ";" + $2, (map sprintf("%s=%s", ph.key, string($1)), ph.value);
+        }
+        return path + "?" + str;
+    }
+
     #! returns example Qore code for the given request
     /** @param method the HTTP method (in lower case)
         @param path the URI path of the request
@@ -3011,8 +3027,9 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         getQoreExampleParams(\query, \headers, parameters);
         getQoreExampleParams(\query, \headers, pio.parameters, parameters);
 
-        if (query)
-            path = make_uri_query(cast<hash<UriQueryInfo>>({"method": path, "params": query}));
+        if (query) {
+            path = makeRestExampleQueryPath(path, query);
+        }
 
         rv.example = sprintf("RestClient client((\"url\": %y));\n", openapi3.getTargetUrl());
 
@@ -3063,7 +3080,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         getQoreExampleParams(\query, \rv.hdr, pio.parameters, parameters);
 
         rv.request_uri = sprintf("%s %s HTTP/1.1", method.upr(),
-            make_uri_query(cast<hash<UriQueryInfo>>({"method": path, "params": query})));
+            makeRestExampleQueryPath(path, query));
 
         #! get example message body
         *ParameterObject body_po = body ?? pio.body;

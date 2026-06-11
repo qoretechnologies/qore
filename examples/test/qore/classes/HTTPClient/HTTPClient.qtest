@@ -453,7 +453,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
         assertTrue(hc.getPreEncodedUrls());
 
-        assertEq("hello[]", hc.send(NOTHING, "PUT", "?hello%5B%5D").body);
+        # HttpServer preserves query percent encoding until parsing; compare decoded query values here.
+        assertEq("hello[]", decode_url(hc.send(NOTHING, "PUT", "?hello%5B%5D").body));
 
         assertThrows("URL-ENCODING-ERROR", "\\?hello\\[\\]", \hc.send(), (NOTHING, "PUT", "?hello[]"));
 
@@ -461,8 +462,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertTrue(hc.setPreEncodedUrls(False));
         assertFalse(hc.getPreEncodedUrls());
 
-        assertEq("hello[]", hc.send(NOTHING, "PUT", "?hello[]").body);
-        assertEq("hello%5B%5D", hc.send(NOTHING, "PUT", "?hello%5B%5D").body);
+        assertEq("hello[]", decode_url(hc.send(NOTHING, "PUT", "?hello[]").body));
+        assertEq("hello%5B%5D", decode_url(hc.send(NOTHING, "PUT", "?hello%5B%5D").body));
     }
 
     connectPrimesConnectionManagerTest() {

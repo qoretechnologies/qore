@@ -1038,11 +1038,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Returns connection pool statistics
     /** @return a hash with the following keys:
         - \c total_connections (int): total number of pooled connections across all hosts
+        - \c total_usable_connections (int): total number of pooled connections that can accept new streams
         - \c total_active_streams (int): total number of active streams across all connections
         - \c hosts (int): number of distinct host:port entries in the pool
         - \c per_host (hash<string, hash<auto>>): per-host breakdown keyed by "host:port", where
           each value is a hash with:
           - \c connections (int): number of connections to that host
+          - \c usable_connections (int): number of connections to that host that can accept new streams
           - \c active_streams (int): total active streams on those connections
           - \c draining (int): number of connections in GOAWAY/draining state
         - \c protocol (string): configured protocol selection ("auto", "h1", "h2", or "h3")
@@ -1053,24 +1055,30 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         AutoReadLock al(pool_lock);
 
         int total_connections = 0;
+        int total_usable_connections = 0;
         int total_active_streams = 0;
         hash<auto> per_host = {};
 
         foreach string key in (keys pool) {
             list<HttpClientConnection> conns = pool{key};
             int host_connections = conns.size();
+            int host_usable_connections = 0;
             int host_streams = 0;
             int host_draining = 0;
             foreach HttpClientConnection conn in (conns) {
                 host_streams += conn.getActiveStreamCount();
                 if (conn.isDraining()) {
                     ++host_draining;
+                } else if (!conn.isClosed() && isConnectionAlive(conn)) {
+                    ++host_usable_connections;
                 }
             }
             total_connections += host_connections;
+            total_usable_connections += host_usable_connections;
             total_active_streams += host_streams;
             per_host{key} = {
                 "connections": host_connections,
+                "usable_connections": host_usable_connections,
                 "active_streams": host_streams,
                 "draining": host_draining,
             };
@@ -1078,6 +1086,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         return {
             "total_connections": total_connections,
+            "total_usable_connections": total_usable_connections,
             "total_active_streams": total_active_streams,
             "hosts": per_host.size(),
             "per_host": per_host,

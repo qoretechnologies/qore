@@ -1000,12 +1000,15 @@ l50Xb2GWQesIt9k5jF5IOw==
             }
         }
 
-        # Step 6: After two failed requests, verify the pool state is consistent.
-        # With async I/O, closed connections are removed by the controller
-        # callback, so the pool may have 0 or 1 connections depending on timing.
+        # Step 6: After two failed requests, verify the reusable pool state is
+        # consistent. With async I/O, unavailable draining/closed entries are
+        # removed by the controller callback, so total_connections can include
+        # an entry that checkout will evict later. Usable connections are the
+        # deterministic capacity invariant.
         hash<auto> stats_final = mgr.getStats();
-        assertLe(1, stats_final.total_connections,
-            "pool should have at most 1 connection after GOAWAY + failed requests");
+        assertLe(1, stats_final.total_usable_connections,
+            sprintf("pool should have at most 1 usable connection after GOAWAY + failed requests; stats=%y",
+                stats_final));
     }
 
     # ---- Group 5: Auto-QUIC Listener + Alt-Svc ----
