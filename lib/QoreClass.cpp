@@ -2148,7 +2148,8 @@ int BCNode::initialize(QoreClass* cls) {
 }
 
 bool BCNode::isBaseClass(QoreClass* qc, bool toplevel) const {
-    assert(sclass);
+    if (!sclass)
+        return false;
 
     if (!toplevel && access >= Internal)
         return false;
@@ -2162,7 +2163,8 @@ bool BCNode::isBaseClass(QoreClass* qc, bool toplevel) const {
 }
 
 const QoreMethod* BCNode::runtimeFindCommittedMethod(const char* name, ClassAccess& n_access, const qore_class_private* class_ctx, bool allow_internal) const {
-    assert(sclass);
+    if (!sclass)
+        return nullptr;
 
     if (access >= Internal && !allow_internal)
         return nullptr;
@@ -2175,7 +2177,8 @@ const QoreMethod* BCNode::runtimeFindCommittedMethod(const char* name, ClassAcce
 }
 
 const QoreMethod* BCNode::runtimeFindCommittedStaticMethod(const char* name, ClassAccess& n_access, const qore_class_private* class_ctx, bool allow_internal) const {
-    assert(sclass);
+    if (!sclass)
+        return nullptr;
 
     if (access >= Internal && !allow_internal)
         return nullptr;
@@ -2332,7 +2335,8 @@ bool BCNode::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_acce
 }
 
 bool BCNode::runtimeIsPrivateMember(const char* str, bool toplevel) const {
-    assert(sclass);
+    if (!sclass)
+        return false;
 
     if (access >= Internal && !toplevel)
         return false;
