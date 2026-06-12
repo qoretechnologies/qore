@@ -949,6 +949,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Direct-call slot identities are exposed as advisory call relocations for
     // object-link diagnostics and guarded runtime prelink controls.
     flags |= QORE_AOT_FEAT_CALL_RELOCATIONS;
+    // Hash/object dereference expressions preserve their source parse result
+    // type so source-stripped defaults retain overload-resolution input types.
+    flags |= QORE_AOT_FEAT_HASH_DEREF_TYPEINFO;
     return flags;
 }
 
@@ -8949,6 +8952,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 }
             }
             if (!preload_failed) {
+                mdes->rebuildShellIndexes();
                 sibling_mdes = std::move(mdes);
             }
             if (preload_failed) {

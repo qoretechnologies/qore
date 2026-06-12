@@ -498,6 +498,50 @@ static const AbstractQoreFunctionVariant* resolveAOTConstructorVariant(const Qor
     return variant;
 }
 
+const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name) {
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, name)) {
+        return fe;
+    }
+
+    // Native slot-map registration in a script batch runs while deserialized
+    // functions are still pending.  The namespace tree is populated, but
+    // runtimeFindFunctionEntry() rejects committedEmpty() functions; the
+    // parse lookup can still see pending same-batch declarations.
+    if (strstr(name, "::")) {
+        NamedScope nscope(name);
+        if (nscope.size() <= 1) {
+            return nullptr;
+        }
+        qore_ns_private* ns = qore_ns_private::get(*pp->RootNS);
+        bool full_scope_found = true;
+        for (unsigned i = 0; i + 1 < nscope.size(); ++i) {
+            QoreNamespace* child = ns->parseFindLocalNamespace(nscope[i]);
+            if (!child) {
+                full_scope_found = false;
+                break;
+            }
+            ns = qore_ns_private::get(*child);
+        }
+        if (full_scope_found) {
+            if (FunctionEntry* fe = ns->func_list.findNode(nscope.getIdentifier())) {
+                return fe;
+            }
+        }
+
+        // Standalone script fragments can serialize an unqualified function
+        // call as current-namespace qualified (for example OMQ::QDBG_LOG),
+        // while the aggregate metadata resolves the same symbol through the
+        // root function index.  Try the terminal identifier as a final
+        // pending-safe fallback after exact scoped lookup fails.
+        if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+                *pp->RootNS, nscope.getIdentifier())) {
+            return fe;
+        }
+    }
+    return nullptr;
+}
+
 //! Resolve an expression slot identity to NaN-boxed QoreValue bits
 /** Looks up the referenced function/method/class in the program's namespace tree
     and creates the appropriate AST node.
@@ -520,8 +564,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 return 0;
             }
             // Look up function by name
-            const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-                *pp->RootNS, ref1);
+            const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, ref1);
             if (!fe) {
                 printd(0, "AOT v2: cannot resolve function '%s' for expr slot\n", ref1);
                 return 0;
@@ -2656,8 +2699,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Function call reference: resolve function by name
                 ref1 = reader.readStringRef(ptr);   // function_name
                 if (ref1 && *ref1) {
-                    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-                        *pp->RootNS, ref1);
+                    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, ref1);
                     if (fe) {
                         QoreFunction* f = fe->getFunction();
                         if (f) {
@@ -3130,6 +3172,23 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::HASH_DEREF: {
                 // left (base expr) + right (key expr) — uses readOneExpr to consume both sub-expressions
+                const QoreTypeInfo* result_type_info = nullptr;
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0) {
+                    const char* type_path = reader.readStringRef(ptr);
+                    if (type_path && *type_path) {
+                        QoreAOTTypeResolver type_resolver(pgm);
+                        std::string type_error;
+                        result_type_info = type_resolver.resolve(type_path, type_error);
+                        if (!result_type_info || !type_error.empty()) {
+                            if (trace_slot_reg) {
+                                fprintf(stderr, "[aot-slot-reg] '%s': HASH_DEREF expr[%d] cannot resolve "
+                                    "result type '%s': %s\n", name, i, type_path, type_error.c_str());
+                            }
+                            has_unsupported = true;
+                            continue;
+                        }
+                    }
+                }
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
                     ctx->locals, num_locals, ctx->globals, num_globals);
@@ -3142,7 +3201,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     has_unsupported = true;
                 } else {
                     ctx->exprs[i] = toBitsNB(QoreValue(
-                        new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right)));
+                        new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right, result_type_info)));
                 }
                 continue;
             }
@@ -6599,7 +6658,9 @@ static void registerAOTFunctionsFromSlotMaps(
         std::vector<AOTInitFuncExecInfo>* init_func_contexts = nullptr,
         QoreAOTTypeResolver* shared_type_resolver = nullptr,
         std::vector<std::string>* registration_errors = nullptr,
-        std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata = nullptr) {
+        std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata = nullptr,
+        bool allow_unlinked_native_inputs = false,
+        int* ignored_unlinked_functions = nullptr) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     if (!sec) {
         printd(0, "AOT v2: no SLOT_MAPS section found\n");
@@ -7074,6 +7135,25 @@ static void registerAOTFunctionsFromSlotMaps(
         bool is_init_func = (strncmp(func_name, "__const_init::", 14) == 0
             || strncmp(func_name, "__svar_init::", 13) == 0
             || strncmp(func_name, "__module_init::", 15) == 0);
+
+        // Native-only script objects can contain bodies that are not present in
+        // the linked aggregate metadata.  This happens when a standalone compile
+        // saw a different preprocessor state than the aggregate link, for
+        // example a guard file that defines a replacement function before a
+        // later source's %ifndef block.  The linked program is authoritative:
+        // if there is no matching linked variant, this native body is dead and
+        // must not make startup fail.  Keep normal metadata registration strict.
+        if (!uvb && allow_unlinked_native_inputs && !is_init_func && fname_str != "_toplevel") {
+            ++registered;
+            if (ignored_unlinked_functions) {
+                ++*ignored_unlinked_functions;
+            }
+            func_map.erase(func_name);
+            printd(2, "AOT slot-reg: ignored unlinked native body '%s'\n", func_name);
+            ptr = entry_end;
+            continue;
+        }
+
         if (uvb && uvb->hasCachedFunction() && !is_init_func) {
             ++registered;
             func_map.erase(func_name);
@@ -11692,7 +11772,8 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
         const char* label,
         const QoreAOTFunc* functions, int num_functions,
         std::vector<AOTInitFuncExecInfo>* batch_init_contexts = nullptr,
-        std::vector<AOTInitFuncDescriptor>* batch_init_descriptors = nullptr) {
+        std::vector<AOTInitFuncDescriptor>* batch_init_descriptors = nullptr,
+        bool allow_unlinked_native_inputs = false) {
     if (!tpgm || !metadata || metadata_len <= 0) {
         return 1;
     }
@@ -11739,15 +11820,17 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
     qore_program_private* pp = qore_program_private::get(*tpgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     int registered = 0;
+    int ignored_unlinked = 0;
     std::vector<AOTInitFuncExecInfo> init_func_contexts;
     std::vector<std::string> registration_errors;
     auto debug_metadata = makeAOTDebugMetadata(reader, metadata, metadata_len);
     registerAOTFunctionsFromSlotMaps(reader, root_ns, tpgm, func_map, registered,
-        &init_func_contexts, nullptr, &registration_errors, debug_metadata);
+        &init_func_contexts, nullptr, &registration_errors, debug_metadata,
+        allow_unlinked_native_inputs, &ignored_unlinked);
     printd(1, "qore_aot_script_register_native(%s): registered %d/%d "
-        "pre-compiled functions (%d init funcs)\n",
+        "pre-compiled functions (%d init funcs, %d unlinked native bodies ignored)\n",
         label ? label : "<script>", registered, num_functions,
-        (int)init_func_contexts.size());
+        (int)init_func_contexts.size(), ignored_unlinked);
     if (!registration_errors.empty() || registered < num_functions) {
         std::string msg = makeAOTRegistrationFailureMessage(label, registered, num_functions,
             &func_map, &registration_errors);
@@ -12254,7 +12337,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 int native_rc = qore_aot_script_register_native_impl(tpgm,
                     d.metadata, d.metadata_len, d.label.c_str(),
                     d.functions, d.num_functions,
-                    &batch_init_contexts, &batch_init_descriptors);
+                    &batch_init_contexts, &batch_init_descriptors,
+                    true);
                 if (time_on) {
                     us_register += now_us() - t0;
                 }

@@ -740,7 +740,6 @@ static bool materializeDeferredMemberDefault(const QoreAOTBinaryReader& reader,
     if (pm.value_blob.empty()) {
         return true;
     }
-
     const uint8_t* vptr = pm.value_blob.data();
     const uint8_t* vend = vptr + pm.value_blob.size();
     std::string value_error;
@@ -986,7 +985,17 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
         }
 
         case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: {
-            if (!skip_fixed(9, "complex default kind and type path")) {
+            if (ptr >= end) {
+                error = "unexpected end of data skipping complex default kind";
+                return false;
+            }
+            uint8_t kind = QoreAOTBinaryReader::readU8(ptr);
+            if (kind == 3
+                    && (reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0
+                    && !skip_fixed(1, "complex buffer init kind")) {
+                return false;
+            }
+            if (!skip_fixed(8, "complex default type path")) {
                 return false;
             }
             uint32_t nargs = 0;
@@ -2236,6 +2245,11 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             if (socn && socn->oc) {
                 std::string class_path = qore_aot_encode_class_ref(socn->oc);
                 const QoreListNode* args = socn->getArgs();
+                const QoreParseListNode* parse_args = socn->getParseArgs();
+                if (parse_args && !parse_args->empty() && (!args || args->empty())) {
+                    writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
+                    return true;
+                }
                 uint32_t nargs = args ? static_cast<uint32_t>(args->size()) : 0;
 
                 // Only serialize if all args are serializable concrete values
@@ -6234,7 +6248,8 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 const AbstractQoreNode* node = dv.getInternalNode();
                 if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
                     const QoreListNode* args = socn->getArgs();
-                    if (socn->oc && (!args || args->empty())) {
+                    const QoreParseListNode* parse_args = socn->getParseArgs();
+                    if (socn->oc && (!args || args->empty()) && (!parse_args || parse_args->empty())) {
                         writer.writeU8(1);
                         writer.writeValue(dv);
                         continue;
@@ -6460,6 +6475,10 @@ static bool aotValueTagPreservesMemberDefault(const QoreValue& v) {
             const AbstractQoreNode* node = v.getInternalNode();
             if (const auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
                 const QoreListNode* args = socn->getArgs();
+                const QoreParseListNode* parse_args = socn->getParseArgs();
+                if (parse_args && !parse_args->empty() && (!args || args->empty())) {
+                    return false;
+                }
                 if (!args) {
                     return true;
                 }
@@ -8157,11 +8176,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 writeTypePathRef(writer, vrn->getTypeInfo());
             }
-            const QoreListNode* args = vrn->getArgs();
-            if (!write_qore_arg_list(args)) {
-                return false;
-            }
-            return true;
+            return write_args_prefer_qore(vrn->getArgs(), vrn->getParseArgs());
         }
 
         const QoreTypeInfo* vti = vrn->getTypeInfo();
@@ -8495,6 +8510,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // (e.g., oh.paths."/create".post — left=base, right=key, both recursively classified)
     if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_DEREF));
+        if ((writer.feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0) {
+            writeTypePathRef(writer, hd->getTypeInfo());
+        }
         return write_inline_expr(hd->getLeft()) && write_inline_expr(hd->getRight());
     }
 
@@ -12146,7 +12164,6 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                     pim.name.c_str(), error, false, &self_local, 1)) {
                 return false;
             }
-
             // Transfer ownership of the default value to the class member
             QoreValue default_val = pim.default_val;
             pim.default_val = QoreValue();  // Clear to prevent double-deref
@@ -13574,6 +13591,88 @@ bool QoreAOTBinaryDeserializer::deserializeGlobals(std::string& error) {
     return true;
 }
 
+static bool skipAOTVariantDefaultPayload(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end, uint8_t has_default,
+        std::string& error) {
+    switch (has_default) {
+        case 0:
+            return true;
+
+        case 1:
+            return skipAOTSerializedValue(reader, ptr, end, error);
+
+        case 2:
+        case 3:
+            reader.readStringRef(ptr);
+            return true;
+
+        case 4:
+        case 6:
+            reader.readStringRef(ptr);
+            reader.readStringRef(ptr);
+            return true;
+
+        case 5: {
+            reader.readStringRef(ptr);
+            (void)QoreAOTBinaryReader::readU8(ptr);  // or_nothing
+            uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
+            return !has_inner || skipAOTSerializedValue(reader, ptr, end, error);
+        }
+    }
+
+    error = "invalid AOT variant default marker: " + std::to_string(has_default);
+    return false;
+}
+
+static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end, bool uses_type_table,
+        std::string& error) {
+    // Must match readAndSetupVariantSignature().
+    if (uses_type_table) {
+        (void)QoreAOTBinaryReader::readU32(ptr);
+    } else {
+        reader.readStringRef(ptr);
+    }
+
+    uint32_t num_params = QoreAOTBinaryReader::readU32(ptr);
+    QoreAOTBinaryReader::readU16(ptr);
+
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
+        QoreAOTBinaryReader::readU16(ptr);
+        QoreAOTBinaryReader::readU16(ptr);
+    }
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
+        QoreAOTBinaryReader::readU16(ptr);
+        QoreAOTBinaryReader::readU16(ptr);
+    }
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
+        QoreAOTBinaryReader::readI64(ptr);
+        QoreAOTBinaryReader::readI64(ptr);
+    }
+
+    for (uint32_t p = 0; p < num_params; ++p) {
+        if (p && !(p % 100) && qore_check_cancel(nullptr, "AOT variant signature skip")) {
+            error = "operation cancelled during AOT variant signature skip";
+            return false;
+        }
+        reader.readStringRef(ptr);
+        if (uses_type_table) {
+            (void)QoreAOTBinaryReader::readU32(ptr);
+        } else {
+            reader.readStringRef(ptr);
+        }
+        if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
+            (void)QoreAOTBinaryReader::readU8(ptr);
+        }
+        uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
+        if (!skipAOTVariantDefaultPayload(reader, ptr, end, has_default, error)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 //! Helper: read a variant signature and set up the UserSignature from AOT metadata
 static bool readAndSetupVariantSignature(
         const QoreAOTBinaryReader& reader,
@@ -13981,77 +14080,8 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_METHOD_SYNC) != 0) {
                     QoreAOTBinaryReader::readU8(ptr);  // variant flags
                 }
-                // Read variant data matching the format in readAndSetupVariantSignature:
-                // 1. ret_type (u32 index when type-table is in use, else StringRef)
-                if (uses_type_table) {
-                    (void)QoreAOTBinaryReader::readU32(ptr);  // ret type index
-                } else {
-                    reader.readStringRef(ptr);
-                }
-                // 2. num_params (U32)
-                uint32_t num_params = QoreAOTBinaryReader::readU32(ptr);
-                // 3. sig_flags (U16)
-                QoreAOTBinaryReader::readU16(ptr);
-                // 3a. sig start/end lines (2x U16) — only when feat advertised
-                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
-                    QoreAOTBinaryReader::readU16(ptr);
-                    QoreAOTBinaryReader::readU16(ptr);
-                }
-                // 3b. function-entry statement start/end lines (2x U16)
-                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
-                    QoreAOTBinaryReader::readU16(ptr);
-                    QoreAOTBinaryReader::readU16(ptr);
-                }
-                // 3c. variant parse options (2x I64)
-                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
-                    QoreAOTBinaryReader::readI64(ptr);
-                    QoreAOTBinaryReader::readI64(ptr);
-                }
-                // 4. For each param: name, type, has_default, and optionally value
-                for (uint32_t p = 0; p < num_params; ++p) {
-                    reader.readStringRef(ptr);  // param name
-                    if (uses_type_table) {
-                        (void)QoreAOTBinaryReader::readU32(ptr);  // param type index
-                    } else {
-                        reader.readStringRef(ptr);               // param type path
-                    }
-                    uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
-                    if (has_default == 1) {
-                        // Constant default: skip value
-                        QoreValue default_val = reader.readValue(ptr, end, error);
-                        if (!error.empty()) {
-                            return false;
-                        }
-                        default_val.discard(nullptr);
-                    } else if (has_default == 2) {
-                        // Expression default (no-arg function call): skip function name ref
-                        reader.readStringRef(ptr);
-                    } else if (has_default == 3) {
-                        // Expression default (const ref): skip FQN
-                        reader.readStringRef(ptr);
-                    } else if (has_default == 4) {
-                        // Expression default (method call on const): skip FQN + method name
-                        reader.readStringRef(ptr);
-                        reader.readStringRef(ptr);
-                    } else if (has_default == 5) {
-                        // Expression default (hashdecl cast): skip path + or_nothing +
-                        // optional inner value
-                        reader.readStringRef(ptr);
-                        (void)QoreAOTBinaryReader::readU8(ptr);  // or_nothing
-                        uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
-                        if (has_inner) {
-                            QoreValue v = reader.readValue(ptr, end, error);
-                            if (!error.empty()) {
-                                return false;
-                            }
-                            v.discard(nullptr);
-                        }
-                    } else if (has_default == 6) {
-                        // Expression default (static method call): skip class path
-                        // + method name
-                        reader.readStringRef(ptr);
-                        reader.readStringRef(ptr);
-                    }
+                if (!skipAOTVariantSignature(reader, ptr, end, uses_type_table, error)) {
+                    return false;
                 }
             }
             continue;

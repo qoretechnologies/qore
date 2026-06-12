@@ -53,6 +53,7 @@ class AbstractStatement;
 class AbstractQoreFunctionVariant;
 class CaseNodeRegex;
 class ExceptionSink;
+class FunctionEntry;
 class LocalVar;
 class QoreClass;
 class QoreFunction;
@@ -71,6 +72,9 @@ class TypedHashDecl;
 class UserVariantBase;
 class Var;
 class qore_class_private;
+
+//! Resolve an AOT-serialized function name during runtime metadata reconstruction.
+const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name);
 
 //! Key for source-stripped AOT hashdecl path resolution.
 /** A serialized hashdecl path can contain generic receiver type variables; the same

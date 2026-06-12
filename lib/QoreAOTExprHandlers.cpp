@@ -221,13 +221,7 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
         ctx.error = "empty function name in inline FUNC_CALL expression";
         return QoreValue();
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    // `runtimeFindFunctionEntry` already routes `"Foo::bar"` through
-    // NamedScope (qualified) and bare names through flat lookup —
-    // perfect for the writer's new qualified-name emission and still
-    // correct for legacy bare-name blobs (pre-fix AOT artifacts).
-    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-        *pp->RootNS, func_name);
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
     if (!fe) {
         if (pln) {
             pln->deref();
@@ -658,20 +652,22 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
                 ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(vrn->getTypeInfo()).c_str());
             }
             const QoreListNode* args = vrn->getArgs();
-            size_t nargs = args ? args->size() : 0;
+            const QoreParseListNode* parse_args = vrn->getParseArgs();
+            bool use_args = args && !args->empty();
+            size_t nargs = use_args ? args->size() : (parse_args ? parse_args->size() : 0);
             if (nargs > 255) {
                 return false;
             }
-            if (nargs > 0) {
-                ctx.writer.writeU8(static_cast<uint8_t>(nargs));
-                for (size_t j = 0; j < args->size(); ++j) {
-                    if (!classifyAndWriteExpr(ctx.writer, args->retrieveEntry(j),
-                            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
-                        return false;
-                    }
+            ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+            for (size_t j = 0; j < nargs; ++j) {
+                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT new-object argument serialization")) {
+                    return false;
                 }
-            } else {
-                ctx.writer.writeU8(0);
+                QoreValue arg = use_args ? args->retrieveEntry(j) : parse_args->get(j);
+                if (!classifyAndWriteExpr(ctx.writer, arg,
+                        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+                    return false;
+                }
             }
             return true;
         }
@@ -684,7 +680,24 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
             ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(no->getObjectTypeInfo()).c_str());
         }
-        ctx.writer.writeU8(0);
+        const QoreListNode* args = no->getArgs();
+        const QoreParseListNode* parse_args = no->getParseArgs();
+        bool use_args = args && !args->empty();
+        size_t nargs = use_args ? args->size() : (parse_args ? parse_args->size() : 0);
+        if (nargs > 255) {
+            return false;
+        }
+        ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+        for (size_t j = 0; j < nargs; ++j) {
+            if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT new-object argument serialization")) {
+                return false;
+            }
+            QoreValue arg = use_args ? args->retrieveEntry(j) : parse_args->get(j);
+            if (!classifyAndWriteExpr(ctx.writer, arg,
+                    ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+                return false;
+            }
+        }
         return true;
     }
     return false;
@@ -1345,9 +1358,7 @@ static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
         ctx.error = "empty call reference function name";
         return QoreValue();
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-        *pp->RootNS, func_name);
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
     QoreFunction* f = fe ? fe->getFunction() : nullptr;
     if (!f) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
@@ -1458,9 +1469,7 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
 
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-        *pp->RootNS, func_name);
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
     QoreFunction* f = fe ? fe->getFunction() : nullptr;
     if (!f) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
@@ -1670,13 +1679,19 @@ static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
                 ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(socn->getObjectTypeInfo()).c_str());
             }
             const QoreListNode* args = socn->getArgs();
-            if (args && args->size() > 255) {
+            const QoreParseListNode* parse_args = socn->getParseArgs();
+            bool use_args = args && !args->empty();
+            size_t nargs = use_args ? args->size() : (parse_args ? parse_args->size() : 0);
+            if (nargs > 255) {
                 return false;
             }
-            uint8_t num_args = args ? static_cast<uint8_t>(args->size()) : 0;
-            ctx.writer.writeU8(num_args);
-            for (uint8_t j = 0; j < num_args; ++j) {
-                if (!classifyAndWriteExpr(ctx.writer, args->retrieveEntry(j),
+            ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+            for (size_t j = 0; j < nargs; ++j) {
+                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT scoped new-object argument serialization")) {
+                    return false;
+                }
+                QoreValue arg = use_args ? args->retrieveEntry(j) : parse_args->get(j);
+                if (!classifyAndWriteExpr(ctx.writer, arg,
                         ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
                     return false;
                 }
@@ -2215,6 +2230,9 @@ static bool write_expr_hash_deref(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_DEREF));
+        if ((ctx.writer.feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0) {
+            ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(hd->getTypeInfo()).c_str());
+        }
         return classifyAndWriteExpr(ctx.writer, hd->getLeft(), ctx.parent_locals,
                 ctx.parent_globals, ctx.const_reverse_map)
             && classifyAndWriteExpr(ctx.writer, hd->getRight(), ctx.parent_locals,
@@ -2224,6 +2242,25 @@ static bool write_expr_hash_deref(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_hash_deref(AOTExprReadCtx& ctx) {
+    const QoreTypeInfo* result_type_info = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0) {
+        const char* type_path = ctx.reader.readStringRef(ctx.ptr);
+        if (type_path && *type_path) {
+            QoreAOTTypeResolver type_resolver(ctx.pgm);
+            std::string type_error;
+            result_type_info = type_resolver.resolve(type_path, type_error);
+            if (!result_type_info || !type_error.empty()) {
+                ctx.error = "cannot resolve hash-dereference result type '";
+                ctx.error += type_path;
+                ctx.error += "'";
+                if (!type_error.empty()) {
+                    ctx.error += ": ";
+                    ctx.error += type_error;
+                }
+                return QoreValue();
+            }
+        }
+    }
     std::string left_err;
     QoreValue left = readOneExpr(ctx.reader, ctx.ptr, ctx.end, left_err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
     if (!left_err.empty()) {
@@ -2237,7 +2274,7 @@ static QoreValue read_expr_hash_deref(AOTExprReadCtx& ctx) {
         left.discard(nullptr);
         return QoreValue();
     }
-    return QoreValue(new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right));
+    return QoreValue(new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right, result_type_info));
 }
 
 // ============================================================================

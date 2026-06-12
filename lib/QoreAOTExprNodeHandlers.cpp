@@ -345,9 +345,7 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     if (ctx.failed) {
         return QoreValue();
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-        *pp->RootNS, name.c_str());
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, name.c_str());
     if (!fe) {
         printd(0, "AOT EXPR_TREE: cannot resolve function '%s'\n", name.c_str());
         ctx.failed = true;
@@ -1602,9 +1600,7 @@ static QoreValue read_node_EN_SELF_METH_REF(AOTExprNodeReadCtx& ctx) {
 static QoreValue read_node_EN_FUNC_REF(AOTExprNodeReadCtx& ctx) {
     std::string name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);  // 0 children
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-        *pp->RootNS, name.c_str());
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, name.c_str());
     if (fe) {
         // Create a call reference (\func()), not a function call (func())
         QoreFunction* f = fe->getFunction();

@@ -918,6 +918,9 @@ static bool write_slot_HASH_DEREF(AOTExprSlotWriteCtx& ctx) {
     if (!hd) {
         return false;
     }
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0) {
+        ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(hd->getTypeInfo()).c_str());
+    }
     return classifyAndWriteExpr(ctx.writer, hd->getLeft(),
             ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
         && classifyAndWriteExpr(ctx.writer, hd->getRight(),

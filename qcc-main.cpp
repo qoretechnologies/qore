@@ -1488,6 +1488,7 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS, "call-closure-ref-args"},
         {QORE_AOT_FEAT_TYPED_PHI, "typed-phi"},
         {QORE_AOT_FEAT_CALL_RELOCATIONS, "call-relocations"},
+        {QORE_AOT_FEAT_HASH_DEREF_TYPEINFO, "hash-deref-typeinfo"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -1767,17 +1768,26 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
 
         case AOTExprKind::STATIC_METHOD_CALL: {
             uint8_t nargs = 0;
-            return dump_skip_string_ref(reader, p, end)
-                && dump_skip_string_ref(reader, p, end)
-                && dump_read_u8(p, end, nargs)
-                && skip_n_args(nargs);
+            if (!dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0
+                    && !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            return dump_read_u8(p, end, nargs) && skip_n_args(nargs);
         }
 
         case AOTExprKind::NEW_OBJECT:
         case AOTExprKind::SCOPED_NEW_OBJECT:
             if (slot_form) {
-                return dump_skip_string_ref(reader, p, end)
-                    && dump_skip_string_ref(reader, p, end);
+                if (!dump_skip_string_ref(reader, p, end)
+                        || !dump_skip_string_ref(reader, p, end)) {
+                    return false;
+                }
+                return (reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) == 0
+                    || dump_skip_string_ref(reader, p, end);
             } else {
                 uint8_t nargs = 0;
                 return dump_skip_string_ref(reader, p, end)
@@ -1931,12 +1941,37 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         }
 
         case AOTExprKind::HASHDECL_NEW:
-        case AOTExprKind::COMPLEX_HASH_NEW:
-        case AOTExprKind::COMPLEX_LIST_NEW: {
+        case AOTExprKind::COMPLEX_HASH_NEW: {
             uint8_t nargs = 0;
             return dump_skip_string_ref(reader, p, end)
                 && dump_read_u8(p, end, nargs)
                 && skip_n_args(nargs);
+        }
+
+        case AOTExprKind::COMPLEX_LIST_NEW: {
+            uint8_t has_arg = 0;
+            if (!dump_skip_string_ref(reader, p, end)
+                    || !dump_read_u8(p, end, has_arg)) {
+                return false;
+            }
+            return !has_arg
+                || dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+        }
+
+        case AOTExprKind::COMPLEX_BUFFER_NEW: {
+            uint8_t has_arg = 0;
+            if (!dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0
+                    && !dump_skip_bytes(p, end, 1)) {
+                return false;
+            }
+            if (!dump_read_u8(p, end, has_arg)) {
+                return false;
+            }
+            return !has_arg
+                || dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
         }
 
         case AOTExprKind::HASH_LITERAL: {
@@ -1975,6 +2010,10 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         }
 
         case AOTExprKind::HASH_DEREF:
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0
+                    && !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -2322,6 +2361,8 @@ static const char* dump_aot_value_tag_name(uint8_t tag) {
         case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: return "NEW_COMPLEX_DEFAULT";
         case QoreAOTValueTag::VT_EXPR_TREE: return "EXPR_TREE";
         case QoreAOTValueTag::VT_EXPR_NATIVE: return "EXPR_NATIVE";
+        case QoreAOTValueTag::VT_PLUGIN_INSTANCE: return "PLUGIN_INSTANCE";
+        case QoreAOTValueTag::VT_CHAR: return "CHAR";
     }
     return "UNKNOWN";
 }
@@ -2402,6 +2443,9 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
         case QoreAOTValueTag::VT_BOOL:
             return dump_skip_bytes(p, end, 1) || fail("truncated bool value");
 
+        case QoreAOTValueTag::VT_CHAR:
+            return dump_skip_bytes(p, end, 4) || fail("truncated char value");
+
         case QoreAOTValueTag::VT_INT64:
         case QoreAOTValueTag::VT_FLOAT64:
             return dump_skip_bytes(p, end, 8) || fail("truncated 64-bit value");
@@ -2426,6 +2470,16 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
             uint32_t size = 0;
             return (dump_read_u32(p, end, size) && dump_skip_bytes(p, end, size))
                 || fail("truncated binary value");
+        }
+
+        case QoreAOTValueTag::VT_PLUGIN_INSTANCE: {
+            if (!dump_skip_bytes(p, end, 8)) {
+                return fail("truncated plugin value instance header");
+            }
+            uint32_t payload_size = 0;
+            return (dump_read_u32(p, end, payload_size)
+                    && dump_skip_bytes(p, end, payload_size))
+                || fail("truncated plugin value payload");
         }
 
         case QoreAOTValueTag::VT_LIST: {
@@ -2468,7 +2522,11 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
 
         case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: {
             uint32_t nargs = 0;
-            return dump_skip_bytes(p, end, 1)
+            uint8_t kind = 0;
+            return dump_read_u8(p, end, kind)
+                && (kind != 3
+                    || (reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) == 0
+                    || dump_skip_bytes(p, end, 1))
                 && dump_skip_len_string_ref(reader, p, end)
                 && dump_read_u32(p, end, nargs)
                 && dump_skip_serialized_value_args(reader, p, end, nargs, summary, error);
@@ -2565,6 +2623,12 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
     const bool has_class_type_params =
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0;
+    const bool has_type_param_defaults =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0;
+    const bool has_type_param_bounds =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0;
+    const bool has_class_param_bases =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_PARAM_BASES) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
@@ -2599,6 +2663,22 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                     error = "truncated class type parameter entry";
                     return false;
                 }
+                if (has_type_param_defaults) {
+                    uint8_t has_default = 0;
+                    if (!dump_read_u8(p, end, has_default)
+                            || (has_default && !dump_skip_string_ref(reader, p, end))) {
+                        error = "truncated class type parameter default";
+                        return false;
+                    }
+                }
+                if (has_type_param_bounds) {
+                    uint8_t has_bound = 0;
+                    if (!dump_read_u8(p, end, has_bound)
+                            || (has_bound && !dump_skip_string_ref(reader, p, end))) {
+                        error = "truncated class type parameter bound";
+                        return false;
+                    }
+                }
             }
         }
 
@@ -2610,6 +2690,10 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
         for (uint32_t j = 0; j < num_bases; ++j) {
             if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 2)) {
                 error = "truncated class base entry";
+                return false;
+            }
+            if (has_class_param_bases && !dump_skip_string_ref(reader, p, end)) {
+                error = "truncated class parameterized base type";
                 return false;
             }
         }
@@ -2695,6 +2779,12 @@ static bool dump_scan_hashdecl_defaults(const QoreAOTBinaryReader& reader,
         error = "truncated HASHDECLS header";
         return false;
     }
+    const bool has_hashdecl_type_params =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS) != 0;
+    const bool has_type_param_defaults =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0;
+    const bool has_type_param_bounds =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
@@ -2707,6 +2797,40 @@ static bool dump_scan_hashdecl_defaults(const QoreAOTBinaryReader& reader,
             return false;
         }
         std::string owner = dump_owner_name(path, name);
+
+        if (has_hashdecl_type_params) {
+            uint16_t type_param_count = 0;
+            if (!dump_read_u16(p, end, type_param_count)) {
+                error = "truncated hashdecl type parameter count";
+                return false;
+            }
+            for (uint16_t j = 0; j < type_param_count; ++j) {
+                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT hashdecl type parameter dump")) {
+                    error = "operation cancelled during AOT hashdecl type parameter dump";
+                    return false;
+                }
+                if (!dump_skip_string_ref(reader, p, end)) {
+                    error = "truncated hashdecl type parameter entry";
+                    return false;
+                }
+                if (has_type_param_defaults) {
+                    uint8_t has_default = 0;
+                    if (!dump_read_u8(p, end, has_default)
+                            || (has_default && !dump_skip_string_ref(reader, p, end))) {
+                        error = "truncated hashdecl type parameter default";
+                        return false;
+                    }
+                }
+                if (has_type_param_bounds) {
+                    uint8_t has_bound = 0;
+                    if (!dump_read_u8(p, end, has_bound)
+                            || (has_bound && !dump_skip_string_ref(reader, p, end))) {
+                        error = "truncated hashdecl type parameter bound";
+                        return false;
+                    }
+                }
+            }
+        }
 
         uint32_t num_members = 0;
         if (!dump_read_u32(p, end, num_members)) {

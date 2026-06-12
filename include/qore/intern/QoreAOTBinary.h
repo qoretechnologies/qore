@@ -168,8 +168,9 @@ constexpr uint64_t QORE_AOT_FEAT_CONST_METHODS = 1ULL << 55; //!< METHODS varian
 constexpr uint64_t QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS = 1ULL << 56; //!< Closure-call records preserve caller-cache invalidation metadata
 constexpr uint64_t QORE_AOT_FEAT_TYPED_PHI = 1ULL << 57; //!< Serialized Phi records preserve native/QoreValue representation metadata
 constexpr uint64_t QORE_AOT_FEAT_CALL_RELOCATIONS = 1ULL << 58; //!< CALL_RELOCATIONS section records safe direct-call link candidates
+constexpr uint64_t QORE_AOT_FEAT_HASH_DEREF_TYPEINFO = 1ULL << 59; //!< HASH_DEREF records preserve parse-time result typeInfo
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x07FFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x0FFFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1164,7 +1165,7 @@ enum class AOTExprKind : uint8_t {
     CONST_ENUM         = 19,  //!< Enum constant: ref1=enum_path, ref2=member_name
     CONST_STRING       = 20,  //!< String constant: ref1=string content
     HASH_LITERAL       = 21,  //!< Hash literal: num_pairs(u8) + [key_str(stringref) + value(AOTExprKind)] * N
-    HASH_DEREF         = 22,  //!< Hash/object dereference: left(AOTExprKind) + right(AOTExprKind)
+    HASH_DEREF         = 22,  //!< Hash/object dereference: [type_path if QORE_AOT_FEAT_HASH_DEREF_TYPEINFO] + left(AOTExprKind) + right(AOTExprKind)
     PARSE_REF          = 23,  //!< Parse reference (\var): [type_path if QORE_AOT_FEAT_PARSE_REF_TYPE] + inner_lvalue(AOTExprKind)
     CAST_HASHDECL      = 24,  //!< Hashdecl cast: ref1=hashdecl_path, u8 or_nothing, u8 has_inner, inner?
     CAST_COMPLEX_HASH  = 25,  //!< Complex hash cast: ref1=type_path, u8 or_nothing, u8 has_inner, inner?
@@ -2392,6 +2393,14 @@ public:
             return true;
         };
 
+        // Shell creation may add namespace/class/hashdecl declarations before
+        // the root lookup indexes are rebuilt.  Cross-blob type and base-class
+        // resolution below uses those indexes, so publish the full shell set
+        // before any session resolves names.
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+
         // 2a: types/bases first, then constants, methods, static members,
         // and each session's OWN instance members.  Methods must be added
         // before static/default resolution can observe or initialize class
@@ -2543,6 +2552,14 @@ public:
             return true;
         };
 
+        // Publish all preloaded shell declarations before resolving sibling
+        // types and bases.  The source parser also needs this when it runs
+        // before resolveForSourceParse(), so compileScriptFile() calls
+        // rebuildShellIndexes() after the preload loop.
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+
         if (!runSessionPhase("AOT type resolution",
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.resolveTypes(error);
@@ -2618,10 +2635,13 @@ public:
         if (!sessions.empty()) {
             rebuildRootIndexesOnce();
         }
-        return runSessionPhase("AOT source-parse BCA resolution",
-            [&error](QoreAOTBinaryDeserializer& sess) {
-                return sess.finalizePostIndex(error);
-            });
+
+        // Source-parse mode must not resolve BCA expression blobs yet.  Those
+        // expressions can call functions declared in the target source file,
+        // which are not visible until the following qpgm->parseCommit().
+        // finalizeAfterSourceParse() runs finalizePostIndex() after that commit
+        // and after a full index rebuild.
+        return true;
     }
 
     //! Finish AOT-only post-commit work after source parseCommit().
@@ -2676,6 +2696,14 @@ public:
 
     //! Number of blobs currently in-session.
     size_t sessionCount() const { return sessions.size(); }
+
+    //! Rebuild root namespace indexes after shell preload so source parsing can
+    //! resolve sibling `.qo` declarations before the later resolution pass.
+    void rebuildShellIndexes() {
+        if (!sessions.empty()) {
+            rebuildRootIndexesOnce();
+        }
+    }
 
     //! Access a specific session by insertion index (slice 10g).
     //! Used by the batch-register end path to pull each session's
