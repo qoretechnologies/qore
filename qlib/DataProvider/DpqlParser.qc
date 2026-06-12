@@ -120,6 +120,11 @@ public class DpqlParser {
         (the keys in the expression map). This allows the parser to accept symbol-based
         syntax in DPQL text while storing the canonical name in \c exp.exp.
 
+        Keys are stored lowercased: DPQL surface symbols are case-insensitive like the
+        \c BETWEEN / \c IN keywords, and the infix-operator path looks up the lowercased
+        token — camelCase symbols (e.g. \c startsWith) could never match case-sensitively
+        (issue #5348).
+
         @since DataProvider 3.4
     */
     private buildSymbolToNameMap() {
@@ -133,14 +138,18 @@ public class DpqlParser {
             if (sym =~ /\(\)$/) {
                 sym = substr(sym, 0, sym.size() - 2);
             }
-            symbol_to_name{sym} = ename;
+            symbol_to_name{sym.lwr()} = ename;
         }
     }
 
     #! Resolves a DPQL surface symbol to the internal expression name
+    /** Symbol lookup is case-insensitive (lowercased keys — see buildSymbolToNameMap());
+        the canonical-name fallback stays exact-case.
+    */
     private string resolveExpressionName(string token_name) {
-        if (symbol_to_name{token_name}) {
-            return symbol_to_name{token_name};
+        *string ename = symbol_to_name{token_name.lwr()};
+        if (ename) {
+            return ename;
         }
         if (expressions{token_name}) {
             return token_name;
