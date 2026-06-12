@@ -5727,13 +5727,15 @@ static std::string scriptBatchSourceId(const std::string& target_canon) {
     not for module-fragment `.qo`s (compileSeparatedModuleFile
     path) — those already carry the slice 7 register symbol.
 */
-static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
+static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
         llvm::Module& module, const std::string& mod_name,
         const std::string& file_basename_san,
         llvm::GlobalVariable* blob_gv, size_t blob_size,
         const std::vector<AOTCompiledFunc>& compiled_funcs,
         const char* register_fn_name = nullptr,
-        const char* register_label = nullptr) {
+        const char* register_label = nullptr,
+        const std::vector<std::string>* native_register_symbols = nullptr,
+        std::string* error = nullptr) {
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
     auto* ptr_type = llvm::PointerType::get(ctx, 0);
@@ -5757,7 +5759,14 @@ static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
         {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
 
     std::vector<llvm::Constant*> entries;
-    for (const auto& cf : compiled_funcs) {
+    for (size_t i = 0; i < compiled_funcs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT script register symbol emission")) {
+            if (error) {
+                *error = "AOT script register symbol emission cancelled";
+            }
+            return false;
+        }
+        const auto& cf = compiled_funcs[i];
         // Name string as private global.
         llvm::Constant* name_str = llvm::ConstantDataArray::getString(
             ctx, cf.name, true);
@@ -5806,6 +5815,8 @@ static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
         {ptr_type, ptr_type, i32_type, ptr_type, ptr_type, i32_type}, false);
     auto bridge_fn = module.getOrInsertFunction("qore_aot_script_register",
         bridge_fn_type);
+    auto native_bridge_fn = module.getOrInsertFunction("qore_aot_script_register_native",
+        bridge_fn_type);
 
     // Private label string for diagnostics.
     auto* label_data = llvm::ConstantDataArray::getString(ctx,
@@ -5846,8 +5857,63 @@ static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
         funcs_ptr,
         builder.getInt32(num_funcs)
     });
+    if (native_register_symbols) {
+        auto* native_register_fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
+        for (size_t i = 0; i < native_register_symbols->size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr, "AOT script native register call emission")) {
+                if (error) {
+                    *error = "AOT script native register call emission cancelled";
+                }
+                return false;
+            }
+            const std::string& symbol = (*native_register_symbols)[i];
+            if (symbol.empty()) {
+                continue;
+            }
+            auto callee = module.getOrInsertFunction(symbol, native_register_fn_type);
+            builder.CreateCall(callee, {pgm_arg});
+        }
+    }
     builder.CreateRetVoid();
+
+    // Export a per-file native-only register function.  It uses this object's
+    // metadata solely for slot maps and binds the native body table into a
+    // program whose declarations were already deserialized by an aggregate.
+    if (!register_fn_name) {
+        auto* native_fn = llvm::Function::Create(fn_type,
+            llvm::Function::ExternalLinkage,
+            prefix_public + "_script_native_register", module);
+        native_fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+        auto* native_entry_bb = llvm::BasicBlock::Create(ctx, "entry", native_fn);
+        llvm::IRBuilder<> native_builder(native_entry_bb);
+        llvm::Value* native_pgm_arg = &*native_fn->arg_begin();
+        llvm::Value* native_blob_ptr = native_builder.CreateInBoundsGEP(blob_gv->getValueType(),
+            blob_gv, {native_builder.getInt64(0), native_builder.getInt64(0)});
+        llvm::Value* native_label_ptr = native_builder.CreateInBoundsGEP(label_data->getType(),
+            label_gv, {native_builder.getInt64(0), native_builder.getInt64(0)});
+        llvm::Value* native_funcs_ptr;
+        if (func_table_gv) {
+            auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
+            native_funcs_ptr = native_builder.CreateInBoundsGEP(table_type, func_table_gv,
+                {native_builder.getInt64(0), native_builder.getInt64(0)});
+        } else {
+            native_funcs_ptr = llvm::ConstantPointerNull::get(
+                llvm::cast<llvm::PointerType>(ptr_type));
+        }
+        native_builder.CreateCall(native_bridge_fn, {
+            native_pgm_arg,
+            native_blob_ptr,
+            native_builder.getInt32(static_cast<int>(blob_size)),
+            native_label_ptr,
+            native_funcs_ptr,
+            native_builder.getInt32(num_funcs)
+        });
+        native_builder.CreateRetVoid();
+    }
     (void)i64_type;
+    return true;
 }
 
 //! Phase 4 slice 5: emit the exported fragment symbols for a per-file
@@ -7594,8 +7660,10 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
                 + "' not found after emitFragmentSymbols";
             return false;
         }
-        emitScriptRegisterSymbols(ctx, *module, app_name, file_san, blob_gv,
-            metadata_blob.size(), compiled_funcs);
+        if (!emitScriptRegisterSymbols(ctx, *module, app_name, file_san, blob_gv,
+                metadata_blob.size(), compiled_funcs, nullptr, nullptr, nullptr, &error)) {
+            return false;
+        }
     }
 
     di_builder.finalize();
@@ -8089,7 +8157,8 @@ bool QoreAOT::compileScriptAggregate(
         const std::vector<std::string>& stub_files,
         const std::vector<std::string>& parse_defines,
         const std::vector<std::string>& parse_option_flags,
-        int* compiled_count_out) {
+        int* compiled_count_out,
+        bool register_native_inputs) {
     if (target_files.empty()) {
         error = "compileScriptAggregate: target_files is empty";
         return false;
@@ -8412,14 +8481,33 @@ bool QoreAOT::compileScriptAggregate(
             return false;
         }
         std::string register_fn = "init_" + aggregate_san + "_qo";
+        std::vector<std::string> native_register_symbols;
+        if (register_native_inputs) {
+            native_register_symbols.reserve(entries.size());
+            for (size_t i = 0; i < entries.size(); ++i) {
+                if (i && !(i % 100)
+                        && qore_check_cancel(nullptr, "AOT aggregate native register symbol collection")) {
+                    error = "AOT aggregate native register symbol collection cancelled";
+                    return false;
+                }
+                const SrcEntry& e = entries[i];
+                std::string source_id = scriptBatchSourceId(e.canon);
+                native_register_symbols.push_back("qore_" + source_id + "_" + source_id
+                    + "_script_native_register");
+            }
+        }
         // Register aggregate metadata without function descriptors. Passing
         // the metadata-only compiled_funcs here would register per-file native
         // symbols with aggregate slot maps; parameter/local slots can differ
         // between the aggregate parse and standalone per-file compilation.
         const std::vector<AOTCompiledFunc> no_register_funcs;
-        emitScriptRegisterSymbols(ctx, *module, aggregate_san, aggregate_san,
-            blob_gv, metadata.size(), no_register_funcs,
-            register_fn.c_str(), aggregate_san.c_str());
+        if (!emitScriptRegisterSymbols(ctx, *module, aggregate_san, aggregate_san,
+                blob_gv, metadata.size(), no_register_funcs,
+                register_fn.c_str(), aggregate_san.c_str(),
+                register_native_inputs ? &native_register_symbols : nullptr,
+                &error)) {
+            return false;
+        }
     }
 
     di_builder.finalize();
@@ -9148,8 +9236,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 + "' not found after emitFragmentSymbols";
             return false;
         }
-        emitScriptRegisterSymbols(ctx, *module, app_name, file_san, blob_gv,
-            metadata_blob.size(), compiled_funcs);
+        if (!emitScriptRegisterSymbols(ctx, *module, app_name, file_san, blob_gv,
+                metadata_blob.size(), compiled_funcs, nullptr, nullptr, nullptr, &error)) {
+            return false;
+        }
     }
 
     di_builder.finalize();

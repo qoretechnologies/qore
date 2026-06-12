@@ -773,10 +773,14 @@ public:
         @p output_path containing:
 
         - one aggregate AOT metadata blob for all target-file declarations;
-        - no native function table; per-file `.qo` objects keep ownership of
-          their native bodies and matching slot maps;
+        - no aggregate native function table; per-file `.qo` objects keep
+          ownership of their native bodies and matching slot maps;
         - an exported `init_<aggregate_symbol>_qo(QoreProgram*)` register
           function that calls `qore_aot_script_register()` once.
+          When @p register_native_inputs is true, the same entry point then
+          calls each linked per-file object's native-only register entry so
+          native bodies are bound from their own slot maps without
+          re-deserializing per-file declarations.
 
         The aggregate object is linked alongside the per-file `.qo` objects.
         Runtime startup sees one declaration metadata deserialization session
@@ -800,6 +804,9 @@ public:
         @param parse_option_flags parse-option flag names to apply to every target
         @param compiled_count_out optional output for the total number of
                 emitted Qore code variants
+        @param register_native_inputs emit calls to each per-file
+                `*_script_native_register` symbol after aggregate metadata
+                registration
         @return true on success, false on failure
     */
     static bool compileScriptAggregate(
@@ -815,7 +822,8 @@ public:
             const std::vector<std::string>& stub_files = {},
             const std::vector<std::string>& parse_defines = {},
             const std::vector<std::string>& parse_option_flags = {},
-            int* compiled_count_out = nullptr);
+            int* compiled_count_out = nullptr,
+            bool register_native_inputs = false);
 
     //! Compile an object-driven script register aggregate for existing `.qo` inputs.
     /**

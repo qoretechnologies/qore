@@ -524,6 +524,7 @@ static std::vector<std::string> parse_option_flags;
 // with an `init_SYMBOL_qo(QoreProgram*)` registration entry.  It is linked
 // alongside the per-file `.qo` objects produced by batch script compilation.
 static const char* script_aggregate_symbol = nullptr;
+static bool script_aggregate_native_registers = false;
 // --link-qo emits an object-driven aggregate register object from existing
 // script-context `.qo` inputs, without reparsing the original sources.
 static bool link_qo = false;
@@ -714,6 +715,10 @@ static void print_usage(const char* prog) {
            "                         Emit one metadata-only script aggregate .qo\n"
            "                         exposing init_SYM_qo(); link it with the\n"
            "                         per-file .qo objects from batch script mode\n");
+    printf("      --script-aggregate-native-registers\n"
+           "                         With --script-aggregate, emit calls to linked\n"
+           "                         per-file *_script_native_register() entries so\n"
+           "                         native bodies are bound from per-file slot maps\n");
     printf("      --link-qo          Link existing script-context .qo objects into\n"
            "                         one aggregate register object without reparsing\n"
            "                         original sources; requires -o and\n"
@@ -834,6 +839,7 @@ static struct option long_options[] = {
     {"aggregate-symbol",  required_argument, nullptr, 0x10e},
     {"qolink-map",        required_argument, nullptr, 0x10f},
     {"strict-call-relocations", no_argument, nullptr, 0x110},
+    {"script-aggregate-native-registers", no_argument, nullptr, 0x111},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -963,6 +969,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x110:  // --strict-call-relocations
                 strict_call_relocations = true;
+                break;
+            case 0x111:  // --script-aggregate-native-registers
+                script_aggregate_native_registers = true;
                 break;
             case 'F':
                 from_objects = true;
@@ -4867,6 +4876,11 @@ int main(int argc, char** argv) {
         fprintf(stderr, "error: --strict-call-relocations is only valid with --link-qo\n");
         return 1;
     }
+    if (script_aggregate_native_registers && !script_aggregate_symbol) {
+        fprintf(stderr,
+            "error: --script-aggregate-native-registers is only valid with --script-aggregate\n");
+        return 1;
+    }
 
     if (link_qo) {
         if (compile_only || module_mode || archive_mode || from_objects || context_dir
@@ -5412,7 +5426,7 @@ int main(int argc, char** argv) {
             target_files, output_path, script_aggregate_symbol, PO_DEFAULT,
             error, opt_level, target_triple, include_source,
             load_modules, stub_files, parse_defines, parse_option_flags,
-            &compiled_count);
+            &compiled_count, script_aggregate_native_registers);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();

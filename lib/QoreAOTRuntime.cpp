@@ -11666,6 +11666,7 @@ struct AotScriptDeferredBlob {
     std::string label;
     const QoreAOTFunc* functions;
     int num_functions;
+    bool native_only = false;
 };
 
 class AotScriptBatchState : public AbstractQoreProgramExternalData {
@@ -11685,6 +11686,109 @@ public:
 
 constexpr const char* kAotScriptBatchKey = "qore_aot_script_batch";
 }  // anonymous namespace
+
+static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
+        const uint8_t* metadata, int metadata_len,
+        const char* label,
+        const QoreAOTFunc* functions, int num_functions,
+        std::vector<AOTInitFuncExecInfo>* batch_init_contexts = nullptr,
+        std::vector<AOTInitFuncDescriptor>* batch_init_descriptors = nullptr) {
+    if (!tpgm || !metadata || metadata_len <= 0) {
+        return 1;
+    }
+    if (!functions || num_functions <= 0) {
+        return 0;
+    }
+
+    ExceptionSink xsink;
+    ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        return 2;
+    }
+
+    QoreAOTBinaryReader reader;
+    std::string read_error;
+    if (!reader.open(metadata, static_cast<uint32_t>(metadata_len), read_error)) {
+        fprintf(stderr, "qore_aot_script_register_native(%s): metadata open failed: %s\n",
+            label ? label : "<script>", read_error.c_str());
+        return 3;
+    }
+    uint64_t unsupported = reader.getHeader().feature_flags & ~QORE_AOT_SUPPORTED_FEATURES;
+    if (unsupported) {
+        fprintf(stderr, "qore_aot_script_register_native(%s): unsupported feature flags 0x%016llx\n",
+            label ? label : "<script>", static_cast<unsigned long long>(unsupported));
+        return 3;
+    }
+
+    std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+    for (int i = 0; i < num_functions; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(&xsink, "AOT script native function map build")) {
+            xsink.handleExceptions();
+            return 2;
+        }
+        if (functions[i].name && functions[i].fn_ptr) {
+            func_map[functions[i].name] = &functions[i];
+        }
+    }
+    if (func_map.empty()) {
+        return 0;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*tpgm);
+    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    int registered = 0;
+    std::vector<AOTInitFuncExecInfo> init_func_contexts;
+    std::vector<std::string> registration_errors;
+    auto debug_metadata = makeAOTDebugMetadata(reader, metadata, metadata_len);
+    registerAOTFunctionsFromSlotMaps(reader, root_ns, tpgm, func_map, registered,
+        &init_func_contexts, nullptr, &registration_errors, debug_metadata);
+    printd(1, "qore_aot_script_register_native(%s): registered %d/%d "
+        "pre-compiled functions (%d init funcs)\n",
+        label ? label : "<script>", registered, num_functions,
+        (int)init_func_contexts.size());
+    if (!registration_errors.empty() || registered < num_functions) {
+        std::string msg = makeAOTRegistrationFailureMessage(label, registered, num_functions,
+            &func_map, &registration_errors);
+        fprintf(stderr, "qore_aot_script_register_native: %s\n", msg.c_str());
+        return 4;
+    }
+
+    if (!init_func_contexts.empty()) {
+        std::vector<AOTInitFuncDescriptor> init_descriptors;
+        std::string init_err;
+        if (!readInitFuncs(reader, init_descriptors, init_err)) {
+            fprintf(stderr, "qore_aot_script_register_native(%s): init-func "
+                "descriptor read failed: %s\n",
+                label ? label : "<script>", init_err.c_str());
+            return 5;
+        }
+        if (!init_descriptors.empty()) {
+            if (batch_init_contexts && batch_init_descriptors) {
+                batch_init_contexts->insert(batch_init_contexts->end(),
+                    init_func_contexts.begin(), init_func_contexts.end());
+                batch_init_descriptors->insert(batch_init_descriptors->end(),
+                    init_descriptors.begin(), init_descriptors.end());
+            } else {
+                ExceptionSink tch_xsink;
+                ProgramThreadCountContextHelper tch(&tch_xsink, tpgm, false);
+                if (tch_xsink.isException()) {
+                    tch_xsink.handleExceptions();
+                    return 6;
+                }
+                executeInitFunctions(tpgm, init_func_contexts,
+                    init_descriptors, label ? label : "<script>",
+                    /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr);
+            }
+        }
+    }
+
+    if (!batch_init_contexts) {
+        preInitStaticVarsInProgram(tpgm);
+    }
+    return 0;
+}
 
 // @param label label for diagnostics (source path)
 // @param functions array of pre-compiled function descriptors
@@ -11715,6 +11819,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             d.label = label ? label : "<script>";
             d.functions = functions;
             d.num_functions = num_functions;
+            d.native_only = false;
             batch->deferred.push_back(std::move(d));
             return 0;
         }
@@ -11892,6 +11997,35 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
     return 0;
 }
 
+extern "C" DLLEXPORT int qore_aot_script_register_native(QoreProgram* tpgm,
+        const uint8_t* metadata, int metadata_len,
+        const char* label,
+        const QoreAOTFunc* functions, int num_functions) {
+    if (!tpgm || !metadata || metadata_len <= 0) {
+        return 1;
+    }
+
+    {
+        AbstractQoreProgramExternalData* ext =
+            tpgm->getExternalData(kAotScriptBatchKey);
+        if (ext) {
+            auto* batch = static_cast<AotScriptBatchState*>(ext);
+            AotScriptDeferredBlob d;
+            d.metadata = metadata;
+            d.metadata_len = metadata_len;
+            d.label = label ? label : "<script>";
+            d.functions = functions;
+            d.num_functions = num_functions;
+            d.native_only = true;
+            batch->deferred.push_back(std::move(d));
+            return 0;
+        }
+    }
+
+    return qore_aot_script_register_native_impl(tpgm, metadata, metadata_len,
+        label, functions, num_functions);
+}
+
 // Phase 4 slice 10g: begin a batch of deferred script registrations.
 // Between begin and end, each qore_aot_script_register call only
 // stashes (funcs, metadata, label) for the end-batch flush.  Multiple
@@ -11959,6 +12093,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     {
         size_t setup_cancel_i = 0;
         for (auto& d : batch->deferred) {
+            if (d.native_only) {
+                continue;
+            }
             if (setup_cancel_i && !(setup_cancel_i % 100)
                     && qore_check_cancel(&xsink, "AOT script batch module setup")) {
                 xsink.handleExceptions();
@@ -11999,6 +12136,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     {
         size_t dep_cancel_i = 0;
         for (auto& d : batch->deferred) {
+            if (d.native_only) {
+                continue;
+            }
             if (dep_cancel_i && !(dep_cancel_i % 100)
                     && qore_check_cancel(&xsink, "AOT script batch dependency load")) {
                 xsink.handleExceptions();
@@ -12047,6 +12187,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
 
         size_t cancel_i = 0;
         for (auto& d : batch->deferred) {
+            if (d.native_only) {
+                continue;
+            }
             if (cancel_i && !(cancel_i % 100)
                     && qore_check_cancel(&xsink, "AOT script batch metadata deserialization")) {
                 xsink.handleExceptions();
@@ -12080,18 +12223,49 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
         const size_t n = batch->deferred.size();
-        if (n != batch->mdes.sessionCount()) {
+        size_t metadata_blobs = 0;
+        size_t count_cancel_i = 0;
+        for (const auto& d : batch->deferred) {
+            if (count_cancel_i && !(count_cancel_i % 100)
+                    && qore_check_cancel(&xsink, "AOT script batch metadata count")) {
+                xsink.handleExceptions();
+                return 2;
+            }
+            ++count_cancel_i;
+            if (!d.native_only) {
+                ++metadata_blobs;
+            }
+        }
+        if (metadata_blobs != batch->mdes.sessionCount()) {
             fprintf(stderr, "qore_aot_script_end_batch: internal: "
-                "deferred=%zu vs sessions=%zu mismatch\n",
-                n, batch->mdes.sessionCount());
+                "metadata=%zu vs sessions=%zu mismatch\n",
+                metadata_blobs, batch->mdes.sessionCount());
             return 4;
         }
 
         std::vector<AOTInitFuncExecInfo> batch_init_contexts;
         std::vector<AOTInitFuncDescriptor> batch_init_descriptors;
 
+        size_t session_idx = 0;
         for (size_t i = 0; i < n; ++i) {
             auto& d = batch->deferred[i];
+            if (d.native_only) {
+                uint64_t t0 = time_on ? now_us() : 0;
+                int native_rc = qore_aot_script_register_native_impl(tpgm,
+                    d.metadata, d.metadata_len, d.label.c_str(),
+                    d.functions, d.num_functions,
+                    &batch_init_contexts, &batch_init_descriptors);
+                if (time_on) {
+                    us_register += now_us() - t0;
+                }
+                if (native_rc != 0) {
+                    fprintf(stderr, "qore_aot_script_end_batch(%s): "
+                        "native register failed rc=%d\n",
+                        d.label.c_str(), native_rc);
+                    return native_rc;
+                }
+                continue;
+            }
             std::unordered_map<std::string, const QoreAOTFunc*> func_map;
             if (d.functions) {
                 for (int j = 0; j < d.num_functions; ++j) {
@@ -12102,7 +12276,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             }
             std::vector<AOTInitFuncExecInfo> init_func_contexts;
             int registered = 0;
-            auto& session = batch->mdes.session(i);
+            auto& session = batch->mdes.session(session_idx++);
             std::vector<std::string> registration_errors;
             auto debug_metadata = makeAOTDebugMetadata(session.getReader(),
                 d.metadata, d.metadata_len);
