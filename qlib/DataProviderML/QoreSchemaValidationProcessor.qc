@@ -431,71 +431,15 @@ public class QoreSchemaValidationProcessor inherits AbstractDataProviderMLProces
     #! Appends validation status columns while preserving the input shape
     private auto addValidationColumns(auto records, DataProvider::DataProviderShape shape,
             list<list<string>> errors, list<bool> valid) {
-        switch (shape) {
-            case DataProvider::DataProviderShape::DataFrameBlock:
-                return records.withColumn("_validation_errors", errors).withColumn("_is_valid", valid);
-            case DataProvider::DataProviderShape::BufferColumns: {
-                hash<auto> columns = DataProvider::AbstractDataProcessor::isColumnarResult(records)
-                    ? records.toColumnHash()
-                    : records + {};
-                columns._validation_errors = errors;
-                columns._is_valid = valid;
-                return ColumnarResult::fromColumnHash(columns);
-            }
-            case DataProvider::DataProviderShape::HashOfLists: {
-                hash<auto> columns = records + {};
-                columns._validation_errors = errors;
-                columns._is_valid = valid;
-                return columns;
-            }
-            case DataProvider::DataProviderShape::RowRecords:
-                break;
-        }
-        return records;
+        return DataProvider::AbstractDataProcessor::appendShapeColumns(records, shape, {
+            "_validation_errors": errors,
+            "_is_valid": valid,
+        });
     }
 
     #! Selects valid rows for drop mode while preserving the input shape
     private auto selectRows(auto records, DataProvider::DataProviderShape shape, list<int> selected_indices) {
-        hash<auto> columns;
-        switch (shape) {
-            case DataProvider::DataProviderShape::DataFrameBlock:
-                foreach string name in (records.columnNames()) {
-                    columns{name} = QoreSchemaValidationProcessor::selectColumnValues(
-                        records.getColumn(name), selected_indices);
-                }
-                return DataProvider::AbstractDataProcessor::getDataFrameClass().newObject(columns);
-            case DataProvider::DataProviderShape::BufferColumns:
-                columns = DataProvider::AbstractDataProcessor::isColumnarResult(records)
-                    ? records.toColumnHash()
-                    : records + {};
-                foreach string name in (keys columns) {
-                    columns{name} = QoreSchemaValidationProcessor::selectColumnValues(
-                        columns{name}, selected_indices);
-                }
-                return ColumnarResult::fromColumnHash(columns);
-            case DataProvider::DataProviderShape::HashOfLists:
-                foreach string name in (keys records) {
-                    columns{name} = QoreSchemaValidationProcessor::selectColumnValues(
-                        records{name}, selected_indices);
-                }
-                return columns;
-            case DataProvider::DataProviderShape::RowRecords:
-                break;
-        }
-        return records;
-    }
-
-    #! Selects row values from a list or dense buffer column
-    private static list<auto> selectColumnValues(auto column, list<int> selected_indices) {
-        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
-        list<auto> result;
-        if (values.typeCode() != NT_LIST) {
-            return DataProvider::AbstractDataProcessor::repeatValue(column, selected_indices.lsize());
-        }
-        foreach int index in (selected_indices) {
-            push result, values[index];
-        }
-        return result;
+        return DataProvider::AbstractDataProcessor::selectShapeRows(records, shape, selected_indices);
     }
 
     #! Supports shaped bulk API

@@ -570,6 +570,201 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         return result;
     }
 
+    #! Returns top-level column names from a shaped block
+    /** @param data the shaped value
+        @param shape the detected or negotiated shape
+
+        @since %DataProvider 3.5
+    */
+    static list<string> getShapeColumnNames(auto data, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock:
+                return data.columnNames();
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(data)) {
+                    return data.columnNames();
+                }
+                return keys data;
+            case DataProviderShape::HashOfLists:
+                return keys data;
+            case DataProviderShape::RowRecords:
+                if (data.typeCode() == NT_HASH) {
+                    return keys data;
+                }
+                break;
+        }
+        return ();
+    }
+
+    #! Returns one top-level column container from a shaped block
+    /** @param data the shaped value
+        @param shape the detected or negotiated shape
+        @param field a top-level field name
+
+        @return the column container, or @ref NOTHING if the field is not available
+
+        @since %DataProvider 3.5
+    */
+    static *auto getShapeColumn(auto data, DataProviderShape shape, string field) {
+        if (field.find(".") >= 0) {
+            return;
+        }
+
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock:
+                return data.columnNames().contains(field) ? data.getColumn(field) : NOTHING;
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(data)) {
+                    return data.columnNames().contains(field) ? data.getColumn(field) : NOTHING;
+                }
+                return data.hasKey(field) ? data{field} : NOTHING;
+            case DataProviderShape::HashOfLists:
+                return data.hasKey(field) ? data{field} : NOTHING;
+            case DataProviderShape::RowRecords:
+                if (data.typeCode() == NT_HASH && data.hasKey(field)) {
+                    return data{field};
+                }
+                break;
+        }
+    }
+
+    #! Converts a shaped column container to a list with one entry per row
+    /** Scalar values are repeated for \a count rows.  List and dense buffer columns
+        must match \a count.
+
+        @param column the column container or scalar value
+        @param count the expected row count
+        @param field the field name for diagnostics
+
+        @since %DataProvider 3.5
+    */
+    static list<auto> columnValuesToList(auto column, int count, string field) {
+        switch (column.typeCode()) {
+            case NT_BUFFER: {
+                if (column.lsize() != count) {
+                    throw "PROCESSOR-SHAPE-ERROR",
+                        sprintf("field %y has %d values but the shaped block has %d rows",
+                            field, column.lsize(), count);
+                }
+                return column.toList();
+            }
+            case NT_LIST:
+                if (column.lsize() != count) {
+                    throw "PROCESSOR-SHAPE-ERROR",
+                        sprintf("field %y has %d values but the shaped block has %d rows",
+                            field, column.lsize(), count);
+                }
+                return column;
+        }
+        return AbstractDataProcessor::repeatValue(column, count);
+    }
+
+    #! Converts a shaped column container to a list of floats
+    /** @param column the column container or scalar value
+        @param count the expected row count
+        @param field the field name for diagnostics
+
+        @since %DataProvider 3.5
+    */
+    static list<float> columnValuesToFloatList(auto column, int count, string field) {
+        list<float> result;
+        foreach auto value in (AbstractDataProcessor::columnValuesToList(column, count, field)) {
+            push result, value.toFloat();
+        }
+        return result;
+    }
+
+    #! Selects row values from a list, dense buffer, or scalar column
+    /** @param column the column container or scalar value
+        @param selected_indices zero-based row indices to retain
+
+        @since %DataProvider 3.5
+    */
+    static list<auto> selectColumnValues(auto column, list<int> selected_indices) {
+        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
+        list<auto> result;
+        if (values.typeCode() != NT_LIST) {
+            return AbstractDataProcessor::repeatValue(column, selected_indices.lsize());
+        }
+        foreach int index in (selected_indices) {
+            push result, values[index];
+        }
+        return result;
+    }
+
+    #! Selects rows from a hash-of-lists or hash-of-buffers column block
+    /** @param data the column block
+        @param selected_indices zero-based row indices to retain
+
+        @since %DataProvider 3.5
+    */
+    static hash<auto> selectColumnBlockRows(hash<auto> data, list<int> selected_indices) {
+        hash<auto> result;
+        foreach string name in (keys data) {
+            result{name} = AbstractDataProcessor::selectColumnValues(data{name}, selected_indices);
+        }
+        return result;
+    }
+
+    #! Selects rows from a shaped block while preserving a bulk shape
+    /** @param records the shaped value
+        @param shape the detected or negotiated shape
+        @param selected_indices zero-based row indices to retain
+
+        @since %DataProvider 3.5
+    */
+    static auto selectShapeRows(auto records, DataProviderShape shape, list<int> selected_indices) {
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock:
+                return records.takeRows(selected_indices);
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(records)) {
+                    return records.take(selected_indices);
+                }
+                return ColumnarResult::fromColumnHash(
+                    AbstractDataProcessor::selectColumnBlockRows(records, selected_indices));
+            case DataProviderShape::HashOfLists:
+                return AbstractDataProcessor::selectColumnBlockRows(records, selected_indices);
+            case DataProviderShape::RowRecords:
+                break;
+        }
+        return records;
+    }
+
+    #! Appends columns to a shaped block while preserving the negotiated shape
+    /** @param records the shaped value
+        @param shape the detected or negotiated shape
+        @param new_columns columns to append
+
+        @since %DataProvider 3.5
+    */
+    static auto appendShapeColumns(auto records, DataProviderShape shape, hash<auto> new_columns) {
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock: {
+                auto result = records;
+                foreach hash<auto> i in (new_columns.pairIterator()) {
+                    result = result.withColumn(i.key, i.value);
+                }
+                return result;
+            }
+            case DataProviderShape::BufferColumns: {
+                hash<auto> columns = AbstractDataProcessor::isColumnarResult(records)
+                    ? records.toColumnHash()
+                    : records + {};
+                columns += new_columns;
+                return ColumnarResult::fromColumnHash(columns);
+            }
+            case DataProviderShape::HashOfLists: {
+                hash<auto> columns = records + {};
+                columns += new_columns;
+                return columns;
+            }
+            case DataProviderShape::RowRecords:
+                break;
+        }
+        return records;
+    }
+
     #! Returns a list containing \a count copies of \a value
     /** @param value the value to repeat
         @param count the number of values

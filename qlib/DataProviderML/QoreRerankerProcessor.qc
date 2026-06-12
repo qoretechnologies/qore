@@ -547,52 +547,11 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
     #! Builds a shaped top-k output block with reranker score and rank columns
     private auto selectRerankedRows(auto records, DataProvider::DataProviderShape shape,
             list<int> selected_indices, list<float> scores, list<int> ranks) {
-        hash<auto> columns;
-        switch (shape) {
-            case DataProvider::DataProviderShape::DataFrameBlock:
-                return records.takeRows(selected_indices)
-                    .withColumn("reranker_score", scores)
-                    .withColumn("reranker_rank", ranks);
-            case DataProvider::DataProviderShape::BufferColumns:
-                if (DataProvider::AbstractDataProcessor::isColumnarResult(records)) {
-                    columns = records.take(selected_indices).toColumnHash();
-                    columns.reranker_score = scores;
-                    columns.reranker_rank = ranks;
-                    return ColumnarResult::fromColumnHash(columns);
-                }
-                columns = records + {};
-                foreach string name in (keys columns) {
-                    columns{name} = QoreRerankerProcessor::selectColumnValues(
-                        columns{name}, selected_indices);
-                }
-                columns.reranker_score = scores;
-                columns.reranker_rank = ranks;
-                return ColumnarResult::fromColumnHash(columns);
-            case DataProvider::DataProviderShape::HashOfLists:
-                foreach string name in (keys records) {
-                    columns{name} = QoreRerankerProcessor::selectColumnValues(
-                        records{name}, selected_indices);
-                }
-                columns.reranker_score = scores;
-                columns.reranker_rank = ranks;
-                return columns;
-            case DataProvider::DataProviderShape::RowRecords:
-                break;
-        }
-        return records;
-    }
-
-    #! Selects a ranked subset from a list or dense buffer column
-    private static list<auto> selectColumnValues(auto column, list<int> selected_indices) {
-        list<auto> values = column.typeCode() == NT_BUFFER ? column.toList() : column;
-        list<auto> result;
-        if (values.typeCode() != NT_LIST) {
-            return DataProvider::AbstractDataProcessor::repeatValue(column, selected_indices.lsize());
-        }
-        foreach int index in (selected_indices) {
-            push result, values[index];
-        }
-        return result;
+        auto selected = DataProvider::AbstractDataProcessor::selectShapeRows(records, shape, selected_indices);
+        return DataProvider::AbstractDataProcessor::appendShapeColumns(selected, shape, {
+            "reranker_score": scores,
+            "reranker_rank": ranks,
+        });
     }
 
     #! Supports shaped bulk API
