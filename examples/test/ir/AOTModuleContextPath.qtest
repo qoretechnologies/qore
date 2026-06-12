@@ -30,6 +30,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
             \modulePreservesRawGenericBaseCompatibility());
         addTestCase("AOT reexported modules load concurrently into Programs",
             \moduleConcurrentProgramLoadsWithReexport());
+        addTestCase("AOT distinct modules load concurrently into Programs",
+            \moduleConcurrentDistinctProgramLoads());
 
         set_return_value(main());
     }
@@ -552,5 +554,121 @@ if (errors) {
         string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
         assertEq("value=42 errors=0\nEXIT=0\n", run_out,
             "concurrent Program::loadModule() calls must not deadlock on AOT reexported modules");
+    }
+
+    moduleConcurrentDistinctProgramLoads() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        const int ModuleCount = 12;
+        File f();
+        string modules_src = "(\n";
+
+        for (int i = 0; i < ModuleCount; ++i) {
+            string module_name = sprintf("AOTConcurrentState%d", i);
+            string function_name = sprintf("aotConcurrentState%dValue", i);
+            int base = 100 + i;
+            string qm_path = sprintf("%s/%s.qm", tmp_dir, module_name);
+            string qmod_path = sprintf("%s/%s.qmod", tmp_dir, module_name);
+
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"concurrent AOT state module\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () {
+        %s::ModuleInitValue = %s::StateValue.value();
+    };
+}
+
+public namespace %s {
+    our *int ModuleInitValue;
+
+    public class StateObject {
+        private {
+            int v;
+        }
+
+        constructor(int n) {
+            v = n;
+        }
+
+        int value() {
+            return v;
+        }
+    }
+
+    public const StateValue = new StateObject(%d);
+
+    public int sub value() {
+        return StateValue.value() + (ModuleInitValue ?? -1);
+    }
+}
+
+public int sub %s() {
+    return %s::value();
+}
+", module_name, module_name, module_name, module_name, base, function_name, module_name));
+            f.close();
+
+            string compile_out = backquote(sprintf(
+                "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+                libqore_dir, libqore_dir, qore_bin, qmod_path, qm_path));
+            assertTrue(is_file(qmod_path), sprintf("compiled %s AOT module: %s", module_name, compile_out));
+            unlink(qm_path);
+
+            modules_src += sprintf("    {\"module\": \"%s\", \"function\": \"%s\", \"expected\": %d},\n",
+                module_name, function_name, base * 2);
+        }
+        modules_src += ")";
+
+        string script_path = tmp_dir + "/run-concurrent-distinct.qr";
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+
+const Modules = " + modules_src + ";
+const Threads = Modules.size();
+
+Counter ready(Threads);
+Counter done(Threads);
+Mutex error_lock();
+list<string> errors = ();
+
+foreach hash<auto> info in (Modules) {
+    background sub (hash<auto> info) {
+        on_exit done.dec();
+        ready.dec();
+        ready.waitForZero();
+
+        try {
+            Program p();
+            p.loadModule(info.module);
+            int value = p.callFunction(info.function);
+            if (value != info.expected) {
+                error_lock.lock();
+                on_exit error_lock.unlock();
+                errors += sprintf(\"%s: got %d expected %d\", info.module, value, info.expected);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            error_lock.lock();
+            on_exit error_lock.unlock();
+            errors += sprintf(\"%s: %s: %s\", info.module, ex.err, ex.desc);
+        }
+    }(info);
+}
+
+done.waitForZero();
+printf(\"errors=%d\\n\", errors.size());
+if (errors) {
+    printf(\"%s\\n\", errors.join(\"\\n\"));
+}
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("errors=0\nEXIT=0\n", run_out,
+            "concurrent Program::loadModule() calls for distinct AOT modules must not race AOT module state");
     }
 }

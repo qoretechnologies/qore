@@ -864,6 +864,7 @@ public:
     DLLLOCAL ~ModuleLoadMapHelper();
 
     DLLLOCAL void unlock();
+    DLLLOCAL void lock();
 
 private:
     QoreModuleManager::module_load_map_t::iterator i;

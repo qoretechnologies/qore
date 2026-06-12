@@ -2362,8 +2362,6 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
             }
         }
     }
-    mlmh.unlock();
-
     // see if a module with this name is already registered
     QoreAbstractModule* mi = findModuleUnlocked(name);
     if (mi) {
@@ -2437,7 +2435,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     try {
         assert(q_gettid());
-        // The ModuleLoadMapHelper above handles unlocking for init.
+        // Run only module init code without the module-manager mutex; the in-progress
+        // reservation remains active so concurrent loads of this module still wait.
+        mlmh.unlock();
         assert(mod_info.init);
         printd(5, "QoreModuleManager::loadBinaryModuleFromDesc(%s) %s: calling module_init@%p\n", path,
             name, mod_info.init);
@@ -2458,6 +2458,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         e.convert(&xsink);
         return nullptr;
     }
+    mlmh.lock();
 
     std::unique_ptr<QoreBuiltinModule> bmi(new QoreBuiltinModule(nullptr, path, mod_info,
         dlh ? dlh->release() : nullptr, info.release(), load_opt));
@@ -2742,6 +2743,13 @@ void ModuleLoadMapHelper::unlock() {
         // Run initialization unlocked.
         QMM.mutex.unlock();
         unlocked = true;
+    }
+}
+
+void ModuleLoadMapHelper::lock() {
+    if (unlocked) {
+        QMM.mutex.lock();
+        unlocked = false;
     }
 }
 

@@ -8658,13 +8658,10 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
     "unsupported AOT slot metadata" error far from the real cause.
 
     A failed load is only tolerated for a circular/in-progress dependency, which is still registered
-    in the module map.  The module map must be queried with the correct locking discipline: the
-    source-stripped module-init paths (qore_aot_module_init_v2 / _v3) run with the module-loading
-    mutex held (inherited from loadBinaryModuleFromDesc) and must use the unlocked lookup, while the
-    executable/script entry points (qore_aot_run_v2 / _v3, qore_aot_module_init,
-    qore_aot_script_register / _end_batch) run without the mutex and use the locking lookup. */
-static bool aotRequiredDepUnavailable(const char* dep, bool module_lock_held) {
-    return module_lock_held ? !QMM.findModuleUnlocked(dep) : !QMM.findModule(dep);
+    in the module map.  AOT init runs while binary-module initialization is temporarily outside the
+    module-manager mutex, so this helper must use the locking lookup. */
+static bool aotRequiredDepUnavailable(const char* dep) {
+    return !QMM.findModule(dep);
 }
 
 extern "C" DLLEXPORT int qore_aot_run_v2(
@@ -8758,7 +8755,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                         printd(2, "AOT v2: dependency '%s' load error (rc=%d)\n",
                             dep.c_str(), dep_rc);
                         xsink.clear();
-                        if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                        if (aotRequiredDepUnavailable(dep.c_str())) {
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
@@ -9027,9 +9024,8 @@ struct AotModuleState {
     get_module_context()->getName() to find the correct program for the module being
     imported.
 
-    Thread safety: Access is serialized by QoreModuleManager's module loading mutex.
-    All accesses (qore_aot_module_init, qore_aot_module_ns_init, qore_aot_module_delete)
-    occur under the module manager lock, so no additional synchronization is needed.
+    Thread safety: Access is serialized by get_aot_module_state_lock().  The binary module loader releases the
+    module-manager mutex while running module init code, so this state cannot rely on QoreModuleManager locking.
 */
 static std::unordered_map<std::string, AotModuleState> aot_module_map;
 
@@ -9106,6 +9102,11 @@ static bool aotInitTraceEnabled() {
 
 static QoreRecursiveThreadLock& get_aot_init_execution_lock() {
     static QoreRecursiveThreadLock lock;
+    return lock;
+}
+
+static QoreThreadLock& get_aot_module_state_lock() {
+    static QoreThreadLock lock;
     return lock;
 }
 
@@ -9213,8 +9214,9 @@ static std::vector<std::string> extractDependencies(const char* source, int sour
 //! Strip %requires directives from source code
 /** AOT modules have already resolved their dependencies at compile time, so we must
     not process %requires directives when parsing the embedded source at runtime.
-    Processing %requires would cause a deadlock because module loading holds the
-    module manager lock, and parsing %requires tries to acquire the same lock.
+    Dependencies are loaded explicitly before the embedded source is parsed; replaying
+    %requires here would re-enter module loading while the current module is still
+    registered as in-progress.
 
     For %try-module blocks, we need special handling:
     - Strip the %try-module and %endtry directives themselves
@@ -9270,7 +9272,11 @@ static std::string stripRequiresDirectives(const char* source, int source_len,
             bool loaded = false;
             if (!mod_name.empty()) {
                 ExceptionSink xsink;
-                QoreProgram* load_target = target_pgm ? target_pgm : aot_module_pgm;
+                QoreProgram* load_target = target_pgm;
+                if (!load_target) {
+                    AutoLocker aot_state_al(get_aot_module_state_lock());
+                    load_target = aot_module_pgm;
+                }
                 int rc = MM.runTimeLoadModule(&xsink, mod_name.c_str(), load_target);
                 loaded = (rc >= 0 && !xsink);
                 xsink.clear();
@@ -9471,7 +9477,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                         printd(2, "AOT v3: dependency '%s' load error (rc=%d)\n",
                             dep.c_str(), dep_rc);
                         xsink.clear();
-                        if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                        if (aotRequiredDepUnavailable(dep.c_str())) {
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
@@ -9786,7 +9792,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
             // A genuinely-missing dependency is a hard error (this init path runs with the
             // module-loading mutex unlocked, so use the locking lookup); only a circular/in-progress
             // dependency, still registered in the module map, is tolerated.
-            if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+            if (aotRequiredDepUnavailable(dep.c_str())) {
                 QoreStringNode* err = new QoreStringNodeMaker(
                     "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
                     "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
@@ -9928,12 +9934,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for modules that call ns_init during their own init
     // before being stored in the map.
-    aot_module_pgm = local_pgm;
-    aot_module_name = mod_name;
-    aot_module_path = label ? label : "";
-    aot_module_funcs = functions;
-    aot_module_num_funcs = num_functions;
     {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        aot_module_pgm = local_pgm;
+        aot_module_name = mod_name;
+        aot_module_path = label ? label : "";
+        aot_module_funcs = functions;
+        aot_module_num_funcs = num_functions;
+
         AotModuleState state;
         state.pgm = local_pgm;
         state.funcs = functions;
@@ -9974,33 +9982,44 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
     const char* mod_path = nullptr;
     QoreProgram* mod_pgm = nullptr;
     const std::vector<std::string>* reexport_deps = nullptr;
+    std::string mod_name_storage;
+    std::string mod_path_storage;
+    std::vector<std::string> reexport_deps_storage;
 
-    QoreModuleContext* ctx = get_module_context();
-    if (ctx) {
-        mod_name = ctx->getName();
-        auto it = aot_module_map.find(mod_name);
-        if (it != aot_module_map.end()) {
-            mod_pgm = it->second.pgm;
-            reexport_deps = &it->second.reexport_deps;
-            if (!it->second.path.empty()) {
-                mod_path = it->second.path.c_str();
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        QoreModuleContext* ctx = get_module_context();
+        if (ctx) {
+            mod_name = ctx->getName();
+            auto it = aot_module_map.find(mod_name);
+            if (it != aot_module_map.end()) {
+                mod_pgm = it->second.pgm;
+                reexport_deps_storage = it->second.reexport_deps;
+                reexport_deps = &reexport_deps_storage;
+                if (!it->second.path.empty()) {
+                    mod_path_storage = it->second.path;
+                    mod_path = mod_path_storage.c_str();
+                }
             }
         }
-    }
-    if (aotInitTraceEnabled()) {
-        fprintf(stderr, "[aot-init] ns_init entry ctx_mod=%s fallback_mod=%s map_size=%zu mod_pgm=%p path=%s\n",
-            mod_name ? mod_name : "<none>", aot_module_name.c_str(),
-            aot_module_map.size(), (void*)mod_pgm, mod_path ? mod_path : "<none>");
-    }
 
-    // Fall back to the current module being initialized (for the module's own registration)
-    if (!mod_pgm) {
-        mod_pgm = aot_module_pgm;
-        if (!mod_name) {
-            mod_name = aot_module_name.c_str();
+        if (aotInitTraceEnabled()) {
+            fprintf(stderr, "[aot-init] ns_init entry ctx_mod=%s fallback_mod=%s map_size=%zu mod_pgm=%p path=%s\n",
+                mod_name ? mod_name : "<none>", aot_module_name.c_str(),
+                aot_module_map.size(), (void*)mod_pgm, mod_path ? mod_path : "<none>");
         }
-        if (!aot_module_path.empty()) {
-            mod_path = aot_module_path.c_str();
+
+        // Fall back to the current module being initialized (for the module's own registration)
+        if (!mod_pgm) {
+            mod_pgm = aot_module_pgm;
+            if (!mod_name) {
+                mod_name_storage = aot_module_name;
+                mod_name = mod_name_storage.c_str();
+            }
+            if (!aot_module_path.empty()) {
+                mod_path_storage = aot_module_path;
+                mod_path = mod_path_storage.c_str();
+            }
         }
     }
 
@@ -10116,18 +10135,35 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
     // We build init function contexts HERE using the TARGET program's namespace tree
     // (which has properly committed classes) rather than the module program's tree.
     if (mod_name) {
-        auto it = aot_module_map.find(mod_name);
-        if (aotInitTraceEnabled()) {
-            fprintf(stderr, "[aot-init] ns_init module=%s map_found=%d descriptors=%zu metadata=%zu funcs=%d\n",
-                mod_name, it != aot_module_map.end(),
-                it != aot_module_map.end() ? it->second.init_descriptors.size() : 0,
-                it != aot_module_map.end() ? it->second.metadata.size() : 0,
-                it != aot_module_map.end() ? it->second.num_funcs : 0);
+        const QoreAOTFunc* init_funcs = nullptr;
+        int init_num_funcs = 0;
+        QoreProgram* init_ctx_pgm = nullptr;
+        std::vector<uint8_t> init_metadata;
+        std::vector<AOTInitFuncDescriptor> init_descriptors;
+
+        {
+            AutoLocker aot_state_al(get_aot_module_state_lock());
+            auto it = aot_module_map.find(mod_name);
+            if (aotInitTraceEnabled()) {
+                fprintf(stderr, "[aot-init] ns_init module=%s map_found=%d descriptors=%zu metadata=%zu funcs=%d\n",
+                    mod_name, it != aot_module_map.end(),
+                    it != aot_module_map.end() ? it->second.init_descriptors.size() : 0,
+                    it != aot_module_map.end() ? it->second.metadata.size() : 0,
+                    it != aot_module_map.end() ? it->second.num_funcs : 0);
+            }
+            if (it != aot_module_map.end() && !it->second.init_descriptors.empty()
+                    && !it->second.metadata.empty()
+                    && it->second.init_done_pgms.find(tpgm) == it->second.init_done_pgms.end()) {
+                it->second.init_done_pgms.insert(tpgm);
+                init_funcs = it->second.funcs;
+                init_num_funcs = it->second.num_funcs;
+                init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
+                init_metadata = it->second.metadata;
+                init_descriptors = it->second.init_descriptors;
+            }
         }
-        if (it != aot_module_map.end() && !it->second.init_descriptors.empty()
-                && !it->second.metadata.empty()
-                && it->second.init_done_pgms.find(tpgm) == it->second.init_done_pgms.end()) {
-            it->second.init_done_pgms.insert(tpgm);
+
+        if (!init_descriptors.empty() && !init_metadata.empty()) {
             // Build function table from the stored function pointers.
             // Only include init functions (__const_init::, __svar_init::,
             // __module_init::) — regular user functions were already registered
@@ -10137,13 +10173,13 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
             // mergeUserPublic), so namespace-private functions would fail
             // lookup and produce spurious "unresolved local slot" warnings.
             std::unordered_map<std::string, const QoreAOTFunc*> func_map;
-            for (int i = 0; i < it->second.num_funcs; ++i) {
-                const char* fname = it->second.funcs[i].name;
-                if (fname && it->second.funcs[i].fn_ptr
+            for (int i = 0; init_funcs && i < init_num_funcs; ++i) {
+                const char* fname = init_funcs[i].name;
+                if (fname && init_funcs[i].fn_ptr
                         && (strncmp(fname, "__const_init::", 14) == 0
                             || strncmp(fname, "__svar_init::", 13) == 0
                             || strncmp(fname, "__module_init::", 15) == 0)) {
-                    func_map[fname] = &it->second.funcs[i];
+                    func_map[fname] = &init_funcs[i];
                 }
             }
             if (aotInitTraceEnabled()) {
@@ -10165,18 +10201,18 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
             // program still holds references to everything the AOT-compiled
             // init code was lowered against, so the module program is the
             // natural context for slot resolution.
-            QoreProgram* init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
+            assert(init_ctx_pgm);
             QoreAOTBinaryReader init_reader;
             std::string reader_error;
-            if (init_reader.open(it->second.metadata.data(),
-                    static_cast<uint32_t>(it->second.metadata.size()), reader_error)) {
+            if (init_reader.open(init_metadata.data(),
+                    static_cast<uint32_t>(init_metadata.size()), reader_error)) {
                 qore_ns_private* target_root_priv = qore_ns_private::get(
                     *static_cast<RootQoreNamespace*>(root_ns));
                 std::vector<AOTInitFuncExecInfo> init_func_contexts;
                 int registered = 0;
                 std::vector<std::string> registration_errors;
                 auto debug_metadata = makeAOTDebugMetadata(init_reader,
-                    it->second.metadata.data(), static_cast<int>(it->second.metadata.size()));
+                    init_metadata.data(), static_cast<int>(init_metadata.size()));
                 registerAOTFunctionsFromSlotMaps(init_reader, target_root_priv,
                     init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
                     &registration_errors, debug_metadata);
@@ -10205,7 +10241,7 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                     // the module program will then read correct values via
                     // RuntimeConstantRefNode.
                     executeInitFunctions(tpgm, init_func_contexts,
-                        it->second.init_descriptors, mod_name,
+                        init_descriptors, mod_name,
                         init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
                         mod_path);
                 }
@@ -10233,41 +10269,53 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
     // Use the module context name to clean up only the module being unloaded
     // (set by QoreBuiltinModule::~QoreBuiltinModule via QoreModuleNameContextHelper)
     const char* mod_name = get_module_context_name();
+    QoreProgram* pgm = nullptr;
     if (mod_name) {
-        auto it = aot_module_map.find(mod_name);
-        if (it != aot_module_map.end()) {
-            if (it->second.pgm) {
-                // Clear namespace data before deref to release cross-program
-                // closure references. Without this, the module's ClosureVarValues
-                // may reference objects from the main program that have already
-                // been freed during global cleanup, causing dangling pointer access.
-                ExceptionSink xsink;
-                qore_program_private::get(*it->second.pgm)->waitForTerminationAndClear(&xsink);
-                it->second.pgm->waitForTerminationAndDeref(&xsink);
+        {
+            AutoLocker aot_state_al(get_aot_module_state_lock());
+            auto it = aot_module_map.find(mod_name);
+            if (it != aot_module_map.end()) {
+                pgm = it->second.pgm;
+                aot_module_map.erase(it);
             }
-            aot_module_map.erase(it);
+            // Clear per-module state if it matches the module being deleted
+            if (aot_module_name == mod_name) {
+                aot_module_pgm = nullptr;
+                aot_module_name.clear();
+                aot_module_path.clear();
+                aot_module_funcs = nullptr;
+                aot_module_num_funcs = 0;
+            }
         }
-        // Clear per-module state if it matches the module being deleted
-        if (aot_module_name == mod_name) {
+        if (pgm) {
+            // Clear namespace data before deref to release cross-program
+            // closure references. Without this, the module's ClosureVarValues
+            // may reference objects from the main program that have already
+            // been freed during global cleanup, causing dangling pointer access.
+            ExceptionSink xsink;
+            qore_program_private::get(*pgm)->waitForTerminationAndClear(&xsink);
+            pgm->waitForTerminationAndDeref(&xsink);
+        }
+    } else {
+        // Fallback: no module context — clean up all (shutdown path)
+        std::vector<QoreProgram*> programs;
+        {
+            AutoLocker aot_state_al(get_aot_module_state_lock());
+            for (auto& entry : aot_module_map) {
+                if (entry.second.pgm) {
+                    programs.push_back(entry.second.pgm);
+                }
+            }
+            aot_module_map.clear();
             aot_module_pgm = nullptr;
             aot_module_name.clear();
             aot_module_path.clear();
             aot_module_funcs = nullptr;
             aot_module_num_funcs = 0;
         }
-    } else {
-        // Fallback: no module context — clean up all (shutdown path)
-        for (auto& entry : aot_module_map) {
-            if (entry.second.pgm) {
-                entry.second.pgm->waitForTerminationAndDeref(nullptr);
-            }
+        for (QoreProgram* p : programs) {
+            p->waitForTerminationAndDeref(nullptr);
         }
-        aot_module_map.clear();
-        aot_module_pgm = nullptr;
-        aot_module_name.clear();
-        aot_module_path.clear();
-        aot_module_funcs = nullptr;
-        aot_module_num_funcs = 0;
     }
 }
 
@@ -10285,6 +10333,7 @@ DLLLOCAL bool qore_is_aot_user_module(const char* name) {
     if (!name) {
         return false;
     }
+    AutoLocker aot_state_al(get_aot_module_state_lock());
     return aot_module_map.find(name) != aot_module_map.end();
 }
 
@@ -10292,6 +10341,7 @@ DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name) {
     if (!name) {
         return nullptr;
     }
+    AutoLocker aot_state_al(get_aot_module_state_lock());
     auto it = aot_module_map.find(name);
     if (it == aot_module_map.end()) {
         return nullptr;
@@ -10300,11 +10350,16 @@ DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name) {
 }
 
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink) {
-    for (auto& entry : aot_module_map) {
-        QoreProgram* pgm = entry.second.pgm;
-        if (!pgm) {
-            continue;
+    std::vector<QoreProgram*> programs;
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        for (auto& entry : aot_module_map) {
+            if (entry.second.pgm) {
+                programs.push_back(entry.second.pgm);
+            }
         }
+    }
+    for (QoreProgram* pgm : programs) {
         pgm->waitForTermination();
         qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
     }
@@ -10408,7 +10463,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
             xsink.clear();
-            if (aotRequiredDepUnavailable(dep.c_str(), true)) {
+            if (aotRequiredDepUnavailable(dep.c_str())) {
                 // Genuinely missing (not a circular/in-progress load) — hard error.
                 printd(5, "AOT module v2 '%s': required dependency '%s' is unavailable\n",
                     mod_name, dep.c_str());
@@ -10508,12 +10563,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for early ns_init entry.
-    aot_module_pgm = local_pgm;
-    aot_module_name = mod_name;
-    aot_module_path = label ? label : "";
-    aot_module_funcs = functions;
-    aot_module_num_funcs = num_functions;
     {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        aot_module_pgm = local_pgm;
+        aot_module_name = mod_name;
+        aot_module_path = label ? label : "";
+        aot_module_funcs = functions;
+        aot_module_num_funcs = num_functions;
+
         AotModuleState state;
         state.pgm = local_pgm;
         state.funcs = functions;
@@ -11276,14 +11333,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // slot metadata" error.  Fail here with a clear message instead.
     //
     // A failed load is only tolerated for a circular/in-progress dependency, which is still
-    // registered in the module map (findModuleUnlocked != nullptr); the module-loading mutex is
-    // held across AOT init (see aot_module_map note), so the unlocked lookup is correct here.
+    // registered in the module map.  AOT init runs outside the module-manager mutex, so the
+    // availability check uses the normal locking lookup.
     for (const std::string& dep : deps) {
         printd(5, "AOT module v3 '%s': loading dependency '%s'\n", mod_name, dep.c_str());
         int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
         if (rc < 0 || xsink) {
             xsink.clear();
-            if (aotRequiredDepUnavailable(dep.c_str(), true)) {
+            if (aotRequiredDepUnavailable(dep.c_str())) {
                 // Genuinely missing (not a circular/in-progress load) — hard error.
                 printd(5, "AOT module v3 '%s': required dependency '%s' is unavailable\n",
                     mod_name, dep.c_str());
@@ -11484,12 +11541,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for early ns_init entry.
-    aot_module_pgm = local_pgm;
-    aot_module_name = mod_name;
-    aot_module_path = module_context_path ? module_context_path : "";
-    aot_module_funcs = functions;
-    aot_module_num_funcs = num_functions;
     {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        aot_module_pgm = local_pgm;
+        aot_module_name = mod_name;
+        aot_module_path = module_context_path ? module_context_path : "";
+        aot_module_funcs = functions;
+        aot_module_num_funcs = num_functions;
+
         AotModuleState state;
         state.pgm = local_pgm;
         state.funcs = functions;
@@ -11701,7 +11760,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                     printd(2, "qore_aot_script_register(%s): dependency '%s' load error "
                         "(rc=%d)\n", label ? label : "<script>", dep.c_str(), dep_rc);
                     xsink.clear();
-                    if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                    if (aotRequiredDepUnavailable(dep.c_str())) {
                         xsink.raiseException("AOT-ERROR",
                             "the AOT-compiled script (%s) requires module '%s', which could not be "
                             "loaded; the script was AOT-compiled against '%s' (its compiled code "
@@ -11950,7 +12009,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                         printd(2, "qore_aot_script_end_batch(%s): dependency '%s' load "
                             "error (rc=%d)\n", d.label.c_str(), dep.c_str(), dep_rc);
                         xsink.clear();
-                        if (aotRequiredDepUnavailable(dep.c_str(), false)) {
+                        if (aotRequiredDepUnavailable(dep.c_str())) {
                             xsink.raiseException("AOT-ERROR",
                                 "the AOT-compiled script (%s) requires module '%s', which could not be "
                                 "loaded; the script was AOT-compiled against '%s' (its compiled code "
