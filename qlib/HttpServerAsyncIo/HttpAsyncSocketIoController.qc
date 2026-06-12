@@ -3511,12 +3511,11 @@ public class HttpAsyncSocketIoController {
             remove connections{uh};
         }
 
-        # Cancel the poll operation from the I/O controller cache to release socket reference
-        try {
-            controller.cancel(cinfo.sock);
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::DEBUG, "Error cancelling WebSocket operation for %y: %s: %s", uh, ex.err, ex.desc);
-        }
+        # The terminal onComplete() that brought us here has already removed
+        # the poll op from the async I/O controller cache and released its
+        # socket reference.  Do not send a second cancel here: during teardown
+        # it can race with controller autostop and leave the completion worker
+        # waiting on a cancel that has no useful work left to do.
 
         try {
             submitToHandlerPool(cinfo.target, sub () {

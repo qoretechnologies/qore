@@ -200,6 +200,14 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
     */
     private handlerPoolDrain() {
         bool wsc_alive = False;
+        bool dispatch_cleared = False;
+        on_exit {
+            if (!dispatch_cleared) {
+                AutoLock al(dispatch_mutex);
+                dispatching = False;
+            }
+            active_dispatches.dec();
+        }
         {
             AutoLock al(dispatch_mutex);
             if (!completed && wsc) {
@@ -215,7 +223,7 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                             # Connection torn down mid-dispatch; skip the
                             # notifyIo() and exit cleanly.
                             dispatching = False;
-                            active_dispatches.dec();
+                            dispatch_cleared = True;
                             return;
                         }
                         if (handler) {
@@ -229,13 +237,13 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                 wsc_alive = exists wsc;
             }
             dispatching = False;
+            dispatch_cleared = True;
         }
         # Wake the controller to send any queued data (echo responses,
         # close echoes) that processServerFrame() pushed to send_queue.
         if (wsc_alive) {
             wsc.notifyIo();
         }
-        active_dispatches.dec();
     }
 
     #! Drains queued frames inline under dispatch_mutex; caller must hold the mutex
