@@ -1,0 +1,73 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlGuardrailFilterBufferColumnsBridge
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/OnnxBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlGuardrailFilterBufferColumnsBridge {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_guardrail_filter_buffercolumns_bridge");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = guardrailRows();
+        int expected_rows = rows - ((rows + 9) / 10);
+        ColumnarResult columns;
+        DataProviderML::QoreGuardrailFilterProcessor proc({
+            "text_field": "body",
+            "rules": (
+                {"type": "pii", "severity": "critical", "params": {"action": "block"}},
+            ),
+        });
+
+        r.setup = sub () {
+            columns = ColumnarResult::fromColumnHash(makeGuardrailColumnHash(rows));
+            r.bytes_processed = rows * 96;
+        };
+
+        r.measure = sub () {
+            list<auto> input_rows = AbstractDataProcessor::convertShape(
+                columns, DataProviderShape::BufferColumns, DataProviderShape::RowRecords);
+            list<auto> output_rows;
+            foreach auto row in (input_rows) {
+                OnnxBench::collectResult(\output_rows, proc.processRecord(row));
+            }
+            hash<auto> bulk = AbstractDataProcessor::recordsToHashList(output_rows);
+            ColumnarResult result = AbstractDataProcessor::convertHashListResultShape(
+                bulk, DataProviderShape::BufferColumns);
+            int out_rows = AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns);
+            if (out_rows != expected_rows) {
+                throw "BENCHMARK-ERROR",
+                    sprintf("guardrail-filter bridge returned %d rows; expected %d", out_rows, expected_rows);
+            }
+        };
+
+        exit(r.run());
+    }
+
+    private static int guardrailRows() {
+        *string env_rows = ENV.QORE_BENCH_GUARDRAIL_ROWS;
+        return env_rows ? env_rows.toInt() : 20000;
+    }
+
+    private static hash<auto> makeGuardrailColumnHash(int rows) {
+        buffer<int64> ids = buffer<int64>::sized(rows);
+        list<string> bodies;
+        for (int i = 0; i < rows; ++i) {
+            ids[i] = i;
+            push bodies, (i % 10) == 0
+                ? sprintf("customer %d email user%d@example.com", i, i)
+                : sprintf("clean customer support note %d", i);
+        }
+        return {"id": ids, "body": bodies};
+    }
+}

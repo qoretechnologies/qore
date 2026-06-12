@@ -311,6 +311,10 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("tokenize - DataFrameBlock shape", \tokenizeDataFrameShape());
         addTestCase("tokenize - BufferColumns shape", \tokenizeBufferColumnsShape());
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
+        addTestCase("chunk-text - DataFrameBlock shape", \chunkTextDataFrameShape());
+        addTestCase("chunk-text - BufferColumns shape", \chunkTextBufferColumnsShape());
+        addTestCase("guardrail-filter - BufferColumns shape", \guardrailFilterBufferColumnsShape());
+        addTestCase("guardrail-transform - BufferColumns shape", \guardrailTransformBufferColumnsShape());
         addTestCase("embed-text - DataFrameBlock ONNX shape", \embedTextDataFrameOnnxShape());
         addTestCase("embed-text - BufferColumns ONNX shape", \embedTextBufferColumnsOnnxShape());
         addTestCase("embed-text - DataFrameBlock dense columns",
@@ -5143,6 +5147,131 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             "chunk-text should use tokenizer artifact loaded from registry");
         assertTrue(exists result[0].chunk_token_count,
             "chunk output should include token count");
+    }
+
+    chunkTextDataFrameShape() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+        return;
+%endif
+        if (skipTokenizerFixture()) {
+            return;
+        }
+
+        DataProviderML::QoreChunkTextProcessor proc({
+            "text_field": "body",
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "chunk_size": 4,
+            "chunk_overlap": 0,
+        });
+
+        DataFrame::DataFrame df({
+            "id": (1, 2),
+            "body": (
+                "hello world enterprise ai search",
+                "qore pipelines process columnar data quickly",
+            ),
+        });
+
+        auto result = proc.processRecordsShape(df, DataProviderShape::DataFrameBlock);
+        assertEq(DataProviderShape::DataFrameBlock, AbstractDataProcessor::detectShape(result),
+            "chunk-text should preserve DataFrameBlock output");
+        int count = AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::DataFrameBlock);
+        assertTrue(count >= 2, "chunk-text should emit at least one chunk per source row");
+        assertEq(count, result.getColumn("id").lsize());
+        assertEq(count, result.getColumn("chunk_text").lsize());
+        assertEq(count, result.getColumn("chunk_index").lsize());
+        foreach int token_count in (result.getColumn("chunk_token_count")) {
+            assertTrue(token_count > 0, "chunk token count should be positive");
+        }
+    }
+
+    chunkTextBufferColumnsShape() {
+        if (skipTokenizerFixture()) {
+            return;
+        }
+
+        DataProviderML::QoreChunkTextProcessor proc({
+            "text_field": "body",
+            "tokenizer_config_path": getTokenizerConfigPath(),
+            "chunk_size": 4,
+            "chunk_overlap": 0,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "body": (
+                "hello world enterprise ai search",
+                "qore pipelines process columnar data quickly",
+            ),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "chunk-text should preserve BufferColumns output");
+        hash<auto> out = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertTrue(out.id.lsize() >= 2, "chunk-text should emit at least one chunk per source row");
+        assertEq(out.id.lsize(), out.chunk_text.lsize());
+        assertEq(out.id.lsize(), out.chunk_index.lsize());
+        assertEq(out.id.lsize(), out.chunk_token_count.lsize());
+        assertTrue(out.id.contains(1), "chunk output should include chunks for source id 1");
+        assertTrue(out.id.contains(2), "chunk output should include chunks for source id 2");
+        foreach int token_count in (out.chunk_token_count) {
+            assertTrue(token_count > 0, "chunk token count should be positive");
+        }
+    }
+
+    guardrailFilterBufferColumnsShape() {
+        DataProviderML::QoreGuardrailFilterProcessor proc({
+            "text_field": "body",
+            "rules": (
+                {"type": "pii", "severity": "critical", "params": {"action": "block"}},
+            ),
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3)),
+            "body": ("clean text", "email test@example.com", "still clean"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "guardrail-filter should preserve BufferColumns output");
+        hash<auto> out = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq((1, 3), out.id,
+            "guardrail-filter should drop only the record containing blocked PII");
+        assertEq(("clean text", "still clean"), out.body);
+    }
+
+    guardrailTransformBufferColumnsShape() {
+        DataProviderML::QoreGuardrailTransformProcessor proc({
+            "text_field": "body",
+            "rules": (
+                {"type": "pii", "severity": "high", "params": {"action": "redact"}},
+            ),
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "body": ("clean text", "email test@example.com"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "guardrail-transform should preserve BufferColumns output");
+        hash<auto> out = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq((1, 2), out.id);
+        assertEq(2, out._guardrail_passed.lsize());
+        assertTrue(out._guardrail_passed[0]);
+        assertTrue(out._guardrail_passed[1]);
+        assertEq("clean text", out.body[0]);
+        assertTrue(out.body[1] =~ /EMAIL_REDACTED/,
+            "guardrail-transform should redact the PII value in the text column");
+        assertTrue(out._guardrail_violations[1].size() >= 1,
+            "redacted record should include guardrail violation metadata");
     }
 
     embedTextDataFrameOnnxShape() {

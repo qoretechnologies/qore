@@ -427,6 +427,69 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         return field_values;
     }
 
+    #! Extracts one top-level field from a shaped block as a row-aligned list
+    /** Missing top-level columns are represented as @ref NOTHING values to
+        match row-record field lookup behavior.
+
+        @param records shaped input block
+        @param shape negotiated shape for \a records
+        @param field configured top-level field
+        @param count expected logical row count
+
+        @since DataProviderML 1.4
+    */
+    static list<auto> getShapeFieldValues(auto records, DataProvider::DataProviderShape shape,
+            string field, int count) {
+        *auto column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, field);
+        return exists column
+            ? DataProvider::AbstractDataProcessor::columnValuesToList(column, count, field)
+            : DataProvider::AbstractDataProcessor::repeatValue(NOTHING, count);
+    }
+
+    #! Extracts one top-level field from a shaped block as string values
+    /** @param records shaped input block
+        @param shape negotiated shape for \a records
+        @param field configured top-level field
+        @param count expected logical row count
+
+        @since DataProviderML 1.4
+    */
+    static list<string> getShapeFieldStringValues(auto records, DataProvider::DataProviderShape shape,
+            string field, int count) {
+        list<string> result;
+        foreach auto value in (AbstractDataProviderMLProcessor::getShapeFieldValues(
+                records, shape, field, count)) {
+            push result, value.toString();
+        }
+        return result;
+    }
+
+    #! Selects shaped source rows and appends generated columns
+    /** This helper supports aggregate processors that can emit multiple output
+        rows per input row without materializing the whole input block as row
+        hashes.  \a selected_indices can contain duplicate row indexes.
+
+        @param records shaped input block
+        @param shape negotiated shape for \a records
+        @param selected_indices source row index for each output row
+        @param generated_columns generated column values, one value per output row
+
+        @return the shaped output block, or @ref NOTHING when no rows are selected
+
+        @since DataProviderML 1.4
+    */
+    static *auto appendGeneratedShapeRows(auto records, DataProvider::DataProviderShape shape,
+            list<int> selected_indices, hash<auto> generated_columns) {
+        if (!selected_indices) {
+            return;
+        }
+
+        auto selected = DataProvider::AbstractDataProcessor::selectShapeRows(
+            records, shape, selected_indices);
+        return DataProvider::AbstractDataProcessor::appendShapeColumns(
+            selected, shape, generated_columns);
+    }
+
     #! Builds an ML numeric matrix from row-aligned field lists
     /** @param field_values row-aligned field values keyed by field name
         @param fields configured field order
