@@ -54,6 +54,10 @@ class AOTConstructorCallRelocationsTest inherits QUnit::Test {
         string consumer_qo = lib_dir + "/consumer.qo";
         string aggregate_qo = lib_dir + "/aggregate.qo";
         string map_path = lib_dir + "/aggregate.qolink.json";
+        string strict_aggregate_qo = lib_dir + "/strict-aggregate.qo";
+        string strict_map_path = lib_dir + "/strict-aggregate.qolink.json";
+        string missing_aggregate_qo = lib_dir + "/missing-provider-aggregate.qo";
+        string missing_map_path = lib_dir + "/missing-provider-aggregate.qolink.json";
 
         write(provider_src, "%new-style
 public class AOTCtorRelocProvider {
@@ -109,5 +113,23 @@ public class AOTCtorRelocConsumer {
             "link map resolves the constructor relocation: " + link_map);
         assertTrue(link_map.find("\"unresolved\": 0") != -1,
             "link map has no unresolved call relocations: " + link_map);
+
+        string strict_link_out = run(sprintf(
+            "%s --link-qo --strict-call-relocations --aggregate-symbol=AOT_CTOR_RELOC_STRICT_TEST"
+            " --qolink-map=%s -o %s %s %s",
+            qcc_bin, strict_map_path, strict_aggregate_qo, provider_qo, consumer_qo));
+        assertTrue(is_file(strict_aggregate_qo), "strict qo-link succeeds with provider: " + strict_link_out);
+        assertTrue(is_file(strict_map_path), "strict qo-link writes link map: " + strict_link_out);
+
+        string missing_provider_out = run(sprintf(
+            "%s --link-qo --strict-call-relocations --aggregate-symbol=AOT_CTOR_RELOC_MISSING_TEST"
+            " --qolink-map=%s -o %s %s",
+            qcc_bin, missing_map_path, missing_aggregate_qo, consumer_qo));
+        assertTrue(!is_file(missing_aggregate_qo),
+            "strict qo-link fails without constructor provider: " + missing_provider_out);
+        assertTrue(missing_provider_out.find("unresolved call relocation") != -1,
+            "strict qo-link reports unresolved call relocation: " + missing_provider_out);
+        assertTrue(missing_provider_out.find("AOTCtorRelocProvider::constructor(int)") != -1,
+            "strict qo-link diagnostic names missing constructor: " + missing_provider_out);
     }
 }

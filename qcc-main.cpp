@@ -527,6 +527,7 @@ static const char* script_aggregate_symbol = nullptr;
 // --link-qo emits an object-driven aggregate register object from existing
 // script-context `.qo` inputs, without reparsing the original sources.
 static bool link_qo = false;
+static bool strict_call_relocations = false;
 static const char* link_aggregate_symbol = nullptr;
 static const char* qolink_map_path = nullptr;
 // --from-objects signals aggregator mode: the
@@ -722,6 +723,11 @@ static void print_usage(const char* prog) {
            "                         init_SYM_qo(QoreProgram*)\n");
     printf("      --qolink-map=FILE  Write --link-qo map JSON to FILE (default:\n"
            "                         <output>.qolink.json)\n");
+    printf("      --strict-call-relocations\n"
+           "                         With --link-qo, fail if any call relocation is\n"
+           "                         unresolved, ambiguous, or hash-mismatched.\n"
+           "                         Useful for complete closed-world test links;\n"
+           "                         production links can keep optional runtime fallback.\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -827,6 +833,7 @@ static struct option long_options[] = {
     {"link-qo",           no_argument,       nullptr, 0x10d},
     {"aggregate-symbol",  required_argument, nullptr, 0x10e},
     {"qolink-map",        required_argument, nullptr, 0x10f},
+    {"strict-call-relocations", no_argument, nullptr, 0x110},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -953,6 +960,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x10f:  // --qolink-map
                 qolink_map_path = optarg;
+                break;
+            case 0x110:  // --strict-call-relocations
+                strict_call_relocations = true;
                 break;
             case 'F':
                 from_objects = true;
@@ -4013,6 +4023,38 @@ static void print_qo_link_issues(const char* label, const std::vector<QOLinkIssu
     }
 }
 
+static void print_qo_link_call_relocation_issues(const char* label,
+        const std::vector<QOLinkCallRelocation>& relocs) {
+    for (size_t i = 0; i < relocs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link call-relocation issue reporting")) {
+            fprintf(stderr, "error: operation cancelled during AOT qo-link call-relocation issue reporting\n");
+            return;
+        }
+        const QOLinkCallRelocation& reloc = relocs[i];
+        fprintf(stderr, "error: qo-link %s call relocation: consumer='%s' function='%s' slot=%u "
+            "target='%s' symbol='%s' reason='%s'",
+            label, reloc.consumer.c_str(), reloc.function_name.c_str(), reloc.expr_slot,
+            reloc.target_kind.c_str(), reloc.path.c_str(),
+            reloc.reason.empty() ? reloc.resolution.c_str() : reloc.reason.c_str());
+        if (!reloc.expected.empty()) {
+            fprintf(stderr, " %s", reloc.expected.c_str());
+        }
+        if (!reloc.providers.empty()) {
+            fprintf(stderr, " providers=");
+            for (size_t j = 0; j < reloc.providers.size(); ++j) {
+                if (j && !(j % 100)
+                        && qore_check_cancel(nullptr, "AOT qo-link call-relocation provider reporting")) {
+                    fprintf(stderr,
+                        "\nerror: operation cancelled during AOT qo-link call-relocation provider reporting\n");
+                    return;
+                }
+                fprintf(stderr, "%s%s", j ? "," : "", reloc.providers[j].c_str());
+            }
+        }
+        fputc('\n', stderr);
+    }
+}
+
 static void dump_object_sections(const llvm::object::ObjectFile& obj) {
     printf("  object sections:\n");
     for (const llvm::object::SectionRef& sec : obj.sections()) {
@@ -4821,6 +4863,10 @@ int main(int argc, char** argv) {
             "error: --aggregate-symbol and --qolink-map are only valid with --link-qo\n");
         return 1;
     }
+    if (strict_call_relocations && !link_qo) {
+        fprintf(stderr, "error: --strict-call-relocations is only valid with --link-qo\n");
+        return 1;
+    }
 
     if (link_qo) {
         if (compile_only || module_mode || archive_mode || from_objects || context_dir
@@ -4887,6 +4933,16 @@ int main(int argc, char** argv) {
             print_qo_link_issues("unresolved import", plan.unresolved_imports);
             print_qo_link_issues("ambiguous import", plan.ambiguous_imports);
             print_qo_link_issues("hash mismatch", plan.hash_mismatches);
+            qore_cleanup();
+            return 1;
+        }
+        if (strict_call_relocations
+                && (!plan.unresolved_call_relocations.empty()
+                    || !plan.ambiguous_call_relocations.empty()
+                    || !plan.call_relocation_hash_mismatches.empty())) {
+            print_qo_link_call_relocation_issues("unresolved", plan.unresolved_call_relocations);
+            print_qo_link_call_relocation_issues("ambiguous", plan.ambiguous_call_relocations);
+            print_qo_link_call_relocation_issues("hash mismatch", plan.call_relocation_hash_mismatches);
             qore_cleanup();
             return 1;
         }
