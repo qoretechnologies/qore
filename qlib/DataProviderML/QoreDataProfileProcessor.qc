@@ -149,26 +149,151 @@ public class QoreDataProfileProcessor inherits AbstractDataProviderMLProcessor {
     #! Processes a window of records to produce a data profile
     private list<auto> processWindow(list<hash<auto>> records) {
         int count = records.lsize();
+        hash<auto> values;
+
+        foreach string field in (fields) {
+            list<auto> field_values;
+            foreach hash<auto> rec in (records) {
+                push field_values, DataProvider::AbstractDataProvider::getFieldValue(rec, field);
+            }
+            values{field} = field_values;
+        }
+
+        return processColumnWindow(values, 0, count);
+    }
+
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreDataProfileProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (hasNestedFields() || buffer) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        hash<auto> values = getShapeProfileValues(records, shape, count);
+        list<auto> events;
+        int offset = 0;
+        while (offset + window_size <= count) {
+            events += processColumnWindow(values, offset, window_size);
+            offset += window_size;
+        }
+
+        if (offset < count) {
+            buffer = materializeShapeTailRows(records, shape, offset, count - offset);
+        }
+
+        if (!events) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(events);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
+    #! Returns @ref True if any configured field requires row materialization
+    private bool hasNestedFields() {
+        foreach string field in (fields) {
+            if (field.find(".") >= 0) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Reads top-level fields directly from a shaped block
+    private hash<auto> getShapeProfileValues(auto records, DataProvider::DataProviderShape shape, int count) {
+        hash<auto> values;
+        foreach string field in (fields) {
+            *auto column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, field);
+            if (exists column) {
+                values{field} = DataProvider::AbstractDataProcessor::columnValuesToList(column, count, field);
+            }
+        }
+        return values;
+    }
+
+    #! Keeps only the trailing rows that have not yet filled a complete profile window
+    private list<hash<auto>> materializeShapeTailRows(auto records, DataProvider::DataProviderShape shape,
+            int offset, int count) {
+        list<int> selected_indices;
+        for (int row = offset; row < offset + count; ++row) {
+            push selected_indices, row;
+        }
+
+        auto selected = DataProvider::AbstractDataProcessor::selectShapeRows(records, shape, selected_indices);
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            selected, shape, DataProvider::DataProviderShape::RowRecords);
+        list<hash<auto>> result;
+        foreach auto row in (rows) {
+            push result, row;
+        }
+        return result;
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
+    #! Profiles one complete window using pre-read field columns
+    private list<auto> processColumnWindow(hash<auto> values, int offset, int count) {
         list<auto> events;
 
         foreach string field in (fields) {
-            # collect values and track types
-            int missing_count = 0;
+            int missing_count = values.hasKey(field) ? 0 : count;
             hash<string, int> type_counts;
             list<auto> non_null_values = ();
 
-            foreach hash<auto> rec in (records) {
-                auto val = DataProvider::AbstractDataProvider::getFieldValue(rec, field);
-                if (!exists val) {
-                    ++missing_count;
-                } else {
-                    string val_type = val.type();
-                    type_counts{val_type} = (type_counts{val_type} ?? 0) + 1;
-                    push non_null_values, val;
+            if (values.hasKey(field)) {
+                list<auto> field_values = values{field};
+                for (int i = offset; i < offset + count; ++i) {
+                    auto val = field_values[i];
+                    if (!exists val) {
+                        ++missing_count;
+                    } else {
+                        string val_type = val.type();
+                        type_counts{val_type} = (type_counts{val_type} ?? 0) + 1;
+                        push non_null_values, val;
+                    }
                 }
             }
 
-            # determine most common type
             string most_common_type = "unknown";
             int max_type_count = 0;
             foreach string t in (keys type_counts) {
@@ -178,16 +303,13 @@ public class QoreDataProfileProcessor inherits AbstractDataProviderMLProcessor {
                 }
             }
 
-            # compute cardinality
             hash<auto> unique_tracker;
             foreach auto v in (non_null_values) {
                 unique_tracker{string(v)} = True;
             }
             int cardinality = unique_tracker.size();
 
-            # check if field is numeric
             bool is_numeric = (most_common_type == "integer" || most_common_type == "float");
-
             *float min_val;
             *float max_val;
             *float mean_val;
@@ -195,57 +317,12 @@ public class QoreDataProfileProcessor inherits AbstractDataProviderMLProcessor {
             *int outlier_count;
 
             if (is_numeric && non_null_values.lsize() > 0) {
-                # compute numeric statistics
-                list<float> numeric_values = ();
-                foreach auto v in (non_null_values) {
-                    push numeric_values, v.toFloat();
-                }
-
-                int n = numeric_values.lsize();
-
-                # min and max
-                float mn = numeric_values[0];
-                float mx = numeric_values[0];
-                float total = 0.0;
-                foreach float nv in (numeric_values) {
-                    if (nv < mn) {
-                        mn = nv;
-                    }
-                    if (nv > mx) {
-                        mx = nv;
-                    }
-                    total += nv;
-                }
-                min_val = mn;
-                max_val = mx;
-                mean_val = total / n;
-
-                # standard deviation
-                float sq_sum = 0.0;
-                foreach float nv in (numeric_values) {
-                    float diff = nv - mean_val;
-                    sq_sum += diff * diff;
-                }
-                std_val = sqrt(sq_sum / n);
-
-                # outlier detection via IQR (only for >= 10 values)
-                if (n >= 10) {
-                    # sort values for quartile computation
-                    list<float> sorted = sort(numeric_values);
-                    float q1 = sorted[(n * 0.25).toInt()];
-                    float q3 = sorted[(n * 0.75).toInt()];
-                    float iqr = q3 - q1;
-                    float lower_bound = q1 - 1.5 * iqr;
-                    float upper_bound = q3 + 1.5 * iqr;
-
-                    int oc = 0;
-                    foreach float nv in (numeric_values) {
-                        if (nv < lower_bound || nv > upper_bound) {
-                            ++oc;
-                        }
-                    }
-                    outlier_count = oc;
-                }
+                hash<auto> stats = calculateNumericStats(non_null_values);
+                min_val = stats.min;
+                max_val = stats.max;
+                mean_val = stats.mean;
+                std_val = stats.std;
+                outlier_count = stats.outlier_count;
             }
 
             push events, <DataProfileFieldInfo>{
@@ -265,6 +342,61 @@ public class QoreDataProfileProcessor inherits AbstractDataProviderMLProcessor {
         }
 
         return events;
+    }
+
+    #! Calculates numeric statistics for profile output
+    private hash<auto> calculateNumericStats(list<auto> non_null_values) {
+        list<float> numeric_values = ();
+        foreach auto v in (non_null_values) {
+            push numeric_values, v.toFloat();
+        }
+
+        int n = numeric_values.lsize();
+        float mn = numeric_values[0];
+        float mx = numeric_values[0];
+        float total = 0.0;
+        foreach float nv in (numeric_values) {
+            if (nv < mn) {
+                mn = nv;
+            }
+            if (nv > mx) {
+                mx = nv;
+            }
+            total += nv;
+        }
+
+        float mean_val = total / n;
+        float sq_sum = 0.0;
+        foreach float nv in (numeric_values) {
+            float diff = nv - mean_val;
+            sq_sum += diff * diff;
+        }
+
+        *int outlier_count;
+        if (n >= 10) {
+            list<float> sorted = sort(numeric_values);
+            float q1 = sorted[(n * 0.25).toInt()];
+            float q3 = sorted[(n * 0.75).toInt()];
+            float iqr = q3 - q1;
+            float lower_bound = q1 - 1.5 * iqr;
+            float upper_bound = q3 + 1.5 * iqr;
+
+            int oc = 0;
+            foreach float nv in (numeric_values) {
+                if (nv < lower_bound || nv > upper_bound) {
+                    ++oc;
+                }
+            }
+            outlier_count = oc;
+        }
+
+        return {
+            "min": mn,
+            "max": mx,
+            "mean": mean_val,
+            "std": sqrt(sq_sum / n),
+            "outlier_count": outlier_count,
+        };
     }
 
     #! Supports shaped bulk API

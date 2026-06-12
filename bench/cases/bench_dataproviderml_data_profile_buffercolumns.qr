@@ -1,0 +1,44 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlDataProfileBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlDataProfileBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_data_profile_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            columns = DataFrameBench::makeColumnarResult(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreDataProfileProcessor proc({
+                "fields": ("amount", "score", "status", "region"),
+                "window_size": rows,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_data_profile_buffercolumns", result, 4);
+            if (result.getColumn("field_name").lsize() != 4 || result.getColumn("count")[0] != rows) {
+                throw "BENCHMARK-ERROR", "data-profile did not produce expected field profiles";
+            }
+        };
+
+        exit(r.run());
+    }
+}

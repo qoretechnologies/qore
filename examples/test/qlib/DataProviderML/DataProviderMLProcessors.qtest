@@ -189,6 +189,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("data-profile - missing values", \dataProfileMissingValues());
         addTestCase("data-profile - numeric stats", \dataProfileNumericStats());
         addTestCase("data-profile - outlier detection", \dataProfileOutlierDetection());
+        addTestCase("data-profile - BufferColumns shape", \dataProfileBufferColumnsShape());
         addTestCase("data-profile - flush partial", \dataProfileFlushPartial());
         addTestCase("data-profile - not configured", \dataProfileNotConfigured());
         addTestCase("data-profile - capabilities", \dataProfileCapabilities());
@@ -4740,6 +4741,40 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(exists profile.outlier_count);
         assertTrue(profile.outlier_count >= 2,
             sprintf("expected at least 2 outliers, got %d", profile.outlier_count));
+    }
+
+    dataProfileBufferColumnsShape() {
+        DataProviderML::QoreDataProfileProcessor proc({
+            "fields": ("value", "category", "missing"),
+            "window_size": 4,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3, 4, 5)),
+            "value": new buffer<float64>((10.0, 20.0, 30.0, 40.0, 50.0)),
+            "category": ("a", "b", "a", "c", "d"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "data-profile should preserve BufferColumns output for complete windows");
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+
+        hash<auto> profiles = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("value", "category", "missing"), profiles.field_name);
+        assertEq((4, 4, 4), profiles.count);
+        assertEq((0, 0, 4), profiles.missing_count);
+        assertEq(("float", "string", "unknown"), profiles.type);
+        assertEq((4, 3, 0), profiles.cardinality);
+        assertFloat(25.0, profiles.mean[0], 0.001);
+
+        *list<auto> flushed = proc.flushRecords();
+        assertTrue(exists flushed);
+        assertEq(3, flushed.lsize());
+        assertEq(1, flushed[0].count);
+        assertEq(50.0, flushed[0].min);
+        assertEq(1, flushed[2].missing_count);
     }
 
     dataProfileFlushPartial() {

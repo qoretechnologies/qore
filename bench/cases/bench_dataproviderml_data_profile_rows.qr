@@ -1,0 +1,49 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlDataProfileRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlDataProfileRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_data_profile_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            records = DataFrameBench::makeRecords(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreDataProfileProcessor proc({
+                "fields": ("amount", "score", "status", "region"),
+                "window_size": rows,
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                *auto row_result = proc.processRecord(rec);
+                if (exists row_result) {
+                    result += row_result;
+                }
+            }
+            if (result.lsize() != 4 || result[0].count != rows) {
+                throw "BENCHMARK-ERROR", "data-profile did not produce expected row output";
+            }
+        };
+
+        exit(r.run());
+    }
+}
