@@ -222,6 +222,66 @@ class OverflowWsHandler inherits WebSocketHandler {
     }
 }
 
+#! a fake H2/H3 stream context to exercise the outbound-backpressure drop without a live HTTP/2 or HTTP/3 connection
+class FakeBackpressureStreamContext inherits AsyncSocketIo::AbstractStreamContext {
+    public {
+        #! when True, trySendData() reports backpressure (a full stream send buffer)
+        bool full;
+        #! frames actually accepted for sending (via sendData() or a non-backpressured trySendData())
+        list<binary> sent();
+    }
+
+    constructor(bool full) {
+        self.full = full;
+    }
+
+    string getProtocol() {
+        return "http3";
+    }
+
+    int getStreamId() {
+        return 1;
+    }
+
+    Socket getSocket() {
+        return new Socket();
+    }
+
+    bool isOpen() {
+        return True;
+    }
+
+    sendData(binary data, bool end_stream = False) {
+        sent += data;
+    }
+
+    bool trySendData(binary data, bool end_stream = False) {
+        if (full) {
+            return False;
+        }
+        sent += data;
+        return True;
+    }
+
+    *binary readData(int max_bytes = 0) {
+        return NOTHING;
+    }
+}
+
+#! a connection that records whether it was dropped (stop() called) without performing real teardown
+class DropTrackingWsConnection inherits WebSocketConnection {
+    public {
+        bool dropped = False;
+    }
+
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    stop() {
+        dropped = True;
+    }
+}
+
 class MyWsClient inherits WebSocketClient {
     private {
         WaitGroup wg;
@@ -259,6 +319,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("pending send buffer tests", \pendingSendBufferTests());
         addTestCase("AsyncAPI handler option tests", \asyncApiHandlerOptionTests());
         addTestCase("max_queue_size drops slow client", \maxQueueSizeDropsTest());
+        addTestCase("H2/H3 stream backpressure drops slow client", \streamBackpressureDropsTest());
         addTestCase("idle_timeout closes idle connection", \idleTimeoutTest());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
@@ -973,6 +1034,46 @@ class WebSocketHandlerTest inherits QUnit::Test {
         assertFalse(runWsMaxQueueScenario(0), "with no limit, the over-queue connection stays registered");
         # with the limit set, the over-limit connection IS dropped on the next send
         assertTrue(runWsMaxQueueScenario(5), "with max_queue_size set, the over-limit connection is dropped");
+    }
+
+    #! when a limit is set, a backpressured H2/H3 stream closes the connection instead of blocking or dropping frames
+    streamBackpressureDropsTest() {
+        # with a limit set, a stream reporting backpressure (full send buffer) closes the whole connection — a
+        # slow/non-reading H2/H3 client must never stall a broadcast nor silently lose a frame on a live connection
+        {
+            MyWsHandler h({"max_queue_size": 5, "logger": logger});
+            FakeBackpressureStreamContext ctx(True);
+            DropTrackingWsConnection c(h);
+            c.setStreamContext(ctx);
+            c.enableDirectSend();
+            c.sendEncoded(<00ff>);
+            assertTrue(c.dropped, "a backpressured H2/H3 stream closes the connection");
+            assertEq(0, ctx.sent.size(), "no frame is sent on the dropped connection");
+        }
+
+        # a healthy stream is not dropped and the frame is sent
+        {
+            MyWsHandler h({"max_queue_size": 5, "logger": logger});
+            FakeBackpressureStreamContext ctx(False);
+            DropTrackingWsConnection c(h);
+            c.setStreamContext(ctx);
+            c.enableDirectSend();
+            c.sendEncoded(<00ff>);
+            assertFalse(c.dropped, "a healthy H2/H3 stream is not dropped");
+            assertEq(1, ctx.sent.size(), "the frame is sent on a healthy stream");
+        }
+
+        # with no limit set, the legacy blocking sendData() path is used and the connection is never dropped here
+        {
+            MyWsHandler h({"max_queue_size": 0, "logger": logger});
+            FakeBackpressureStreamContext ctx(True);
+            DropTrackingWsConnection c(h);
+            c.setStreamContext(ctx);
+            c.enableDirectSend();
+            c.sendEncoded(<00ff>);
+            assertFalse(c.dropped, "with no limit set, the connection is not dropped");
+            assertEq(1, ctx.sent.size(), "with no limit set, sendData() is used so the frame is sent");
+        }
     }
 
     #! sets up a handler whose connections always report an over-limit queue; sends once and returns True if the

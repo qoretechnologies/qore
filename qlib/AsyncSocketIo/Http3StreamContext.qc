@@ -169,6 +169,28 @@ public class Http3StreamContext inherits AbstractStreamContext {
         }
     }
 
+    #! Attempts to send data on the QUIC stream without blocking on backpressure
+    /** Performs a single non-blocking @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" call,
+        which returns @c 1 (and discards the frame) when the stream send buffer is full, rather than looping and
+        waiting for the buffer to drain the way @ref sendData() does.  This lets a WebSocket broadcast drop a slow
+        or non-reading client immediately instead of stalling for up to @ref MaxDrainRetries drain waits.
+
+        @param data the binary payload to send
+        @param end_stream if @ref True, signals end of stream after this data
+
+        @return @ref True if the data was accepted; @ref False if the stream send buffer is full (backpressure)
+
+        @since AsyncSocketIo 1.0
+    */
+    bool trySendData(binary data, bool end_stream = False) {
+        int rc = sock.submitQuicStreamData(session_id, stream_id, data, end_stream);
+        # wake the I/O controller so queued packets are flushed on its next tick
+        if (wake_callback) {
+            wake_callback();
+        }
+        return rc != 1;
+    }
+
     #! Read data from the extended CONNECT tunnel
     /** When a data Queue is registered, reads non-blockingly from the Queue
         (data is pushed by h3RecvDataCallback in the C++ QUIC session).

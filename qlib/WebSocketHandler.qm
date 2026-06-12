@@ -137,8 +137,11 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @subsection websockethandler_v2_8 Version 2.8
     - added a per-connection outbound queue limit (the \c max_queue_size handler option and
       @ref WebSocketHandler::WebSocketHandler::setMaxQueueSize() "setMaxQueueSize()"): a slow or non-reading client
-      whose async outbound frame queue reaches the limit is dropped instead of growing server memory without
-      bound; protects servers exposed to untrusted clients
+      is dropped instead of growing server memory without bound or stalling a broadcast; protects servers exposed
+      to untrusted clients.  For HTTP/1.1 the async outbound frame queue is bounded by the limit (frame count); for
+      HTTP/2 and HTTP/3 the connection is closed as soon as the stream send buffer reports backpressure (a
+      non-blocking send is used instead of waiting for the buffer to drain).  Dropped frames are never sent on a
+      live connection — the whole connection is closed so the peer never sees a gap in the message stream
     - added an idle timeout (the \c idle_timeout handler option and
       @ref WebSocketHandler::WebSocketHandler::setIdleTimeout() "setIdleTimeout()"): a connection with no
       inbound activity for the configured number of seconds is closed, reclaiming slots/resources held by idle
@@ -680,6 +683,35 @@ public class WebSocketConnection {
         return async_ws_poll_op ? async_ws_poll_op.getSendQueueSize() : 0;
     }
 
+    #! Sends an encoded frame over the H2/H3 stream context, dropping the connection on backpressure when a limit is set
+    /** Enforces the per-connection outbound backpressure limit for the H2/H3 stream-context send path (the
+        @ref getMaxQueueSize() "max_queue_size" frame counter applies only to the H1 async send queue).  When a
+        limit is configured, a non-blocking @ref AsyncSocketIo::AbstractStreamContext::trySendData() "trySendData()"
+        is used: if the stream send buffer is full the whole connection is closed (a slow or non-reading client must
+        not stall a broadcast or have frames silently dropped — closing is the only stream-safe response).  When no
+        limit is set the legacy blocking @ref AsyncSocketIo::AbstractStreamContext::sendData() "sendData()" is used.
+
+        @since %WebSocketHandler 2.8
+    */
+    private streamSendOrDrop(binary encoded) {
+        if (handler.getMaxQueueSize() > 0) {
+            if (!stream_ctx.trySendData(encoded)) {
+                handler.logWarn("WebSocket stream outbound send buffer is full (backpressure); dropping the slow "
+                    "client to protect server resources");
+                try {
+                    stop();
+                } catch (hash<ExceptionInfo> ex) {
+                    handler.logError("error dropping backpressured WebSocket connection: %s",
+                        get_exception_string(ex));
+                }
+                return;
+            }
+        } else {
+            stream_ctx.sendData(encoded);
+        }
+        notifyIo();
+    }
+
     #! Pushes an already-encoded message on the connection's message channel
     sendEncoded(binary msg) {
         if (dropIfQueueFull()) {
@@ -692,8 +724,7 @@ public class WebSocketConnection {
         }
         # H2/H3: send directly via stream context if available
         if (direct_send_enabled && stream_ctx) {
-            stream_ctx.sendData(msg);
-            notifyIo();
+            streamSendOrDrop(msg);
             return;
         }
         try {
@@ -746,8 +777,7 @@ public class WebSocketConnection {
         # controller but doesn't trigger the stream processor to drain the
         # channel if no incoming data arrives.
         if (direct_send_enabled && stream_ctx) {
-            stream_ctx.sendData(encoded);
-            notifyIo();
+            streamSendOrDrop(encoded);
             return;
         }
         try {
@@ -781,8 +811,7 @@ public class WebSocketConnection {
             return;
         }
         if (direct_send_enabled && stream_ctx) {
-            stream_ctx.sendData(encoded);
-            notifyIo();
+            streamSendOrDrop(encoded);
             return;
         }
         try {

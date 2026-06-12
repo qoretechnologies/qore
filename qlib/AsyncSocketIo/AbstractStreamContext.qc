@@ -63,6 +63,30 @@ public class AbstractStreamContext {
     */
     abstract sendData(binary data, bool end_stream = False);
 
+    #! Attempts to send data without blocking on outbound backpressure
+    /** Transports that can detect a full stream send buffer without blocking (HTTP/2 and HTTP/3) override this to
+        return @ref False when the buffer is full instead of blocking or waiting for it to drain.  This lets a
+        caller (e.g. a WebSocket broadcast loop) drop a slow or non-reading client immediately rather than stalling.
+
+        Dropping individual frames on a live connection is never safe for an ordered protocol like WebSocket, so on
+        backpressure the caller must close the whole connection — the un-sent frame is intentionally discarded
+        because the peer receives a connection close rather than a gap in the stream.
+
+        The default implementation performs a normal (possibly blocking) @ref sendData() and returns @ref True.
+
+        @param data the binary payload to send
+        @param end_stream if @ref True, signals end of stream after this data
+
+        @return @ref True if the data was accepted for sending; @ref False if the stream send buffer is full
+        (backpressure) and the caller should drop the connection
+
+        @since AsyncSocketIo 1.0
+    */
+    bool trySendData(binary data, bool end_stream = False) {
+        sendData(data, end_stream);
+        return True;
+    }
+
     #! Read data from the stream
     /** @return binary data if available, or @ref nothing if no data is buffered
     */

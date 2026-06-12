@@ -149,6 +149,34 @@ public class Http2StreamContext inherits AbstractStreamContext {
         }
     }
 
+    #! Attempts to send data on the HTTP/2 stream without blocking on backpressure
+    /** @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" discards the frame and throws
+        @c HTTP2-FLOW-CONTROL when the stream send buffer is full; this method maps that condition to a @ref False
+        return so a caller (e.g. a WebSocket broadcast) can drop a slow or non-reading client immediately.  Any
+        other exception propagates unchanged.
+
+        @param data the binary payload to send
+        @param end_stream if @ref True, signals end of stream after this data
+
+        @return @ref True if the data was accepted; @ref False if the stream send buffer is full (backpressure)
+
+        @since AsyncSocketIo 1.0
+    */
+    bool trySendData(binary data, bool end_stream = False) {
+        try {
+            sock.sendHttp2StreamData(stream_id, data, end_stream);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP2-FLOW-CONTROL") {
+                return False;
+            }
+            rethrow;
+        }
+        if (wake_callback) {
+            wake_callback();
+        }
+        return True;
+    }
+
     #! Read data from this HTTP/2 stream.
     /** Reads from the Queue non-blockingly. The I/O controller populates the Queue via
         @ref HttpServerAsyncIo::Http2PollOperation::drainStreamQueues()

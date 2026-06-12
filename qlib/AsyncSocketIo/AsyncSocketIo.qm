@@ -67,6 +67,10 @@ module AsyncSocketIo {
 
     @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
     - the initial version of the AsyncSocketIo module
+    - @ref AsyncSocketIo::AbstractStreamContext::trySendData() "AbstractStreamContext::trySendData()": a
+      non-blocking send that returns @ref False instead of blocking or waiting when the stream send buffer is full
+      (backpressure).  HTTP/2 and HTTP/3 stream contexts override it so a caller (e.g. a WebSocket broadcast) can
+      drop a slow or non-reading client immediately rather than stalling on it
     - @ref AsyncSocketIo::AsyncSocketIoController::addTimer() "addTimer()" accepts an optional \c owner
       argument; when set, the timer's callback dispatch is tracked under that owner so a teardown path can
       deterministically drain a fired-but-not-yet-run callback via
