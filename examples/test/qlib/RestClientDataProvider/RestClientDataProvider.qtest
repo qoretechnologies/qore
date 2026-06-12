@@ -116,6 +116,23 @@ public class RestClientDataProviderTest inherits QUnit::Test {
     }
 
     httpClientDataProviderTest() {
+        *hash<string, hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActionHash(RestClientDataProvider::AppName);
+        assertTrue(exists actions, "GenericRest app actions must be registered");
+        *hash<DataProviderActionInfo> call_action = actions.call;
+        assertTrue(exists call_action, "GenericRest call action must be registered");
+        assertTrue(exists call_action.options.openapi3,
+            "GenericRest call action must expose the openapi3 option");
+        assertFalse(exists call_action.options.swagger,
+            "GenericRest call action must not expose the swagger option");
+        assertFalse(exists call_action.options.validator,
+            "GenericRest call action must not expose the validator option");
+        RestClientDataProvider openapi3_parent({
+            "url": "http://localhost:" + port,
+            "openapi3": get_script_dir() + "/../OpenApi3/PetStore.openapi3.yaml",
+        });
+        assertEq("rest", openapi3_parent.getName());
+
         {
             RestClientDataProvider parent({"url": "http://localhost:" + port});
             hash<DataProviderSummaryInfo> sinfo = parent.getSummaryInfo();

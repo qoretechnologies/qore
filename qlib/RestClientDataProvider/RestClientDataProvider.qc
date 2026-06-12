@@ -350,6 +350,15 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
                 "desc": "if `True` then the server's certificate will only be accepted if it's verified",
                 "default_value": False,
             },
+            "openapi3": <DataProviderOptionInfo>{
+                "display_name": "OpenApi 3 Schema",
+                "short_desc": "Sets the location of an OpenApi 3 schema to use for the connection",
+                "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                    DTT_FromFile: True,
+                    DTT_FromLocation: True,
+                }),
+                "desc": "An OpenApi 3 schema location or file data for the REST connection",
+            },
             "swagger": <DataProviderOptionInfo>{
                 "display_name": "Swagger Schema",
                 "short_desc": "Sets the location of a Swagger schema to use for the connection",

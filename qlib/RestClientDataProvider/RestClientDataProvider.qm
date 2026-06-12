@@ -230,6 +230,11 @@ module RestClientDataProvider {
                 RestClientCallWithMethodRequestDataType::Fields - ("method", "path", "query_args", "body"), {
                     "required": False,
                 },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                RestClientDataProvider::ConstructorOptions{"openapi3",}, {
+                    "required": False,
+                    "loc": "constructor",
+                },
             ),
             "output_type": RestClientCallResponseDataType,
         });
