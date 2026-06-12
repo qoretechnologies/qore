@@ -108,6 +108,18 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("logistic-regression - capabilities", \logrCapabilities());
         addTestCase("logistic-regression - constructor validation", \logrConstructorValidation());
 
+        # KNN tests
+        addTestCase("knn-classification - basic classification", \knnClassBasicClassification());
+        addTestCase("knn-classification - flush partial", \knnClassFlushPartial());
+        addTestCase("knn-classification - BufferColumns shape", \knnClassBufferColumnsShape());
+        addTestCase("knn-classification - capabilities", \knnClassCapabilities());
+        addTestCase("knn-classification - constructor validation", \knnClassConstructorValidation());
+        addTestCase("knn-regression - basic prediction", \knnRegBasicPrediction());
+        addTestCase("knn-regression - flush partial", \knnRegFlushPartial());
+        addTestCase("knn-regression - BufferColumns shape", \knnRegBufferColumnsShape());
+        addTestCase("knn-regression - capabilities", \knnRegCapabilities());
+        addTestCase("knn-regression - constructor validation", \knnRegConstructorValidation());
+
         # LOF tests
         addTestCase("lof - basic anomaly detection", \lofBasicDetection());
         addTestCase("lof - flush partial", \lofFlushPartial());
@@ -1524,6 +1536,226 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
                 "fields": " , ",
                 "target_field": "label",
                 "window_size": 10,
+            });
+        });
+    }
+
+    # ===================== KNN Tests =====================
+
+    knnClassBasicClassification() {
+        DataProviderML::QoreKNNClassificationProcessor proc({
+            "fields": "x,y",
+            "target_field": "label",
+            "window_size": 6,
+            "k": 3,
+        });
+
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "label": 0.0},
+            {"x": 0.1, "y": 0.1, "label": 0.0},
+            {"x": 0.2, "y": 0.0, "label": 0.0},
+            {"x": 10.0, "y": 10.0, "label": 1.0},
+            {"x": 10.1, "y": 10.1, "label": 1.0},
+            {"x": 10.2, "y": 10.0, "label": 1.0},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(6, results.lsize());
+        foreach auto event in (results) {
+            assertEq("knn-classification", event.event_type);
+            assertTrue(event.hasKey("predicted_class"));
+            assertTrue(event.confidence >= 0.0);
+            assertTrue(event.confidence <= 1.0);
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    knnClassFlushPartial() {
+        DataProviderML::QoreKNNClassificationProcessor proc({
+            "fields": "x,y",
+            "target_field": "label",
+            "window_size": 20,
+            "k": 3,
+        });
+
+        for (int i = 0; i < 5; ++i) {
+            proc.processRecord({
+                "x": i * 0.1,
+                "y": i * 0.2,
+                "label": i >= 3 ? 1.0 : 0.0,
+            });
+        }
+
+        *list<auto> flushed = proc.flushRecords();
+        assertTrue(exists flushed);
+        assertEq(5, flushed.lsize());
+    }
+
+    knnClassBufferColumnsShape() {
+        DataProviderML::QoreKNNClassificationProcessor proc({
+            "fields": "x,y",
+            "target_field": "label",
+            "window_size": 6,
+            "k": 3,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.2, 10.0, 10.1, 10.2)),
+            "y": new buffer<float64>((0.0, 0.1, 0.0, 10.0, 10.1, 10.0)),
+            "label": new buffer<float64>((0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(6, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("knn-classification", "knn-classification", "knn-classification"),
+            events.event_type[0..2]);
+        assertTrue(events.confidence[0] >= 0.0);
+        assertEq(1.0, events.record_values[3].label);
+    }
+
+    knnClassCapabilities() {
+        DataProviderML::QoreKNNClassificationProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    knnClassConstructorValidation() {
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreKNNClassificationProcessor({
+                "fields": "x",
+                "target_field": "label",
+                "window_size": 10,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreKNNClassificationProcessor({
+                "fields": "x",
+                "target_field": "label",
+                "window_size": 10,
+                "k": 0,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", "window_size", sub() {
+            new DataProviderML::QoreKNNClassificationProcessor({
+                "fields": "x",
+                "target_field": "label",
+                "window_size": 3,
+                "k": 5,
+            });
+        });
+    }
+
+    knnRegBasicPrediction() {
+        DataProviderML::QoreKNNRegressionProcessor proc({
+            "fields": "x,y",
+            "target_field": "target",
+            "window_size": 6,
+            "k": 3,
+        });
+
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "target": 1.0},
+            {"x": 0.1, "y": 0.1, "target": 1.2},
+            {"x": 0.2, "y": 0.0, "target": 1.4},
+            {"x": 10.0, "y": 10.0, "target": 20.0},
+            {"x": 10.1, "y": 10.1, "target": 20.2},
+            {"x": 10.2, "y": 10.0, "target": 20.4},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(6, results.lsize());
+        foreach auto event in (results) {
+            assertEq("knn-regression", event.event_type);
+            assertTrue(event.hasKey("prediction"));
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    knnRegFlushPartial() {
+        DataProviderML::QoreKNNRegressionProcessor proc({
+            "fields": "x,y",
+            "target_field": "target",
+            "window_size": 20,
+            "k": 3,
+        });
+
+        for (int i = 0; i < 5; ++i) {
+            proc.processRecord({
+                "x": i * 0.1,
+                "y": i * 0.2,
+                "target": i * 1.5,
+            });
+        }
+
+        *list<auto> flushed = proc.flushRecords();
+        assertTrue(exists flushed);
+        assertEq(5, flushed.lsize());
+    }
+
+    knnRegBufferColumnsShape() {
+        DataProviderML::QoreKNNRegressionProcessor proc({
+            "fields": "x,y",
+            "target_field": "target",
+            "window_size": 6,
+            "k": 3,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.2, 10.0, 10.1, 10.2)),
+            "y": new buffer<float64>((0.0, 0.1, 0.0, 10.0, 10.1, 10.0)),
+            "target": new buffer<float64>((1.0, 1.2, 1.4, 20.0, 20.2, 20.4)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(6, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("knn-regression", "knn-regression", "knn-regression"),
+            events.event_type[0..2]);
+        assertTrue(events.prediction[0] >= 0.0);
+        assertEq(20.0, events.record_values[3].target);
+    }
+
+    knnRegCapabilities() {
+        DataProviderML::QoreKNNRegressionProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    knnRegConstructorValidation() {
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreKNNRegressionProcessor({
+                "fields": "x",
+                "target_field": "target",
+                "window_size": 10,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreKNNRegressionProcessor({
+                "fields": "x",
+                "target_field": "target",
+                "window_size": 10,
+                "k": 0,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", "window_size", sub() {
+            new DataProviderML::QoreKNNRegressionProcessor({
+                "fields": "x",
+                "target_field": "target",
+                "window_size": 3,
+                "k": 5,
             });
         });
     }

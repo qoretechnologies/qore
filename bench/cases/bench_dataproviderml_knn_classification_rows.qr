@@ -1,0 +1,58 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlKnnClassificationRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlKnnClassificationRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_knn_classification_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            for (int i = 0; i < rows; ++i) {
+                int c = i % 2;
+                push records, {
+                    "x": (c ? 10.0 : 0.0) + float(i % 20) / 100.0,
+                    "y": (c ? 10.0 : 0.0) + float((i * 7) % 20) / 100.0,
+                    "label": c,
+                };
+            }
+            r.bytes_processed = rows * 24;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreKNNClassificationProcessor proc({
+                "fields": ("x", "y"),
+                "target_field": "label",
+                "window_size": 50,
+                "k": 5,
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                *auto row_result = proc.processRecord(rec);
+                if (exists row_result) {
+                    result += row_result;
+                }
+            }
+            if (result.lsize() != rows) {
+                throw "BENCHMARK-ERROR", "KNN classification did not produce expected row output";
+            }
+        };
+
+        exit(r.run());
+    }
+}
