@@ -140,9 +140,9 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       whose async outbound frame queue reaches the limit is dropped instead of growing server memory without
       bound; protects servers exposed to untrusted clients
     - added an idle timeout (the \c idle_timeout handler option and
-      @ref WebSocketHandler::WebSocketHandler::setIdleTimeout() "setIdleTimeout()"): an async connection with no
+      @ref WebSocketHandler::WebSocketHandler::setIdleTimeout() "setIdleTimeout()"): a connection with no
       inbound activity for the configured number of seconds is closed, reclaiming slots/resources held by idle
-      clients
+      clients; enforced for HTTP/1.1 (async poll op), HTTP/2, and HTTP/3 WebSocket transports
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketHandler
       metadata always resolves the typed AsyncAPI validator members and methods
     - added \c asyncapi, \c validator, and \c asyncapi_channel constructor options to configure an AsyncAPI
@@ -1219,7 +1219,10 @@ class WebSocketStreamProcessor {
         #! Heartbeat PING payload
         data heartbeat_msg = "";
 
-        #! Async I/O controller timer ID for heartbeat checks
+        #! Idle timeout in seconds (0 = disabled); closes the stream if no inbound frame arrives in this interval
+        softint idle_timeout_s = 0;
+
+        #! Async I/O controller timer ID for heartbeat/idle checks
         *int heartbeat_timer_id;
 
         #! Timer generation used to ignore stale callbacks after reschedule/cancel
@@ -1374,14 +1377,17 @@ class WebSocketStreamProcessor {
         return isClosed();
     }
 
-    #! Starts timer-driven heartbeat PINGs for H2/H3 WebSocket streams
+    #! Starts timer-driven heartbeat PINGs and idle-timeout enforcement for H2/H3 WebSocket streams
     /** Uses AsyncSocketIoController timers and sends a PING only when no
-        inbound WebSocket frame has arrived within the heartbeat interval.
+        inbound WebSocket frame has arrived within the heartbeat interval; when
+        \a idle_timeout_s is positive, the stream is closed if no inbound frame
+        arrives within that interval (reclaims resources held by idle clients).
     */
-    startHeartbeat(softint heartbeat_s, data heartbeat_msg) {
+    startHeartbeat(softint heartbeat_s, data heartbeat_msg, softint idle_timeout_s = 0) {
         AutoLock al(heartbeat_mutex);
         self.heartbeat_s = heartbeat_s;
         self.heartbeat_msg = heartbeat_msg;
+        self.idle_timeout_s = idle_timeout_s;
         rescheduleHeartbeatTimerLocked();
     }
 
@@ -1447,14 +1453,24 @@ class WebSocketStreamProcessor {
 
     private rescheduleHeartbeatTimerLocked() {
         cancelHeartbeatTimerLocked();
-        if (closed || heartbeat_s <= 0) {
+        if (closed || (heartbeat_s <= 0 && idle_timeout_s <= 0)) {
             return;
         }
 
-        int interval_ms = heartbeat_s * 1000;
         int now = clock_getmillis();
-        int heartbeat_base_ms = last_recv_ms > last_ping_ms ? last_recv_ms : last_ping_ms;
-        int delay_ms = interval_ms - (now - heartbeat_base_ms);
+        # schedule the timer for the sooner of the heartbeat and idle deadlines (either may be disabled)
+        *int delay_ms;
+        if (heartbeat_s > 0) {
+            int interval_ms = heartbeat_s * 1000;
+            int heartbeat_base_ms = last_recv_ms > last_ping_ms ? last_recv_ms : last_ping_ms;
+            delay_ms = interval_ms - (now - heartbeat_base_ms);
+        }
+        if (idle_timeout_s > 0) {
+            int idle_delay_ms = (idle_timeout_s * 1000) - (now - last_recv_ms);
+            if (!exists delay_ms || idle_delay_ms < delay_ms) {
+                delay_ms = idle_delay_ms;
+            }
+        }
         if (delay_ms < 1) {
             delay_ms = 1;
         }
@@ -1481,23 +1497,35 @@ class WebSocketStreamProcessor {
 
     private handleHeartbeatTimer(int generation) {
         bool send_ping = False;
+        bool close_idle = False;
         data msg;
 
         {
             AutoLock al(heartbeat_mutex);
-            if (generation != heartbeat_generation || closed || heartbeat_s <= 0) {
+            if (generation != heartbeat_generation || closed || (heartbeat_s <= 0 && idle_timeout_s <= 0)) {
                 return;
             }
             remove heartbeat_timer_id;
 
-            int interval_ms = heartbeat_s * 1000;
             int now = clock_getmillis();
-            if ((now - last_recv_ms) >= interval_ms
-                    && (!last_ping_ms || (now - last_ping_ms) >= interval_ms)) {
-                last_ping_ms = now;
-                msg = heartbeat_msg;
-                send_ping = True;
+            # idle timeout takes precedence: close the stream when no inbound frame has arrived within the interval
+            if (idle_timeout_s > 0 && (now - last_recv_ms) >= (idle_timeout_s * 1000)) {
+                close_idle = True;
+            } else if (heartbeat_s > 0) {
+                int interval_ms = heartbeat_s * 1000;
+                if ((now - last_recv_ms) >= interval_ms
+                        && (!last_ping_ms || (now - last_ping_ms) >= interval_ms)) {
+                    last_ping_ms = now;
+                    msg = heartbeat_msg;
+                    send_ping = True;
+                }
             }
+        }
+
+        # close() acquires process_mutex (not heartbeat_mutex) and signals shutdown; called with no lock held
+        if (close_idle) {
+            close();
+            return;
         }
 
         if (send_ping) {
@@ -2252,7 +2280,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         # Heartbeat is handled by AsyncSocketIoController timers in the stream
         # processor. PINGs are sent only when no inbound WebSocket frame has
         # arrived within the configured heartbeat interval.
-        stream_proc.startHeartbeat(heartbeat, heartbeat_msg);
+        stream_proc.startHeartbeat(heartbeat, heartbeat_msg, idle_timeout);
 
         # Block until stream closes. The stream_done counter is decremented by
         # WebSocketStreamProcessor::notifyIo() when it detects the close. When
