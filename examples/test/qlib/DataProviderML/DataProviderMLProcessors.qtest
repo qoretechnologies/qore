@@ -169,6 +169,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("rolling-stats - all statistics", \rollingStatsAllStatistics());
         addTestCase("rolling-stats - window sliding", \rollingStatsWindowSliding());
         addTestCase("rolling-stats - default statistics", \rollingStatsDefaultStatistics());
+        addTestCase("rolling-stats - BufferColumns shape", \rollingStatsBufferColumnsShape());
         addTestCase("rolling-stats - not configured", \rollingStatsNotConfigured());
         addTestCase("rolling-stats - capabilities", \rollingStatsCapabilities());
         addTestCase("rolling-stats - constructor validation", \rollingStatsConstructorValidation());
@@ -2775,6 +2776,45 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertFalse(r.hasKey("x_min"));
         assertFalse(r.hasKey("x_max"));
         assertFalse(r.hasKey("x_sum"));
+    }
+
+    rollingStatsBufferColumnsShape() {
+        DataProviderML::QoreRollingStatsProcessor proc({
+            "fields": "temperature",
+            "window_size": 2,
+            "statistics": ("mean", "std", "min", "max", "sum"),
+        });
+
+        auto columns = ColumnarResult::fromColumnHash({
+            "temperature": new buffer<float64>((10.0, 20.0, 30.0)),
+            "label": ("a", "b", "c"),
+        });
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        assertEq(("a", "b", "c"), result.getColumn("label").toList());
+        assertEq((10.0, 20.0, 30.0), result.getColumn("temperature").toList());
+        assertEq("buffer<float64>", result.getColumn("temperature_mean").fullType());
+        assertEq("buffer<float64>", result.getColumn("temperature_std").fullType());
+
+        assertFloat(10.0, result.getColumn("temperature_mean")[0], 0.001);
+        assertFloat(15.0, result.getColumn("temperature_mean")[1], 0.001);
+        assertFloat(25.0, result.getColumn("temperature_mean")[2], 0.001);
+        assertFloat(0.0, result.getColumn("temperature_std")[0], 0.001);
+        assertFloat(5.0, result.getColumn("temperature_std")[1], 0.001);
+        assertFloat(5.0, result.getColumn("temperature_std")[2], 0.001);
+        assertFloat(20.0, result.getColumn("temperature_min")[2], 0.001);
+        assertFloat(30.0, result.getColumn("temperature_max")[2], 0.001);
+        assertFloat(50.0, result.getColumn("temperature_sum")[2], 0.001);
+
+        auto next = ColumnarResult::fromColumnHash({
+            "temperature": new buffer<float64>((40.0,)),
+            "label": ("d",),
+        });
+        auto next_result = proc.processRecordsShape(next, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(next_result));
+        assertFloat(35.0, next_result.getColumn("temperature_mean")[0], 0.001);
+        assertFloat(70.0, next_result.getColumn("temperature_sum")[0], 0.001);
     }
 
     rollingStatsNotConfigured() {

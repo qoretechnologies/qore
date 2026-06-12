@@ -121,8 +121,15 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
         #! Which statistics to compute
         list<string> statistics;
 
-        #! Sliding window buffer of recent records
-        list<hash<auto>> buffer;
+        #! Sliding numeric windows per configured field
+        hash<auto> field_buffers;
+
+        #! Whether to emit each configured statistic
+        bool emit_mean = False;
+        bool emit_std = False;
+        bool emit_min = False;
+        bool emit_max = False;
+        bool emit_sum = False;
 
         #! Whether configured
         bool configured = False;
@@ -150,7 +157,8 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
         if (!statistics) {
             statistics = ("mean",);
         }
-        buffer = ();
+        configureStatisticFlags();
+        initializeFieldBuffers();
         configured = True;
     }
 
@@ -177,83 +185,264 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
             throw "PROCESSOR-ERROR",
                 "QoreRollingStatsProcessor: not configured; provide constructor options";
         }
-        # add to sliding window
-        push buffer, record;
-        if (buffer.lsize() > window_size) {
-            splice buffer, 0, 1;
+        hash<auto> row_values = getRecordFieldValues(record);
+        hash<auto> next_buffers = copyFieldBuffers();
+        appendRowValues(\next_buffers, row_values);
+
+        hash<auto> result = {} + record;
+        addStatisticValues(\result, next_buffers);
+        field_buffers = next_buffers;
+        return result;
+    }
+
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreRollingStatsProcessor: not configured; provide constructor options";
         }
 
-        # start with the original record
-        hash<auto> result = {} + record;
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
 
-        # compute statistics for each monitored field
-        foreach string field in (fields) {
-            # extract values from the window for this field
-            list<float> values = ();
-            foreach hash<auto> rec in (buffer) {
-                push values,
-                    DataProvider::AbstractDataProvider::getFieldValue(rec, field).toFloat();
+        if (hasNestedFields()) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *hash<auto> shape_values = getShapeFieldValues(records, shape, count);
+        if (!exists shape_values) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        hash<auto> next_buffers = copyFieldBuffers();
+        hash<auto> output_columns = makeOutputColumns(count);
+        for (int row = 0; row < count; ++row) {
+            foreach string field in (fields) {
+                push next_buffers{field}, shape_values{field}[row];
+                trimWindow(\next_buffers, field);
+                setStatisticColumnValues(\output_columns, field, next_buffers{field}, row);
             }
-            int n = values.lsize();
+        }
 
-            foreach string stat in (statistics) {
-                string output_key = field + "_" + stat;
-                switch (stat) {
-                    case "mean": {
-                        float total = 0.0;
-                        foreach float v in (values) {
-                            total += v;
-                        }
-                        result{output_key} = total / n;
-                        break;
-                    }
-                    case "std": {
-                        float total = 0.0;
-                        foreach float v in (values) {
-                            total += v;
-                        }
-                        float mean = total / n;
-                        float sq_sum = 0.0;
-                        foreach float v in (values) {
-                            float diff = v - mean;
-                            sq_sum += diff * diff;
-                        }
-                        result{output_key} = sqrt(sq_sum / n);
-                        break;
-                    }
-                    case "min": {
-                        float min_val = values[0];
-                        for (int i = 1; i < n; ++i) {
-                            if (values[i] < min_val) {
-                                min_val = values[i];
-                            }
-                        }
-                        result{output_key} = min_val;
-                        break;
-                    }
-                    case "max": {
-                        float max_val = values[0];
-                        for (int i = 1; i < n; ++i) {
-                            if (values[i] > max_val) {
-                                max_val = values[i];
-                            }
-                        }
-                        result{output_key} = max_val;
-                        break;
-                    }
-                    case "sum": {
-                        float total = 0.0;
-                        foreach float v in (values) {
-                            total += v;
-                        }
-                        result{output_key} = total;
-                        break;
-                    }
+        auto result = DataProvider::AbstractDataProcessor::appendShapeColumns(records, shape, output_columns);
+        field_buffers = next_buffers;
+        return result;
+    }
+
+    #! Initializes per-field numeric windows
+    private initializeFieldBuffers() {
+        field_buffers = {};
+        foreach string field in (fields) {
+            field_buffers{field} = ();
+        }
+    }
+
+    #! Configures fast statistic switches from the validated option list
+    private configureStatisticFlags() {
+        emit_mean = statistics.contains("mean");
+        emit_std = statistics.contains("std");
+        emit_min = statistics.contains("min");
+        emit_max = statistics.contains("max");
+        emit_sum = statistics.contains("sum");
+    }
+
+    #! Returns @ref True if any configured field requires row materialization
+    private bool hasNestedFields() {
+        foreach string field in (fields) {
+            if (field.find(".") >= 0) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Reads configured numeric fields from one row before updating state
+    private hash<auto> getRecordFieldValues(auto record) {
+        hash<auto> values;
+        foreach string field in (fields) {
+            values{field} = DataProvider::AbstractDataProvider::getFieldValue(record, field).toFloat();
+        }
+        return values;
+    }
+
+    #! Reads configured numeric fields directly from shaped columns
+    private *hash<auto> getShapeFieldValues(auto records, DataProvider::DataProviderShape shape, int count) {
+        hash<auto> values;
+        foreach string field in (fields) {
+            *auto column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, field);
+            if (!exists column) {
+                return;
+            }
+            values{field} = DataProvider::AbstractDataProcessor::columnValuesToFloatList(column, count, field);
+        }
+        return values;
+    }
+
+    #! Returns a deep copy of the current sliding numeric windows
+    private hash<auto> copyFieldBuffers() {
+        hash<auto> result;
+        foreach string field in (fields) {
+            result{field} = field_buffers.hasKey(field) ? field_buffers{field} + () : ();
+        }
+        return result;
+    }
+
+    #! Appends one row of numeric values to copied sliding windows
+    private appendRowValues(reference<hash<auto>> buffers, hash<auto> row_values) {
+        foreach string field in (fields) {
+            push buffers{field}, row_values{field};
+            trimWindow(\buffers, field);
+        }
+    }
+
+    #! Keeps a copied field window within the configured window size
+    private trimWindow(reference<hash<auto>> buffers, string field) {
+        int overflow = buffers{field}.lsize() - window_size;
+        if (overflow > 0) {
+            splice buffers{field}, 0, overflow;
+        }
+    }
+
+    #! Adds row-oriented statistic fields to a copied result record
+    private addStatisticValues(reference<hash<auto>> result, hash<auto> buffers) {
+        foreach string field in (fields) {
+            setStatisticHashValues(\result, field, buffers{field});
+        }
+    }
+
+    #! Creates dense output buffers for all requested statistic columns
+    private hash<auto> makeOutputColumns(int count) {
+        hash<auto> result;
+        foreach string field in (fields) {
+            if (emit_mean) {
+                result{field + "_mean"} = buffer<float64>::sized(count);
+            }
+            if (emit_std) {
+                result{field + "_std"} = buffer<float64>::sized(count);
+            }
+            if (emit_min) {
+                result{field + "_min"} = buffer<float64>::sized(count);
+            }
+            if (emit_max) {
+                result{field + "_max"} = buffer<float64>::sized(count);
+            }
+            if (emit_sum) {
+                result{field + "_sum"} = buffer<float64>::sized(count);
+            }
+        }
+        return result;
+    }
+
+    #! Adds statistic values to row output
+    private setStatisticHashValues(reference<hash<auto>> result, string field, list<auto> values) {
+        int n = values.lsize();
+        float total = 0.0;
+        float min_val = values[0];
+        float max_val = values[0];
+        foreach float value in (values) {
+            total += value;
+            if (value < min_val) {
+                min_val = value;
+            }
+            if (value > max_val) {
+                max_val = value;
+            }
+        }
+        float mean = total / n;
+        if (emit_mean) {
+            result{field + "_mean"} = mean;
+        }
+        if (emit_std) {
+            result{field + "_std"} = calculateStd(values, mean);
+        }
+        if (emit_min) {
+            result{field + "_min"} = min_val;
+        }
+        if (emit_max) {
+            result{field + "_max"} = max_val;
+        }
+        if (emit_sum) {
+            result{field + "_sum"} = total;
+        }
+    }
+
+    #! Adds statistic values to dense shaped output columns
+    private setStatisticColumnValues(reference<hash<auto>> output_columns, string field, list<auto> values, int row) {
+        int n = values.lsize();
+        float total = 0.0;
+        float min_val = values[0];
+        float max_val = values[0];
+        foreach float value in (values) {
+            total += value;
+            if (value < min_val) {
+                min_val = value;
+            }
+            if (value > max_val) {
+                max_val = value;
+            }
+        }
+        float mean = total / n;
+        if (emit_mean) {
+            output_columns{field + "_mean"}[row] = mean;
+        }
+        if (emit_std) {
+            output_columns{field + "_std"}[row] = calculateStd(values, mean);
+        }
+        if (emit_min) {
+            output_columns{field + "_min"}[row] = min_val;
+        }
+        if (emit_max) {
+            output_columns{field + "_max"}[row] = max_val;
+        }
+        if (emit_sum) {
+            output_columns{field + "_sum"}[row] = total;
+        }
+    }
+
+    #! Calculates population standard deviation for a prepared rolling window
+    private float calculateStd(list<auto> values, float mean) {
+        float sq_sum = 0.0;
+        foreach float value in (values) {
+            float diff = value - mean;
+            sq_sum += diff * diff;
+        }
+        return sqrt(sq_sum / values.lsize());
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
                 }
             }
         }
-
-        return result;
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
     }
 
     #! Supports shaped bulk API

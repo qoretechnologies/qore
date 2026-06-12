@@ -1,0 +1,48 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlRollingStatsRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlRollingStatsRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_rolling_stats_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            records = DataFrameBench::makeRecords(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreRollingStatsProcessor proc({
+                "fields": ("amount", "score"),
+                "window_size": 32,
+                "statistics": ("mean", "std", "min", "max", "sum"),
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                push result, proc.processRecord(rec);
+            }
+            if (result.lsize() != rows || !result[rows - 1].hasKey("amount_mean")
+                    || !result[rows - 1].hasKey("score_std")) {
+                throw "BENCHMARK-ERROR", "rolling stats did not produce expected row output";
+            }
+        };
+
+        exit(r.run());
+    }
+}

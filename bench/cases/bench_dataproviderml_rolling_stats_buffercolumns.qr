@@ -1,0 +1,45 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlRollingStatsBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlRollingStatsBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_rolling_stats_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            columns = DataFrameBench::makeColumnarResult(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreRollingStatsProcessor proc({
+                "fields": ("amount", "score"),
+                "window_size": 32,
+                "statistics": ("mean", "std", "min", "max", "sum"),
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_rolling_stats_buffercolumns", result, rows);
+            if (result.getColumn("amount_mean").size() != rows || result.getColumn("score_std").size() != rows) {
+                throw "BENCHMARK-ERROR", "rolling stats did not produce expected output columns";
+            }
+        };
+
+        exit(r.run());
+    }
+}

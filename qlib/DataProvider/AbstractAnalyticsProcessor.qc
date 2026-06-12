@@ -533,7 +533,7 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
         }
 
         int record_count = AbstractDataProcessor::shapeRecordCount(records, shape);
-        hash<list<auto>> column_values;
+        hash<auto> column_values;
         foreach string field in (fields) {
             if (columns.hasKey(field)) {
                 column_values{field} = AbstractDataProcessor::columnValuesToList(columns{field}, record_count, field);
