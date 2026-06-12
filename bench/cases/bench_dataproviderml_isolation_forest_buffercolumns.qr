@@ -1,0 +1,52 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlIsolationForestBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlIsolationForestBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_isolation_forest_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            buffer<float64> x = buffer<float64>::sized(rows);
+            buffer<float64> y = buffer<float64>::sized(rows);
+            for (int i = 0; i < rows; ++i) {
+                x[i] = DataFrameBench::amountFor(i);
+                y[i] = DataFrameBench::scoreFor(i);
+            }
+            columns = ColumnarResult::fromColumnHash({"x": x, "y": y});
+            r.bytes_processed = rows * 16;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreIsolationForestProcessor proc({
+                "fields": ("x", "y"),
+                "window_size": 50,
+                "n_trees": 10,
+                "sample_size": 32,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_isolation_forest_buffercolumns", result, rows);
+            if (result.getColumn("event_type").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "isolation forest did not produce expected output rows";
+            }
+        };
+
+        exit(r.run());
+    }
+}

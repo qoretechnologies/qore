@@ -277,6 +277,116 @@ public class QoreGMMProcessor inherits AbstractDataProviderMLProcessor {
         return events;
     }
 
+    #! Processes complete shaped windows through GMM
+    private *hash<auto> processCompleteShapeWindows(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreGMMProcessor: not configured; provide constructor options";
+        }
+        if (buffer || AbstractDataProviderMLProcessor::hasNestedFieldPath(fields)) {
+            return;
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return {"results": ()};
+        }
+
+        hash<auto> field_values = AbstractDataProviderMLProcessor::getShapeFieldValueLists(
+            records, shape, fields, count);
+        list<auto> events;
+        int offset = 0;
+        while (offset + window_size <= count) {
+            events += processMatrixWindow(field_values, offset, window_size);
+            offset += window_size;
+        }
+
+        if (offset < count) {
+            buffer = AbstractDataProviderMLProcessor::materializeShapeRows(records, shape, offset, count - offset);
+        }
+        return {"results": events};
+    }
+
+    #! Processes one matrix window through GMM
+    private list<auto> processMatrixWindow(hash<auto> field_values, int offset, int count) {
+        list<list<float>> matrix = AbstractDataProviderMLProcessor::fieldValueListsToMatrix(
+            field_values, fields, offset, count);
+
+        if (!gmm_model) {
+            gmm_model = new ML::GMM({
+                "n_components": n_components,
+                "covariance_type": covariance_type,
+            });
+            gmm_model.fitMatrix(matrix);
+        } else if (online) {
+            gmm_model.updateMatrix(matrix);
+        } else {
+            gmm_model = new ML::GMM({
+                "n_components": n_components,
+                "covariance_type": covariance_type,
+            });
+            gmm_model.fitMatrix(matrix);
+        }
+
+        list<hash<ML::GMMResult>> predictions = gmm_model.predictMatrix(matrix);
+
+        list<auto> events;
+        for (int i = 0; i < count; ++i) {
+            int row = offset + i;
+            push events, <GMMClusteringEventInfo>{
+                "event_type": "gmm",
+                "cluster": predictions[i].cluster,
+                "max_probability": predictions[i].max_probability,
+                "probabilities": predictions[i].probabilities,
+                "log_likelihood": predictions[i].log_likelihood,
+                "record_values": AbstractDataProviderMLProcessor::recordValuesFromFieldValueLists(
+                    field_values, fields, row),
+            };
+        }
+        return events;
+    }
+
+    #! Uses the row-oriented implementation as a semantics-preserving fallback
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        return AbstractDataProviderMLProcessor::convertRecordListOutputShape(results, shape);
+    }
+
+    #! Processes records in bulk hash-of-lists format
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        if (!exists result) {
+            return;
+        }
+        return cast<hash>(result);
+    }
+
+    #! Processes shaped records without first materializing row hashes when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        *hash<auto> native_result = processCompleteShapeWindows(records, shape);
+        if (exists native_result) {
+            return AbstractDataProviderMLProcessor::convertRecordListOutputShape(native_result.results, shape);
+        }
+        return processShapeRowsFallback(records, shape);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;

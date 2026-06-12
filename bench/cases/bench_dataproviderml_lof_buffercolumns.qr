@@ -1,0 +1,51 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlLofBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlLofBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_lof_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            buffer<float64> x = buffer<float64>::sized(rows);
+            buffer<float64> y = buffer<float64>::sized(rows);
+            for (int i = 0; i < rows; ++i) {
+                x[i] = float(i % 50) / 10.0;
+                y[i] = float((i * 7) % 50) / 10.0;
+            }
+            columns = ColumnarResult::fromColumnHash({"x": x, "y": y});
+            r.bytes_processed = rows * 16;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreLOFProcessor proc({
+                "fields": ("x", "y"),
+                "window_size": 50,
+                "k": 5,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_lof_buffercolumns", result, rows);
+            if (result.getColumn("event_type").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "LOF did not produce expected output rows";
+            }
+        };
+
+        exit(r.run());
+    }
+}

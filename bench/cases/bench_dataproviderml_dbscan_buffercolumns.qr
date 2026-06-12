@@ -1,0 +1,53 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlDbscanBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlDbscanBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_dbscan_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            buffer<float64> x = buffer<float64>::sized(rows);
+            buffer<float64> y = buffer<float64>::sized(rows);
+            for (int i = 0; i < rows; ++i) {
+                int c = i % 2;
+                x[i] = (c ? 10.0 : 0.0) + float(i % 20) / 100.0;
+                y[i] = (c ? 10.0 : 0.0) + float((i * 7) % 20) / 100.0;
+            }
+            columns = ColumnarResult::fromColumnHash({"x": x, "y": y});
+            r.bytes_processed = rows * 16;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreDBSCANClusteringProcessor proc({
+                "fields": ("x", "y"),
+                "window_size": 50,
+                "epsilon": 0.5,
+                "min_points": 3,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_dbscan_buffercolumns", result, rows);
+            if (result.getColumn("event_type").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "DBSCAN did not produce expected output rows";
+            }
+        };
+
+        exit(r.run());
+    }
+}

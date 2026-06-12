@@ -51,6 +51,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("isolation-forest - anomaly detection", \iforestAnomalyDetection());
         addTestCase("isolation-forest - flush partial", \iforestFlushPartial());
         addTestCase("isolation-forest - DataFrameBlock flush shape", \iforestDataFrameFlushShape());
+        addTestCase("isolation-forest - BufferColumns shape", \iforestBufferColumnsShape());
         addTestCase("isolation-forest - not configured", \iforestNotConfigured());
         addTestCase("isolation-forest - capabilities", \iforestCapabilities());
         addTestCase("isolation-forest - constructor validation", \iforestConstructorValidation());
@@ -59,6 +60,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("dbscan - basic clustering", \dbscanBasicClustering());
         addTestCase("dbscan - noise detection", \dbscanNoiseDetection());
         addTestCase("dbscan - flush partial", \dbscanFlushPartial());
+        addTestCase("dbscan - BufferColumns shape", \dbscanBufferColumnsShape());
         addTestCase("dbscan - capabilities", \dbscanCapabilities());
         addTestCase("dbscan - constructor validation", \dbscanConstructorValidation());
 
@@ -101,12 +103,14 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # LOF tests
         addTestCase("lof - basic anomaly detection", \lofBasicDetection());
         addTestCase("lof - flush partial", \lofFlushPartial());
+        addTestCase("lof - BufferColumns shape", \lofBufferColumnsShape());
         addTestCase("lof - capabilities", \lofCapabilities());
         addTestCase("lof - constructor validation", \lofConstructorValidation());
 
         # GMM tests
         addTestCase("gmm - basic clustering", \gmmBasicClustering());
         addTestCase("gmm - flush partial", \gmmFlushPartial());
+        addTestCase("gmm - BufferColumns shape", \gmmBufferColumnsShape());
         addTestCase("gmm - capabilities", \gmmCapabilities());
         addTestCase("gmm - constructor validation", \gmmConstructorValidation());
 
@@ -582,6 +586,34 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             blocks[0].getColumn("event_type"));
     }
 
+    iforestBufferColumnsShape() {
+        DataProviderML::QoreIsolationForestProcessor proc({
+            "fields": "x,y",
+            "window_size": 10,
+            "n_trees": 10,
+            "sample_size": 5,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0)),
+            "y": new buffer<float64>((0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(10, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("isolation-forest", "isolation-forest", "isolation-forest"),
+            events.event_type[0..2]);
+        assertEq(0.0, events.record_values[0].x);
+
+        *list<auto> blocks = proc.flushAndCollect();
+        assertEq(1, blocks.lsize());
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(blocks[0]));
+        assertEq(3, AbstractDataProcessor::shapeRecordCount(blocks[0], DataProviderShape::BufferColumns));
+    }
+
     iforestNotConfigured() {
         DataProviderML::QoreIsolationForestProcessor proc();
         assertThrows("PROCESSOR-ERROR", sub() {
@@ -714,6 +746,32 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         *list<auto> flushed = proc.flushRecords();
         assertTrue(exists flushed);
         assertEq(5, flushed.lsize());
+    }
+
+    dbscanBufferColumnsShape() {
+        DataProviderML::QoreDBSCANClusteringProcessor proc({
+            "fields": "x,y",
+            "window_size": 8,
+            "epsilon": 2.0,
+            "min_points": 2,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.5, 0.3, -0.4, 10.0, 10.5, 10.2, 9.7)),
+            "y": new buffer<float64>((0.0, 0.5, -0.2, 0.3, 10.0, 10.5, 9.8, 10.3)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(8, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("dbscan-clustering", "dbscan-clustering", "dbscan-clustering"),
+            events.event_type[0..2]);
+        assertEq(events.cluster[0], events.cluster[1]);
+        assertEq(events.cluster[4], events.cluster[5]);
+        assertTrue(events.cluster[0] != events.cluster[4]);
+        assertEq(10.0, events.record_values[4].x);
     }
 
     dbscanCapabilities() {
@@ -1377,6 +1435,30 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq(5, flushed.lsize());
     }
 
+    lofBufferColumnsShape() {
+        DataProviderML::QoreLOFProcessor proc({
+            "fields": "x,y",
+            "window_size": 10,
+            "k": 3,
+            "threshold": 1.5,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.2, 0.0, 0.1, 0.2, 0.0, 0.1, 0.2, 100.0)),
+            "y": new buffer<float64>((0.0, 0.1, 0.2, 0.0, 0.1, 0.2, 0.0, 0.1, 0.2, 100.0)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(10, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("lof", "lof", "lof"), events.event_type[0..2]);
+        assertTrue(events.lof_score[9] > events.lof_score[0],
+            sprintf("outlier LOF (%f) should be > normal LOF (%f)", events.lof_score[9], events.lof_score[0]));
+        assertEq(100.0, events.record_values[9].x);
+    }
+
     lofCapabilities() {
         DataProviderML::QoreLOFProcessor proc();
         assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
@@ -1470,6 +1552,29 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         *list<auto> flushed = proc.flushRecords();
         assertTrue(exists flushed);
         assertEq(5, flushed.lsize());
+    }
+
+    gmmBufferColumnsShape() {
+        DataProviderML::QoreGMMProcessor proc({
+            "fields": "x,y",
+            "window_size": 8,
+            "n_components": 2,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.2, 0.0, 10.0, 10.1, 10.2, 10.0)),
+            "y": new buffer<float64>((0.0, 0.1, 0.0, 0.2, 10.0, 10.1, 10.0, 10.2)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(8, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("gmm", "gmm", "gmm"), events.event_type[0..2]);
+        assertEq(2, events.probabilities[0].lsize());
+        assertTrue(events.cluster[0] != events.cluster[4], "two groups should have different clusters");
+        assertEq(10.0, events.record_values[4].x);
     }
 
     gmmCapabilities() {

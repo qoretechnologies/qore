@@ -390,6 +390,79 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
         return result;
     }
 
+    #! Returns True when any configured field needs row materialization for nested lookup
+    /** @param fields configured field names
+
+        @since DataProviderML 1.4
+    */
+    static bool hasNestedFieldPath(list<string> fields) {
+        foreach string field in (fields) {
+            if (field.find(".") >= 0) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Extracts configured field values from a shaped block as row-aligned lists
+    /** Missing top-level columns are represented as @ref NOTHING values to
+        match row-record field lookup behavior.
+
+        @param records shaped input block
+        @param shape negotiated shape for \a records
+        @param fields configured top-level fields
+        @param count expected logical row count
+
+        @since DataProviderML 1.4
+    */
+    static hash<auto> getShapeFieldValueLists(auto records, DataProvider::DataProviderShape shape,
+            list<string> fields, int count) {
+        hash<auto> field_values;
+        foreach string field in (fields) {
+            *auto column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, field);
+            field_values{field} = exists column
+                ? DataProvider::AbstractDataProcessor::columnValuesToList(column, count, field)
+                : DataProvider::AbstractDataProcessor::repeatValue(NOTHING, count);
+        }
+        return field_values;
+    }
+
+    #! Builds an ML numeric matrix from row-aligned field lists
+    /** @param field_values row-aligned field values keyed by field name
+        @param fields configured field order
+        @param offset first row offset
+        @param count number of rows to include
+
+        @since DataProviderML 1.4
+    */
+    static list<list<float>> fieldValueListsToMatrix(hash<auto> field_values, list<string> fields,
+            int offset, int count) {
+        list<list<float>> matrix;
+        for (int row = offset; row < offset + count; ++row) {
+            list<float> matrix_row;
+            foreach string field in (fields) {
+                push matrix_row, field_values{field}[row].toFloat();
+            }
+            push matrix, matrix_row;
+        }
+        return matrix;
+    }
+
+    #! Builds the event record_values hash for a row in row-aligned field lists
+    /** @param field_values row-aligned field values keyed by field name
+        @param fields configured field order
+        @param row zero-based row index
+
+        @since DataProviderML 1.4
+    */
+    static hash<auto> recordValuesFromFieldValueLists(hash<auto> field_values, list<string> fields, int row) {
+        hash<auto> record_values;
+        foreach string field in (fields) {
+            record_values{field} = field_values{field}[row];
+        }
+        return record_values;
+    }
+
     #! Processes records in bulk hash-of-lists format
     private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
         *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
