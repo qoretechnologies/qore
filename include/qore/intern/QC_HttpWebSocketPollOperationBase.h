@@ -208,6 +208,14 @@ public:
         return close_code;
     }
 
+    //! Returns the number of pre-encoded frames currently queued for sending
+    /** used to enforce a per-connection outbound queue limit so a slow or non-reading client cannot grow server
+        memory without bound
+    */
+    DLLLOCAL size_t getSendQueueSize() const {
+        return send_queue ? send_queue->size() : 0;
+    }
+
     //! Returns the WebSocket close reason
     DLLLOCAL const char* getCloseReason() const {
         return close_reason.c_str();

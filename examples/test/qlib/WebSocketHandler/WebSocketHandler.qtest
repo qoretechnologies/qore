@@ -202,6 +202,26 @@ class MyWsHandlerWithExtensions inherits WebSocketHandler {
     }
 }
 
+#! a connection that reports an over-limit outbound queue, so the max_queue_size drop path can be tested
+#! deterministically without depending on TCP buffer / drain timing
+class OverflowWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    int getOutboundQueueSize() {
+        return 1000000;
+    }
+}
+
+class OverflowWsHandler inherits WebSocketHandler {
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new OverflowWsConnection(self);
+    }
+}
+
 class MyWsClient inherits WebSocketClient {
     private {
         WaitGroup wg;
@@ -238,6 +258,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("stream context API tests", \streamContextApiTests());
         addTestCase("pending send buffer tests", \pendingSendBufferTests());
         addTestCase("AsyncAPI handler option tests", \asyncApiHandlerOptionTests());
+        addTestCase("max_queue_size drops slow client", \maxQueueSizeDropsTest());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -943,6 +964,59 @@ class WebSocketHandlerTest inherits QUnit::Test {
             assertEq(frames[i], wsc.dequeuePendingSend(), sprintf("dequeue order frame %d", i));
         }
         assertFalse(wsc.hasPendingSends(), "empty after draining all 20 frames");
+    }
+
+    #! a slow/non-reading client whose outbound frame queue exceeds max_queue_size is dropped to protect memory
+    maxQueueSizeDropsTest() {
+        # control: with no limit (0) the over-queue connection is NOT dropped
+        assertFalse(runWsMaxQueueScenario(0), "with no limit, the over-queue connection stays registered");
+        # with the limit set, the over-limit connection IS dropped on the next send
+        assertTrue(runWsMaxQueueScenario(5), "with max_queue_size set, the over-limit connection is dropped");
+    }
+
+    #! sets up a handler whose connections always report an over-limit queue; sends once and returns True if the
+    #! connection was dropped (deregistered), False if it stayed registered
+    private bool runWsMaxQueueScenario(int mqs) {
+        OverflowWsHandler h({"heartbeat": 20, "logger": logger, "max_queue_size": mqs});
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        hs.setHandler("ws-handler", "", NOTHING, h);
+        hs.setDefaultHandler("ws-handler", h);
+        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + p});
+        wsc.connect();
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        # wait for server-side registration
+        int retries = 0;
+        while (!h.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        if (!h.getConnectionIds()) {
+            throw "TEST-ERROR", "connection not registered in time";
+        }
+
+        # one send: the connection reports an over-limit queue, so a configured limit drops it here
+        h.sendAll("x");
+
+        if (!mqs) {
+            # no limit: nothing tears the connection down, so it is still registered immediately after the send
+            return !h.getConnectionIds();
+        }
+        # limit set: the dropped connection is closed and the async I/O controller deregisters it (bounded wait)
+        retries = 0;
+        while (h.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        return !h.getConnectionIds();
     }
 
     private log(string str) {

@@ -1111,6 +1111,13 @@ int HttpWebSocketPollOperationBase::getSendTimeout() [flags=RET_VALUE_ONLY] {
     return priv->getSendTimeout();
 }
 
+//! Returns the number of pre-encoded frames currently queued for sending
+/** @return the number of queued outbound frames; used to enforce a per-connection outbound queue limit
+*/
+int HttpWebSocketPollOperationBase::getSendQueueSize() [flags=RET_VALUE_ONLY] {
+    return priv->getSendQueueSize();
+}
+
 //! Sets the heartbeat interval in milliseconds
 /** When set, the poll operation automatically sends a ping frame if no data
     has been received within this interval. The I/O controller uses

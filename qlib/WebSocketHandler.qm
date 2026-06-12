@@ -135,6 +135,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @section websockethandler_relnotes WebSocketHandler Release History
 
     @subsection websockethandler_v2_8 Version 2.8
+    - added a per-connection outbound queue limit (the \c max_queue_size handler option and
+      @ref WebSocketHandler::WebSocketHandler::setMaxQueueSize() "setMaxQueueSize()"): a slow or non-reading client
+      whose async outbound frame queue reaches the limit is dropped instead of growing server memory without
+      bound; protects servers exposed to untrusted clients
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketHandler
       metadata always resolves the typed AsyncAPI validator members and methods
     - added \c asyncapi, \c validator, and \c asyncapi_channel constructor options to configure an AsyncAPI
@@ -640,8 +644,43 @@ public class WebSocketConnection {
         return rc == 0;
     }
 
+    #! Drops the connection if its outbound frame queue has reached the handler's limit (slow/non-reading client)
+    /** Enforces the per-connection outbound backpressure limit: a client that does not read fast enough would
+        otherwise grow the async send queue without bound.  Returns @ref True if the connection was dropped (the
+        caller must then skip sending).  The limit applies to the async send path (the per-connection send queue);
+        @ref True is never returned when no limit is set.
+
+        @since %WebSocketHandler 2.8
+    */
+    private bool dropIfQueueFull() {
+        int limit = handler.getMaxQueueSize();
+        if (!limit || getOutboundQueueSize() < limit) {
+            return False;
+        }
+        handler.logWarn("WebSocket connection outbound queue reached the limit (%d frames); dropping the slow "
+            "client to protect server memory", limit);
+        try {
+            stop();
+        } catch (hash<ExceptionInfo> ex) {
+            handler.logError("error dropping overflowing WebSocket connection: %s", get_exception_string(ex));
+        }
+        return True;
+    }
+
+    #! Returns the number of frames currently queued for sending on the async send path (0 if not async)
+    /** used to enforce the per-connection outbound queue limit; override in a subclass to customize the measure
+
+        @since %WebSocketHandler 2.8
+    */
+    int getOutboundQueueSize() {
+        return async_ws_poll_op ? async_ws_poll_op.getSendQueueSize() : 0;
+    }
+
     #! Pushes an already-encoded message on the connection's message channel
     sendEncoded(binary msg) {
+        if (dropIfQueueFull()) {
+            return;
+        }
         if (direct_send_enabled && async_ws_poll_op) {
             async_ws_poll_op.sendRawFrame(msg);
             notifyIo();
@@ -685,6 +724,9 @@ public class WebSocketConnection {
         If an AsyncAPI validator is set, the outgoing message will be validated before sending.
     */
     send(data msg) {
+        if (dropIfQueueFull()) {
+            return;
+        }
         if (asyncapi_validator && asyncapi_channel) {
             hash<auto> headers;
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
@@ -721,6 +763,9 @@ public class WebSocketConnection {
         If an AsyncAPI validator is set, the outgoing message will be validated before sending.
     */
     send(data msg, int op, bool fin) {
+        if (dropIfQueueFull()) {
+            return;
+        }
         if (asyncapi_validator && asyncapi_channel) {
             hash<auto> headers;
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
@@ -1534,6 +1579,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             "asyncapi",
             "asyncapi_channel",
             "validator",
+            "max_queue_size",
         );
     }
 
@@ -1543,6 +1589,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! connection hash
         hash<string, WebSocketConnection> ch;
+
+        #! maximum per-connection outbound frame queue before the connection is dropped (0 = unlimited)
+        int max_queue_size = 0;
 
         #! heartbeat interval in seconds
         softint heartbeat = DefaultHeartbeatInterval;
@@ -1688,6 +1737,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %d is negative; expecting "
                             "non-negative value (0 = unlimited)", h.key, max_message_size);
                     }
+                    break;
+                }
+                case "max_queue_size": {
+                    if (!h.value.intp() || int(h.value) < 0) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is not a non-negative "
+                            "integer giving the maximum per-connection outbound frame queue size (0 = unlimited)",
+                            h.key, h.value);
+                    }
+                    max_queue_size = int(h.value);
                     break;
                 }
                 case "asyncapi": {
@@ -2214,6 +2272,28 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
     #! called when the connection terminates; the default implementation does nothing
     deregisterConnectionImpl(WebSocketConnection wsc) {
+    }
+
+    #! returns the maximum per-connection outbound frame queue size before a slow client is dropped (0 = unlimited)
+    /** @since %WebSocketHandler 2.8
+    */
+    int getMaxQueueSize() {
+        return max_queue_size;
+    }
+
+    #! sets the maximum per-connection outbound frame queue size before a slow client is dropped (0 = unlimited)
+    /** @param size the maximum number of queued outbound frames; \c 0 disables the limit
+
+        @throw WEBSOCKETHANDLER-OPTION-ERROR the value is negative
+
+        @since %WebSocketHandler 2.8
+    */
+    setMaxQueueSize(softint size) {
+        if (size < 0) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("max_queue_size value %y is not a non-negative integer",
+                size);
+        }
+        max_queue_size = size;
     }
 
     #! sends a message to all connected clients
