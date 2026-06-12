@@ -73,6 +73,9 @@ class AsyncApiGeneratorTest inherits Test {
         addTestCase("nullable list type", \testNullableListType());
         addTestCase("multiple message blocks", \testMultipleMessageBlocks());
         addTestCase("message block field parsing", \testMessageBlockFieldParsing());
+        addTestCase("parse MQTT channel block", \testParseMqttChannelBlock());
+        addTestCase("parse Kafka channel block", \testParseKafkaChannelBlock());
+        addTestCase("generator protocol bindings", \testGeneratorProtocolBindings());
         addTestCase("EventData extension fields", \testEventDataExtensions());
         addTestCase("doxygen ref resolution", \testDoxygenRefResolution());
         set_return_value(main());
@@ -1053,6 +1056,173 @@ trailing code";
         hash<auto> msg_props = channels[0].subscribe_schemas[0].schema.properties;
         assertEq("filter by WARNING level", msg_props.filter.description,
             "@ref in message field description should be resolved");
+    }
+
+    testParseMqttChannelBlock() {
+        string content = "/** @MQTT sensors/temperature
+    @ASYNCAPI
+    @summary Sensor telemetry topic
+    @desc MQTT topic for sensor readings
+
+    @publish SensorReading
+    @qos 1
+    @retain true
+    @contentType application/json
+    @payloadFormatIndicator 1
+    - device_id (string): device ID
+    - value (float): sensor value
+
+    @subscribe SensorCommand
+    @qos 2
+    - command (string): command name
+
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels =
+            AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+        assertEq(1, channels.size(), "Should find 1 MQTT channel");
+
+        hash<AsyncApi::ChannelSchemaInfo> channel = channels[0];
+        assertEq("sensors/temperature", channel.path, "MQTT topic should be extracted");
+        assertEq("mqtt", channel.protocol, "MQTT protocol should be set");
+        assertEq("Sensor telemetry topic", channel.summary, "Summary should match");
+
+        assertEq(1, channel.subscribe_schemas.size(), "MQTT @publish should create one send schema");
+        assertEq("SensorReading", channel.subscribe_schemas[0].name, "MQTT publish message name");
+        assertEq(1, channel.subscribe_schemas[0].operation_bindings.mqtt.qos, "MQTT QoS binding");
+        assertTrue(channel.subscribe_schemas[0].operation_bindings.mqtt.retain, "MQTT retain binding");
+        assertEq("application/json", channel.subscribe_schemas[0].content_type, "MQTT content type");
+        assertEq(1, channel.subscribe_schemas[0].bindings.mqtt.payloadFormatIndicator,
+            "MQTT payload format indicator");
+
+        assertEq(1, channel.publish_schemas.size(), "MQTT @subscribe should create one receive schema");
+        assertEq("SensorCommand", channel.publish_schemas[0].name, "MQTT subscribe message name");
+        assertEq(2, channel.publish_schemas[0].operation_bindings.mqtt.qos, "MQTT subscribe QoS binding");
+        assertFalse(channel.publish_schemas[0].operation_bindings.mqtt.hasKey("retain"),
+            "MQTT receive binding should not include retain");
+    }
+
+    testParseKafkaChannelBlock() {
+        string content = "/** @KAFKA orders.created
+    @ASYNCAPI
+    @summary Created orders topic
+    @partitions 12
+    @replicas 3
+
+    @publish OrderCreated
+    @bindingVersion 0.6.0
+    @key string
+    - key (string): order ID
+    - value (hash<auto>): event payload
+
+    @subscribe OrderCreatedConsumed
+    @groupId order-workers
+    @clientId order-service
+    - key (string): order ID
+    - value (hash<auto>): event payload
+
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels =
+            AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+        assertEq(1, channels.size(), "Should find 1 Kafka channel");
+
+        hash<AsyncApi::ChannelSchemaInfo> channel = channels[0];
+        assertEq("orders.created", channel.path, "Kafka topic should be extracted");
+        assertEq("kafka", channel.protocol, "Kafka protocol should be set");
+        assertEq("orders.created", channel.bindings.kafka.topic, "Kafka channel binding topic");
+        assertEq(12, channel.bindings.kafka.partitions, "Kafka partitions binding");
+        assertEq(3, channel.bindings.kafka.replicas, "Kafka replicas binding");
+        assertEq("0.5.0", channel.bindings.kafka.bindingVersion,
+            "Kafka message bindingVersion should not override channel binding version");
+
+        assertEq(1, channel.subscribe_schemas.size(), "Kafka @publish should create one send schema");
+        assertEq("OrderCreated", channel.subscribe_schemas[0].name, "Kafka publish message name");
+        assertEq("string", channel.subscribe_schemas[0].bindings.kafka.key.type, "Kafka key schema type");
+        assertEq("0.6.0", channel.subscribe_schemas[0].operation_bindings.kafka.bindingVersion,
+            "Kafka operation bindingVersion should come from the message block");
+
+        assertEq(1, channel.publish_schemas.size(), "Kafka @subscribe should create one receive schema");
+        assertEq("OrderCreatedConsumed", channel.publish_schemas[0].name, "Kafka subscribe message name");
+        assertEq("order-workers", channel.publish_schemas[0].operation_bindings.kafka.groupId{"enum"}[0],
+            "Kafka groupId binding");
+        assertEq("order-service", channel.publish_schemas[0].operation_bindings.kafka.clientId{"enum"}[0],
+            "Kafka clientId binding");
+    }
+
+    testGeneratorProtocolBindings() {
+        list<hash<AsyncApi::ChannelSchemaInfo>> mqtt_channels =
+            AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks("/** @MQTT sensors/temperature
+    @ASYNCAPI
+    @summary Sensor telemetry
+    @publish SensorReading
+    @qos 1
+    @retain true
+    @contentType application/json
+    - device_id (string): device ID
+    - value (float): sensor value
+    @ENDASYNCAPI
+*/");
+
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "MQTT API",
+            "version": "1.0.0",
+        });
+        gen.addChannel(mqtt_channels[0]);
+        hash<auto> schema = gen.generate();
+
+        assertEq("mqtt", schema.servers.default.protocol, "Default MQTT server protocol");
+        assertTrue(schema.channels.hasKey("sensors_temperature"), "MQTT channel key should be sanitized");
+        assertEq("sensors/temperature", schema.channels.sensors_temperature.address, "MQTT channel address");
+        assertEq("application/json", schema.components.messages.SensorReading.contentType,
+            "MQTT message content type");
+        assertEq("application/json", schema.components.messages.SensorReading.bindings.mqtt.contentType,
+            "MQTT message binding content type");
+        assertEq(1, schema.operations.send_sensors_temperature_SensorReading.bindings.mqtt.qos,
+            "MQTT operation QoS");
+        assertTrue(schema.operations.send_sensors_temperature_SensorReading.bindings.mqtt.retain,
+            "MQTT operation retain flag");
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> kafka_channels =
+            AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks("/** @KAFKA orders.created
+    @ASYNCAPI
+    @summary Created orders
+    @partitions 12
+    @publish OrderCreated
+    @key string
+    - key (string): order ID
+    - value (hash<auto>): event payload
+    @ENDASYNCAPI
+*/");
+
+        AsyncApi::AsyncApiSchemaGenerator kafka_gen({
+            "title": "Kafka API",
+            "version": "1.0.0",
+        });
+        kafka_gen.addChannel(kafka_channels[0]);
+        schema = kafka_gen.generate();
+
+        assertEq("kafka", schema.servers.default.protocol, "Default Kafka server protocol");
+        assertTrue(schema.channels.hasKey("orders_created"), "Kafka channel key should be sanitized");
+        assertEq("orders.created", schema.channels.orders_created.address, "Kafka channel address");
+        assertEq("orders.created", schema.channels.orders_created.bindings.kafka.topic, "Kafka binding topic");
+        assertEq(12, schema.channels.orders_created.bindings.kafka.partitions, "Kafka binding partitions");
+        assertEq("string", schema.components.messages.OrderCreated.bindings.kafka.key.type,
+            "Kafka message key binding");
+        assertEq("0.5.0", schema.operations.send_orders_created_OrderCreated.bindings.kafka.bindingVersion,
+            "Kafka operation binding version");
+
+        AsyncApi::AsyncApiSchemaGenerator mixed_gen({
+            "title": "Mixed API",
+            "version": "1.0.0",
+        });
+        mixed_gen.addChannel(kafka_channels[0]);
+        mixed_gen.addChannel(mqtt_channels[0]);
+        schema = mixed_gen.generate();
+
+        assertEq("mqtt", schema.servers.default.protocol, "Mixed MQTT/Kafka default protocol preference");
     }
 
     testEventDataExtensions() {

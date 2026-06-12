@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2024 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QORE-ASYNCAPI-GEN 1 "2026 April 02" "Qore 3.0" "Qore Programming Language"
+.TH QORE-ASYNCAPI-GEN 1 "2026 June 12" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qore\-asyncapi\-gen \- generate AsyncAPI 3.0 specifications from Qore sources
 .SH SYNOPSIS
@@ -11,7 +11,7 @@ qore\-asyncapi\-gen \- generate AsyncAPI 3.0 specifications from Qore sources
 \fIsource-file\fP...
 .SH DESCRIPTION
 \fBqore\-asyncapi\-gen\fR parses \fB@EVENT\fP, \fB@EVENTSCHEMA\fP,
-\fB@WEBSOCKET\fP, and \fB@ASYNCAPI\fP blocks in Qore source files and
+\fB@WEBSOCKET\fP, \fB@MQTT\fP, \fB@KAFKA\fP, and \fB@ASYNCAPI\fP blocks in Qore source files and
 generates an AsyncAPI 3.0.0 specification.
 .SH OPTIONS
 .TP
@@ -31,7 +31,8 @@ API version (default: \fB1.0.0\fP).
 API description.
 .TP
 .BR \-s ", " \-\-server =\fIURL\fP
-Server URL (repeatable).
+Server URL (repeatable). Scheme-prefixed values such as \fBwss://\fP, \fBmqtt://\fP, and \fBkafka://\fP
+also set the AsyncAPI server protocol.
 .TP
 .BR \-c ", " \-\-channel =\fIpath\fP
 Channel path (repeatable).

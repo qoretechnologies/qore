@@ -138,7 +138,8 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
     @subsection asyncapi_generator_classes Generator Classes
 
     The following classes are available for schema generation:
-    - @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer": parses \@EVENT and \@WEBSOCKET blocks from source files
+    - @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer": parses \@EVENT, \@WEBSOCKET,
+      \@MQTT, and \@KAFKA blocks from source files
     - @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper": maps Qore types to JSON Schema types
     - @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator": generates complete AsyncAPI 3.0.0 schemas
 
@@ -162,7 +163,7 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
     * /
     @endverbatim
 
-    @subsection asyncapi_channel_format WebSocket Channel Format
+    @subsection asyncapi_channel_format Channel Format
 
     Document WebSocket channels using the \@WEBSOCKET block format:
 
@@ -177,6 +178,34 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
         @publish EventMessage
         - name (string): event name
         - data (hash<auto>): event data
+        @ENDASYNCAPI
+    * /
+    @endverbatim
+
+    MQTT and Kafka topics use the same message field format, but start with \@MQTT or \@KAFKA:
+    @verbatim
+    /** @MQTT sensors/temperature
+        @ASYNCAPI
+        @summary Sensor telemetry topic
+        @publish SensorReading
+        @qos 1
+        @contentType application/json
+        - device_id (string): Device ID
+        - value (float): Sensor reading
+        @ENDASYNCAPI
+    * /
+    @endverbatim
+
+    @verbatim
+    /** @KAFKA orders.created
+        @ASYNCAPI
+        @summary Created orders topic
+        @partitions 12
+        @replicas 3
+        @publish OrderCreated
+        @key string
+        - key (string): Order ID
+        - value (hash<auto>): Order event
         @ENDASYNCAPI
     * /
     @endverbatim
@@ -270,7 +299,8 @@ qore-asyncapi-gen -t "My Event API" -V "1.0.0" -o events.yaml src/*.qclass
     - protocol-agnostic message validation
     - built-in WebSocket integration via WebSocketClient and WebSocketHandler modules
     - added @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator" class for generating AsyncAPI 3.0.0 schemas from Qore source code
-    - added @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer" class for parsing \@EVENT and \@WEBSOCKET blocks
+    - added @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer" class for parsing \@EVENT,
+      \@WEBSOCKET, \@MQTT, and \@KAFKA blocks
     - added @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper" class for mapping Qore types to JSON Schema types
     - added \c qore-asyncapi-gen CLI tool for generating schemas from source files
 */
@@ -1728,14 +1758,18 @@ public hashdecl EventSchemaInfo {
     *list<auto> examples;
 }
 
-#! WebSocket channel information parsed from \@WEBSOCKET blocks
+#! AsyncAPI channel information parsed from \@WEBSOCKET, \@MQTT, and \@KAFKA blocks
 public hashdecl ChannelSchemaInfo {
     #! Channel path (e.g., "/creator")
     string path;
+    #! Protocol name (for example "ws", "mqtt", or "kafka")
+    *string protocol;
     #! Short summary of the channel
     *string summary;
     #! Detailed description
     *string desc;
+    #! Channel bindings
+    *hash<auto> bindings;
     #! Subscribe message schema (single, for backwards compatibility)
     *hash<auto> subscribe_schema;
     #! Publish message schema (single, for backwards compatibility)
@@ -1758,10 +1792,14 @@ public hashdecl MessageSchemaInfo {
     *string content_type;
     #! Payload schema
     *hash<auto> payload;
+    #! Message bindings
+    *hash<auto> bindings;
+    #! Operation bindings for operations generated from this message
+    *hash<auto> operation_bindings;
 }
 
-#! Tokenizer for \@EVENT and \@WEBSOCKET comment blocks
-/** This class parses \@EVENT/\@EVENTSCHEMA and \@WEBSOCKET/\@ASYNCAPI blocks from Qore source files
+#! Tokenizer for \@EVENT, \@WEBSOCKET, \@MQTT, and \@KAFKA comment blocks
+/** This class parses \@EVENT/\@EVENTSCHEMA and \@WEBSOCKET/\@MQTT/\@KAFKA/\@ASYNCAPI blocks from Qore source files
     and extracts schema information for AsyncAPI generation.
 
     @par Event Block Format
@@ -1793,6 +1831,35 @@ public hashdecl MessageSchemaInfo {
     @publish EventMessage
     - name (string): event name
     - data (hash): event data
+    @ENDASYNCAPI
+* /
+    @endverbatim
+
+    @par MQTT Topic Block Format
+    @verbatim
+/** @MQTT sensors/temperature
+    @ASYNCAPI
+    @summary Sensor telemetry topic
+    @publish SensorReading
+    @qos 1
+    @contentType application/json
+    - device_id (string): device ID
+    - value (float): reading value
+    @ENDASYNCAPI
+* /
+    @endverbatim
+
+    @par Kafka Topic Block Format
+    @verbatim
+/** @KAFKA orders.created
+    @ASYNCAPI
+    @summary Created orders topic
+    @partitions 12
+    @replicas 3
+    @publish OrderCreated
+    @key string
+    - key (string): order ID
+    - value (hash<auto>): event payload
     @ENDASYNCAPI
 * /
     @endverbatim
@@ -2081,20 +2148,27 @@ public class AsyncApiSchemaTokenizer {
 %endif
     }
 
-    #! Parse a \@WEBSOCKET block and extract channel information
-    /** @param block the text content of the \@WEBSOCKET block
+    #! Parse a channel block and extract channel information
+    /** @param block the text content of the \@WEBSOCKET, \@MQTT, or \@KAFKA block
         @return the parsed channel schema information
     */
     static hash<ChannelSchemaInfo> parseChannelBlock(string block) {
         hash<ChannelSchemaInfo> channel = <ChannelSchemaInfo>{};
 
-        # Extract path from first line: @WEBSOCKET <path> (path must start with /)
-        *list<*string> match = (block =~ x/^\s*@WEBSOCKET\s+(\/\S*)/m);
-        if (match && match[0]) {
-            channel.path = match[0];
+        # Extract protocol and address from first line: @WEBSOCKET <path>, @MQTT <topic>, or @KAFKA <topic>
+        *list<*string> match = (block =~ x/^\s*@(WEBSOCKET|MQTT|KAFKA)\s+(\S+)/m);
+        if (match && match[0] && match[1]) {
+            string tag = match[0];
+            channel.path = match[1];
+            channel.protocol = tag == "WEBSOCKET" ? "ws" : tolower(tag);
+            if (tag == "WEBSOCKET" && channel.path !~ /^\//) {
+                throw "PARSE-ERROR", "WebSocket channel path must start with /";
+            }
         } else {
-            throw "PARSE-ERROR", "Cannot find path in @WEBSOCKET block";
+            throw "PARSE-ERROR", "Cannot find channel address in @WEBSOCKET, @MQTT, or @KAFKA block";
         }
+
+        channel.bindings = parseChannelBindings(getChannelHeaderBlock(block), channel.protocol, channel.path);
 
         # Extract @summary (don't stop at inline doxygen tags like @ref)
         match = (block =~ x/@summary\s+(.+?)(?=@(?!ref\b)|\n\s*\n|$)/s);
@@ -2108,15 +2182,25 @@ public class AsyncApiSchemaTokenizer {
             channel.desc = trim(processDoxygenRefs(match[0]));
         }
 
-        # Extract all @subscribe schemas
-        channel.subscribe_schemas = parseAllMessageBlocks(block, "subscribe");
+        # Extract all message schemas.  WebSocket keeps the legacy interpretation:
+        # @subscribe is a client send operation and @publish is a server receive operation.
+        # MQTT/Kafka use protocol vocabulary: @publish is send and @subscribe is receive.
+        if (channel.protocol == "mqtt" || channel.protocol == "kafka") {
+            channel.subscribe_schemas = parseAllMessageBlocks(block, "publish", channel.protocol, "send")
+                + parseAllMessageBlocks(block, "send", channel.protocol, "send");
+            channel.publish_schemas = parseAllMessageBlocks(block, "subscribe", channel.protocol, "receive")
+                + parseAllMessageBlocks(block, "receive", channel.protocol, "receive");
+        } else {
+            channel.subscribe_schemas = parseAllMessageBlocks(block, "subscribe", channel.protocol, "send")
+                + parseAllMessageBlocks(block, "send", channel.protocol, "send");
+            channel.publish_schemas = parseAllMessageBlocks(block, "publish", channel.protocol, "receive")
+                + parseAllMessageBlocks(block, "receive", channel.protocol, "receive");
+        }
         if (channel.subscribe_schemas) {
             # Set first one for backwards compatibility
             channel.subscribe_schema = channel.subscribe_schemas[0];
         }
 
-        # Extract all @publish schemas
-        channel.publish_schemas = parseAllMessageBlocks(block, "publish");
         if (channel.publish_schemas) {
             # Set first one for backwards compatibility
             channel.publish_schema = channel.publish_schemas[0];
@@ -2130,7 +2214,8 @@ public class AsyncApiSchemaTokenizer {
         @param msg_type "subscribe" or "publish"
         @return list of message schema hashes, each with "name" and "schema" keys
     */
-    private static list<hash<auto>> parseAllMessageBlocks(string block, string msg_type) {
+    private static list<hash<auto>> parseAllMessageBlocks(string block, string msg_type, *string protocol,
+            *string action) {
         list<hash<auto>> messages = ();
 
         # Find all occurrences of @subscribe or @publish
@@ -2168,8 +2253,8 @@ public class AsyncApiSchemaTokenizer {
                 string line = block.substr(line_start, line_end - line_start);
                 string trimmed = trim(line);
 
-                # Stop at next @subscribe, @publish, or @ENDASYNCAPI (regardless of indentation)
-                if (trimmed =~ /^@(subscribe|publish|ENDASYNCAPI)\b/) {
+                # Stop at next message or end tag (regardless of indentation)
+                if (trimmed =~ /^@(subscribe|publish|send|receive|ENDASYNCAPI)\b/) {
                     break;
                 }
 
@@ -2192,6 +2277,7 @@ public class AsyncApiSchemaTokenizer {
                 if (examples) {
                     msg.examples = examples;
                 }
+                addProtocolMessageInfo(\msg, msg_block, protocol, action);
                 messages += msg;
             }
 
@@ -2199,6 +2285,176 @@ public class AsyncApiSchemaTokenizer {
         }
 
         return messages;
+    }
+
+    private static string getChannelHeaderBlock(string block) {
+        list<string> lines;
+        foreach string line in (block.split("\n")) {
+            string trimmed = trim(line);
+            if (trimmed =~ /^@(subscribe|publish|send|receive)\b/) {
+                break;
+            }
+            lines += line;
+        }
+        return lines.join("\n");
+    }
+
+    #! Parse protocol-specific channel bindings from channel-level tags
+    private static *hash<auto!> parseChannelBindings(string block, *string protocol, string address) {
+        if (protocol == "kafka") {
+            hash<auto> kafka;
+            kafka.topic = address;
+            kafka.bindingVersion = getTagValue(block, "bindingVersion") ?? "0.5.0";
+            if (*string partitions = getTagValue(block, "partitions")) {
+                kafka.partitions = partitions.toInt();
+            }
+            if (*string replicas = getTagValue(block, "replicas")) {
+                kafka.replicas = replicas.toInt();
+            }
+            hash<auto> topic_config;
+            if (*string cleanup = getTagValue(block, "cleanupPolicy")) {
+                topic_config{"cleanup.policy"} = cleanup.split(",");
+            }
+            if (*string retention_ms = getTagValue(block, "retentionMs")) {
+                topic_config{"retention.ms"} = retention_ms.toInt();
+            }
+            if (*string retention_bytes = getTagValue(block, "retentionBytes")) {
+                topic_config{"retention.bytes"} = retention_bytes.toInt();
+            }
+            if (*string delete_retention_ms = getTagValue(block, "deleteRetentionMs")) {
+                topic_config{"delete.retention.ms"} = delete_retention_ms.toInt();
+            }
+            if (*string max_message_bytes = getTagValue(block, "maxMessageBytes")) {
+                topic_config{"max.message.bytes"} = max_message_bytes.toInt();
+            }
+            if (topic_config) {
+                kafka.topicConfiguration = topic_config;
+            }
+            return {"kafka": kafka};
+        }
+    }
+
+    #! Adds protocol-specific message and operation bindings to a parsed message hash
+    private static addProtocolMessageInfo(reference<hash<auto>> msg, string msg_block, *string protocol,
+            *string action) {
+        if (protocol == "mqtt") {
+            addMqttMessageInfo(\msg, msg_block, action);
+        } else if (protocol == "kafka") {
+            addKafkaMessageInfo(\msg, msg_block, action);
+        }
+    }
+
+    private static addMqttMessageInfo(reference<hash<auto>> msg, string msg_block, *string action) {
+        string binding_version = getTagValue(msg_block, "bindingVersion") ?? "0.2.0";
+        hash<auto> op_binding;
+        op_binding.bindingVersion = binding_version;
+        if (*string qos = getTagValue(msg_block, "qos")) {
+            op_binding.qos = qos.toInt();
+        }
+        if (action == "send") {
+            if (*string retain = getTagValue(msg_block, "retain")) {
+                op_binding.retain = parseBool(retain);
+            } else if (*string retained = getTagValue(msg_block, "retained")) {
+                op_binding.retain = parseBool(retained);
+            }
+        }
+        if (*string expiry = getTagValue(msg_block, "messageExpiryInterval")) {
+            op_binding.messageExpiryInterval = expiry.toInt();
+        } else if (*string expiry_alt = getTagValue(msg_block, "message_expiry_interval")) {
+            op_binding.messageExpiryInterval = expiry_alt.toInt();
+        }
+        msg.operation_bindings = {"mqtt": op_binding};
+
+        hash<auto> msg_binding;
+        if (*string payload_format = getTagValue(msg_block, "payloadFormatIndicator")) {
+            msg_binding.payloadFormatIndicator = payload_format.toInt();
+        } else if (*string payload_format_alt = getTagValue(msg_block, "payload_format")) {
+            msg_binding.payloadFormatIndicator = parseBool(payload_format_alt) ? 1 : 0;
+        }
+        if (*string content_type = getTagValue(msg_block, "contentType")) {
+            msg.content_type = content_type;
+            msg_binding.contentType = content_type;
+        } else if (*string content_type_alt = getTagValue(msg_block, "content_type")) {
+            msg.content_type = content_type_alt;
+            msg_binding.contentType = content_type_alt;
+        }
+        if (*string response_topic = getTagValue(msg_block, "responseTopic")) {
+            msg_binding.responseTopic = response_topic;
+        } else if (*string response_topic_alt = getTagValue(msg_block, "response_topic")) {
+            msg_binding.responseTopic = response_topic_alt;
+        }
+        if (*string correlation_data = getTagValue(msg_block, "correlationData")) {
+            msg_binding.correlationData = AsyncApiTypeMapper::mapType(correlation_data);
+        } else if (*string correlation_data_alt = getTagValue(msg_block, "correlation_data")) {
+            msg_binding.correlationData = AsyncApiTypeMapper::mapType(correlation_data_alt);
+        }
+        if (msg_binding) {
+            msg_binding.bindingVersion = binding_version;
+            msg.bindings = {"mqtt": msg_binding};
+        }
+    }
+
+    private static addKafkaMessageInfo(reference<hash<auto>> msg, string msg_block, *string action) {
+        string binding_version = getTagValue(msg_block, "bindingVersion") ?? "0.5.0";
+        hash<auto> op_binding;
+        op_binding.bindingVersion = binding_version;
+        if (action == "receive") {
+            if (*string group_id = getTagValue(msg_block, "groupId")) {
+                op_binding.groupId = makeStringEnumSchema(group_id);
+            } else if (*string group_id_alt = getTagValue(msg_block, "group_id")) {
+                op_binding.groupId = makeStringEnumSchema(group_id_alt);
+            }
+            if (*string client_id = getTagValue(msg_block, "clientId")) {
+                op_binding.clientId = makeStringEnumSchema(client_id);
+            } else if (*string client_id_alt = getTagValue(msg_block, "client_id")) {
+                op_binding.clientId = makeStringEnumSchema(client_id_alt);
+            }
+        }
+        msg.operation_bindings = {"kafka": op_binding};
+
+        hash<auto> msg_binding;
+        if (*string key_type = getTagValue(msg_block, "key")) {
+            msg_binding.key = AsyncApiTypeMapper::mapType(key_type);
+        }
+        if (*string schema_id_location = getTagValue(msg_block, "schemaIdLocation")) {
+            msg_binding.schemaIdLocation = schema_id_location;
+        }
+        if (*string schema_id_payload_encoding = getTagValue(msg_block, "schemaIdPayloadEncoding")) {
+            msg_binding.schemaIdPayloadEncoding = schema_id_payload_encoding;
+        }
+        if (*string schema_lookup_strategy = getTagValue(msg_block, "schemaLookupStrategy")) {
+            msg_binding.schemaLookupStrategy = schema_lookup_strategy;
+        }
+        if (msg_binding) {
+            msg_binding.bindingVersion = binding_version;
+            msg.bindings = {"kafka": msg_binding};
+        }
+    }
+
+    private static hash<auto> makeStringEnumSchema(string value) {
+        hash<auto> schema;
+        schema.type = "string";
+        schema{"enum"} = (value,);
+        return schema;
+    }
+
+    private static *string getTagValue(string block, string tag) {
+        string tag_prefix = "@" + tag;
+        foreach string line in (block.split("\n")) {
+            string trimmed = trim(line);
+            if (trimmed.size() <= tag_prefix.size()) {
+                continue;
+            }
+            if (trimmed.substr(0, tag_prefix.size()) == tag_prefix
+                    && trimmed.substr(tag_prefix.size(), 1) =~ /\s/) {
+                return trim(trimmed.substr(tag_prefix.size()));
+            }
+        }
+    }
+
+    private static bool parseBool(string value) {
+        value = tolower(trim(value));
+        return value == "true" || value == "yes" || value == "1";
     }
 
     #! Parse message field definitions
@@ -2342,17 +2598,17 @@ public class AsyncApiSchemaTokenizer {
         return events;
     }
 
-    #! Parse source file content and extract all \@WEBSOCKET blocks
+    #! Parse source file content and extract all AsyncAPI channel blocks
     /** @param content the source file content
         @return list of parsed channel schemas
 
-        This method searches for \@WEBSOCKET blocks within doc comment blocks
-        to avoid matching \@WEBSOCKET in string literals or regular comments.
+        This method searches for \@WEBSOCKET, \@MQTT, and \@KAFKA blocks within doc comment blocks
+        to avoid matching schema tags in string literals or regular comments.
     */
     static list<hash<ChannelSchemaInfo>> parseChannelBlocks(string content) {
         list<hash<ChannelSchemaInfo>> channels = ();
 
-        # Find all doc comment blocks first, then search for @WEBSOCKET within them
+        # Find all doc comment blocks first, then search for channel tags within them
         # Pattern matches /** ... */ blocks (non-greedy) with capture group
         *list<string> doc_matches = (content =~ x/(\/\*\*[\s\S]*?\*\/)/g);
         if (!doc_matches) {
@@ -2360,8 +2616,13 @@ public class AsyncApiSchemaTokenizer {
         }
 
         foreach string doc_block in (doc_matches) {
-            # Check if this doc block contains @WEBSOCKET
-            int start = doc_block.find("@WEBSOCKET ");
+            int start = -1;
+            foreach string tag in (("@WEBSOCKET ", "@MQTT ", "@KAFKA ")) {
+                int tag_start = doc_block.find(tag);
+                if (tag_start >= 0 && (start < 0 || tag_start < start)) {
+                    start = tag_start;
+                }
+            }
             if (start < 0) {
                 continue;
             }
@@ -2483,7 +2744,8 @@ public class AsyncApiTypeMapper {
 }
 
 #! Generates AsyncAPI 3.0.0 schemas from parsed event and channel definitions
-/** This class generates complete AsyncAPI 3.0.0 schemas from parsed \@EVENT and \@WEBSOCKET blocks.
+/** This class generates complete AsyncAPI 3.0.0 schemas from parsed \@EVENT, \@WEBSOCKET, \@MQTT, and
+    \@KAFKA blocks.
 
     @par Example
     @code{.py}
@@ -2591,11 +2853,12 @@ public class AsyncApiSchemaGenerator {
         if (servers) {
             asyncapi.servers = servers;
         } else {
+            string default_protocol = getDefaultServerProtocol();
             asyncapi.servers = {
                 "default": {
                     "host": "{host}:{port}",
-                    "protocol": "wss",
-                    "description": "WebSocket endpoint",
+                    "protocol": default_protocol,
+                    "description": getDefaultServerDescription(default_protocol),
                 },
             };
         }
@@ -2604,12 +2867,13 @@ public class AsyncApiSchemaGenerator {
         asyncapi.channels = {};
         hash<string, list<string>> channel_subscribe_msgs;
         hash<string, list<string>> channel_publish_msgs;
+        hash<auto> channel_subscribe_operation_bindings;
+        hash<auto> channel_publish_operation_bindings;
         hash<auto> message_components = generateMessageComponents();
 
         if (channels) {
             foreach hash<auto> ch in (channels.pairIterator()) {
-                string channel_name = ch.key;
-                channel_name =~ s/^\///;
+                string channel_name = makeUniqueChannelName(asyncapi.channels, makeChannelName(ch.key));
                 hash<ChannelSchemaInfo> channel = ch.value;
 
                 hash<auto> channel_messages = {};
@@ -2630,6 +2894,12 @@ public class AsyncApiSchemaGenerator {
                             "\$ref": "#/components/messages/" + msg_info.component_key,
                         };
                         subscribe_keys += msg_key;
+                        if (msg_info.operation_bindings) {
+                            if (!channel_subscribe_operation_bindings{channel_name}) {
+                                channel_subscribe_operation_bindings{channel_name} = {};
+                            }
+                            channel_subscribe_operation_bindings{channel_name}{msg_key} = msg_info.operation_bindings;
+                        }
                     }
                 }
 
@@ -2642,6 +2912,12 @@ public class AsyncApiSchemaGenerator {
                             "\$ref": "#/components/messages/" + msg_info.component_key,
                         };
                         publish_keys += msg_key;
+                        if (msg_info.operation_bindings) {
+                            if (!channel_publish_operation_bindings{channel_name}) {
+                                channel_publish_operation_bindings{channel_name} = {};
+                            }
+                            channel_publish_operation_bindings{channel_name}{msg_key} = msg_info.operation_bindings;
+                        }
                     }
                 }
 
@@ -2660,6 +2936,9 @@ public class AsyncApiSchemaGenerator {
                     "description": channel.desc ?? channel.summary ?? "",
                     "messages": channel_messages,
                 };
+                if (channel.bindings) {
+                    asyncapi.channels{channel_name}.bindings = channel.bindings;
+                }
             }
         }
 
@@ -2682,21 +2961,31 @@ public class AsyncApiSchemaGenerator {
         foreach string channel_name in (keys asyncapi.channels) {
             foreach string msg_key in (channel_subscribe_msgs{channel_name} ?? ()) {
                 string op_name = makeOperationName("send", channel_name, msg_key);
-                asyncapi.operations{op_name} = {
+                hash<auto> op = {
                     "action": "send",
                     "channel": {"\$ref": "#/channels/" + channel_name},
                     "summary": "Send " + msg_key + " message",
                     "messages": ({"\$ref": "#/channels/" + channel_name + "/messages/" + msg_key},),
                 };
+                if (channel_subscribe_operation_bindings{channel_name}
+                        && channel_subscribe_operation_bindings{channel_name}{msg_key}) {
+                    op.bindings = channel_subscribe_operation_bindings{channel_name}{msg_key};
+                }
+                asyncapi.operations{op_name} = op;
             }
             foreach string msg_key in (channel_publish_msgs{channel_name} ?? ()) {
                 string op_name = makeOperationName("receive", channel_name, msg_key);
-                asyncapi.operations{op_name} = {
+                hash<auto> op = {
                     "action": "receive",
                     "channel": {"\$ref": "#/channels/" + channel_name},
                     "summary": "Receive " + msg_key + " message",
                     "messages": ({"\$ref": "#/channels/" + channel_name + "/messages/" + msg_key},),
                 };
+                if (channel_publish_operation_bindings{channel_name}
+                        && channel_publish_operation_bindings{channel_name}{msg_key}) {
+                    op.bindings = channel_publish_operation_bindings{channel_name}{msg_key};
+                }
+                asyncapi.operations{op_name} = op;
             }
         }
 
@@ -2762,6 +3051,9 @@ public class AsyncApiSchemaGenerator {
         if (msg.desc) {
             component.description = msg.desc;
         }
+        if (msg.bindings) {
+            component.bindings = msg.bindings;
+        }
         if (msg.examples) {
             list<hash<auto>> example_msgs;
             foreach auto ex in (msg.examples) {
@@ -2773,10 +3065,13 @@ public class AsyncApiSchemaGenerator {
         }
         message_components{component_key} = component;
 
-        return {
-            "component_key": component_key,
-            "message_key": getMessageKey(msg.name),
-        };
+        hash<auto> rv;
+        rv.component_key = component_key;
+        rv.message_key = getMessageKey(msg.name);
+        if (msg.operation_bindings) {
+            rv.operation_bindings = msg.operation_bindings;
+        }
+        return rv;
     }
 
     private static string getMessageKey(string name) {
@@ -2813,10 +3108,53 @@ public class AsyncApiSchemaGenerator {
         return key;
     }
 
+    private static string makeChannelName(string path) {
+        string name = path;
+        name =~ s/^\///;
+        name =~ s/[^A-Za-z0-9_]/_/g;
+        if (!name) {
+            return "root";
+        }
+        return name;
+    }
+
+    private static string makeUniqueChannelName(hash<auto> generated_channels, string base_key) {
+        string key = base_key;
+        int idx = 2;
+        while (generated_channels{key}) {
+            key = base_key + "_" + idx.toString();
+            idx++;
+        }
+        return key;
+    }
+
     private static string makeOperationName(string direction, string channel_name, string msg_key) {
         string base = direction + "_" + channel_name + "_" + msg_key;
         base =~ s/[^A-Za-z0-9_]/_/g;
         return base;
+    }
+
+    private string getDefaultServerProtocol() {
+        bool has_kafka;
+        foreach hash<ChannelSchemaInfo> channel in (channels.iterator()) {
+            if (channel.protocol == "mqtt") {
+                return "mqtt";
+            }
+            if (channel.protocol == "kafka") {
+                has_kafka = True;
+            }
+        }
+        return has_kafka ? "kafka" : "wss";
+    }
+
+    private static string getDefaultServerDescription(string protocol) {
+        if (protocol == "mqtt") {
+            return "MQTT broker";
+        }
+        if (protocol == "kafka") {
+            return "Kafka broker";
+        }
+        return "WebSocket endpoint";
     }
 
     #! Generate schema component definitions

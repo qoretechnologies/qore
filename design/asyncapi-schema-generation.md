@@ -4,7 +4,7 @@ This guide explains how to generate AsyncAPI 3.0.0 schemas from Qore source code
 
 ## Overview
 
-The AsyncAPI schema generator allows you to document your event-driven APIs directly in your Qore source code using special `@EVENT` and `@WEBSOCKET` comment blocks. The generator parses these blocks and produces a complete AsyncAPI 3.0.0 specification in YAML or JSON format.
+The AsyncAPI schema generator allows you to document your event-driven APIs directly in your Qore source code using special `@EVENT`, `@WEBSOCKET`, `@MQTT`, and `@KAFKA` comment blocks. The generator parses these blocks and produces a complete AsyncAPI 3.0.0 specification in YAML or JSON format.
 
 AsyncAPI is ideal for documenting:
 - WebSocket event streaming endpoints
@@ -141,7 +141,7 @@ When parsing channels with multiple message types:
 - `subscribe_schemas` list contains all `@subscribe` message schemas
 - `publish_schemas` list contains all `@publish` message schemas
 - For backwards compatibility, `subscribe_schema` and `publish_schema` contain the first message of each type
- - The generator emits component message schemas for all message types and includes them in the channel's `messages` map
+- The generator emits component message schemas for all message types and includes them in the channel's `messages` map
 
 ### WebSocket Block Structure
 
@@ -155,6 +155,111 @@ When parsing channels with multiple message types:
 | `@publish` | Message schema for server-to-client messages (can appear multiple times) | No |
 | `@example` | JSON example payload for the preceding message block (can appear multiple times) | No |
 | `@ENDASYNCAPI` | Marks the end of AsyncAPI schema | Yes |
+
+## @MQTT Block Format
+
+Document MQTT topics using the `@MQTT` block format. For MQTT, `@publish` documents messages sent to the topic and `@subscribe` documents messages received from the topic.
+
+```qore
+/** @MQTT sensors/temperature
+    @ASYNCAPI
+    @summary Sensor telemetry topic
+    @desc MQTT 5 topic for publishing sensor readings.
+
+    @publish SensorReading
+    @qos 1
+    @retain false
+    @contentType application/json
+    @payloadFormatIndicator 1
+    - device_id (string): Device ID
+    - value (float): Sensor reading
+    - timestamp (date): Reading timestamp
+
+    @subscribe SensorCommand
+    @qos 1
+    - command (string): Command name
+    - args (*hash<auto>): Optional command arguments
+
+    @ENDASYNCAPI
+*/
+```
+
+### MQTT Block Structure
+
+| Tag | Description | Required |
+|-----|-------------|----------|
+| `@MQTT` | MQTT topic name or topic filter | Yes |
+| `@ASYNCAPI` | Marks the start of AsyncAPI schema | Yes |
+| `@summary` | Brief one-line description | No |
+| `@desc` | Detailed description | No |
+| `@publish` | Message schema for messages sent to the topic (can appear multiple times) | No |
+| `@subscribe` | Message schema for messages received from the topic (can appear multiple times) | No |
+| `@qos` | MQTT operation binding QoS value: `0`, `1`, or `2` | No |
+| `@retain` / `@retained` | MQTT send operation retain flag | No |
+| `@messageExpiryInterval` / `@message_expiry_interval` | MQTT 5 message expiry interval in seconds | No |
+| `@contentType` / `@content_type` | Message content type and MQTT message binding content type | No |
+| `@payloadFormatIndicator` / `@payload_format` | MQTT 5 payload format indicator | No |
+| `@responseTopic` / `@response_topic` | MQTT 5 response topic | No |
+| `@correlationData` / `@correlation_data` | Qore type for MQTT 5 correlation data schema | No |
+| `@bindingVersion` | MQTT binding version (default: `0.2.0`) | No |
+| `@example` | JSON example payload for the preceding message block | No |
+| `@ENDASYNCAPI` | Marks the end of AsyncAPI schema | Yes |
+
+## @KAFKA Block Format
+
+Document Kafka topics using the `@KAFKA` block format. For Kafka, `@publish` documents producer messages and `@subscribe` documents consumer messages.
+
+```qore
+/** @KAFKA orders.created
+    @ASYNCAPI
+    @summary Created orders topic
+    @desc Kafka topic carrying created order events.
+    @partitions 12
+    @replicas 3
+
+    @publish OrderCreated
+    @key string
+    - key (string): Order ID
+    - value (hash<auto>): Created order event payload
+
+    @subscribe OrderCreatedConsumed
+    @groupId order-workers
+    @clientId order-service
+    - key (string): Order ID
+    - value (hash<auto>): Created order event payload
+
+    @ENDASYNCAPI
+*/
+```
+
+### Kafka Block Structure
+
+| Tag | Description | Required |
+|-----|-------------|----------|
+| `@KAFKA` | Kafka topic name | Yes |
+| `@ASYNCAPI` | Marks the start of AsyncAPI schema | Yes |
+| `@summary` | Brief one-line description | No |
+| `@desc` | Detailed description | No |
+| `@publish` | Message schema for producer messages (can appear multiple times) | No |
+| `@subscribe` | Message schema for consumer messages (can appear multiple times) | No |
+| `@partitions` | Kafka channel binding partition count | No |
+| `@replicas` | Kafka channel binding replica count | No |
+| `@cleanupPolicy` | Comma-separated Kafka topic cleanup policy values | No |
+| `@retentionMs` | Kafka topic retention in milliseconds | No |
+| `@retentionBytes` | Kafka topic retention in bytes | No |
+| `@deleteRetentionMs` | Kafka delete retention in milliseconds | No |
+| `@maxMessageBytes` | Kafka max message bytes | No |
+| `@groupId` / `@group_id` | Kafka consumer operation binding group ID | No |
+| `@clientId` / `@client_id` | Kafka consumer operation binding client ID | No |
+| `@key` | Qore type for Kafka message key schema | No |
+| `@schemaIdLocation` | Kafka message binding schema ID location | No |
+| `@schemaIdPayloadEncoding` | Kafka message binding schema ID payload encoding | No |
+| `@schemaLookupStrategy` | Kafka message binding schema lookup strategy | No |
+| `@bindingVersion` | Kafka binding version (default: `0.5.0`) | No |
+| `@example` | JSON example payload for the preceding message block | No |
+| `@ENDASYNCAPI` | Marks the end of AsyncAPI schema | Yes |
+
+`@send` and `@receive` can be used instead of protocol-specific `@publish` and `@subscribe` in any channel block.
 
 ### Message Field Definitions
 
@@ -263,7 +368,7 @@ qore-asyncapi-gen [options] <source-files...>
 | `-t, --title=TITLE` | API title (default: "Event API") |
 | `-V, --api-version=VER` | API version (default: 1.0.0) |
 | `-d, --description=DESC` | API description |
-| `-s, --server=URL` | Server URL (can be specified multiple times) |
+| `-s, --server=URL` | Server URL (can be specified multiple times); URL schemes such as `wss://`, `mqtt://`, and `kafka://` set the AsyncAPI server protocol |
 | `-c, --channel=PATH` | Channel path (can be specified multiple times) |
 | `-v, --verbose` | Increase verbosity |
 | `-h, --help` | Show help message |
