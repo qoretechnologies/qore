@@ -56,6 +56,11 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         const Options = (
             "heartbeat",
             "heartbeat_msg",
+            "logger",
+            "data",
+            "asyncapi",
+            "asyncapi_channel",
+            "validator",
         );
 
         #! Response header to SSE requests
@@ -92,6 +97,12 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         #! heartbeat message returned by getHeartbeatMessage()
         string heartbeat_msg = DefaultHeartbeatMsg;
+
+        #! Optional default AsyncAPI validator assigned to new connections
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! Default AsyncAPI channel assigned to new connections
+        *string asyncapi_channel;
     }
 
     private:internal {
@@ -106,6 +117,12 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         - \c heartbeat: a non-negative integer value giving seconds for the heartbeat interval for the server
           connection; \c 0 disables heartbeats (default: 20 seconds)
         - \c logger: a LoggerInterface object for logging
+        - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic message validation
+          on all new connections
+        - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object to use for automatic message
+          validation on all new connections; this takes precedence over \c asyncapi
+        - \c asyncapi_channel: the AsyncAPI channel name to use with \c asyncapi or \c validator; required when
+          either validation option is configured
 
         @throw SERVERSENTEVENTHANDLER-OPTION-ERROR unknown or invalid option
     */
@@ -347,6 +364,10 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     /** Internal helper shared by all three \c setupAsyncSseConnection*() variants.
     */
     private registerAndInvokeHooks(ServerSentEventConnection conn, string cid, hash<auto> hdr) {
+        if (asyncapi_validator && asyncapi_channel && !conn.getAsyncApiValidator()) {
+            conn.setAsyncApiValidator(asyncapi_validator, asyncapi_channel);
+        }
+
         {
             rwl.writeLock();
             on_exit rwl.writeUnlock();
@@ -422,8 +443,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending
     */
     sendAll(hash<SseMessageInfo> msg) {
-        string str = encodeMessage(msg);
-
         bool debug = isEnabledFor(LoggerLevel::DEBUG);
         list<ServerSentEventConnection> conns();
         list<string> ids();
@@ -439,7 +458,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         }
 
         # push the data on all connection channels
-        map $1.sendEncoded(str), conns.iterator();
+        map $1.send(msg), conns.iterator();
         if (debug) {
             logDebug("SSE sent to connections: %y", ids);
         }
@@ -453,8 +472,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending
     */
     sendOne(softstring id, hash<SseMessageInfo> msg) {
-        string str = encodeMessage(msg);
-
         rwl.readLock();
         on_exit rwl.readUnlock();
 
@@ -462,7 +479,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             throw "SERVERSENTEVENT-CONNECTION-ERROR", sprintf("connection %y does not exist (valid connections: %y)",
                 id, keys ch);
         #logDebug("sending data to connection: %y", id);
-        ch{id}.sendEncoded(str);
+        ch{id}.send(msg);
     }
 
     #! stop given connection ID
@@ -519,6 +536,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     #! Common constructor initialization
     private constructorInit(*hash<auto> opts) {
+        *string asyncapi_url;
         foreach hash<auto> h in (opts.pairIterator()) {
             switch (h.key) {
                 case "heartbeat": {
@@ -547,10 +565,45 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                     serializer = c;
                     break;
                 }
+                case "asyncapi": {
+                    if (h.value.typeCode() != NT_STRING || !h.value.val()) {
+                        throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option %y has type %y and value %y; "
+                            "expecting a non-empty string URL or file path", h.key, h.value.fullType(), h.value);
+                    }
+                    asyncapi_url = h.value;
+                    break;
+                }
+                case "validator": {
+                    if (!(h.value instanceof AsyncApi::AsyncApi3Schema)) {
+                        throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option %y has type %y; expecting "
+                            "\"AsyncApi::AsyncApi3Schema\"", h.key, h.value.fullType());
+                    }
+                    asyncapi_validator = h.value;
+                    break;
+                }
+                case "asyncapi_channel": {
+                    if (h.value.typeCode() != NT_STRING || !h.value.val()) {
+                        throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option %y has type %y and value %y; "
+                            "expecting a non-empty string channel name", h.key, h.value.fullType(), h.value);
+                    }
+                    asyncapi_channel = h.value;
+                    break;
+                }
                 default:
                     throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option %y is unknown; known options: %y",
                         h.key, Options);
             }
+        }
+        if (!asyncapi_validator && asyncapi_url) {
+            asyncapi_validator = AsyncApi::AsyncApi3Loader::fromUrl(asyncapi_url);
+        }
+        if (asyncapi_validator && !asyncapi_channel) {
+            throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", "option \"asyncapi_channel\" is required when "
+                "\"asyncapi\" or \"validator\" is configured";
+        }
+        if (!asyncapi_validator && asyncapi_channel) {
+            throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", "option \"asyncapi_channel\" requires \"asyncapi\" or "
+                "\"validator\"";
         }
         if (!serializer) {
             serialization = DataSerializationSupport.firstKey();

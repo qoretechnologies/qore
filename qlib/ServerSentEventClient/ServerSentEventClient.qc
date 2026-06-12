@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ServerSentEventClient.qc SSE connection client
 
-/*  ServerSentEventClient.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  ServerSentEventClient.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -148,6 +148,12 @@ public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionPro
         #! Request body for non-GET requests
         *data request_body;
 
+        #! Optional AsyncAPI validator
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! AsyncAPI channel name for validation
+        *string asyncapi_channel;
+
         #! Connection sequence
         static Sequence seq();
 
@@ -181,6 +187,12 @@ ServerSentEventClient sse(\event(), {
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
             current thread's execution to another thread (default value: \c thread_yield());
             required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
+        - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic validation of
+          deserialized event data
+        - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object to use for automatic
+          validation of deserialized event data; this takes precedence over \c asyncapi
+        - \c asyncapi_channel: the AsyncAPI channel name to use with \c asyncapi or \c validator; required when
+          either validation option is configured
 
         @throw SSE-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
     */
@@ -213,6 +225,31 @@ ServerSentEventClient sse(\event(), {
     #! Returns the data serialization value (\c "none", \c "json")
     string getSerialization() {
         return serialization;
+    }
+
+    #! Sets an AsyncAPI validator for received SSE event data
+    /** @param validator the AsyncAPI schema validator
+        @param channel the channel name to use for validation
+    */
+    setAsyncApiValidator(AsyncApi::AsyncApi3Schema validator, string channel) {
+        asyncapi_validator = validator;
+        asyncapi_channel = channel;
+    }
+
+    #! Returns the current AsyncAPI validator, if any
+    *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
+        return asyncapi_validator;
+    }
+
+    #! Returns the current AsyncAPI channel name, if any
+    *string getAsyncApiChannel() {
+        return asyncapi_channel;
+    }
+
+    #! Clears the AsyncAPI validator
+    clearAsyncApiValidator() {
+        delete asyncapi_validator;
+        delete asyncapi_channel;
     }
 
     #! returns the URL given in the constructor
@@ -596,6 +633,8 @@ sse.setEventQueue();
         # set logger, if any
         logger = opts.logger;
 
+        configureAsyncApiOptions(opts);
+
         if (exists opts.last_event_id) {
             if (!opts.last_event_id.strp()) {
                 raiseError("ServerSentEventClient::constructor() options have an invalid 'last_event_id' key with type "
@@ -611,7 +650,7 @@ sse.setEventQueue();
 
         # remove SSE-only options
         remove http_opts{"logger", "last_event_id", "data", "reconnect", "yield", "start_thread",
-            "method", "body"};
+            "method", "body", "asyncapi", "asyncapi_channel", "validator"};
 
         if (opts.hasKey("yield")) {
             if (!opts.yield.callp()) {
@@ -721,8 +760,9 @@ sse.setEventQueue();
             if (event.id =~ /^[0-9]+$/) {
                 event.id = event.id.toInt();
             }
+            validateIncomingEvent(event);
         } catch (hash<ExceptionInfo> ex) {
-            logError("Error deserializing SSE event: %s (event data: %y)", get_exception_string(ex),
+            logError("Error processing SSE event: %s (event data: %y)", get_exception_string(ex),
                 event);
             return SSEEDC_CONTINUE;
         }
@@ -743,6 +783,63 @@ sse.setEventQueue();
                 return buf;
         }
         unsupportedSerialization();
+    }
+
+    private configureAsyncApiOptions(hash<auto> opts) {
+        *string asyncapi_url;
+        if (exists opts.validator) {
+            if (!(opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
+                raiseError("ServerSentEventClient::constructor() option 'validator' has type %y; expecting "
+                    "AsyncApi::AsyncApi3Schema", opts.validator.fullType());
+            }
+            asyncapi_validator = opts.validator;
+        }
+        if (exists opts.asyncapi) {
+            if (opts.asyncapi.typeCode() != NT_STRING || !opts.asyncapi.val()) {
+                raiseError("ServerSentEventClient::constructor() option 'asyncapi' has type %y and value %y; "
+                    "expecting a non-empty string URL or file path", opts.asyncapi.fullType(), opts.asyncapi);
+            }
+            asyncapi_url = opts.asyncapi;
+        }
+        if (exists opts.asyncapi_channel) {
+            if (opts.asyncapi_channel.typeCode() != NT_STRING || !opts.asyncapi_channel.val()) {
+                raiseError("ServerSentEventClient::constructor() option 'asyncapi_channel' has type %y and value %y; "
+                    "expecting a non-empty string channel name", opts.asyncapi_channel.fullType(),
+                    opts.asyncapi_channel);
+            }
+            asyncapi_channel = opts.asyncapi_channel;
+        }
+        if (!asyncapi_validator && asyncapi_url) {
+            asyncapi_validator = AsyncApi::AsyncApi3Loader::fromUrl(asyncapi_url);
+        }
+        if (asyncapi_validator && !asyncapi_channel) {
+            raiseError("ServerSentEventClient::constructor() option 'asyncapi_channel' is required when 'asyncapi' "
+                "or 'validator' is configured");
+        }
+        if (!asyncapi_validator && asyncapi_channel) {
+            raiseError("ServerSentEventClient::constructor() option 'asyncapi_channel' requires 'asyncapi' or "
+                "'validator'");
+        }
+    }
+
+    private validateIncomingEvent(hash<auto> event) {
+        if (asyncapi_validator && asyncapi_channel) {
+            auto payload = exists event.data ? event.data : NOTHING;
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \payload, getAsyncApiHeaders(event));
+            if (exists event.data) {
+                event.data = payload;
+            }
+        }
+    }
+
+    private static hash<auto> getAsyncApiHeaders(hash<auto> event) {
+        hash<auto> headers;
+        foreach string key in (("event", "id", "retry", "comment")) {
+            if (exists event{key}) {
+                headers{key} = event{key};
+            }
+        }
+        return headers;
     }
 
     #! Throws an UNSUPPORTED-SERIALIZATION error

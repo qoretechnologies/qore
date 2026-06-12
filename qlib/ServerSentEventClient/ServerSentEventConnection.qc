@@ -128,6 +128,18 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
                         "valid with non-GET methods. The body is resent on each reconnection "
                         "attempt",
                 },
+                "asyncapi": <ConnectionOptionInfo>{
+                    "display_name": "AsyncAPI Schema",
+                    "short_desc": "AsyncAPI schema URL or file path",
+                    "type": "string",
+                    "desc": "AsyncAPI schema URL or file path used to validate received SSE event data",
+                },
+                "asyncapi_channel": <ConnectionOptionInfo>{
+                    "display_name": "AsyncAPI Channel",
+                    "short_desc": "AsyncAPI channel for validation",
+                    "type": "string",
+                    "desc": "AsyncAPI channel name to use when `asyncapi` is configured",
+                },
             },
         };
     }
@@ -237,7 +249,8 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         return new ServerSentEventClientDataProvider({
             "url": url,
-        } + opts{"token", "token_type", "username", "password", "method", "body"});
+        } + opts{"token", "token_type", "username", "password", "method", "body", "asyncapi",
+            "asyncapi_channel"});
     }
 
     #! returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
@@ -287,7 +300,8 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         *data sse_body = remove http_opts.body;
 
         # Remove SSE-only options
-        remove http_opts{"logger", "last_event_id", "data", "reconnect", "yield", "start_thread"};
+        remove http_opts{"logger", "last_event_id", "data", "reconnect", "yield", "start_thread",
+            "asyncapi", "asyncapi_channel", "validator"};
 
         # Handle authorization token
         if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {

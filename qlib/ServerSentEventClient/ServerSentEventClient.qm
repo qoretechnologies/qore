@@ -43,6 +43,7 @@
 %requires Mime
 %requires HttpClientIo
 %requires HttpClientStreamingIo
+%requires AsyncApi >= 1.0
 
 %try-module json >= 1.5
 %define NoJson
@@ -124,6 +125,8 @@ module ServerSentEventClient {
     - added \c method and \c body options to support HTTP POST and other methods for SSE connections,
       enabling integration with streaming APIs (OpenAI, Anthropic, etc.) that use POST with JSON
       request bodies
+    - added AsyncAPI 3.0 validation support for received SSE event data via the \c asyncapi,
+      \c validator, and \c asyncapi_channel options
 */
 
 #! the ServerSentEventClient namespace contains all the objects in the ServerSentEventClient module

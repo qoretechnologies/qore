@@ -31,12 +31,13 @@
 %requires DataProvider
 %requires ConnectionProvider
 %requires HttpServerUtil
-%requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
+%requires AsyncSocketIo
 %requires HttpServerAsyncIo
 %requires HttpServer
 %requires ServerSentEventHandler
 %requires HttpClientIo
 %requires HttpClientStreamingIo
+%requires AsyncApi
 %try-module json
 %define NoJson
 %endtry
@@ -77,6 +78,45 @@ class HeartbeatSseHandler inherits ServerSentEventHandler {
         conn.send(<SseMessageInfo>{
             "event": "greeting",
             "data": "hello",
+        });
+    }
+}
+
+class JsonSseHandler inherits ServerSentEventHandler {
+    public {
+        bool validator_seen = False;
+    }
+
+    constructor(AsyncApi::AsyncApi3Schema validator)
+            : ServerSentEventHandler(NOTHING, {
+                "data": "json",
+                "validator": validator,
+                "asyncapi_channel": "events",
+            }) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        validator_seen = conn.getAsyncApiValidator() instanceof AsyncApi::AsyncApi3Schema
+            && conn.getAsyncApiChannel() == "events";
+        conn.send(<SseMessageInfo>{
+            "event": "greeting",
+            "data": {
+                "message": "hello",
+            },
+        });
+    }
+}
+
+class InvalidJsonSseHandler inherits ServerSentEventHandler {
+    constructor() : ServerSentEventHandler(NOTHING, {"data": "json"}) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{
+            "event": "greeting",
+            "data": {
+                "unexpected": True,
+            },
         });
     }
 }
@@ -153,7 +193,76 @@ class SseObservableTest inherits Test {
         addTestCase("SseObservable closes on idle timeout", \testIdleTimeoutFires());
         addTestCase("SseObservable heartbeats prevent idle timeout",
             \testHeartbeatPreventsIdleTimeout());
+        addTestCase("SseObservable validates AsyncAPI events", \testAsyncApiValidatedEvents());
+        addTestCase("SseObservable reports AsyncAPI validation errors",
+            \testAsyncApiIncomingValidationFailure());
+        addTestCase("SSE AsyncAPI option and outbound validation",
+            \testAsyncApiOptionsAndOutboundValidation());
         set_return_value(main());
+    }
+
+    private static AsyncApi::AsyncApi3Schema createAsyncApiSchema() {
+        return new AsyncApi::AsyncApi3Schema("", {
+            "asyncapi": "3.0.0",
+            "info": {
+                "title": "SSE Observable Test API",
+                "version": "1.0.0",
+            },
+            "channels": {
+                "events": {
+                    "address": "/sse",
+                    "messages": {
+                        "eventMessage": {
+                            "$ref": "#/components/messages/EventMessage",
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "sendEvent": {
+                    "action": "send",
+                    "channel": {
+                        "$ref": "#/channels/events",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/events/messages/eventMessage",
+                        },
+                    ),
+                },
+                "receiveEvent": {
+                    "action": "receive",
+                    "channel": {
+                        "$ref": "#/channels/events",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/events/messages/eventMessage",
+                        },
+                    ),
+                },
+            },
+            "components": {
+                "messages": {
+                    "EventMessage": {
+                        "payload": {
+                            "$ref": "#/components/schemas/EventPayload",
+                        },
+                    },
+                },
+                "schemas": {
+                    "EventPayload": {
+                        "type": "object",
+                        "required": ("message",),
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                            },
+                        },
+                    },
+                },
+            },
+        });
     }
 
     globalSetUp() {
@@ -494,5 +603,131 @@ class SseObservableTest inherits Test {
         assertGe(2, hb_events.size(), "heartbeats kept the stream alive");
 
         obs.stopEvents();
+    }
+
+    testAsyncApiValidatedEvents() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+        JsonSseHandler async_handler(schema);
+        HttpServer async_server(<HttpServerOptionInfo>{
+            "logger": new Logger("asyncapi-sse", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        on_exit async_server.stop();
+        async_server.setDefaultHandler("sse", async_handler);
+        int async_port = async_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        string url = sprintf("http://localhost:%d/sse", async_port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse",
+            NOTHING, NOTHING, {
+                "serialization": "json",
+                "validator": schema,
+                "asyncapi_channel": "events",
+            });
+
+        TestObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertTrue(observer.waitForEvents(10s), "received connected + AsyncAPI data event");
+        assertTrue(async_handler.validator_seen, "handler-level AsyncAPI validator was assigned to connection");
+
+        list<hash<auto>> data_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_DATA
+        );
+        assertEq(1, data_events.size(), "one data event");
+        assertEq("greeting", data_events[0].data.event);
+        assertEq("hello", data_events[0].data.data.message);
+
+        obs.stopEvents();
+    }
+
+    testAsyncApiIncomingValidationFailure() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+        InvalidJsonSseHandler invalid_handler();
+        HttpServer invalid_server(<HttpServerOptionInfo>{
+            "logger": new Logger("asyncapi-invalid-sse", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        on_exit invalid_server.stop();
+        invalid_server.setDefaultHandler("sse", invalid_handler);
+        int invalid_port = invalid_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        string url = sprintf("http://localhost:%d/sse", invalid_port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse",
+            NOTHING, NOTHING, {
+                "serialization": "json",
+                "validator": schema,
+                "asyncapi_channel": "events",
+            });
+
+        TestObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertTrue(observer.waitForCount(2, 10s), "received connected + validation closed event");
+
+        list<hash<auto>> data_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_DATA
+        );
+        assertEq(0, data_events.size(), "invalid message was not delivered");
+
+        list<hash<auto>> closed_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_CLOSED
+        );
+        assertEq(1, closed_events.size(), "one closed event");
+        assertEq("validation-error", closed_events[0].data.reason);
+        assertEq("SCHEMA-VALIDATION-ERROR", closed_events[0].data.error.err);
+
+        obs.stopEvents();
+    }
+
+    testAsyncApiOptionsAndOutboundValidation() {
+        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+
+        HttpClientIo::HttpClientConnectionManager mgr();
+        assertThrows("SSE-OBSERVABLE-OPTION-ERROR", sub () {
+            new HttpClientStreamingIo::SseObservable(mgr, "http://localhost:1/sse", "GET", "/sse",
+                NOTHING, NOTHING, {"validator": schema});
+        });
+        assertThrows("SSE-OBSERVABLE-OPTION-ERROR", sub () {
+            new HttpClientStreamingIo::SseObservable(mgr, "http://localhost:1/sse", "GET", "/sse",
+                NOTHING, NOTHING, {"asyncapi_channel": "events"});
+        });
+        assertThrows("SERVERSENTEVENTHANDLER-OPTION-ERROR", sub () {
+            new ServerSentEventHandler(NOTHING, {"validator": schema});
+        });
+        assertThrows("SERVERSENTEVENTHANDLER-OPTION-ERROR", sub () {
+            new ServerSentEventHandler(NOTHING, {"asyncapi_channel": "events"});
+        });
+
+        ServerSentEventHandler handler();
+        Socket sock();
+        ServerSentEventConnection conn(handler, sock, {}, {}, "asyncapi-unit");
+        conn.setAsyncApiValidator(schema, "events");
+        conn.send(<SseMessageInfo>{
+            "event": "greeting",
+            "data": {
+                "message": "hello",
+            },
+        });
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            conn.send(<SseMessageInfo>{
+                "event": "greeting",
+                "data": {
+                    "unexpected": True,
+                },
+            });
+        });
     }
 }

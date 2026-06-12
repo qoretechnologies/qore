@@ -128,6 +128,12 @@ public class SseObservableBridge inherits DataProvider::Observer {
 
         #! Serialization for the @c data field
         string serialization;
+
+        #! Optional AsyncAPI validator
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! AsyncAPI channel name for validation
+        *string asyncapi_channel;
     }
 
     #! Create the bridge and subscribe it to the given Observable.
@@ -142,9 +148,18 @@ public class SseObservableBridge inherits DataProvider::Observer {
         - \c initial_event (@c *hash<SseMessageInfo>): an optional event
           pushed before any live events — useful for priming a just-
           attached client with a current-state snapshot
+        - \c asyncapi: a string URL or file path to an AsyncAPI schema to load
+          for automatic validation of outbound event data
+        - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema"
+          object to use for automatic validation of outbound event data; this
+          takes precedence over \c asyncapi
+        - \c asyncapi_channel: the AsyncAPI channel name to use with
+          \c asyncapi or \c validator; required when either validation option
+          is configured
     */
     constructor(DataProvider::Observable source, *hash<auto> opts) {
         self.source = source;
+        configureAsyncApiOptions(opts ?? {});
         event_filter = opts.event_ids;
         terminate_on = opts.terminate_on;
         serialization = opts.serialization ?? DefaultSerialization;
@@ -256,6 +271,7 @@ public class SseObservableBridge inherits DataProvider::Observer {
         this.
     */
     pushMessage(hash<SseMessageInfo> msg) {
+        msg = validateOutgoingEvent(msg);
         string chunk = encodeMessage(msg);
         AutoLock al(m);
         chunks += chunk;
@@ -338,6 +354,64 @@ public class SseObservableBridge inherits DataProvider::Observer {
                     sprintf("unknown serialization %y", serialization);
         }
     }
+
+    private configureAsyncApiOptions(hash<auto> opts) {
+        *string asyncapi_url;
+        if (exists opts.validator) {
+            if (!(opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
+                throw "SSE-BRIDGE-OPTION-ERROR", sprintf("Option \"validator\" has type %y; expecting "
+                    "\"AsyncApi::AsyncApi3Schema\"", opts.validator.fullType());
+            }
+            asyncapi_validator = opts.validator;
+        }
+        if (exists opts.asyncapi) {
+            if (opts.asyncapi.typeCode() != NT_STRING || !opts.asyncapi.val()) {
+                throw "SSE-BRIDGE-OPTION-ERROR", sprintf("Option \"asyncapi\" has type %y and value %y; "
+                    "expecting a non-empty string URL or file path", opts.asyncapi.fullType(), opts.asyncapi);
+            }
+            asyncapi_url = opts.asyncapi;
+        }
+        if (exists opts.asyncapi_channel) {
+            if (opts.asyncapi_channel.typeCode() != NT_STRING || !opts.asyncapi_channel.val()) {
+                throw "SSE-BRIDGE-OPTION-ERROR", sprintf("Option \"asyncapi_channel\" has type %y and value %y; "
+                    "expecting a non-empty string channel name", opts.asyncapi_channel.fullType(),
+                    opts.asyncapi_channel);
+            }
+            asyncapi_channel = opts.asyncapi_channel;
+        }
+        if (!asyncapi_validator && asyncapi_url) {
+            asyncapi_validator = AsyncApi::AsyncApi3Loader::fromUrl(asyncapi_url);
+        }
+        if (asyncapi_validator && !asyncapi_channel) {
+            throw "SSE-BRIDGE-OPTION-ERROR", "Option \"asyncapi_channel\" is required when \"asyncapi\" or "
+                "\"validator\" is configured";
+        }
+        if (!asyncapi_validator && asyncapi_channel) {
+            throw "SSE-BRIDGE-OPTION-ERROR", "Option \"asyncapi_channel\" requires \"asyncapi\" or \"validator\"";
+        }
+    }
+
+    private hash<SseMessageInfo> validateOutgoingEvent(hash<auto> event) {
+        if (asyncapi_validator && asyncapi_channel) {
+            auto payload = exists event.data ? event.data : NOTHING;
+            hash<auto> headers = getAsyncApiHeaders(event);
+            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \payload, \headers);
+            if (exists event.data) {
+                event.data = payload;
+            }
+        }
+        return cast<hash<SseMessageInfo>>(event);
+    }
+
+    private static hash<auto> getAsyncApiHeaders(hash<auto> event) {
+        hash<auto> headers;
+        foreach string key in (("event", "id", "retry", "comment")) {
+            if (exists event{key}) {
+                headers{key} = event{key};
+            }
+        }
+        return headers;
+    }
 }
 
 #! Build an @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo"
@@ -356,6 +430,9 @@ public class SseObservableBridge inherits DataProvider::Observer {
     - \c hdr (\c *hash): extra response headers to merge with the defaults
       (\c Content-Type, \c Cache-Control, \c X-Accel-Buffering)
     - \c code (\c *int): override the default HTTP status (200)
+    - \c asyncapi, \c validator, and \c asyncapi_channel: forwarded to
+      @ref SseObservableBridge::constructor() for outbound AsyncAPI
+      validation
 
     @return an @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo"
     ready to be returned from the handler

@@ -105,6 +105,12 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
 
         #! Request body for non-GET requests
         *data request_body;
+
+        #! Optional AsyncAPI validator
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! AsyncAPI channel name for validation
+        *string asyncapi_channel;
     }
 
     #! Creates the SSE client
@@ -118,6 +124,12 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         - \c serialization: "json" or "none" (default: "none")
         - \c yield: callable to yield thread execution (for sandboxed environments)
         - \c start_thread: callable to start a new thread (for sandboxed environments)
+        - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic validation of
+          deserialized event data
+        - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object to use for automatic
+          validation of deserialized event data; this takes precedence over \c asyncapi
+        - \c asyncapi_channel: the AsyncAPI channel name to use with \c asyncapi or \c validator; required when
+          either validation option is configured
     */
     constructor(hash<auto> opts) {
         url = getString(opts, "url");
@@ -151,6 +163,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
         yield = opts.yield;
         start_thread = opts.start_thread;
+
+        configureAsyncApiOptions(opts);
 
         # set HTTP method option, if any
         if (opts.method) {
@@ -280,6 +294,31 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     */
     string getUrl() {
         return url;
+    }
+
+    #! Sets an AsyncAPI validator for received SSE event data
+    /** @param validator the AsyncAPI schema validator
+        @param channel the channel name to use for validation
+    */
+    setAsyncApiValidator(AsyncApi::AsyncApi3Schema validator, string channel) {
+        asyncapi_validator = validator;
+        asyncapi_channel = channel;
+    }
+
+    #! Returns the current AsyncAPI validator, if any
+    *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
+        return asyncapi_validator;
+    }
+
+    #! Returns the current AsyncAPI channel name, if any
+    *string getAsyncApiChannel() {
+        return asyncapi_channel;
+    }
+
+    #! Clears the AsyncAPI validator
+    clearAsyncApiValidator() {
+        delete asyncapi_validator;
+        delete asyncapi_channel;
     }
 
     #! Background event loop using HttpClientIo + SseStreamReader
@@ -426,8 +465,9 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
                 if (evt.id =~ /^[0-9]+$/) {
                     evt.id = evt.id.toInt();
                 }
+                validateIncomingEvent(evt);
             } catch (hash<ExceptionInfo> ex) {
-                self.logError("Error deserializing SSE event: %s", get_exception_string(ex));
+                self.logError("Error processing SSE event: %s", get_exception_string(ex));
                 continue;
             }
 
@@ -443,6 +483,60 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
 %endif
         return buf;
+    }
+
+    private configureAsyncApiOptions(hash<auto> opts) {
+        *string asyncapi_url;
+        if (exists opts.validator) {
+            if (!(opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
+                throw "SSE-ERROR", sprintf("option 'validator' has type %y; expecting AsyncApi::AsyncApi3Schema",
+                    opts.validator.fullType());
+            }
+            asyncapi_validator = opts.validator;
+        }
+        if (exists opts.asyncapi) {
+            if (opts.asyncapi.typeCode() != NT_STRING || !opts.asyncapi.val()) {
+                throw "SSE-ERROR", sprintf("option 'asyncapi' has type %y and value %y; expecting a non-empty "
+                    "string URL or file path", opts.asyncapi.fullType(), opts.asyncapi);
+            }
+            asyncapi_url = opts.asyncapi;
+        }
+        if (exists opts.asyncapi_channel) {
+            if (opts.asyncapi_channel.typeCode() != NT_STRING || !opts.asyncapi_channel.val()) {
+                throw "SSE-ERROR", sprintf("option 'asyncapi_channel' has type %y and value %y; expecting a "
+                    "non-empty string channel name", opts.asyncapi_channel.fullType(), opts.asyncapi_channel);
+            }
+            asyncapi_channel = opts.asyncapi_channel;
+        }
+        if (!asyncapi_validator && asyncapi_url) {
+            asyncapi_validator = AsyncApi::AsyncApi3Loader::fromUrl(asyncapi_url);
+        }
+        if (asyncapi_validator && !asyncapi_channel) {
+            throw "SSE-ERROR", "option 'asyncapi_channel' is required when 'asyncapi' or 'validator' is configured";
+        }
+        if (!asyncapi_validator && asyncapi_channel) {
+            throw "SSE-ERROR", "option 'asyncapi_channel' requires 'asyncapi' or 'validator'";
+        }
+    }
+
+    private validateIncomingEvent(hash<auto> event) {
+        if (asyncapi_validator && asyncapi_channel) {
+            auto payload = exists event.data ? event.data : NOTHING;
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \payload, getAsyncApiHeaders(event));
+            if (exists event.data) {
+                event.data = payload;
+            }
+        }
+    }
+
+    private static hash<auto> getAsyncApiHeaders(hash<auto> event) {
+        hash<auto> headers;
+        foreach string key in (("event", "id", "retry", "comment")) {
+            if (exists event{key}) {
+                headers{key} = event{key};
+            }
+        }
+        return headers;
     }
 
     #! Emit a DEBUG-level log entry via the wrapped logger, if any

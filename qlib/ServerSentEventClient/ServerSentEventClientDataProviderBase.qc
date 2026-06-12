@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ServerSentEventClientDataProviderBase.qc SSE connection client
 
-/*  ServerSentEventClientDataProviderBase.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  ServerSentEventClientDataProviderBase.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -174,6 +174,18 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
                     "serialization is set to 'json' and the body is not a string, it will "
                     "be serialized to JSON automatically. Only valid with non-GET methods. "
                     "The body is resent on each reconnection attempt",
+            },
+            "asyncapi": <DataProviderOptionInfo>{
+                "display_name": "AsyncAPI Schema",
+                "short_desc": "AsyncAPI schema URL or file path",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "AsyncAPI schema URL or file path used to validate received SSE event data",
+            },
+            "asyncapi_channel": <DataProviderOptionInfo>{
+                "display_name": "AsyncAPI Channel",
+                "short_desc": "AsyncAPI channel for validation",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "AsyncAPI channel name to use when `asyncapi` is configured",
             },
             "timeout": <DataProviderOptionInfo>{
                 "display_name": "I/O Timeout",

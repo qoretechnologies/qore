@@ -65,6 +65,12 @@ public class ServerSentEventConnection {
             - HTTP/3:   @ref HttpServerAsyncIo::Http3SseStream
         */
         *HttpServerAsyncIo::AbstractSseConnection sse_conn;
+
+        #! Optional AsyncAPI validator
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! AsyncAPI channel name for validation
+        *string asyncapi_channel;
     }
 
     private:internal {
@@ -135,7 +141,46 @@ public class ServerSentEventConnection {
 
     #! Encodes and queues an SSE message for sending
     send(hash<SseMessageInfo> msg) {
+        msg = validateOutgoingEvent(msg);
         sendEncoded(handler.encodeMessage(msg));
+    }
+
+    #! Sets an AsyncAPI validator for outbound SSE event data
+    /** @param validator the AsyncAPI schema validator
+        @param channel the channel name to use for validation
+    */
+    setAsyncApiValidator(AsyncApi::AsyncApi3Schema validator, string channel) {
+        asyncapi_validator = validator;
+        asyncapi_channel = channel;
+    }
+
+    #! Returns the current AsyncAPI validator, if any
+    *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
+        return asyncapi_validator;
+    }
+
+    #! Returns the current AsyncAPI channel name, if any
+    *string getAsyncApiChannel() {
+        return asyncapi_channel;
+    }
+
+    #! Clears the AsyncAPI validator
+    clearAsyncApiValidator() {
+        delete asyncapi_validator;
+        delete asyncapi_channel;
+    }
+
+    #! Validates an outgoing SSE event payload against the AsyncAPI schema
+    hash<SseMessageInfo> validateOutgoingEvent(hash<auto> event) {
+        if (asyncapi_validator && asyncapi_channel) {
+            auto payload = exists event.data ? event.data : NOTHING;
+            hash<auto> headers = getAsyncApiHeaders(event);
+            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \payload, \headers);
+            if (exists event.data) {
+                event.data = payload;
+            }
+        }
+        return cast<hash<SseMessageInfo>>(event);
     }
 
     #! This method is called when the connection is closed
@@ -158,6 +203,16 @@ public class ServerSentEventConnection {
         if (sse_conn) {
             sse_conn.abort();
         }
+    }
+
+    private static hash<auto> getAsyncApiHeaders(hash<auto> event) {
+        hash<auto> headers;
+        foreach string key in (("event", "id", "retry", "comment")) {
+            if (exists event{key}) {
+                headers{key} = event{key};
+            }
+        }
+        return headers;
     }
 }
 }

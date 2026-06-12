@@ -25,6 +25,7 @@
 %requires HttpClientIo
 %requires DataProvider
 %requires AsyncSocketIo
+%requires AsyncApi >= 1.0
 %try-module json
 %define NoJson
 %endtry
@@ -62,6 +63,8 @@ module HttpClientStreamingIo {
     - @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader" consumes
       comment-only SSE keep-alive frames internally and returns only dispatchable
       SSE events to callers.
+    - @ref HttpClientStreamingIo::SseObservable "SseObservable" supports AsyncAPI 3.0 validation of
+      deserialized SSE event data via the \c asyncapi, \c validator, and \c asyncapi_channel options.
 */
 
 #! Main namespace for the HttpClientStreamingIo module

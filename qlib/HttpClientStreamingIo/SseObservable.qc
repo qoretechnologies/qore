@@ -226,6 +226,12 @@ public class SseObservable inherits DataProvider::DelayedObservable {
 
         #! Async I/O controller key for the notifier poll operation
         *string poll_key;
+
+        #! Optional AsyncAPI validator
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! AsyncAPI channel name for validation
+        *string asyncapi_channel;
     }
 
     #! Creates an SSE Observable
@@ -247,6 +253,12 @@ public class SseObservable inherits DataProvider::DelayedObservable {
           messages (e.g. \c ":hb\\n\\n") to observers via
           @ref EVENT_SSE_HEARTBEAT; if \c False, consume them silently while
           still using them to reset the idle-timeout deadline.
+        - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic validation of
+          deserialized event data
+        - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object to use for automatic
+          validation of deserialized event data; this takes precedence over \c asyncapi
+        - \c asyncapi_channel: the AsyncAPI channel name to use with \c asyncapi or \c validator; required when
+          either validation option is configured
     */
     constructor(HttpClientIo::HttpClientConnectionManager mgr, string url,
             string method, string path, *hash<auto> headers, *data body,
@@ -273,6 +285,32 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         if (exists self.opts.startup_callback) {
             startup_callback = self.opts.startup_callback;
         }
+        configureAsyncApiOptions(self.opts);
+    }
+
+    #! Sets an AsyncAPI validator for received SSE event data
+    /** @param validator the AsyncAPI schema validator
+        @param channel the channel name to use for validation
+    */
+    setAsyncApiValidator(AsyncApi::AsyncApi3Schema validator, string channel) {
+        asyncapi_validator = validator;
+        asyncapi_channel = channel;
+    }
+
+    #! Returns the current AsyncAPI validator, if any
+    *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
+        return asyncapi_validator;
+    }
+
+    #! Returns the current AsyncAPI channel name, if any
+    *string getAsyncApiChannel() {
+        return asyncapi_channel;
+    }
+
+    #! Clears the AsyncAPI validator
+    clearAsyncApiValidator() {
+        delete asyncapi_validator;
+        delete asyncapi_channel;
     }
 
     #! Called when all observers have been added — starts the SSE stream
@@ -636,9 +674,10 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 if (evt_hash.id =~ /^[0-9]+$/) {
                     evt_hash.id = evt_hash.id.toInt();
                 }
+                validateIncomingEvent(evt_hash);
             } catch (hash<ExceptionInfo> ex) {
                 notifyClosed({
-                    "reason": "deserialize-error",
+                    "reason": ex.err == "SCHEMA-VALIDATION-ERROR" ? "validation-error" : "deserialize-error",
                     "error": ex,
                     "event": evt_hash,
                 });
@@ -689,6 +728,63 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         }
 %endif
         return buf;
+    }
+
+    private configureAsyncApiOptions(hash<auto> opts) {
+        *string asyncapi_url;
+        if (exists opts.validator) {
+            if (!(opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
+                throw "SSE-OBSERVABLE-OPTION-ERROR", sprintf("Option \"validator\" has type %y; expecting "
+                    "\"AsyncApi::AsyncApi3Schema\"", opts.validator.fullType());
+            }
+            asyncapi_validator = opts.validator;
+        }
+        if (exists opts.asyncapi) {
+            if (opts.asyncapi.typeCode() != NT_STRING || !opts.asyncapi.val()) {
+                throw "SSE-OBSERVABLE-OPTION-ERROR", sprintf("Option \"asyncapi\" has type %y and value %y; "
+                    "expecting a non-empty string URL or file path", opts.asyncapi.fullType(), opts.asyncapi);
+            }
+            asyncapi_url = opts.asyncapi;
+        }
+        if (exists opts.asyncapi_channel) {
+            if (opts.asyncapi_channel.typeCode() != NT_STRING || !opts.asyncapi_channel.val()) {
+                throw "SSE-OBSERVABLE-OPTION-ERROR", sprintf("Option \"asyncapi_channel\" has type %y and value %y; "
+                    "expecting a non-empty string channel name", opts.asyncapi_channel.fullType(),
+                    opts.asyncapi_channel);
+            }
+            asyncapi_channel = opts.asyncapi_channel;
+        }
+        if (!asyncapi_validator && asyncapi_url) {
+            asyncapi_validator = AsyncApi::AsyncApi3Loader::fromUrl(asyncapi_url);
+        }
+        if (asyncapi_validator && !asyncapi_channel) {
+            throw "SSE-OBSERVABLE-OPTION-ERROR", "Option \"asyncapi_channel\" is required when \"asyncapi\" or "
+                "\"validator\" is configured";
+        }
+        if (!asyncapi_validator && asyncapi_channel) {
+            throw "SSE-OBSERVABLE-OPTION-ERROR", "Option \"asyncapi_channel\" requires \"asyncapi\" or "
+                "\"validator\"";
+        }
+    }
+
+    private validateIncomingEvent(hash<auto> event) {
+        if (asyncapi_validator && asyncapi_channel) {
+            auto payload = exists event.data ? event.data : NOTHING;
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \payload, getAsyncApiHeaders(event));
+            if (exists event.data) {
+                event.data = payload;
+            }
+        }
+    }
+
+    private static hash<auto> getAsyncApiHeaders(hash<auto> event) {
+        hash<auto> headers;
+        foreach string key in (("event", "id", "retry", "comment")) {
+            if (exists event{key}) {
+                headers{key} = event{key};
+            }
+        }
+        return headers;
     }
 }
 
