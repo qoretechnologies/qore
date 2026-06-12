@@ -533,13 +533,23 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
         }
 
         int record_count = AbstractDataProcessor::shapeRecordCount(records, shape);
+        hash<list<auto>> column_values;
+        foreach string field in (fields) {
+            if (columns.hasKey(field)) {
+                column_values{field} = AbstractDataProcessor::columnValuesToList(columns{field}, record_count, field);
+            }
+        }
+        if (!column_values) {
+            return;
+        }
+
         list<auto> results;
         for (int i = 0; i < record_count; ++i) {
             foreach string field in (fields) {
-                if (!columns.hasKey(field)) {
+                if (!column_values.hasKey(field)) {
                     continue;
                 }
-                *auto event = processFieldValue(field, columns{field}[i]);
+                *auto event = processFieldValue(field, column_values{field}[i]);
                 if (exists event) {
                     push results, event;
                 }
@@ -551,6 +561,20 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
 
     #! Returns selected top-level input columns for columnar analytics processing
     private *hash<auto> getAnalyticsFieldColumns(auto records, DataProviderShape shape) {
+        if (shape == DataProviderShape::HashOfLists) {
+            foreach string field in (fields) {
+                if (field.find(".") >= 0) {
+                    return;
+                }
+            }
+            hash<auto> columns;
+            foreach string field in (fields) {
+                if (records.hasKey(field)) {
+                    columns{field} = records{field};
+                }
+            }
+            return columns;
+        }
         return AbstractDataProcessor::getTopLevelShapeColumns(records, shape, fields);
     }
 
@@ -562,8 +586,13 @@ public class AbstractAnalyticsProcessor inherits AbstractDataProvider {
     */
     private *auto processRecordsShapeImpl(auto records, DataProviderShape shape) {
         switch (shape) {
-            case DataProviderShape::HashOfLists:
+            case DataProviderShape::HashOfLists: {
+                *auto shaped_result = processColumnarRecordsShape(records, shape);
+                if (exists shaped_result) {
+                    return shaped_result;
+                }
                 return processRecordsBulkShape(records, shape);
+            }
             case DataProviderShape::BufferColumns:
             case DataProviderShape::DataFrameBlock: {
                 *auto shaped_result = processColumnarRecordsShape(records, shape);
