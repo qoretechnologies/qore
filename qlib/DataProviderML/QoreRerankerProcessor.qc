@@ -519,6 +519,8 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                     column = records{field};
                 }
                 break;
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         if (!exists column) {
             return;
@@ -574,6 +576,8 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 columns.reranker_score = scores;
                 columns.reranker_rank = ranks;
                 return columns;
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         return records;
     }

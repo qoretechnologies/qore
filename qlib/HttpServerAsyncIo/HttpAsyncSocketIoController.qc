@@ -2120,7 +2120,7 @@ public class HttpAsyncSocketIoController {
                 dispatchOnError(cinfo.target, result.sock, result.ex, cinfo.listener, cinfo.cx, uh,
                     "SSL error");
             }
-            try { result.sock.close(); } catch () {}
+            try { cast<Socket>(result.sock).close(); } catch () {}
             return;
         }
 
@@ -2211,7 +2211,7 @@ public class HttpAsyncSocketIoController {
                 AutoWriteLock al(m);
                 remove connections{uh};
             }
-            try { result.sock.close(); } catch () {}
+            try { cast<Socket>(result.sock).close(); } catch () {}
         }
     }
 

@@ -601,6 +601,8 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                     column = records{text_field};
                 }
                 break;
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         if (!exists column) {
             return;
@@ -642,6 +644,8 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                 columns.embedding = embeddings;
                 return columns;
             }
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         return records;
     }
@@ -705,6 +709,8 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                 }
                 return data;
             }
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         return records;
     }

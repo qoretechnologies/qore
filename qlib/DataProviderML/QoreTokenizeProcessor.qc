@@ -280,6 +280,8 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
                     column = records{text_field};
                 }
                 break;
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         if (!exists column) {
             return;
@@ -322,6 +324,8 @@ public class QoreTokenizeProcessor inherits AbstractDataProviderMLProcessor {
                 columns{output_field} = token_counts;
                 return columns;
             }
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         return records;
     }

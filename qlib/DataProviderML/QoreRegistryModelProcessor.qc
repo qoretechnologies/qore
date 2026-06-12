@@ -993,6 +993,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                         column = records{field};
                     }
                     break;
+                case DataProvider::DataProviderShape::RowRecords:
+                    break;
             }
 
             if (!exists column || column.typeCode() != NT_BUFFER || column.fullType() != required_type) {
@@ -1354,6 +1356,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                         result{f} = records{f};
                     }
                     break;
+                case DataProvider::DataProviderShape::RowRecords:
+                    break;
             }
         }
 
@@ -1529,6 +1533,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                     return records{prompt_field};
                 }
                 break;
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         return NOTHING;
     }
@@ -1593,6 +1599,8 @@ public class QoreRegistryModelProcessor inherits AbstractDataProviderMLProcessor
                 if (records.hasKey(field)) {
                     return records{field};
                 }
+                break;
+            case DataProvider::DataProviderShape::RowRecords:
                 break;
         }
         return NOTHING;

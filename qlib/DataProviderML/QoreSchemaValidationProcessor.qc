@@ -448,6 +448,8 @@ public class QoreSchemaValidationProcessor inherits AbstractDataProviderMLProces
                 columns._is_valid = valid;
                 return columns;
             }
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         return records;
     }
@@ -477,6 +479,8 @@ public class QoreSchemaValidationProcessor inherits AbstractDataProviderMLProces
                         records{name}, selected_indices);
                 }
                 return columns;
+            case DataProvider::DataProviderShape::RowRecords:
+                break;
         }
         return records;
     }

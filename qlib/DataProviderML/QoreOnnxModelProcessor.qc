@@ -1090,6 +1090,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                         column = records{field};
                     }
                     break;
+                case DataProvider::DataProviderShape::RowRecords:
+                    break;
             }
 
             if (!exists column || column.typeCode() != NT_BUFFER || column.fullType() != required_type) {
@@ -1192,6 +1194,8 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                     if (records.hasKey(f)) {
                         result{f} = records{f};
                     }
+                    break;
+                case DataProvider::DataProviderShape::RowRecords:
                     break;
             }
         }
