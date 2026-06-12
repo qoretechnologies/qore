@@ -61,6 +61,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             "asyncapi",
             "asyncapi_channel",
             "validator",
+            "max_queue_size",
         );
 
         #! Response header to SSE requests
@@ -91,6 +92,9 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         #! connection hash
         hash<string, ServerSentEventConnection> ch;
+
+        #! maximum per-connection outbound event queue size before the connection is dropped (0 = unlimited)
+        int max_queue_size = 0;
 
         #! heartbeat interval in seconds
         int heartbeat = DefaultHeartbeatInterval;
@@ -166,6 +170,28 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         }
         heartbeat = secs;
         logDebug("Set heartbeat to %d second%s", heartbeat, heartbeat == 1 ? "" : "s");
+    }
+
+    #! sets the maximum per-connection outbound event queue size before a slow client is dropped (0 = unlimited)
+    /** @param size the maximum number of queued events; \c 0 disables the limit
+
+        @throw SERVERSENTEVENTHANDLER-OPTION-ERROR the value is negative
+
+        @since %ServerSentEventHandler 1.2
+    */
+    setMaxQueueSize(softint size) {
+        if (size < 0) {
+            throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("max_queue_size value %y is not a non-negative "
+                "integer", size);
+        }
+        max_queue_size = size;
+    }
+
+    #! returns the maximum per-connection outbound event queue size (0 = unlimited)
+    /** @since %ServerSentEventHandler 1.2
+    */
+    int getMaxQueueSize() {
+        return max_queue_size;
     }
 
     #! called by the HTTP server to handle incoming HTTP requests
@@ -457,11 +483,42 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             }
         }
 
-        # push the data on all connection channels
-        map $1.send(msg), conns.iterator();
+        # push the data on all connection channels, dropping any client whose outbound queue is over the limit
+        foreach ServerSentEventConnection conn in (conns) {
+            if (dropIfOverflowing(conn)) {
+                continue;
+            }
+            conn.send(msg);
+        }
         if (debug) {
             logDebug("SSE sent to connections: %y", ids);
         }
+    }
+
+    #! Drops a connection whose outbound queue has exceeded \c max_queue_size (a slow or non-reading client)
+    /** Enforces the per-connection outbound backpressure limit: a client that does not read fast enough would
+        otherwise grow the server's outbound queue without bound.  Returns @ref True if the connection was dropped
+        (the caller must then skip sending to it).  The stream is aborted; the async I/O controller tears the
+        connection down and deregisters it.
+
+        @since %ServerSentEventHandler 1.2
+    */
+    private bool dropIfOverflowing(ServerSentEventConnection conn) {
+        if (!max_queue_size || conn.getQueueSize() < max_queue_size) {
+            return False;
+        }
+        logWarn("SSE connection %y outbound queue reached the limit (%d events); dropping the slow client to "
+            "protect server memory", conn.cid, max_queue_size);
+        try {
+            # abort the stream (closes the client connection) and deregister it (removes it from the connection map
+            # and runs the close hooks) so the slow client cannot continue to consume server memory
+            conn.stop();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("error stopping overflowing SSE connection %y: %s", conn.cid, get_exception_string(ex));
+        }
+        # NOTE: must NOT be called while holding the connection lock (deregisterConnection() takes the write lock)
+        deregisterConnection(conn.cid);
+        return True;
     }
 
     #! sends a message to the given connection ID
@@ -472,14 +529,23 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending
     */
     sendOne(softstring id, hash<SseMessageInfo> msg) {
-        rwl.readLock();
-        on_exit rwl.readUnlock();
+        ServerSentEventConnection conn;
+        {
+            rwl.readLock();
+            on_exit rwl.readUnlock();
 
-        if (!exists ch{id})
-            throw "SERVERSENTEVENT-CONNECTION-ERROR", sprintf("connection %y does not exist (valid connections: %y)",
-                id, keys ch);
+            if (!exists ch{id})
+                throw "SERVERSENTEVENT-CONNECTION-ERROR", sprintf("connection %y does not exist (valid "
+                    "connections: %y)", id, keys ch);
+            conn = ch{id};
+        }
         #logDebug("sending data to connection: %y", id);
-        ch{id}.send(msg);
+        # drop the client instead of sending if its outbound queue is over the limit (done outside the connection
+        # lock because the drop path takes the write lock)
+        if (dropIfOverflowing(conn)) {
+            return;
+        }
+        conn.send(msg);
     }
 
     #! stop given connection ID
@@ -587,6 +653,15 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                             "expecting a non-empty string channel name", h.key, h.value.fullType(), h.value);
                     }
                     asyncapi_channel = h.value;
+                    break;
+                }
+                case "max_queue_size": {
+                    if (!h.value.intp() || h.value.toInt() < 0) {
+                        throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option %y value %y is not a "
+                            "non-negative integer giving the maximum per-connection outbound event queue size "
+                            "(0 = unlimited)", h.key, h.value);
+                    }
+                    max_queue_size = h.value.toInt();
                     break;
                 }
                 default:

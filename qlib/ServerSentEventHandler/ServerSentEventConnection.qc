@@ -132,6 +132,16 @@ public class ServerSentEventConnection {
         return sse_conn;
     }
 
+    #! Returns the number of events currently queued for sending to the client (0 if the stream is not yet active)
+    /** used by @ref ServerSentEventHandler to enforce a per-connection outbound queue limit so a slow or
+        non-reading client cannot grow server memory without bound
+
+        @since %ServerSentEventHandler 1.2
+    */
+    int getQueueSize() {
+        return sse_conn ? sse_conn.getQueueSize() : 0;
+    }
+
     #! Pushes an already-encoded message for sending via the async I/O controller
     sendEncoded(string msg) {
         if (sse_conn) {

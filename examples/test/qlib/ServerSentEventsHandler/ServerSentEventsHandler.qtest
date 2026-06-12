@@ -28,6 +28,28 @@ class MySseHandler inherits ServerSentEventHandler {
     }
 }
 
+#! a connection that reports an over-limit outbound queue, so the max_queue_size drop path can be tested
+#! deterministically without depending on TCP buffer / drain timing
+class OverflowSseConnection inherits ServerSentEventHandler::ServerSentEventConnection {
+    constructor(ServerSentEventHandler::ServerSentEventHandler handler, Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid) : ServerSentEventHandler::ServerSentEventConnection(handler, sock, cx, hdr, cid) {
+    }
+
+    int getQueueSize() {
+        return 1000000;
+    }
+}
+
+class OverflowSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    constructor(*hash<auto> opts) : ServerSentEventHandler::ServerSentEventHandler(opts) {
+    }
+
+    ServerSentEventHandler::ServerSentEventConnection getConnectionImpl(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid) {
+        return new OverflowSseConnection(self, sock, cx, hdr, cid);
+    }
+}
+
 public class Main inherits QUnit::Test {
     public {
         HttpServer http;
@@ -48,6 +70,7 @@ public class Main inherits QUnit::Test {
         addTestCase("SSE deterministic shutdown", \sseDeterministicShutdownTest());
         addTestCase("SSE multiple connections shutdown", \sseMultipleConnectionsShutdownTest());
         addTestCase("SSE shutdown during data delivery", \sseShutdownDuringDataTest());
+        addTestCase("SSE max_queue_size drops slow client", \sseMaxQueueSizeDropsTest());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -340,6 +363,58 @@ public class Main inherits QUnit::Test {
         }();
         assertTrue(stopped.get(10s) != NOTHING,
             "server.stop() should complete while SSE data is being sent");
+    }
+
+    #! a slow/non-reading client whose outbound queue exceeds max_queue_size is dropped to protect server memory
+    sseMaxQueueSizeDropsTest() {
+        checkModule();
+        # control: with no limit (0) the over-queue connection is NOT dropped
+        assertFalse(runMaxQueueScenario(0), "with no limit, the over-queue connection stays registered");
+        # with the limit set, the over-limit connection IS dropped on the next send
+        assertTrue(runMaxQueueScenario(5), "with max_queue_size set, the over-limit connection is dropped");
+    }
+
+    #! sets up a handler whose connections always report an over-limit queue; sends once and returns True if the
+    #! connection was dropped (deregistered), False if it stayed registered
+    private bool runMaxQueueScenario(int mqs) {
+        OverflowSseHandler h({"logger": logger, "max_queue_size": mqs});
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        hs.setHandler("sse-handler", "", NOTHING, h);
+        hs.setDefaultHandler("sse-handler", h);
+        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        # connect a raw SSE client and wait for server-side registration
+        Socket s();
+        s.connect("localhost:" + p);
+        on_exit s.close();
+        s.send("GET / HTTP/1.1\r\nHost: localhost\r\nAccept: " + MimeTypeSse + "\r\n\r\n");
+        assertEq(200, s.readHTTPHeader().status_code);
+
+        int retries = 0;
+        while (!h.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        if (!h.getConnectionIds()) {
+            throw "TEST-ERROR", "connection not registered in time";
+        }
+
+        # one send: the connection reports an over-limit queue, so a configured limit drops it here
+        h.sendAll(<SseMessageInfo>{"data": "x"});
+
+        if (!mqs) {
+            # no limit: nothing tears the connection down, so it is still registered immediately after the send
+            return !h.getConnectionIds();
+        }
+        # limit set: the dropped connection's stream is aborted and the async I/O controller deregisters it
+        # (bounded wait, matching this test's registration-wait pattern)
+        retries = 0;
+        while (h.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        return !h.getConnectionIds();
     }
 }
 
