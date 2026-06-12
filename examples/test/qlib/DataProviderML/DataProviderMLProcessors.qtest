@@ -140,6 +140,16 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("random-forest-regression - capabilities", \rfRegCapabilities());
         addTestCase("random-forest-regression - constructor validation", \rfRegConstructorValidation());
 
+        # GBT tests
+        addTestCase("gbt-classification - basic classification", \gbtClassBasicClassification());
+        addTestCase("gbt-classification - BufferColumns shape", \gbtClassBufferColumnsShape());
+        addTestCase("gbt-classification - capabilities", \gbtClassCapabilities());
+        addTestCase("gbt-classification - constructor validation", \gbtClassConstructorValidation());
+        addTestCase("gbt-regression - basic prediction", \gbtRegBasicPrediction());
+        addTestCase("gbt-regression - BufferColumns shape", \gbtRegBufferColumnsShape());
+        addTestCase("gbt-regression - capabilities", \gbtRegCapabilities());
+        addTestCase("gbt-regression - constructor validation", \gbtRegConstructorValidation());
+
         # LOF tests
         addTestCase("lof - basic anomaly detection", \lofBasicDetection());
         addTestCase("lof - flush partial", \lofFlushPartial());
@@ -2085,6 +2095,167 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         });
         assertThrows("CONSTRUCTOR-ERROR", sub() {
             new DataProviderML::QoreRandomForestRegressionProcessor({
+                "fields": "x",
+                "target_field": "target",
+                "window_size": 1,
+            });
+        });
+    }
+
+    # ===================== GBT Tests =====================
+
+    gbtClassBasicClassification() {
+        DataProviderML::QoreGBTClassificationProcessor proc({
+            "fields": "x,y",
+            "target_field": "label",
+            "window_size": 6,
+            "n_estimators": 3,
+            "max_depth": 3,
+            "learning_rate": 0.1,
+        });
+
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "label": 0.0},
+            {"x": 0.1, "y": 0.1, "label": 0.0},
+            {"x": 0.2, "y": 0.0, "label": 0.0},
+            {"x": 1.0, "y": 1.0, "label": 1.0},
+            {"x": 1.1, "y": 0.9, "label": 1.0},
+            {"x": 0.9, "y": 1.1, "label": 1.0},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+
+        assertEq(6, results.lsize());
+        foreach auto event in (results) {
+            assertEq("gbt-classification", event.event_type);
+            assertTrue(event.hasKey("predicted_class"));
+            assertTrue(event.confidence >= 0.0);
+            assertTrue(event.confidence <= 1.0);
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    gbtClassBufferColumnsShape() {
+        DataProviderML::QoreGBTClassificationProcessor proc({
+            "fields": "x,y",
+            "target_field": "label",
+            "window_size": 6,
+            "n_estimators": 3,
+            "max_depth": 3,
+            "learning_rate": 0.1,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.2, 1.0, 1.1, 0.9)),
+            "y": new buffer<float64>((0.0, 0.1, 0.0, 1.0, 0.9, 1.1)),
+            "label": new buffer<float64>((0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(6, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("gbt-classification", "gbt-classification"), events.event_type[0..1]);
+        assertEq(1.0, events.record_values[3].label);
+    }
+
+    gbtClassCapabilities() {
+        DataProviderML::QoreGBTClassificationProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    gbtClassConstructorValidation() {
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreGBTClassificationProcessor({
+                "fields": "x",
+                "target_field": "label",
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreGBTClassificationProcessor({
+                "fields": "x",
+                "target_field": "label",
+                "window_size": 1,
+            });
+        });
+    }
+
+    gbtRegBasicPrediction() {
+        DataProviderML::QoreGBTRegressionProcessor proc({
+            "fields": "x,y",
+            "target_field": "target",
+            "window_size": 6,
+            "n_estimators": 3,
+            "max_depth": 3,
+            "learning_rate": 0.1,
+        });
+
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "target": 1.0},
+            {"x": 0.1, "y": 0.1, "target": 1.2},
+            {"x": 0.2, "y": 0.0, "target": 1.4},
+            {"x": 1.0, "y": 1.0, "target": 3.0},
+            {"x": 1.1, "y": 0.9, "target": 3.2},
+            {"x": 0.9, "y": 1.1, "target": 3.4},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+
+        assertEq(6, results.lsize());
+        foreach auto event in (results) {
+            assertEq("gbt-regression", event.event_type);
+            assertTrue(event.hasKey("prediction"));
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    gbtRegBufferColumnsShape() {
+        DataProviderML::QoreGBTRegressionProcessor proc({
+            "fields": "x,y",
+            "target_field": "target",
+            "window_size": 6,
+            "n_estimators": 3,
+            "max_depth": 3,
+            "learning_rate": 0.1,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.2, 1.0, 1.1, 0.9)),
+            "y": new buffer<float64>((0.0, 0.1, 0.0, 1.0, 0.9, 1.1)),
+            "target": new buffer<float64>((1.0, 1.2, 1.4, 3.0, 3.2, 3.4)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(6, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("gbt-regression", "gbt-regression"), events.event_type[0..1]);
+        assertTrue(events.prediction[0] >= 0.0);
+        assertEq(3.0, events.record_values[3].target);
+    }
+
+    gbtRegCapabilities() {
+        DataProviderML::QoreGBTRegressionProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    gbtRegConstructorValidation() {
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreGBTRegressionProcessor({
+                "fields": "x",
+                "target_field": "target",
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreGBTRegressionProcessor({
                 "fields": "x",
                 "target_field": "target",
                 "window_size": 1,
