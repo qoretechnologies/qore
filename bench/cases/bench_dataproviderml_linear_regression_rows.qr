@@ -1,0 +1,59 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlLinearRegressionRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlLinearRegressionRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_linear_regression_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            for (int i = 0; i < rows; ++i) {
+                float x = DataFrameBench::amountFor(i) / 100.0;
+                float y = DataFrameBench::scoreFor(i);
+                push records, {
+                    "x": x,
+                    "y": y,
+                    "target": 2.0 * x - 0.5 * y + 3.0,
+                };
+            }
+            r.bytes_processed = rows * 24;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreLinearRegressionProcessor proc({
+                "fields": ("x", "y"),
+                "target_field": "target",
+                "window_size": 50,
+                "online": False,
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                *auto row_result = proc.processRecord(rec);
+                if (exists row_result) {
+                    result += row_result;
+                }
+            }
+            if (result.lsize() != rows) {
+                throw "BENCHMARK-ERROR", "linear regression did not produce expected row output";
+            }
+        };
+
+        exit(r.run());
+    }
+}

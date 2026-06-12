@@ -1,0 +1,54 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlLinearRegressionBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlLinearRegressionBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_linear_regression_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            buffer<float64> x = buffer<float64>::sized(rows);
+            buffer<float64> y = buffer<float64>::sized(rows);
+            buffer<float64> target = buffer<float64>::sized(rows);
+            for (int i = 0; i < rows; ++i) {
+                x[i] = DataFrameBench::amountFor(i) / 100.0;
+                y[i] = DataFrameBench::scoreFor(i);
+                target[i] = 2.0 * x[i] - 0.5 * y[i] + 3.0;
+            }
+            columns = ColumnarResult::fromColumnHash({"x": x, "y": y, "target": target});
+            r.bytes_processed = rows * 24;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreLinearRegressionProcessor proc({
+                "fields": ("x", "y"),
+                "target_field": "target",
+                "window_size": 50,
+                "online": False,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_linear_regression_buffercolumns", result, rows);
+            if (result.getColumn("event_type").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "linear regression did not produce expected output rows";
+            }
+        };
+
+        exit(r.run());
+    }
+}

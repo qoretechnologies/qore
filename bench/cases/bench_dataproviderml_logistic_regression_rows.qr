@@ -1,0 +1,61 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlLogisticRegressionRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlLogisticRegressionRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_logistic_regression_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            for (int i = 0; i < rows; ++i) {
+                float x = float(i % 50) / 50.0;
+                float y = float((i * 7) % 50) / 50.0;
+                push records, {
+                    "x": x,
+                    "y": y,
+                    "label": (x + y) > 1.0 ? 1.0 : 0.0,
+                };
+            }
+            r.bytes_processed = rows * 24;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreLogisticRegressionProcessor proc({
+                "fields": ("x", "y"),
+                "target_field": "label",
+                "window_size": 50,
+                "online": False,
+                "max_iterations": 50,
+                "learning_rate": 0.05,
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                *auto row_result = proc.processRecord(rec);
+                if (exists row_result) {
+                    result += row_result;
+                }
+            }
+            if (result.lsize() != rows) {
+                throw "BENCHMARK-ERROR", "logistic regression did not produce expected row output";
+            }
+        };
+
+        exit(r.run());
+    }
+}

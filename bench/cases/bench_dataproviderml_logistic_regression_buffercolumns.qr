@@ -1,0 +1,56 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlLogisticRegressionBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlLogisticRegressionBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_logistic_regression_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            buffer<float64> x = buffer<float64>::sized(rows);
+            buffer<float64> y = buffer<float64>::sized(rows);
+            buffer<float64> label = buffer<float64>::sized(rows);
+            for (int i = 0; i < rows; ++i) {
+                x[i] = float(i % 50) / 50.0;
+                y[i] = float((i * 7) % 50) / 50.0;
+                label[i] = (x[i] + y[i]) > 1.0 ? 1.0 : 0.0;
+            }
+            columns = ColumnarResult::fromColumnHash({"x": x, "y": y, "label": label});
+            r.bytes_processed = rows * 24;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreLogisticRegressionProcessor proc({
+                "fields": ("x", "y"),
+                "target_field": "label",
+                "window_size": 50,
+                "online": False,
+                "max_iterations": 50,
+                "learning_rate": 0.05,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_logistic_regression_buffercolumns", result, rows);
+            if (result.getColumn("event_type").lsize() != rows) {
+                throw "BENCHMARK-ERROR", "logistic regression did not produce expected output rows";
+            }
+        };
+
+        exit(r.run());
+    }
+}
