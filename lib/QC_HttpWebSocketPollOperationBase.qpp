@@ -244,6 +244,14 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         return nullptr;
     }
 
+    // --- Idle timeout: close the connection if no recv activity for idle_timeout_ms ---
+    // reclaims connection slots/resources held by idle clients (e.g. a client that connects and never sends)
+    if (idle_timeout_ms > 0 && !goalReached() && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0
+            && (q_clock_getmillis() - last_recv_activity_ms) >= idle_timeout_ms) {
+        queueSendClose(WSCC_GoingAway, "idle timeout", xsink);
+        return nullptr;
+    }
+
     // --- Heartbeat: auto-send ping if no recv activity ---
     // last_ping_sent_ms guards against spamming PINGs when the peer is
     // silent; last_recv_activity_ms reflects real incoming traffic only
@@ -339,6 +347,16 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             }
             if (poll_timeout == 0 || hb_remaining < poll_timeout) {
                 poll_timeout = hb_remaining;
+            }
+        }
+        // schedule a poll for the idle-timeout deadline so the idle check fires even when heartbeat is disabled
+        if (idle_timeout_ms > 0 && last_recv_activity_ms > 0) {
+            int64 idle_remaining = idle_timeout_ms - (q_clock_getmillis() - last_recv_activity_ms);
+            if (idle_remaining <= 0) {
+                idle_remaining = 1;
+            }
+            if (poll_timeout == 0 || idle_remaining < poll_timeout) {
+                poll_timeout = idle_remaining;
             }
         }
         if (poll_timeout > 0) {
@@ -1116,6 +1134,20 @@ int HttpWebSocketPollOperationBase::getSendTimeout() [flags=RET_VALUE_ONLY] {
 */
 int HttpWebSocketPollOperationBase::getSendQueueSize() [flags=RET_VALUE_ONLY] {
     return priv->getSendQueueSize();
+}
+
+//! Sets the idle timeout in milliseconds; the connection is closed if no inbound activity is seen for this interval
+/** @param idle_timeout_ms the idle timeout in milliseconds (0 = disabled)
+*/
+nothing HttpWebSocketPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags=NAMED_ARGS] {
+    priv->setIdleTimeout(static_cast<int64>(idle_timeout_ms));
+}
+
+//! Returns the idle timeout in milliseconds (0 = disabled)
+/** @return the idle timeout in milliseconds
+*/
+int HttpWebSocketPollOperationBase::getIdleTimeout() [flags=RET_VALUE_ONLY] {
+    return priv->getIdleTimeout();
 }
 
 //! Sets the heartbeat interval in milliseconds

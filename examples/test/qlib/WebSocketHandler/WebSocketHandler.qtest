@@ -259,6 +259,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("pending send buffer tests", \pendingSendBufferTests());
         addTestCase("AsyncAPI handler option tests", \asyncApiHandlerOptionTests());
         addTestCase("max_queue_size drops slow client", \maxQueueSizeDropsTest());
+        addTestCase("idle_timeout closes idle connection", \idleTimeoutTest());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -1017,6 +1018,46 @@ class WebSocketHandlerTest inherits QUnit::Test {
             ++retries;
         }
         return !h.getConnectionIds();
+    }
+
+    #! a connection with no inbound activity for the idle timeout is closed to reclaim resources
+    idleTimeoutTest() {
+        # high heartbeat + 1s idle timeout: a client that sends nothing is closed after ~1s (the idle deadline
+        # is reached well before any heartbeat ping)
+        MyWsHandler h({"heartbeat": 10, "idle_timeout": 1, "logger": logger});
+        assertEq(1, h.getIdleTimeout(), "idle_timeout option set on the handler");
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        hs.setHandler("ws-handler", "", NOTHING, h);
+        hs.setDefaultHandler("ws-handler", h);
+        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + p});
+        wsc.connect();
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        # wait for server-side registration
+        int retries = 0;
+        while (!h.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        if (!h.getConnectionIds()) {
+            throw "TEST-ERROR", "connection not registered in time";
+        }
+
+        # the client sends nothing; after the idle timeout the server closes the connection (bounded wait)
+        retries = 0;
+        while (h.getConnectionIds() && retries < 100) {
+            usleep(100ms);
+            ++retries;
+        }
+        assertFalse(h.getConnectionIds().val(), "idle connection closed after the idle timeout");
     }
 
     private log(string str) {

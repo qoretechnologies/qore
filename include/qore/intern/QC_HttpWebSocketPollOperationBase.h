@@ -326,6 +326,22 @@ public:
         }
     }
 
+    //! Sets the idle timeout in milliseconds (0 = disabled)
+    /** when set, the connection is closed if no inbound activity is seen for this interval; reclaims connection
+        slots/resources held by idle clients
+    */
+    DLLLOCAL void setIdleTimeout(int64 ms) {
+        idle_timeout_ms = ms;
+        if (ms > 0 && last_recv_activity_ms == 0) {
+            last_recv_activity_ms = q_clock_getmillis();
+        }
+    }
+
+    //! Returns the idle timeout in milliseconds (0 = disabled)
+    DLLLOCAL int64 getIdleTimeout() const {
+        return idle_timeout_ms;
+    }
+
     //! Sets the send timeout in milliseconds
     DLLLOCAL void setSendTimeout(int64 ms) {
         send_timeout_ms = ms;
@@ -407,6 +423,9 @@ private:
 
     //! Heartbeat interval in milliseconds (0 = disabled)
     int64 heartbeat_interval_ms = 0;
+
+    //! Idle timeout in milliseconds (0 = disabled); the connection is closed if no recv activity for this interval
+    int64 idle_timeout_ms = 0;
 
     //! Timestamp of last recv activity (milliseconds since epoch)
     int64 last_recv_activity_ms = 0;

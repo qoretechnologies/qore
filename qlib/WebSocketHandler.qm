@@ -139,6 +139,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       @ref WebSocketHandler::WebSocketHandler::setMaxQueueSize() "setMaxQueueSize()"): a slow or non-reading client
       whose async outbound frame queue reaches the limit is dropped instead of growing server memory without
       bound; protects servers exposed to untrusted clients
+    - added an idle timeout (the \c idle_timeout handler option and
+      @ref WebSocketHandler::WebSocketHandler::setIdleTimeout() "setIdleTimeout()"): an async connection with no
+      inbound activity for the configured number of seconds is closed, reclaiming slots/resources held by idle
+      clients
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketHandler
       metadata always resolves the typed AsyncAPI validator members and methods
     - added \c asyncapi, \c validator, and \c asyncapi_channel constructor options to configure an AsyncAPI
@@ -1580,6 +1584,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             "asyncapi_channel",
             "validator",
             "max_queue_size",
+            "idle_timeout",
         );
     }
 
@@ -1592,6 +1597,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! maximum per-connection outbound frame queue before the connection is dropped (0 = unlimited)
         int max_queue_size = 0;
+
+        #! idle timeout in seconds: a connection with no inbound activity for this interval is closed (0 = disabled)
+        int idle_timeout = 0;
 
         #! heartbeat interval in seconds
         softint heartbeat = DefaultHeartbeatInterval;
@@ -1746,6 +1754,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                             h.key, h.value);
                     }
                     max_queue_size = int(h.value);
+                    break;
+                }
+                case "idle_timeout": {
+                    if (!h.value.intp() || int(h.value) < 0) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %y is not a non-negative "
+                            "integer giving the idle timeout in seconds (0 = disabled)", h.key, h.value);
+                    }
+                    idle_timeout = int(h.value);
                     break;
                 }
                 case "asyncapi": {
@@ -2086,6 +2102,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         # Set up async H1 WebSocket I/O
         if (is_ws_async) {
             ws_poll_op.setHeartbeat(heartbeat * 1000);
+            ws_poll_op.setIdleTimeout(idle_timeout * 1000);
             ws_poll_op.setSendTimeout(get_duration_microseconds(send_timeout) / 1000);
             if (max_message_size > 0) {
                 ws_poll_op.setMaxFrameSize(max_message_size);
@@ -2294,6 +2311,30 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 size);
         }
         max_queue_size = size;
+    }
+
+    #! returns the idle timeout in seconds: a connection idle for this interval is closed (0 = disabled)
+    /** @since %WebSocketHandler 2.8
+    */
+    int getIdleTimeout() {
+        return idle_timeout;
+    }
+
+    #! sets the idle timeout in seconds: a connection with no inbound activity for this interval is closed
+    /** @param seconds the idle timeout in seconds; \c 0 disables the timeout
+
+        @note applies to connections established after this call
+
+        @throw WEBSOCKETHANDLER-OPTION-ERROR the value is negative
+
+        @since %WebSocketHandler 2.8
+    */
+    setIdleTimeout(softint seconds) {
+        if (seconds < 0) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("idle_timeout value %y is not a non-negative integer",
+                seconds);
+        }
+        idle_timeout = seconds;
     }
 
     #! sends a message to all connected clients
