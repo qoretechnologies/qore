@@ -773,15 +773,16 @@ public:
         @p output_path containing:
 
         - one aggregate AOT metadata blob for all target-file declarations;
-        - a function table with external references to the native bodies in
-          the corresponding per-file `.qo` objects;
+        - no native function table; per-file `.qo` objects keep ownership of
+          their native bodies and matching slot maps;
         - an exported `init_<aggregate_symbol>_qo(QoreProgram*)` register
           function that calls `qore_aot_script_register()` once.
 
         The aggregate object is linked alongside the per-file `.qo` objects.
-        Missing native symbols therefore fail in the normal link phase, while
-        runtime startup sees one metadata deserialization session instead of
-        one session per source file.
+        Runtime startup sees one declaration metadata deserialization session
+        plus the per-file native registration sessions. This avoids pairing
+        aggregate slot maps with per-file native bodies compiled from a
+        different slot layout.
 
         @param target_files source files represented by the linked `.qo` set
         @param output_path path for the aggregate relocatable object

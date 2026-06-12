@@ -8346,7 +8346,12 @@ bool QoreAOT::compileScriptAggregate(
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
-        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
+        // Script aggregates provide declaration/dependency metadata only.
+        // Native function ownership stays with each per-file .qo because its
+        // native body and slot map were compiled from the same source context.
+        const std::vector<AOTCompiledFunc> no_native_funcs;
+        const std::vector<AOTCompiledInitFunc> no_native_init_funcs;
+        if (!appendSymbolIndexSection(writer, root_ns, no_native_funcs, no_native_init_funcs, error, &func_slots,
                 nullptr, nullptr, nullptr, &target_set)) {
             return false;
         }
@@ -8407,8 +8412,13 @@ bool QoreAOT::compileScriptAggregate(
             return false;
         }
         std::string register_fn = "init_" + aggregate_san + "_qo";
+        // Register aggregate metadata without function descriptors. Passing
+        // the metadata-only compiled_funcs here would register per-file native
+        // symbols with aggregate slot maps; parameter/local slots can differ
+        // between the aggregate parse and standalone per-file compilation.
+        const std::vector<AOTCompiledFunc> no_register_funcs;
         emitScriptRegisterSymbols(ctx, *module, aggregate_san, aggregate_san,
-            blob_gv, metadata.size(), compiled_funcs,
+            blob_gv, metadata.size(), no_register_funcs,
             register_fn.c_str(), aggregate_san.c_str());
     }
 
