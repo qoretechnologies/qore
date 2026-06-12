@@ -274,6 +274,146 @@ public class QoreImputerProcessor inherits AbstractDataProviderMLProcessor {
         return events;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreImputerProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (hasNestedFields() || buffer) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *hash<auto> field_values = getShapeFieldValues(records, shape, count);
+        if (!exists field_values) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        *list<auto> events;
+        int offset = 0;
+        while (offset + window_size <= count) {
+            events += processColumnWindow(field_values, offset, window_size);
+            offset += window_size;
+        }
+
+        if (offset < count) {
+            buffer = AbstractDataProviderMLProcessor::materializeShapeRows(records, shape, offset, count - offset);
+        }
+
+        return AbstractDataProviderMLProcessor::convertRecordListOutputShape(events, shape);
+    }
+
+    #! Returns @ref True if any configured field requires row materialization
+    private bool hasNestedFields() {
+        foreach string field in (fields) {
+            if (field.find(".") >= 0) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Reads configured fields directly from shaped columns
+    private *hash<auto> getShapeFieldValues(auto records, DataProvider::DataProviderShape shape, int count) {
+        hash<auto> values;
+        foreach string field in (fields) {
+            *auto column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, field);
+            if (!exists column) {
+                return;
+            }
+            values{field} = DataProvider::AbstractDataProcessor::columnValuesToList(column, count, field);
+        }
+        return values;
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        return AbstractDataProviderMLProcessor::convertRecordListOutputShape(results, shape);
+    }
+
+    #! Processes one complete shaped value window through the imputer
+    private list<auto> processColumnWindow(hash<auto> field_values, int offset, int count) {
+        list<list<*float>> matrix;
+        for (int i = offset; i < offset + count; ++i) {
+            list<*float> row;
+            foreach string field in (fields) {
+                list<auto> values = field_values{field};
+                auto val = values[i];
+                push row, exists val ? val.toFloat() : NOTHING;
+            }
+            push matrix, row;
+        }
+
+        list<list<float>> imputed = transformMatrix(matrix);
+        list<auto> events;
+        for (int i = 0; i < count; ++i) {
+            hash<auto> record_values;
+            hash<auto> imputed_values;
+            int missing_count = 0;
+            for (int j = 0; j < fields.lsize(); ++j) {
+                string field = fields[j];
+                list<auto> values = field_values{field};
+                auto orig = values[offset + i];
+                record_values{field} = orig;
+                imputed_values{field} = imputed[i][j];
+                if (!exists orig) {
+                    ++missing_count;
+                }
+            }
+            push events, <ImputerEventInfo>{
+                "event_type": "imputer",
+                "record_values": record_values,
+                "imputed_values": imputed_values,
+                "missing_count": missing_count,
+                "strategy": strategy,
+            };
+        }
+        return events;
+    }
+
+    #! Fits or applies the retained ML imputer
+    private list<list<float>> transformMatrix(list<list<*float>> matrix) {
+        if (!imputer) {
+            imputer = new ML::Imputer({
+                "strategy": strategy,
+                "constant_value": constant_value,
+            });
+            imputer.fitMatrix(matrix);
+        }
+        return imputer.transformMatrix(matrix);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;

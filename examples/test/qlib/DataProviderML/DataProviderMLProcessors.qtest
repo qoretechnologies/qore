@@ -157,6 +157,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # Imputer tests
         addTestCase("imputer - mean strategy", \imputerMeanStrategy());
         addTestCase("imputer - constant strategy", \imputerConstantStrategy());
+        addTestCase("imputer - BufferColumns shape", \imputerBufferColumnsShape());
         addTestCase("imputer - capabilities", \imputerCapabilities());
 
         # Metric processors
@@ -2578,6 +2579,30 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         # Row 0 and 2 should be unchanged
         assertFloat(1.0, results[0].imputed_values.x, 1e-10);
         assertFloat(3.0, results[2].imputed_values.x, 1e-10);
+    }
+
+    imputerBufferColumnsShape() {
+        DataProviderML::QoreImputerProcessor proc({
+            "fields": ("x", "y"),
+            "window_size": 4,
+            "strategy": "mean",
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": (1.0, 2.0, NOTHING, 4.0),
+            "y": (10.0, NOTHING, 30.0, 40.0),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(4, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("imputer", "imputer", "imputer", "imputer"), events.event_type);
+        assertEq((0, 1, 1, 0), events.missing_count);
+        assertFloat(2.333333333, events.imputed_values[2].x, 0.0001);
+        assertFloat(26.666666667, events.imputed_values[1].y, 0.0001);
     }
 
     imputerCapabilities() {
