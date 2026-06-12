@@ -4,7 +4,7 @@ This guide explains how to generate AsyncAPI 3.0.0 schemas from Qore source code
 
 ## Overview
 
-The AsyncAPI schema generator allows you to document your event-driven APIs directly in your Qore source code using special `@EVENT`, `@WEBSOCKET`, `@MQTT`, and `@KAFKA` comment blocks. The generator parses these blocks and produces a complete AsyncAPI 3.0.0 specification in YAML or JSON format.
+The AsyncAPI schema generator allows you to document your event-driven APIs directly in your Qore source code using special `@EVENT`, `@WEBSOCKET`, `@SSE`, `@MQTT`, and `@KAFKA` comment blocks. The generator parses these blocks and produces a complete AsyncAPI 3.0.0 specification in YAML or JSON format.
 
 AsyncAPI is ideal for documenting:
 - WebSocket event streaming endpoints
@@ -155,6 +155,53 @@ When parsing channels with multiple message types:
 | `@publish` | Message schema for server-to-client messages (can appear multiple times) | No |
 | `@example` | JSON example payload for the preceding message block (can appear multiple times) | No |
 | `@ENDASYNCAPI` | Marks the end of AsyncAPI schema | Yes |
+
+## @SSE Block Format
+
+Document Server-Sent Events streams using the `@SSE` block format. SSE is emitted as an HTTP streaming channel with Qore-specific `x-qore-sse` extension metadata because AsyncAPI does not define an official SSE binding.
+
+```qore
+/** @SSE /events
+    @ASYNCAPI
+    @summary Device event stream
+    @desc HTTP Server-Sent Events endpoint for device telemetry.
+    @retry 3000
+
+    @publish TemperatureChanged
+    @eventName temperature.changed
+    @contentType application/json
+    - device_id (string): Device ID
+    - value (float): Sensor reading
+    - timestamp (date): Reading timestamp
+
+    @publish DeviceAlert
+    @eventName device.alert
+    - device_id (string): Device ID
+    - severity (string): Alert severity
+
+    @ENDASYNCAPI
+*/
+```
+
+### SSE Block Structure
+
+| Tag | Description | Required |
+|-----|-------------|----------|
+| `@SSE` | SSE endpoint path, for example `/events` | Yes |
+| `@ASYNCAPI` | Marks the start of AsyncAPI schema | Yes |
+| `@summary` | Brief one-line description | No |
+| `@desc` | Detailed description | No |
+| `@publish` / `@receive` / `@subscribe` | SSE event payload received by stream consumers (can appear multiple times) | No |
+| `@send` | SSE event payload sent by stream producers | No |
+| `@eventName` / `@event` | SSE event name written in the `event:` field | No |
+| `@id` | Example or fixed SSE `id:` value | No |
+| `@retry` | SSE reconnect delay in milliseconds | No |
+| `@comment` | SSE comment / keep-alive metadata | No |
+| `@contentType` / `@content_type` | Message content type | No |
+| `@example` | JSON example payload for the preceding message block | No |
+| `@ENDASYNCAPI` | Marks the end of AsyncAPI schema | Yes |
+
+SSE-specific metadata is emitted in `x-qore-sse` extension fields on channels and messages. The default generated server protocol for an SSE-only schema is `http`. Use `@send` for payloads validated on the SSE server or handler side; use `@publish`, `@receive`, or `@subscribe` for payloads validated by stream consumers.
 
 ## @MQTT Block Format
 
@@ -368,7 +415,7 @@ qore-asyncapi-gen [options] <source-files...>
 | `-t, --title=TITLE` | API title (default: "Event API") |
 | `-V, --api-version=VER` | API version (default: 1.0.0) |
 | `-d, --description=DESC` | API description |
-| `-s, --server=URL` | Server URL (can be specified multiple times); URL schemes such as `wss://`, `mqtt://`, and `kafka://` set the AsyncAPI server protocol |
+| `-s, --server=URL` | Server URL (can be specified multiple times); URL schemes such as `wss://`, `http://`, `https://`, `mqtt://`, and `kafka://` set the AsyncAPI server protocol |
 | `-c, --channel=PATH` | Channel path (can be specified multiple times) |
 | `-v, --verbose` | Increase verbosity |
 | `-h, --help` | Show help message |

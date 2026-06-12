@@ -107,11 +107,11 @@ class AsyncApiGenCmd {
         printf("  -t, --title=TITLE        API title (default: 'Event API')\n");
         printf("  -V, --api-version=VER    API version (default: '1.0.0')\n");
         printf("  -d, --description=DESC   API description\n");
-        printf("  -s, --server=URL         Server URL; wss://, mqtt://, and kafka:// set the protocol\n");
+        printf("  -s, --server=URL         Server URL; wss://, http(s)://, mqtt://, and kafka:// set the protocol\n");
         printf("  -c, --channel=PATH       Channel path (can be specified multiple times)\n");
         printf("  -v, --verbose            Increase verbosity\n");
         printf("  -h, --help               Show this help message\n\n");
-        printf("The tool parses @EVENT/@EVENTSCHEMA and @WEBSOCKET/@MQTT/@KAFKA/@ASYNCAPI blocks in Qore\n");
+        printf("The tool parses @EVENT/@EVENTSCHEMA and @WEBSOCKET/@SSE/@MQTT/@KAFKA/@ASYNCAPI blocks in Qore\n");
         printf("source files and generates an AsyncAPI 3.0.0 specification.\n\n");
         printf("Example:\n");
         printf("  qore-asyncapi-gen -t 'My Events' -V '2.0' -o events.yaml src/*.qclass\n");

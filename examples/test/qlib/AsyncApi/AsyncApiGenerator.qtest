@@ -73,8 +73,10 @@ class AsyncApiGeneratorTest inherits Test {
         addTestCase("nullable list type", \testNullableListType());
         addTestCase("multiple message blocks", \testMultipleMessageBlocks());
         addTestCase("message block field parsing", \testMessageBlockFieldParsing());
+        addTestCase("parse SSE channel block", \testParseSseChannelBlock());
         addTestCase("parse MQTT channel block", \testParseMqttChannelBlock());
         addTestCase("parse Kafka channel block", \testParseKafkaChannelBlock());
+        addTestCase("generator SSE extensions", \testGeneratorSseExtensions());
         addTestCase("generator protocol bindings", \testGeneratorProtocolBindings());
         addTestCase("EventData extension fields", \testEventDataExtensions());
         addTestCase("doxygen ref resolution", \testDoxygenRefResolution());
@@ -1103,6 +1105,49 @@ trailing code";
             "MQTT receive binding should not include retain");
     }
 
+    testParseSseChannelBlock() {
+        string content = "/** @SSE /events
+    @ASYNCAPI
+    @summary Device event stream
+    @desc SSE stream for device events
+    @retry 3000
+
+    @publish TemperatureChanged
+    @eventName temperature.changed
+    @contentType application/json
+    - device_id (string): device ID
+    - value (float): sensor value
+
+    @receive DeviceAlert
+    @event device.alert
+    - device_id (string): device ID
+    - severity (string): alert severity
+
+    @ENDASYNCAPI
+*/";
+
+        list<hash<AsyncApi::ChannelSchemaInfo>> channels =
+            AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks(content);
+        assertEq(1, channels.size(), "Should find 1 SSE channel");
+
+        hash<AsyncApi::ChannelSchemaInfo> channel = channels[0];
+        assertEq("/events", channel.path, "SSE path should be extracted");
+        assertEq("sse", channel.protocol, "SSE protocol should be set");
+        assertEq("Device event stream", channel.summary, "Summary should match");
+        assertTrue(channel.extensions{"x-qore-sse"}.stream, "SSE stream extension should be set");
+        assertEq(3000, channel.extensions{"x-qore-sse"}.retry, "SSE retry extension");
+
+        assertEq(0, channel.subscribe_schemas.size(), "SSE should not create send schemas without @send");
+        assertEq(2, channel.publish_schemas.size(), "SSE should create two receive schemas");
+        assertEq("TemperatureChanged", channel.publish_schemas[0].name, "First SSE event name");
+        assertEq("temperature.changed", channel.publish_schemas[0].extensions{"x-qore-sse"}.event,
+            "SSE event name extension");
+        assertEq("application/json", channel.publish_schemas[0].content_type, "SSE content type");
+        assertEq("DeviceAlert", channel.publish_schemas[1].name, "Second SSE event name");
+        assertEq("device.alert", channel.publish_schemas[1].extensions{"x-qore-sse"}.event,
+            "Alternate SSE event tag");
+    }
+
     testParseKafkaChannelBlock() {
         string content = "/** @KAFKA orders.created
     @ASYNCAPI
@@ -1223,6 +1268,41 @@ trailing code";
         schema = mixed_gen.generate();
 
         assertEq("mqtt", schema.servers.default.protocol, "Mixed MQTT/Kafka default protocol preference");
+    }
+
+    testGeneratorSseExtensions() {
+        list<hash<AsyncApi::ChannelSchemaInfo>> sse_channels =
+            AsyncApi::AsyncApiSchemaTokenizer::parseChannelBlocks("/** @SSE /events
+    @ASYNCAPI
+    @summary Device events
+    @retry 5000
+    @publish TemperatureChanged
+    @eventName temperature.changed
+    @contentType application/json
+    - device_id (string): device ID
+    - value (float): sensor value
+    @ENDASYNCAPI
+*/");
+
+        AsyncApi::AsyncApiSchemaGenerator gen({
+            "title": "SSE API",
+            "version": "1.0.0",
+        });
+        gen.addChannel(sse_channels[0]);
+        hash<auto> schema = gen.generate();
+
+        assertEq("http", schema.servers.default.protocol, "Default SSE server protocol");
+        assertEq("SSE endpoint", schema.servers.default.description, "Default SSE server description");
+        assertTrue(schema.channels.hasKey("events"), "SSE channel key should be sanitized");
+        assertEq("/events", schema.channels.events.address, "SSE channel address");
+        assertTrue(schema.channels.events{"x-qore-sse"}.stream, "SSE channel extension");
+        assertEq(5000, schema.channels.events{"x-qore-sse"}.retry, "SSE retry extension");
+        assertEq("application/json", schema.components.messages.TemperatureChanged.contentType,
+            "SSE message content type");
+        assertEq("temperature.changed", schema.components.messages.TemperatureChanged{"x-qore-sse"}.event,
+            "SSE message event extension");
+        assertEq("receive", schema.operations.receive_events_TemperatureChanged.action,
+            "SSE publish blocks should generate receive operations");
     }
 
     testEventDataExtensions() {

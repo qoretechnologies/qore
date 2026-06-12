@@ -73,6 +73,21 @@ module ServerSentEventHandler {
       @ref ServerSentEventHandler::sseObservableResponse() helper wraps
       bridge construction for use from REST / HTTP handlers
 
+    @par AsyncAPI Validation Example
+    @code{.py}
+%requires ServerSentEventHandler
+
+hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
+    DataProvider::Observable source = getEventSource(ah.id);
+    return ServerSentEventHandler::sseObservableResponse(source, {
+        "event_ids": ("progress", "done"),
+        "terminate_on": "done",
+        "asyncapi": "file:///opt/schemas/sse-events.yaml",
+        "asyncapi_channel": "events",
+    });
+}
+    @endcode
+
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
 
     @subsection serversenteventhandler_v1_1_0 Version 1.1.0

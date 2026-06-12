@@ -181,6 +181,23 @@ Counter c(1);
 c.waitForZero();
     @endcode
 
+    @par AsyncAPI Validation Example
+    @code{.py}
+%requires WebSocketClient
+%requires AsyncApi
+
+AsyncApi::AsyncApi3Schema validator = AsyncApi::AsyncApi3Loader::fromUrl(
+    "file:///opt/schemas/websocket-events.yaml");
+
+WebSocketClient ws(callback, {
+    "url": "wss://api.example.com/events",
+    "validator": validator,
+    "asyncapi_channel": "events",
+});
+ws.connect();
+ws.send("validated payload");
+    @endcode
+
     @par HTTP/3 WebSocket Example
     When connecting to an HTTP/3-capable server over \c wss://, the WebSocket client automatically
     negotiates HTTP/3 transport using extended CONNECT (RFC 9220):
@@ -680,13 +697,11 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! Event disposition code: unknown opcode
         const WSEDC_UNKNOWN_OPCODE = 3;
 
-%ifndef NoAsyncApi
         #! Optional AsyncAPI validator
         *AsyncApi::AsyncApi3Schema asyncapi_validator;
 
         #! AsyncAPI channel name for validation
         *string asyncapi_channel;
-%endif
 
         #! Extensions offered to the server
         *list<AbstractWebSocketExtension> offered_extensions;
@@ -1008,7 +1023,6 @@ WebSocketClient ws(\event(), {
         return map $1.getName(), active_extensions;
     }
 
-%ifndef NoAsyncApi
     #! Sets an AsyncAPI validator for message validation
     /** @param validator the AsyncAPI schema validator
         @param channel the channel name to use for validation
@@ -1079,7 +1093,6 @@ WebSocketClient ws(\event(), {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
     }
-%endif
 
     #! Connects to the websocket server
     /** @par Example:
@@ -2022,7 +2035,6 @@ ws.setEventQueue();
         }
         http_opts.encoding = "UTF-8";
 
-%ifndef NoAsyncApi
         # process AsyncAPI validator options
         if (http_opts.hasKey("validator")) {
             if (!(http_opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
@@ -2042,7 +2054,6 @@ ws.setEventQueue();
             asyncapi_channel = remove http_opts.asyncapi_channel;
             remove http_opts.asyncapi;
         }
-%endif
 
         # process WebSocket extensions option
         if (http_opts.hasKey("extensions")) {
@@ -2136,10 +2147,8 @@ ws.setEventQueue();
         @note Override this method to implement custom validation error handling.
     */
     private int handleEvent(string buf) {
-%ifndef NoAsyncApi
         auto msg = buf;
         validateIncomingMessage(\msg);
-%endif
         if (callback) {
             callback(buf);
         } else {
@@ -2157,10 +2166,8 @@ ws.setEventQueue();
         @note Override this method to implement custom validation error handling.
     */
     private int handleEvent(binary buf) {
-%ifndef NoAsyncApi
         auto msg = buf;
         validateIncomingMessage(\msg);
-%endif
         if (callback) {
             callback(buf);
         } else {
@@ -3847,10 +3854,8 @@ class MyObserver inherits Observer {
         If an AsyncAPI validator is set, the outgoing message will be validated before sending.
     */
     sendData(auto value) {
-%ifndef NoAsyncApi
         hash<auto> headers;
         validateOutgoingMessage(\value, \headers);
-%endif
         send(serializeData(value));
     }
 
@@ -3923,9 +3928,7 @@ class MyObserver inherits Observer {
 
     #! Handles deserialized event data
     private int handleEventData(auto msgdata) {
-%ifndef NoAsyncApi
         validateIncomingMessage(\msgdata);
-%endif
         notifyObservers(EVENT_WS_DATA, {"data": msgdata});
         return WSEDC_CONTINUE;
     }

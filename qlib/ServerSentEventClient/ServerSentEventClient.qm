@@ -113,6 +113,23 @@ module ServerSentEventClient {
 
     All the public symbols in the module are defined in the ServerSentEventClient namespace.
 
+    @par AsyncAPI Validation Example
+    @code{.py}
+%requires ServerSentEventClient
+%requires AsyncApi
+
+AsyncApi::AsyncApi3Schema validator = AsyncApi::AsyncApi3Loader::fromUrl(
+    "file:///opt/schemas/sse-events.yaml");
+
+ServerSentEventClientIo sse({
+    "url": "https://api.example.com/events",
+    "serialization": "json",
+    "validator": validator,
+    "asyncapi_channel": "events",
+});
+sse.observersReady();
+    @endcode
+
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
     @subsection serversenteventclient_v1_0 Version 1.0

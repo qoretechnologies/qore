@@ -139,7 +139,7 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
 
     The following classes are available for schema generation:
     - @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer": parses \@EVENT, \@WEBSOCKET,
-      \@MQTT, and \@KAFKA blocks from source files
+      \@SSE, \@MQTT, and \@KAFKA blocks from source files
     - @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper": maps Qore types to JSON Schema types
     - @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator": generates complete AsyncAPI 3.0.0 schemas
 
@@ -182,7 +182,20 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
     * /
     @endverbatim
 
-    MQTT and Kafka topics use the same message field format, but start with \@MQTT or \@KAFKA:
+    SSE streams, MQTT topics, and Kafka topics use the same message field format, but start with
+    \@SSE, \@MQTT, or \@KAFKA:
+    @verbatim
+    /** @SSE /events
+        @ASYNCAPI
+        @summary Server-sent event stream
+        @publish TemperatureChanged
+        @eventName temperature.changed
+        - device_id (string): Device ID
+        - value (float): Sensor reading
+        @ENDASYNCAPI
+    * /
+    @endverbatim
+
     @verbatim
     /** @MQTT sensors/temperature
         @ASYNCAPI
@@ -300,7 +313,7 @@ qore-asyncapi-gen -t "My Event API" -V "1.0.0" -o events.yaml src/*.qclass
     - built-in WebSocket integration via WebSocketClient and WebSocketHandler modules
     - added @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator" class for generating AsyncAPI 3.0.0 schemas from Qore source code
     - added @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer" class for parsing \@EVENT,
-      \@WEBSOCKET, \@MQTT, and \@KAFKA blocks
+      \@WEBSOCKET, \@SSE, \@MQTT, and \@KAFKA blocks
     - added @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper" class for mapping Qore types to JSON Schema types
     - added \c qore-asyncapi-gen CLI tool for generating schemas from source files
 */
@@ -1758,7 +1771,7 @@ public hashdecl EventSchemaInfo {
     *list<auto> examples;
 }
 
-#! AsyncAPI channel information parsed from \@WEBSOCKET, \@MQTT, and \@KAFKA blocks
+#! AsyncAPI channel information parsed from \@WEBSOCKET, \@SSE, \@MQTT, and \@KAFKA blocks
 public hashdecl ChannelSchemaInfo {
     #! Channel path (e.g., "/creator")
     string path;
@@ -1770,6 +1783,8 @@ public hashdecl ChannelSchemaInfo {
     *string desc;
     #! Channel bindings
     *hash<auto> bindings;
+    #! AsyncAPI extension fields for the generated channel
+    *hash<auto> extensions;
     #! Subscribe message schema (single, for backwards compatibility)
     *hash<auto> subscribe_schema;
     #! Publish message schema (single, for backwards compatibility)
@@ -1794,12 +1809,14 @@ public hashdecl MessageSchemaInfo {
     *hash<auto> payload;
     #! Message bindings
     *hash<auto> bindings;
+    #! AsyncAPI extension fields for the generated message
+    *hash<auto> extensions;
     #! Operation bindings for operations generated from this message
     *hash<auto> operation_bindings;
 }
 
-#! Tokenizer for \@EVENT, \@WEBSOCKET, \@MQTT, and \@KAFKA comment blocks
-/** This class parses \@EVENT/\@EVENTSCHEMA and \@WEBSOCKET/\@MQTT/\@KAFKA/\@ASYNCAPI blocks from Qore source files
+#! Tokenizer for \@EVENT, \@WEBSOCKET, \@SSE, \@MQTT, and \@KAFKA comment blocks
+/** This class parses \@EVENT/\@EVENTSCHEMA and \@WEBSOCKET/\@SSE/\@MQTT/\@KAFKA/\@ASYNCAPI blocks from Qore source files
     and extracts schema information for AsyncAPI generation.
 
     @par Event Block Format
@@ -1831,6 +1848,19 @@ public hashdecl MessageSchemaInfo {
     @publish EventMessage
     - name (string): event name
     - data (hash): event data
+    @ENDASYNCAPI
+* /
+    @endverbatim
+
+    @par SSE Stream Block Format
+    @verbatim
+/** @SSE /events
+    @ASYNCAPI
+    @summary Server-sent event stream
+    @publish TemperatureChanged
+    @eventName temperature.changed
+    - device_id (string): device ID
+    - value (float): reading value
     @ENDASYNCAPI
 * /
     @endverbatim
@@ -2149,26 +2179,27 @@ public class AsyncApiSchemaTokenizer {
     }
 
     #! Parse a channel block and extract channel information
-    /** @param block the text content of the \@WEBSOCKET, \@MQTT, or \@KAFKA block
+    /** @param block the text content of the \@WEBSOCKET, \@SSE, \@MQTT, or \@KAFKA block
         @return the parsed channel schema information
     */
     static hash<ChannelSchemaInfo> parseChannelBlock(string block) {
         hash<ChannelSchemaInfo> channel = <ChannelSchemaInfo>{};
 
-        # Extract protocol and address from first line: @WEBSOCKET <path>, @MQTT <topic>, or @KAFKA <topic>
-        *list<*string> match = (block =~ x/^\s*@(WEBSOCKET|MQTT|KAFKA)\s+(\S+)/m);
+        # Extract protocol and address from first line: @WEBSOCKET/@SSE <path>, @MQTT/@KAFKA <topic>
+        *list<*string> match = (block =~ x/^\s*@(WEBSOCKET|SSE|MQTT|KAFKA)\s+(\S+)/m);
         if (match && match[0] && match[1]) {
             string tag = match[0];
             channel.path = match[1];
             channel.protocol = tag == "WEBSOCKET" ? "ws" : tolower(tag);
-            if (tag == "WEBSOCKET" && channel.path !~ /^\//) {
-                throw "PARSE-ERROR", "WebSocket channel path must start with /";
+            if ((tag == "WEBSOCKET" || tag == "SSE") && channel.path !~ /^\//) {
+                throw "PARSE-ERROR", sprintf("%s channel path must start with /", tag);
             }
         } else {
-            throw "PARSE-ERROR", "Cannot find channel address in @WEBSOCKET, @MQTT, or @KAFKA block";
+            throw "PARSE-ERROR", "Cannot find channel address in @WEBSOCKET, @SSE, @MQTT, or @KAFKA block";
         }
 
         channel.bindings = parseChannelBindings(getChannelHeaderBlock(block), channel.protocol, channel.path);
+        channel.extensions = parseChannelExtensions(getChannelHeaderBlock(block), channel.protocol);
 
         # Extract @summary (don't stop at inline doxygen tags like @ref)
         match = (block =~ x/@summary\s+(.+?)(?=@(?!ref\b)|\n\s*\n|$)/s);
@@ -2189,6 +2220,11 @@ public class AsyncApiSchemaTokenizer {
             channel.subscribe_schemas = parseAllMessageBlocks(block, "publish", channel.protocol, "send")
                 + parseAllMessageBlocks(block, "send", channel.protocol, "send");
             channel.publish_schemas = parseAllMessageBlocks(block, "subscribe", channel.protocol, "receive")
+                + parseAllMessageBlocks(block, "receive", channel.protocol, "receive");
+        } else if (channel.protocol == "sse") {
+            channel.subscribe_schemas = parseAllMessageBlocks(block, "send", channel.protocol, "send");
+            channel.publish_schemas = parseAllMessageBlocks(block, "publish", channel.protocol, "receive")
+                + parseAllMessageBlocks(block, "subscribe", channel.protocol, "receive")
                 + parseAllMessageBlocks(block, "receive", channel.protocol, "receive");
         } else {
             channel.subscribe_schemas = parseAllMessageBlocks(block, "subscribe", channel.protocol, "send")
@@ -2299,6 +2335,21 @@ public class AsyncApiSchemaTokenizer {
         return lines.join("\n");
     }
 
+    #! Parse AsyncAPI extension fields from channel-level tags
+    private static *hash<auto!> parseChannelExtensions(string block, *string protocol) {
+        if (protocol == "sse") {
+            hash<auto> sse;
+            sse.stream = True;
+            if (*string retry = getTagValue(block, "retry")) {
+                sse.retry = retry.toInt();
+            }
+            if (*string comment = getTagValue(block, "comment")) {
+                sse.comment = comment;
+            }
+            return {"x-qore-sse": sse};
+        }
+    }
+
     #! Parse protocol-specific channel bindings from channel-level tags
     private static *hash<auto!> parseChannelBindings(string block, *string protocol, string address) {
         if (protocol == "kafka") {
@@ -2341,7 +2392,34 @@ public class AsyncApiSchemaTokenizer {
             addMqttMessageInfo(\msg, msg_block, action);
         } else if (protocol == "kafka") {
             addKafkaMessageInfo(\msg, msg_block, action);
+        } else if (protocol == "sse") {
+            addSseMessageInfo(\msg, msg_block, action);
         }
+    }
+
+    private static addSseMessageInfo(reference<hash<auto>> msg, string msg_block, *string action) {
+        hash<auto> sse;
+        sse.action = action;
+        if (*string event_name = getTagValue(msg_block, "eventName")) {
+            sse.event = event_name;
+        } else if (*string event_name_alt = getTagValue(msg_block, "event")) {
+            sse.event = event_name_alt;
+        }
+        if (*string id = getTagValue(msg_block, "id")) {
+            sse.id = id;
+        }
+        if (*string retry = getTagValue(msg_block, "retry")) {
+            sse.retry = retry.toInt();
+        }
+        if (*string comment = getTagValue(msg_block, "comment")) {
+            sse.comment = comment;
+        }
+        if (*string content_type = getTagValue(msg_block, "contentType")) {
+            msg.content_type = content_type;
+        } else if (*string content_type_alt = getTagValue(msg_block, "content_type")) {
+            msg.content_type = content_type_alt;
+        }
+        msg.extensions = {"x-qore-sse": sse};
     }
 
     private static addMqttMessageInfo(reference<hash<auto>> msg, string msg_block, *string action) {
@@ -2602,7 +2680,7 @@ public class AsyncApiSchemaTokenizer {
     /** @param content the source file content
         @return list of parsed channel schemas
 
-        This method searches for \@WEBSOCKET, \@MQTT, and \@KAFKA blocks within doc comment blocks
+        This method searches for \@WEBSOCKET, \@SSE, \@MQTT, and \@KAFKA blocks within doc comment blocks
         to avoid matching schema tags in string literals or regular comments.
     */
     static list<hash<ChannelSchemaInfo>> parseChannelBlocks(string content) {
@@ -2617,7 +2695,7 @@ public class AsyncApiSchemaTokenizer {
 
         foreach string doc_block in (doc_matches) {
             int start = -1;
-            foreach string tag in (("@WEBSOCKET ", "@MQTT ", "@KAFKA ")) {
+            foreach string tag in (("@WEBSOCKET ", "@SSE ", "@MQTT ", "@KAFKA ")) {
                 int tag_start = doc_block.find(tag);
                 if (tag_start >= 0 && (start < 0 || tag_start < start)) {
                     start = tag_start;
@@ -2744,7 +2822,7 @@ public class AsyncApiTypeMapper {
 }
 
 #! Generates AsyncAPI 3.0.0 schemas from parsed event and channel definitions
-/** This class generates complete AsyncAPI 3.0.0 schemas from parsed \@EVENT, \@WEBSOCKET, \@MQTT, and
+/** This class generates complete AsyncAPI 3.0.0 schemas from parsed \@EVENT, \@WEBSOCKET, \@SSE, \@MQTT, and
     \@KAFKA blocks.
 
     @par Example
@@ -2939,6 +3017,9 @@ public class AsyncApiSchemaGenerator {
                 if (channel.bindings) {
                     asyncapi.channels{channel_name}.bindings = channel.bindings;
                 }
+                if (channel.extensions) {
+                    map asyncapi.channels{channel_name}{$1.key} = $1.value, channel.extensions.pairIterator();
+                }
             }
         }
 
@@ -3054,6 +3135,9 @@ public class AsyncApiSchemaGenerator {
         if (msg.bindings) {
             component.bindings = msg.bindings;
         }
+        if (msg.extensions) {
+            map component{$1.key} = $1.value, msg.extensions.pairIterator();
+        }
         if (msg.examples) {
             list<hash<auto>> example_msgs;
             foreach auto ex in (msg.examples) {
@@ -3143,6 +3227,9 @@ public class AsyncApiSchemaGenerator {
             if (channel.protocol == "kafka") {
                 has_kafka = True;
             }
+            if (channel.protocol == "sse") {
+                return "http";
+            }
         }
         return has_kafka ? "kafka" : "wss";
     }
@@ -3153,6 +3240,9 @@ public class AsyncApiSchemaGenerator {
         }
         if (protocol == "kafka") {
             return "Kafka broker";
+        }
+        if (protocol == "http" || protocol == "https") {
+            return "SSE endpoint";
         }
         return "WebSocket endpoint";
     }
