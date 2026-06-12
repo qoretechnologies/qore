@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file RestSchemaValidator.qm an abstract API for validating REST schemas
 
-/*  RestSchemaValidator.qm Copyright (C) 2017 - 2024 Qore Technologies, s.r.o.
+/*  RestSchemaValidator.qm Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -95,6 +95,8 @@ module RestSchemaValidator {
       version 1.12+ is available (RFC 8949)
     - added official YAML MIME type \c "application/yaml" (RFC 9512) to serialization/deserialization
       support (alongside existing \c "text/x-yaml" and \c "application/x-yaml")
+    - added query date serialization option accessors to
+      @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
 
     @subsection restschemavalidator_2_4 RestSchemaValidator v2.4
     - added @ref RestSchemaValidator::RestSchemaLoader "RestSchemaLoader" class for auto-detecting and loading
@@ -1799,6 +1801,30 @@ public namespace RestSchemaValidator {
         *TimeZone getTimeZoneLocale() {
             # must be performed in the implementing module's Program container
             return getTimeZoneLocaleImpl();
+        }
+
+        #! Returns @ref True if date/time values in query arguments should be serialized in UTC
+        /** The base class returns NOTHING by default; schema implementations can override this method to expose
+            schema-specific serialization options.
+
+            @return @ref True if date/time values in query arguments should be serialized in UTC
+
+            @since RestSchemaValidator 2.5
+        */
+        *bool getUtcDates() {
+            return NOTHING;
+        }
+
+        #! Returns the format string for serializing date/time values in query arguments
+        /** The base class returns NOTHING by default; schema implementations can override this method to expose
+            schema-specific serialization options.
+
+            @return the format string for serializing date/time values in query arguments
+
+            @since RestSchemaValidator 2.5
+        */
+        *string getQueryDateFormat() {
+            return NOTHING;
         }
 
         #! returns a data provider object for this connection, if supported by any REST schema validator object

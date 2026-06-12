@@ -38,6 +38,7 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         addTestCase("OpenAPI 3.0 schema composition test", \testOpenApi3SchemaComposition());
         addTestCase("OpenAPI 3.0 data provider type validation", \testOpenApi3TypeValidation());
         addTestCase("OpenAPI 3.1 data provider features", \testOpenApi31Features());
+        addTestCase("Abstract validator query date options", \testAbstractValidatorQueryDateOptions());
         addTestCase("Overlapping Swagger paths test", \testOverlappingSwaggerPaths());
         addTestCase("Factory test", \testFactory());
         set_return_value(main());
@@ -871,6 +872,50 @@ paths:
             assertTrue(provider.isOpenApi3());
             assertEq("Test API 3.0", provider.getName());
         }
+    }
+
+    testAbstractValidatorQueryDateOptions() {
+        checkModules();
+
+        AbstractRestSchemaValidator null_validator = new NullRestSchemaValidator();
+        assertEq(NOTHING, null_validator.getUtcDates());
+        assertEq(NOTHING, null_validator.getQueryDateFormat());
+
+        string swagger_schema = '{
+            "swagger": "2.0",
+            "info": {"title": "Swagger Date Options", "version": "1"},
+            "paths": {}
+        }';
+        AbstractRestSchemaValidator swagger_default = SwaggerLoader::fromString(swagger_schema, True);
+        assertEq(NOTHING, swagger_default.getUtcDates());
+        assertEq(NOTHING, swagger_default.getQueryDateFormat());
+
+        AbstractRestSchemaValidator swagger_schema_obj = SwaggerLoader::fromString(swagger_schema, True, {
+            "utc_dates": True,
+            "query_date_format": "YYYY-MM-DD",
+        });
+        RestSchemaDataProvider swagger_provider(swagger_schema_obj);
+        AbstractRestSchemaValidator swagger_provider_schema = swagger_provider.getSchema();
+        assertTrue(swagger_provider_schema.getUtcDates());
+        assertEq("YYYY-MM-DD", swagger_provider_schema.getQueryDateFormat());
+
+        string openapi3_schema = '{
+            "openapi": "3.0.0",
+            "info": {"title": "OpenAPI Date Options", "version": "1"},
+            "paths": {}
+        }';
+        AbstractRestSchemaValidator openapi3_default = OpenApi3Loader::fromString(openapi3_schema, True);
+        assertEq(NOTHING, openapi3_default.getUtcDates());
+        assertEq(NOTHING, openapi3_default.getQueryDateFormat());
+
+        AbstractRestSchemaValidator openapi3_schema_obj = OpenApi3Loader::fromString(openapi3_schema, True, {
+            "utc_dates": False,
+            "query_date_format": "YYYY-MM-DDTHH:mm:SS",
+        });
+        RestSchemaDataProvider openapi3_provider(openapi3_schema_obj);
+        AbstractRestSchemaValidator openapi3_provider_schema = openapi3_provider.getSchema();
+        assertFalse(openapi3_provider_schema.getUtcDates());
+        assertEq("YYYY-MM-DDTHH:mm:SS", openapi3_provider_schema.getQueryDateFormat());
     }
 
     testOverlappingSwaggerPaths() {
