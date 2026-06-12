@@ -197,9 +197,8 @@ public class QoreDecisionTreeRegressionProcessor inherits AbstractDataProviderML
         }
 
         # create options hash for the model
-        hash<auto> model_opts = {
-            "task": "regression",
-        };
+        hash<auto> model_opts;
+        model_opts.task = "regression";
         if (exists max_depth) {
             model_opts.max_depth = max_depth;
         }
@@ -232,6 +231,120 @@ public class QoreDecisionTreeRegressionProcessor inherits AbstractDataProviderML
             };
         }
         return events;
+    }
+
+    #! Processes complete shaped windows through Decision Tree regression
+    private *hash<auto> processCompleteShapeWindows(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreDecisionTreeRegressionProcessor: not configured; provide constructor options";
+        }
+
+        list<string> value_fields;
+        foreach string field in (fields) {
+            push value_fields, field;
+        }
+        push value_fields, target_field;
+        if (buffer || AbstractDataProviderMLProcessor::hasNestedFieldPath(value_fields)) {
+            return;
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return {"results": ()};
+        }
+
+        hash<auto> field_values = AbstractDataProviderMLProcessor::getShapeFieldValueLists(
+            records, shape, value_fields, count);
+        list<auto> events;
+        int offset = 0;
+        while (offset + window_size <= count) {
+            events += processMatrixWindow(field_values, value_fields, offset, window_size);
+            offset += window_size;
+        }
+
+        if (offset < count) {
+            buffer = AbstractDataProviderMLProcessor::materializeShapeRows(records, shape, offset, count - offset);
+        }
+        return {"results": events};
+    }
+
+    #! Processes one matrix window through Decision Tree regression
+    private list<auto> processMatrixWindow(hash<auto> field_values, list<string> value_fields,
+            int offset, int count) {
+        list<list<float>> matrix = AbstractDataProviderMLProcessor::fieldValueListsToMatrix(
+            field_values, fields, offset, count);
+        list<float> targets;
+        for (int row = offset; row < offset + count; ++row) {
+            push targets, field_values{target_field}[row].toFloat();
+        }
+
+        hash<auto> model_opts;
+        model_opts.task = "regression";
+        if (exists max_depth) {
+            model_opts.max_depth = max_depth;
+        }
+        model_opts.criterion = "mse";
+
+        if (!model) {
+            model = new ML::DecisionTree(model_opts);
+            model.fitMatrix(matrix, targets);
+        }
+
+        list<hash<ML::DecisionTreeRegressionResult>> predictions = model.predictRegressionMatrix(matrix);
+
+        list<auto> events;
+        for (int i = 0; i < count; ++i) {
+            int row = offset + i;
+            push events, <DecisionTreeRegressionEventInfo>{
+                "event_type": "decision-tree-regression",
+                "prediction": predictions[i].prediction,
+                "record_values": AbstractDataProviderMLProcessor::recordValuesFromFieldValueLists(
+                    field_values, value_fields, row),
+            };
+        }
+        return events;
+    }
+
+    #! Uses the row-oriented implementation as a semantics-preserving fallback
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        return AbstractDataProviderMLProcessor::convertRecordListOutputShape(results, shape);
+    }
+
+    #! Processes records in bulk hash-of-lists format
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        if (!exists result) {
+            return;
+        }
+        return cast<hash>(result);
+    }
+
+    #! Processes shaped records without first materializing row hashes when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        *hash<auto> native_result = processCompleteShapeWindows(records, shape);
+        if (exists native_result) {
+            return AbstractDataProviderMLProcessor::convertRecordListOutputShape(native_result.results, shape);
+        }
+        return processShapeRowsFallback(records, shape);
     }
 
     #! Supports shaped bulk API

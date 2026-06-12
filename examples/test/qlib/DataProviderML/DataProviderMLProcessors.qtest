@@ -120,6 +120,16 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("knn-regression - capabilities", \knnRegCapabilities());
         addTestCase("knn-regression - constructor validation", \knnRegConstructorValidation());
 
+        # DecisionTree tests
+        addTestCase("decision-tree-classification - basic classification", \dtClassBasicClassification());
+        addTestCase("decision-tree-classification - BufferColumns shape", \dtClassBufferColumnsShape());
+        addTestCase("decision-tree-classification - capabilities", \dtClassCapabilities());
+        addTestCase("decision-tree-classification - constructor validation", \dtClassConstructorValidation());
+        addTestCase("decision-tree-regression - basic prediction", \dtRegBasicPrediction());
+        addTestCase("decision-tree-regression - BufferColumns shape", \dtRegBufferColumnsShape());
+        addTestCase("decision-tree-regression - capabilities", \dtRegCapabilities());
+        addTestCase("decision-tree-regression - constructor validation", \dtRegConstructorValidation());
+
         # LOF tests
         addTestCase("lof - basic anomaly detection", \lofBasicDetection());
         addTestCase("lof - flush partial", \lofFlushPartial());
@@ -1756,6 +1766,160 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
                 "target_field": "target",
                 "window_size": 3,
                 "k": 5,
+            });
+        });
+    }
+
+    # ===================== DecisionTree Tests =====================
+
+    dtClassBasicClassification() {
+        DataProviderML::QoreDecisionTreeClassificationProcessor proc({
+            "fields": "x,y",
+            "target_field": "label",
+            "window_size": 6,
+            "max_depth": 4,
+        });
+
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "label": 0.0},
+            {"x": 0.1, "y": 0.1, "label": 0.0},
+            {"x": 0.2, "y": 0.0, "label": 0.0},
+            {"x": 1.0, "y": 1.0, "label": 1.0},
+            {"x": 1.1, "y": 0.9, "label": 1.0},
+            {"x": 0.9, "y": 1.1, "label": 1.0},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+
+        assertEq(6, results.lsize());
+        foreach auto event in (results) {
+            assertEq("decision-tree-classification", event.event_type);
+            assertTrue(event.hasKey("predicted_class"));
+            assertTrue(event.confidence >= 0.0);
+            assertTrue(event.confidence <= 1.0);
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    dtClassBufferColumnsShape() {
+        DataProviderML::QoreDecisionTreeClassificationProcessor proc({
+            "fields": "x,y",
+            "target_field": "label",
+            "window_size": 6,
+            "max_depth": 4,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.2, 1.0, 1.1, 0.9)),
+            "y": new buffer<float64>((0.0, 0.1, 0.0, 1.0, 0.9, 1.1)),
+            "label": new buffer<float64>((0.0, 0.0, 0.0, 1.0, 1.0, 1.0)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(6, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("decision-tree-classification", "decision-tree-classification"),
+            events.event_type[0..1]);
+        assertEq(1.0, events.record_values[3].label);
+    }
+
+    dtClassCapabilities() {
+        DataProviderML::QoreDecisionTreeClassificationProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    dtClassConstructorValidation() {
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDecisionTreeClassificationProcessor({
+                "fields": "x",
+                "target_field": "label",
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDecisionTreeClassificationProcessor({
+                "fields": "x",
+                "target_field": "label",
+                "window_size": 1,
+            });
+        });
+    }
+
+    dtRegBasicPrediction() {
+        DataProviderML::QoreDecisionTreeRegressionProcessor proc({
+            "fields": "x,y",
+            "target_field": "target",
+            "window_size": 6,
+            "max_depth": 4,
+        });
+
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "target": 1.0},
+            {"x": 0.1, "y": 0.1, "target": 1.2},
+            {"x": 0.2, "y": 0.0, "target": 1.4},
+            {"x": 1.0, "y": 1.0, "target": 3.0},
+            {"x": 1.1, "y": 0.9, "target": 3.2},
+            {"x": 0.9, "y": 1.1, "target": 3.4},
+        );
+
+        list<auto> results;
+        foreach hash<auto> rec in (data) {
+            DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord(rec));
+        }
+
+        assertEq(6, results.lsize());
+        foreach auto event in (results) {
+            assertEq("decision-tree-regression", event.event_type);
+            assertTrue(event.hasKey("prediction"));
+            assertTrue(event.hasKey("record_values"));
+        }
+    }
+
+    dtRegBufferColumnsShape() {
+        DataProviderML::QoreDecisionTreeRegressionProcessor proc({
+            "fields": "x,y",
+            "target_field": "target",
+            "window_size": 6,
+            "max_depth": 4,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.2, 1.0, 1.1, 0.9)),
+            "y": new buffer<float64>((0.0, 0.1, 0.0, 1.0, 0.9, 1.1)),
+            "target": new buffer<float64>((1.0, 1.2, 1.4, 3.0, 3.2, 3.4)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(6, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> events = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("decision-tree-regression", "decision-tree-regression"), events.event_type[0..1]);
+        assertTrue(events.prediction[0] >= 0.0);
+        assertEq(3.0, events.record_values[3].target);
+    }
+
+    dtRegCapabilities() {
+        DataProviderML::QoreDecisionTreeRegressionProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+    }
+
+    dtRegConstructorValidation() {
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDecisionTreeRegressionProcessor({
+                "fields": "x",
+                "target_field": "target",
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDecisionTreeRegressionProcessor({
+                "fields": "x",
+                "target_field": "target",
+                "window_size": 1,
             });
         });
     }
