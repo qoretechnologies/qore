@@ -1,0 +1,47 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlEwmaRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlEwmaRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_ewma_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            records = DataFrameBench::makeRecords(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreEWMAProcessor proc({
+                "fields": ("amount", "score"),
+                "alpha": 0.3,
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                push result, proc.processRecord(rec);
+            }
+            if (result.lsize() != rows || !result[rows - 1].hasKey("amount_ewma")
+                    || !result[rows - 1].hasKey("score_ewma")) {
+                throw "BENCHMARK-ERROR", "EWMA did not produce expected row output";
+            }
+        };
+
+        exit(r.run());
+    }
+}

@@ -190,6 +190,135 @@ public class QoreEWMAProcessor inherits AbstractDataProviderMLProcessor {
         return result;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreEWMAProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (hasNestedFields()) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *hash<auto> shape_values = getShapeFieldValues(records, shape, count);
+        if (!exists shape_values) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        hash<string, float> next_values = copyEwmaValues();
+        bool next_initialized = initialized;
+        hash<auto> output_columns = makeOutputColumns(count);
+        for (int row = 0; row < count; ++row) {
+            foreach string field in (fields) {
+                float ewma = calculateNextEwma(field, shape_values{field}[row].toFloat(),
+                    \next_values, next_initialized);
+                output_columns{field + "_ewma"}[row] = ewma;
+            }
+            if (!next_initialized) {
+                next_initialized = True;
+            }
+        }
+
+        auto result = DataProvider::AbstractDataProcessor::appendShapeColumns(records, shape, output_columns);
+        ewma_values = next_values;
+        initialized = next_initialized;
+        return result;
+    }
+
+    #! Returns @ref True if any configured field requires row materialization
+    private bool hasNestedFields() {
+        foreach string field in (fields) {
+            if (field.find(".") >= 0) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Reads configured numeric fields directly from shaped columns
+    private *hash<auto> getShapeFieldValues(auto records, DataProvider::DataProviderShape shape, int count) {
+        hash<auto> values;
+        foreach string field in (fields) {
+            *auto column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, field);
+            if (!exists column) {
+                return;
+            }
+            values{field} = DataProvider::AbstractDataProcessor::columnValuesToFloatList(column, count, field);
+        }
+        return values;
+    }
+
+    #! Returns a copy of the current EWMA state
+    private hash<string, float> copyEwmaValues() {
+        hash<string, float> result = {};
+        foreach string field in (fields) {
+            if (ewma_values.hasKey(field)) {
+                result{field} = ewma_values{field};
+            }
+        }
+        return result;
+    }
+
+    #! Calculates and stores the next EWMA value in copied state
+    private float calculateNextEwma(string field, float current_value,
+            reference<hash<string, float>> next_values, bool next_initialized) {
+        if (!next_initialized) {
+            next_values{field} = current_value;
+        } else {
+            next_values{field} = alpha * current_value + (1.0 - alpha) * next_values{field};
+        }
+        return next_values{field};
+    }
+
+    #! Creates dense output buffers for all configured EWMA columns
+    private hash<auto> makeOutputColumns(int count) {
+        hash<auto> result;
+        foreach string field in (fields) {
+            result{field + "_ewma"} = buffer<float64>::sized(count);
+        }
+        return result;
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;

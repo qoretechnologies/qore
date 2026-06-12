@@ -1,0 +1,44 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlEwmaBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlEwmaBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_ewma_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            columns = DataFrameBench::makeColumnarResult(rows);
+            r.bytes_processed = DataFrameBench::approxBytes(rows);
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreEWMAProcessor proc({
+                "fields": ("amount", "score"),
+                "alpha": 0.3,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_ewma_buffercolumns", result, rows);
+            if (result.getColumn("amount_ewma").size() != rows || result.getColumn("score_ewma").size() != rows) {
+                throw "BENCHMARK-ERROR", "EWMA did not produce expected output columns";
+            }
+        };
+
+        exit(r.run());
+    }
+}
