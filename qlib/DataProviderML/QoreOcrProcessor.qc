@@ -188,6 +188,73 @@ public class QoreOcrProcessor inherits AbstractDataProviderMLProcessor {
         return result;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreOcrProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (image_field.find(".") >= 0) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        list<auto> images = AbstractDataProviderMLProcessor::getShapeFieldValues(
+            records, shape, image_field, count);
+        list<string> texts;
+        list<float> confidences;
+        for (int row = 0; row < count; ++row) {
+            binary image_data = images[row];
+            hash<QoreOcrUtils::OcrResult> ocr_result = engine.extractText(image_data);
+            push texts, ocr_result.text;
+            push confidences, ocr_result.confidence;
+        }
+
+        return DataProvider::AbstractDataProcessor::appendShapeColumns(records, shape, {
+            "ocr_text": texts,
+            "ocr_confidence": confidences,
+        });
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;

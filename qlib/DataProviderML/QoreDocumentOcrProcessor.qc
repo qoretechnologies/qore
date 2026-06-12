@@ -209,6 +209,90 @@ public class QoreDocumentOcrProcessor inherits AbstractDataProviderMLProcessor {
         return result;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreDocumentOcrProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (document_field.find(".") >= 0 || (mime_type_field.val() && mime_type_field.find(".") >= 0)) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        list<auto> documents = AbstractDataProviderMLProcessor::getShapeFieldValues(
+            records, shape, document_field, count);
+        *list<string> mime_types;
+        if (mime_type_field.val()) {
+            mime_types = AbstractDataProviderMLProcessor::getShapeFieldStringValues(
+                records, shape, mime_type_field, count);
+        }
+
+        list<string> texts;
+        list<string> formats;
+        list<int> pages;
+        list<int> ocr_pages;
+        list<float> confidences;
+        for (int row = 0; row < count; ++row) {
+            binary doc_data = documents[row];
+            *string mime_type = mime_types ? mime_types[row] : NOTHING;
+            hash<QoreOcrUtils::DocumentOcrResult> ocr_result =
+                engine.processDocument(doc_data, mime_type);
+            push texts, ocr_result.text;
+            push formats, ocr_result.detected_format;
+            push pages, ocr_result.page_count;
+            push ocr_pages, ocr_result.ocr_page_count;
+            push confidences, ocr_result.avg_confidence;
+        }
+
+        return DataProvider::AbstractDataProcessor::appendShapeColumns(records, shape, {
+            "document_text": texts,
+            "document_format": formats,
+            "document_pages": pages,
+            "document_ocr_pages": ocr_pages,
+            "document_confidence": confidences,
+        });
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;

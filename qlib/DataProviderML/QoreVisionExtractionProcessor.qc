@@ -256,6 +256,93 @@ public class QoreVisionExtractionProcessor inherits AbstractDataProviderMLProces
         return result;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreVisionExtractionProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (image_field.find(".") >= 0 || (mime_type_field.val() && mime_type_field.find(".") >= 0)) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        list<auto> images = AbstractDataProviderMLProcessor::getShapeFieldValues(
+            records, shape, image_field, count);
+        *list<string> mime_types;
+        if (mime_type_field.val()) {
+            mime_types = AbstractDataProviderMLProcessor::getShapeFieldStringValues(
+                records, shape, mime_type_field, count);
+        }
+
+        list<string> texts;
+        list<string> formats;
+        for (int row = 0; row < count; ++row) {
+            binary image_data = images[row];
+            string mime_type = mime_types ? mime_types[row] : "image/png";
+
+            hash<QoreVisionExtraction::VisionExtractionResult> vr;
+            switch (extraction_type) {
+                case "describe":
+                    vr = vision_client.describeImage(image_data, mime_type);
+                    break;
+                case "extract_table":
+                    vr = vision_client.extractTable(image_data, mime_type);
+                    break;
+                case "extract_text":
+                    vr = vision_client.extractText(image_data, mime_type);
+                    break;
+            }
+
+            push texts, vr.text;
+            push formats, vr.format;
+        }
+
+        return DataProvider::AbstractDataProcessor::appendShapeColumns(records, shape, {
+            "vision_text": texts,
+            "vision_format": formats,
+        });
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;

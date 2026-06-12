@@ -347,6 +347,86 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
         return results;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreSemanticChunkProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (text_field.find(".") >= 0) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        list<string> texts = AbstractDataProviderMLProcessor::getShapeFieldStringValues(
+            records, shape, text_field, count);
+        list<int> source_indices;
+        list<string> chunk_texts;
+        list<int> chunk_indices;
+        list<int> chunk_token_counts;
+
+        for (int row = 0; row < count; ++row) {
+            if (!texts[row].val()) {
+                continue;
+            }
+
+            list<hash<auto>> chunks = chunker.chunkText(texts[row]);
+            int idx = 0;
+            foreach hash<auto> chunk in (chunks) {
+                push source_indices, row;
+                push chunk_texts, chunk.text;
+                push chunk_indices, idx;
+                push chunk_token_counts, chunk.token_count;
+                ++idx;
+            }
+        }
+
+        return AbstractDataProviderMLProcessor::appendGeneratedShapeRows(records, shape, source_indices, {
+            "chunk_text": chunk_texts,
+            "chunk_index": chunk_indices,
+            "chunk_token_count": chunk_token_counts,
+        });
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;

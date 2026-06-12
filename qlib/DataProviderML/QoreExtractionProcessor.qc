@@ -286,6 +286,89 @@ public class QoreExtractionProcessor inherits AbstractDataProviderMLProcessor {
         return result;
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreExtractionProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (text_field.find(".") >= 0) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        list<string> texts = AbstractDataProviderMLProcessor::getShapeFieldStringValues(
+            records, shape, text_field, count);
+        list<auto> extracted;
+        list<bool> valid;
+        list<auto> usage;
+        list<auto> errors;
+        bool has_errors = False;
+        for (int row = 0; row < count; ++row) {
+            hash<QoreStructuredExtraction::ExtractionResult> extraction =
+                pipeline.extractData(texts[row]);
+            push extracted, extraction.extracted;
+            push valid, extraction.valid;
+            push usage, extraction.usage;
+            if (extraction.validation_errors) {
+                push errors, extraction.validation_errors;
+                has_errors = True;
+            } else {
+                push errors, NOTHING;
+            }
+        }
+
+        hash<auto> new_columns = {
+            "_extracted": extracted,
+            "_extraction_valid": valid,
+            "_extraction_usage": usage,
+        };
+        if (has_errors) {
+            new_columns._extraction_errors = errors;
+        }
+
+        return DataProvider::AbstractDataProcessor::appendShapeColumns(records, shape, new_columns);
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        if (!results) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(results);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(bulk, shape);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;
