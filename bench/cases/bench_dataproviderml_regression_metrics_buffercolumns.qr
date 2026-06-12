@@ -1,0 +1,51 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlRegressionMetricsBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlRegressionMetricsBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_regression_metrics_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            buffer<float64> pred = buffer<float64>::sized(rows);
+            buffer<float64> actual = buffer<float64>::sized(rows);
+            for (int i = 0; i < rows; ++i) {
+                actual[i] = float(i % 1000) / 10.0;
+                pred[i] = actual[i] + float((i % 7) - 3) / 10.0;
+            }
+            columns = ColumnarResult::fromColumnHash({"pred": pred, "actual": actual});
+            r.bytes_processed = rows * 16;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreRegressionMetricsProcessor proc({
+                "predicted_field": "pred",
+                "true_field": "actual",
+                "window_size": rows,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_regression_metrics_buffercolumns", result, 1);
+            if (result.getColumn("sample_count")[0] != rows) {
+                throw "BENCHMARK-ERROR", "regression metrics did not process all samples";
+            }
+        };
+
+        exit(r.run());
+    }
+}

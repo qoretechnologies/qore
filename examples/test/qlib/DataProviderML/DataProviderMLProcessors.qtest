@@ -161,8 +161,11 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
 
         # Metric processors
         addTestCase("classification-metrics - basic", \classMetricsBasic());
+        addTestCase("classification-metrics - BufferColumns shape", \classMetricsBufferColumnsShape());
         addTestCase("regression-metrics - basic", \regMetricsBasic());
+        addTestCase("regression-metrics - BufferColumns shape", \regMetricsBufferColumnsShape());
         addTestCase("clustering-metrics - basic", \clusterMetricsBasic());
+        addTestCase("clustering-metrics - BufferColumns shape", \clusterMetricsBufferColumnsShape());
 
         # RollingStats tests
         addTestCase("rolling-stats - basic enrichment", \rollingStatsBasicEnrichment());
@@ -2611,6 +2614,29 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq(5, results[0].sample_count);
     }
 
+    classMetricsBufferColumnsShape() {
+        DataProviderML::QoreClassificationMetricsProcessor proc({
+            "predicted_field": "pred",
+            "true_field": "actual",
+            "window_size": 5,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "pred": new buffer<int64>((1, 0, 1, 1, 0)),
+            "actual": new buffer<int64>((1, 0, 0, 1, 0)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(1, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+
+        hash<auto> metrics = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("classification-metrics",), metrics.event_type);
+        assertFloat(0.8, metrics.accuracy[0], 1e-10);
+        assertEq((5,), metrics.sample_count);
+    }
+
     regMetricsBasic() {
         DataProviderML::QoreRegressionMetricsProcessor proc({
             "predicted_field": "pred",
@@ -2631,6 +2657,30 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertEq("regression-metrics", results[0].event_type);
         assertFloat(0.0, results[0].mse, 1e-10);
         assertFloat(1.0, results[0].r2, 1e-10);
+    }
+
+    regMetricsBufferColumnsShape() {
+        DataProviderML::QoreRegressionMetricsProcessor proc({
+            "predicted_field": "pred",
+            "true_field": "actual",
+            "window_size": 3,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "pred": new buffer<float64>((1.0, 2.0, 3.0)),
+            "actual": new buffer<float64>((1.0, 2.0, 3.0)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(1, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+
+        hash<auto> metrics = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("regression-metrics",), metrics.event_type);
+        assertFloat(0.0, metrics.mse[0], 1e-10);
+        assertFloat(1.0, metrics.r2[0], 1e-10);
+        assertEq((3,), metrics.sample_count);
     }
 
     clusterMetricsBasic() {
@@ -2657,6 +2707,31 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(results[0].silhouette_score > 0.9);
         assertEq(2, results[0].n_clusters);
         assertEq(6, results[0].sample_count);
+    }
+
+    clusterMetricsBufferColumnsShape() {
+        DataProviderML::QoreClusteringMetricsProcessor proc({
+            "fields": "x,y",
+            "cluster_field": "cluster",
+            "window_size": 6,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "x": new buffer<float64>((0.0, 0.1, 0.0, 10.0, 10.1, 10.0)),
+            "y": new buffer<float64>((0.0, 0.0, 0.1, 10.0, 10.0, 10.1)),
+            "cluster": new buffer<int64>((0, 0, 0, 1, 1, 1)),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result));
+        assertEq(1, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+
+        hash<auto> metrics = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq(("clustering-metrics",), metrics.event_type);
+        assertTrue(metrics.silhouette_score[0] > 0.9);
+        assertEq((2,), metrics.n_clusters);
+        assertEq((6,), metrics.sample_count);
     }
 
     # ===================== RollingStats Tests =====================

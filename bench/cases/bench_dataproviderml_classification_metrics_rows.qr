@@ -1,0 +1,56 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlClassificationMetricsRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlClassificationMetricsRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_classification_metrics_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            for (int i = 0; i < rows; ++i) {
+                int actual = i % 3;
+                push records, {
+                    "actual": actual,
+                    "pred": (i % 10) == 0 ? ((i + 1) % 3) : actual,
+                };
+            }
+            r.bytes_processed = rows * 16;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreClassificationMetricsProcessor proc({
+                "predicted_field": "pred",
+                "true_field": "actual",
+                "window_size": rows,
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                *auto row_result = proc.processRecord(rec);
+                if (exists row_result) {
+                    result += row_result;
+                }
+            }
+            if (result.lsize() != 1 || result[0].sample_count != rows) {
+                throw "BENCHMARK-ERROR", "classification metrics did not process all samples";
+            }
+        };
+
+        exit(r.run());
+    }
+}

@@ -186,6 +186,124 @@ public class QoreRegressionMetricsProcessor inherits AbstractDataProviderMLProce
         },);
     }
 
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreRegressionMetricsProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (hasNestedFields() || buffer) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *hash<auto> values = getShapeMetricValues(records, shape, count);
+        if (!exists values) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        list<float> y_true = values{"y_true"};
+        list<float> y_pred = values{"y_pred"};
+        *list<auto> events;
+        int offset = 0;
+        while (offset + window_size <= count) {
+            events += processMetricWindow(y_true, y_pred, offset, window_size);
+            offset += window_size;
+        }
+
+        if (offset < count) {
+            buffer = AbstractDataProviderMLProcessor::materializeShapeRows(records, shape, offset, count - offset);
+        }
+
+        return AbstractDataProviderMLProcessor::convertRecordListOutputShape(events, shape);
+    }
+
+    #! Returns @ref True if either configured field requires row materialization
+    private bool hasNestedFields() {
+        return predicted_field.find(".") >= 0 || true_field.find(".") >= 0;
+    }
+
+    #! Reads configured numeric fields directly from shaped columns
+    private *hash<auto> getShapeMetricValues(auto records, DataProvider::DataProviderShape shape, int count) {
+        *auto true_column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, true_field);
+        *auto pred_column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, predicted_field);
+        if (!exists true_column || !exists pred_column) {
+            return;
+        }
+
+        return {
+            "y_true": DataProvider::AbstractDataProcessor::columnValuesToFloatList(true_column, count, true_field),
+            "y_pred": DataProvider::AbstractDataProcessor::columnValuesToFloatList(
+                pred_column, count, predicted_field),
+        };
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        return AbstractDataProviderMLProcessor::convertRecordListOutputShape(results, shape);
+    }
+
+    #! Computes regression metrics for a complete value window
+    private list<auto> processMetricWindow(list<float> all_y_true, list<float> all_y_pred, int offset, int count) {
+        list<float> y_true;
+        list<float> y_pred;
+        if (offset == 0 && count == all_y_true.lsize()) {
+            y_true = all_y_true;
+            y_pred = all_y_pred;
+        } else {
+            for (int i = offset; i < offset + count; ++i) {
+                push y_true, all_y_true[i];
+                push y_pred, all_y_pred[i];
+            }
+        }
+
+        float mse = ML::ml_mse(y_true, y_pred);
+        float rmse = ML::ml_rmse(y_true, y_pred);
+        float mae = ML::ml_mae(y_true, y_pred);
+        float r2 = ML::ml_r2_score(y_true, y_pred);
+        float explained_variance = ML::ml_explained_variance(y_true, y_pred);
+
+        return (<RegressionMetricsEventInfo>{
+            "event_type": "regression-metrics",
+            "mse": mse,
+            "rmse": rmse,
+            "mae": mae,
+            "r2": r2,
+            "explained_variance": explained_variance,
+            "sample_count": count,
+        },);
+    }
+
     #! Supports shaped bulk API
     private bool supportsBulkApiImpl() {
         return True;

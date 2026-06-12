@@ -1,0 +1,56 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlRegressionMetricsRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlRegressionMetricsRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_regression_metrics_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            for (int i = 0; i < rows; ++i) {
+                float actual = float(i % 1000) / 10.0;
+                push records, {
+                    "actual": actual,
+                    "pred": actual + float((i % 7) - 3) / 10.0,
+                };
+            }
+            r.bytes_processed = rows * 16;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreRegressionMetricsProcessor proc({
+                "predicted_field": "pred",
+                "true_field": "actual",
+                "window_size": rows,
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                *auto row_result = proc.processRecord(rec);
+                if (exists row_result) {
+                    result += row_result;
+                }
+            }
+            if (result.lsize() != 1 || result[0].sample_count != rows) {
+                throw "BENCHMARK-ERROR", "regression metrics did not process all samples";
+            }
+        };
+
+        exit(r.run());
+    }
+}

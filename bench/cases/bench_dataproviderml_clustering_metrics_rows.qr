@@ -1,0 +1,57 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlClusteringMetricsRows
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlClusteringMetricsRows {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_clustering_metrics_rows");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        list<hash<auto>> records;
+
+        r.setup = sub () {
+            for (int i = 0; i < rows; ++i) {
+                int c = i % 2;
+                push records, {
+                    "cluster": c,
+                    "x": (c ? 10.0 : 0.0) + float(i % 100) / 1000.0,
+                    "y": (c ? 10.0 : 0.0) + float((i * 7) % 100) / 1000.0,
+                };
+            }
+            r.bytes_processed = rows * 24;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreClusteringMetricsProcessor proc({
+                "fields": ("x", "y"),
+                "cluster_field": "cluster",
+                "window_size": rows,
+            });
+            list<auto> result;
+            foreach hash<auto> rec in (records) {
+                *auto row_result = proc.processRecord(rec);
+                if (exists row_result) {
+                    result += row_result;
+                }
+            }
+            if (result.lsize() != 1 || result[0].sample_count != rows || result[0].n_clusters != 2) {
+                throw "BENCHMARK-ERROR", "clustering metrics did not process all samples";
+            }
+        };
+
+        exit(r.run());
+    }
+}

@@ -1,0 +1,54 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlClusteringMetricsBufferColumns
+
+%requires ../lib/BenchRunner.qm
+%requires ../lib/DataFrameBenchData.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlClusteringMetricsBufferColumns {
+    constructor() {
+        Bench::BenchRunner r("dataproviderml_clustering_metrics_buffercolumns");
+        r.iterations = 6;
+        r.warmup = 2;
+
+        int rows = DataFrameBench::defaultRows();
+        ColumnarResult columns;
+
+        r.setup = sub () {
+            buffer<float64> x = buffer<float64>::sized(rows);
+            buffer<float64> y = buffer<float64>::sized(rows);
+            buffer<int64> cluster = buffer<int64>::sized(rows);
+            for (int i = 0; i < rows; ++i) {
+                int c = i % 2;
+                cluster[i] = c;
+                x[i] = (c ? 10.0 : 0.0) + float(i % 100) / 1000.0;
+                y[i] = (c ? 10.0 : 0.0) + float((i * 7) % 100) / 1000.0;
+            }
+            columns = ColumnarResult::fromColumnHash({"x": x, "y": y, "cluster": cluster});
+            r.bytes_processed = rows * 24;
+        };
+
+        r.measure = sub () {
+            DataProviderML::QoreClusteringMetricsProcessor proc({
+                "fields": ("x", "y"),
+                "cluster_field": "cluster",
+                "window_size": rows,
+            });
+            ColumnarResult result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+            DataFrameBench::verifyColumnarRows("dataproviderml_clustering_metrics_buffercolumns", result, 1);
+            if (result.getColumn("sample_count")[0] != rows || result.getColumn("n_clusters")[0] != 2) {
+                throw "BENCHMARK-ERROR", "clustering metrics did not process all samples";
+            }
+        };
+
+        exit(r.run());
+    }
+}

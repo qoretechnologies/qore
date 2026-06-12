@@ -166,7 +166,6 @@ public class QoreClusteringMetricsProcessor inherits AbstractDataProviderMLProce
 
     #! Processes a window of records through clustering metrics
     private list<auto> processWindow(list<hash<auto>> records) {
-        # extract data matrix and cluster labels
         list<list<float>> matrix;
         list<float> labels;
         hash<string, bool> unique_clusters;
@@ -182,7 +181,6 @@ public class QoreClusteringMetricsProcessor inherits AbstractDataProviderMLProce
         }
 
         int n_clusters = unique_clusters.size();
-
         float silhouette = ML::ml_silhouette_score(matrix, labels);
         float davies_bouldin = ML::ml_davies_bouldin_score(matrix, labels);
         float calinski_harabasz = ML::ml_calinski_harabasz_score(matrix, labels);
@@ -193,6 +191,146 @@ public class QoreClusteringMetricsProcessor inherits AbstractDataProviderMLProce
             "davies_bouldin_score": davies_bouldin,
             "calinski_harabasz_score": calinski_harabasz,
             "sample_count": records.lsize(),
+            "n_clusters": n_clusters,
+        },);
+    }
+
+    #! Processes records in bulk hash-of-lists format without row materialization when possible
+    private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
+        updatePendingOutputShape(DataProvider::DataProviderShape::HashOfLists);
+        *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
+        return exists result ? cast<hash>(result) : NOTHING;
+    }
+
+    #! Processes an explicitly negotiated pipeline shape without row materialization when possible
+    private *auto processRecordsShapeImpl(auto records, DataProvider::DataProviderShape shape) {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreClusteringMetricsProcessor: not configured; provide constructor options";
+        }
+
+        updatePendingOutputShape(shape);
+        if (shape == DataProvider::DataProviderShape::RowRecords) {
+            return processRecordImpl(records);
+        }
+
+        if (hasNestedFields() || buffer) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        int count = DataProvider::AbstractDataProcessor::shapeRecordCount(records, shape);
+        if (!count) {
+            return;
+        }
+
+        *hash<auto> values = getShapeMetricValues(records, shape, count);
+        if (!exists values) {
+            return processShapeRowsFallback(records, shape);
+        }
+
+        hash<auto> field_values = values.field_values;
+        list<float> labels = values.labels;
+        *list<auto> events;
+        int offset = 0;
+        while (offset + window_size <= count) {
+            events += processMetricWindow(field_values, labels, offset, window_size);
+            offset += window_size;
+        }
+
+        if (offset < count) {
+            buffer = AbstractDataProviderMLProcessor::materializeShapeRows(records, shape, offset, count - offset);
+        }
+
+        return AbstractDataProviderMLProcessor::convertRecordListOutputShape(events, shape);
+    }
+
+    #! Returns @ref True if any configured field requires row materialization
+    private bool hasNestedFields() {
+        if (cluster_field.find(".") >= 0) {
+            return True;
+        }
+        foreach string field in (fields) {
+            if (field.find(".") >= 0) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Reads configured numeric fields directly from shaped columns
+    private *hash<auto> getShapeMetricValues(auto records, DataProvider::DataProviderShape shape, int count) {
+        hash<auto> field_values;
+        foreach string field in (fields) {
+            *auto column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, field);
+            if (!exists column) {
+                return;
+            }
+            field_values{field} = DataProvider::AbstractDataProcessor::columnValuesToFloatList(column, count, field);
+        }
+
+        *auto label_column = DataProvider::AbstractDataProcessor::getShapeColumn(records, shape, cluster_field);
+        if (!exists label_column) {
+            return;
+        }
+
+        return {
+            "field_values": field_values,
+            "labels": DataProvider::AbstractDataProcessor::columnValuesToFloatList(
+                label_column, count, cluster_field),
+        };
+    }
+
+    #! Uses the row-oriented implementation when a column fast path is not safe
+    private *auto processShapeRowsFallback(auto records, DataProvider::DataProviderShape shape) {
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            records, shape, DataProvider::DataProviderShape::RowRecords);
+        *list<auto> results;
+        foreach auto row in (rows) {
+            *auto row_result = processRecordImpl(row);
+            if (exists row_result) {
+                if (row_result.typeCode() == NT_LIST) {
+                    results += row_result;
+                } else {
+                    push results, row_result;
+                }
+            }
+        }
+        return AbstractDataProviderMLProcessor::convertRecordListOutputShape(results, shape);
+    }
+
+    #! Computes clustering metrics for a complete value window
+    private list<auto> processMetricWindow(hash<auto> all_field_values, list<float> all_labels, int offset, int count) {
+        list<list<float>> matrix;
+        list<float> labels;
+        hash<string, bool> unique_clusters;
+        for (int i = offset; i < offset + count; ++i) {
+            list<float> row;
+            foreach string f in (fields) {
+                list<float> values = all_field_values{f};
+                push row, values[i];
+            }
+            push matrix, row;
+            push labels, all_labels[i];
+            unique_clusters{string(all_labels[i])} = True;
+        }
+
+        int n_clusters = unique_clusters.size();
+
+        return calculateMetricEvent(matrix, labels, n_clusters, count);
+    }
+
+    #! Calculates the clustering metric event from a prepared matrix and labels
+    private list<auto> calculateMetricEvent(list<list<float>> matrix, list<float> labels, int n_clusters, int count) {
+        float silhouette = ML::ml_silhouette_score(matrix, labels);
+        float davies_bouldin = ML::ml_davies_bouldin_score(matrix, labels);
+        float calinski_harabasz = ML::ml_calinski_harabasz_score(matrix, labels);
+
+        return (<ClusteringMetricsEventInfo>{
+            "event_type": "clustering-metrics",
+            "silhouette_score": silhouette,
+            "davies_bouldin_score": davies_bouldin,
+            "calinski_harabasz_score": calinski_harabasz,
+            "sample_count": count,
             "n_clusters": n_clusters,
         },);
     }

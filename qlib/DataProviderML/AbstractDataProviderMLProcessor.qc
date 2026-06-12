@@ -346,6 +346,50 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
             cast<enum<DataProvider::DataProviderShape>>(shape));
     }
 
+    #! Converts a list of event records to the requested bulk output shape
+    /** @param records optional row-record event list
+        @param shape requested output shape
+
+        @return the converted bulk output, or @ref NOTHING if \a records is empty
+
+        @since DataProviderML 1.4
+    */
+    static *auto convertRecordListOutputShape(*list<auto> records, DataProvider::DataProviderShape shape) {
+        if (!records) {
+            return;
+        }
+        hash<auto> bulk = DataProvider::AbstractDataProcessor::recordsToHashList(records);
+        return AbstractDataProviderMLProcessor::convertBulkOutputShape(
+            bulk, cast<enum<DataProvider::DataProviderShape>>(shape));
+    }
+
+    #! Materializes a row slice from a shaped block
+    /** @param records shaped input block
+        @param shape negotiated shape for \a records
+        @param offset first row offset
+        @param count number of rows to materialize
+
+        @return row-record hashes for the selected range
+
+        @since DataProviderML 1.4
+    */
+    static list<hash<auto>> materializeShapeRows(auto records, DataProvider::DataProviderShape shape,
+            int offset, int count) {
+        list<int> selected_indices;
+        for (int row = offset; row < offset + count; ++row) {
+            push selected_indices, row;
+        }
+
+        auto selected = DataProvider::AbstractDataProcessor::selectShapeRows(records, shape, selected_indices);
+        list<auto> rows = DataProvider::AbstractDataProcessor::convertShape(
+            selected, shape, DataProvider::DataProviderShape::RowRecords);
+        list<hash<auto>> result;
+        foreach auto row in (rows) {
+            push result, row;
+        }
+        return result;
+    }
+
     #! Processes records in bulk hash-of-lists format
     private *hash<auto> processRecordsBulkImpl(hash<auto> records) {
         *auto result = processRecordsShapeImpl(records, DataProvider::DataProviderShape::HashOfLists);
