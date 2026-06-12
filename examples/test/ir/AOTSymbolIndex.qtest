@@ -235,6 +235,12 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string main_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, main_qo));
         assertTrue(main_index.find("\"call_relocations\"") != -1,
             "index JSON includes call relocation records: " + main_index);
+        assertTrue(main_index.find("\"requires\"") != -1,
+            "index JSON includes requires records: " + main_index);
+        assertTrue(main_index.find("\"flags\": 2") != -1,
+            "call-derived import is marked optional: " + main_index);
+        assertTrue(main_index.find("\"consumer_source_file\"") != -1,
+            "call-derived import records its consumer source: " + main_index);
         assertTrue(main_index.find("\"target_kind\": \"static_method\"") != -1,
             "index JSON includes call relocation target kind: " + main_index);
         assertTrue(main_index.find("\"fallback_descriptor\"") != -1,

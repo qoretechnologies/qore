@@ -153,6 +153,7 @@
 #include <iomanip>
 #include <limits>
 #include <numeric>
+#include <set>
 #include <sstream>
 #include <cstdlib>
 #include <typeinfo>
@@ -5298,6 +5299,82 @@ static void aotAddNativeRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     native.push_back(std::move(rec));
 }
 
+static QoreAOTSymbolKind aotSymbolKindForCallRelocation(QoreAOTCallRelocationTargetKind kind) {
+    switch (kind) {
+        case QoreAOTCallRelocationTargetKind::FUNCTION:
+            return QoreAOTSymbolKind::FUNCTION;
+        case QoreAOTCallRelocationTargetKind::METHOD:
+            return QoreAOTSymbolKind::METHOD;
+        case QoreAOTCallRelocationTargetKind::STATIC_METHOD:
+            return QoreAOTSymbolKind::STATIC_METHOD;
+        case QoreAOTCallRelocationTargetKind::CONSTRUCTOR:
+            return QoreAOTSymbolKind::CONSTRUCTOR;
+        case QoreAOTCallRelocationTargetKind::NONE:
+            break;
+    }
+    return QoreAOTSymbolKind::FUNCTION;
+}
+
+static const char* aotFuncSlotSourceFile(const AOTCompiledFuncWithSlots& func, size_t expr_slot) {
+    if (expr_slot < func.aot_locs.size() && !func.aot_locs[expr_slot].file.empty()) {
+        return func.aot_locs[expr_slot].file.c_str();
+    }
+    if (!func.aot_locs.empty() && !func.aot_locs.front().file.empty()) {
+        return func.aot_locs.front().file.c_str();
+    }
+    return nullptr;
+}
+
+static bool aotAppendCallImportRecords(const std::vector<AOTCompiledFuncWithSlots>* funcs,
+        std::vector<QoreAOTSymbolIndexRecord>& imported, const char* compile_file,
+        const std::unordered_set<std::string>* compile_files, std::string* error) {
+    if (!funcs) {
+        return true;
+    }
+
+    std::set<std::string> seen;
+    for (size_t i = 0; i < funcs->size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index call-import collection")) {
+            return false;
+        }
+        const AOTCompiledFuncWithSlots& func = (*funcs)[i];
+        for (size_t j = 0; j < func.slot_ids.exprs.size(); ++j) {
+            if (!aotCheckSymbolIndexCancel(j, error, "AOT symbol-index call-import collection")) {
+                return false;
+            }
+            const AOTExprSlotId& expr = func.slot_ids.exprs[j];
+            if (expr.call_relocation_kind == QoreAOTCallRelocationTargetKind::NONE
+                    || expr.reloc_qore_path.empty()) {
+                continue;
+            }
+            const char* consumer_file = aotFuncSlotSourceFile(func, j);
+            if (shouldSkipByCompileFile(consumer_file, compile_file, compile_files)) {
+                continue;
+            }
+
+            QoreAOTSymbolKind kind = aotSymbolKindForCallRelocation(expr.call_relocation_kind);
+            std::string seen_key = std::to_string(static_cast<unsigned>(kind));
+            seen_key += '\n';
+            seen_key += expr.reloc_qore_path;
+            seen_key += '\n';
+            seen_key += consumer_file ? consumer_file : "";
+            if (!seen.insert(seen_key).second) {
+                continue;
+            }
+
+            QoreAOTSymbolIndexRecord rec;
+            rec.kind = kind;
+            rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+            rec.flags = QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT;
+            rec.metadata_slot = static_cast<uint32_t>(std::min<size_t>(j, UINT32_MAX));
+            rec.qore_path = expr.reloc_qore_path;
+            rec.consumer_source_file = consumer_file ? consumer_file : "";
+            imported.push_back(std::move(rec));
+        }
+    }
+    return true;
+}
+
 static bool aotAppendClassMemberRecords(const AOTSerializeState::ClassInfo& ci,
         uint32_t class_slot, std::vector<QoreAOTSymbolIndexRecord>& defined,
         std::string* error) {
@@ -5364,7 +5441,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         const char* compile_file,
         const std::unordered_map<std::string, std::string>* native_symbol_map,
         const std::unordered_map<std::string, std::string>* init_native_symbol_map,
-        std::string* error,
+        const std::vector<AOTCompiledFuncWithSlots>* func_slots, std::string* error,
         const std::unordered_set<std::string>* compile_files) {
     if (!root_ns) {
         if (error) {
@@ -5708,6 +5785,9 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
             }
             aotAddNativeRecord(native, entry.first, entry.second, "init_func");
         }
+    }
+    if (!aotAppendCallImportRecords(func_slots, imported, compile_file, compile_files, error)) {
+        return false;
     }
 
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SYMBOL_INDEX);

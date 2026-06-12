@@ -620,6 +620,7 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
         const std::vector<AOTCompiledFunc>& compiled_funcs,
         const std::vector<AOTCompiledInitFunc>& compiled_init_funcs,
         std::string& error,
+        const std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr,
         const char* module_name = nullptr,
         const std::unordered_set<std::string>* keep_modules = nullptr,
         const char* compile_file = nullptr,
@@ -637,7 +638,7 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
 
     std::string symbol_error;
     if (!serializeSymbolIndex(writer, root_ns, module_name, keep_modules, compile_file,
-            &native_symbols, &init_native_symbols, &symbol_error, compile_files)) {
+            &native_symbols, &init_native_symbols, func_slots, &symbol_error, compile_files)) {
         error = "failed to serialize AOT symbol index";
         if (!symbol_error.empty()) {
             error += ": " + symbol_error;
@@ -4677,7 +4678,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
-        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, "",
+        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots, "",
                 local_module_names.empty() ? nullptr : &local_module_names)) {
             return false;
         }
@@ -6588,7 +6589,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
-        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error,
+        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                 mod_info.name.c_str())) {
             return false;
         }
@@ -7049,7 +7050,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }
-            if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error,
+            if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                     mod_info.name.c_str())) {
                 return false;
             }
@@ -7538,7 +7539,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
-        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error,
+        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                 nullptr, nullptr, target_canon.c_str())) {
             return false;
         }
@@ -8345,7 +8346,7 @@ bool QoreAOT::compileScriptAggregate(
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
-        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error,
+        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                 nullptr, nullptr, nullptr, &target_set)) {
             return false;
         }
@@ -9060,7 +9061,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
-        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error,
+        if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                 nullptr, nullptr, target_canon.c_str())) {
             return false;
         }
@@ -9607,7 +9608,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }
-            if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error,
+            if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                     mod_info.name.c_str(), nullptr, target_canon.c_str())) {
                 return false;
             }
@@ -10060,7 +10061,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }
-            if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error,
+            if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                     mod_info.name.c_str())) {
                 return false;
             }
@@ -10529,7 +10530,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }
-            if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error,
+            if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
                     mod_info.name.c_str())) {
                 return false;
             }

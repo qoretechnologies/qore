@@ -3373,6 +3373,10 @@ static bool is_owned_qore_provider(const QoreAOTSymbolIndexRecord& rec) {
     return !rec.qore_path.empty() && !rec.source_file.empty();
 }
 
+static bool is_optional_qo_import(const QoreAOTSymbolIndexRecord& rec) {
+    return (rec.flags & QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT) != 0;
+}
+
 static const char* qo_link_call_path_scope(const std::string& path) {
     if (path.empty()) {
         return "unknown";
@@ -3508,9 +3512,11 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             QoreAOTDependencyClass dep_class = rec.dependency_class;
             if (dep_class == QoreAOTDependencyClass::MODULE_API
                     || dep_class == QoreAOTDependencyClass::MODULE_RUNTIME
-                    || dep_class == QoreAOTDependencyClass::NATIVE_BODY) {
+                    || dep_class == QoreAOTDependencyClass::NATIVE_BODY
+                    || dep_class == QoreAOTDependencyClass::DYNAMIC) {
                 continue;
             }
+            bool optional_import = is_optional_qo_import(rec);
 
             QOLinkIssue issue;
             issue.consumer = input.path;
@@ -3518,7 +3524,9 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             issue.dependency_class = qoreAOTDependencyClassName(dep_class);
             auto provider_it = providers.find(rec.qore_path);
             if (provider_it == providers.end()) {
-                plan.unresolved_imports.push_back(std::move(issue));
+                if (!optional_import) {
+                    plan.unresolved_imports.push_back(std::move(issue));
+                }
                 continue;
             }
 
@@ -3530,7 +3538,9 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
                 issue.providers.push_back(candidates[k]->source_file);
             }
             if (candidates.size() > 1) {
-                plan.ambiguous_imports.push_back(std::move(issue));
+                if (!optional_import) {
+                    plan.ambiguous_imports.push_back(std::move(issue));
+                }
                 continue;
             }
 
@@ -3549,7 +3559,9 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
                 mismatch = true;
             }
             if (mismatch) {
-                plan.hash_mismatches.push_back(std::move(issue));
+                if (!optional_import) {
+                    plan.hash_mismatches.push_back(std::move(issue));
+                }
             } else {
                 plan.resolved_imports.push_back(std::move(issue));
             }

@@ -84,6 +84,14 @@ public class AOTCtorRelocConsumer {
         assertTrue(dump.find("constructor   AOTCtorRelocProvider::constructor(int)") != -1,
             "consumer .qo records the constructor relocation path: " + dump);
 
+        string index_json = run(sprintf("%s --dump-index-json %s", qcc_bin, consumer_qo));
+        assertTrue(index_json.find("\"requires\"") != -1,
+            "consumer index JSON includes requires records: " + index_json);
+        assertTrue(index_json.find("AOTCtorRelocProvider::constructor(int)") != -1,
+            "consumer index JSON records the constructor import: " + index_json);
+        assertTrue(index_json.find("\"flags\": 2") != -1,
+            "constructor import is marked optional: " + index_json);
+
         string link_out = run(sprintf(
             "%s --link-qo --aggregate-symbol=AOT_CTOR_RELOC_TEST --qolink-map=%s -o %s %s %s",
             qcc_bin, map_path, aggregate_qo, provider_qo, consumer_qo));

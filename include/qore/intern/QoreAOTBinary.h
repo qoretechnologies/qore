@@ -61,6 +61,7 @@ class QoreParseListNode;
 class ExceptionSink;
 class RuntimeConstantRefNode;
 struct QoreProgramLocation;
+struct AOTCompiledFuncWithSlots;
 
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation);
 
@@ -233,6 +234,8 @@ enum class QoreAOTDependencyClass : uint8_t {
 
 //! SYMBOL_INDEX record flag: native symbol is defined by this object.
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
+//! SYMBOL_INDEX record flag: import is advisory/optional and may fall back to runtime lookup.
+constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
 constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 1;
@@ -939,6 +942,7 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     @param compile_file optional single-source filter matching serializeNamespaceTree()
     @param native_symbol_map optional Qore body key -> LLVM/native symbol map
     @param init_native_symbol_map optional init function key -> LLVM/native symbol map
+    @param func_slots optional compiled slot identities used to emit advisory call imports
     @param error optional output diagnostic
     @param compile_files optional multi-source filter matching serializeNamespaceTree()
     @return true on success, false on cancellation or serialization failure
@@ -949,6 +953,7 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     const char* compile_file = nullptr,
     const std::unordered_map<std::string, std::string>* native_symbol_map = nullptr,
     const std::unordered_map<std::string, std::string>* init_native_symbol_map = nullptr,
+    const std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr,
     std::string* error = nullptr,
     const std::unordered_set<std::string>* compile_files = nullptr);
 
