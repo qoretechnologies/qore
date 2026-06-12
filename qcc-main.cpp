@@ -4416,6 +4416,19 @@ static bool json_print_context_array(const char* key,
     return true;
 }
 
+static bool json_collect_context_values(const std::vector<std::pair<std::string, std::string>>& values,
+        const char* key, std::vector<std::string>& out) {
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT symbol-index JSON context value collection")) {
+            return false;
+        }
+        if (values[i].first == key) {
+            out.push_back(values[i].second);
+        }
+    }
+    return true;
+}
+
 static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsigned indent) {
     printf("%*s{", static_cast<int>(indent), "");
     json_print_string("kind");
@@ -4620,6 +4633,10 @@ static int dump_aot_index_json_for_file(const char* path) {
 
     uint64_t object_hash = XXH64(contents.data(), contents.size(), 0);
     std::string hash = "xxh64:" + hex64_string(object_hash);
+    std::vector<std::string> source_parse_defines;
+    if (!json_collect_context_values(combined.context, "source_parse_define", source_parse_defines)) {
+        return 1;
+    }
 
     printf("{\n");
     json_print_u64_field("format", 1, 2);
@@ -4628,6 +4645,7 @@ static int dump_aot_index_json_for_file(const char* path) {
     json_print_u64_field("object_size", contents.size(), 2);
     json_print_string_field("source", source_text.empty() ? "" : source_text.front(), 2);
     if (!json_print_string_array("source_text", source_text, 2)
+            || !json_print_string_array("source_parse_defines", source_parse_defines, 2)
             || !json_print_context_array("context", combined.context, 2)
             || !json_print_symbol_array("defines", combined.defined, 2)
             || !json_print_symbol_array("provides", combined.defined, 2)

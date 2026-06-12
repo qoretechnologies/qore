@@ -5504,6 +5504,24 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     context.emplace_back("module_filter", module_name ? module_name : "");
     context.emplace_back("compile_file", compile_file ? compile_file : "");
     context.emplace_back("compile_file_count", std::to_string(compile_files ? compile_files->size() : 0));
+    if (QoreProgram* pgm = root_ns->getProgram()) {
+        const std::vector<qore_program_private::source_parse_define_t>& source_parse_defines =
+            qore_program_private::getSourceParseDefineRecords(pgm);
+        for (size_t i = 0; i < source_parse_defines.size(); ++i) {
+            if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index source parse-define collection")) {
+                return false;
+            }
+            const qore_program_private::source_parse_define_t& rec = source_parse_defines[i];
+            if (compile_file && rec.source_file != compile_file) {
+                continue;
+            }
+            if (!compile_file && compile_files && !compile_files->empty()
+                    && compile_files->find(rec.source_file) == compile_files->end()) {
+                continue;
+            }
+            context.emplace_back("source_parse_define", rec.define);
+        }
+    }
 
     for (size_t i = 0; i < state.namespaces.size(); ++i) {
         if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index namespace collection")) {

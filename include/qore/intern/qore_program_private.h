@@ -655,6 +655,13 @@ public:
     // define map
     dmap_t dmap;
 
+    struct source_parse_define_t {
+        std::string source_file;
+        std::string define;
+    };
+
+    std::vector<source_parse_define_t> source_parse_defines;
+
     // pushed parse option map
     ppo_t ppo;
 
@@ -2136,6 +2143,44 @@ public:
         return false;
     }
 
+    DLLLOCAL bool buildSourceParseDefineRecord(const QoreProgramLocation* loc, const char* name, QoreValue val,
+            source_parse_define_t& rec) {
+        if (!loc || !name || !*name) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.define = name;
+        if (val.isNothing()) {
+            return true;
+        }
+
+        ExceptionSink xsink;
+        QoreString str(QCS_UTF8);
+        if (val.getAsString(str, FMT_NORMAL, &xsink) || xsink) {
+            xsink.clear();
+            return false;
+        }
+        rec.define += '=';
+        rec.define += str.c_str();
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseDefine(const QoreProgramLocation* loc, const char* name, QoreValue val) {
+        source_parse_define_t rec;
+        if (buildSourceParseDefineRecord(loc, name, val, rec)) {
+            source_parse_defines.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_define_t>& getSourceParseDefineRecords() const {
+        return source_parse_defines;
+    }
+
     // internal method - does not bother with the parse lock
     DLLLOCAL const QoreValue getDefine(const char* name, bool& is_defined) {
         dmap_t::iterator i = dmap.find(name);
@@ -2211,6 +2256,7 @@ public:
         if (checkDefine(loc, str, parseSink))
             return;
 
+        recordSourceParseDefine(loc, str, val);
         setDefine(str, val, parseSink);
     }
 
@@ -2694,6 +2740,10 @@ public:
     DLLLOCAL static void parseDefine(QoreProgram* pgm, const QoreProgramLocation* loc, const char* str,
             QoreValue val) {
         pgm->priv->parseDefine(loc, str, val);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_define_t>& getSourceParseDefineRecords(QoreProgram* pgm) {
+        return pgm->priv->getSourceParseDefineRecords();
     }
 
     //! Copies all defines from `parent` into `child`.

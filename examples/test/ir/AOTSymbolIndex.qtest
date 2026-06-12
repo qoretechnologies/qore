@@ -30,6 +30,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("symbol hash behavior", \testHashBehavior());
         addTestCase("complex constant value hashing", \testComplexConstantValueHashing());
         addTestCase("symbol index JSON dump", \testDumpIndexJson());
+        addTestCase("source parse defines in symbol index", \testSourceParseDefines());
         addTestCase("qo link aggregate", \testQoLinkAggregate());
         addTestCase("prelinked call disable switch", \testPrelinkedCallDisableSwitch());
 
@@ -187,6 +188,70 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "JSON dump includes constant path: " + json);
         assertTrue(json.find("\"native_body_hash\": \"xxh64:") != -1,
             "JSON dump includes native body hash: " + json);
+    }
+
+    testSourceParseDefines() {
+        TmpDir tmp = initDirs();
+        compileAndDump("source-defines",
+            "%define AOTSourceMacro\n"
+            "%define AOTSourceMacroNumber 42\n"
+            "%define AOTSourceMacroString \"macro value\"\n"
+            "class SourceDefineIndexTest {\n"
+            "    int f() { return 1; }\n"
+            "}\n");
+
+        string json = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, last_out));
+        assertTrue(json.find("\"source_parse_defines\"") != -1,
+            "JSON dump includes source parse defines: " + json);
+        assertTrue(json.find("AOTSourceMacro") != -1,
+            "JSON dump includes bare source parse define: " + json);
+        assertTrue(json.find("AOTSourceMacroNumber=42") != -1,
+            "JSON dump includes numeric source parse define: " + json);
+        assertTrue(json.find("AOTSourceMacroString=\\\"macro value\\\"") != -1,
+            "JSON dump includes quoted string source parse define: " + json);
+        assertTrue(json.find("\"key\": \"source_parse_define\"") != -1,
+            "raw context includes source_parse_define entries: " + json);
+
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(qo_dir);
+        string provider_src = tmp_dir + "/provider.qc";
+        string consumer_src = tmp_dir + "/consumer.qc";
+        write(provider_src,
+            "%new-style\n"
+            "%define AOTBatchShared\n"
+            "class AOTBatchDefineProvider { int f() { return 1; } }\n");
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTBatchDefineConsumer { int f() { return 2; } }\n");
+
+        string compile_out = run(sprintf("%s %s -c --output-dir=%s %s %s",
+            env, qcc_bin, qo_dir, provider_src, consumer_src));
+        assertTrue(compile_out.find("script-context .qo") != -1,
+            "batch compile emitted script objects: " + compile_out);
+
+        string provider_qo;
+        string consumer_qo;
+        foreach string raw_line in (compile_out.split("\n")) {
+            int pos = raw_line.find(qo_dir);
+            if (pos == -1) {
+                continue;
+            }
+            string path = raw_line.substr(pos);
+            if (raw_line.find("provider_qc.qo") != -1) {
+                provider_qo = path;
+            } else if (raw_line.find("consumer_qc.qo") != -1) {
+                consumer_qo = path;
+            }
+        }
+        assertTrue(is_file(provider_qo), "batch compile emitted provider .qo: " + compile_out);
+        assertTrue(is_file(consumer_qo), "batch compile emitted consumer .qo: " + compile_out);
+
+        string provider_json = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, provider_qo));
+        string consumer_json = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(provider_json.find("AOTBatchShared") != -1,
+            "provider object exports its source parse define: " + provider_json);
+        assertTrue(consumer_json.find("AOTBatchShared") == -1,
+            "consumer object does not claim sibling source parse define: " + consumer_json);
     }
 
     testQoLinkAggregate() {
