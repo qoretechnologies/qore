@@ -247,6 +247,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @subsection wsc_v2_4 v2.4
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketClient
       metadata always resolves the typed AsyncAPI validator members and methods
+    - @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" now validates
+      deserialized incoming payloads against the configured AsyncAPI receive schema before raising
+      @ref WebSocketClient::EVENT_WS_DATA "EVENT_WS_DATA"; validation errors are raised as
+      @ref WebSocketClient::EVENT_WS_ERROR "EVENT_WS_ERROR"
     - fixed a wedged-connection bug where @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()"
       returned @ref False and could not recover when the async event thread had exited (\c tid cleared) while
       auto-reconnect was enabled; @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" now detects
@@ -1046,6 +1050,34 @@ WebSocketClient ws(\event(), {
     clearAsyncApiValidator() {
         delete asyncapi_validator;
         delete asyncapi_channel;
+    }
+
+    #! Validates an incoming message against the AsyncAPI schema
+    /** @param msg the message to validate (reference, may be modified)
+        @param headers optional headers hash for validation
+
+        @throws SCHEMA-VALIDATION-ERROR if the message fails validation
+
+        @since WebSocketClient 2.4
+    */
+    validateIncomingMessage(reference<auto> msg, hash<auto> headers = {}) {
+        if (asyncapi_validator && asyncapi_channel) {
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, headers);
+        }
+    }
+
+    #! Validates an outgoing message against the AsyncAPI schema
+    /** @param msg the message to validate
+        @param headers reference to headers (may be modified)
+
+        @throws SCHEMA-VALIDATION-ERROR if the message fails validation
+
+        @since WebSocketClient 2.4
+    */
+    validateOutgoingMessage(reference<auto> msg, reference<hash<auto>> headers) {
+        if (asyncapi_validator && asyncapi_channel) {
+            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
+        }
     }
 %endif
 
@@ -2105,10 +2137,8 @@ ws.setEventQueue();
     */
     private int handleEvent(string buf) {
 %ifndef NoAsyncApi
-        if (asyncapi_validator && asyncapi_channel) {
-            auto msg = buf;
-            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, {});
-        }
+        auto msg = buf;
+        validateIncomingMessage(\msg);
 %endif
         if (callback) {
             callback(buf);
@@ -2128,10 +2158,8 @@ ws.setEventQueue();
     */
     private int handleEvent(binary buf) {
 %ifndef NoAsyncApi
-        if (asyncapi_validator && asyncapi_channel) {
-            auto msg = buf;
-            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, {});
-        }
+        auto msg = buf;
+        validateIncomingMessage(\msg);
 %endif
         if (callback) {
             callback(buf);
@@ -3820,10 +3848,8 @@ class MyObserver inherits Observer {
     */
     sendData(auto value) {
 %ifndef NoAsyncApi
-        if (asyncapi_validator && asyncapi_channel) {
-            hash<auto> headers;
-            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \value, \headers);
-        }
+        hash<auto> headers;
+        validateOutgoingMessage(\value, \headers);
 %endif
         send(serializeData(value));
     }
@@ -3897,6 +3923,9 @@ class MyObserver inherits Observer {
 
     #! Handles deserialized event data
     private int handleEventData(auto msgdata) {
+%ifndef NoAsyncApi
+        validateIncomingMessage(\msgdata);
+%endif
         notifyObservers(EVENT_WS_DATA, {"data": msgdata});
         return WSEDC_CONTINUE;
     }

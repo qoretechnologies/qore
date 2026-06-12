@@ -17,13 +17,14 @@
 %requires DataProvider
 %requires ConnectionProvider
 %requires HttpServerUtil
-%requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
+%requires AsyncSocketIo
 %requires HttpServerAsyncIo
 %requires HttpServer
 %requires HttpClientIo
 %requires WebSocketUtil
 %requires WebSocketHandler
 %requires WebSocketClient
+%requires AsyncApi
 %try-module json
 %define NoJson
 %endtry
@@ -47,6 +48,25 @@ class EchoWsHandler inherits WebSocketHandler {
     constructor() : WebSocketHandler() {}
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         return new EchoWsConnection(self);
+    }
+}
+
+class InvalidEchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {}
+    gotMessage(string msg) {
+%ifndef NoJson
+        send(make_json({"unexpected": msg}));
+%else
+        send("INVALID:" + msg);
+%endif
+    }
+    gotMessage(binary msg) { gotMessage(msg.toString("UTF-8")); }
+}
+
+class InvalidEchoWsHandler inherits WebSocketHandler {
+    constructor() : WebSocketHandler() {}
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new InvalidEchoWsConnection(self);
     }
 }
 
@@ -106,10 +126,99 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("same-process echo (observer)", \testSameProcessEchoObserver());
         addTestCase("same-process echo (callback)", \testSameProcessEchoCallback());
         addTestCase("same-process HTTP/3 heartbeat", \testSameProcessHttp3Heartbeat());
+        addTestCase("AsyncAPI serialized validation", \testAsyncApiSerializedValidation());
+        addTestCase("AsyncAPI serialized incoming validation failure",
+            \testAsyncApiSerializedIncomingValidationFailure());
         set_return_value(main());
     }
 
-    private hash<auto> createServer() {
+%ifndef NoJson
+    private static AsyncApi::AsyncApi3Schema createAsyncApiSchema() {
+        return AsyncApi::AsyncApi3Loader::fromString(make_json({
+            "asyncapi": "3.0.0",
+            "info": {
+                "title": "WebSocket Echo Test API",
+                "version": "1.0.0",
+            },
+            "channels": {
+                "echo": {
+                    "address": "/",
+                    "messages": {
+                        "echoRequest": {
+                            "$ref": "#/components/messages/EchoRequest",
+                        },
+                        "echoResponse": {
+                            "$ref": "#/components/messages/EchoResponse",
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "sendEchoRequest": {
+                    "action": "send",
+                    "channel": {
+                        "$ref": "#/channels/echo",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/echo/messages/echoRequest",
+                        },
+                    ),
+                },
+                "receiveEchoResponse": {
+                    "action": "receive",
+                    "channel": {
+                        "$ref": "#/channels/echo",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/echo/messages/echoResponse",
+                        },
+                    ),
+                },
+            },
+            "components": {
+                "messages": {
+                    "EchoRequest": {
+                        "payload": {
+                            "$ref": "#/components/schemas/EchoRequestPayload",
+                        },
+                    },
+                    "EchoResponse": {
+                        "payload": {
+                            "$ref": "#/components/schemas/EchoResponsePayload",
+                        },
+                    },
+                },
+                "schemas": {
+                    "EchoRequestPayload": {
+                        "type": "object",
+                        "required": ("action", "msg"),
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                            },
+                            "msg": {
+                                "type": "string",
+                            },
+                        },
+                    },
+                    "EchoResponsePayload": {
+                        "type": "object",
+                        "required": ("echo",),
+                        "properties": {
+                            "echo": {
+                                "type": "string",
+                            },
+                        },
+                    },
+                },
+            },
+        }), True);
+    }
+%endif
+
+    private hash<auto> createServer(*WebSocketHandler handler) {
         Logger logger("test", m_options.verbose > 2
             ? LoggerLevel::getLevelDebug()
             : LoggerLevel::getLevelInfo());
@@ -120,7 +229,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "logger": logger,
             "debug": True,
         });
-        EchoWsHandler handler();
+        if (!handler) {
+            handler = new EchoWsHandler();
+        }
         server.setDefaultHandler("ws", handler);
         hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
             "node": "localhost",
@@ -216,6 +327,90 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(response.val(), "observer should receive response");
     }
 
+    testAsyncApiSerializedValidation() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        hash<auto> ctx = createServer();
+        on_exit {
+            HttpServer srv = ctx.server;
+            srv.stop();
+            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+            ctrl.stopClear();
+        }
+
+        Counter c(1);
+        *auto response;
+
+        WebSocketClientWithSerialization wsc({
+            "url": sprintf("wss://localhost:%d", ctx.linfo.port),
+            "logger": ctx.logger,
+            "http_version": "auto",
+            "ssl_verify_cert": False,
+            "data": "json",
+            "validator": createAsyncApiSchema(),
+            "asyncapi_channel": "echo",
+        });
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+        TestObserver obs(c, \response);
+        wsc.registerObserver(obs);
+        wsc.observersReady();
+        wsc.sendData({"action": "test", "msg": "hello"});
+        int rc = c.waitForZero(5s);
+        assertEq(0, rc, "AsyncAPI validated observer echo must not time out");
+        assertTrue(response.val(), "observer should receive validated response");
+        assertTrue(response.echo.val(), "validated response should include echo payload");
+
+        try {
+            wsc.sendData({"action": "test"});
+            fail("Expected SCHEMA-VALIDATION-ERROR for invalid outgoing payload");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SCHEMA-VALIDATION-ERROR", ex.err);
+        }
+    }
+
+    testAsyncApiSerializedIncomingValidationFailure() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        InvalidEchoWsHandler handler();
+        hash<auto> ctx = createServer(handler);
+        on_exit {
+            HttpServer srv = ctx.server;
+            srv.stop();
+            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+            ctrl.stopClear();
+        }
+
+        Counter c(1);
+        *auto error;
+
+        WebSocketClientWithSerialization wsc({
+            "url": sprintf("wss://localhost:%d", ctx.linfo.port),
+            "logger": ctx.logger,
+            "http_version": "auto",
+            "ssl_verify_cert": False,
+            "data": "json",
+            "validator": createAsyncApiSchema(),
+            "asyncapi_channel": "echo",
+        });
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+        TestObserver obs(c, \error, EVENT_WS_ERROR);
+        wsc.registerObserver(obs);
+        wsc.observersReady();
+        wsc.sendData({"action": "test", "msg": "hello"});
+        int rc = c.waitForZero(5s);
+        assertEq(0, rc, "invalid AsyncAPI response should raise an error event");
+        assertTrue(error.val(), "observer should receive validation error details");
+        assertEq("SCHEMA-VALIDATION-ERROR", error.err);
+    }
+
     testSameProcessHttp3Heartbeat() {
         hash<auto> ctx = createServer();
         on_exit {
@@ -258,15 +453,17 @@ class TestObserver inherits Observer {
     private {
         Counter c;
         reference<auto> response;
+        string event_id;
     }
 
-    constructor(Counter c, reference<auto> response) {
+    constructor(Counter c, reference<auto> response, string event_id = EVENT_WS_DATA) {
         self.c = c;
         self.response = \response;
+        self.event_id = event_id;
     }
 
     update(string event_id, hash<auto> data_) {
-        if (event_id == "ws-data-event") {
+        if (event_id == self.event_id) {
             response = data_.data;
             c.dec();
         }

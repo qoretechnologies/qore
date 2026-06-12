@@ -15,6 +15,7 @@
 %requires WebSocketHandler
 %requires WebSocketClient
 %requires AsyncSocketIo
+%requires AsyncApi
 
 %exec-class WebSocketHandlerTest
 
@@ -236,6 +237,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("sendAll extension tests", \sendAllExtensionTests());
         addTestCase("stream context API tests", \streamContextApiTests());
         addTestCase("pending send buffer tests", \pendingSendBufferTests());
+        addTestCase("AsyncAPI handler option tests", \asyncApiHandlerOptionTests());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -261,6 +263,59 @@ class WebSocketHandlerTest inherits QUnit::Test {
         # Stop the global async I/O controller's ThreadPool to allow clean exit
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         ctrl.stopClear();
+    }
+
+    private static AsyncApi::AsyncApi3Schema createAsyncApiSchema() {
+        return new AsyncApi::AsyncApi3Schema("", {
+            "asyncapi": "3.0.0",
+            "info": {
+                "title": "WebSocket Handler Test API",
+                "version": "1.0.0",
+            },
+            "channels": {
+                "ws": {
+                    "address": "/",
+                    "messages": {
+                        "textMessage": {
+                            "$ref": "#/components/messages/TextMessage",
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "sendText": {
+                    "action": "send",
+                    "channel": {
+                        "$ref": "#/channels/ws",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/ws/messages/textMessage",
+                        },
+                    ),
+                },
+                "receiveText": {
+                    "action": "receive",
+                    "channel": {
+                        "$ref": "#/channels/ws",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/ws/messages/textMessage",
+                        },
+                    ),
+                },
+            },
+            "components": {
+                "messages": {
+                    "TextMessage": {
+                        "payload": {
+                            "type": "string",
+                        },
+                    },
+                },
+            },
+        });
     }
 
     disconnectTest() {
@@ -405,6 +460,47 @@ class WebSocketHandlerTest inherits QUnit::Test {
 
         wsHandler.errs.get(10s);
         assertEq(0, wsHandler.errs.size());
+    }
+
+    asyncApiHandlerOptionTests() {
+        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () { new MyWsHandler({"validator": schema}); });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new MyWsHandler({"asyncapi_channel": "ws"});
+        });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new MyWsHandler({"validator": {}, "asyncapi_channel": "ws"});
+        });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new MyWsHandler({"asyncapi": "", "asyncapi_channel": "ws"});
+        });
+        assertThrows("WEBSOCKETHANDLER-OPTION-ERROR", sub () {
+            new MyWsHandler({"validator": schema, "asyncapi_channel": ""});
+        });
+
+        MyWsHandler wsh({
+            "validator": schema,
+            "asyncapi_channel": "ws",
+        });
+        WebSocketConnection conn = wsh.doNewConnection({}, {}, "asyncapi");
+        assertTrue(conn.getAsyncApiValidator() instanceof AsyncApi::AsyncApi3Schema);
+        assertEq("ws", conn.getAsyncApiChannel());
+
+        auto outgoing = "hello";
+        hash<auto> headers;
+        conn.validateOutgoingMessage(\outgoing, \headers);
+
+        auto incoming = "world";
+        conn.validateIncomingMessage(\incoming);
+
+        try {
+            auto invalid = {"unexpected": True};
+            conn.validateIncomingMessage(\invalid);
+            fail("Expected SCHEMA-VALIDATION-ERROR for invalid incoming WebSocket message");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SCHEMA-VALIDATION-ERROR", ex.err);
+        }
     }
 
     extensionTests() {

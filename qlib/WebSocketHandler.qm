@@ -115,6 +115,9 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @subsection websockethandler_v2_8 Version 2.8
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketHandler
       metadata always resolves the typed AsyncAPI validator members and methods
+    - added \c asyncapi, \c validator, and \c asyncapi_channel constructor options to configure an AsyncAPI
+      validator once on a @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" and apply it automatically
+      to every new @ref WebSocketHandler::WebSocketConnection "WebSocketConnection"
     - HTTP/2 WebSocket connections now thread an \c io_wake closure into
       the @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext"
       they hand to the @ref WebSocketHandler::WebSocketConnection
@@ -984,7 +987,7 @@ public class WebSocketConnection {
     */
     validateIncomingMessage(reference<auto> msg, hash<auto> headers = {}) {
         if (asyncapi_validator && asyncapi_channel) {
-            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, \headers);
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \msg, headers);
         }
     }
 
@@ -1540,6 +1543,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             "heartbeat_msg",
             "extensions",
             "max_message_size",
+            "asyncapi",
+            "asyncapi_channel",
+            "validator",
         );
     }
 
@@ -1581,6 +1587,18 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         /** @since WebSocketHandler 2.3
         */
         hash<string, hash<auto>> pending_extensions;
+
+%ifndef NoAsyncApi
+        #! Optional default AsyncAPI validator assigned to new connections
+        /** @since WebSocketHandler 2.8
+        */
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! Default AsyncAPI channel assigned to new connections
+        /** @since WebSocketHandler 2.8
+        */
+        *string asyncapi_channel;
+%endif
     }
 
     private:internal {
@@ -1604,11 +1622,20 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         - \c extensions: a list of extension names to support (e.g., \c ("permessage-deflate")) or a
           @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" instance (since WebSocketHandler
           2.3)
+        - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic message validation
+          on all new connections (since WebSocketHandler 2.8)
+        - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object to use for automatic message
+          validation on all new connections; this takes precedence over \c asyncapi (since WebSocketHandler 2.8)
+        - \c asyncapi_channel: the AsyncAPI channel name to use with \c asyncapi or \c validator; required when
+          either validation option is configured (since WebSocketHandler 2.8)
 
         @throw WEBSOCKETHANDLER-OPTION-ERROR unknown or invalid option
     */
     constructor(*HttpServer::AbstractAuthenticator auth, *hash<auto> opts)
             : HttpServer::AbstractHttpSocketHandler(auth) {
+%ifndef NoAsyncApi
+        *string asyncapi_url;
+%endif
         foreach hash<auto> h in (opts.pairIterator()) {
             switch (h.key) {
                 case "heartbeat": {
@@ -1679,11 +1706,50 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     }
                     break;
                 }
+%ifndef NoAsyncApi
+                case "asyncapi": {
+                    if (h.value.typeCode() != NT_STRING || !h.value.val()) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y and value %y; "
+                            "expecting a non-empty string URL or file path", h.key, h.value.fullType(), h.value);
+                    }
+                    asyncapi_url = h.value;
+                    break;
+                }
+                case "validator": {
+                    if (!(h.value instanceof AsyncApi::AsyncApi3Schema)) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y; expecting "
+                            "\"AsyncApi::AsyncApi3Schema\"", h.key, h.value.fullType());
+                    }
+                    asyncapi_validator = h.value;
+                    break;
+                }
+                case "asyncapi_channel": {
+                    if (h.value.typeCode() != NT_STRING || !h.value.val()) {
+                        throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y has type %y and value %y; "
+                            "expecting a non-empty string channel name", h.key, h.value.fullType(), h.value);
+                    }
+                    asyncapi_channel = h.value;
+                    break;
+                }
+%endif
                 default:
                     throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y is unknown; known options: %y", h.key,
                         Options);
             }
         }
+%ifndef NoAsyncApi
+        if (!asyncapi_validator && asyncapi_url) {
+            asyncapi_validator = AsyncApi::AsyncApi3Loader::fromUrl(asyncapi_url);
+        }
+        if (asyncapi_validator && !asyncapi_channel) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", "Option \"asyncapi_channel\" is required when \"asyncapi\" or "
+                "\"validator\" is configured";
+        }
+        if (!asyncapi_validator && asyncapi_channel) {
+            throw "WEBSOCKETHANDLER-OPTION-ERROR", "Option \"asyncapi_channel\" requires \"asyncapi\" or "
+                "\"validator\"";
+        }
+%endif
     }
 
     #! returns the connection heartbeat interval as a number of seconds
@@ -2151,6 +2217,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     #! called when a connection is established; registers the new connection internally
     WebSocketConnection doNewConnection(hash<auto> cx, hash<auto> hdr, string cid) {
         WebSocketConnection rv = getConnectionImpl(cx, hdr, cid);
+
+%ifndef NoAsyncApi
+        if (asyncapi_validator && asyncapi_channel && !rv.getAsyncApiValidator()) {
+            rv.setAsyncApiValidator(asyncapi_validator, asyncapi_channel);
+        }
+%endif
 
         # add connection object to hash
         {

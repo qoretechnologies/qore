@@ -1721,12 +1721,16 @@ foreach string module_name in (registry.getProcessModules()) {
       - added HTTP/3 WebSocket support (RFC 9220) and the \c "3.0" \c http_version option
       - added WebSocket extension support with permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
-      - added optional AsyncAPI 3.0 message validation
+      - added optional AsyncAPI 3.0 message validation, including validation of deserialized
+        @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization"
+        receive payloads
       - new \c heartbeat and \c idle_timeout constructor options for configurable PING pacing and
         silent-peer detection, with corrected async heartbeat timing
 
     - @ref websockethandlerintro "WebSocketHandler" module
-      - added optional AsyncAPI 3.0 validation support for WebSocket messages
+      - added optional AsyncAPI 3.0 validation support for WebSocket messages, including handler-level
+        \c asyncapi, \c validator, and \c asyncapi_channel constructor options for applying validation to
+        every new connection
       - added server-side WebSocket extension support with permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
         - new \c extensions constructor option to enable supported extensions
