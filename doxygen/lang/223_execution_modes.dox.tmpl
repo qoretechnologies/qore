@@ -200,6 +200,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --time-trace[=PATH]|Emit Chrome-format LLVM timing trace
     |\c --big-fn-threshold=N|Use \c OptimizeNone for functions with at least N IR blocks, default 200
     |\c -e, \c --entry=FN|Entry function for generated one-shot or link-mode \c main()
+    |\c -r, \c --warnings-are-errors|Treat Qore parser warnings as fatal compile errors
     |\c --dump-info|Inspect embedded AOT metadata without executing code
     |\c --dump-symbols|Include an nm-like symbol table in dump output
     |\c --dump-sections|Include object and AOT section tables in dump output

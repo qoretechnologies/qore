@@ -47,6 +47,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <mutex>
@@ -247,6 +248,22 @@ std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo) {
 //! Stripping debug info skips per-function DISubprogram + DILocation creation +
 //! backend DWARF table emission, measurably speeding up AOT compile for
 //! Release-tier builds.
+static bool qoreAotWarningsAreErrors() {
+    const char* env = getenv("QORE_AOT_WARNINGS_ARE_ERRORS");
+    return env && *env && strcmp(env, "0");
+}
+
+static bool qoreAotHandleWarnings(ExceptionSink& wsink, std::string& error,
+        const char* context) {
+    bool has_warnings = wsink.isException();
+    wsink.handleWarnings();
+    if (!has_warnings || !qoreAotWarningsAreErrors()) {
+        return false;
+    }
+    error = std::string(context) + " emitted Qore warnings";
+    return true;
+}
+
 static bool aotEmitDebugInfo() {
     static const bool strip = getenv("QORE_AOT_NO_DEBUG_INFO") != nullptr;
     return !strip;
@@ -6341,8 +6358,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // created by trySetUserModuleDependency need to be removed)
     QMM.removeUserModuleDependency(mod_info.name.c_str());
 
-    if (wsink.isException()) {
-        wsink.handleWarnings();
+    if (qoreAotHandleWarnings(wsink, error, "module parsing")) {
+        return false;
     }
     if (xsink.isException()) {
         xsink.handleExceptions();
@@ -6790,7 +6807,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         }
 
         // Step 8: Commit parsing
-        qpgm->parseCommit(&xsink);
+        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
             xsink.handleExceptions();
@@ -6806,8 +6823,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         mod_ctx.close();
 
         // Handle warnings
-        if (wsink.isException()) {
-            wsink.handleWarnings();
+        if (qoreAotHandleWarnings(wsink, error, "split module parsing")) {
+            return false;
         }
 
         // Step 9: Initialize LLVM and compile functions
@@ -7636,8 +7653,8 @@ static bool parseStubFiles(QoreProgram* pgm,
             error = "parse error in stub file: " + canon;
             return false;
         }
-        if (wsink.isException()) {
-            wsink.handleWarnings();
+        if (qoreAotHandleWarnings(wsink, error, "stub parsing")) {
+            return false;
         }
     }
     return true;
@@ -7881,8 +7898,8 @@ bool QoreAOT::compileScriptFilesBatch(
         error = "parse commit failed in batch compile";
         return false;
     }
-    if (wsink.isException()) {
-        wsink.handleWarnings();
+    if (qoreAotHandleWarnings(wsink, error, "batch script parsing")) {
+        return false;
     }
 
     // Now emit one .qo per target using the shared parsed program.  Each
@@ -8139,8 +8156,8 @@ bool QoreAOT::compileScriptAggregate(
         error = "parse commit failed in aggregate compile";
         return false;
     }
-    if (wsink.isException()) {
-        wsink.handleWarnings();
+    if (qoreAotHandleWarnings(wsink, error, "script aggregate parsing")) {
+        return false;
     }
 
     llvm::InitializeNativeTarget();
@@ -8855,8 +8872,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             return false;
         }
     }
-    if (wsink.isException()) {
-        wsink.handleWarnings();
+    if (qoreAotHandleWarnings(wsink, error, "script parsing")) {
+        return false;
     }
 
     // LLVM codegen setup.
@@ -9362,7 +9379,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             return false;
         }
 
-        qpgm->parseCommit(&xsink);
+        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
             xsink.handleExceptions();
@@ -9380,8 +9397,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         }
         mod_ctx.close();
 
-        if (wsink.isException()) {
-            wsink.handleWarnings();
+        if (qoreAotHandleWarnings(wsink, error, "per-file split module parsing")) {
+            return false;
         }
 
         llvm::InitializeNativeTarget();
@@ -9821,7 +9838,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             }
         }
 
-        qpgm->parseCommit(&xsink);
+        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
             xsink.handleExceptions();
@@ -9834,8 +9851,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         }
         mod_ctx.close();
 
-        if (wsink.isException()) {
-            wsink.handleWarnings();
+        if (qoreAotHandleWarnings(wsink, error, "module object aggregation parsing")) {
+            return false;
         }
 
         // Initialize LLVM (native target suffices for the aggregator's glue
@@ -10306,7 +10323,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             }
         }
 
-        qpgm->parseCommit(&xsink);
+        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
             xsink.handleExceptions();
@@ -10319,8 +10336,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         }
         mod_ctx.close();
 
-        if (wsink.isException()) {
-            wsink.handleWarnings();
+        if (qoreAotHandleWarnings(wsink, error, "module archive aggregation parsing")) {
+            return false;
         }
 
         llvm::InitializeNativeTarget();

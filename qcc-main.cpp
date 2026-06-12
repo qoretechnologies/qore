@@ -527,6 +527,7 @@ static bool archive_mode = false;
 static bool include_source = false;
 static const char* metadata_compression = nullptr;
 static bool verbose = false;
+static bool warnings_are_errors = false;
 static bool show_help = false;
 static bool show_version = false;
 static bool dump_info = false;
@@ -730,6 +731,8 @@ static void print_usage(const char* prog) {
            "                         registering script objects (default: main).\n"
            "                         Applies to one-shot multi-source mode and\n"
            "                         `.qo` link mode.\n");
+    printf("  -r, --warnings-are-errors\n"
+           "                         Treat Qore parser warnings as fatal compile errors\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -762,6 +765,16 @@ static void print_version() {
     printf("qcc (Qore Code Compiler) v%s\n", QCC_VERSION);
     printf("Using Qore library v%s\n", qore_version_string);
     printf("Built with LLVM for JIT/AOT compilation\n");
+}
+
+static bool qccHandleWarnings(ExceptionSink& wsink) {
+    bool has_warnings = wsink.isException();
+    wsink.handleWarnings();
+    if (!has_warnings || !warnings_are_errors) {
+        return false;
+    }
+    fprintf(stderr, "error: Qore parser warnings treated as fatal compile errors\n");
+    return true;
 }
 
 static struct option long_options[] = {
@@ -801,6 +814,7 @@ static struct option long_options[] = {
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
+    {"warnings-are-errors", no_argument,     nullptr, 'r'},
     {"verbose",           no_argument,       nullptr, 'v'},
     {"help",              no_argument,       nullptr, 'h'},
     {"version",           no_argument,       nullptr, 'V'},
@@ -809,7 +823,7 @@ static struct option long_options[] = {
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TL:l:age:vhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TL:l:age:rvhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -932,6 +946,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'e':
                 entry_fn = optarg;
+                break;
+            case 'r':
+                warnings_are_errors = true;
                 break;
             case 'v':
                 verbose = true;
@@ -4453,6 +4470,9 @@ int main(int argc, char** argv) {
     if (verbose) {
         setenv("QORE_AOT_VERBOSE", "1", 1);
     }
+    if (warnings_are_errors) {
+        setenv("QORE_AOT_WARNINGS_ARE_ERRORS", "1", 1);
+    }
     if (metadata_compression) {
         setenv("QORE_AOT_METADATA_COMPRESSION", metadata_compression, 1);
     }
@@ -5241,6 +5261,9 @@ int main(int argc, char** argv) {
     // Warn about ignored options
     if (static_link && module_mode) {
         fprintf(stderr, "warning: --static is ignored when compiling modules\n");
+        if (warnings_are_errors) {
+            return 1;
+        }
     }
 
     // -c (compile-only) applies to module inputs (.qm / split
@@ -5487,11 +5510,14 @@ int main(int argc, char** argv) {
         QoreProgram* qpgm = new QoreProgram(compile_po | QoreParseOptions(PO_NEW_STYLE | PO_STRICT_ARGS
             | PO_REQUIRE_TYPES));
         ExceptionSink xsink;
+        ExceptionSink wsink;
 
-        qpgm->parseFile(source_file, &xsink);
+        qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
 
         if (xsink.isException()) {
             xsink.handleExceptions();
+            rc = 1;
+        } else if (qccHandleWarnings(wsink)) {
             rc = 1;
         } else {
             // Compile to executable
