@@ -57,6 +57,30 @@ public class AbstractAsyncApiTransport {
     */
     abstract connect();
 
+    #! Subscribes to incoming messages on a channel
+    /** The callback receives the decoded message payload and optional transport headers:
+        <tt>callback(auto msg, *hash&lt;auto&gt; headers)</tt>.  Transports that do not support inbound messages can
+        keep this default implementation.
+
+        @param channel the channel/topic to subscribe to
+        @param callback callback invoked for each incoming message
+        @param options optional transport-specific subscription options
+
+        @return a transport-specific subscription handle, or NOTHING
+
+        @throw TRANSPORT-ERROR if the transport does not support subscriptions or the subscription fails
+    */
+    auto subscribe(string channel, code<nothing(auto, *hash<auto>)> callback, *hash<auto> options) {
+        throw "TRANSPORT-ERROR", sprintf("%s does not support AsyncAPI receive subscriptions", self.className());
+    }
+
+    #! Unsubscribes a handle returned by @ref subscribe()
+    /** @param subscription the transport-specific subscription handle returned by @ref subscribe()
+    */
+    unsubscribe(auto subscription) {
+        # default implementation does nothing
+    }
+
     #! Disconnects the transport
     disconnect() {
         # default implementation does nothing
