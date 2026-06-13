@@ -409,6 +409,7 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test multiple content types in requestBody", \testMultipleContentTypes());
         addTestCase("Test generator nullable nested named hash body params",
             \testGeneratorNullableNestedNamedHashBodyParams());
+        addTestCase("Test generator union type schemas", \testGeneratorUnionTypeSchemas());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -4446,5 +4447,52 @@ public class OpenApi3Test inherits QUnit::Test {
             output_type.allOf[0]."\$ref");
         assertTrue(exists output_type.allOf[1].properties.type);
         assertTrue(exists spec.components.schemas.TypeSpecInfo);
+    }
+
+    testGeneratorUnionTypeSchemas() {
+        hash<auto> mapped = OpenApi3TypeMapper::mapType("*list<string>|*list<hash>");
+        assertTrue(mapped.nullable);
+        assertEq(2, mapped.anyOf.size());
+        assertEq("array", mapped.anyOf[0].type);
+        assertEq("string", mapped.anyOf[0].items.type);
+        assertEq("array", mapped.anyOf[1].type);
+        assertEq("object", mapped.anyOf[1].items.type);
+        assertTrue(mapped.anyOf[1].items.additionalProperties);
+
+        string source =
+            "/** @REST /v1/example\n"
+            "*/\n"
+            "class ExampleRestClass {\n"
+            "    /** @REST POST /v1/example action=create\n"
+            "        @SCHEMA\n"
+            "        @summary Create example\n"
+            "        @desc Creates an example.\n"
+            "        @params\n"
+            "        - groups (*list<string>|*list<hash>): groups\n"
+            "        @return (hash ResultInfo): result\n"
+            "        - ok (bool): True on success\n"
+            "        @ENDSCHEMA\n"
+            "    */\n"
+            "    hash<auto> postCreate(hash<auto> cx, *hash<auto> ah) { }\n"
+            "}\n";
+
+        list<hash<RestMethodInfo>> methods =
+            OpenApi3SchemaTokenizer::parseSourceContent(source);
+        assertEq(1, methods.size());
+
+        OpenApi3SchemaGenerator gen({"title": "Union Test",
+            "version": "1.0"});
+        gen.addMethod("/v1/example", methods[0]);
+
+        hash<auto> spec = gen.generate();
+        string path = (keys spec.paths)[0];
+        hash<auto> groups = spec.paths{path}.post.requestBody
+            .content{"application/json"}.schema.properties.groups;
+        assertTrue(groups.nullable);
+        assertEq(2, groups.anyOf.size());
+        assertEq("array", groups.anyOf[0].type);
+        assertEq("string", groups.anyOf[0].items.type);
+        assertEq("array", groups.anyOf[1].type);
+        assertEq("object", groups.anyOf[1].items.type);
     }
 }

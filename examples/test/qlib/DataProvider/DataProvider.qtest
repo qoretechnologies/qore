@@ -3843,6 +3843,33 @@ public class DataProviderTest inherits QUnit::Test {
         }
 
         {
+            assertEq(("hash<string, list<int>>", "string"),
+                AbstractDataProviderType::splitTypeUnion("hash<string, list<int>>|string"));
+            assertThrows("UNKNOWN-TYPE", "empty alternative",
+                \AbstractDataProviderType::splitTypeUnion(), "string|");
+
+            AbstractDataProviderType t = AbstractDataProviderType::get("list<string>|list<hash>");
+            assertEq("QoreUnionDataType", t.className());
+            assertEq("list<string>|list<hash>", t.getName());
+            assertEq("list", t.getBaseTypeName());
+            assertTrue(t.isMandatory());
+            assertEq(("a", "b"), t.acceptsValue(("a", "b")));
+            assertEq(({"a": 1},), t.acceptsValue(({"a": 1},)));
+            assertThrows("RUNTIME-TYPE-ERROR", "union type", \t.acceptsValue(), (1,));
+
+            t = AbstractDataProviderType::get("*list<string>|*list<hash>");
+            assertFalse(t.isMandatory());
+            assertNothing(t.acceptsValue());
+            assertNothing(t.acceptsValue(NULL));
+            assertEq("list<string>|list<hash>", t.getMandatoryType().getName());
+
+            ListDataType lt(AbstractDataProviderType::get("string|int"));
+            assertEq("list<string|int>", lt.getName());
+            assertEq("list<auto>", lt.getValueType().getName());
+            assertEq(("a", 1), lt.acceptsValue(("a", 1)));
+        }
+
+        {
             AbstractDataProviderType type = DataProvider::getType("/qore/ftp/event");
             assertEq("hash<auto>", type.getValueType().getName());
             type = DataProvider::getType("qore/ftp/event");

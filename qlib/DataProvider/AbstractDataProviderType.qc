@@ -840,7 +840,59 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         @param options type options for the data type object
     */
     static AbstractDataProviderType get(string typename, *hash<auto> options) {
+        if (*list<string> union_types = AbstractDataProviderType::splitTypeUnion(typename)) {
+            return new QoreUnionDataType(union_types);
+        }
         return AbstractDataProviderType::get(DataTypeMap{typename} ?? new Type(typename), options);
+    }
+
+    #! Split a type string into top-level union alternatives
+    /** @param typename the type string to split
+        @return a list of top-level union alternatives, or @ref NOTHING if the type is not a union
+
+        @throw UNKNOWN-TYPE a top-level union delimiter has an empty type alternative
+
+        @since DataProvider 3.5.1
+    */
+    static *list<string> splitTypeUnion(string typename) {
+        int angle_depth = 0;
+        int square_depth = 0;
+        int paren_depth = 0;
+        int start = 0;
+        list<string> rv = ();
+
+        for (int i = 0; i < typename.length(); ++i) {
+            string ch = typename[i];
+            switch (ch) {
+                case "<": ++angle_depth; break;
+                case ">": if (angle_depth) --angle_depth; break;
+                case "[": ++square_depth; break;
+                case "]": if (square_depth) --square_depth; break;
+                case "(": ++paren_depth; break;
+                case ")": if (paren_depth) --paren_depth; break;
+                case "|":
+                    if (!angle_depth && !square_depth && !paren_depth) {
+                        string alternative = trim(typename.substr(start, i - start));
+                        if (!alternative.val()) {
+                            throw "UNKNOWN-TYPE", sprintf("invalid union type %y: empty alternative", typename);
+                        }
+                        rv += alternative;
+                        start = i + 1;
+                    }
+                    break;
+            }
+        }
+
+        if (!rv) {
+            return;
+        }
+
+        string alternative = trim(typename.substr(start));
+        if (!alternative.val()) {
+            throw "UNKNOWN-TYPE", sprintf("invalid union type %y: empty alternative", typename);
+        }
+        rv += alternative;
+        return rv;
     }
 
     #! Returns an appropriate object for the given type description

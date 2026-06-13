@@ -45,7 +45,7 @@
 %requires(reexport) HttpServerUtil >= 0.3.12
 %requires(reexport) RestSchemaValidator >= 2.5
 %requires(reexport) FileLocationHandler
-%requires(reexport) DataProvider >= 3.0
+%requires(reexport) DataProvider >= 3.5.1
 
 %allow-weak-references
 
@@ -5701,6 +5701,25 @@ public class OpenApi3TypeMapper {
         # Handle empty string
         if (!qore_type.val()) {
             return {"type": "string", "description": "Unknown type: empty"};
+        }
+
+        # Check for top-level union types before generic list/hash parsing
+        if (*list<string> union_types = AbstractDataProviderType::splitTypeUnion(qore_type)) {
+            bool nullable;
+            list<hash<auto>> any_of = ();
+            foreach string union_type in (union_types) {
+                if (union_type[0] == "*") {
+                    nullable = True;
+                    union_type = union_type.substr(1);
+                }
+                any_of += mapType(union_type);
+            }
+            hash<auto> rv;
+            rv.anyOf = any_of;
+            if (nullable) {
+                rv.nullable = True;
+            }
+            return rv;
         }
 
         # Check for nullable/optional type (leading *)

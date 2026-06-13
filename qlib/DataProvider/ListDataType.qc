@@ -56,9 +56,9 @@ public class ListDataType inherits QoreDataType {
     #! creates the object
     constructor(AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options,
             *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
-            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags,
+            : QoreDataType(ListDataType::getQoreType(element_type, or_nothing), options, tags,
                 default_value, attr) {
-        if (!name) {
+        if (!name || !element_type.getValueType()) {
             name = sprintf("%slist<%s>", or_nothing ? "*" : "", element_type.getName());
         }
         self.element_type = element_type;
@@ -80,7 +80,7 @@ public class ListDataType inherits QoreDataType {
     #! creates the object
     constructor(string name, AbstractDataProviderType element_type, bool or_nothing = False, *hash<auto> options,
             *hash<auto> tags, *list<auto> default_value, *hash<NameDescInfo> attr)
-            : QoreDataType(ListDataType::getQoreType(element_type.getValueType(), or_nothing), options, tags,
+            : QoreDataType(ListDataType::getQoreType(element_type, or_nothing), options, tags,
                 default_value, attr) {
         self.name = name;
         self.element_type = element_type;
@@ -165,6 +165,14 @@ public class ListDataType inherits QoreDataType {
     #! Returns the underlying %Qore type for this type
     private Type getQoreType(Type element_type, bool or_nothing) {
         return new Type(sprintf("%slist<%s>", or_nothing ? "*" : "", element_type.getName()));
+    }
+
+    #! Returns the underlying %Qore type for this type
+    private Type getQoreType(AbstractDataProviderType element_type, bool or_nothing) {
+        *Type qtype = element_type.getValueType();
+        return qtype
+            ? ListDataType::getQoreType(qtype, or_nothing)
+            : (or_nothing ? AutoListOrNothingType : AutoListType);
     }
 }
 }
