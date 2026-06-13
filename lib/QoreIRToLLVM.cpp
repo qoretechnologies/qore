@@ -8513,16 +8513,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (inv->invoke_opcode == QoreIROpcode::LoadStaticVar) {
                 // LoadStaticVar invoke: resolve by class path/name in AOT, direct pointer in JIT
                 if (aot_mode) {
-                    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
-                            inv->expr.getInternalNode());
-                    if (!static_var) {
-                        error = "AOT LoadStaticVar requires StaticClassVarRefNode metadata";
+                    const AbstractQoreNode* node = inv->expr.getInternalNode();
+                    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+                    const auto* deferred_static = static_var
+                        ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+                    if (!static_var && !deferred_static) {
+                        error = "AOT LoadStaticVar requires static member metadata";
                         return false;
                     }
+                    std::string class_name = static_var
+                        ? static_var->qc.getNamespacePath() : deferred_static->class_path;
+                    std::string member_name = static_var
+                        ? static_var->str : deferred_static->member_name;
                     llvm::Value* class_path = builder->CreateGlobalStringPtr(
-                            static_var->qc.getNamespacePath(), "static_var_class_path");
+                            class_name, "static_var_class_path");
                     llvm::Value* var_name = builder->CreateGlobalStringPtr(
-                            static_var->str, "static_var_name");
+                            member_name, "static_var_name");
                     auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, ptr_type, ptr_type}, false);
                     const bool for_call = dot_eval_only_bases.count(inst->result.id);
@@ -12350,16 +12356,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* svinst = static_cast<const QoreIRStaticVarInstruction*>(inst);
             llvm::Value* result;
             if (aot_mode) {
-                const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
-                        svinst->expr.getInternalNode());
-                if (!static_var) {
-                    error = "AOT LoadStaticVar requires StaticClassVarRefNode metadata";
+                const AbstractQoreNode* node = svinst->expr.getInternalNode();
+                const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+                const auto* deferred_static = static_var
+                    ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+                if (!static_var && !deferred_static) {
+                    error = "AOT LoadStaticVar requires static member metadata";
                     return false;
                 }
+                std::string class_name = static_var
+                    ? static_var->qc.getNamespacePath() : deferred_static->class_path;
+                std::string member_name = static_var
+                    ? static_var->str : deferred_static->member_name;
                 llvm::Value* class_path = builder->CreateGlobalStringPtr(
-                        static_var->qc.getNamespacePath(), "static_var_class_path");
+                        class_name, "static_var_class_path");
                 llvm::Value* var_name = builder->CreateGlobalStringPtr(
-                        static_var->str, "static_var_name");
+                        member_name, "static_var_name");
                 auto lsv_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, ptr_type, ptr_type}, false);
                 const bool for_call = dot_eval_only_bases.count(inst->result.id);

@@ -662,6 +662,23 @@ public:
 
     std::vector<source_parse_define_t> source_parse_defines;
 
+    struct source_parse_type_import_t {
+        std::string source_file;
+        std::string qore_path;
+        std::string type_path;
+        bool hashdecl = false;
+        bool or_nothing = false;
+    };
+
+    std::vector<source_parse_type_import_t> source_parse_type_imports;
+
+    struct source_parse_function_import_t {
+        std::string source_file;
+        std::string qore_path;
+    };
+
+    std::vector<source_parse_function_import_t> source_parse_function_imports;
+
     // pushed parse option map
     ppo_t ppo;
 
@@ -2181,6 +2198,62 @@ public:
         return source_parse_defines;
     }
 
+    DLLLOCAL bool buildSourceParseTypeImportRecord(const QoreProgramLocation* loc, const char* qore_path,
+            const char* type_path, bool hashdecl, bool or_nothing, source_parse_type_import_t& rec) {
+        if (!loc || !qore_path || !*qore_path || !type_path || !*type_path) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.qore_path = qore_path;
+        rec.type_path = type_path;
+        rec.hashdecl = hashdecl;
+        rec.or_nothing = or_nothing;
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseTypeImport(const QoreProgramLocation* loc, const char* qore_path,
+            const char* type_path, bool hashdecl, bool or_nothing) {
+        source_parse_type_import_t rec;
+        if (buildSourceParseTypeImportRecord(loc, qore_path, type_path, hashdecl, or_nothing, rec)) {
+            source_parse_type_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_type_import_t>& getSourceParseTypeImportRecords() const {
+        return source_parse_type_imports;
+    }
+
+    DLLLOCAL bool buildSourceParseFunctionImportRecord(const QoreProgramLocation* loc, const char* qore_path,
+            source_parse_function_import_t& rec) {
+        if (!loc || !qore_path || !*qore_path) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.qore_path = qore_path;
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseFunctionImport(const QoreProgramLocation* loc, const char* qore_path) {
+        source_parse_function_import_t rec;
+        if (buildSourceParseFunctionImportRecord(loc, qore_path, rec)) {
+            source_parse_function_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_function_import_t>& getSourceParseFunctionImportRecords() const {
+        return source_parse_function_imports;
+    }
+
     // internal method - does not bother with the parse lock
     DLLLOCAL const QoreValue getDefine(const char* name, bool& is_defined) {
         dmap_t::iterator i = dmap.find(name);
@@ -2744,6 +2817,26 @@ public:
 
     DLLLOCAL static const std::vector<source_parse_define_t>& getSourceParseDefineRecords(QoreProgram* pgm) {
         return pgm->priv->getSourceParseDefineRecords();
+    }
+
+    DLLLOCAL static void recordSourceParseTypeImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path, const char* type_path, bool hashdecl, bool or_nothing) {
+        pgm->priv->recordSourceParseTypeImport(loc, qore_path, type_path, hashdecl, or_nothing);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_type_import_t>& getSourceParseTypeImportRecords(
+            QoreProgram* pgm) {
+        return pgm->priv->getSourceParseTypeImportRecords();
+    }
+
+    DLLLOCAL static void recordSourceParseFunctionImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path) {
+        pgm->priv->recordSourceParseFunctionImport(loc, qore_path);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_function_import_t>& getSourceParseFunctionImportRecords(
+            QoreProgram* pgm) {
+        return pgm->priv->getSourceParseFunctionImportRecords();
     }
 
     //! Copies all defines from `parent` into `child`.

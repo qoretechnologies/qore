@@ -39,11 +39,13 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreRegex.h"
+#include "qore/intern/qore_aot_deps.h"
 
 // include files for default object classes
 #include "qore/intern/QC_Socket.h"
@@ -1745,6 +1747,10 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
 
     if (const char* hint = bareword_foreign_hint(bword)) {
         parse_error(*loc, "cannot resolve bareword '%s' to any reachable object; %s", bword, hint);
+    } else if (abr && qore_aot_source_parse_active()) {
+        typeInfo = autoTypeInfo;
+        found = true;
+        return new DeferredStaticClassMemberRefNode(loc, "", bword);
     } else {
         // gather near-match candidates from the scopes that were just searched to suggest a likely fix
         QoreSuggestionList sl(bword);
@@ -1843,6 +1849,26 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
                 return rv;
             }
         }
+    }
+
+    if (qore_aot_source_parse_active() && nscope.size() == 1) {
+        const char* name = nscope.getIdentifier();
+        typeInfo = autoTypeInfo;
+        found = true;
+        return new DeferredStaticClassMemberRefNode(loc, "", name);
+    }
+
+    if (qore_aot_source_parse_active() && nscope.size() >= 2) {
+        std::string class_path;
+        for (unsigned i = 0; i < (nscope.size() - 1); ++i) {
+            if (i) {
+                class_path += "::";
+            }
+            class_path += nscope[i];
+        }
+        typeInfo = autoTypeInfo;
+        found = true;
+        return new DeferredStaticClassMemberRefNode(loc, class_path.c_str(), nscope.getIdentifier());
     }
 
     // raise parse exception

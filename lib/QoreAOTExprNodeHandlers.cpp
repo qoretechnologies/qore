@@ -284,10 +284,7 @@ static QoreValue read_node_EN_STATIC_VAR(AOTExprNodeReadCtx& ctx) {
                 *qc, *vi));
         }
     }
-    printd(0, "AOT EXPR_TREE: cannot resolve static var %s::%s\n",
-        class_name.c_str(), var_name.c_str());
-    ctx.failed = true;
-    return QoreValue();
+    return QoreValue(new DeferredStaticClassMemberRefNode(&loc_builtin, class_name.c_str(), var_name.c_str()));
 }
 
 static QoreValue read_node_EN_CONST_REF(AOTExprNodeReadCtx& ctx) {
@@ -347,6 +344,10 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     }
     const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, name.c_str());
     if (!fe) {
+        QoreValue fallback = qore_aot_make_deferred_function_call(ctx.pgm, name.c_str(), pln.release());
+        if (!fallback.isNothing()) {
+            return fallback;
+        }
         printd(0, "AOT EXPR_TREE: cannot resolve function '%s'\n", name.c_str());
         ctx.failed = true;
         return QoreValue();

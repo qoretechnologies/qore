@@ -3131,15 +3131,13 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, parse_args, false);
                 return QoreValue(nhd);
             }
-            // kind 0 or 1: resolve complex list/hash type
-            // qore_get_type_from_string_intern handles `list<T>`, `hash<T>`,
-            // etc. by looking up any class/hashdecl refs via the current
-            // program. We don't install ProgramRuntimeParseAccessHelper here:
-            // by the time readValue runs for a class member default, the
-            // current program is already the active program and taking parse
-            // access during deserialization can corrupt runtime state.
-            const QoreTypeInfo* ti = qore_get_type_from_string_intern(type_path);
-            if (!ti) {
+            // kind 0 or 1: resolve complex list/hash type. Use the AOT
+            // resolver so nested sibling class/hashdecl refs can remain
+            // deferred until the linked program has all metadata loaded.
+            QoreAOTTypeResolver type_resolver(getProgram());
+            std::string type_error;
+            const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
+            if (!ti || !type_error.empty()) {
                 printd(0, "AOT readValue VT_NEW_COMPLEX_DEFAULT: cannot resolve type '%s' (kind=%d)\n",
                     type_path, (int)kind);
                 if (parse_args) {
@@ -4179,6 +4177,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
             if (qc) {
                 return qc->getOrNothingTypeInfo();
             }
+            return qore_get_aot_deferred_type_info(nullptr, class_path.c_str(), false, false);
         }
     }
 
@@ -4193,7 +4192,15 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
             if (qc) {
                 return qc->getOrNothingTypeInfo();
             }
+            return qore_get_aot_deferred_type_info(nullptr, class_path.c_str(), true, false);
         }
+    }
+
+    std::vector<std::string> hash_args;
+    bool hash_or_nothing = false;
+    if (extract_aot_type_args(path, "hash", hash_or_nothing, hash_args)
+            && hash_args.size() == 1 && hash_args[0] != "auto" && hash_args[0] != "auto!") {
+        return qore_get_aot_deferred_type_info(nullptr, hash_args[0].c_str(), hash_or_nothing, true);
     }
 
     // Use the existing parser infrastructure to resolve complex type strings
@@ -4449,6 +4456,11 @@ static bool isAOTSerializableMethodVariant(const QoreMethod* method, const Abstr
     const QoreClass* method_class = method->getClass();
     const QoreClass* owner_class = owner->getClass();
     return !(method_class && owner_class && method_class->getClass(owner_class->getID()));
+}
+
+//! Returns true for method variants that can be named in the symbol index.
+static bool isAOTLinkableMethodVariant(const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    return method && variant && (!variant->isUser() || isAOTSerializableMethodVariant(method, variant));
 }
 
 //! Collect function names that have native AOT slot maps in this binary.
@@ -4725,7 +4737,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
     // Collect user global variables
     for (auto& vi : ns->var_list.vmap) {
         Var* var = vi.second;
-        if (var->isImported()) {
+        if (var->isImported() || var->isAOTImport()) {
             // Imported globals belong to dependency modules.  Serializing them
             // here would make the downstream AOT module deserialize a private
             // local slot instead of binding to the dependency's live storage.
@@ -5246,6 +5258,137 @@ static bool aotCheckSymbolIndexCancel(size_t ordinal, std::string* error, const 
     return true;
 }
 
+static bool aotBCANeedsParseResolution(const BCANode* bca) {
+    return bca && ((!bca->classid && (bca->ns || bca->name)) || bca->getParseArgs());
+}
+
+static bool aotResolveBCAListForSerialization(const QoreClass* qc, const UserConstructorVariant* ucv,
+        const BCAList* bcal, std::string* error) {
+    if (!qc || !ucv || !bcal) {
+        return true;
+    }
+
+    bool needs_resolution = false;
+    for (const BCANode* bca : *bcal) {
+        if (aotBCANeedsParseResolution(bca)) {
+            needs_resolution = true;
+            break;
+        }
+    }
+    if (!needs_resolution) {
+        return true;
+    }
+
+    qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(qc));
+    if (!priv || !priv->scl) {
+        if (error) {
+            *error = "cannot resolve base-constructor arguments for class '";
+            *error += qc->getName();
+            *error += "': class has no base-class list";
+        }
+        return false;
+    }
+
+    UserConstructorVariant* mut_ucv = const_cast<UserConstructorVariant*>(ucv);
+    UserParamListLocalVarHelper ph(mut_ucv, qc->getTypeInfo());
+    for (BCANode* bca : *const_cast<BCAList*>(bcal)) {
+        if (!aotBCANeedsParseResolution(bca)) {
+            continue;
+        }
+        if (bca->parseInit(priv->scl, qc->getName())) {
+            if (error) {
+                *error = "cannot resolve base-constructor arguments for class '";
+                *error += qc->getName();
+                *error += "'";
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool aotClassRefMatches(const QoreClass* qc, const char* ref) {
+    if (!qc || !ref || !*ref) {
+        return false;
+    }
+    auto match_path = [ref](const char* path) -> bool {
+        if (!path || !*path) {
+            return false;
+        }
+        if (!strcmp(path, ref)) {
+            return true;
+        }
+        return path[0] == ':' && path[1] == ':' && !strcmp(path + 2, ref);
+    };
+    std::string ns_path = qc->getNamespacePath();
+    return match_path(qc->getName()) || match_path(qc->getPath()) || match_path(ns_path.c_str());
+}
+
+static const QoreClass* aotFindBCAClass(const QoreMethod* method, const BCANode* bca) {
+    if (!method || !bca) {
+        return nullptr;
+    }
+
+    const QoreClass* method_class = method->getClass();
+    const qore_class_private* cls_priv = method_class ? qore_class_private::get(*method_class) : nullptr;
+    if (!cls_priv || !cls_priv->scl) {
+        return nullptr;
+    }
+
+    if (bca->classid) {
+        ClassAccess access;
+        if (const QoreClass* base_cls = cls_priv->scl->getClass(bca->classid, access, true)) {
+            return base_cls;
+        }
+    }
+
+    const char* ref = bca->ns ? bca->ns->ostr : bca->name;
+    if (!ref || !*ref) {
+        return nullptr;
+    }
+    for (auto bi = cls_priv->scl->begin(), be = cls_priv->scl->end(); bi != be; ++bi) {
+        const QoreClass* base = (*bi)->sclass;
+        if (aotClassRefMatches(base, ref)) {
+            return base;
+        }
+    }
+    return nullptr;
+}
+
+static std::string aotBCAClassRef(const QoreMethod* method, const BCANode* bca) {
+    if (const QoreClass* base_cls = aotFindBCAClass(method, bca)) {
+        return qore_aot_encode_class_ref(base_cls);
+    }
+    if (!bca) {
+        return std::string();
+    }
+    const char* ref = bca->ns ? bca->ns->ostr : bca->name;
+    return ref ? std::string(ref) : std::string();
+}
+
+static uint16_t aotBCAArgCount(const BCANode* bca) {
+    if (!bca) {
+        return 0;
+    }
+    if (const QoreListNode* args = bca->getArgs()) {
+        return static_cast<uint16_t>(args->size());
+    }
+    if (const QoreParseListNode* parse_args = bca->getParseArgs()) {
+        return static_cast<uint16_t>(parse_args->size());
+    }
+    return 0;
+}
+
+static QoreValue aotBCAArgValue(const BCANode* bca, uint16_t arg_index) {
+    assert(bca);
+    if (const QoreListNode* args = bca->getArgs()) {
+        return args->retrieveEntry(arg_index);
+    }
+    const QoreParseListNode* parse_args = bca->getParseArgs();
+    assert(parse_args);
+    return parse_args->get(arg_index);
+}
+
 static bool aotSymbolRecordLess(const QoreAOTSymbolIndexRecord& a,
         const QoreAOTSymbolIndexRecord& b) {
     if (a.qore_path != b.qore_path) {
@@ -5389,6 +5532,273 @@ static bool aotAppendCallImportRecords(const std::vector<AOTCompiledFuncWithSlot
     return true;
 }
 
+static bool aotAppendGlobalImportRecords(const std::vector<AOTCompiledFuncWithSlots>* funcs,
+        std::vector<QoreAOTSymbolIndexRecord>& imported, const char* compile_file,
+        const std::unordered_set<std::string>* compile_files, std::string* error) {
+    if (!funcs) {
+        return true;
+    }
+
+    std::set<std::string> seen;
+    for (size_t i = 0; i < funcs->size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index global import collection")) {
+            return false;
+        }
+        const AOTCompiledFuncWithSlots& func = (*funcs)[i];
+        for (size_t j = 0; j < func.slot_ids.globals.size(); ++j) {
+            if (!aotCheckSymbolIndexCancel(j, error, "AOT symbol-index global import slot collection")) {
+                return false;
+            }
+            const AOTGlobalSlotId& global = func.slot_ids.globals[j];
+            if (!global.is_aot_import || global.name.empty()) {
+                continue;
+            }
+            const char* consumer_file = aotFuncSlotSourceFile(func, j);
+            if (shouldSkipByCompileFile(consumer_file, compile_file, compile_files)) {
+                continue;
+            }
+
+            std::string seen_key = global.name;
+            seen_key += '\n';
+            seen_key += consumer_file ? consumer_file : "";
+            if (!seen.insert(seen_key).second) {
+                continue;
+            }
+
+            QoreAOTSymbolIndexRecord rec;
+            rec.kind = QoreAOTSymbolKind::GLOBAL;
+            rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+            rec.metadata_slot = static_cast<uint32_t>(std::min<size_t>(j, UINT32_MAX));
+            rec.qore_path = global.name;
+            rec.consumer_source_file = consumer_file ? consumer_file : "";
+            rec.declaration_hash = aotHashParts({
+                "global-import",
+                rec.qore_path,
+                global.type_path,
+                global.is_thread_local ? "thread_local" : "global",
+            });
+            imported.push_back(std::move(rec));
+        }
+    }
+    return true;
+}
+
+static std::string aotStaticMemberImportPath(const std::string& class_ref, const std::string& member) {
+    if (member.empty()) {
+        return std::string();
+    }
+    if (class_ref.empty()) {
+        return member;
+    }
+    // Module-private encoded class references are not linkable by a sibling
+    // source path. They are resolved through the owning module program.
+    if (class_ref.find('\n') != std::string::npos || class_ref.find("@qore-module:") == 0) {
+        return std::string();
+    }
+    return aotJoinPath(aotStripLeadingColons(class_ref), member.c_str());
+}
+
+static bool aotAppendStaticMemberImportRecords(const std::vector<AOTCompiledFuncWithSlots>* funcs,
+        std::vector<QoreAOTSymbolIndexRecord>& imported, const char* compile_file,
+        const std::unordered_set<std::string>* compile_files, std::string* error) {
+    if (!funcs) {
+        return true;
+    }
+
+    std::set<std::string> seen;
+    for (size_t i = 0; i < funcs->size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index static-member import collection")) {
+            return false;
+        }
+        const AOTCompiledFuncWithSlots& func = (*funcs)[i];
+        for (size_t j = 0; j < func.slot_ids.exprs.size(); ++j) {
+            if (!aotCheckSymbolIndexCancel(j, error, "AOT symbol-index static-member import slot collection")) {
+                return false;
+            }
+            const AOTExprSlotId& expr = func.slot_ids.exprs[j];
+            if (expr.kind != AOTExprKind::STATIC_VARREF) {
+                continue;
+            }
+            std::string path = aotStaticMemberImportPath(expr.ref1, expr.ref2);
+            if (path.empty()) {
+                continue;
+            }
+            const char* consumer_file = aotFuncSlotSourceFile(func, j);
+            if (shouldSkipByCompileFile(consumer_file, compile_file, compile_files)) {
+                continue;
+            }
+
+            std::string seen_key = path;
+            seen_key += '\n';
+            seen_key += consumer_file ? consumer_file : "";
+            if (!seen.insert(seen_key).second) {
+                continue;
+            }
+
+            QoreAOTSymbolIndexRecord rec;
+            rec.kind = expr.ref1.empty() ? QoreAOTSymbolKind::GLOBAL : QoreAOTSymbolKind::STATIC_VAR;
+            rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+            rec.metadata_slot = static_cast<uint32_t>(std::min<size_t>(j, UINT32_MAX));
+            rec.qore_path = std::move(path);
+            rec.consumer_source_file = consumer_file ? consumer_file : "";
+            imported.push_back(std::move(rec));
+        }
+    }
+    return true;
+}
+
+static bool aotAppendTypeImportRecords(QoreProgram* pgm, std::vector<QoreAOTSymbolIndexRecord>& imported,
+        const char* compile_file, const std::unordered_set<std::string>* compile_files, std::string* error) {
+    if (!pgm) {
+        return true;
+    }
+
+    const std::vector<qore_program_private::source_parse_type_import_t>& type_imports =
+        qore_program_private::getSourceParseTypeImportRecords(pgm);
+    std::set<std::string> seen;
+    for (size_t i = 0; i < type_imports.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index source type-import collection")) {
+            return false;
+        }
+        const qore_program_private::source_parse_type_import_t& rec = type_imports[i];
+        if (shouldSkipByCompileFile(rec.source_file.c_str(), compile_file, compile_files)) {
+            continue;
+        }
+
+        std::string seen_key = rec.hashdecl ? "hashdecl" : "class";
+        seen_key += '\n';
+        seen_key += rec.qore_path;
+        seen_key += '\n';
+        seen_key += rec.source_file;
+        seen_key += '\n';
+        seen_key += rec.type_path;
+        if (!seen.insert(seen_key).second) {
+            continue;
+        }
+
+        QoreAOTSymbolIndexRecord ir;
+        ir.kind = rec.hashdecl ? QoreAOTSymbolKind::HASHDECL : QoreAOTSymbolKind::CLASS;
+        ir.dependency_class = QoreAOTDependencyClass::QORE_API;
+        ir.qore_path = rec.qore_path;
+        ir.consumer_source_file = rec.source_file;
+        imported.push_back(std::move(ir));
+    }
+    return true;
+}
+
+static bool aotAppendFunctionImportRecords(QoreProgram* pgm, std::vector<QoreAOTSymbolIndexRecord>& imported,
+        const char* compile_file, const std::unordered_set<std::string>* compile_files, std::string* error) {
+    if (!pgm) {
+        return true;
+    }
+
+    const std::vector<qore_program_private::source_parse_function_import_t>& function_imports =
+        qore_program_private::getSourceParseFunctionImportRecords(pgm);
+    std::set<std::string> seen;
+    for (size_t i = 0; i < function_imports.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index source function-import collection")) {
+            return false;
+        }
+        const qore_program_private::source_parse_function_import_t& rec = function_imports[i];
+        if (shouldSkipByCompileFile(rec.source_file.c_str(), compile_file, compile_files)) {
+            continue;
+        }
+
+        std::string seen_key = rec.qore_path;
+        seen_key += '\n';
+        seen_key += rec.source_file;
+        if (!seen.insert(seen_key).second) {
+            continue;
+        }
+
+        QoreAOTSymbolIndexRecord ir;
+        ir.kind = QoreAOTSymbolKind::FUNCTION;
+        ir.dependency_class = QoreAOTDependencyClass::QORE_API;
+        ir.qore_path = rec.qore_path;
+        ir.consumer_source_file = rec.source_file;
+        imported.push_back(std::move(ir));
+    }
+    return true;
+}
+
+static bool aotAppendBCAImportRecords(const AOTSerializeState& state,
+        std::vector<QoreAOTSymbolIndexRecord>& imported, const char* compile_file,
+        const std::unordered_set<std::string>* compile_files, std::string* error) {
+    std::set<std::string> seen;
+    for (size_t i = 0; i < state.methods.size(); ++i) {
+        if (!aotCheckSymbolIndexCancel(i, error, "AOT symbol-index BCA import collection")) {
+            return false;
+        }
+        const auto& mi = state.methods[i];
+        if (mi.class_idx >= state.classes.size() || !mi.method || mi.is_static
+                || strcmp(mi.method->getName(), "constructor")) {
+            continue;
+        }
+
+        const QoreClass* qc = state.classes[mi.class_idx].cls;
+        const qore_method_private* mp = qore_method_private::get(*mi.method);
+        const MethodFunctionBase* mfb = mp->func;
+        QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
+        size_t variant_i = 0;
+        while (qfi.next()) {
+            if (!aotCheckSymbolIndexCancel(variant_i++, error,
+                    "AOT symbol-index BCA import variant collection")) {
+                return false;
+            }
+            const AbstractQoreFunctionVariant* v = qfi.getVariant();
+            if (!isAOTSerializableMethodVariant(mi.method, v)) {
+                continue;
+            }
+            std::string source_file = aotFunctionVariantSourceFile(v);
+            if (shouldSkipByCompileFile(source_file.empty() ? nullptr : source_file.c_str(),
+                    compile_file, compile_files)) {
+                continue;
+            }
+
+            const UserConstructorVariant* ucv = dynamic_cast<const UserConstructorVariant*>(
+                reinterpret_cast<const MethodVariantBase*>(v));
+            const BCAList* bcal = ucv ? ucv->getBaseClassArgumentList() : nullptr;
+            if (!bcal || bcal->empty()) {
+                continue;
+            }
+            if (!aotResolveBCAListForSerialization(qc, ucv, bcal, error)) {
+                return false;
+            }
+
+            size_t bca_i = 0;
+            for (const BCANode* bca : *bcal) {
+                if (!aotCheckSymbolIndexCancel(bca_i++, error,
+                        "AOT symbol-index BCA import entry collection")) {
+                    return false;
+                }
+                const AbstractQoreFunctionVariant* base_variant = bca->getVariant();
+                const QoreClass* base_cls = aotFindBCAClass(mi.method, bca);
+                if (!base_variant || !base_cls) {
+                    continue;
+                }
+
+                std::string key = aotMethodDisplayKey(base_cls, "constructor", base_variant);
+                std::string seen_key = key;
+                seen_key += '\n';
+                seen_key += source_file;
+                if (!seen.insert(seen_key).second) {
+                    continue;
+                }
+
+                QoreAOTSymbolIndexRecord rec;
+                rec.kind = QoreAOTSymbolKind::CONSTRUCTOR;
+                rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+                rec.flags = QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT;
+                rec.metadata_slot = static_cast<uint32_t>(std::min<size_t>(i, UINT32_MAX));
+                rec.qore_path = std::move(key);
+                rec.consumer_source_file = source_file;
+                imported.push_back(std::move(rec));
+            }
+        }
+    }
+    return true;
+}
+
 static bool aotAppendClassMemberRecords(const AOTSerializeState::ClassInfo& ci,
         uint32_t class_slot, std::vector<QoreAOTSymbolIndexRecord>& defined,
         std::string* error) {
@@ -5446,6 +5856,231 @@ static bool aotAppendClassMemberRecords(const AOTSerializeState::ClassInfo& ci,
             ce->hasInitExpr() ? "pending" : "literal",
         });
         defined.push_back(std::move(rec));
+    }
+    return true;
+}
+
+struct AOTInheritedClassMemberAliasState {
+    std::set<std::string> static_vars;
+    std::set<std::string> constants;
+    std::set<std::string> static_methods;
+    std::set<const qore_class_private*> visited_bases;
+    size_t record_count = 0;
+};
+
+static bool aotInheritedMemberAccessLinkable(ClassAccess access) {
+    return access < Internal;
+}
+
+static bool aotAppendInheritedStaticVarAlias(const std::string& class_path,
+        const std::string& class_source_file, const char* name, const QoreVarInfo& vi,
+        uint32_t class_slot, std::vector<QoreAOTSymbolIndexRecord>& defined) {
+    if (!name || !*name || !aotInheritedMemberAccessLinkable(vi.getAccess())) {
+        return false;
+    }
+
+    QoreAOTSymbolIndexRecord rec;
+    rec.kind = QoreAOTSymbolKind::STATIC_VAR;
+    rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+    rec.metadata_slot = class_slot;
+    rec.qore_path = aotJoinPath(class_path, name);
+    rec.source_file = class_source_file;
+    rec.visibility = aotVisibility(vi.getAccess());
+    rec.provider_source_file = aotLocationFile(vi.loc);
+    rec.abi_kind = "inherited_alias";
+    rec.declaration_hash = aotHashParts({
+        "inherited_static_var",
+        rec.qore_path,
+        rec.visibility,
+        aotTypePathString(vi.getTypeInfo()),
+    });
+    defined.push_back(std::move(rec));
+    return true;
+}
+
+static bool aotAppendInheritedClassConstantAlias(const std::string& class_path,
+        const std::string& class_source_file, const ConstantEntry* ce,
+        uint32_t class_slot, std::vector<QoreAOTSymbolIndexRecord>& defined) {
+    if (!ce || ce->isSystem() || ce->isExternalStub()
+            || !aotInheritedMemberAccessLinkable(ce->getAccess())) {
+        return false;
+    }
+
+    QoreAOTSymbolIndexRecord rec;
+    rec.kind = QoreAOTSymbolKind::CONSTANT;
+    rec.dependency_class = ce->hasInitExpr()
+        ? QoreAOTDependencyClass::QORE_API : QoreAOTDependencyClass::QORE_VALUE;
+    rec.metadata_slot = class_slot;
+    rec.qore_path = aotJoinPath(class_path, ce->getName());
+    rec.source_file = class_source_file;
+    rec.visibility = aotVisibility(ce->getAccess());
+    rec.provider_source_file = aotLocationFile(ce->loc);
+    rec.abi_kind = "inherited_alias";
+    rec.value_hash = aotValueHashForConstant(ce);
+    rec.declaration_hash = aotHashParts({
+        "inherited_class_constant",
+        rec.qore_path,
+        rec.visibility,
+        aotTypePathString(ce->typeInfo),
+        ce->hasInitExpr() ? "pending" : "literal",
+    });
+    defined.push_back(std::move(rec));
+    return true;
+}
+
+static bool aotAppendInheritedStaticMethodAliases(const std::string& class_path,
+        const std::string& class_source_file, const QoreMethod* method,
+        uint32_t class_slot, std::vector<QoreAOTSymbolIndexRecord>& defined,
+        std::string* error, AOTInheritedClassMemberAliasState& state) {
+    if (!method || !method->isStatic()) {
+        return false;
+    }
+
+    const qore_method_private* mp = qore_method_private::get(*method);
+    const MethodFunctionBase* mfb = mp->func;
+    QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
+    bool emitted = false;
+    size_t variant_i = 0;
+    while (qfi.next()) {
+        if (!aotCheckSymbolIndexCancel(state.record_count++,
+                error, "AOT symbol-index inherited static-method alias collection")) {
+            return false;
+        }
+        const AbstractQoreFunctionVariant* v = qfi.getVariant();
+        if (!isAOTLinkableMethodVariant(method, v)) {
+            continue;
+        }
+        const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
+        if (!mvb || !aotInheritedMemberAccessLinkable(mvb->getAccess())) {
+            continue;
+        }
+
+        std::string key = class_path;
+        key += "::";
+        key += method->getName();
+        key = getVariantKey(key.c_str(), v);
+
+        QoreAOTSymbolIndexRecord rec;
+        rec.kind = QoreAOTSymbolKind::STATIC_METHOD;
+        rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+        rec.metadata_slot = (class_slot << 16) | std::min<uint32_t>(variant_i, UINT16_MAX);
+        rec.qore_path = key;
+        rec.source_file = class_source_file;
+        rec.visibility = aotVisibility(mvb->getAccess());
+        rec.signature_hash = aotSignatureSurface(key, v);
+        rec.declaration_hash = aotMethodVariantDeclHash(key, rec.visibility, v, true);
+        rec.provider_source_file = aotFunctionVariantSourceFile(v);
+        rec.abi_kind = "inherited_alias";
+        defined.push_back(std::move(rec));
+        emitted = true;
+        ++variant_i;
+    }
+    return emitted;
+}
+
+static bool aotAppendInheritedClassMemberAliasesFromBase(const qore_class_private* base_priv,
+        const std::string& class_path, const std::string& class_source_file, uint32_t class_slot,
+        AOTInheritedClassMemberAliasState& state, std::vector<QoreAOTSymbolIndexRecord>& defined,
+        std::string* error) {
+    if (!base_priv || !state.visited_bases.insert(base_priv).second) {
+        return true;
+    }
+
+    for (auto& vi : base_priv->vars.member_list) {
+        if (!aotCheckSymbolIndexCancel(state.record_count++,
+                error, "AOT symbol-index inherited static-var alias collection")) {
+            return false;
+        }
+        if (!state.static_vars.insert(vi.first).second) {
+            continue;
+        }
+        if (!aotAppendInheritedStaticVarAlias(class_path, class_source_file,
+                vi.first, *vi.second, class_slot, defined)) {
+            state.static_vars.erase(vi.first);
+        }
+    }
+
+    ConstConstantListIterator ccli(base_priv->constlist);
+    while (ccli.next()) {
+        if (!aotCheckSymbolIndexCancel(state.record_count++,
+                error, "AOT symbol-index inherited class-constant alias collection")) {
+            return false;
+        }
+        const ConstantEntry* ce = ccli.getEntry();
+        const std::string& name = ce->getName();
+        if (!state.constants.insert(name).second) {
+            continue;
+        }
+        if (!aotAppendInheritedClassConstantAlias(class_path, class_source_file,
+                ce, class_slot, defined)) {
+            state.constants.erase(name);
+        }
+    }
+
+    for (auto& mi : base_priv->shm) {
+        if (!state.static_methods.insert(mi.first).second) {
+            continue;
+        }
+        if (!aotAppendInheritedStaticMethodAliases(class_path, class_source_file,
+                mi.second, class_slot, defined, error, state)) {
+            state.static_methods.erase(mi.first);
+        }
+    }
+
+    if (!base_priv->scl) {
+        return true;
+    }
+
+    for (auto* bcn : *base_priv->scl) {
+        if (!aotCheckSymbolIndexCancel(state.record_count++,
+                error, "AOT symbol-index inherited class-member alias base walk")) {
+            return false;
+        }
+        if (!bcn || !bcn->sclass) {
+            continue;
+        }
+        if (!aotAppendInheritedClassMemberAliasesFromBase(qore_class_private::get(*bcn->sclass),
+                class_path, class_source_file, class_slot, state, defined, error)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool aotAppendInheritedClassMemberAliases(const AOTSerializeState::ClassInfo& ci,
+        uint32_t class_slot, std::vector<QoreAOTSymbolIndexRecord>& defined,
+        std::string* error) {
+    const qore_class_private* priv = ci.priv;
+    if (!priv || !priv->scl) {
+        return true;
+    }
+
+    AOTInheritedClassMemberAliasState state;
+    for (auto& vi : priv->vars.member_list) {
+        state.static_vars.insert(vi.first);
+    }
+    ConstConstantListIterator ccli(priv->constlist);
+    while (ccli.next()) {
+        state.constants.insert(ccli.getEntry()->getName());
+    }
+    for (auto& mi : priv->shm) {
+        state.static_methods.insert(mi.first);
+    }
+
+    std::string class_path = aotStripLeadingColons(priv->path);
+    std::string class_source_file = aotLocationFile(priv->loc);
+    for (auto* bcn : *priv->scl) {
+        if (!aotCheckSymbolIndexCancel(state.record_count++,
+                error, "AOT symbol-index inherited class-member alias base walk")) {
+            return false;
+        }
+        if (!bcn || !bcn->sclass) {
+            continue;
+        }
+        if (!aotAppendInheritedClassMemberAliasesFromBase(qore_class_private::get(*bcn->sclass),
+                class_path, class_source_file, class_slot, state, defined, error)) {
+            return false;
+        }
     }
     return true;
 }
@@ -5521,6 +6156,12 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
             }
             context.emplace_back("source_parse_define", rec.define);
         }
+        if (!aotAppendTypeImportRecords(pgm, imported, compile_file, compile_files, error)) {
+            return false;
+        }
+        if (!aotAppendFunctionImportRecords(pgm, imported, compile_file, compile_files, error)) {
+            return false;
+        }
     }
 
     for (size_t i = 0; i < state.namespaces.size(); ++i) {
@@ -5557,6 +6198,9 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         rec.declaration_hash = aotClassDeclHash(ci);
         defined.push_back(std::move(rec));
         if (!aotAppendClassMemberRecords(ci, static_cast<uint32_t>(i), defined, error)) {
+            return false;
+        }
+        if (!aotAppendInheritedClassMemberAliases(ci, static_cast<uint32_t>(i), defined, error)) {
             return false;
         }
     }
@@ -5818,7 +6462,16 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
             aotAddNativeRecord(native, entry.first, entry.second, "init_func");
         }
     }
+    if (!aotAppendGlobalImportRecords(func_slots, imported, compile_file, compile_files, error)) {
+        return false;
+    }
+    if (!aotAppendStaticMemberImportRecords(func_slots, imported, compile_file, compile_files, error)) {
+        return false;
+    }
     if (!aotAppendCallImportRecords(func_slots, imported, compile_file, compile_files, error)) {
+        return false;
+    }
+    if (!aotAppendBCAImportRecords(state, imported, compile_file, compile_files, error)) {
         return false;
     }
 
@@ -7537,16 +8190,21 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         const ConstructorMethodVariant* cmv = CONMV_const(mvb);
                         const BCAList* bcal = cmv->getBaseClassArgumentList();
                         if (bcal && !bcal->empty()) {
-                            writer.writeU8(1);  // has_bca = true
-                            writer.writeU16(static_cast<uint16_t>(bcal->size()));
-
-                            // Build slot map from constructor's signature params
                             // Must use dynamic_cast due to multiple inheritance:
                             // UserConstructorVariant inherits both ConstructorMethodVariant
                             // (via MethodVariantBase -> AbstractQoreFunctionVariant) and
                             // UserVariantBase. reinterpret_cast gives wrong pointer offset.
                             const UserConstructorVariant* ucv =
                                 dynamic_cast<const UserConstructorVariant*>(cmv);
+                            if (ucv && !aotResolveBCAListForSerialization(
+                                    method->getClass(), ucv, bcal, &error)) {
+                                return false;
+                            }
+
+                            writer.writeU8(1);  // has_bca = true
+                            writer.writeU16(static_cast<uint16_t>(bcal->size()));
+
+                            // Build slot map from constructor's signature params
                             const UserSignature* sig = ucv
                                 ? const_cast<UserConstructorVariant*>(ucv)->getUserSignature()
                                 : nullptr;
@@ -7555,17 +8213,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                             uint16_t bca_index = 0;
                             for (const BCANode* bca : *bcal) {
                                 // Write base class path for runtime resolution
-                                const QoreClass* base_cls = nullptr;
-                                if (bca->classid) {
-                                    const qore_class_private* cls_priv =
-                                        qore_class_private::get(*mi.method->getClass());
-                                    if (cls_priv->scl) {
-                                        ClassAccess access;
-                                        base_cls = cls_priv->scl->getClass(
-                                            bca->classid, access, true);
-                                    }
-                                }
-                                std::string base_path = qore_aot_encode_class_ref(base_cls);
+                                std::string base_path = aotBCAClassRef(mi.method, bca);
                                 writer.writeStringRef(base_path.c_str());
                                 writer.writeU16(static_cast<uint16_t>(
                                     bca->loc ? bca->loc->start_line : 0));
@@ -7577,7 +8225,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 // QORE_AOT_FEAT_BCA_NATIVE_ARGS bit is absent; new writers do
                                 // not emit EXPR_TREE fallback.
                                 const QoreListNode* args = bca->getArgs();
-                                uint16_t num_args = args ? static_cast<uint16_t>(args->size()) : 0;
+                                uint16_t num_args = aotBCAArgCount(bca);
                                 const qore_list_private* args_priv = qore_list_private::get(args);
                                 const std::vector<size_t>* eval_map = args_priv
                                     ? args_priv->getCallArgEvalMap()
@@ -7614,7 +8262,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 const QoreClass* method_class = mi.method->getClass();
                                 std::string method_class_path = qore_aot_encode_class_ref(method_class);
                                 for (uint16_t ai = 0; ai < num_args; ++ai) {
-                                    QoreValue arg_val = args->retrieveEntry(ai);
+                                    QoreValue arg_val = aotBCAArgValue(bca, ai);
                                     if (!writeNativeBCAArgBlob(writer, arg_val, bca_locals, &program_crm,
                                             method_class_path, method->getName(), base_path, bca_index, ai,
                                             bca->loc, error)) {
@@ -7711,7 +8359,7 @@ void collectDeclaredSourceFiles(qore_ns_private* ns, std::unordered_set<std::str
     // global variables
     for (auto& vi : ns->var_list.vmap) {
         Var* var = vi.second;
-        if (!var->isImported() && !var->isBuiltin()) {
+        if (!var->isImported() && !var->isAOTImport() && !var->isBuiltin()) {
             add_file(var->getParseLocation());
         }
     }
@@ -8250,6 +8898,14 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(0);
             return true;
         }
+        if (vrn->isDynamicObjectConstruct()) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
+            writer.writeStringRef(vrn->getDynamicClassName().c_str());
+            if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+                writeTypePathRef(writer, vrn->getTypeInfo());
+            }
+            return write_args_prefer_qore(vrn->getArgs(), vrn->getParseArgs());
+        }
         qoreAOTSetExprSerializationError("unsupported VarRefNewObjectNode constructor in "
             + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
         return false;
@@ -8329,6 +8985,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         std::string class_ref = qore_aot_encode_class_ref(&sv->qc);
         writer.writeStringRef(class_ref.c_str());
         writer.writeStringRef(sv->str.c_str());
+        return true;
+    }
+    if (auto* dsv = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_VARREF));
+        writer.writeStringRef(dsv->class_path.c_str());
+        writer.writeStringRef(dsv->member_name.c_str());
         return true;
     }
 
@@ -9571,6 +10233,9 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeStringRef(global.name.c_str());
             writer.writeStringRef(global.type_path.c_str());
             writer.writeU8(global.is_thread_local ? 1 : 0);
+            if ((writer.feature_flags & QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS) != 0) {
+                writer.writeU8(global.is_aot_import ? 1 : 0);
+            }
         }
         traceEntryOffset("after globals");
 
@@ -12126,9 +12791,10 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                     }
                 } else {
                     // kind 0 (complex list) or kind 1 (complex hash)
-                    const QoreTypeInfo* cti = qore_get_type_from_string_intern(
-                        pim.pending_complex_default_path.c_str());
-                    if (cti) {
+                    std::string type_error;
+                    const QoreTypeInfo* cti = type_resolver->resolve(
+                        pim.pending_complex_default_path.c_str(), type_error);
+                    if (cti && type_error.empty()) {
                         if (pim.pending_complex_default_kind == 0) {
                             QoreValue list_args;
                             if (parse_args) {
@@ -12157,6 +12823,10 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                         }
                         std::string details = "complex default kind="
                             + std::to_string((int)pim.pending_complex_default_kind);
+                        if (!type_error.empty()) {
+                            details += "; ";
+                            details += type_error;
+                        }
                         return setAOTDeferredMemberResolutionError(error,
                             "complex default type",
                             pim.pending_complex_default_path.c_str(), "class",
@@ -12346,9 +13016,10 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                             "class", qc->getName(), psm.name.c_str());
                     }
                 } else {
-                    const QoreTypeInfo* cti = qore_get_type_from_string_intern(
-                        psm.pending_complex_default_path.c_str());
-                    if (cti) {
+                    std::string type_error;
+                    const QoreTypeInfo* cti = type_resolver->resolve(
+                        psm.pending_complex_default_path.c_str(), type_error);
+                    if (cti && type_error.empty()) {
                         if (psm.pending_complex_default_kind == 0) {
                             QoreValue list_args;
                             if (parse_args) {
@@ -12377,6 +13048,10 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                         }
                         std::string details = "complex default kind="
                             + std::to_string((int)psm.pending_complex_default_kind);
+                        if (!type_error.empty()) {
+                            details += "; ";
+                            details += type_error;
+                        }
                         return setAOTDeferredMemberResolutionError(error,
                             "complex default type",
                             psm.pending_complex_default_path.c_str(), "class",
@@ -12776,9 +13451,10 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                             "hashdecl", hd->getName(), phm.name.c_str());
                     }
                 } else {
-                    const QoreTypeInfo* cti = qore_get_type_from_string_intern(
-                        phm.pending_complex_default_path.c_str());
-                    if (cti) {
+                    std::string type_error;
+                    const QoreTypeInfo* cti = type_resolver->resolve(
+                        phm.pending_complex_default_path.c_str(), type_error);
+                    if (cti && type_error.empty()) {
                         if (phm.pending_complex_default_kind == 0) {
                             QoreValue list_args;
                             if (parse_args) {
@@ -12804,6 +13480,10 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                         }
                         std::string details = "complex default kind="
                             + std::to_string((int)phm.pending_complex_default_kind);
+                        if (!type_error.empty()) {
+                            details += "; ";
+                            details += type_error;
+                        }
                         return setAOTDeferredMemberResolutionError(error,
                             "complex default type",
                             phm.pending_complex_default_path.c_str(), "hashdecl",

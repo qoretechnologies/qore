@@ -335,6 +335,35 @@ static StaticClassVarRefNode* instRegistryResolveStaticVarRef(QoreProgram* pgm, 
     return vi ? new StaticClassVarRefNode(&loc_builtin, var_name.c_str(), *owner_qc, *vi) : nullptr;
 }
 
+static bool instRegistryIsLegacyDeferredGlobalLValueRoot(const std::string& name, std::string& global_name) {
+    if (name.size() > 2 && name[0] == ':' && name[1] == ':') {
+        global_name = name.substr(2);
+        return true;
+    }
+    return false;
+}
+
+static bool instRegistryResolveGlobalLValueRoot(AOTInstReadCtx& ctx, LVPathStep& step,
+        const std::string& name) {
+    if (!ctx.pgm) {
+        ctx.error = "cannot resolve global lvalue path root '" + name + "': no runtime program";
+        return false;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+    const qore_ns_private* vns = nullptr;
+    Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name.c_str(), vns);
+    if (!var) {
+        ctx.error = "cannot resolve global lvalue path root '" + name + "'";
+        return false;
+    }
+
+    step.kind = var->isThreadLocal() ? LVPathStepKind::ThreadLocalVar : LVPathStepKind::GlobalVar;
+    step.name = name;
+    step.ref_ptr = var;
+    return true;
+}
+
 // Error propagation convention for instruction read_fn handlers:
 // Every read_fn that calls ctx.readExpr(...) with a LOCAL `std::string error`
 // MUST copy a non-empty inner error into ctx.error before returning nullptr:
@@ -3181,31 +3210,28 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                 }
             }
         } else if (step.kind == LVPathStepKind::StaticVar) {
-            StaticClassVarRefNode* scv = instRegistryResolveStaticVarRef(ctx.pgm, step.name);
-            if (!scv) {
-                ctx.error = "cannot resolve static lvalue path root '" + step.name + "'";
-                delete pi;
-                return nullptr;
+            std::string global_name;
+            if (instRegistryIsLegacyDeferredGlobalLValueRoot(step.name, global_name)) {
+                if (!instRegistryResolveGlobalLValueRoot(ctx, step, global_name)) {
+                    delete pi;
+                    return nullptr;
+                }
+            } else {
+                StaticClassVarRefNode* scv = instRegistryResolveStaticVarRef(ctx.pgm, step.name);
+                if (!scv) {
+                    ctx.error = "cannot resolve static lvalue path root '" + step.name + "'";
+                    delete pi;
+                    return nullptr;
+                }
+                // AOT static lvalue roots resolve at runtime in the active program.
+                // This keeps module writes aligned with LoadStaticVar-by-path reads
+                // after the module namespace is merged into an importing program.
+                scv->deref(nullptr);
             }
-            // AOT static lvalue roots resolve at runtime in the active program.
-            // This keeps module writes aligned with LoadStaticVar-by-path reads
-            // after the module namespace is merged into an importing program.
-            scv->deref(nullptr);
         } else if ((step.kind == LVPathStepKind::GlobalVar
                 || step.kind == LVPathStepKind::ThreadLocalVar)
                 && !step.name.empty()) {
-            if (!ctx.pgm) {
-                ctx.error = "cannot resolve global lvalue path root '" + step.name
-                    + "': no runtime program";
-                delete pi;
-                return nullptr;
-            }
-            qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-            const qore_ns_private* vns = nullptr;
-            step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
-                *pp->RootNS, step.name.c_str(), vns);
-            if (!step.ref_ptr) {
-                ctx.error = "cannot resolve global lvalue path root '" + step.name + "'";
+            if (!instRegistryResolveGlobalLValueRoot(ctx, step, step.name)) {
                 delete pi;
                 return nullptr;
             }

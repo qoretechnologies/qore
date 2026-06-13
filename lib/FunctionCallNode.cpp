@@ -36,6 +36,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreParseTypeInfo.h"
 #include "qore/intern/NewComplexTypeNode.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <string>
 #include <vector>
@@ -85,6 +86,19 @@ static const QoreTypeInfo* resolve_static_scope_receiver_type(const QoreProgramL
             "'buffer<T>::sized()/filled()' for dense buffer factories", type_path.c_str());
         err = -1;
         return autoTypeInfo;
+    }
+    return rv;
+}
+
+static std::string get_static_scope_class_path(const NamedScope& scope) {
+    std::string rv;
+    unsigned count = scope.size();
+    assert(count >= 2);
+    for (unsigned i = 0; i + 1 < count; ++i) {
+        if (i) {
+            rv += "::";
+        }
+        rv += scope[i];
     }
     return rv;
 }
@@ -1115,7 +1129,42 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     }
 
     // resolves the function
-    fe = qore_root_ns_private::parseResolveFunctionEntry(loc, c_str);
+    fe = qore_root_ns_private::parseFindFunctionEntry(c_str);
+    if (!fe && qore_aot_source_parse_active()) {
+        if (has_explicit_type_args) {
+            parse_error(*loc, "cannot defer unresolved function call '%s()' with explicit type arguments", c_str);
+            return -1;
+        }
+
+        if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+            qore_program_private::recordSourceParseFunctionImport(pgm, loc, c_str);
+        }
+
+        const FunctionEntry* call_function_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
+            "call_function");
+        if (!call_function_fe) {
+            return -1;
+        }
+
+        QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
+        dynamic_args->add(new QoreStringNode(c_str), loc);
+        QoreParseListNode* old_args = takeParseArgs();
+        if (old_args) {
+            dynamic_args->appendFrom(old_args);
+            old_args->deref();
+        }
+
+        FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_function_fe, dynamic_args);
+        val = dynamic_call;
+        free(c_str);
+        c_str = nullptr;
+        deref();
+        return dynamic_call->parseInitFinalizedCall(val, parse_context);
+    }
+
+    if (!fe) {
+        fe = qore_root_ns_private::parseResolveFunctionEntry(loc, c_str);
+    }
     free(c_str);
     c_str = nullptr;
 
@@ -1197,7 +1246,7 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     if (name) {
         assert(!oc);
         // find object class
-        if ((oc = qore_root_ns_private::parseFindScopedClass(loc, *name))) {
+        if ((oc = qore_root_ns_private::parseFindScopedClass(loc, *name, false))) {
             // check if parse options allow access to this class
             int64 cflags = oc->getDomain();
             if (cflags && qore_program_private::parseAddDomain(parse_context.pgm, cflags)) {
@@ -1205,6 +1254,36 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     "class", oc->getName());
                 err = -1;
             }
+        } else if (qore_aot_source_parse_active()) {
+            if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                std::string type_path = "object<";
+                type_path += name->ostr;
+                type_path += '>';
+                qore_program_private::recordSourceParseTypeImport(pgm, loc, name->ostr, type_path.c_str(), false,
+                    false);
+            }
+
+            const FunctionEntry* create_object_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
+                "create_object");
+            if (!create_object_fe) {
+                return -1;
+            }
+
+            QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
+            dynamic_args->add(new QoreStringNode(name->ostr), loc);
+            QoreParseListNode* old_args = parse_args;
+            parse_args = nullptr;
+            if (old_args) {
+                dynamic_args->appendFrom(old_args);
+                old_args->deref();
+            }
+
+            FunctionCallNode* dynamic_call = new FunctionCallNode(loc, create_object_fe, dynamic_args);
+            val = dynamic_call;
+            delete name;
+            name = nullptr;
+            deref();
+            return dynamic_call->parseInitFinalizedCall(val, parse_context);
         }
         delete name;
         name = nullptr;
@@ -1439,6 +1518,34 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 return parse_init_value(val, parse_context);
             } else {
                 assert(!n);
+            }
+
+            if (qore_aot_source_parse_active() && scope->size() >= 2) {
+                if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                    qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+                }
+
+                const FunctionEntry* call_static_method_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
+                    "call_static_method");
+                if (!call_static_method_fe) {
+                    return -1;
+                }
+
+                QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
+                dynamic_args->add(new QoreStringNode(get_static_scope_class_path(*scope)), loc);
+                dynamic_args->add(new QoreStringNode(scope->getIdentifier()), loc);
+                QoreParseListNode* old_args = takeParseArgs();
+                if (old_args) {
+                    dynamic_args->appendFrom(old_args);
+                    old_args->deref();
+                }
+
+                FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_static_method_fe, dynamic_args);
+                val = dynamic_call;
+                delete scope;
+                scope = nullptr;
+                deref();
+                return dynamic_call->parseInitFinalizedCall(val, parse_context);
             }
 
             {

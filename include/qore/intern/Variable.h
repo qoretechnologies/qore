@@ -119,6 +119,7 @@ private:
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred
     bool is_auto_type = false;          // true if declared type is an auto type
     bool no_narrowing = false;          // true if declared with auto! to disable type narrowing
+    bool aot_import = false;            // true for AOT placeholders resolved by link/load context
     bool pub;                           // is this global var public (valid and set for modules only)
     mutable bool finalized;             // has this var already been cleared during Program destruction?
     bool is_thread_local;               // is this a thread_local var?
@@ -232,6 +233,15 @@ public:
     DLLLOCAL const Var* parseGetVar() const;
 
     DLLLOCAL bool isImported() const;
+
+    DLLLOCAL bool isAOTImport() const {
+        return aot_import;
+    }
+
+    DLLLOCAL void setAOTImport() {
+        assert(!builtin);
+        aot_import = true;
+    }
 
     DLLLOCAL void deref(ExceptionSink* xsink);
 

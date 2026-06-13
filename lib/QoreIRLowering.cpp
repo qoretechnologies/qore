@@ -3890,6 +3890,23 @@ static bool extractLValuePath(const QoreValue& expr,
         return true;
     }
 
+    if (auto* dsv = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+        LVPathStep step;
+        if (dsv->class_path.empty()) {
+            // AOT source parsing uses DeferredStaticClassMemberRefNode for
+            // unresolved bare symbols.  In an lvalue root position, such a
+            // symbol can only be a deferred global/thread-local variable.
+            step.kind = LVPathStepKind::GlobalVar;
+            step.name = dsv->member_name;
+        } else {
+            step.kind = LVPathStepKind::StaticVar;
+            step.name = dsv->class_path + "::" + dsv->member_name;
+        }
+        step.ref_ptr = nullptr;
+        path.push_back(step);
+        return true;
+    }
+
     // Navigation: QoreSquareBracketsRangeOperatorNode (container[start..stop])
     if (auto* sbr = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
         if (!allow_slice) {
@@ -4525,6 +4542,22 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         }
         return builder.createLoadStaticVar(&static_var->vi, static_var->str.c_str(),
                 expr, static_var->loc)->result;
+    }
+    if (auto* deferred_static = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, deferred_static->loc);
+            inst->invoke_opcode = QoreIROpcode::LoadStaticVar;
+            builder.setBlock(normal_block);
+            return inst->result;
+        }
+        return builder.createLoadStaticVar(nullptr, deferred_static->member_name.c_str(),
+                expr, deferred_static->loc)->result;
     }
     if (auto* backquote = dynamic_cast<const BackquoteNode*>(node)) {
         auto* inst = builder.createBackquote(backquote->str, backquote->loc);

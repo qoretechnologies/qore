@@ -3332,11 +3332,19 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         }
 
         case QoreIROpcode::LoadStaticVar: {
-            if (auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
-                    inv->expr.getInternalNode())) {
+            const AbstractQoreNode* node = inv->expr.getInternalNode();
+            if (auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node)) {
                 uint64_t result_bits = preserve_hash_key_weak_result
                     ? qore_rt_load_static_var_for_call(&static_var->vi, static_var->str.c_str(), xsink)
                     : qore_rt_load_static_var(&static_var->vi, static_var->str.c_str(), xsink);
+                return fromBits(result_bits);
+            }
+            if (auto* deferred_static = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+                uint64_t result_bits = preserve_hash_key_weak_result
+                    ? qore_rt_load_static_var_by_path_for_call(deferred_static->class_path.c_str(),
+                        deferred_static->member_name.c_str(), xsink)
+                    : qore_rt_load_static_var_by_path(deferred_static->class_path.c_str(),
+                        deferred_static->member_name.c_str(), xsink);
                 return fromBits(result_bits);
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -7423,10 +7431,37 @@ load_local_done:
             }
             case QoreIROpcode::LoadStaticVar: {
                 auto* sv_inst = static_cast<QoreIRStaticVarInstruction*>(inst);
+                const AbstractQoreNode* node = sv_inst->expr.getInternalNode();
+                if (auto* deferred_static = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+                    uint64_t result_bits = isDotEvalOnlyBase(inst)
+                        ? qore_rt_load_static_var_by_path_for_call(deferred_static->class_path.c_str(),
+                            deferred_static->member_name.c_str(), xsink)
+                        : qore_rt_load_static_var_by_path(deferred_static->class_path.c_str(),
+                            deferred_static->member_name.c_str(), xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    QoreValue out = fromBits(result_bits);
+                    setValueSlot(values, sv_inst->result.id, out, xsink);
+                    if (out.hasNode()) {
+                        cleanup.push_back(sv_inst->result.id);
+                    }
+                    ++ip;
+                    break;
+                }
                 // Resolve vi from expr if not set (AOT-deserialized handler IR)
                 if (!sv_inst->vi && sv_inst->expr.getType() == NT_CLASS_VARREF) {
-                    sv_inst->vi = &(static_cast<StaticClassVarRefNode*>(
-                        sv_inst->expr.getInternalNode()))->vi;
+                    auto* static_var = dynamic_cast<StaticClassVarRefNode*>(const_cast<AbstractQoreNode*>(node));
+                    if (!static_var) {
+                        xsink->raiseException("IR-RUNTIME-ERROR",
+                            "LoadStaticVar instruction has invalid static member metadata");
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    sv_inst->vi = &static_var->vi;
                 }
                 // issue 3523: evaluate in case the value is a reference
                 ValueHolder val(sv_inst->vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),

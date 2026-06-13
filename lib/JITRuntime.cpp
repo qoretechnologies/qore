@@ -1898,6 +1898,19 @@ static uint64_t qore_rt_load_static_var_impl(QoreVarInfo* vi, const char* var_na
     return toBits(!preserve_weak_result && val->needsEval() ? val->eval(xsink) : val.release());
 }
 
+static QoreValue qore_rt_eval_runtime_var(Var* var, ExceptionSink* xsink) {
+    QoreValue v = var->eval();
+    AbstractQoreNode* n = v.getInternalNode();
+    if (n && n->getType() == NT_REFERENCE) {
+        ReferenceNode* r = reinterpret_cast<ReferenceNode*>(n);
+        bool needs_deref = true;
+        QoreValue nv = r->eval(needs_deref, xsink);
+        discard(v.getInternalNode(), xsink);
+        return nv;
+    }
+    return v;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_static_var(QoreVarInfo* vi, const char* var_name,
         ExceptionSink* xsink) {
     return qore_rt_load_static_var_impl(vi, var_name, xsink, false);
@@ -1910,7 +1923,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_for_call(QoreVarInfo* vi, 
 
 static uint64_t qore_rt_load_static_var_by_path_impl(const char* class_path,
         const char* var_name, ExceptionSink* xsink, bool preserve_weak_result) {
-    if (!class_path || !*class_path || !var_name || !*var_name) {
+    if (!class_path || !var_name || !*var_name) {
         xsink->raiseException("STATIC-VAR-ERROR", "cannot resolve static variable '%s::%s'",
             class_path ? class_path : "<null>", var_name ? var_name : "<null>");
         return toBits(QoreValue());
@@ -1926,7 +1939,36 @@ static uint64_t qore_rt_load_static_var_by_path_impl(const char* class_path,
     const char* resolved_class_path = (class_path[0] == ':' && class_path[1] == ':')
         ? class_path + 2 : class_path;
     qore_program_private* pp = qore_program_private::get(*pgm);
+
+    std::string full_path;
+    if (*resolved_class_path) {
+        full_path = resolved_class_path;
+        full_path += "::";
+        full_path += var_name;
+    } else {
+        full_path = var_name;
+    }
+
     const qore_ns_private* found_ns = nullptr;
+    if (Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, full_path.c_str(), found_ns)) {
+        return toBits(qore_rt_eval_runtime_var(var, xsink));
+    }
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+
+    found_ns = nullptr;
+    if (const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(*pp->RootNS,
+            full_path.c_str(), found_ns)) {
+        return toBits(ce->getReferencedValue());
+    }
+
+    if (!*resolved_class_path) {
+        xsink->raiseException("STATIC-VAR-ERROR", "cannot resolve variable or constant '%s'", var_name);
+        return toBits(QoreValue());
+    }
+
+    found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
         *pp->RootNS, resolved_class_path, found_ns);
     if (!qc) {
@@ -1954,6 +1996,24 @@ static uint64_t qore_rt_load_static_var_by_path_impl(const char* class_path,
         }
     }
     if (!member) {
+        const QoreExternalConstant* c = qc->findConstant(var_name);
+        if (!c) {
+            QoreClassHierarchyIterator hi(*qc);
+            unsigned hierarchy_count = 0;
+            while (hi.next()) {
+                if (++hierarchy_count % 100 == 0
+                        && qore_check_cancel(xsink, "static constant hierarchy lookup")) {
+                    return toBits(QoreValue());
+                }
+                c = hi.get().findConstant(var_name);
+                if (c) {
+                    break;
+                }
+            }
+        }
+        if (c) {
+            return toBits(c->getReferencedValue());
+        }
         xsink->raiseException("STATIC-VAR-ERROR", "cannot resolve static variable '%s::%s'",
             class_path, var_name);
         return toBits(QoreValue());
@@ -8075,36 +8135,66 @@ extern "C" DLLEXPORT void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32
     }
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_globals);
-    return qore_rt_load_global(ctx->globals[idx], xsink);
+    Var* var = ctx->globals[idx];
+    if (var) {
+        return var;
+    }
+    if (static_cast<size_t>(idx) >= ctx->global_names.size() || ctx->global_names[idx].empty()) {
+        return nullptr;
+    }
+
+    std::lock_guard<std::mutex> lock(ctx->global_resolution_mutex);
+    var = ctx->globals[idx];
+    if (var) {
+        return var;
+    }
+
+    qore_program_private* pp = ctx->pgm ? qore_program_private::get(*ctx->pgm) : nullptr;
+    if (pp && pp->RootNS) {
+        const qore_ns_private* vns = nullptr;
+        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, ctx->global_names[idx].c_str(), vns);
+        if (var) {
+            ctx->globals[idx] = var;
+            return var;
+        }
+    }
+
+    bool required = static_cast<size_t>(idx) < ctx->global_required_imports.size()
+        && ctx->global_required_imports[idx];
+    if (required && xsink) {
+        xsink->raiseException("AOT-GLOBAL-IMPORT-ERROR",
+            "required global import '%s' is not available in the linked/loaded Program",
+            ctx->global_names[idx].c_str());
+    }
+    return nullptr;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    return qore_rt_load_global(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_globals);
-    qore_rt_store_global(ctx->globals[idx], val, xsink);
+    qore_rt_store_global(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
         uint64_t val, ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_globals);
-    qore_rt_store_global_eval_weak(ctx->globals[idx], val, xsink);
+    qore_rt_store_global_eval_weak(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_globals);
-    return qore_rt_load_thread_local(ctx->globals[idx], xsink);
+    return qore_rt_load_thread_local(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_thread_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_globals);
-    qore_rt_store_thread_local(ctx->globals[idx], val, xsink);
+    qore_rt_store_thread_local(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_thread_local_eval_weak_aot(QoreAOTContext* ctx,
         int32_t idx, uint64_t val, ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_globals);
-    qore_rt_store_thread_local_eval_weak(ctx->globals[idx], val, xsink);
+    qore_rt_store_thread_local_eval_weak(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), val, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
@@ -8620,6 +8710,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int
     if (expr.hasNode()) {
         if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(expr.getInternalNode())) {
             return toBits(vrn->constructValue(xsink));
+        }
+        if (dynamic_cast<const NewObjectCallNode*>(expr.getInternalNode())
+                || dynamic_cast<const ScopedObjectCallNode*>(expr.getInternalNode())) {
+            bool needs_deref = false;
+            return toBits(expr.eval(needs_deref, xsink));
+        }
+        if (auto* fcn = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+            const char* name = fcn->getName();
+            if (name && !strcmp(name, "create_object")) {
+                bool needs_deref = false;
+                return toBits(expr.eval(needs_deref, xsink));
+            }
         }
     }
     return qore_rt_raise_aot_ast_fallback(ctx, idx, xsink, "qore_rt_vrn_construct_aot",
@@ -12632,7 +12734,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match_value(uint64_t case_val_
         uint64_t switch_val_bits, ExceptionSink* xsink) {
     QoreValue case_val = fromBits(case_val_bits);
     QoreValue switch_val = fromBits(switch_val_bits);
-    return toBits(QoreValue(qore_switch_case_equal(switch_val, case_val, xsink)));
+    ValueEvalOptimizedRefHolder case_eval(case_val, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue(false));
+    }
+    QoreValue eval_case_val = case_eval.takeReferencedValue();
+    bool match = qore_switch_case_equal(switch_val, eval_case_val, xsink);
+    eval_case_val.discard(xsink);
+    return toBits(QoreValue(match));
 }
 
 // AOT-safe switch case match: case value loaded from expression slot at runtime

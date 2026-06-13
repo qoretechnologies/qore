@@ -34,6 +34,7 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/CaseNodeWithOperator.h"
 #include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/qore_program_private.h"
 
 CaseNode::~CaseNode() {
@@ -70,7 +71,14 @@ bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionS
 }
 
 bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
-    return qore_switch_case_equal(lhs_value, val, xsink);
+    ValueEvalOptimizedRefHolder case_val(val, xsink);
+    if (xsink && *xsink) {
+        return false;
+    }
+    QoreValue eval_case_val = case_val.takeReferencedValue();
+    bool rv = qore_switch_case_equal(lhs_value, eval_case_val, xsink);
+    eval_case_val.discard(xsink);
+    return rv;
 }
 
 bool CaseNode::isCaseNode() const {
@@ -297,6 +305,18 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
                 QoreValue nv = se.takeReferencedValue();
                 w->val.discard(nullptr);
                 w->val = nv;
+            } else if (qore_aot_source_parse_active()) {
+                QoreValue ex_err = xsink.getExceptionErr();
+                bool defer_case = false;
+                if (ex_err.getType() == NT_STRING) {
+                    QoreStringValueHelper ex_err_str(ex_err);
+                    defer_case = !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT");
+                }
+                if (defer_case) {
+                    xsink.clear();
+                } else {
+                    qore_program_private::addParseException(parse_context.pgm, xsink);
+                }
             } else {
                 qore_program_private::addParseException(parse_context.pgm, xsink);
             }
@@ -309,7 +329,7 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
             // Check only the simple case blocks (case 1: ...),
             // not those with relational operators. Could be changed later to provide more checking.
             // note that no exception can be raised here as the case node values are parse values
-            if (w->isCaseNode() && cw->isCaseNode()) {
+            if (w->isCaseNode() && cw->isCaseNode() && w->val.isValue() && cw->val.isValue()) {
                 bool duplicate = qore_switch_case_equal(w->val, cw->val, &xsink);
                 if (xsink) {
                     qore_program_private::addParseException(parse_context.pgm, xsink);

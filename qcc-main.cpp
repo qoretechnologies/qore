@@ -529,6 +529,7 @@ static bool script_aggregate_native_registers = false;
 // script-context `.qo` inputs, without reparsing the original sources.
 static bool link_qo = false;
 static bool strict_call_relocations = false;
+static bool allow_unresolved_qo_imports = false;
 static const char* link_aggregate_symbol = nullptr;
 static const char* qolink_map_path = nullptr;
 // --from-objects signals aggregator mode: the
@@ -733,6 +734,12 @@ static void print_usage(const char* prog) {
            "                         unresolved, ambiguous, or hash-mismatched.\n"
            "                         Useful for complete closed-world test links;\n"
            "                         production links can keep optional runtime fallback.\n");
+    printf("      --allow-unresolved-imports\n"
+           "                         With --link-qo, permit required symbol imports to\n"
+           "                         remain unresolved in this aggregate and record them\n"
+           "                         in the link map. Intended only for intermediate\n"
+           "                         partial aggregates that are checked later by a\n"
+           "                         complete strict link.\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -840,6 +847,7 @@ static struct option long_options[] = {
     {"qolink-map",        required_argument, nullptr, 0x10f},
     {"strict-call-relocations", no_argument, nullptr, 0x110},
     {"script-aggregate-native-registers", no_argument, nullptr, 0x111},
+    {"allow-unresolved-imports", no_argument, nullptr, 0x112},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -972,6 +980,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x111:  // --script-aggregate-native-registers
                 script_aggregate_native_registers = true;
+                break;
+            case 0x112:  // --allow-unresolved-imports
+                allow_unresolved_qo_imports = true;
                 break;
             case 'F':
                 from_objects = true;
@@ -3325,6 +3336,15 @@ struct QOLinkPlan {
     std::vector<QOLinkCallRelocation> call_relocation_hash_mismatches;
 };
 
+using QOLinkProviderMap = std::map<std::string, std::vector<const QoreAOTSymbolIndexRecord*>>;
+
+struct QOLinkProviderIndex {
+    QOLinkProviderMap exact;
+    QOLinkProviderMap raw_suffix;
+    QOLinkProviderMap callable_suffix;
+    QOLinkProviderMap callable_base_exact;
+};
+
 static void add_unique_string(std::vector<std::string>& out, std::set<std::string>& seen,
         const std::string& value) {
     if (!value.empty() && seen.insert(value).second) {
@@ -3337,6 +3357,26 @@ static bool qo_link_check_cancel(size_t ordinal, const char* operation, std::str
         error = "operation cancelled during ";
         error += operation ? operation : "AOT qo-link processing";
         return false;
+    }
+    return true;
+}
+
+static bool collect_qo_register_symbols(const llvm::object::ObjectFile& obj,
+        std::vector<std::string>& register_symbols, std::string& error) {
+    size_t i = 0;
+    for (const llvm::object::SymbolRef& sym : obj.symbols()) {
+        if (!qo_link_check_cancel(i++, "AOT qo-link register-symbol scan", error)) {
+            return false;
+        }
+        auto name_or = sym.getName();
+        if (!name_or) {
+            llvm::consumeError(name_or.takeError());
+            continue;
+        }
+        std::string name = name_or->str();
+        if (string_has_suffix(name, "_script_register") && symbol_kind(sym) != 'U') {
+            register_symbols.push_back(std::move(name));
+        }
     }
     return true;
 }
@@ -3368,15 +3408,8 @@ static bool collect_qo_link_input(const char* path, QOLinkInputInfo& input,
     }
 
     std::vector<std::string> register_symbols;
-    std::vector<AOTDumpSymbolRow> symbol_rows = collect_symbol_rows(*obj);
-    for (size_t i = 0; i < symbol_rows.size(); ++i) {
-        if (!qo_link_check_cancel(i, "AOT qo-link symbol scan", error)) {
-            return false;
-        }
-        const AOTDumpSymbolRow& row = symbol_rows[i];
-        if (row.kind != 'U' && string_has_suffix(row.name, "_script_register")) {
-            register_symbols.push_back(row.name);
-        }
+    if (!collect_qo_register_symbols(*obj, register_symbols, error)) {
+        return false;
     }
     if (register_symbols.empty()) {
         error = "input has no exported *_script_register symbol: " + std::string(path);
@@ -3520,6 +3553,219 @@ static bool is_optional_qo_import(const QoreAOTSymbolIndexRecord& rec) {
     return (rec.flags & QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT) != 0;
 }
 
+static bool is_deferred_callable_qo_import(const QoreAOTSymbolIndexRecord& rec) {
+    return rec.kind == QoreAOTSymbolKind::FUNCTION
+        && rec.qore_path.find('(') == std::string::npos;
+}
+
+static std::string qo_link_strip_leading_colons(const std::string& path) {
+    return string_has_prefix(path, "::") ? path.substr(2) : path;
+}
+
+static void qo_link_add_provider_candidate(QOLinkProviderMap& providers,
+        const std::string& key, const QoreAOTSymbolIndexRecord* rec) {
+    if (!key.empty()) {
+        providers[key].push_back(rec);
+    }
+}
+
+static void qo_link_add_suffix_keys(std::set<std::string>& keys, const std::string& path) {
+    if (path.empty()) {
+        return;
+    }
+    keys.insert(path);
+    size_t pos = 0;
+    while ((pos = path.find("::", pos)) != std::string::npos) {
+        pos += 2;
+        if (pos < path.size()) {
+            keys.insert(path.substr(pos));
+        }
+    }
+}
+
+static void qo_link_index_raw_suffix(QOLinkProviderMap& providers,
+        const QoreAOTSymbolIndexRecord* rec) {
+    std::string stripped = qo_link_strip_leading_colons(rec->qore_path);
+    size_t sig_pos = stripped.find('(');
+    std::set<std::string> keys;
+    if (sig_pos == std::string::npos) {
+        qo_link_add_suffix_keys(keys, stripped);
+    } else {
+        std::string base = stripped.substr(0, sig_pos);
+        std::string signature = stripped.substr(sig_pos);
+        std::set<std::string> base_keys;
+        qo_link_add_suffix_keys(base_keys, base);
+        for (const std::string& key : base_keys) {
+            keys.insert(key + signature);
+        }
+    }
+    for (const std::string& key : keys) {
+        qo_link_add_provider_candidate(providers, key, rec);
+    }
+}
+
+static void qo_link_index_callable_suffix(QOLinkProviderMap& providers,
+        const QoreAOTSymbolIndexRecord* rec) {
+    std::string stripped = qo_link_strip_leading_colons(rec->qore_path);
+    size_t sig_pos = stripped.find('(');
+    if (sig_pos == std::string::npos) {
+        qo_link_index_raw_suffix(providers, rec);
+        return;
+    }
+
+    std::string base = stripped.substr(0, sig_pos);
+    std::string signature = stripped.substr(sig_pos);
+    std::set<std::string> base_keys;
+    qo_link_add_suffix_keys(base_keys, base);
+    for (const std::string& key : base_keys) {
+        qo_link_add_provider_candidate(providers, key, rec);
+        qo_link_add_provider_candidate(providers, key + signature, rec);
+    }
+}
+
+static void qo_link_index_callable_base_exact(QOLinkProviderMap& providers,
+        const QoreAOTSymbolIndexRecord* rec) {
+    std::string stripped = qo_link_strip_leading_colons(rec->qore_path);
+    size_t sig_pos = stripped.find('(');
+    if (sig_pos != std::string::npos) {
+        qo_link_add_provider_candidate(providers, stripped.substr(0, sig_pos), rec);
+    }
+}
+
+static void qo_link_index_provider(QOLinkProviderIndex& index,
+        const QoreAOTSymbolIndexRecord* rec) {
+    index.exact[rec->qore_path].push_back(rec);
+    qo_link_index_raw_suffix(index.raw_suffix, rec);
+    qo_link_index_callable_suffix(index.callable_suffix, rec);
+    qo_link_index_callable_base_exact(index.callable_base_exact, rec);
+}
+
+static void find_deferred_callable_qo_providers(
+        const QOLinkProviderMap& providers,
+        const std::string& name, std::vector<const QoreAOTSymbolIndexRecord*>& matches) {
+    std::string key = qo_link_strip_leading_colons(name);
+    auto it = providers.find(key);
+    if (it != providers.end()) {
+        matches.insert(matches.end(), it->second.begin(), it->second.end());
+    }
+}
+
+static std::string qo_link_callable_base_path(const std::string& path) {
+    size_t pos = path.find('(');
+    return pos == std::string::npos ? path : path.substr(0, pos);
+}
+
+static bool qo_link_path_is_bare_name(const std::string& path) {
+    std::string stripped = qo_link_strip_leading_colons(path);
+    return !stripped.empty()
+        && stripped.find("::") == std::string::npos
+        && stripped.find('(') == std::string::npos;
+}
+
+static size_t qo_link_path_namespace_depth(const std::string& path) {
+    std::string stripped = qo_link_strip_leading_colons(qo_link_callable_base_path(path));
+    size_t depth = 0;
+    size_t pos = 0;
+    while ((pos = stripped.find("::", pos)) != std::string::npos) {
+        ++depth;
+        pos += 2;
+    }
+    return depth;
+}
+
+static void find_suffix_qo_providers(
+        const QOLinkProviderIndex& providers,
+        const std::string& name, bool callable, std::vector<const QoreAOTSymbolIndexRecord*>& matches) {
+    std::string key = qo_link_strip_leading_colons(name);
+    const QOLinkProviderMap& suffix_providers = callable ? providers.callable_suffix : providers.raw_suffix;
+    auto it = suffix_providers.find(key);
+    if (it != suffix_providers.end()) {
+        matches.insert(matches.end(), it->second.begin(), it->second.end());
+    }
+}
+
+static bool qo_link_call_relocation_is_callable(const QoreAOTCallRelocationRecord& rec) {
+    return rec.target_kind == QoreAOTCallRelocationTargetKind::FUNCTION
+        || rec.target_kind == QoreAOTCallRelocationTargetKind::METHOD
+        || rec.target_kind == QoreAOTCallRelocationTargetKind::STATIC_METHOD
+        || rec.target_kind == QoreAOTCallRelocationTargetKind::CONSTRUCTOR;
+}
+
+static bool qo_link_provider_matches_hashes(const QoreAOTSymbolIndexRecord& rec,
+        const QoreAOTSymbolIndexRecord& provider) {
+    return (rec.signature_hash.empty() || rec.signature_hash == provider.signature_hash)
+        && (rec.declaration_hash.empty() || rec.declaration_hash == provider.declaration_hash)
+        && (rec.value_hash.empty() || rec.value_hash == provider.value_hash);
+}
+
+static bool qo_link_call_provider_matches_hashes(const QoreAOTCallRelocationRecord& rec,
+        const QoreAOTSymbolIndexRecord& provider) {
+    return (rec.signature_hash.empty() || rec.signature_hash == provider.signature_hash)
+        && (rec.declaration_hash.empty() || rec.declaration_hash == provider.declaration_hash);
+}
+
+static std::vector<const QoreAOTSymbolIndexRecord*> dedupe_qo_provider_candidates(
+        const QoreAOTSymbolIndexRecord& rec,
+        const std::vector<const QoreAOTSymbolIndexRecord*>& candidates) {
+    std::vector<const QoreAOTSymbolIndexRecord*> out;
+    std::map<std::string, size_t> by_source;
+    for (const QoreAOTSymbolIndexRecord* candidate : candidates) {
+        std::string key = candidate->source_file;
+        auto [it, inserted] = by_source.emplace(key, out.size());
+        if (inserted) {
+            out.push_back(candidate);
+            continue;
+        }
+        const QoreAOTSymbolIndexRecord* current = out[it->second];
+        if (!qo_link_provider_matches_hashes(rec, *current)
+                && qo_link_provider_matches_hashes(rec, *candidate)) {
+            out[it->second] = candidate;
+        }
+    }
+    return out;
+}
+
+static void qo_link_prefer_shallowest_provider_for_bare_import(const QoreAOTSymbolIndexRecord& rec,
+        std::vector<const QoreAOTSymbolIndexRecord*>& candidates) {
+    if (!qo_link_path_is_bare_name(rec.qore_path) || is_deferred_callable_qo_import(rec) || candidates.size() <= 1) {
+        return;
+    }
+
+    size_t best_depth = std::numeric_limits<size_t>::max();
+    for (const QoreAOTSymbolIndexRecord* candidate : candidates) {
+        best_depth = std::min(best_depth, qo_link_path_namespace_depth(candidate->qore_path));
+    }
+
+    std::vector<const QoreAOTSymbolIndexRecord*> filtered;
+    for (const QoreAOTSymbolIndexRecord* candidate : candidates) {
+        if (qo_link_path_namespace_depth(candidate->qore_path) == best_depth) {
+            filtered.push_back(candidate);
+        }
+    }
+    candidates.swap(filtered);
+}
+
+static std::vector<const QoreAOTSymbolIndexRecord*> dedupe_qo_call_provider_candidates(
+        const QoreAOTCallRelocationRecord& rec,
+        const std::vector<const QoreAOTSymbolIndexRecord*>& candidates) {
+    std::vector<const QoreAOTSymbolIndexRecord*> out;
+    std::map<std::string, size_t> by_source;
+    for (const QoreAOTSymbolIndexRecord* candidate : candidates) {
+        std::string key = candidate->source_file;
+        auto [it, inserted] = by_source.emplace(key, out.size());
+        if (inserted) {
+            out.push_back(candidate);
+            continue;
+        }
+        const QoreAOTSymbolIndexRecord* current = out[it->second];
+        if (!qo_link_call_provider_matches_hashes(rec, *current)
+                && qo_link_call_provider_matches_hashes(rec, *candidate)) {
+            out[it->second] = candidate;
+        }
+    }
+    return out;
+}
+
 static const char* qo_link_call_path_scope(const std::string& path) {
     if (path.empty()) {
         return "unknown";
@@ -3566,7 +3812,7 @@ static const char* qo_link_unresolved_call_reason(const QOLinkCallRelocation& re
 
 static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
         QOLinkPlan& plan, std::string& error) {
-    std::map<std::string, std::vector<const QoreAOTSymbolIndexRecord*>> providers;
+    QOLinkProviderIndex providers;
     std::map<std::string, QoreAOTDependencyClass> import_classes;
     std::set<std::string> provided_seen;
     std::set<std::string> native_seen;
@@ -3599,7 +3845,7 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             }
             const QoreAOTSymbolIndexRecord& rec = input.index.defined[j];
             if (is_owned_qore_provider(rec)) {
-                providers[rec.qore_path].push_back(&rec);
+                qo_link_index_provider(providers, &rec);
                 add_unique_string(plan.provided_qore_symbols, provided_seen, rec.qore_path);
             }
         }
@@ -3665,15 +3911,35 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
             issue.consumer = input.path;
             issue.path = rec.qore_path;
             issue.dependency_class = qoreAOTDependencyClassName(dep_class);
-            auto provider_it = providers.find(rec.qore_path);
-            if (provider_it == providers.end()) {
+            auto provider_it = providers.exact.find(rec.qore_path);
+            std::vector<const QoreAOTSymbolIndexRecord*> deferred_callable_candidates;
+            std::vector<const QoreAOTSymbolIndexRecord*> suffix_candidates;
+            const std::vector<const QoreAOTSymbolIndexRecord*>* candidates_ptr =
+                provider_it == providers.exact.end() ? nullptr : &provider_it->second;
+            if (!candidates_ptr && is_deferred_callable_qo_import(rec)) {
+                find_deferred_callable_qo_providers(providers.callable_base_exact, rec.qore_path,
+                    deferred_callable_candidates);
+                if (!deferred_callable_candidates.empty()) {
+                    candidates_ptr = &deferred_callable_candidates;
+                }
+            }
+            if (!candidates_ptr) {
+                find_suffix_qo_providers(providers, rec.qore_path, is_deferred_callable_qo_import(rec),
+                    suffix_candidates);
+                if (!suffix_candidates.empty()) {
+                    candidates_ptr = &suffix_candidates;
+                }
+            }
+            if (!candidates_ptr) {
                 if (!optional_import) {
                     plan.unresolved_imports.push_back(std::move(issue));
                 }
                 continue;
             }
 
-            const auto& candidates = provider_it->second;
+            std::vector<const QoreAOTSymbolIndexRecord*> candidates =
+                dedupe_qo_provider_candidates(rec, *candidates_ptr);
+            qo_link_prefer_shallowest_provider_for_bare_import(rec, candidates);
             for (size_t k = 0; k < candidates.size(); ++k) {
                 if (!qo_link_check_cancel(k, "AOT qo-link provider validation", error)) {
                     return false;
@@ -3730,15 +3996,26 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
                 reloc.dependency_class = qoreAOTDependencyClassName(import_it->second);
             }
             reloc.fallback_descriptor = rec.fallback_descriptor;
-            auto provider_it = providers.find(rec.qore_path);
-            if (provider_it == providers.end()) {
+            auto provider_it = providers.exact.find(rec.qore_path);
+            std::vector<const QoreAOTSymbolIndexRecord*> suffix_candidates;
+            const std::vector<const QoreAOTSymbolIndexRecord*>* candidates_ptr =
+                provider_it == providers.exact.end() ? nullptr : &provider_it->second;
+            if (!candidates_ptr) {
+                find_suffix_qo_providers(providers, rec.qore_path, qo_link_call_relocation_is_callable(rec),
+                    suffix_candidates);
+                if (!suffix_candidates.empty()) {
+                    candidates_ptr = &suffix_candidates;
+                }
+            }
+            if (!candidates_ptr) {
                 reloc.resolution = "unresolved";
                 reloc.reason = qo_link_unresolved_call_reason(reloc);
                 plan.unresolved_call_relocations.push_back(std::move(reloc));
                 continue;
             }
 
-            const auto& candidates = provider_it->second;
+            std::vector<const QoreAOTSymbolIndexRecord*> candidates =
+                dedupe_qo_call_provider_candidates(rec, *candidates_ptr);
             for (size_t k = 0; k < candidates.size(); ++k) {
                 if (!qo_link_check_cancel(k, "AOT qo-link call-relocation provider validation", error)) {
                     return false;
@@ -4028,6 +4305,8 @@ static bool write_qo_link_map(const std::string& path, const std::string& output
     json_file_string(f, output);
     fputs(",\n  \"aggregate_symbol\": ", f);
     json_file_string(f, aggregate_symbol);
+    fprintf(f, ",\n  \"allow_unresolved_imports\": %s",
+        allow_unresolved_qo_imports ? "true" : "false");
     fputs(",\n  \"inputs\": [", f);
     for (size_t i = 0; i < inputs.size(); ++i) {
         if (!qo_link_check_cancel(i, "AOT qo-link map input write", error)) {
@@ -5014,8 +5293,9 @@ int main(int argc, char** argv) {
             "error: --aggregate-symbol and --qolink-map are only valid with --link-qo\n");
         return 1;
     }
-    if (strict_call_relocations && !link_qo) {
-        fprintf(stderr, "error: --strict-call-relocations is only valid with --link-qo\n");
+    if ((strict_call_relocations || allow_unresolved_qo_imports) && !link_qo) {
+        fprintf(stderr,
+            "error: --strict-call-relocations and --allow-unresolved-imports are only valid with --link-qo\n");
         return 1;
     }
     if (script_aggregate_native_registers && !script_aggregate_symbol) {
@@ -5084,8 +5364,8 @@ int main(int argc, char** argv) {
             qore_cleanup();
             return 1;
         }
-        if (!plan.unresolved_imports.empty() || !plan.ambiguous_imports.empty()
-                || !plan.hash_mismatches.empty()) {
+        if ((!allow_unresolved_qo_imports && !plan.unresolved_imports.empty())
+                || !plan.ambiguous_imports.empty() || !plan.hash_mismatches.empty()) {
             print_qo_link_issues("unresolved import", plan.unresolved_imports);
             print_qo_link_issues("ambiguous import", plan.ambiguous_imports);
             print_qo_link_issues("hash mismatch", plan.hash_mismatches);

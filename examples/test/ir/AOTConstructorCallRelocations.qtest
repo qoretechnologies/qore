@@ -28,6 +28,8 @@ class AOTConstructorCallRelocationsTest inherits QUnit::Test {
 
         addTestCase("standalone constructor call relocation resolves at link time",
             \testStandaloneConstructorRelocation());
+        addTestCase("standalone inherited constructor preload defers constant init",
+            \testStandaloneInheritedConstructorPreload());
 
         set_return_value(main());
     }
@@ -131,5 +133,82 @@ public class AOTCtorRelocConsumer {
             "strict qo-link reports unresolved call relocation: " + missing_provider_out);
         assertTrue(missing_provider_out.find("AOTCtorRelocProvider::constructor(int)") != -1,
             "strict qo-link diagnostic names missing constructor: " + missing_provider_out);
+    }
+
+    testStandaloneInheritedConstructorPreload() {
+        TmpDir tmp("qore-aot-base-ctor-preload-");
+        string tmp_dir = tmp.path;
+        string lib_dir = tmp_dir + "/aotlib";
+        mkdir(lib_dir);
+
+        string base_src = tmp_dir + "/base.qc";
+        string derived_src = tmp_dir + "/derived.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string base_qo = lib_dir + "/base.qo";
+        string derived_qo = lib_dir + "/derived.qo";
+        string main_qo = lib_dir + "/main.qo";
+        string app = tmp_dir + "/base-ctor-preload";
+
+        write(base_src, "%new-style
+public class AOTBaseCtorLinkBase {
+    private {
+        string value;
+    }
+
+    constructor(string n_value) {
+        value = n_value;
+    }
+
+    string getValue() {
+        return value;
+    }
+}
+");
+        write(derived_src, "%new-style
+public class AOTBaseCtorLinkDerived inherits AOTBaseCtorLinkBase {
+    constructor(string value) : AOTBaseCtorLinkBase(value) {
+    }
+}
+");
+        write(main_src, "%new-style
+const object<AOTBaseCtorLinkDerived> AOTBaseCtorLinkObj = new AOTBaseCtorLinkDerived(\"ok\");
+
+int sub main() {
+    printf(\"%s\\n\", AOTBaseCtorLinkObj.getValue());
+    return 0;
+}
+
+main();
+");
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        string base_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, lib_dir, base_qo, base_src));
+        assertTrue(is_file(base_qo), "compiled base .qo: " + base_out);
+
+        string derived_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, lib_dir, derived_qo, derived_src));
+        assertTrue(is_file(derived_qo), "compiled derived .qo: " + derived_out);
+
+        string derived_index = run(sprintf("%s --dump-index-json %s", qcc_bin, derived_qo));
+        assertTrue(derived_index.find("AOTBaseCtorLinkBase::constructor(string)") != -1,
+            "derived index records explicit base-constructor dependency: " + derived_index);
+        assertTrue(derived_index.find("\"kind\": \"constructor\"") != -1,
+            "derived index marks the base-constructor dependency as a constructor: " + derived_index);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, lib_dir, main_qo, main_src));
+        assertEq(-1, main_out.find("RUNTIME-OVERLOAD-ERROR"),
+            "main compile does not fall back to the base default constructor: " + main_out);
+        assertEq(-1, main_out.find("AOT-PENDING-FUNCTION"),
+            "main compile defers constants that instantiate a preloaded sibling: " + main_out);
+        assertTrue(is_file(main_qo), "compiled main .qo: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, base_qo, derived_qo, main_qo));
+        assertTrue(is_file(app), "linked inherited constructor executable: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("ok\n", out, "linked executable initializes the deferred constant: " + out);
     }
 }

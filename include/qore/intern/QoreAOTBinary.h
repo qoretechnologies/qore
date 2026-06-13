@@ -101,6 +101,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v9: optional CALL_RELOCATIONS section describes pre-resolved direct call slots
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 9;
 
+//! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
+constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
+
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
 
@@ -169,8 +172,9 @@ constexpr uint64_t QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS = 1ULL << 56; //!< Closur
 constexpr uint64_t QORE_AOT_FEAT_TYPED_PHI = 1ULL << 57; //!< Serialized Phi records preserve native/QoreValue representation metadata
 constexpr uint64_t QORE_AOT_FEAT_CALL_RELOCATIONS = 1ULL << 58; //!< CALL_RELOCATIONS section records safe direct-call link candidates
 constexpr uint64_t QORE_AOT_FEAT_HASH_DEREF_TYPEINFO = 1ULL << 59; //!< HASH_DEREF records preserve parse-time result typeInfo
+constexpr uint64_t QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS = 1ULL << 60; //!< SLOT_MAPS global records preserve required import flags
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x0FFFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1429,6 +1433,7 @@ struct AOTGlobalSlotId {
     std::string name;        //!< qualified variable name
     std::string type_path;   //!< type path
     bool is_thread_local = false; //!< true if thread-local variable
+    bool is_aot_import = false; //!< true if this slot must resolve from the linked/loaded context
 };
 
 //! Identity for an expression slot
@@ -2109,6 +2114,9 @@ public:
     bool commitClassesImportAbstract(std::string& error);
     bool commitClassesResolveAbstract(std::string& error);
     bool commitClassesValidate(std::string& error);
+    bool resolveBCAExpressionsPhase(std::string& error) {
+        return resolveBCAExpressions(error);
+    }
 
     //! Phase-split 2d — resolve pending static-method defaults,
     //! embedded source metadata, rebuild indexes, and resolve BCA
@@ -2636,11 +2644,16 @@ public:
             rebuildRootIndexesOnce();
         }
 
-        // Source-parse mode must not resolve BCA expression blobs yet.  Those
-        // expressions can call functions declared in the target source file,
-        // which are not visible until the following qpgm->parseCommit().
-        // finalizeAfterSourceParse() runs finalizePostIndex() after that commit
-        // and after a full index rebuild.
+        // Install BCA expression blobs before the following source parseCommit().
+        // Source constants may instantiate preloaded sibling classes during
+        // that commit, so their explicit base-constructor calls must already
+        // be present on the pending constructor variants.
+        if (!runSessionPhase("AOT BCA expression resolution",
+                [&error](QoreAOTBinaryDeserializer& sess) {
+                    return sess.resolveBCAExpressionsPhase(error);
+                })) {
+            return false;
+        }
         return true;
     }
 

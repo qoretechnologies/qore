@@ -952,6 +952,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Hash/object dereference expressions preserve their source parse result
     // type so source-stripped defaults retain overload-resolution input types.
     flags |= QORE_AOT_FEAT_HASH_DEREF_TYPEINFO;
+    // Global slot records carry whether a global is a required AOT source-parse
+    // import that must resolve from the final linked/loaded Program.
+    flags |= QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS;
     return flags;
 }
 
@@ -8968,7 +8971,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // time via parseFindClassIntern's namespace-tree walk over the shells.
     {
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
-        AOTSourceParseGuard source_guard(sibling_mdes != nullptr);
+        AOTSourceParseGuard source_guard(!library_paths.empty());
         qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
             &wsink, QP_WARN_DEFAULT);
     }
@@ -9001,7 +9004,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
 
     {
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
-        AOTSourceParseGuard source_guard(sibling_mdes != nullptr);
+        AOTSourceParseGuard source_guard(!library_paths.empty());
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
@@ -12653,6 +12656,14 @@ class ExprTreeSerializer {
             return true;
         }
 
+        if (auto* dsv = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_VAR));
+            writeStr(dsv->class_path);
+            writeStr(dsv->member_name);
+            writeU16(0);
+            return true;
+        }
+
         // Check constant reverse map FIRST — provides FQN for RuntimeConstantRefNode and others
         // This must come BEFORE RuntimeConstantRefNode check so that constants are resolved
         // via their fully-qualified names instead of unqualified names
@@ -13801,6 +13812,17 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.child_expr = vrn->getNewArgs();
             return id;
         }
+        if (vrn->isDynamicObjectConstruct()) {
+            id.kind = AOTExprKind::NEW_OBJECT;
+            id.ref1 = vrn->getDynamicClassName();
+            id.ref2 = QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT;
+            if (const QoreTypeInfo* object_type_info = vrn->getTypeInfo()) {
+                id.ref3 = getSlotTypePath(object_type_info);
+            }
+            id.call_args = vrn->getArgs();
+            id.parse_args = vrn->getParseArgs();
+            return id;
+        }
         // Other non-class VarRefNewObjectNode falls through to UNSUPPORTED.
     }
 
@@ -14391,6 +14413,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::STATIC_VARREF;
         id.ref1 = qore_aot_encode_class_ref(&sv->qc);
         id.ref2 = sv->str;
+        id.reloc_qore_path = id.ref1 + "::" + id.ref2;
+        return id;
+    }
+
+    if (auto* dsv = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+        id.kind = AOTExprKind::STATIC_VARREF;
+        id.ref1 = dsv->class_path;
+        id.ref2 = dsv->member_name;
+        id.reloc_qore_path = id.ref1 + "::" + id.ref2;
         return id;
     }
 
@@ -14915,6 +14946,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         gid.name = getGlobalSlotQualifiedName(pgm, var);
         gid.type_path = getSlotTypePath(var->getTypeInfo());
         gid.is_thread_local = var->isThreadLocal();
+        gid.is_aot_import = var->isAOTImport();
     }
 
     // Extract body local identities

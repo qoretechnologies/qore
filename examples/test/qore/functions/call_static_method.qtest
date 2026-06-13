@@ -12,6 +12,9 @@ class T {
     static int get() { return 1; }
 }
 
+class TChild inherits T {
+}
+
 public class CallStaticMethodTest inherits QUnit::Test {
     constructor() : Test("CallStaticMethodTest", "1.0") {
         addTestCase("Test 1", \test());
@@ -22,7 +25,7 @@ public class CallStaticMethodTest inherits QUnit::Test {
 
     test() {
         assertEq(1, call_static_method("T", "get"));
+        assertEq(1, call_static_method("TChild", "get"));
         assertThrows("UNKNOWN-METHOD", "T::invalid", sub () { call_static_method("T", "invalid"); });
     }
 }
-

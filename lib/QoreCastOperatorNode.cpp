@@ -254,6 +254,39 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     delete pti;
     pti = nullptr;
 
+    if (qore_type_info_is_aot_deferred(parse_context.typeInfo)) {
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_OBJECT) != QTI_NOT_EQUAL) {
+            if ((QoreTypeInfo::parseReturns(expTypeInfo, NT_OBJECT) == QTI_NOT_EQUAL)
+                && (!or_nothing || QoreTypeInfo::parseReturns(expTypeInfo, NT_NOTHING) == QTI_NOT_EQUAL)) {
+                parse_error(*loc, "cast<%s>(%s) is invalid; cannot cast from %s to object",
+                    QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(expTypeInfo),
+                    QoreTypeInfo::getName(expTypeInfo));
+                err = -1;
+            }
+            if (exp) {
+                ReferenceHolder<> holder(this, nullptr);
+                val = new QoreClassCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
+            }
+            set_cast_analysis();
+            return err;
+        }
+        if (QoreTypeInfo::parseReturns(parse_context.typeInfo, NT_HASH) != QTI_NOT_EQUAL) {
+            if ((QoreTypeInfo::parseReturns(expTypeInfo, NT_HASH) == QTI_NOT_EQUAL)
+                && (!or_nothing || QoreTypeInfo::parseReturns(expTypeInfo, NT_NOTHING) == QTI_NOT_EQUAL)) {
+                parse_error(*loc, "cast<%s>(%s) is invalid; cannot cast from %s to hash",
+                    QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(expTypeInfo),
+                    QoreTypeInfo::getName(expTypeInfo));
+                err = -1;
+            }
+            if (exp) {
+                ReferenceHolder<> holder(this, nullptr);
+                val = new QoreHashDeclCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
+            }
+            set_cast_analysis();
+            return err;
+        }
+    }
+
     if (QoreScalarCastOperatorNode::isSupportedCastType(parse_context.typeInfo)) {
         const QoreTypeInfo* conversionTypeInfo = QoreScalarCastOperatorNode::getConversionTypeInfo(
             parse_context.typeInfo, or_nothing);

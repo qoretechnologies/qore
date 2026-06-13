@@ -61,6 +61,7 @@ class QoreIRFunction;
 class QoreIRLValuePathInstruction;
 class QoreMethod;
 class QoreNamespace;
+class QoreParseListNode;
 class QoreProgram;
 class QoreStringNode;
 class QoreTypeInfo;
@@ -75,6 +76,9 @@ class qore_class_private;
 
 //! Resolve an AOT-serialized function name during runtime metadata reconstruction.
 const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name);
+
+//! Create a dynamic call_function() fallback for an unresolved serialized function call.
+QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args);
 
 //! Key for source-stripped AOT hashdecl path resolution.
 /** A serialized hashdecl path can contain generic receiver type variables; the same
@@ -131,6 +135,9 @@ struct QoreAOTContext {
     int num_locals = 0;
     Var** globals = nullptr;        //!< LoadGlobal/StoreGlobal/LoadThreadLocal/StoreThreadLocal
     int num_globals = 0;
+    std::vector<std::string> global_names; //!< Runtime fallback names for lazily resolving globals
+    std::vector<uint8_t> global_required_imports; //!< Nonzero when missing globals are required imports
+    std::mutex global_resolution_mutex; //!< Guards lazy global slot resolution
     uint64_t* exprs = nullptr;      //!< NaN-boxed QoreValue for Invoke/Call/CallMethod/CallStatic/LValue
     int num_exprs = 0;
     const AbstractStatement** stmts = nullptr;  //!< OnBlockExit/Foreach statement pointers

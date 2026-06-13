@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/ParserSupport.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
@@ -38,6 +39,26 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/RuntimeConfig.h"
+
+static std::string qore_aot_deferred_object_type_class_path(const QoreTypeInfo* typeInfo) {
+    if (!qore_type_info_is_aot_deferred(typeInfo)
+            || QoreTypeInfo::parseReturns(typeInfo, NT_OBJECT) == QTI_NOT_EQUAL) {
+        return std::string();
+    }
+
+    std::string path = qore_get_aot_serializable_type_path(typeInfo);
+    const char* start = nullptr;
+    if (path.rfind("object<", 0) == 0) {
+        start = path.c_str() + 7;
+    } else if (path.rfind("*object<", 0) == 0) {
+        start = path.c_str() + 8;
+    }
+    if (!start) {
+        return std::string();
+    }
+    const char* end = strrchr(start, '>');
+    return end && end > start ? std::string(start, end - start) : std::string();
+}
 
 bool VarRefNode::parseEqualTo(const VarRefNode& other) const {
     if (type != other.type) {
@@ -541,6 +562,14 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                     if (!err && is_local_type && ref.id) {
                         ref.id->parseAssigned();
                     }
+                } else if (qore_aot_source_parse_active()
+                        && !(dynamic_class_name = qore_aot_deferred_object_type_class_path(typeInfo)).empty()) {
+                    setReceiverTypeInfo(typeInfo);
+                    err = parseArgsVariant(loc, parse_context, nullptr, nullptr);
+                    vrn_type = VRN_DYNAMIC_OBJECT;
+                    if (!err && is_local_type && ref.id) {
+                        ref.id->parseAssigned();
+                    }
                 } else {
                     parse_error(*loc, "type '%s' does not support implied constructor instantiation",
                         QoreTypeInfo::getName(typeInfo));
@@ -578,6 +607,27 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
         case VRN_COMPLEXLIST:
             return qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
 
+        case VRN_DYNAMIC_OBJECT: {
+            const QoreClass* qc = qore_program_private::runtimeFindClass(*getProgram(), dynamic_class_name.c_str(),
+                xsink);
+            if (!qc) {
+                if (!*xsink) {
+                    xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class '%s' for instantiation",
+                        dynamic_class_name.c_str());
+                }
+                return QoreValue();
+            }
+            if (getProgram()->getParseOptions() & qc->getDomain()) {
+                xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
+                    "access to the '%s' class", qc->getName());
+                return QoreValue();
+            }
+            if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+                return QoreValue();
+            }
+            return qc->execConstructor(args, xsink);
+        }
+
         default:
             assert(false);
             return QoreValue();
@@ -614,6 +664,28 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
         case VRN_COMPLEXLIST:
             value = qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
             break;
+
+        case VRN_DYNAMIC_OBJECT: {
+            const QoreClass* qc = qore_program_private::runtimeFindClass(*getProgram(), dynamic_class_name.c_str(),
+                xsink);
+            if (!qc) {
+                if (!*xsink) {
+                    xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class '%s' for instantiation",
+                        dynamic_class_name.c_str());
+                }
+                return QoreValue();
+            }
+            if (getProgram()->getParseOptions() & qc->getDomain()) {
+                xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
+                    "access to the '%s' class", qc->getName());
+                return QoreValue();
+            }
+            if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+                return QoreValue();
+            }
+            value = qc->execConstructor(args, xsink);
+            break;
+        }
 
         default:
             assert(false);

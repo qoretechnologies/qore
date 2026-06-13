@@ -376,12 +376,16 @@ int ConstantEntry::parseCommitRuntimeInit() {
                 // available at compile time: either a qcc --stub constant
                 // (EXTERNAL-STUB-CONSTANT) supplied by the runtime host, or an
                 // AOT-deserialized shell from a dependency object whose
-                // __const_init function has not run yet (AOT-PENDING-CONSTANT).
-                // Both cases are resolved identically: defer this constant to its
-                // own runtime __const_init (the preserved aot_init_expr), where the
-                // register-time round-retry resolves the dependency ordering.
+                // __const_init function has not run yet (AOT-PENDING-CONSTANT),
+                // or an AOT-deserialized sibling function body that is not
+                // executable during qcc -c -L source parse (AOT-PENDING-FUNCTION).
+                // These cases are resolved identically: defer this constant to
+                // its own runtime __const_init (the preserved aot_init_expr),
+                // where normal link/load ordering makes the dependency
+                // executable.
                 defer_runtime_init = !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
-                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT");
+                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
+                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
             }
             if (!defer_runtime_init) {
                 typeInfo = nothingTypeInfo;
@@ -684,7 +688,7 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
     cnemap_t::iterator i = cnemap.find(name);
     if (i != cnemap.end()) {
         if (!i->second->parseInit(ptr)) {
-            constantTypeInfo = i->second->typeInfo;
+            constantTypeInfo = i->second->getParseTypeInfo();
             access = i->second->getAccess();
             found = true;
             // AOT incremental dependency: see ConstantEntry::get().  Records

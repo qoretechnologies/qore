@@ -223,8 +223,10 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     }
     const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
     if (!fe) {
-        if (pln) {
-            pln->deref();
+        QoreValue fallback = qore_aot_make_deferred_function_call(ctx.pgm, func_name, pln);
+        pln = nullptr;
+        if (!fallback.isNothing()) {
+            return fallback;
         }
         ctx.error = "cannot resolve function '";
         ctx.error += func_name;
@@ -671,6 +673,32 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
             }
             return true;
         }
+        if (vrn->isDynamicObjectConstruct()) {
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
+            ctx.writer.writeStringRef(vrn->getDynamicClassName().c_str());
+            if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+                ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(vrn->getTypeInfo()).c_str());
+            }
+            const QoreListNode* args = vrn->getArgs();
+            const QoreParseListNode* parse_args = vrn->getParseArgs();
+            bool use_args = args && !args->empty();
+            size_t nargs = use_args ? args->size() : (parse_args ? parse_args->size() : 0);
+            if (nargs > 255) {
+                return false;
+            }
+            ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+            for (size_t j = 0; j < nargs; ++j) {
+                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT dynamic new-object argument serialization")) {
+                    return false;
+                }
+                QoreValue arg = use_args ? args->retrieveEntry(j) : parse_args->get(j);
+                if (!classifyAndWriteExpr(ctx.writer, arg,
+                        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
@@ -701,6 +729,41 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         return true;
     }
     return false;
+}
+
+static QoreValue make_deferred_create_object_call(AOTExprReadCtx& ctx, const char* class_path,
+        QoreListNode* args_list) {
+    if (!class_path || !*class_path) {
+        if (args_list) {
+            args_list->deref(nullptr);
+        }
+        return QoreValue();
+    }
+
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, "create_object");
+    if (!fe) {
+        if (args_list) {
+            args_list->deref(nullptr);
+        }
+        ctx.error = "cannot resolve create_object() for deferred constructor class '";
+        ctx.error += class_path;
+        ctx.error += "'";
+        return QoreValue();
+    }
+
+    QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
+    pln->add(QoreValue::makeStringValue(class_path), &loc_builtin);
+    if (args_list) {
+        size_t nargs = args_list->size();
+        for (size_t i = 0; i < nargs; ++i) {
+            pln->add(args_list->getReferencedEntry(i), &loc_builtin);
+        }
+        args_list->deref(nullptr);
+    }
+
+    FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, pln);
+    fcn->resolveParseArgs();
+    return QoreValue(fcn);
 }
 
 static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
@@ -748,10 +811,7 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
     }
     const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
-        if (args_list) {
-            args_list->deref(nullptr);
-        }
-        return QoreValue();
+        return make_deferred_create_object_call(ctx, class_path, args_list);
     }
     std::string variant_err;
     const AbstractQoreFunctionVariant* variant = resolve_expr_constructor_variant(qc, args_list, class_path,
@@ -1628,6 +1688,12 @@ static bool write_expr_static_varref(AOTExprWriteCtx& ctx) {
         ctx.writer.writeStringRef(sv->str.c_str());
         return true;
     }
+    if (auto* dsv = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_VARREF));
+        ctx.writer.writeStringRef(dsv->class_path.c_str());
+        ctx.writer.writeStringRef(dsv->member_name.c_str());
+        return true;
+    }
     return false;
 }
 
@@ -1639,7 +1705,7 @@ static QoreValue read_expr_static_varref(AOTExprReadCtx& ctx) {
     }
     const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_name, false);
     if (!qc) {
-        return QoreValue();
+        return QoreValue(new DeferredStaticClassMemberRefNode(&loc_builtin, class_name, var_name));
     }
     const QoreClass* owner_qc = qc;
     const QoreExternalStaticMember* m = qc->findLocalStaticMember(var_name);
@@ -1655,7 +1721,7 @@ static QoreValue read_expr_static_varref(AOTExprReadCtx& ctx) {
         }
     }
     if (!m) {
-        return QoreValue();
+        return QoreValue(new DeferredStaticClassMemberRefNode(&loc_builtin, class_name, var_name));
     }
     QoreVarInfo* vi = const_cast<QoreVarInfo*>(
         reinterpret_cast<const QoreVarInfo*>(m));
@@ -1747,10 +1813,7 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
     }
     const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
-        if (args_list) {
-            args_list->deref(nullptr);
-        }
-        return QoreValue();
+        return make_deferred_create_object_call(ctx, class_path, args_list);
     }
     std::string variant_err;
     const AbstractQoreFunctionVariant* variant = resolve_expr_constructor_variant(qc, args_list, class_path,

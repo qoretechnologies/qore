@@ -542,6 +542,61 @@ const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, 
     return nullptr;
 }
 
+QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args) {
+    if (!name || !*name) {
+        if (args) {
+            args->deref();
+        }
+        return QoreValue();
+    }
+
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, "call_function");
+    if (!fe) {
+        if (args) {
+            args->deref();
+        }
+        return QoreValue();
+    }
+
+    QoreParseListNode* dynamic_args = new QoreParseListNode(&loc_builtin);
+    dynamic_args->add(new QoreStringNode(name), &loc_builtin);
+    if (args) {
+        dynamic_args->appendFrom(args);
+        args->deref();
+    }
+
+    FunctionCallNode* call = new FunctionCallNode(&loc_builtin, fe, dynamic_args);
+    call->resolveParseArgs();
+    return QoreValue(call);
+}
+
+static QoreValue makeDeferredCreateObjectSlotCall(QoreProgram* pgm, const char* class_path,
+        QoreParseListNode* args) {
+    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, "create_object");
+    if (!fe) {
+        if (args) {
+            args->deref();
+        }
+        return QoreValue();
+    }
+
+    QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
+    pln->add(QoreValue::makeStringValue(class_path ? class_path : ""), &loc_builtin);
+    if (args) {
+        size_t nargs = args->size();
+        for (size_t i = 0; i < nargs; ++i) {
+            QoreValue v = args->get(i);
+            v.refSelf();
+            pln->add(v, &loc_builtin);
+        }
+        args->deref();
+    }
+
+    FunctionCallNode* call = new FunctionCallNode(&loc_builtin, fe, pln);
+    call->resolveParseArgs();
+    return QoreValue(call);
+}
+
 //! Resolve an expression slot identity to NaN-boxed QoreValue bits
 /** Looks up the referenced function/method/class in the program's namespace tree
     and creates the appropriate AST node.
@@ -802,10 +857,9 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             }
             const QoreClass* qc = qore_aot_resolve_class_ref(pgm, ref1, false);
             if (!qc) {
-                std::string class_desc = describeAOTClassRef(ref1);
-                printd(0, "AOT v2: cannot resolve class '%s' for static var '%s'\n",
-                    class_desc.c_str(), ref2);
-                return 0;
+                DeferredStaticClassMemberRefNode* node = new DeferredStaticClassMemberRefNode(&loc_builtin, ref1,
+                    ref2);
+                return toBitsNB(QoreValue(node));
             }
             // Walk the class hierarchy to find the static member.  Source code like
             // `DbDataProvider::table_lookup` where `table_lookup` is defined on
@@ -827,9 +881,9 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 }
             }
             if (!m) {
-                printd(0, "AOT v2: cannot find static var '%s::%s' (incl. inherited)\n",
-                    ref1, ref2);
-                return 0;
+                DeferredStaticClassMemberRefNode* node = new DeferredStaticClassMemberRefNode(&loc_builtin, ref1,
+                    ref2);
+                return toBitsNB(QoreValue(node));
             }
             // QoreExternalStaticMember is the public API facade for QoreVarInfo
             QoreVarInfo* vi = const_cast<QoreVarInfo*>(
@@ -1194,67 +1248,6 @@ struct AOTEncodedMethodRef {
 
 static const QoreClass* findAOTClassByPath(QoreProgram* pgm, const char* class_path, bool pseudo) {
     return qore_aot_resolve_class_ref(pgm, class_path, pseudo);
-}
-
-static bool splitAOTStaticVarPath(const std::string& full_name, std::string& class_path,
-        std::string& var_name) {
-    size_t sep = full_name.rfind("::");
-    if (sep == std::string::npos) {
-        return false;
-    }
-
-    class_path = full_name.substr(0, sep);
-    var_name = full_name.substr(sep + 2);
-    if (class_path.size() >= 2 && class_path[0] == ':' && class_path[1] == ':') {
-        class_path.erase(0, 2);
-    }
-
-    return !class_path.empty() && !var_name.empty();
-}
-
-static StaticClassVarRefNode* resolveAOTStaticLValueRoot(QoreProgram* pgm, const std::string& full_name,
-        std::string& error) {
-    if (!pgm) {
-        error = "cannot resolve static lvalue path root '" + full_name + "': no program";
-        return nullptr;
-    }
-
-    std::string class_path;
-    std::string var_name;
-    if (!splitAOTStaticVarPath(full_name, class_path, var_name)) {
-        error = "invalid static lvalue path root '" + full_name + "'";
-        return nullptr;
-    }
-
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
-    if (!qc) {
-        error = "cannot resolve class '" + class_path + "' for static lvalue path root '" + full_name + "'";
-        return nullptr;
-    }
-
-    const QoreClass* owner_qc = qc;
-    QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
-    if (!vi) {
-        QoreClassHierarchyIterator hi(*qc);
-        while (hi.next()) {
-            const QoreClass& parent_qc = hi.get();
-            vi = qore_class_private::get(parent_qc)->vars.find(var_name.c_str());
-            if (vi) {
-                owner_qc = &parent_qc;
-                break;
-            }
-        }
-    }
-
-    if (!vi) {
-        error = "cannot resolve static variable '" + var_name + "' in class '" + class_path
-            + "' for static lvalue path root '" + full_name + "'";
-        return nullptr;
-    }
-
-    return new StaticClassVarRefNode(&loc_builtin, var_name.c_str(), *owner_qc, *vi);
 }
 
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
@@ -2257,10 +2250,16 @@ static QoreAOTContext* buildContextFromSlotMap(
     // across all namespaces — not just the root namespace's local vmap.
     // This is needed for builtin globals like Qore::ARGV, Qore::QORE_ARGV, Qore::ENV
     // which live in the Qore sub-namespace.
+    bool has_global_slot_flags = (reader.getHeader().feature_flags & QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS) != 0;
+    ctx->global_names.resize(num_globals);
+    ctx->global_required_imports.resize(num_globals);
     for (int i = 0; i < num_globals; ++i) {
         const char* gname = reader.readStringRef(ptr);
         const char* gtype = reader.readStringRef(ptr);
         uint8_t is_tl = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t is_required_import = has_global_slot_flags ? QoreAOTBinaryReader::readU8(ptr) : 0;
+        ctx->global_names[i] = gname ? gname : "";
+        ctx->global_required_imports[i] = is_required_import;
 
         if (gname && *gname) {
             // Look up global variable by name across all namespaces
@@ -2343,6 +2342,57 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref2 = reader.readStringRef(ptr);
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                     ref3 = reader.readStringRef(ptr);
+                }
+                if (ref2 && !strcmp(ref2, QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT)) {
+                    uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                    QoreParseListNode* args = nullptr;
+                    bool deferred_error = false;
+                    if (num_args > 0) {
+                        args = new QoreParseListNode(&loc_builtin);
+                        for (uint8_t j = 0; j < num_args; ++j) {
+                            std::string arg_err;
+                            QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
+                                ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                            if (!arg_err.empty()) {
+                                if (trace_slot_reg) {
+                                    fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s cannot read "
+                                        "deferred constructor arg %u for class '%s': %s\n",
+                                        name, i, expr_kind_name, static_cast<unsigned>(j),
+                                        ref1 ? ref1 : "", arg_err.c_str());
+                                }
+                                arg.discard(nullptr);
+                                if (args) {
+                                    args->deref();
+                                }
+                                setBuildError(arg_err);
+                                has_unsupported = true;
+                                ctx->exprs[i] = toBitsNB(QoreValue());
+                                args = nullptr;
+                                deferred_error = true;
+                                break;
+                            }
+                            args->add(arg, &loc_builtin);
+                        }
+                    }
+                    if (deferred_error) {
+                        continue;
+                    }
+                    QoreValue call = makeDeferredCreateObjectSlotCall(pgm, ref1, args);
+                    if (!call) {
+                        std::string msg = "cannot create deferred constructor call for class '";
+                        msg += ref1 ? ref1 : "";
+                        msg += "'";
+                        setBuildError(msg);
+                        has_unsupported = true;
+                        ctx->exprs[i] = toBitsNB(QoreValue());
+                        continue;
+                    }
+                    if (trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s defers constructor class '%s' "
+                            "to create_object()\n", name, i, expr_kind_name, ref1 ? ref1 : "");
+                    }
+                    ctx->exprs[i] = toBitsNB(call);
+                    continue;
                 }
                 if (ref1 && *ref1) {
                     ctx->owned_call_target_strings.emplace_back(ref1);
@@ -4587,18 +4637,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                         *pp->RootNS, step.name.c_str(), vns);
                 } else if (step.kind == LVPathStepKind::StaticVar
                         && !step.name.empty()) {
-                    std::string error;
-                    StaticClassVarRefNode* scv = resolveAOTStaticLValueRoot(pgm, step.name, error);
-                    if (!scv) {
-                        printd(0, "AOT v2: %s while building context for '%s'\n", error.c_str(), name);
-                        delete ctx;
-                        return nullptr;
-                    }
-                    // Static variable lvalue roots must resolve in the active
-                    // runtime program, matching AOT LoadStaticVar-by-path.
-                    // A module context can be built against the module shadow
-                    // program, while execution happens in the importing program.
-                    scv->deref(nullptr);
+                    // Keep the symbolic path. Standalone-compiled fragments can
+                    // reference static vars or scoped globals provided by sibling
+                    // .qo files that are not registered yet when this context is
+                    // built. LValueHelper::navigatePath() resolves the path when
+                    // the assignment actually runs.
+                    step.ref_ptr = nullptr;
                 }
                 pi->path.push_back(std::move(step));
             }
@@ -5766,6 +5810,17 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 }
             }
             uint8_t num_steps = QoreAOTBinaryReader::readU8(ptr);
+            auto resolve_global_lvalue_root = [&](LVPathStep& step, const std::string& name) -> bool {
+                Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name.c_str());
+                if (!var) {
+                    error = "cannot resolve global lvalue path root '" + name + "'";
+                    return false;
+                }
+                step.kind = var->isThreadLocal() ? LVPathStepKind::ThreadLocalVar : LVPathStepKind::GlobalVar;
+                step.name = name;
+                step.ref_ptr = var;
+                return true;
+            };
             for (uint8_t i = 0; i < num_steps; ++i) {
                 LVPathStep step;
                 step.kind = static_cast<LVPathStepKind>(QoreAOTBinaryReader::readU8(ptr));
@@ -5793,17 +5848,20 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 // GlobalVar/ThreadLocalVar: resolve by name via program namespace
                 if ((step.kind == LVPathStepKind::GlobalVar || step.kind == LVPathStepKind::ThreadLocalVar)
                         && !step.name.empty()) {
-                    step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
-                        *pp->RootNS, step.name.c_str());
-                } else if (step.kind == LVPathStepKind::StaticVar && !step.name.empty()) {
-                    std::string static_error;
-                    StaticClassVarRefNode* scv = resolveAOTStaticLValueRoot(pgm, step.name, static_error);
-                    if (!scv) {
-                        error = "failed to deserialize static lvalue path root: " + static_error;
+                    if (!resolve_global_lvalue_root(step, step.name)) {
+                        delete pi;
                         return nullptr;
                     }
-                    step.ref_ptr = scv;
-                    pi->owned_static_var_refs.push_back(scv);
+                } else if (step.kind == LVPathStepKind::StaticVar && !step.name.empty()) {
+                    if (step.name.size() > 2 && step.name[0] == ':' && step.name[1] == ':') {
+                        std::string global_name = step.name.substr(2);
+                        if (!resolve_global_lvalue_root(step, global_name)) {
+                            delete pi;
+                            return nullptr;
+                        }
+                    } else {
+                        step.ref_ptr = nullptr;
+                    }
                 }
                 pi->path.push_back(std::move(step));
             }
