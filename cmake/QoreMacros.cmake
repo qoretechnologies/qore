@@ -832,7 +832,7 @@ ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 #     qore_user_module("qlib/RestHandler.qm" "HttpServerUtil;Mime;Util")
 #
 # The module will be installed automatically in 'make install' target.
-MACRO (QORE_USER_MODULE _module_file _mod_deps)
+MACRO (QORE_USER_MODULE _module_file)
     get_filename_component(f ${_module_file} NAME_WE)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qm" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qc"
@@ -844,21 +844,16 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         set(qm_install_subdir "") # common qm file
     endif()
 
+    # any args after the module path are extra resource files (logo SVGs,
+    # asyncapi YAMLs, etc.) installed alongside the module
     set (_extra_files ${ARGN})
 
-    # User-module dependencies are maintained explicitly by the caller.
-    # AOT qmod rules add all in-tree binary module targets separately, so
-    # split-module compilation cannot race binary modules required by a
-    # transitive %requires chain.
-    set(_effective_mod_deps ${_mod_deps})
-
-    # Record user-module dependencies for a final pass after all module
-    # targets have been declared.  The immediate dependency wiring below can
-    # only see targets already defined at this point; without the final pass,
-    # forward qlib dependencies are order-dependent and parallel qmod builds
-    # can race each other.
+    # Register the module for the final dependency-wiring pass.  Inter-module
+    # build-order dependencies are derived from each module's own %requires
+    # directives in QORE_FINALIZE_USER_MODULE_DEPENDENCIES (the single source of
+    # truth), run after every module target exists -- so a module may %requires
+    # a sibling declared later in this file without any ordering concern.
     set_property(GLOBAL APPEND PROPERTY QORE_USER_MODULE_TARGETS ${f})
-    set_property(GLOBAL PROPERTY QORE_USER_MODULE_DEPS_${f} "${_effective_mod_deps}")
 
     # Add module name to the global list for documentation cross-referencing
     set(QORE_USER_MODULE_NAMES ${QORE_USER_MODULE_NAMES} ${f} CACHE INTERNAL "List of user module names for doc cross-referencing")
@@ -964,13 +959,9 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         add_dependencies(docs-${f} docs-lang)
         add_dependencies(docs-${f} docs-lib)
 
-        # make this dependent on the other module targets
-        foreach(i ${_effective_mod_deps})
-            get_filename_component(f0 ${i} NAME)
-            if (TARGET docs-${f0})
-                add_dependencies(docs-${f} docs-${f0})
-            endif()
-        endforeach(i)
+        # docs cross-module dependencies are wired comprehensively in
+        # QORE_FINALIZE_USER_MODULE_DEPENDENCIES from each module's %requires
+        # directives, after every docs-<module> target exists.
     endif (DOXYGEN_FOUND)
 
     # install qm file
@@ -1052,28 +1043,88 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
             QORE_USER_MODULE_AOT_RULES(${f} 0
                 ${CMAKE_SOURCE_DIR}/${_module_file} ${_mod_targets})
         endif()
-        foreach(_dep ${_effective_mod_deps})
-            get_filename_component(_dep_name ${_dep} NAME_WE)
-            if (TARGET ${_dep_name})
-                add_dependencies(${f}-qmod ${_dep_name})
-            endif()
-            if (TARGET ${_dep_name}-qmod)
-                add_dependencies(${f}-qmod ${_dep_name}-qmod)
-            endif()
-        endforeach()
+        # Inter-qmod build-order edges are wired comprehensively in
+        # QORE_FINALIZE_USER_MODULE_DEPENDENCIES, after every module target
+        # exists, from each module's %requires directives.
     endif()
 ENDMACRO (QORE_USER_MODULE)
+
+# Parse the module names a user module depends on from the %requires directives
+# in its source.  Sets <_out_var> in the caller scope to a de-duplicated list of
+# module leaf-names, excluding the "qore" language pseudo-module and self.
+#
+# Scans the main .qm plus, for split-dir modules, every .qm/.qc in the directory
+# (split-dir .qc files carry their own %requires, e.g. DataProvider's .qc files
+# `%requires reflection`).  Matches `%requires Foo` and `%requires(reexport) Foo`
+# but deliberately NOT `%try-module Foo` (optional dependencies that load
+# gracefully when absent, so they must not create hard build-order edges).
+#
+# Each scanned source is registered on CMAKE_CONFIGURE_DEPENDS so that editing a
+# module's %requires re-runs CMake configure (nothing else triggers reconfigure
+# on a .qm edit).
+function(_QORE_PARSE_MODULE_REQUIRES _mod _out_var)
+    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${_mod})
+        file(GLOB _src_files
+            "${CMAKE_SOURCE_DIR}/qlib/${_mod}/*.qm"
+            "${CMAKE_SOURCE_DIR}/qlib/${_mod}/*.qc")
+    elseif (EXISTS ${CMAKE_SOURCE_DIR}/qlib/${_mod}.qm)
+        set(_src_files "${CMAKE_SOURCE_DIR}/qlib/${_mod}.qm")
+    else()
+        set(${_out_var} "" PARENT_SCOPE)
+        return()
+    endif()
+
+    set(_reqs "")
+    foreach(_f ${_src_files})
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_f})
+        file(STRINGS ${_f} _lines)
+        set(_in_doc_example FALSE)
+        foreach(_line ${_lines})
+            # %requires inside doxygen @code/@verbatim example blocks are sample
+            # user scripts, not real module dependencies -- skip them.  (Check the
+            # @end* markers first; they do not contain the opening token.)
+            if (_line MATCHES "@endcode" OR _line MATCHES "@endverbatim")
+                set(_in_doc_example FALSE)
+            elseif (_line MATCHES "@code" OR _line MATCHES "@verbatim")
+                set(_in_doc_example TRUE)
+            elseif (NOT _in_doc_example AND
+                    _line MATCHES "^%requires(\\(reexport\\))?[ \t]+([^ \t><=\r]+)")
+                # capture the module token after an optional (reexport) option, up
+                # to the first whitespace or version-operator character
+                get_filename_component(_name "${CMAKE_MATCH_2}" NAME_WE)
+                if (NOT _name STREQUAL "qore" AND NOT _name STREQUAL "${_mod}")
+                    list(APPEND _reqs "${_name}")
+                endif()
+            endif()
+        endforeach()
+    endforeach()
+    if (_reqs)
+        list(REMOVE_DUPLICATES _reqs)
+    endif()
+    set(${_out_var} "${_reqs}" PARENT_SCOPE)
+endfunction()
 
 function(QORE_FINALIZE_USER_MODULE_DEPENDENCIES)
     get_property(_qore_user_modules GLOBAL PROPERTY QORE_USER_MODULE_TARGETS)
     foreach(_mod ${_qore_user_modules})
-        get_property(_mod_deps GLOBAL PROPERTY QORE_USER_MODULE_DEPS_${_mod})
-        if (NOT _mod_deps)
+        # Build-order dependencies are derived solely from the module's own
+        # %requires directives -- the single source of truth.  A module's AOT
+        # compile loads exactly what it %requires (directly or transitively), so
+        # these edges are necessary and sufficient to avoid compiling against a
+        # stale dependency .qmod; per-module transitivity covers indirect deps.
+        _qore_parse_module_requires(${_mod} _all_deps)
+        if (NOT _all_deps)
             continue()
         endif()
 
-        foreach(_dep ${_mod_deps})
+        set(_seen "")
+        foreach(_dep ${_all_deps})
             get_filename_component(_dep_name ${_dep} NAME_WE)
+            list(FIND _seen "${_dep_name}" _si)
+            if (NOT _si EQUAL -1)
+                continue()
+            endif()
+            list(APPEND _seen "${_dep_name}")
 
             if (TARGET docs-${_mod} AND TARGET docs-${_dep_name})
                 add_dependencies(docs-${_mod} docs-${_dep_name})
