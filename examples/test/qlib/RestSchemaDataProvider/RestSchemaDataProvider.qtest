@@ -535,11 +535,63 @@ paths:
 
             # Invalid data - matches neither (missing required fields)
             hash birdData = {"petType": "bird"};
-            assertThrows("RUNTIME-TYPE-ERROR", "oneOf", \bodyType.acceptsValue(), birdData);
+            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \bodyType.acceptsValue(),
+                birdData);
 
-            # Invalid data - matches both schemas
+            # Invalid data - matches neither: strict schema validation rejects "meow" as an undeclared property of
+            # the dog schema and "bark" as an undeclared property of the cat schema, so a hybrid object satisfies
+            # neither alternative
             hash hybridData = {"petType": "hybrid", "bark": True, "meow": True};
-            assertThrows("RUNTIME-TYPE-ERROR", "multiple oneOf", \bodyType.acceptsValue(), hybridData);
+            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \bodyType.acceptsValue(),
+                hybridData);
+        }
+
+        # Test oneOf "matches multiple schemas" detection with overlapping alternatives
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: OneOf Multiple Match Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testOneOfMultiple
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    petType:
+                      type: string
+                  required:
+                    - petType
+                - type: object
+                  properties:
+                    petType:
+                      type: string
+                    name:
+                      type: string
+                  required:
+                    - petType
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType bodyType = bodyField.getType();
+
+            # an object with only "petType" satisfies both overlapping alternatives, so oneOf must reject it as
+            # matching more than one schema
+            hash ambiguousData = {"petType": "ambiguous"};
+            assertThrows("RUNTIME-TYPE-ERROR", "matches multiple oneOf schemas", \bodyType.acceptsValue(),
+                ambiguousData);
         }
 
         # Test anyOf type validation
@@ -591,15 +643,64 @@ paths:
             result = bodyType.acceptsValue(idData);
             assertEq(123, result.id);
 
-            # Valid data - matches both (allowed for anyOf)
+            # Invalid data - strict schema validation rejects "id" as an undeclared property of the name schema and
+            # "name" as an undeclared property of the id schema, so an object with both satisfies neither alternative
             hash bothData = {"name": "John", "id": 123};
-            result = bodyType.acceptsValue(bothData);
-            assertEq("John", result.name);
-            assertEq(123, result.id);
+            assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf schema", \bodyType.acceptsValue(),
+                bothData);
 
             # Invalid data - matches neither
             hash neitherData = {"other": "value"};
-            assertThrows("RUNTIME-TYPE-ERROR", "anyOf", \bodyType.acceptsValue(), neitherData);
+            assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf schema", \bodyType.acceptsValue(),
+                neitherData);
+        }
+
+        # Test anyOf accepting a value that matches multiple overlapping alternatives (returns the first match)
+        {
+            string schema_yaml = "openapi: '3.0.0'
+info:
+  title: AnyOf Multiple Match Test
+  version: '1.0'
+paths:
+  /test:
+    post:
+      operationId: testAnyOfMultiple
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - type: object
+                  properties:
+                    petType:
+                      type: string
+                  required:
+                    - petType
+                - type: object
+                  properties:
+                    petType:
+                      type: string
+                    name:
+                      type: string
+                  required:
+                    - petType
+      responses:
+        '200':
+          description: Success
+";
+            RestSchemaDataProvider provider({"schema": schema_yaml});
+            AbstractDataProvider p0 = provider.getChildProviderPath("test/POST");
+            AbstractDataProviderType reqType = p0.getRequestType();
+            *AbstractDataField bodyField = reqType.getField("body");
+            assertTrue(bodyField.val());
+            AbstractDataProviderType bodyType = bodyField.getType();
+
+            # an object with only "petType" satisfies both overlapping alternatives; anyOf accepts it and returns
+            # the value from the first matching alternative
+            hash multiData = {"petType": "ambiguous"};
+            auto result = bodyType.acceptsValue(multiData);
+            assertEq("ambiguous", result.petType);
         }
 
         # Test not type validation
