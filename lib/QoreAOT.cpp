@@ -216,6 +216,38 @@ void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
     }
 }
 
+// thread-local sink for resolved file paths of dependency modules loaded during
+// an AOT module compile (see qore_aot_deps.h).  Inactive (nullptr) for every
+// normal program, so the record hook is a single pointer test.
+static thread_local std::vector<std::string>* aot_module_dep_sink = nullptr;
+
+void qore_aot_set_module_dep_sink(std::vector<std::string>* sink) {
+    aot_module_dep_sink = sink;
+}
+
+// Record the on-disk file of every module loaded into the compile program into
+// the active module-dep sink.  These are the module's direct %requires closure;
+// per-module transitivity makes recording direct deps sufficient for the build
+// to rebuild a dependent when any dependency .qmod it loaded changes.  No-op
+// when no sink is set.
+static void qore_aot_record_module_deps(QoreProgram* pgm) {
+    if (!aot_module_dep_sink || !pgm) {
+        return;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    for (const std::string& name : pp->parse_modules) {
+        QoreAbstractModule* m = QMM.findModule(name.c_str());
+        if (!m) {
+            continue;
+        }
+        const char* fn = m->getFileName();
+        // skip synthetic ("<builtin>") and empty paths
+        if (fn && *fn && *fn != '<') {
+            aot_module_dep_sink->push_back(fn);
+        }
+    }
+}
+
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -6367,6 +6399,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         return false;
     }
 
+    // record the dependency modules loaded for the %requires closure so qcc can
+    // list their .qmod files as Make depfile prerequisites
+    qore_aot_record_module_deps(*qpgm);
+
     // Step 3: Initialize LLVM and compile functions
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -6826,6 +6862,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         if (qoreAotHandleWarnings(wsink, error, "split module parsing")) {
             return false;
         }
+
+        // record the dependency modules loaded for the %requires closure so qcc
+        // can list their .qmod files as Make depfile prerequisites
+        qore_aot_record_module_deps(*qpgm);
 
         // Step 9: Initialize LLVM and compile functions
         llvm::InitializeNativeTarget();
@@ -9400,6 +9440,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         if (qoreAotHandleWarnings(wsink, error, "per-file split module parsing")) {
             return false;
         }
+
+        // record the dependency modules loaded for the %requires closure so qcc
+        // can list their .qmod files as Make depfile prerequisites
+        qore_aot_record_module_deps(*qpgm);
 
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();

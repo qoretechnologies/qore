@@ -33,6 +33,7 @@
 #include <qore/Qore.h>
 #include <qore/ParseOptionMap.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
@@ -328,7 +329,8 @@ static bool has_qo_extension(const char* path) {
 // file edits in split-module dirs retrigger the affected per-file `.qo`.
 // Only spaces and backslashes in paths are escaped — Make handles both.
 static bool write_depfile(const char* path, const std::string& output,
-                          const std::string& source, const char* context) {
+                          const std::string& source, const char* context,
+                          const std::vector<std::string>* extra_deps = nullptr) {
     // Canonicalize so the relative vs absolute spelling of the same file
     // (e.g. primary passed by qcc as realpath + same file re-emerging
     // from an opendir(context) scan with a relative prefix) dedupes
@@ -378,6 +380,20 @@ static bool write_depfile(const char* path, const std::string& output,
         }
         closedir(d);
         std::sort(deps.begin(), deps.end());
+    }
+
+    // merge any extra dependency files (e.g. the .qmod files of modules loaded
+    // for a compiled module's %requires closure), canonicalized and deduped
+    if (extra_deps) {
+        for (const std::string& d : *extra_deps) {
+            if (d.empty()) {
+                continue;
+            }
+            std::string full = canon(d);
+            if (std::find(deps.begin(), deps.end(), full) == deps.end()) {
+                deps.emplace_back(std::move(full));
+            }
+        }
     }
 
     FILE* f = fopen(path, "w");
@@ -5430,7 +5446,9 @@ int main(int argc, char** argv) {
         // Compile a single file from a split module
         // directory.  The directory is the parse context; the file is the
         // sole source of emitted metadata and native functions.
-        if (!QoreAOT::compileSeparatedModuleFile(
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
+        bool ok = QoreAOT::compileSeparatedModuleFile(
                 context_dir,
                 source_file,
                 output,
@@ -5438,7 +5456,9 @@ int main(int argc, char** argv) {
                 error,
                 opt_level,
                 target_triple,
-                include_source)) {
+                include_source);
+        qore_aot_set_module_dep_sink(nullptr);
+        if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
@@ -5446,16 +5466,20 @@ int main(int argc, char** argv) {
                 printf("qcc: compiled per-file .qo (-O%d%s): %s\n", opt_level,
                     source_mode_suffix(include_source), output.c_str());
             }
-            // deps = target source + every sibling .qm/.qc/.ql
-            // in --context=DIR (matches compileSeparatedModuleFile's dir scan).
+            // deps = target source + every sibling .qm/.qc/.ql in --context=DIR
+            // (matches compileSeparatedModuleFile's dir scan) + the .qmod files
+            // of modules loaded for the %requires closure.
             if (depfile_path
-                    && !write_depfile(depfile_path, output, source_file, context_dir)) {
+                    && !write_depfile(depfile_path, output, source_file, context_dir,
+                                      &dep_module_files)) {
                 rc = 1;
             }
         }
     } else if (is_split_module) {
         // Compile split module directory
-        if (!QoreAOT::compileSeparatedModule(
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
+        bool ok = QoreAOT::compileSeparatedModule(
                 source_file,
                 output,
                 compile_po,
@@ -5463,7 +5487,9 @@ int main(int argc, char** argv) {
                 opt_level,
                 target_triple,
                 include_source,
-                compile_only)) {
+                compile_only);
+        qore_aot_set_module_dep_sink(nullptr);
+        if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
@@ -5475,14 +5501,18 @@ int main(int argc, char** argv) {
             // source_file is the split-module directory itself;
             // pass it as `context` so every .qm/.qc/.ql inside counts as a dep.
             // Leave `source` empty so the target dir is not double-listed.
+            // dep_module_files adds the .qmod files of the %requires closure.
             if (depfile_path
-                    && !write_depfile(depfile_path, output, std::string(), source_file)) {
+                    && !write_depfile(depfile_path, output, std::string(), source_file,
+                                      &dep_module_files)) {
                 rc = 1;
             }
         }
     } else if (module_mode) {
         // Compile single-file module
-        if (!QoreAOT::compileModule(
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
+        bool ok = QoreAOT::compileModule(
                 source_text.c_str(), (int)source_text.size(),
                 source_file,
                 output,
@@ -5491,7 +5521,9 @@ int main(int argc, char** argv) {
                 opt_level,
                 target_triple,
                 include_source,
-                compile_only)) {
+                compile_only);
+        qore_aot_set_module_dep_sink(nullptr);
+        if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
@@ -5500,8 +5532,9 @@ int main(int argc, char** argv) {
                     compile_only ? ", relocatable .qo" : "",
                     source_mode_suffix(include_source), output.c_str());
             }
-            // deps = just the .qm file
-            if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
+            // deps = the .qm file + the .qmod files of the %requires closure
+            if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr,
+                                               &dep_module_files)) {
                 rc = 1;
             }
         }

@@ -36,8 +36,10 @@
 
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 class QoreProgramLocation;
+class QoreProgram;
 
 //! AOT incremental-dependency sink for the single-file compiler.
 /** During a `qcc -c -L <dir>` compile, references to declarations that the
@@ -70,5 +72,21 @@ DLLLOCAL bool qore_aot_source_parse_active();
 /** No-op if no sink is active, the location is null, or the file is synthetic
     (e.g. "<builtin>").  Cheap (one thread-local load) on the inactive path. */
 DLLLOCAL void qore_aot_note_referenced_decl(const QoreProgramLocation* loc);
+
+//! AOT module-dependency sink for the module compiler.
+/** When compiling a `.qm`/split-module to a `.qmod`, qcc's `--depfile` records
+    the module's own source files but NOT the dependency `.qmod` files it loaded
+    for the %requires closure.  A dependent therefore is not rebuilt when only a
+    dependency `.qmod` changes (e.g. a dependency's version bump).
+
+    When a sink is set for the current thread, the module compiler records the
+    resolved on-disk file of every module loaded into the compile program, so
+    qcc can list them as Make prerequisites.  No-op (one thread-local load) when
+    no sink is active. The caller owns the vector and must clear the sink (pass
+    nullptr) before it is destroyed.
+
+    Exported (unlike the sinks above, which are libqore-internal) because qcc —
+    a separate binary linking libqore — sets it around its module-compile calls. */
+DLLEXPORT void qore_aot_set_module_dep_sink(std::vector<std::string>* sink);
 
 #endif
