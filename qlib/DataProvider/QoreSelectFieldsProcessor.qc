@@ -179,10 +179,9 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
             if (!selected) {
                 return;
             }
-            if (shape == DataProviderShape::RowRecords) {
-                return selected.size() == 1 ? selected[0] : selected;
-            }
             switch (shape) {
+                case DataProviderShape::RowRecords:
+                    return selected.size() == 1 ? selected[0] : selected;
                 case DataProviderShape::HashOfLists:
                     return AbstractDataProcessor::recordsToHashList(selected);
                 case DataProviderShape::DataFrameBlock:

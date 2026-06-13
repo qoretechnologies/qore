@@ -5506,7 +5506,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         if (!(expinfo.role & role)) {
             throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("expression %y is invalid in role %y; valid "
                 "expressions for this role: %y", exp, RoleCodeMap{role},
-                (map $1.key, expmap.pairIterator(), $1.value & role));
+                (map $1.key, expmap.pairIterator(), $1.value.role & role));
         }
         return expinfo;
     }

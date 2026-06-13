@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore InvalidConnection class definition
 
-/*  InvalidConnection.qc Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  InvalidConnection.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,7 +58,12 @@ public class InvalidConnection inherits AbstractConnection {
             - \c error a custom error string
     */
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {},
-            *Logger logger) : AbstractConnection(name, description, url, attributes, NOTHING, logger) {
+            *Logger logger) : AbstractConnection({
+                "name": name,
+                "desc": description,
+                "url": url,
+                "logger": logger,
+            }, attributes) {
         if (attributes.error.val()) {
             error = attributes.error;
         }

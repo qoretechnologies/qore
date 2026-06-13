@@ -73,7 +73,7 @@ public const DPQL_TOK_OP_REGEX = 19;
 #! Regex pattern (/pattern/flags)
 public const DPQL_TOK_REGEX = 20;
 #! Regex non-match operator (!~)
-public const DPQL_TOK_OP_NMATCH = 21;
+public const DPQL_TOK_OP_NMATCH = 28;
 #! Addition operator (+)
 public const DPQL_TOK_OP_PLUS = 23;
 #! Subtraction operator (-)

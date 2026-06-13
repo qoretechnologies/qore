@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DefaultBulkInserter class definition
 
-/** DefaultBulkInserter.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** DefaultBulkInserter.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,7 +33,7 @@ public class DefaultBulkInserter inherits AbstractDataProviderBulkOperation {
 
     #! flushes queued data to the database
     private flushImpl() {
-        provider.createRecords(buf);
+        provider.createRecordsBulk(buf);
     }
 }
 }

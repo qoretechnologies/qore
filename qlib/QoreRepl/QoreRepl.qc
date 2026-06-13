@@ -1327,10 +1327,10 @@ if (!exists result) {
         }
 
         # List members with types
-        list<Reflection::AbstractMember> members = cls.getMembers();
+        list<Reflection::AbstractClassMember> members = cls.getMembers();
         if (members) {
             result += sprintf("  %s\n", color.key("Members:"));
-            foreach Reflection::AbstractMember m in (members) {
+            foreach Reflection::AbstractClassMember m in (members) {
                 Reflection::Type t = m.getType();
                 list<string> modifiers = m.getModifierList();
                 # Remove "public" from modifiers (default visibility)
@@ -2300,7 +2300,7 @@ class ReflectionCompletionProvider inherits QoreCodeCompletion::AbstractCompleti
 
         # Members (non-static)
         try {
-            foreach Reflection::AbstractMember m in (cls.getMembers()) {
+            foreach Reflection::AbstractClassMember m in (cls.getMembers()) {
                 list<string> mods = m.getModifierList();
                 string name = m.getName();
                 if (!inlist("static", mods) && !seen{name}

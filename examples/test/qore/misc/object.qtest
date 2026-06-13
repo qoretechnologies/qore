@@ -250,6 +250,72 @@ object sub test3() { return create_object_args(\"PrivTest\", 1);}
             on_error printf("%N\n", warn);
             assertNothing(warn);
         }
+
+        # "int instanceof float" is True at runtime, because the float type accepts an int value; the asymmetry must
+        # be respected: this must NOT warn (while the reverse "float instanceof int", checked above, does warn)
+        assertTrue(1 instanceof float);
+        {
+            Program p(PO_NEW_STYLE);
+            *hash<ExceptionInfo> warn = p.parse("int i = 1; bool b = i instanceof float; delete b;", "", -1);
+            on_error printf("%N\n", warn);
+            assertNothing(warn);
+        }
+
+        # a broad hash lvalue can hold a specific hashdecl at runtime, so "*hash<auto> instanceof hash<X>" is
+        # runtime-dependent and must NOT warn
+        {
+            Program p(PO_NEW_STYLE);
+            *hash<ExceptionInfo> warn = p.parse("hashdecl H1 {int i;} *hash<auto> h; "
+                "bool b = h instanceof hash<H1>; delete b;", "", -1);
+            on_error printf("%N\n", warn);
+            assertNothing(warn);
+        }
+
+        # a specific hashdecl is always a generic hash, so this must NOT warn
+        {
+            Program p(PO_NEW_STYLE);
+            *hash<ExceptionInfo> warn = p.parse("hashdecl H1 {int i;} hash<H1> h(); "
+                "bool b = h instanceof hash<auto>; delete b;", "", -1);
+            on_error printf("%N\n", warn);
+            assertNothing(warn);
+        }
+
+        # an untyped (auto) value could be anything, including a hashdecl, so this must NOT warn
+        {
+            Program p(PO_NEW_STYLE);
+            *hash<ExceptionInfo> warn = p.parse("hashdecl H1 {int i;} auto a = 1; "
+                "bool b = a instanceof hash<H1>; delete b;", "", -1);
+            on_error printf("%N\n", warn);
+            assertNothing(warn);
+        }
+
+        # hashdecls have single inheritance only, so two disjoint hashdecls can never share a runtime value: this is
+        # genuinely always False and must warn
+        {
+            Program p(PO_NEW_STYLE);
+            *hash<ExceptionInfo> warn = p.parse("hashdecl H1 {int i;} hashdecl H2 {string s;} hash<H1> h(); "
+                "bool b = h instanceof hash<H2>; delete b;", "", -1);
+            on_error printf("%N\n", warn);
+            assertEq("hash<ExceptionInfo>", warn.fullType());
+        }
+
+        # a hashdecl that inherits another is genuinely a subtype of it, so this must NOT warn
+        {
+            Program p(PO_NEW_STYLE);
+            *hash<ExceptionInfo> warn = p.parse("hashdecl H1 {int i;} hashdecl H2 inherits H1 {string s;} "
+                "hash<H2> h(); bool b = h instanceof hash<H1>; delete b;", "", -1);
+            on_error printf("%N\n", warn);
+            assertNothing(warn);
+        }
+
+        # disjoint complex list types can never share a runtime value: genuinely always False, must warn
+        {
+            Program p(PO_NEW_STYLE);
+            *hash<ExceptionInfo> warn = p.parse("list<string> l(); bool b = l instanceof list<int>; delete b;",
+                "", -1);
+            on_error printf("%N\n", warn);
+            assertEq("hash<ExceptionInfo>", warn.fullType());
+        }
     }
 
     testObj() {

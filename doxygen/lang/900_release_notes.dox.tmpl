@@ -2506,6 +2506,11 @@ foreach string module_name in (registry.getProcessModules()) {
       - fixed scheduling of closure values created in object scope with the @ref background "background operator" so
         stale captured objects are rejected before thread creation and valid captured objects stay alive until the
         background expression finishes
+      - fixed false-positive and missing @ref instanceof "instanceof" \c always-returns-False parse warnings; the
+        warning is no longer emitted when a runtime value could match the target type (such as
+        <tt>*hash&lt;auto&gt; instanceof hash&lt;SomeHashDecl&gt;</tt> or <tt>int instanceof float</tt>), but is now
+        correctly emitted for disjoint hashdecl and complex-list types (such as <tt>hash&lt;X&gt; instanceof
+        hash&lt;Y&gt;</tt>), which can never share a runtime value
 
     - fixed a bug handling nested conditional parsing directives
       (<a href="https://github.com/qoretechnologies/qore/issues/4999">issue 4999</a>)

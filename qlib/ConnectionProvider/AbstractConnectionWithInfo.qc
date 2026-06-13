@@ -49,7 +49,13 @@ public class AbstractConnectionWithInfo inherits AbstractConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {},
-            *Logger logger) : AbstractConnection(name, description, url, attributes, options, logger) {
+            *Logger logger) : AbstractConnection({
+                "name": name,
+                "desc": description,
+                "url": url,
+                "opts": options,
+                "logger": logger,
+            }, attributes) {
     }
 
     #! creates the AbstractConnectionWithInfo object

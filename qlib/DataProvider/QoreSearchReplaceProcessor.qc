@@ -240,10 +240,9 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
             if (!processed) {
                 return;
             }
-            if (shape == DataProviderShape::RowRecords) {
-                return processed.size() == 1 ? processed[0] : processed;
-            }
             switch (shape) {
+                case DataProviderShape::RowRecords:
+                    return processed.size() == 1 ? processed[0] : processed;
                 case DataProviderShape::HashOfLists:
                     return AbstractDataProcessor::recordsToHashList(processed);
                 case DataProviderShape::DataFrameBlock:

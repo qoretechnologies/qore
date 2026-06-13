@@ -507,6 +507,9 @@ public class AbstractDataProcessor inherits Qore::Serializable {
                 }
                 return;
             }
+            case DataProviderShape::RowRecords:
+            case DataProviderShape::HashOfLists:
+                return;
         }
         return;
     }

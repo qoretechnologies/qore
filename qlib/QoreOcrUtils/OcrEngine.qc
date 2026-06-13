@@ -143,8 +143,9 @@ public class OcrEngine {
             "confidence": meta.confidence.toFloat(),
             "blocks": meta.blocks,
         };
-%endif
+%else
         throw "OCR-ERROR", "ocr module not available";
+%endif
     }
 
     #! Extracts text via HTTP OCR endpoint
