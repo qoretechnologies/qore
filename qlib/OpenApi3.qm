@@ -5330,6 +5330,10 @@ namespace Priv {
                 if (v.size() > 1)
                     throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d value has a hash with more than "
                         "one key: %y; expecting a hash with a single key", obj_type, name, pos, val.size(), v);
+                if (!v.size()) {
+                    target += v;
+                    continue;
+                }
                 string key = v.firstKey();
                 if (target.hasKey(key))
                     throw "INVALID-FIELD-TYPE", sprintf("%s Object: %y element %d/%d has duplicate key %y", obj_type,
