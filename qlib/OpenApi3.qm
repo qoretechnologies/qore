@@ -4019,6 +4019,116 @@ public class OpenApi3HashDataType inherits HashDataType {
     }
 }
 
+#! A union data type that preserves OpenAPI composition semantics
+/** This type exposes \c oneOf and \c anyOf alternatives through the DataProvider type model while preserving the
+    keyword-specific matching rule in \c acceptsValue().
+*/
+public class OpenApi3UnionDataType inherits QoreUnionDataType {
+    private {
+        #! OpenAPI composition keyword represented by this type
+        string composition_keyword;
+
+        #! OpenAPI schema alternatives in declaration order, if available
+        *list<SchemaObject> schemas;
+    }
+
+    #! Creates the type with OpenAPI composition semantics
+    /** @param types the alternative data provider types, in schema declaration order
+        @param composition_keyword \c oneOf or \c anyOf
+        @param schemas OpenAPI schema alternatives in declaration order, if available
+    */
+    constructor(list<AbstractDataProviderType> types, string composition_keyword, *list<SchemaObject> schemas)
+            : QoreUnionDataType(types) {
+        self.composition_keyword = composition_keyword;
+        self.schemas = schemas;
+    }
+
+    #! Returns the type's short description
+    string getShortDescription() {
+        return sprintf("OpenAPI %s union accepting: %s", composition_keyword,
+            (map $1.getName(), getUnionTypes()).join(", "));
+    }
+
+    #! Returns the description
+    string getDesc() {
+        return sprintf("OpenAPI %s data type accepting alternatives: %s", composition_keyword,
+            (map $1.getName(), getUnionTypes()).join(", "));
+    }
+
+    #! Returns the value if the value can be assigned according to the OpenAPI composition keyword
+    /** @param value value to validate
+        @return the value accepted by the first matching alternative
+        @throw RUNTIME-TYPE-ERROR no alternative accepts \a value, or \c oneOf has more than one match
+    */
+    auto acceptsValue(auto value) {
+        if (!exists value && isOrNothingType()) {
+            return;
+        }
+
+        int matches = 0;
+        auto first_value;
+        bool have_first = False;
+        *hash<ExceptionInfo> last_exception;
+        list<AbstractDataProviderType> types = getUnionTypes();
+        for (int i = 0; i < types.size(); ++i) {
+            try {
+                auto accepted = value;
+                if (schemas) {
+                    schemas[i].check(False, True, "/", "POST", schemas[i].name, \accepted);
+                }
+                accepted = types[i].acceptsValue(accepted);
+                ++matches;
+                if (!have_first) {
+                    first_value = accepted;
+                    have_first = True;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                last_exception = ex;
+            }
+        }
+
+        string value_type = exists value ? value.type() : "nothing";
+        if (composition_keyword == "oneOf") {
+            if (matches == 1) {
+                return first_value;
+            }
+            if (!matches) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match any oneOf schema%s",
+                    value_type, last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
+            }
+            throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y matches multiple oneOf schemas; must match "
+                "exactly one", value_type);
+        }
+
+        if (matches) {
+            return first_value;
+        }
+        throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match any anyOf schema%s", value_type,
+            last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
+    }
+
+    #! Returns a "soft" type equivalent to the current type
+    AbstractDataProviderType getSoftType() {
+        return new OpenApi3UnionDataType((map $1.getSoftType(), getUnionTypes()), composition_keyword, schemas);
+    }
+
+    #! Returns an "or nothing" type equivalent to the current type
+    AbstractDataProviderType getOrNothingType() {
+        if (isOrNothingType()) {
+            return self;
+        }
+        return new OpenApi3UnionDataType((map $1.getOrNothingType(), getUnionTypes()), composition_keyword, schemas);
+    }
+
+    #! Returns a mandatory type equivalent to the current type
+    AbstractDataProviderType getMandatoryType() {
+        if (!isOrNothingType()) {
+            return self;
+        }
+        return new OpenApi3UnionDataType((map $1.getMandatoryType(), getUnionTypes()), composition_keyword, schemas);
+    }
+}
+
 #! defines an object in a schema
 /** Inherits common schema members from
     @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject".
@@ -4475,6 +4585,47 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             return new OpenApi3HashDataType(base_type, typename, self, True);
         }
         return new HashDataType(base_type, typename);
+    }
+
+    #! Returns the data type for the schema
+    AbstractDataProviderType getDataType(bool required = True, *object rest) {
+        if (oneOf || anyOf) {
+            if (required) {
+                if (!dataType) {
+                    dataType = getCompositionDataType(True, rest);
+                }
+                return dataType;
+            }
+            if (!orNothingDataType) {
+                orNothingDataType = dataType ? dataType.getOrNothingType() : getCompositionDataType(False, rest);
+            }
+            return orNothingDataType;
+        }
+        if (type != "object" && !properties && !notSchema) {
+            if (required) {
+                if (!dataType) {
+                    dataType = getSchemaType("/", type, format, items, True);
+                }
+                return dataType;
+            }
+            if (!orNothingDataType) {
+                orNothingDataType = dataType ? dataType.getOrNothingType() : getSchemaType("/", type, format, items,
+                    False);
+            }
+            return orNothingDataType;
+        }
+        return RestSchemaValidator::AbstractRestSchemaObject::getDataType(required, rest);
+    }
+
+    #! Returns the union data type for \c oneOf and \c anyOf schema composition
+    private AbstractDataProviderType getCompositionDataType(bool required, *object rest) {
+        list<SchemaObject> schemas = oneOf ? oneOf : anyOf;
+        if (schemas.size() == 1) {
+            return schemas[0].getDataType(required, rest);
+        }
+        AbstractDataProviderType rv = new OpenApi3UnionDataType((map $1.getDataType(True, rest), schemas),
+            oneOf ? "oneOf" : "anyOf", schemas);
+        return required ? rv : rv.getOrNothingType();
     }
 
     # returns an example value for a REST API call

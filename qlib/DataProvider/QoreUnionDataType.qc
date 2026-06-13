@@ -102,6 +102,17 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         return sprintf("Union data type accepting one of: %s", (map $1.getName(), types).join(", "));
     }
 
+    #! Returns a description of the type as a hash
+    /** @param simple if @ref True, return simplified type names where supported by the alternatives
+        @return a hash with a \c union_types key preserving alternative type metadata
+        @since DataProvider 3.5.1
+    */
+    hash<DataTypeInfo> getInfo(*bool simple) {
+        hash<DataTypeInfo> rv = AbstractDataProviderType::getInfo(simple);
+        rv.union_types = map $1.getInfo(simple), types;
+        return rv;
+    }
+
     #! Returns the base type for the type, if any
     /** @return @ref NOTHING because a union has no single native Qore type
         @since DataProvider 3.5.1

@@ -3840,6 +3840,20 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("*hash<string, bool>", AbstractDataProviderType::get("*hash<string, bool>").getName());
             assertThrows("UNKNOWN-TYPE", "xyz", \AbstractDataProviderType::get(), "xyz");
             assertThrows("UNKNOWN-TYPE", "hash<string>", \AbstractDataProviderType::get(), "hash<string>");
+
+            AbstractDataProviderType list_type = AbstractDataProviderType::get("list<string>");
+            AbstractDataProviderType list_rt = AbstractDataProviderType::get(list_type.getInfo());
+            assertEq("list<string>", list_rt.getName());
+            assertEq("string", list_rt.getElementType().getName());
+            assertEq(("a", "b"), list_rt.acceptsValue(("a", "b")));
+            assertThrows("RUNTIME-TYPE-ERROR", \list_rt.acceptsValue(), (1,));
+
+            AbstractDataProviderType hash_type = AbstractDataProviderType::get("hash<string, bool>");
+            AbstractDataProviderType hash_rt = AbstractDataProviderType::get(hash_type.getInfo());
+            assertEq("hash<string, bool>", hash_rt.getName());
+            assertEq("bool", hash_rt.getElementType().getName());
+            assertEq({"enabled": True}, hash_rt.acceptsValue({"enabled": True}));
+            assertThrows("RUNTIME-TYPE-ERROR", \hash_rt.acceptsValue(), {"enabled": "yes"});
         }
 
         {
@@ -3853,6 +3867,12 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq("list<string>|list<hash>", t.getName());
             assertEq("list", t.getBaseTypeName());
             assertTrue(t.isMandatory());
+            hash<DataTypeInfo> tinfo = t.getInfo();
+            assertEq(2, tinfo.union_types.size());
+            assertEq(("list<string>", "list<hash>"), map $1.name, tinfo.union_types);
+            AbstractDataProviderType rt = AbstractDataProviderType::get(tinfo);
+            assertEq("QoreUnionDataType", rt.className());
+            assertEq(t.getName(), rt.getName());
             assertEq(("a", "b"), t.acceptsValue(("a", "b")));
             assertEq(({"a": 1},), t.acceptsValue(({"a": 1},)));
             assertThrows("RUNTIME-TYPE-ERROR", "union type", \t.acceptsValue(), (1,));
@@ -3866,7 +3886,12 @@ public class DataProviderTest inherits QUnit::Test {
             ListDataType lt(AbstractDataProviderType::get("string|int"));
             assertEq("list<string|int>", lt.getName());
             assertEq("list<auto>", lt.getValueType().getName());
+            AbstractDataProviderType ltrt = AbstractDataProviderType::get(lt.getInfo());
+            assertEq("list<string|int>", ltrt.getName());
+            assertEq("QoreUnionDataType", ltrt.getElementType().className());
             assertEq(("a", 1), lt.acceptsValue(("a", 1)));
+            assertEq(("a", 1), ltrt.acceptsValue(("a", 1)));
+            assertThrows("RUNTIME-TYPE-ERROR", \ltrt.acceptsValue(), (True,));
         }
 
         {

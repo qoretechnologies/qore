@@ -405,11 +405,9 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         assertEq(True, exists body_t.getField("tag"), "merged field from Mixin");
         assertEq(True, exists body_t.getField("extra"), "merged field from inline allOf fragment");
 
-        # oneOf/anyOf: OpenApi3 already handles these at validation time via
-        # OpenApi3HashDataType's checkSchemaComposition(); at the data provider
-        # type level they surface as hash types with relaxed additionalProperties.
-        # Verify that a schema using oneOf does not break the data provider and
-        # that the request type still constructs without throwing.
+        # oneOf/anyOf composition must surface as a DataProvider union type so
+        # callers and editors can inspect every alternative without losing the
+        # original OpenAPI schema composition.
         hash<auto> one_of_schema = {
             "openapi": "3.0.0",
             "info": {"title": "oneOf-test", "version": "1.0"},
@@ -422,6 +420,22 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
                             "content": {
                                 "application/json": {
                                     "schema": {"$ref": "#/components/schemas/Shape"},
+                                },
+                            },
+                        },
+                        "responses": {
+                            "200": {"description": "ok"},
+                        },
+                    },
+                },
+                "/value": {
+                    "post": {
+                        "operationId": "createValue",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/Value"},
                                 },
                             },
                         },
@@ -449,6 +463,12 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
                             {"$ref": "#/components/schemas/Square"},
                         ),
                     },
+                    "Value": {
+                        "anyOf": (
+                            {"type": "string"},
+                            {"type": "integer"},
+                        ),
+                    },
                 },
             },
         };
@@ -459,6 +479,36 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         AbstractDataProviderType shape_req = post_shape.getRequestType();
         AbstractDataField shape_body = shape_req.getField("body");
         assertEq(True, exists shape_body, "oneOf schemas must still produce a body field");
+        AbstractDataProviderType shape_body_type = shape_body.getType();
+        assertEq("OpenApi3UnionDataType", shape_body_type.className(), "oneOf body type");
+        assertTrue(shape_body_type instanceof QoreUnionDataType, "oneOf body type inherits QoreUnionDataType");
+        QoreUnionDataType shape_union = cast<QoreUnionDataType>(shape_body_type);
+        assertEq(("Circle", "Square"), map $1.getName(), shape_union.getUnionTypes());
+
+        hash<DataTypeInfo> shape_info = shape_body_type.getInfo();
+        assertEq(2, shape_info.union_types.size(), "oneOf alternatives in type info");
+        assertEq("Circle", shape_info.union_types[0].name);
+        assertEq(True, exists shape_info.union_types[0].fields.radius);
+        assertEq("Square", shape_info.union_types[1].name);
+        assertEq(True, exists shape_info.union_types[1].fields.side);
+        AbstractDataProviderType restored_shape_type = AbstractDataProviderType::get(shape_info);
+        assertEq("QoreUnionDataType", restored_shape_type.className(), "type info round-trip");
+        assertEq(("Circle", "Square"), map $1.getName(),
+            cast<QoreUnionDataType>(restored_shape_type).getUnionTypes());
+        hash<auto> accepted_circle = shape_body_type.acceptsValue({"radius": 2.5});
+        assertTrue(accepted_circle.radius == 2.5);
+        hash<auto> accepted_square = shape_body_type.acceptsValue({"side": 3.0});
+        assertTrue(accepted_square.side == 3.0);
+        assertThrows("RUNTIME-TYPE-ERROR", \shape_body_type.acceptsValue(), {"color": "red"});
+
+        AbstractDataProvider post_value = one_prov.getChildProviderPath("value/POST");
+        AbstractDataProviderType value_req = post_value.getRequestType();
+        AbstractDataProviderType value_body_type = value_req.getField("body").getType();
+        assertEq("OpenApi3UnionDataType", value_body_type.className(), "anyOf body type");
+        assertEq(("softstring", "softint"), map $1.getName(),
+            cast<QoreUnionDataType>(value_body_type).getUnionTypes());
+        assertEq("abc", value_body_type.acceptsValue("abc"));
+        assertEq(42, value_body_type.acceptsValue(42));
     }
 
     phase6RequestExecutionTest() {

@@ -227,6 +227,11 @@ public hashdecl DataTypeInfo {
     #! A type description of any element type
     *hash<DataTypeInfo> element_type;
 
+    #! Alternative type descriptions for union types
+    /** @since DataProvider 3.5.1
+    */
+    *list<hash<DataTypeInfo>> union_types;
+
     #! The default value for the type
     auto default_value;
 
@@ -905,23 +910,92 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             return Class::forName("DataProvider").getStaticMethod("getTypeCache").call()
                 .lookupTypeFromPathEx(info.path);
         }
-        if (*Type t = DataTypeMap{info.name} ?? DataTypeMap{info.base_type}) {
-            hash<auto> attr = info{"display_name", "short_desc", "desc"};
-            AbstractDataProviderType rv = AbstractDataProviderType::get(t, info.options, info.tags,
-                info.default_value, attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
-            if (!info.mandatory && !rv.isOrNothingType()) {
-                return rv.getOrNothingType();
-            }
-            if (info.default_field_type_info && (rv instanceof HashDataType)) {
-                HashDataType hdt = cast<HashDataType>(rv);
-                if (!hdt.getDefaultOtherFieldType()) {
-                    hdt.setDefaultOtherFieldType(AbstractDataProviderType::get(info.default_field_type_info));
-                }
-            }
+        hash<auto> attr = info{"display_name", "short_desc", "desc"};
+        if (info.union_types) {
+            AbstractDataProviderType rv = new QoreUnionDataType((map AbstractDataProviderType::get($1),
+                info.union_types));
+            return info.mandatory ? rv.getMandatoryType() : rv.getOrNothingType();
+        }
+        if (info.fields) {
+            HashDataType rv(info.mandatory ? AutoHashType : AutoHashOrNothingType, info.name,
+                AbstractDataProviderType::getDataFields(info.fields), info.options, info.tags, info.default_value,
+                attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            AbstractDataProviderType::setHashDataTypeInfo(rv, info);
             return rv;
+        }
+        if ((info.base_type == "list" || info.name =~ /^.?list</) && info.element_type) {
+            return new ListDataType(info.name, AbstractDataProviderType::get(info.element_type), !info.mandatory,
+                info.options, info.tags, info.default_value, attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+        }
+        *Type t = DataTypeMap{info.name};
+        if (!t && info.name) {
+            try {
+                t = new Type(info.name);
+            } catch (hash<ExceptionInfo> ex) {
+                # Fall back to the base type below; named schema types are not necessarily Qore type names.
+            }
+        }
+        if (!t) {
+            t = DataTypeMap{info.base_type};
+        }
+        if (t) {
+            AbstractDataProviderType rv = AbstractDataProviderType::get(t, info.options, info.tags, info.default_value,
+                attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            return AbstractDataProviderType::setDataTypeInfo(rv, info);
         }
 
         throw "TYPE-ERROR", sprintf("No match for type: %y", info);
+    }
+
+    #! Restores data fields from serialized field descriptions
+    /** @param fields serialized field descriptions
+
+        @return restored data fields keyed by field name
+
+        @since DataProvider 3.5.1
+    */
+    private static hash<string, AbstractDataField> getDataFields(hash<string, hash<DataFieldInfo>> fields) {
+        return map {$1.key: new QoreDataField($1.value + {"name": $1.value.name ?? $1.key})},
+            fields.pairIterator();
+    }
+
+    #! Applies common serialized data type metadata to a restored type
+    /** @param rv the restored data provider type
+        @param info the serialized type description
+
+        @return the restored type with common metadata applied
+
+        @since DataProvider 3.5.1
+    */
+    private static AbstractDataProviderType setDataTypeInfo(AbstractDataProviderType rv, hash<DataTypeInfo> info) {
+        if (!info.mandatory && !rv.isOrNothingType()) {
+            rv = rv.getOrNothingType();
+        }
+        if (info.default_field_type_info && (rv instanceof HashDataType)) {
+            HashDataType hdt = cast<HashDataType>(rv);
+            if (!hdt.getDefaultOtherFieldType()) {
+                hdt.setDefaultOtherFieldType(AbstractDataProviderType::get(info.default_field_type_info));
+            }
+        }
+        if (info.required_groups && (rv instanceof HashDataType)) {
+            cast<HashDataType>(rv).setRequiredGroups(info.required_groups);
+        }
+        return rv;
+    }
+
+    #! Applies hash-specific serialized type metadata to a restored hash type
+    /** @param rv the restored hash data provider type
+        @param info the serialized type description
+
+        @since DataProvider 3.5.1
+    */
+    private static setHashDataTypeInfo(HashDataType rv, hash<DataTypeInfo> info) {
+        if (info.default_field_type_info) {
+            rv.setDefaultOtherFieldType(AbstractDataProviderType::get(info.default_field_type_info));
+        }
+        if (info.required_groups) {
+            rv.setRequiredGroups(info.required_groups);
+        }
     }
 
     #! sets the given option without any validation of the option
