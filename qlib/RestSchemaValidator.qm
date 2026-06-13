@@ -2762,11 +2762,13 @@ public namespace RestSchemaValidator {
             if (str =~ /^<(\?xml|[a-zA-Z])/) {
                 return "xml";
             }
-            # check for JSON (starts with '{')
-            if (str =~ /^\{/) {
+            # check for JSON: a JSON object always has a double-quoted key (or is empty) immediately
+            # after the opening brace.  YAML flow style (e.g. "{openapi: ...}") uses unquoted keys and
+            # is not valid JSON, so it must be parsed as YAML.
+            if (str =~ /^\{\s*["}]/) {
                 return "json";
             }
-            # default to YAML
+            # default to YAML (covers block style and flow style with unquoted keys)
             return "yaml";
         }
 

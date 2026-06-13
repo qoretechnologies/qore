@@ -243,41 +243,16 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
             || str =~ /^\s*["']?(swagger|openapi)["']?\s*:/;
     }
 
-    #! Returns @ref True if the content is an OpenAPI 3.x document (else it is treated as Swagger 2.0)
-    /** Detects both block (\c "openapi: 3...") and flow (\c "{openapi: \"3\"...}") styles, with quoted or
-        unquoted keys, and tolerates a leading \c "%YAML" directive or \c "---" document marker, so the
-        loader is not chosen from a fragile leading-token match alone.
-    */
-    private static bool contentIsOpenApi3(string content) {
-        return content =~ /(^|[\s{,])["']?openapi["']?\s*:\s*["']?3/;
-    }
-
     #! Loads a schema from a string
     private static AbstractRestSchemaValidator loadSchemaFromString(string schema_str, *bool lax_parsing) {
         int parse_flags = lax_parsing ? Swagger::LM_ALL : 0;
-        # try to detect if it's OpenAPI 3.0 or Swagger 2.0
-        if (contentIsOpenApi3(schema_str)) {
-            return OpenApi3Loader::fromString(schema_str, NOTHING, {"parse_flags": parse_flags});
-        }
-        return SwaggerLoader::fromString(schema_str, NOTHING, {"parse_flags": parse_flags});
+        return RestSchemaLoader::fromString(schema_str, NOTHING, {"parse_flags": parse_flags});
     }
 
     #! Loads a schema from a URL
     private static AbstractRestSchemaValidator loadSchemaFromUrl(string url, *bool lax_parsing) {
         int parse_flags = lax_parsing ? Swagger::LM_ALL : 0;
-        # first load the content to detect the schema type
-        string content;
-        if (url =~ /^[a-z]+:\/\//i) {
-            HTTPClient client({"url": url});
-            content = client.get("");
-        } else {
-            content = ReadOnlyFile::readTextFile(url);
-        }
-        # detect schema type
-        if (contentIsOpenApi3(content)) {
-            return OpenApi3Loader::fromString(content, NOTHING, {"parse_flags": parse_flags});
-        }
-        return SwaggerLoader::fromString(content, NOTHING, {"parse_flags": parse_flags});
+        return RestSchemaLoader::fromUrl(url, NOTHING, {"parse_flags": parse_flags});
     }
 
     #! Sets the schema and display name

@@ -38,6 +38,7 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         addTestCase("inline schema content detection", \testInlineSchemaContentDetection());
         addTestCase("OpenAPI 3.0 schema composition test", \testOpenApi3SchemaComposition());
         addTestCase("OpenAPI 3.0 data provider type validation", \testOpenApi3TypeValidation());
+        addTestCase("inline YAML schema markers", \testInlineYamlSchemaMarkers());
         addTestCase("OpenAPI 3.1 data provider features", \testOpenApi31Features());
         addTestCase("Abstract validator query date options", \testAbstractValidatorQueryDateOptions());
         addTestCase("Overlapping Swagger paths test", \testOverlappingSwaggerPaths());
@@ -938,6 +939,26 @@ paths:
             hash missingAge = {"name": "John"};
             assertThrows("MISSING-VALUE-ERROR", "age", \bodyType.acceptsValue(), missingAge);
         }
+    }
+
+    testInlineYamlSchemaMarkers() {
+        checkModules();
+
+        string openapi_schema = '%YAML 1.2
+--- {openapi: "3.0.3", info: {title: "YAML Marker OpenAPI", version: "1.0.0"}, paths: {/ping: {get: {operationId: "ping", responses: {200: {description: "ok"}}}}}}
+';
+        RestSchemaDataProvider openapi_provider({"schema": openapi_schema});
+        assertTrue(openapi_provider.isOpenApi3());
+        assertEq("YAML Marker OpenAPI", openapi_provider.getName());
+        assertEq("GET", openapi_provider.getChildProviderPath("ping/GET").getName());
+
+        string swagger_schema = '%YAML 1.2
+--- {swagger: "2.0", info: {title: "YAML Marker Swagger", version: "1.0.0"}, paths: {/ping: {get: {operationId: "ping", responses: {200: {description: "ok"}}}}}}
+';
+        RestSchemaDataProvider swagger_provider({"schema": swagger_schema});
+        assertTrue(swagger_provider.isSwagger());
+        assertEq("YAML Marker Swagger", swagger_provider.getName());
+        assertEq("GET", swagger_provider.getChildProviderPath("ping/GET").getName());
     }
 
     testOpenApi31Features() {

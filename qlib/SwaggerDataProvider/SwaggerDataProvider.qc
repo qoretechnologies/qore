@@ -170,8 +170,7 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
             switch (copts.schema.typeCode()) {
                 case NT_STRING:
                     # determine if the string is a file or a location
-                    if (copts.schema.size() > 1024 || copts.schema =~ /^swagger:/ || copts.schema =~ /^{/
-                        || copts.schema =~ /^swagger":/) {
+                    if (isSchemaSourceString(copts.schema)) {
                         setSchema(SwaggerLoader::fromString(copts.schema, NOTHING, {"parse_flags": copts.lax_parsing}));
                     } else {
                         setSchema(SwaggerLoader::fromUrl(copts.schema, NOTHING, {"parse_flags": copts.lax_parsing}));
@@ -215,6 +214,15 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
     #! Returns the data provider name
     string getName() {
         return display_name;
+    }
+
+    #! Returns True if a string option is inline schema source rather than a URL or file path
+    private static bool isSchemaSourceString(string schema_str) {
+        if (schema_str.size() > 1024) {
+            return True;
+        }
+        string source = trim(schema_str);
+        return source =~ /^(%YAML|---|[\{\[]|swagger\s*:|"swagger"\s*:)/i;
     }
 
     #! Returns the data provider description

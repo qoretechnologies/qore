@@ -34,6 +34,7 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     constructor() : Test("AsyncApiDataProviderTest", "1.0") {
         testDir = get_script_dir();
         addTestCase("data provider creation test", \dataProviderCreationTest());
+        addTestCase("inline YAML schema markers", \inlineYamlSchemaMarkersTest());
         addTestCase("channel navigation test", \channelNavigationTest());
         addTestCase("operation navigation test", \operationNavigationTest());
         addTestCase("message type test", \messageTypeTest());
@@ -68,6 +69,18 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         hash<DataProviderInfo> info = provider.getInfo();
         assertTrue(info.supports_children);
         assertEq("asyncapi", info.schema_type);
+    }
+
+    inlineYamlSchemaMarkersTest() {
+        checkModules();
+
+        hash<auto> opts = {
+            "schema": "%YAML 1.2\n---\n"
+                + File::readTextFile(testDir + "/ChatApi.asyncapi.yaml"),
+        };
+        AsyncApiDataProvider::AsyncApiDataProvider provider(opts);
+        assertEq("Chat API", provider.getName());
+        assertTrue(inlist("userChat", provider.getChildProviderNames()));
     }
 
     channelNavigationTest() {
