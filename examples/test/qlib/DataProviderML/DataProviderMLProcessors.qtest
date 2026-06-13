@@ -25,6 +25,7 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ocr"
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/tokenizer"
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/dataframe"
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -313,8 +314,13 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("chunk-text - registry tokenizer", \chunkTextRegistryTokenizer());
         addTestCase("chunk-text - DataFrameBlock shape", \chunkTextDataFrameShape());
         addTestCase("chunk-text - BufferColumns shape", \chunkTextBufferColumnsShape());
+        addTestCase("extract-structured - SGLang BufferColumns shape",
+            \extractStructuredSglangBufferColumnsShape());
         addTestCase("guardrail-filter - BufferColumns shape", \guardrailFilterBufferColumnsShape());
         addTestCase("guardrail-transform - BufferColumns shape", \guardrailTransformBufferColumnsShape());
+        addTestCase("ocr - BufferColumns shape", \ocrBufferColumnsShape());
+        addTestCase("document-ocr - BufferColumns image shape",
+            \documentOcrBufferColumnsImageShape());
         addTestCase("embed-text - DataFrameBlock ONNX shape", \embedTextDataFrameOnnxShape());
         addTestCase("embed-text - BufferColumns ONNX shape", \embedTextBufferColumnsOnnxShape());
         addTestCase("embed-text - DataFrameBlock dense columns",
@@ -2599,6 +2605,35 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         return path;
     }
 
+    private string getOcrTestImagePath() {
+        string dir = get_script_dir();
+        string path = dir + "/../../../../modules/ocr/test/test_image.png";
+        if (!is_file(path)) {
+            path = "modules/ocr/test/test_image.png";
+        }
+        return path;
+    }
+
+    private *string getSglangTestUrl() {
+        *string url = ENV.QORE_TEST_SGLANG_URL;
+        if (!url.val()) {
+            url = ENV.QORE_BENCH_SGLANG_URL;
+        }
+        return url;
+    }
+
+    private *string getSglangTestApiKey() {
+        *string api_key = ENV.QORE_TEST_SGLANG_API_KEY;
+        if (!api_key.val()) {
+            api_key = ENV.QORE_BENCH_SGLANG_API_KEY;
+        }
+        return api_key;
+    }
+
+    private string getSglangTestModel() {
+        return ENV.QORE_TEST_SGLANG_MODEL ?? ENV.QORE_BENCH_SGLANG_MODEL ?? "qwen3-30b-a3b";
+    }
+
     private bool skipTokenEmbeddingOnnx() {
         if (skipOnnx()) {
             return True;
@@ -2620,6 +2655,40 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         string tokenizer_path = getTokenizerConfigPath();
         if (!is_file(tokenizer_path)) {
             testSkip("tokenizer test data not found at: " + tokenizer_path);
+            return True;
+        }
+        return False;
+    }
+
+    private bool skipOcrFixture() {
+        string image_path = getOcrTestImagePath();
+        if (!is_file(image_path)) {
+            testSkip("OCR test image not found at: " + image_path);
+            return True;
+        }
+
+        try {
+            DataProviderML::QoreOcrProcessor proc({
+                "image_field": "image",
+                "ocr_mode": "native",
+                "language": "eng",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OCR-DEPENDENCY-ERROR" || ex.err == "OCR-INIT-ERROR") {
+                testSkip("native OCR unavailable: " + ex.desc);
+                return True;
+            }
+            rethrow;
+        }
+
+        return False;
+    }
+
+    private bool skipSglangFixture() {
+        if (!getSglangTestUrl().val() || !getSglangTestApiKey().val()) {
+            testSkip("SGLang extraction check requires QORE_TEST_SGLANG_URL and "
+                "QORE_TEST_SGLANG_API_KEY, or QORE_BENCH_SGLANG_URL and "
+                "QORE_BENCH_SGLANG_API_KEY");
             return True;
         }
         return False;
@@ -5219,6 +5288,142 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(out.id.contains(2), "chunk output should include chunks for source id 2");
         foreach int token_count in (out.chunk_token_count) {
             assertTrue(token_count > 0, "chunk token count should be positive");
+        }
+    }
+
+    extractStructuredSglangBufferColumnsShape() {
+        if (skipSglangFixture()) {
+            return;
+        }
+
+        DataProviderML::QoreExtractionProcessor proc({
+            "text_field": "body",
+            "schema_template": "sentiment",
+            "llm_mode": "http",
+            "llm_url": getSglangTestUrl(),
+            "llm_model": getSglangTestModel(),
+            "llm_api_key": getSglangTestApiKey(),
+            "temperature": 0.0,
+            "max_retries": 0,
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "body": (
+                "Qore support was fast, helpful, and accurate.",
+                "The deployment was delayed and the status updates were confusing.",
+            ),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "extract-structured should preserve BufferColumns output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> out = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq((1, 2), out.id);
+        assertEq(2, out._extracted.lsize());
+        assertEq(2, out._extraction_valid.lsize());
+        foreach bool valid in (out._extraction_valid) {
+            assertTrue(valid, "SGLang extraction should validate against the sentiment schema");
+        }
+        foreach hash<auto> extracted in (out._extracted) {
+            assertTrue(inlist(extracted.overall_sentiment,
+                    ("POSITIVE", "NEGATIVE", "NEUTRAL", "MIXED")),
+                sprintf("unexpected sentiment value: %y", extracted.overall_sentiment));
+            assertTrue(extracted.sentiment_score >= -1.0 && extracted.sentiment_score <= 1.0,
+                sprintf("sentiment score out of range: %y", extracted.sentiment_score));
+            assertTrue(extracted.confidence >= 0.0 && extracted.confidence <= 1.0,
+                sprintf("confidence out of range: %y", extracted.confidence));
+        }
+    }
+
+    ocrBufferColumnsShape() {
+        if (skipOcrFixture()) {
+            return;
+        }
+
+        binary img = ReadOnlyFile::readBinaryFile(getOcrTestImagePath());
+        DataProviderML::QoreOcrProcessor proc({
+            "image_field": "image",
+            "ocr_mode": "native",
+            "language": "eng",
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "image": (img, img),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "ocr should preserve BufferColumns output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> out = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq((1, 2), out.id);
+        assertEq(2, out.ocr_text.lsize());
+        assertEq(2, out.ocr_confidence.lsize());
+        foreach string text in (out.ocr_text) {
+            assertTrue(trim(text) =~ /Qore/i,
+                sprintf("OCR output should contain 'Qore', got: %y", trim(text)));
+            assertTrue(trim(text) =~ /OCR/i,
+                sprintf("OCR output should contain 'OCR', got: %y", trim(text)));
+        }
+        foreach float confidence in (out.ocr_confidence) {
+            assertTrue(confidence > 0.0 && confidence <= 1.0,
+                sprintf("OCR confidence should be in (0, 1], got: %f", confidence));
+        }
+    }
+
+    documentOcrBufferColumnsImageShape() {
+        if (skipOcrFixture()) {
+            return;
+        }
+
+        binary img = ReadOnlyFile::readBinaryFile(getOcrTestImagePath());
+        DataProviderML::QoreDocumentOcrProcessor proc({
+            "document_field": "document",
+            "mime_type_field": "mime_type",
+            "language": "eng",
+        });
+
+        ColumnarResult columns = ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2)),
+            "document": (img, img),
+            "mime_type": ("image/png", "image/png"),
+        });
+
+        auto result = proc.processRecordsShape(columns, DataProviderShape::BufferColumns);
+        assertEq(DataProviderShape::BufferColumns, AbstractDataProcessor::detectShape(result),
+            "document-ocr should preserve BufferColumns output");
+        assertEq(2, AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns));
+        hash<auto> out = AbstractDataProcessor::convertShape(
+            result, DataProviderShape::BufferColumns, DataProviderShape::HashOfLists)[0];
+        assertEq((1, 2), out.id);
+        assertEq(2, out.document_text.lsize());
+        assertEq(2, out.document_format.lsize());
+        assertEq(2, out.document_pages.lsize());
+        assertEq(2, out.document_ocr_pages.lsize());
+        assertEq(2, out.document_confidence.lsize());
+        foreach string text in (out.document_text) {
+            assertTrue(trim(text) =~ /Qore/i,
+                sprintf("document OCR output should contain 'Qore', got: %y", trim(text)));
+            assertTrue(trim(text) =~ /OCR/i,
+                sprintf("document OCR output should contain 'OCR', got: %y", trim(text)));
+        }
+        foreach string format in (out.document_format) {
+            assertEq("PNG", format);
+        }
+        foreach int page_count in (out.document_pages) {
+            assertEq(1, page_count);
+        }
+        foreach int ocr_page_count in (out.document_ocr_pages) {
+            assertEq(1, ocr_page_count);
+        }
+        foreach float confidence in (out.document_confidence) {
+            assertTrue(confidence > 0.0 && confidence <= 1.0,
+                sprintf("document OCR confidence should be in (0, 1], got: %f", confidence));
         }
     }
 
