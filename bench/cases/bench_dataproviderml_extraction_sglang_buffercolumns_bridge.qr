@@ -1,0 +1,106 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%exec-class BenchDataProviderMlExtractionSglangBufferColumnsBridge
+
+%requires ../lib/BenchRunner.qm
+%requires DataProviderML
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchDataProviderMlExtractionSglangBufferColumnsBridge {
+    constructor() {
+        *string url = ENV.QORE_BENCH_SGLANG_URL;
+        *string api_key = ENV.QORE_BENCH_SGLANG_API_KEY;
+        if (!url.val() || !api_key.val()) {
+            printf("dataproviderml_extraction_sglang_buffercolumns_bridge: skipped "
+                "(QORE_BENCH_SGLANG_URL and QORE_BENCH_SGLANG_API_KEY required)\n");
+            exit(0);
+        }
+
+        Bench::BenchRunner r("dataproviderml_extraction_sglang_buffercolumns_bridge");
+        r.iterations = 2;
+        r.warmup = 0;
+
+        int rows = extractionRows();
+        ColumnarResult columns;
+        DataProviderML::QoreExtractionProcessor proc({
+            "text_field": "body",
+            "schema_template": "ner",
+            "llm_mode": "http",
+            "llm_url": url,
+            "llm_model": ENV.QORE_BENCH_SGLANG_MODEL ?? "qwen3-30b-a3b",
+            "llm_api_key": api_key,
+            "max_retries": 0,
+        });
+
+        r.setup = sub () {
+            columns = ColumnarResult::fromColumnHash(makeExtractionColumnHash(rows));
+            r.bytes_processed = rows * 160;
+        };
+
+        r.measure = sub () {
+            list<auto> input_rows = AbstractDataProcessor::convertShape(
+                columns, DataProviderShape::BufferColumns, DataProviderShape::RowRecords);
+            list<auto> output_rows;
+            foreach auto row in (input_rows) {
+                collectResult(\output_rows, proc.processRecord(row));
+            }
+            hash<auto> bulk = AbstractDataProcessor::recordsToHashList(output_rows);
+            ColumnarResult result = AbstractDataProcessor::convertHashListResultShape(
+                bulk, DataProviderShape::BufferColumns);
+            verifyExtractionColumns("dataproviderml_extraction_sglang_buffercolumns_bridge", result, rows);
+        };
+
+        exit(r.run());
+    }
+
+    private static int extractionRows() {
+        *string env_rows = ENV.QORE_BENCH_SGLANG_ROWS;
+        return env_rows ? env_rows.toInt() : 2;
+    }
+
+    private static hash<auto> makeExtractionColumnHash(int rows) {
+        buffer<int64> ids = buffer<int64>::sized(rows);
+        list<string> bodies;
+        for (int i = 0; i < rows; ++i) {
+            ids[i] = i;
+            push bodies, sprintf("Contact Jane Doe %d at jane%d@example.com about invoice INV-%04d.",
+                i, i, i);
+        }
+        return {"id": ids, "body": bodies};
+    }
+
+    private static list<auto> columnToList(auto column) {
+        return column.typeCode() == NT_BUFFER ? column.toList() : column;
+    }
+
+    private static collectResult(reference<list<auto>> results, auto r) {
+        if (exists r) {
+            if (r.typeCode() == NT_LIST) {
+                results += r;
+            } else {
+                push results, r;
+            }
+        }
+    }
+
+    private static verifyExtractionColumns(string name, ColumnarResult result, int rows) {
+        int out_rows = AbstractDataProcessor::shapeRecordCount(result, DataProviderShape::BufferColumns);
+        list<auto> valid = columnToList(result.getColumn("_extraction_valid"));
+        list<auto> extracted = columnToList(result.getColumn("_extracted"));
+        if (out_rows != rows || valid.lsize() != rows || extracted.lsize() != rows) {
+            throw "BENCHMARK-ERROR", sprintf("%s returned %d/%d/%d rows; expected %d",
+                name, out_rows, valid.lsize(), extracted.lsize(), rows);
+        }
+        foreach auto row_valid in (valid) {
+            if (!row_valid) {
+                throw "BENCHMARK-ERROR", sprintf("%s returned an invalid extraction", name);
+            }
+        }
+    }
+}
