@@ -813,6 +813,10 @@ public class DataProviderGraphQLSchema {
                 return v.toString();
             case NT_BOOLEAN:
                 return v ? "true" : "false";
+            case NT_DATE:
+                # DPQL date literals are unquoted ISO-8601 (matching DpqlSerializer); "IF" yields
+                # the full ISO form with timezone that the DPQL tokenizer accepts
+                return v.format("IF");
             case NT_LIST:
                 return "(" + (map renderDpqlValue($1), v).join(", ") + ")";
             case NT_NOTHING:
@@ -836,8 +840,8 @@ public class DataProviderGraphQLSchema {
 
     #! returns the per-scalar filter input-type kind for a type, or @ref NOTHING if not filterable
     /** Only simple scalar fields get a typed filter. Object, list, binary, and free-form hash
-        fields are not typed-filterable; date fields are filtered through the raw DPQL \c where
-        argument (which supports proper date literals), not a string filter.
+        fields are not typed-filterable. Date fields get a \c DateTimeFilter whose operands are the
+        \c DateTime custom scalar (ISO-8601 on the wire, rendered as native DPQL date literals).
     */
     private *string scalarFilterKind(AbstractDataProviderType t) {
         # real lists (element type present) and object types are not typed-filterable; "soft"
@@ -855,8 +859,10 @@ public class DataProviderGraphQLSchema {
                 return "Boolean";
             case NT_STRING:
                 return "String";
+            case NT_DATE:
+                return "DateTime";
             default:
-                # dates, binary, hashes: no typed filter (use the raw DPQL where for dates)
+                # binary, hashes: no typed filter
                 return NOTHING;
         }
     }
@@ -870,6 +876,12 @@ public class DataProviderGraphQLSchema {
             case "Int":
             case "Float":
                 candidates = ("eq", "ne", "gt", "gte", "lt", "lte", "in", "nin");
+                break;
+            case "DateTime":
+                # ordered comparisons make sense for dates; "like" does not
+                candidates = ("eq", "ne", "gt", "gte", "lt", "lte", "in", "nin");
+                # the DateTime operands require the custom scalar to be declared and coerced
+                registerScalar("DateTime");
                 break;
             case "Boolean":
                 candidates = ("eq", "ne");

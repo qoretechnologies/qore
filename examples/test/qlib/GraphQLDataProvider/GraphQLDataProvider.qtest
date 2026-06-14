@@ -541,6 +541,41 @@ class ShopProvider inherits DataProvider::AbstractDataProvider {
     }
 }
 
+#! a provider with a date field, to test date-typed filters
+class DatedProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = (
+            {"id": 1, "created": 2026-01-05T00:00:00},
+            {"id": 2, "created": 2026-01-15T00:00:00},
+            {"id": 3, "created": 2026-01-25T00:00:00},
+        );
+    }
+
+    string getName() {
+        return "event";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "created": new QoreDataField("created", "creation date", DateType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+}
+
 class GraphQLDataProviderTest inherits QUnit::Test {
     constructor() : Test("GraphQLDataProviderTest", "1.0") {
         addTestCase("dataprovider bridge", \bridgeTest());
@@ -551,8 +586,46 @@ class GraphQLDataProviderTest inherits QUnit::Test {
         addTestCase("bridge name collision detection", \collisionTest());
         addTestCase("bridge nested-input mutations", \nestedMutationTest());
         addTestCase("bridge child-provider mutations", \childMutationTest());
+        addTestCase("bridge date-typed filters", \dateFilterTest());
 
         set_return_value(main());
+    }
+
+    dateFilterTest() {
+        DatedProvider dp();
+        DataProviderGraphQLSchema bridge(dp);
+        string sdl = bridge.getSdl();
+
+        # a date field gets a DateTimeFilter with ordered-comparison operators over the DateTime
+        # custom scalar (not a string filter, and "like" is not generated for dates)
+        assertRegex("created: DateTimeFilter", sdl);
+        assertRegex("input DateTimeFilter \\{", sdl);
+        assertRegex("gt: DateTime", sdl);
+        assertRegex("in: \\[DateTime!\\]", sdl);
+        assertFalse(sdl =~ /DateTimeFilter \{[^}]*like:/s, "no 'like' operator for a date filter");
+        assertRegex("scalar DateTime", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+        # typed date filters: the ISO-8601 input is coerced to a Qore date, compiled to a native
+        # DPQL date literal, and evaluated by the provider
+        assertEq((2, 3),
+            (map $1.id, ex.execute(
+                "{ search(filter: {created: {gt: \"2026-01-10T00:00:00\"}}) { id } }").data.search));
+        assertEq((1, 2),
+            (map $1.id, ex.execute(
+                "{ search(filter: {created: {lt: \"2026-01-20T00:00:00\"}}) { id } }").data.search));
+        assertEq((2,),
+            (map $1.id, ex.execute(
+                "{ search(filter: {created: {eq: \"2026-01-15T00:00:00\"}}) { id } }").data.search));
+        assertEq((1, 3),
+            (map $1.id, ex.execute(
+                "{ search(filter: {created: {in: [\"2026-01-05T00:00:00\", \"2026-01-25T00:00:00\"]}}) "
+                "{ id } }").data.search));
+
+        # a raw DPQL where with a native date literal still works (and agrees with the typed filter)
+        assertEq((3,),
+            (map $1.id, ex.execute(
+                "{ search(where: \"@created > 2026-01-20T00:00:00\") { id } }").data.search));
     }
 
     childMutationTest() {

@@ -185,8 +185,10 @@ lists-of-objects map back correctly.
 DataProvider layer consumes DPQL natively. Two forms are offered and combined (AND-ed): a raw `where`
 DPQL string, and a typed `filter` input (`<Record>WhereInput` with per-scalar `*Filter` types and
 recursive `_and`/`_or`/`_not`) that is compiled to DPQL — so DPQL remains the single canonical
-intermediate representation. Filter operators are gated on the provider's advertised
-`info.expressions`. `update`/`delete` require a selector (the mass-mutation guard) and return the
+intermediate representation. Per-scalar filters exist for `Int`/`Float`/`String`/`Boolean` and for
+dates via a `DateTimeFilter` (ordered comparisons over the `DateTime` custom scalar; the ISO-8601
+input is coerced to a Qore date and rendered as a native unquoted DPQL date literal). Filter
+operators are gated on the provider's advertised `info.expressions`. `update`/`delete` require a selector (the mass-mutation guard) and return the
 affected-row count, or the affected records when `return_records` is set (wrapped in a transaction
 when the provider requires transaction management). `search` pushes `limit`/`offset` into the
 provider's search options when advertised, else pages client-side.
