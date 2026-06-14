@@ -34,9 +34,12 @@ GraphQL execution engine.
   `context`/`in`/`sub` identifiers.)
 - **OQ1 resolved**: the client raises `GRAPHQL-ERROR` by default with a `graphql_raise_errors`
   opt-out (matches the previously-unimplemented doc contract).
-- **OQ4 (bridge update/delete) deferred**: the bridge generates `search` (read) and `create`
-  fields; update/delete need GraphQL input-type modeling of where-conditions — documented as
-  future work in `DataProviderGraphQLSchema`.
+- **OQ4 (bridge update/delete) — resolved: use DPQL**: rather than generating a bespoke GraphQL
+  filter-input grammar, expose where-conditions as a DPQL string argument forwarded to the
+  DataProvider's native DPQL overloads. The current build still ships read+create only; the full
+  plan to close update/delete/upsert is in
+  [§ DPQL integration & closing update/delete](#dpql-integration--closing-updatedelete-resolves-oq4)
+  below.
 - **Build-system fix** (`cmake/QoreMacros.cmake`): the qmod dependency finalizer wired a
   build-order edge to *any* CMake target whose name matched a `%requires` dependency, including
   third-party FetchContent targets. The external `json` qore module collided with nghttp2's
@@ -155,8 +158,10 @@ This mirrors the inverse mapping already implemented in `Swagger.qm:getTypeInter
   added without a schema-model rewrite.
 - **OQ3 (Phase 6):** Custom scalar mapping policy for DataProvider types with no GraphQL
   primitive (e.g. Qore `date` → custom `DateTime` scalar vs ISO-8601 `String`).
-- **OQ4 (Phase 6):** How to represent DataProvider search *expressions* (DPQL-style) as GraphQL
-  input types vs flat argument lists.
+- **OQ4 (Phase 6) — RESOLVED:** represent where-conditions as a **DPQL string** argument
+  forwarded to the DataProvider's native DPQL overloads, rather than generating a bespoke GraphQL
+  filter-input grammar. Typed introspectable filters (compiling to DPQL) remain an optional later
+  enhancement. See [§ DPQL integration & closing update/delete](#dpql-integration--closing-updatedelete-resolves-oq4).
 
 ---
 
@@ -379,3 +384,172 @@ distinct subproject and should not be folded into the same change set.
 | Type → external-schema prior art (inverse mapping) | `qlib/Swagger.qm:1182`, `qlib/RestSchemaValidator.qm:1236` |
 | Qore type maps | `qlib/DataProvider/AbstractDataProviderType.qc:49` |
 | Module build registration | `CMakeLists.txt:3147` (`RestHandler`), `:3187` (REST clients); `Makefile.am` |
+
+---
+
+# DPQL integration & closing update/delete (resolves OQ4)
+
+This section is the detailed plan to add `update`, `delete`, and `upsert` to the DataProvider
+bridge and to add filtering to `search`, using DPQL (Data Provider Query Language) as the
+where-condition mechanism. It supersedes the original Phase 2.8 "future work" note for OQ4.
+
+## Rationale
+
+The DataProvider layer already speaks DPQL natively for every operation we need, so DPQL
+collapses the hard part of OQ4 (a bespoke GraphQL filter grammar) into "accept and forward a
+string". Verified API basis:
+
+- `AbstractDataProvider::searchRecords(string dpql_where, *hash search_options)` — `AbstractDataProvider.qc:2827`
+- `AbstractDataProvider::updateRecords(hash set, string dpql_where, *hash search_options): int` — `:2978`
+- `AbstractDataProvider::deleteRecords(string dpql_where, *hash search_options): int` — `:3063`
+- `AbstractDataProvider::upsertRecord(hash rec, *hash upsert_options): string` (returns id) — `:2437`
+- `DataProvider::parseDpqlExpression(string): hash<DataProviderExpression>` — `DataProvider.qc:872`
+- `DataProvider::validateDpqlExpression(string text, hash<string, AbstractDataField> fields, *hash expressions, *hash server_expressions): list<hash<DpqlDiagnostic>>` — `DataProvider.qc:1241`
+  (defaults the operator set to `DataProviderGenericExpressions` when `expressions` is omitted)
+- capability flags on `hash<DataProviderInfo>`: `supports_update` (`:201`), `supports_upsert`
+  (`:204`), `supports_delete` (`:207`), `supports_native_search` (`:210`),
+  `supports_search_expressions` (`:273`), and the supported-operator map `expressions` (`:1191`).
+
+DPQL syntax/semantics: `design/dpql-syntax.md`; integration/security: `design/dpql-integration.md`.
+
+## Generated schema (after this change)
+
+For a provider whose record type generates object type `<R>` (e.g. `peopleRecord`):
+
+```graphql
+type Query {
+  # `where` is an optional DPQL filter string, e.g. '@active == true && @age >= 18'
+  search(where: String, limit: Int, offset: Int): [<R>!]!
+}
+
+type Mutation {
+  create(<scalar field args...>): <R>          # if supports_create (existing)
+  update(set: <R>SetInput!, where: String!): Int!   # if supports_update — returns affected count
+  delete(where: String!): Int!                  # if supports_delete — returns affected count
+  upsert(<scalar field args...>): String!       # if supports_upsert — returns the record id
+}
+
+# all record fields, all OPTIONAL (no "!"): the columns to assign in an update
+input <R>SetInput { <field>: <Type> ... }
+```
+
+Design points:
+- **`where` is `String!` (non-null) on `update`/`delete`** — the schema itself forbids an
+  unconditional mass mutation. An intentional "all rows" operation uses a tautology filter
+  (e.g. `@id != null`); a future `allRecords: Boolean` flag could make that explicit.
+- **`where` is optional `String` on `search`** (no filter = return all, subject to `limit`).
+- **Return shapes mirror the API exactly**: `update`/`delete` → `Int!` (affected count),
+  `upsert` → `String!` (id). Returning the affected *records* instead would require a
+  non-atomic follow-up `searchRecords` — deferred (see Phase C).
+- **`<R>SetInput` fields are all optional** so a partial update assigns only the supplied columns.
+
+## Resolver behavior
+
+All resolvers close over the provider `p`, the record-type field map `fields`
+(`getRecordType()`), and `info.expressions`.
+
+- `search(where, limit, offset)`:
+  `it = where.val() ? p.searchRecords(validateWhere(where), {}) : p.searchRecords();`
+  then apply `offset`/`limit` paging as today (`doSearch`).
+- `update(set, where)`: `validateWhere(where); return p.updateRecords(toProviderRec(set), where, {});`
+- `delete(where)`: `validateWhere(where); return p.deleteRecords(where, {});`
+- `upsert(args)`: `return p.upsertRecord(toProviderRec(args), {});`
+
+`validateWhere(where)` returns the validated DPQL string (or throws — see Validation). Resolver
+exceptions are already turned into GraphQL `errors` entries by the executor, so a bad filter
+surfaces as a field error, not a crash.
+
+## Validation & security
+
+`validateWhere(string where)`:
+1. `list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(where, fields, info.expressions);`
+   — checks field references against the record schema and operators against what the provider
+   supports. If any diagnostic has error severity, throw `GRAPHQL-EXECUTION-ERROR` with the
+   concatenated messages (and positions).
+2. **Template-reference defense (default-deny):** parse with `parseDpqlExpression` and walk the
+   resulting `hash<DataProviderExpression>` tree for template-reference nodes (`$context:value`);
+   reject by default. This is defense-in-depth on top of the runtime default (template references
+   throw `TEMPLATE-RESOLUTION-ERROR` unless an `expand` callback is registered via
+   `setTemplateCallbacks` — `dpql-integration.md:588`). A bridge option `allow_templates`
+   (default `False`) can lift the restriction for trusted deployments.
+   - *Investigation item:* confirm the exact node shape used for template references in
+     `hash<DataProviderExpression>` so the walk is precise (small task against `DataProviderExpressions.qc`).
+3. **Do not register permissive template callbacks** for the client-facing path; document that
+   operators exposing the bridge on untrusted input must keep template resolution disabled.
+4. *Optional:* bound expression complexity (node count / nesting depth) to limit DoS via
+   pathological filters.
+
+## Field-name round-tripping (also fixes a latent create bug)
+
+GraphQL field/arg names are sanitized to valid GraphQL identifiers (`sanitizeName()`), but the
+DataProvider expects its **original** field names. The current `create` resolver passes the
+GraphQL arg hash straight to `createRecord()`, which is wrong whenever a name was sanitized
+(e.g. `first-name` → `first_name`). Fix as part of this work:
+
+- During generation build a `gql_name -> provider_field_name` map.
+- Add `toProviderRec(hash<auto> gqlArgs)` that rekeys to provider field names; use it in
+  `create`, `update` (`set`), and `upsert` resolvers.
+- The DPQL `where` string references the provider's **native** field names directly (the client
+  writes raw DPQL); document this boundary. For records whose field names are already valid
+  GraphQL identifiers (the common case) `gql_name == provider_field_name` and this is a no-op.
+
+## Capability gating
+
+| GraphQL operation | Generated when |
+|---|---|
+| `Query.search` (+ `where` arg) | `supports_read` |
+| `Mutation.create` | `supports_create` |
+| `Mutation.update` + `<R>SetInput` | `supports_update` |
+| `Mutation.delete` | `supports_delete` |
+| `Mutation.upsert` | `supports_upsert` |
+
+If no mutation capabilities are present, no `Mutation` type is emitted (as today). If a provider
+advertises neither read nor any mutation, keep the existing `_empty: Boolean` placeholder so the
+schema still has a query root.
+
+## Implementation steps (in `qlib/GraphQLHandler/GraphQLDataProviderBridge.qc`)
+
+1. In `generate()`: add the `where` arg to the `search` field; conditionally emit `update`,
+   `delete`, `upsert` mutation fields and the `<R>SetInput` input type per the gating table.
+2. Build and store the `gql_name -> provider_field_name` map; add `toProviderRec()`.
+3. Add `validateWhere()` (validation + template-reference defense).
+4. Add the `update`/`delete`/`upsert` resolver closures; route `search` through the DPQL overload
+   when `where` is supplied. Convert `create`/`upsert`/`update.set` args via `toProviderRec()`.
+5. Add the `allow_templates` constructor option (default `False`).
+6. Reuse the existing `mapScalarType()`/`mapFieldType()`; for `<R>SetInput` strip the non-null
+   marker (all set fields optional).
+
+## Test matrix (extend `examples/test/qlib/GraphQLHandler/GraphQLHandler.qtest`, `bridgeTest`)
+
+- `search(where: "@active == true")` filters to the matching records.
+- `search(where: "@age >= 18 && @name like \"A%\"")` exercises compound/operator filters.
+- `update(set: {...}, where: "@id == 1")` → affected count; a follow-up `search` confirms the change.
+- `delete(where: "@id == 2")` → affected count; follow-up `search` confirms removal.
+- `upsert(...)` → returns an id; record present afterward.
+- invalid filter: `search(where: "@nosuchfield == 1")` → field error from `validateDpqlExpression`.
+- template-reference rejected by default: `where: "@x == $qore-expr:{1}"` → error.
+- safety: `delete` with no `where` is a **schema-level** error (non-null arg) — assert the
+  request is rejected without reaching the resolver.
+- a read-only provider (no update/delete/upsert flags) emits none of those fields and no
+  `Mutation` type.
+- field-name round-trip: a provider with a field needing sanitization (e.g. `full-name`)
+  round-trips correctly through `create`/`update`.
+
+## Phasing
+
+- **Phase A (this plan):** DPQL-backed `search` filter + `update`/`delete`/`upsert` + `SetInput`
+  + validation + template defense + field-name round-trip + capability gating + tests. Closes
+  the functional gap with full filter power for a contained amount of code.
+- **Phase B (optional, later):** typed, introspectable GraphQL filter input types
+  (`<R>WhereInput`, per-scalar `*Filter`, `_and`/`_or`/`_not`) that **compile to DPQL** — DPQL
+  stays the canonical IR, so there is never a second where-condition model. Justified only if
+  GraphQL-native filter tooling/introspection is required.
+- **Phase C (optional, later):** return affected *records* (non-atomic re-read), and bulk
+  operations from `supports_bulk_create` / `supports_bulk_upsert`.
+
+## Effort
+
+Phase A is comparable to the existing `create`+`search` work plus the validation/security helper
+and the field-name map — a single contained change to `GraphQLDataProviderBridge.qc` and the
+bridge test. Phase B is a separate subproject (filter-type generation + DPQL compilation + a
+per-operator test matrix). Phase C is incremental.
