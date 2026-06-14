@@ -52,6 +52,9 @@ class AOTQccBuildSidecarsTest inherits QUnit::Test {
         string dep = qo + ".d";
         string idx = qo + ".idx.json";
         string manifest = qo + ".manifest.json";
+        string status = qo + ".status.json";
+        string success_stamp = qo + ".success.stamp";
+        string content_stamp = qo + ".content.stamp";
 
         write(src, "%new-style
 public class QccSidecarSingle {
@@ -68,13 +71,17 @@ public class QccSidecarSingle {
         string cmd = sprintf(
             "%s %s -v -c --parse-option=PO_MODERN --depfile=%s"
             " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
+            " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
             " -o %s %s",
-            env, qcc_bin, dep, idx, manifest, qo, src);
+            env, qcc_bin, dep, idx, manifest, status, success_stamp, content_stamp, qo, src);
         string first = run(cmd);
         assertTrue(is_file(qo), "compiled single source .qo: " + first);
         assertTrue(is_file(dep), "wrote single source depfile: " + first);
         assertTrue(is_file(idx), "wrote single source index sidecar: " + first);
         assertTrue(is_file(manifest), "wrote single source manifest: " + first);
+        assertTrue(is_file(status), "wrote single source status JSON: " + first);
+        assertTrue(is_file(success_stamp), "touched single source success stamp: " + first);
+        assertTrue(is_file(content_stamp), "touched single source content stamp: " + first);
 
         string single_dep_text = File::readTextFile(dep);
         assertContains(single_dep_text, "single.qc", "depfile names source");
@@ -85,10 +92,26 @@ public class QccSidecarSingle {
         string manifest_json = File::readTextFile(manifest);
         assertContains(manifest_json, "\"kind\": \"script-file\"", "manifest records mode");
         assertContains(manifest_json, "\"inputs\"", "manifest records inputs");
+        string status_json = File::readTextFile(status);
+        assertContains(status_json, "\"built\": true", "status records initial build");
+        assertContains(status_json, "\"skipped\": false", "status records initial non-skip");
+        assertContains(status_json, "\"output_changed\": true", "status records initial content change");
 
         string second = run(cmd);
         assertContains(second, "manifest current, skipped script-file",
             "second identical command skips from qcc manifest");
+        status_json = File::readTextFile(status);
+        assertContains(status_json, "\"built\": false", "status records manifest skip as not built");
+        assertContains(status_json, "\"skipped\": true", "status records manifest skip");
+        assertContains(status_json, "\"output_changed\": false", "status records skip without content change");
+
+        unlink(content_stamp);
+        string third = run(cmd);
+        assertContains(third, "manifest current, skipped script-file",
+            "manifest skip creates a missing content-stamp baseline");
+        assertTrue(is_file(content_stamp), "manifest skip recreated missing content stamp: " + third);
+        assertContains(File::readTextFile(status), "\"output_changed\": false",
+            "status still records no content change when baseline stamp is recreated");
     }
 
     testQoLinkSidecars() {
@@ -102,6 +125,9 @@ public class QccSidecarSingle {
         string idx = aggregate + ".idx.json";
         string link_map = aggregate + ".qolink.json";
         string manifest = aggregate + ".manifest.json";
+        string status = aggregate + ".status.json";
+        string success_stamp = aggregate + ".success.stamp";
+        string content_stamp = aggregate + ".content.stamp";
 
         write(provider, "%new-style
 public class QccSidecarProvider {
@@ -128,14 +154,20 @@ public class QccSidecarConsumer {
         string cmd = sprintf(
             "%s %s -v --link-qo --aggregate-symbol=QCC_SIDECAR_LINK"
             " --qolink-map=%s --depfile=%s --write-index-json=%s"
-            " --write-manifest=%s --skip-if-manifest-current -o %s %s %s",
-            env, qcc_bin, link_map, dep, idx, manifest, aggregate, provider_qo, consumer_qo);
+            " --write-manifest=%s --skip-if-manifest-current"
+            " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
+            " -o %s %s %s",
+            env, qcc_bin, link_map, dep, idx, manifest, status, success_stamp, content_stamp,
+            aggregate, provider_qo, consumer_qo);
         string first = run(cmd);
         assertTrue(is_file(aggregate), "linked aggregate .qo: " + first);
         assertTrue(is_file(link_map), "wrote link map: " + first);
         assertTrue(is_file(dep), "wrote qo-link depfile: " + first);
         assertTrue(is_file(idx), "wrote qo-link index sidecar: " + first);
         assertTrue(is_file(manifest), "wrote qo-link manifest: " + first);
+        assertTrue(is_file(status), "wrote qo-link status JSON: " + first);
+        assertTrue(is_file(success_stamp), "touched qo-link success stamp: " + first);
+        assertTrue(is_file(content_stamp), "touched qo-link content stamp: " + first);
 
         string dep_text = File::readTextFile(dep);
         assertContains(dep_text, "provider.qo", "qo-link depfile names provider");
@@ -145,10 +177,14 @@ public class QccSidecarConsumer {
         assertContains(map_text, "\"resolved_call_relocations\"", "link map records relocations");
         assertContains(File::readTextFile(manifest), "\"kind\": \"link-qo\"",
             "manifest records qo-link mode");
+        assertContains(File::readTextFile(status), "\"output_changed\": true",
+            "qo-link status records initial content change");
 
         string second = run(cmd);
         assertContains(second, "manifest current, skipped qo link aggregate",
             "second identical qo-link command skips from qcc manifest");
+        assertContains(File::readTextFile(status), "\"skipped\": true",
+            "qo-link status records manifest skip");
     }
 
     testScriptAggregateSidecars() {
@@ -159,6 +195,9 @@ public class QccSidecarConsumer {
         string dep = aggregate + ".d";
         string idx = aggregate + ".idx.json";
         string manifest = aggregate + ".manifest.json";
+        string status = aggregate + ".status.json";
+        string success_stamp = aggregate + ".success.stamp";
+        string content_stamp = aggregate + ".content.stamp";
 
         write(provider, "%modern
 public class QccScriptAggProvider {
@@ -176,13 +215,19 @@ int sub main() {
         string cmd = sprintf(
             "%s %s -v -c --script-aggregate=QCC_SCRIPT_AGG"
             " --depfile=%s --write-index-json=%s --write-manifest=%s"
-            " --skip-if-manifest-current -o %s %s %s",
-            env, qcc_bin, dep, idx, manifest, aggregate, provider, consumer);
+            " --skip-if-manifest-current"
+            " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
+            " -o %s %s %s",
+            env, qcc_bin, dep, idx, manifest, status, success_stamp, content_stamp,
+            aggregate, provider, consumer);
         string first = run(cmd);
         assertTrue(is_file(aggregate), "compiled script aggregate .qo: " + first);
         assertTrue(is_file(dep), "wrote script aggregate depfile: " + first);
         assertTrue(is_file(idx), "wrote script aggregate index sidecar: " + first);
         assertTrue(is_file(manifest), "wrote script aggregate manifest: " + first);
+        assertTrue(is_file(status), "wrote script aggregate status JSON: " + first);
+        assertTrue(is_file(success_stamp), "touched script aggregate success stamp: " + first);
+        assertTrue(is_file(content_stamp), "touched script aggregate content stamp: " + first);
 
         string dep_text = File::readTextFile(dep);
         assertContains(dep_text, "provider.qr", "script aggregate depfile names provider source");
@@ -192,9 +237,13 @@ int sub main() {
             "script aggregate index includes provider class");
         assertContains(File::readTextFile(manifest), "\"kind\": \"script-aggregate\"",
             "manifest records script aggregate mode");
+        assertContains(File::readTextFile(status), "\"output_changed\": true",
+            "script aggregate status records initial content change");
 
         string second = run(cmd);
         assertContains(second, "manifest current, skipped script aggregate",
             "second identical script aggregate command skips from qcc manifest");
+        assertContains(File::readTextFile(status), "\"skipped\": true",
+            "script aggregate status records manifest skip");
     }
 }
