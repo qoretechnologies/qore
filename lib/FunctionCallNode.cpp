@@ -1163,6 +1163,9 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     // resolves the function
     if (!defer_source_function) {
         fe = qore_root_ns_private::parseFindFunctionEntry(c_str);
+        if (fe && parse_check_parse_option(PO_REQUIRE_TYPES)) {
+            qore_root_ns_private::parseMaybeWarnAmbiguousFunctionCall(loc, c_str, fe);
+        }
     }
     if (!fe && qore_aot_source_parse_active()) {
         if (has_explicit_type_args) {
@@ -1302,6 +1305,9 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             dynamic_class_name = name->ostr;
             delete name;
             name = nullptr;
+        } else {
+            qore_root_ns_private::parseFindScopedClass(loc, *name, true);
+            err = -1;
         }
         delete name;
         name = nullptr;
