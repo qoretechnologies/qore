@@ -728,7 +728,19 @@ transactional `return_records` (update/delete wrap mutate + re-read in
   + batch test; transactional return-records test with a transaction-capable fixture.
 - Effort: medium; each item is independent.
 
-## Phase G — module split (gap 11)
+## Phase G — module split (gap 11) — DONE
+
+Implemented as a **two-module** split (not three): the engine (lexer, AST, parser, schema, value,
+executor, introspection, validator) moved to a new dependency-free `GraphQL` module
+(`%requires qore` only); `GraphQLHandler` now `%requires(reexport) GraphQL` and adds the HTTP
+handler + the DataProvider bridge. To avoid an API break, all classes stay in the `GraphQLHandler`
+namespace (the `GraphQL` module contributes engine classes to it; `GraphQLHandler` re-exports),
+so existing code is unchanged and `%requires GraphQL` gives a json/HttpServerUtil/DataProvider-free
+engine. The bridge was kept in `GraphQLHandler` rather than a separate `GraphQLDataProvider`
+module (it only adds the `DataProvider` dependency, which the HTTP handler does not need but which
+is a core qlib module); a third-module split remains a trivial future follow-up. Original plan below.
+
+
 
 - Extract a `GraphQL` module (lexer, AST, parser, schema, executor, introspection, value,
   validator) with no `json`/`HttpServer`/`DataProvider` dependency. `GraphQLHandler` then `%requires`

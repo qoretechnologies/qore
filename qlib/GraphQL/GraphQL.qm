@@ -1,0 +1,103 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GraphQL.qm Qore user module implementing a transport-agnostic GraphQL execution engine
+
+/*  GraphQL.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+module GraphQL {
+    version = "1.0";
+    desc = "User module implementing a transport-agnostic GraphQL execution engine";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage GraphQL Module
+
+    @tableofcontents
+
+    @section graphqlintro GraphQL Introduction
+
+    The %GraphQL module provides a pure-Qore, transport-agnostic
+    <a href="https://graphql.org">GraphQL</a> execution engine: it tokenizes, parses, validates,
+    and executes GraphQL documents against a user-supplied schema and resolver map, returning the
+    standard <tt>{data, errors}</tt> response envelope. It has no HTTP or
+    @ref dataproviderintro "DataProvider" dependency.
+
+    To expose a GraphQL engine over HTTP, use the @ref graphqlhandlerintro "GraphQLHandler" module,
+    which depends on this module.
+
+    All the public symbols in the module are defined in the GraphQLHandler namespace (shared with
+    @ref graphqlhandlerintro "GraphQLHandler").
+
+    @section graphqlcomponents Components
+
+    - @ref GraphQLHandler::GraphQLLexer "GraphQLLexer": tokenizes GraphQL source text
+    - @ref GraphQLHandler::GraphQLParser "GraphQLParser": parses executable documents into an AST
+    - @ref GraphQLHandler::GraphQLSchema "GraphQLSchema": parses Schema Definition Language (SDL)
+      into an in-memory schema model
+    - @ref GraphQLHandler::GraphQLValidator "GraphQLValidator": validates a document against a schema
+    - @ref GraphQLHandler::GraphQLExecutor "GraphQLExecutor": validates and executes a document
+      against a schema and a resolver map, with introspection support
+
+    @section graphqlexample Example
+
+    @code{.py}
+%requires GraphQL
+
+GraphQLSchema schema("type Query { hello(name: String): String }");
+GraphQLExecutor executor(schema, {
+    "Query": {
+        "hello": string sub (auto parent, hash<auto> args, auto ctx) {
+            return sprintf("Hello, %s!", args.name ?? "world");
+        },
+    },
+});
+hash<auto> result = executor.execute("{ hello(name: \"Ada\") }");
+# result == {"data": {"hello": "Hello, Ada!"}}
+    @endcode
+
+    @section graphqlrelnotes Release Notes
+
+    @subsection graphqlv1_0 GraphQL v1.0
+    - the initial version of the %GraphQL module
+*/
+
+#! the GraphQLHandler namespace contains all the objects in the GraphQL and GraphQLHandler modules
+public namespace GraphQLHandler {
+    #! the exception code thrown for GraphQL syntax errors
+    public const GRAPHQL_SYNTAX_ERROR = "GRAPHQL-SYNTAX-ERROR";
+
+    #! the exception code thrown for GraphQL validation errors
+    public const GRAPHQL_VALIDATION_ERROR = "GRAPHQL-VALIDATION-ERROR";
+
+    #! the exception code thrown for GraphQL schema (SDL) errors
+    public const GRAPHQL_SCHEMA_ERROR = "GRAPHQL-SCHEMA-ERROR";
+
+    #! the exception code thrown for GraphQL execution errors
+    public const GRAPHQL_EXECUTION_ERROR = "GRAPHQL-EXECUTION-ERROR";
+}
