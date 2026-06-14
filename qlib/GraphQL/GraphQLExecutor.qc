@@ -246,6 +246,156 @@ public class GraphQLExecutor {
             : {"data": data};
     }
 
+    #! sets up a subscription: validates the document, calls the subscription field's resolver to
+    #! obtain an event source, and returns the per-event execution state
+    /** @param query the GraphQL subscription document source
+        @param variable_values the input variable values, if any
+        @param operation_name the operation to execute, if the document has more than one
+        @param ctx an arbitrary context value passed to resolvers
+
+        @return on success, a hash with a \c subscription key (an opaque value to pass to
+        @ref getSubscriptionStream() to obtain the event source, and to
+        @ref resolveSubscriptionEvent() per event). On failure (not a subscription or a validation
+        error) a hash with an \c errors key is returned instead.
+
+        @note the subscription field's resolver is NOT called here; call
+        @ref getSubscriptionStream() from the thread that will consume the events, because Qore
+        iterators are thread-bound (an iterator must be created and used in the same thread).
+    */
+    hash<auto> executeSubscription(string query, *hash<auto> variable_values, *string operation_name,
+            auto ctx) {
+        hash<GraphQLDocument> doc;
+        try {
+            doc = GraphQLParser::parse(query);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == GRAPHQL_SYNTAX_ERROR) {
+                return {"errors": (makeError(ex.desc, ex.arg),)};
+            }
+            rethrow;
+        }
+        if (validate_documents) {
+            list<auto> verrs = (new GraphQLValidator(schema, all_types, max_complexity)).validate(doc);
+            if (verrs) {
+                return {"errors": verrs};
+            }
+        }
+        hash<string, hash<GraphQLFragmentDefinition>> fragments();
+        list<hash<GraphQLOperationDefinition>> operations();
+        foreach hash<GraphQLNode> def in (doc.definitions) {
+            if (def.kind == NK_OPERATION) {
+                push operations, cast<hash<GraphQLOperationDefinition>>(def);
+            } else if (def.kind == NK_FRAGMENT_DEFINITION) {
+                hash<GraphQLFragmentDefinition> fd = cast<hash<GraphQLFragmentDefinition>>(def);
+                fragments{fd.name} = fd;
+            }
+        }
+        hash<GraphQLOperationDefinition> op;
+        try {
+            op = selectOperation(operations, operation_name);
+        } catch (hash<ExceptionInfo> ex) {
+            return {"errors": (makeError(ex.desc),)};
+        }
+        if (op.operation != "subscription") {
+            return {"errors": (makeError("executeSubscription() requires a subscription operation"),)};
+        }
+        *hash<GraphQLTypeDef> rootType = schema.getSubscriptionType();
+        if (!rootType) {
+            return {"errors": (makeError("the schema does not support subscription operations"),)};
+        }
+
+        ExecutionState state(self, schema, all_types, effective_resolvers, fragments, ctx,
+            scalar_coercers);
+        try {
+            state.coerceVariables(op.variableDefinitions, variable_values);
+            # validate that the subscription selects exactly one root field
+            hash<GraphQLField> field = state.getSingleRootField(rootType,
+                cast<hash<GraphQLSelectionSet>>(op.selectionSet));
+            return {
+                "subscription": {
+                    "rootType": rootType,
+                    "field": field,
+                    "fragments": fragments,
+                    "variable_values": variable_values,
+                    "op": op,
+                    "ctx": ctx,
+                },
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            return {"errors": (makeError(ex.desc, ex.arg),)};
+        }
+    }
+
+    #! calls the subscription field's resolver to obtain the event source (an AbstractIterator)
+    /** Call this from the thread that will consume the events: Qore iterators are thread-bound, so
+        the event-source iterator must be created in (and only used by) the consuming thread.
+
+        @param subscription the opaque \c subscription value from @ref executeSubscription()
+
+        @return the event source @ref Qore::AbstractIterator
+
+        @throw GRAPHQL-EXECUTION-ERROR the resolver did not return an AbstractIterator
+    */
+    Qore::AbstractIterator getSubscriptionStream(hash<auto> subscription) {
+        ExecutionState state(self, schema, all_types, effective_resolvers, subscription.fragments,
+            subscription.ctx, scalar_coercers);
+        state.coerceVariables(subscription.op.variableDefinitions, subscription.variable_values);
+        auto src = state.resolveSubscriptionSource(subscription.rootType, subscription.field);
+        if (!(src instanceof Qore::AbstractIterator)) {
+            throw GRAPHQL_EXECUTION_ERROR, sprintf("the resolver for subscription field %y must "
+                "return an AbstractIterator (the event source)", subscription.field.name);
+        }
+        return src;
+    }
+
+    #! executes one subscription event, returning the response envelope for that event
+    /** @param subscription the opaque \c subscription value from @ref executeSubscription()
+        @param event the event value yielded by the subscription's event source
+
+        @return the GraphQL response envelope (\c data / \c errors) for this event
+    */
+    hash<auto> resolveSubscriptionEvent(hash<auto> subscription, auto event) {
+        ExecutionState state(self, schema, all_types, effective_resolvers, subscription.fragments,
+            subscription.ctx, scalar_coercers);
+        auto data;
+        try {
+            state.coerceVariables(subscription.op.variableDefinitions, subscription.variable_values);
+            data = state.completeRootFieldWithValue(subscription.rootType, subscription.field, event);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == GRAPHQL_NULL_BUBBLE) {
+                data = NOTHING;
+            } else {
+                return {"errors": (makeError(ex.desc, ex.arg),)};
+            }
+        }
+        list<auto> errs = state.getErrors();
+        return errs ? {"data": data, "errors": errs} : {"data": data};
+    }
+
+    #! returns the operation type (\c query / \c mutation / \c subscription) for a request, or
+    #! @ref NOTHING if the document cannot be parsed or the operation cannot be selected
+    /** @param query the GraphQL document source
+        @param operation_name the operation name, if the document has more than one operation
+    */
+    *string getOperationType(string query, *string operation_name) {
+        hash<GraphQLDocument> doc;
+        try {
+            doc = GraphQLParser::parse(query);
+        } catch (hash<ExceptionInfo> ex) {
+            return NOTHING;
+        }
+        list<hash<GraphQLOperationDefinition>> ops();
+        foreach hash<GraphQLNode> def in (doc.definitions) {
+            if (def.kind == NK_OPERATION) {
+                push ops, cast<hash<GraphQLOperationDefinition>>(def);
+            }
+        }
+        try {
+            return selectOperation(ops, operation_name).operation;
+        } catch (hash<ExceptionInfo> ex) {
+            return NOTHING;
+        }
+    }
+
     #! selects the operation to execute from the document's operations
     private hash<GraphQLOperationDefinition> selectOperation(
             list<hash<GraphQLOperationDefinition>> operations, *string operation_name) {
@@ -557,6 +707,43 @@ class ExecutionState {
             }
         }
         return resultMap;
+    }
+
+    #! returns the single root field of a subscription selection set (errors if not exactly one)
+    /** @throw GRAPHQL-VALIDATION-ERROR the selection set does not contain exactly one field
+    */
+    hash<GraphQLField> getSingleRootField(hash<GraphQLTypeDef> rootType, hash<GraphQLSelectionSet> ss) {
+        hash<auto> grouped = collectFields(rootType, ss, {});
+        if (grouped.size() != 1) {
+            throw GRAPHQL_VALIDATION_ERROR, "a subscription operation must select exactly one root field";
+        }
+        return cast<hash<GraphQLField>>(grouped.firstValue()[0]);
+    }
+
+    #! calls a subscription root field's resolver (with coerced arguments) to obtain the event source
+    auto resolveSubscriptionSource(hash<GraphQLTypeDef> rootType, hash<GraphQLField> field) {
+        *hash<GraphQLFieldDef> fieldDef = getFieldDef(rootType, field.name);
+        if (!fieldDef) {
+            throw GRAPHQL_VALIDATION_ERROR, sprintf("cannot subscribe to field %y on type %y",
+                field.name, rootType.name);
+        }
+        hash<auto> args = coerceArgumentValues(fieldDef, field, (field.alias ?? field.name,));
+        return resolveFieldValue(rootType, fieldDef, field.name, NOTHING, args);
+    }
+
+    #! completes a subscription's root field against a provided event value, returning the data map
+    /** @throw GRAPHQL-NULL-BUBBLE the event value is null in a non-null root field
+    */
+    hash<auto> completeRootFieldWithValue(hash<GraphQLTypeDef> rootType, hash<GraphQLField> field,
+            auto value) {
+        string responseKey = field.alias ?? field.name;
+        *hash<GraphQLFieldDef> fieldDef = getFieldDef(rootType, field.name);
+        if (!fieldDef) {
+            recordError(sprintf("cannot query field %y on type %y", field.name, rootType.name),
+                (responseKey,));
+            return {};
+        }
+        return {responseKey: completeValue(fieldDef.type, (field,), value, (responseKey,))};
     }
 
     #! executes a single field, returning its completed value

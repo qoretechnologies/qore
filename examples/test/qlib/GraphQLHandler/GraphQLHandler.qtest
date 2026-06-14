@@ -16,6 +16,7 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires RestClient
+%requires WebSocketClient
 %requires json
 %requires GraphQLHandler
 
@@ -176,6 +177,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("document validation", \validationTest());
         addTestCase("http persisted queries and batching", \apqBatchTest());
         addTestCase("bridge paging and transactions", \pagingTxTest());
+        addTestCase("websocket subscriptions", \subscriptionTest());
 
         set_return_value(main());
     }
@@ -736,6 +738,61 @@ class GraphQLHandlerTest inherits QUnit::Test {
         assertEq("Z", u.data.update[0].name);
         assertTrue(tp.began, "beginTransaction was called");
         assertTrue(tp.committed, "commit was called");
+    }
+
+    subscriptionTest() {
+        # a subscription server over the graphql-transport-ws protocol
+        GraphQLExecutor ex(new GraphQLSchema("type Query { x: Int } type Subscription { ticks: Int }"), {
+            "Query": {"x": int sub (auto p, hash<auto> a, auto c) { return 0; }},
+            "Subscription": {
+                # the event source is an iterator yielding three values
+                "ticks": auto sub (auto p, hash<auto> a, auto c) { return (1, 2, 3).iterator(); },
+            },
+        });
+        GraphQLWsHandler ws(ex);
+        HttpServer s(<HttpServerOptionInfo>{});
+        s.setDefaultHandler("graphql-ws", ws);
+        int p = s.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit s.stop();
+
+        # the client callback pushes received messages to a Queue; the test reads them with
+        # blocking gets (deterministic, no polling)
+        Queue q();
+        WebSocketClient wsc(sub (*data m) { if (exists m) { q.push(m.toString()); } },
+            {"url": "ws://localhost:" + p});
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # connection_init -> connection_ack
+        wsc.send(make_json({"type": "connection_init"}));
+        assertEq("connection_ack", parse_json(q.get()).type);
+
+        # a subscription streams a next per event, then complete
+        wsc.send(make_json({"type": "subscribe", "id": "1",
+            "payload": {"query": "subscription { ticks }"}}));
+        list<int> vals = ();
+        while (True) {
+            hash<auto> m = parse_json(q.get());
+            if (m.type == "next") {
+                vals += m.payload.data.ticks;
+            } else if (m.type == "complete") {
+                break;
+            } else {
+                fail(sprintf("unexpected message: %y", m));
+            }
+        }
+        assertEq((1, 2, 3), vals);
+
+        # a query sent over subscribe executes once: a single next then complete
+        wsc.send(make_json({"type": "subscribe", "id": "2", "payload": {"query": "{ x }"}}));
+        hash<auto> nm = parse_json(q.get());
+        assertEq("next", nm.type);
+        assertEq(0, nm.payload.data.x);
+        assertEq("complete", parse_json(q.get()).type);
+
+        # ping -> pong
+        wsc.send(make_json({"type": "ping"}));
+        assertEq("pong", parse_json(q.get()).type);
     }
 
     validationTest() {

@@ -750,7 +750,20 @@ is a core qlib module); a third-module split remains a trivial future follow-up.
 - **Decision:** do this only once the engine API is stable (after D/E), since the split freezes the
   public engine surface. Effort: medium (mechanical, but touches registration/docs/tests broadly).
 
-## Phase H — streaming subscriptions (gap 1) — largest
+## Phase H — streaming subscriptions (gap 1) — DONE
+
+Implemented: engine subscription support on `GraphQLExecutor` (`executeSubscription` validates/sets
+up; `getSubscriptionStream` calls the subscription field's resolver to obtain the event-source
+`AbstractIterator`; `resolveSubscriptionEvent` executes the selection set per event; plus
+`getOperationType` for routing) and a `GraphQLWsHandler`/`GraphQLWsConnection`
+(`WebSocketHandler`-based) implementing the graphql-transport-ws protocol (`connection_init`/`ack`,
+`subscribe`→`next`*→`complete`, `complete`, `ping`/`pong`, `error`). Query/mutation operations sent
+over `subscribe` execute once (single `next` + `complete`); subscriptions stream a `next` per event
+from a background thread. Key constraint handled: Qore iterators are thread-bound, so the event
+source is created in the consuming stream thread (`getSubscriptionStream`), not at setup. Original
+plan below.
+
+
 
 - Add a subscription transport on top of `WebSocketHandler.qm` implementing the
   `graphql-transport-ws` protocol (connection_init/ack, subscribe, next, complete, error).

@@ -33,6 +33,7 @@
 %requires(reexport) HttpServerUtil >= 1.0
 %requires(reexport) json >= 1.5
 %requires(reexport) DataProvider
+%requires(reexport) WebSocketHandler >= 1.0
 
 module GraphQLHandler {
     version = "1.0";
