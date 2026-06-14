@@ -1258,6 +1258,7 @@ enum class AOTExprKind : uint8_t {
     ITERATE            = 108, //!< Iterate operator: source expression
     STREAMING          = 109, //!< Streaming operator: kind byte + predicate/count expression + source expression
     DEFERRED_STATIC_METHOD_REF = 110, //!< Deferred static method reference: ref1=class_path, ref2=method_name
+    DEFERRED_FUNCTION_REF = 111, //!< Deferred function call reference: ref1=function_name
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };

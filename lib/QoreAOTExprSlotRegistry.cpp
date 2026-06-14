@@ -456,7 +456,7 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"STREAMING", 109, true, write_slot_STREAMING, "Streaming operator"},
     {"DEFERRED_STATIC_METHOD_REF", 110, true, write_slot_STATIC_METHOD_REF,
         "Deferred static method reference"},
-    {nullptr, 111, false, nullptr, nullptr},
+    {"DEFERRED_FUNCTION_REF", 111, true, write_slot_FUNC_CALL_REF, "Deferred function call reference"},
     {nullptr, 112, false, nullptr, nullptr},
     {nullptr, 113, false, nullptr, nullptr},
     {nullptr, 114, false, nullptr, nullptr},

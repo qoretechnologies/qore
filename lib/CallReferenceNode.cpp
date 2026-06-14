@@ -819,6 +819,10 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     const bool defer_source_static_receiver = !source_receiver_path.empty()
         && qore_aot_should_defer_source_symbol(loc, source_receiver_path.c_str(),
             QoreAOTSourceSymbolKind::Class);
+    const bool defer_source_function = !defer_source_static_receiver && scope->size() >= 2
+        && (qore_aot_should_defer_source_symbol(loc, scope->ostr, QoreAOTSourceSymbolKind::Function)
+            || qore_aot_should_defer_source_symbol(loc, scope->getIdentifier(),
+                QoreAOTSourceSymbolKind::Function));
     if (defer_source_static_receiver) {
         if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
             qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
@@ -841,6 +845,11 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         if (qore_aot_source_parse_active() && scope->size() >= 2) {
             if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
                 qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+            }
+            if (defer_source_function) {
+                val = new DeferredFunctionCallReferenceNode(loc, scope->ostr);
+                deref();
+                return 0;
             }
             val = new DeferredStaticMethodCallReferenceNode(loc, source_receiver_path.c_str(),
                 scope->getIdentifier());
@@ -945,6 +954,65 @@ bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
 QoreValue FunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return uf->evalFunction(0, args, pgm, rc, xsink);
+}
+
+DeferredFunctionCallReferenceNode::DeferredFunctionCallReferenceNode(const QoreProgramLocation* loc,
+        const char* n_function_name)
+        : ResolvedCallReferenceNodeIntern(loc, true), function_name(n_function_name ? n_function_name : "") {
+}
+
+bool DeferredFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    const DeferredFunctionCallReferenceNode* d = dynamic_cast<const DeferredFunctionCallReferenceNode*>(v);
+    return d && function_name == d->function_name;
+}
+
+FunctionCallReferenceNode* DeferredFunctionCallReferenceNode::resolve(RuntimeConfig& rc, ExceptionSink* xsink) const {
+    if (function_name.empty()) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",
+            function_name.c_str());
+        return nullptr;
+    }
+
+    QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
+    if (!pgm) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve function call reference '%s()': no program context", function_name.c_str());
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, function_name.c_str());
+    QoreFunction* func = fe ? fe->getFunction(true) : nullptr;
+    if (!func) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve function call reference '%s()'",
+            function_name.c_str());
+        return nullptr;
+    }
+
+    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
+    return new FunctionCallReferenceNode(loc, func, call_pgm);
+}
+
+QoreValue DeferredFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue DeferredFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref,
+        ExceptionSink* xsink) const {
+    assert(needs_deref);
+    return resolve(rc, xsink);
+}
+
+QoreValue DeferredFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    FunctionCallReferenceNode* ref = resolve(rc, xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    QoreValue rv = ref->execValue(args, xsink);
+    ref->deref(xsink);
+    return rv;
 }
 
 ResolvedCallReferenceNode::ResolvedCallReferenceNode() : AbstractCallReferenceNode(false, NT_FUNCREF) {

@@ -8663,6 +8663,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                             result = emitMaybeInvoke(helper, helper_throwing,
                                     {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                        } else if (auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
+                            llvm::Value* function_name = builder->CreateGlobalStringPtr(
+                                    dfcr->getFunctionName(), "deferred_function_call_ref_name");
+                            auto cr_ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_function_call_ref_aot", cr_ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {function_name, xsink_arg}, module, llvm_func, inst);
                         } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
                             QoreFunction* func = fcr->getFunction();
                             if (!func) {
@@ -12561,6 +12572,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
                                 {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                    } else if (auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
+                        llvm::Value* function_name = builder->CreateGlobalStringPtr(
+                                dfcr->getFunctionName(), "deferred_function_call_ref_name");
+                        auto cr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_function_call_ref_aot", cr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {function_name, xsink_arg}, module, llvm_func, inst);
                     } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
                         QoreFunction* func = fcr->getFunction();
                         if (!func) {

@@ -1401,6 +1401,11 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
         ctx.writer.writeStringRef(dscr->getMethodName().c_str());
         return true;
     }
+    if (auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DEFERRED_FUNCTION_REF));
+        ctx.writer.writeStringRef(dfcr->getFunctionName().c_str());
+        return true;
+    }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
         QoreFunction* f = fcr->getFunction();
@@ -1578,6 +1583,26 @@ static bool write_expr_func_call_ref(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_func_call_ref(AOTExprReadCtx& ctx) {
     return read_aot_function_call_ref(ctx);
+}
+
+static bool write_expr_deferred_function_ref(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node);
+    if (!dfcr) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DEFERRED_FUNCTION_REF));
+    ctx.writer.writeStringRef(dfcr->getFunctionName().c_str());
+    return true;
+}
+
+static QoreValue read_expr_deferred_function_ref(AOTExprReadCtx& ctx) {
+    const char* function_name = ctx.reader.readStringRef(ctx.ptr);
+    if (!function_name || !*function_name) {
+        ctx.error = "empty deferred function call reference";
+        return QoreValue();
+    }
+    return QoreValue(new DeferredFunctionCallReferenceNode(&loc_builtin, function_name));
 }
 
 static bool write_expr_bound_method_ref(AOTExprWriteCtx& ctx) {

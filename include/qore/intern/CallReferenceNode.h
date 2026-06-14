@@ -36,6 +36,7 @@
 #include <string>
 
 class LocalFunctionCallReferenceNode;
+class FunctionCallReferenceNode;
 class RuntimeConfig;
 
 struct CallReferenceNodeLocation {
@@ -176,6 +177,37 @@ protected:
 
 private:
     DLLLOCAL StaticMethodCallReferenceNode* resolve(RuntimeConfig& rc, ExceptionSink* xsink) const;
+};
+
+//! a call reference to a user function resolved after AOT source linking
+class DeferredFunctionCallReferenceNode : public ResolvedCallReferenceNodeIntern {
+public:
+    DLLLOCAL DeferredFunctionCallReferenceNode(const QoreProgramLocation* loc, const char* n_function_name);
+
+    DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+        return DeferredFunctionCallReferenceNode::is_equal_hard(v, xsink);
+    }
+
+    DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreFunction* getFunction() const {
+        return nullptr;
+    }
+
+    DLLLOCAL const std::string& getFunctionName() const {
+        return function_name;
+    }
+
+protected:
+    std::string function_name;
+
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+private:
+    DLLLOCAL FunctionCallReferenceNode* resolve(RuntimeConfig& rc, ExceptionSink* xsink) const;
 };
 
 //! a call reference to a static user method

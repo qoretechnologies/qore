@@ -1450,6 +1450,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
         bool parameterized_receiver = static_scope_has_parameterized_receiver(*scope);
         bool defer_source_static_receiver = false;
+        bool defer_source_function = false;
         QoreClass* qc = nullptr;
         if (parameterized_receiver) {
             receiver_type_info = resolve_static_scope_receiver_type(loc, *scope, err);
@@ -1475,6 +1476,12 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             std::string source_receiver_path = get_static_scope_class_path(*scope);
             defer_source_static_receiver = qore_aot_should_defer_source_symbol(loc, source_receiver_path.c_str(),
                 QoreAOTSourceSymbolKind::Class);
+            if (!defer_source_static_receiver && scope->size() >= 2) {
+                defer_source_function = qore_aot_should_defer_source_symbol(loc, scope->ostr,
+                    QoreAOTSourceSymbolKind::Function)
+                    || qore_aot_should_defer_source_symbol(loc, scope->getIdentifier(),
+                        QoreAOTSourceSymbolKind::Function);
+            }
             if (!defer_source_static_receiver) {
                 qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
             }
@@ -1576,6 +1583,33 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             }
 
             if (qore_aot_source_parse_active() && scope->size() >= 2) {
+                if (defer_source_function && !defer_source_static_receiver) {
+                    if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                        qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+                    }
+
+                    const FunctionEntry* call_function_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
+                        "call_function");
+                    if (!call_function_fe) {
+                        return -1;
+                    }
+
+                    QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
+                    dynamic_args->add(new QoreStringNode(scope->ostr), loc);
+                    QoreParseListNode* old_args = takeParseArgs();
+                    if (old_args) {
+                        dynamic_args->appendFrom(old_args);
+                        old_args->deref();
+                    }
+
+                    FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_function_fe, dynamic_args);
+                    val = dynamic_call;
+                    delete scope;
+                    scope = nullptr;
+                    deref();
+                    return dynamic_call->parseInitFinalizedCall(val, parse_context);
+                }
+
                 if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
                     qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
                 }

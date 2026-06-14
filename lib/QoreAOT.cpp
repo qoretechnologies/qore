@@ -10868,6 +10868,12 @@ static bool isNativelyLoweredAOTCallRef(const QoreValue& expr) {
     if (method && method->isStatic() && method->getClass()) {
         return true;
     }
+    if (dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+        return true;
+    }
+    if (dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
+        return true;
+    }
     auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node);
     return fcr && fcr->getFunction();
 }
@@ -14672,6 +14678,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::DEFERRED_STATIC_METHOD_REF;
         id.ref1 = dscr->getClassPath();
         id.ref2 = dscr->getMethodName();
+        return id;
+    }
+    if (auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
+        id.kind = AOTExprKind::DEFERRED_FUNCTION_REF;
+        id.ref1 = dfcr->getFunctionName();
         return id;
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
