@@ -33,6 +33,7 @@
 %requires(reexport) HttpServerUtil >= 1.0
 %requires(reexport) json >= 1.5
 %requires(reexport) WebSocketHandler >= 1.0
+%requires HttpServerAsyncIo
 
 module GraphQLHandler {
     version = "1.0";
@@ -54,7 +55,8 @@ module GraphQLHandler {
     (subscriptions via the \c graphql-transport-ws protocol).
 
     The HTTP handler implements the GraphQL-over-HTTP conventions (POST and GET), document caching,
-    persisted queries, and request batching.
+    persisted queries, request batching, and Server-Sent Events (\c "Accept: text/event-stream",
+    distinct-connections mode) for streaming subscription results over plain HTTP.
 
     To use this module, use \c "%requires GraphQLHandler" in your code. To use just the engine
     (no HTTP dependency), use \c "%requires GraphQL" instead. To generate a schema automatically

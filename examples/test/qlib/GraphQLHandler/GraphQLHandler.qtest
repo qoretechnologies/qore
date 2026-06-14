@@ -64,6 +64,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("http persisted queries and batching", \apqBatchTest());
         addTestCase("websocket subscriptions", \subscriptionTest());
         addTestCase("websocket subscription robustness", \subscriptionRobustnessTest());
+        addTestCase("http sse subscriptions", \sseTest());
 
         set_return_value(main());
     }
@@ -639,5 +640,94 @@ class GraphQLHandlerTest inherits QUnit::Test {
         GraphQLExecutor nex(new GraphQLSchema(sdl), {});
         nex.setValidation(False);
         assertRegex("cannot query field", nex.execute("{ nope }").errors[0].message);
+    }
+
+    #! issues a GraphQL operation over HTTP requesting an SSE response, returning the parsed events
+    /** the raw query is passed in the path; HTTPClient percent-encodes it once (the server decodes
+        it once via parse_uri_query)
+    */
+    private list<auto> sseGet(HTTPClient hc, string query) {
+        hash<auto> resp = hc.send(NOTHING, "GET", "/graphql?query=" + query,
+            {"Accept": "text/event-stream"});
+        return parseSse(resp.body.toString());
+    }
+
+    #! parses an SSE response body into a list of {event, data} hashes (data JSON-decoded)
+    private list<auto> parseSse(string body) {
+        list<auto> out();
+        foreach string block in (body.split("\n\n")) {
+            if (!block.val()) {
+                continue;
+            }
+            hash<auto> ev();
+            string dataRaw = "";
+            foreach string line in (block.split("\n")) {
+                if (line =~ /^event: /) {
+                    ev.event = (line =~ x/^event: (.*)$/)[0];
+                } else if (line =~ /^data: /) {
+                    dataRaw += (line =~ x/^data: (.*)$/)[0];
+                }
+            }
+            if (dataRaw.val()) {
+                ev.data = parse_json(dataRaw);
+            }
+            out += ev;
+        }
+        return out;
+    }
+
+    sseTest() {
+        # a GraphQL-over-HTTP SSE server: a Query, a Mutation, and a Subscription whose event source
+        # is a GraphQLEventQueue handed back to the test via a Queue (deterministic, no polling)
+        Queue created();
+        GraphQLExecutor ex(new GraphQLSchema(
+            "type Query { ping: String } type Mutation { noop: String } type Subscription { feed: Int }"), {
+            "Query": {"ping": string sub (auto p, hash<auto> a, auto c) { return "pong"; }},
+            "Mutation": {"noop": string sub (auto p, hash<auto> a, auto c) { return "ok"; }},
+            "Subscription": {
+                "feed": auto sub (auto p, hash<auto> a, auto c) {
+                    GraphQLEventQueue evq();
+                    created.push(evq);
+                    return evq;
+                },
+            },
+        });
+        GraphQLHandler gh(ex);
+        HttpServer s(<HttpServerOptionInfo>{});
+        s.setDefaultHandler("graphql", gh);
+        int sport = s.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit s.stop();
+
+        HTTPClient hc({"url": "http://localhost:" + sport});
+        on_exit hc.disconnect();
+
+        # a query over SSE: a single "next" with the result, then "complete"
+        list<auto> ev1 = sseGet(hc, "{ ping }");
+        assertEq("next", ev1[0].event);
+        assertEq("pong", ev1[0].data.data.ping);
+        assertEq("complete", ev1[ev1.size() - 1].event);
+
+        # a subscription over SSE: a background producer posts three events then completes the stream
+        background sub () {
+            GraphQLEventQueue evq = created.get();
+            evq.post(1);
+            evq.post(2);
+            evq.post(3);
+            evq.complete();
+        }();
+        list<auto> ev2 = sseGet(hc, "subscription { feed }");
+        list<int> vals = ();
+        foreach hash<auto> e in (ev2) {
+            if (e.event == "next") {
+                vals += e.data.data.feed;
+            }
+        }
+        assertEq((1, 2, 3), vals);
+        assertEq("complete", ev2[ev2.size() - 1].event);
+
+        # a mutation over SSE GET is rejected (GET stays query/subscription-only)
+        list<auto> ev3 = sseGet(hc, "mutation { noop }");
+        assertEq("next", ev3[0].event);
+        assertRegex("not permitted over GET", ev3[0].data.errors[0].message);
     }
 }

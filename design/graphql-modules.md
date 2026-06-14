@@ -11,7 +11,7 @@ engine, the `GraphQLClient` client mixin, the `GraphQLDataProvider` schema bridg
 | `GraphQL` | transport-agnostic GraphQL execution engine | `qore` only |
 | `GraphQLClient` | reusable GraphQL client protocol mixin for REST transports | `Mime` |
 | `GraphQLDataProvider` | generates a schema and resolvers from a DataProvider | `GraphQL`, `DataProvider` |
-| `GraphQLHandler` | exposes the engine over HTTP/WebSocket | `GraphQL`, `json`, `HttpServerUtil`, `WebSocketHandler` |
+| `GraphQLHandler` | exposes the engine over HTTP/WebSocket/SSE | `GraphQL`, `json`, `HttpServerUtil`, `WebSocketHandler`, `HttpServerAsyncIo` |
 
 All public symbols live in the `GraphQLHandler` namespace. The `GraphQL` module contributes the
 engine classes (and the `GRAPHQL-*` exception-code constants) to that namespace; both
@@ -146,6 +146,20 @@ subscription waiting for an event and end it cleanly.
 - executes a JSON-array request body as a batch (one envelope per operation, bounded);
 - restricts `GET` to query operations (mutations rejected) to avoid CSRF;
 - converts any unexpected exception into an error envelope rather than leaking an HTTP 500.
+
+### Server-Sent Events (SSE)
+
+When a request carries `Accept: text/event-stream`, the handler answers with the GraphQL-over-HTTP
+SSE **distinct-connections mode**: one HTTP request maps to one SSE response of `event: next`
+frames (each a result envelope) terminated by a single `event: complete`. A query/mutation emits one
+`next`; a subscription emits one `next` per event from its source. `GraphQLHandler` inherits
+`AbstractHttpSocketHandler` and implements `setupAsyncSseConnection{,Http2,Http3}()`: `handleRequest`
+classifies the operation into a `GraphQLSseStream` (one-shot envelope or subscription state) carried
+via `cx.user_state`, and the setup method pumps it from a background thread into the async I/O
+controller's SSE stream (uniform `queueRawString`/`close` across H1/H2/H3). SSE therefore requires
+the `HttpServer` to run with its asynchronous I/O controller (the default). `GET` remains
+query/subscription-only over SSE. As with WebSocket, a subscription blocked in its source's `next()`
+is only interrupted by the next event or by completing/cancelling the source.
 
 ### WebSocket handler
 

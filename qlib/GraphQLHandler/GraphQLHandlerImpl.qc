@@ -48,7 +48,7 @@ HttpServer server(<HttpServerOptionInfo>{});
 server.setHandler("graphql", "/graphql", MimeTypeJson, gh, NOTHING, False);
     @endcode
 */
-public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
+public class GraphQLHandler inherits HttpServer::AbstractHttpSocketHandler {
     private {
         #! the execution engine
         GraphQLExecutor executor;
@@ -81,7 +81,7 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
     */
     constructor(string sdl, hash<auto> resolvers, *HttpServer::AbstractAuthenticator auth,
             *hash<auto> scalar_coercers)
-            : HttpServer::AbstractHttpRequestHandler(auth) {
+            : HttpServer::AbstractHttpSocketHandler(auth) {
         executor = new GraphQLExecutor(new GraphQLSchema(sdl), resolvers, scalar_coercers);
     }
 
@@ -90,7 +90,7 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         @param auth an optional authenticator for the handler
     */
     constructor(GraphQLExecutor n_executor, *HttpServer::AbstractAuthenticator auth)
-            : HttpServer::AbstractHttpRequestHandler(auth) {
+            : HttpServer::AbstractHttpSocketHandler(auth) {
         executor = n_executor;
     }
 
@@ -141,13 +141,156 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         if (!parsed.query.val() && !exists parsed.extensions.persistedQuery.sha256Hash) {
             return makeJsonResponse(400, {"errors": ({"message": "no GraphQL query was provided"},)});
         }
+        # GraphQL-over-HTTP SSE (distinct connections mode): a client requesting text/event-stream
+        # gets the result(s) as Server-Sent Events (required for streaming subscription results)
+        if (wantsEventStream(hdr)) {
+            return handleSse(cx, hdr, parsed);
+        }
         return makeJsonResponse(200, executeSingle(cx, hdr, parsed));
     }
 
-    #! executes a single GraphQL request (query/operationName/variables/extensions), returning the envelope
-    private hash<auto> executeSingle(hash<auto> cx, hash<auto> hdr, hash<auto> req) {
-        # Automatic Persisted Queries: resolve the query text from the SHA-256 hash if present
-        string query;
+    #! returns @ref True if the client's \c Accept header requests an SSE (\c text/event-stream) response
+    private bool wantsEventStream(hash<auto> hdr) {
+        foreach string k in (keys hdr) {
+            if (k.lwr() == "accept") {
+                string av = hdr{k}.typeCode() == NT_LIST ? hdr{k}.join(",") : hdr{k};
+                return av.lwr().find("text/event-stream") != -1;
+            }
+        }
+        return False;
+    }
+
+    #! handles a single GraphQL request as a Server-Sent-Events stream (GraphQL-over-HTTP SSE)
+    /** A subscription streams a \c next event per event source value; a query or mutation emits a
+        single \c next; both end with a \c complete event. The actual streaming is driven by the
+        async I/O controller via @ref setupAsyncSseConnection() (and the HTTP/2 and HTTP/3 variants);
+        this method classifies the operation into a @ref GraphQLSseStream and hands it to those
+        setup methods through \c cx.user_state.
+
+        @return an SSE (\c text/event-stream) @ref HttpServer::HttpResponseInfo
+
+        @note SSE responses require the @ref httpserverintro "HttpServer" to be running with its
+        asynchronous I/O controller (the default).
+    */
+    private hash<HttpServer::HttpResponseInfo> handleSse(hash<auto> cx, hash<auto> hdr, hash<auto> req) {
+        GraphQLSseStream stream = buildSseStream(cx, hdr, req);
+        return cast<hash<HttpServer::HttpResponseInfo>>({
+            "code": 200,
+            "hdr": {
+                "Content-Type": MimeTypeSse,
+                "Cache-Control": "no-cache",
+                # ask reverse proxies (nginx etc.) not to buffer the event stream
+                "X-Accel-Buffering": "no",
+            },
+            # carried into cx.user_state and consumed by the setupAsyncSseConnection* methods
+            "user_state": {"graphql_sse_stream": stream},
+        });
+    }
+
+    #! synchronous dedicated-socket entry point — SSE is handled via the async setup methods instead
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
+        throw "GRAPHQL-SSE-ERROR", "synchronous SSE handling is not supported; the HttpServer must "
+            "run with its asynchronous I/O controller";
+    }
+
+    #! sets up an HTTP/1.x SSE connection: pumps the classified stream into the poll operation
+    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(Qore::Socket sock,
+            hash<auto> cx, hash<auto> hdr, string cid) {
+        HttpServerAsyncIo::HttpSseStreamPollOperation poll_op(sock);
+        startSsePump(poll_op, cx.user_state.graphql_sse_stream);
+        return poll_op;
+    }
+
+    #! sets up an HTTP/2 SSE connection on a multiplexed stream
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Qore::Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http2SseStream sse_stream(sock, stream_id, wake_callback, True);
+        startSsePump(sse_stream, cx.user_state.graphql_sse_stream);
+        return sse_stream;
+    }
+
+    #! sets up an HTTP/3 SSE connection on a QUIC stream
+    HttpServerAsyncIo::Http3SseStream setupAsyncSseConnectionHttp3(Qore::Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid, int session_id, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http3SseStream sse_stream(sock, session_id, stream_id, wake_callback, True);
+        startSsePump(sse_stream, cx.user_state.graphql_sse_stream);
+        return sse_stream;
+    }
+
+    #! drives a @ref GraphQLSseStream in a background thread, queuing each SSE chunk on the given
+    #! async SSE stream object and closing it when the stream is finished
+    /** @param sse_stream an @ref HttpServerAsyncIo SSE stream object (HTTP/1.x poll op, or the
+        HTTP/2 / HTTP/3 stream adapter), all of which expose \c queueRawString() and \c close()
+        @param stream the classified GraphQL SSE stream
+    */
+    private startSsePump(object sse_stream, GraphQLSseStream stream) {
+        background sub () {
+            try {
+                *string chunk = stream.nextChunk();
+                while (exists chunk) {
+                    sse_stream.queueRawString(chunk);
+                    chunk = stream.nextChunk();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the client may have disconnected; stop pumping
+            }
+            try {
+                sse_stream.close();
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore close failures (already closed / client gone)
+            }
+        }();
+    }
+
+    #! resolves and classifies a request into a @ref GraphQLSseStream (subscription, one-shot, or error)
+    private GraphQLSseStream buildSseStream(hash<auto> cx, hash<auto> hdr, hash<auto> req) {
+        # resolve the query text (Automatic Persisted Queries aware)
+        hash<auto> qr = resolveQuery(req);
+        if (exists qr.errors) {
+            return new GraphQLSseStream(executor, NOTHING, qr);
+        }
+        string query = qr.query;
+
+        # a syntax error becomes a single next {errors} + complete
+        try {
+            getDocument(query);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == GRAPHQL_SYNTAX_ERROR) {
+                return new GraphQLSseStream(executor, NOTHING,
+                    {"errors": (GraphQLExecutor::makeError(ex.desc, ex.arg),)});
+            }
+            rethrow;
+        }
+        hash<GraphQLDocument> doc = getDocument(query);
+
+        *string opType = executor.getOperationType(query, req.operationName);
+        if (opType == "subscription") {
+            hash<auto> subr = executor.executeSubscription(query, req.variables, req.operationName, cx);
+            if (exists subr.errors) {
+                return new GraphQLSseStream(executor, NOTHING, {"errors": subr.errors});
+            }
+            return new GraphQLSseStream(executor, subr.subscription, NOTHING);
+        }
+
+        # query or mutation: execute once. GET remains query-only (CSRF defense), even over SSE
+        if (hdr.method == "GET" && opType == "mutation") {
+            return new GraphQLSseStream(executor, NOTHING,
+                {"errors": ({"message": "mutation operations are not permitted over GET"},)});
+        }
+        hash<auto> env;
+        try {
+            env = executor.executeDocument(doc, req.variables, req.operationName, cx);
+        } catch (hash<ExceptionInfo> ex) {
+            env = {"errors": ({"message": ex.desc},)};
+        }
+        return new GraphQLSseStream(executor, NOTHING, env);
+    }
+
+    #! resolves the GraphQL query text for a request, honoring Automatic Persisted Queries
+    /** @return \c {"query": <text>} on success, or \c {"errors": (...)} if the query could not be
+        resolved (APQ hash mismatch, not-found, or no query provided)
+    */
+    private hash<auto> resolveQuery(hash<auto> req) {
         *string apqHash = req.extensions.persistedQuery.sha256Hash;
         if (exists apqHash) {
             if (req.query.val()) {
@@ -155,19 +298,28 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
                     return {"errors": ({"message": "PersistedQueryHashMismatch"},)};
                 }
                 apqPut(apqHash, req.query);
-                query = req.query;
-            } else {
-                *string cached = apqGet(apqHash);
-                if (!exists cached) {
-                    return {"errors": ({"message": "PersistedQueryNotFound"},)};
-                }
-                query = cached;
+                return {"query": req.query};
             }
-        } else if (req.query.val()) {
-            query = req.query;
-        } else {
-            return {"errors": ({"message": "no GraphQL query was provided"},)};
+            *string cached = apqGet(apqHash);
+            if (!exists cached) {
+                return {"errors": ({"message": "PersistedQueryNotFound"},)};
+            }
+            return {"query": cached};
         }
+        if (req.query.val()) {
+            return {"query": req.query};
+        }
+        return {"errors": ({"message": "no GraphQL query was provided"},)};
+    }
+
+    #! executes a single GraphQL request (query/operationName/variables/extensions), returning the envelope
+    private hash<auto> executeSingle(hash<auto> cx, hash<auto> hdr, hash<auto> req) {
+        # Automatic Persisted Queries: resolve the query text from the SHA-256 hash if present
+        hash<auto> qr = resolveQuery(req);
+        if (exists qr.errors) {
+            return qr;
+        }
+        string query = qr.query;
 
         # parse (LRU cached); a syntax error is a 200 errors envelope
         hash<GraphQLDocument> doc;
