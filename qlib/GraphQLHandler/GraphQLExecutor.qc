@@ -58,14 +58,25 @@ public class GraphQLExecutor {
         hash<auto> effective_resolvers;
         #! the working type map (schema types plus introspection types)
         hash<string, hash<GraphQLTypeDef>> all_types;
+        #! custom-scalar coercers, keyed by scalar type name
+        hash<auto> scalar_coercers;
     }
 
     #! creates the executor for the given schema and resolver map
     /** @param n_schema the schema to execute against
         @param n_resolvers the resolver map (type name -> field name -> resolver code)
+        @param n_scalar_coercers optional custom-scalar coercers, keyed by scalar type name; each
+        value is a hash that may contain:
+        - \c input: <tt>auto sub (auto value)</tt> — validates/parses a client input value for the
+          scalar (should throw to reject an invalid value)
+        - \c output: <tt>auto sub (auto value)</tt> — serializes a resolved value for the scalar
+
+        Built-in scalars (\c Int, \c Float, \c String, \c Boolean, \c ID) are always validated by
+        the engine. A custom scalar with no registered coercer passes its value through unchanged.
     */
-    constructor(GraphQLSchema n_schema, hash<auto> n_resolvers) {
+    constructor(GraphQLSchema n_schema, hash<auto> n_resolvers, *hash<auto> n_scalar_coercers) {
         schema = n_schema;
+        scalar_coercers = n_scalar_coercers ?? {};
         # merge introspection types into the working type map
         all_types = schema.getTypes() + GraphQLIntrospection::getIntrospectionTypes();
 
@@ -172,7 +183,8 @@ public class GraphQLExecutor {
         }
 
         # establish the execution state
-        ExecutionState state(self, schema, all_types, effective_resolvers, fragments, ctx);
+        ExecutionState state(self, schema, all_types, effective_resolvers, fragments, ctx,
+            scalar_coercers);
 
         # coerce variables
         try {
@@ -252,6 +264,10 @@ class ExecutionState {
     public {
         #! the maximum selection-set / input-value nesting depth (DoS guard against deeply nested queries)
         const MaxDepth = 64;
+        #! the minimum value representable by the GraphQL \c Int scalar (signed 32-bit)
+        const Int32Min = -2147483648;
+        #! the maximum value representable by the GraphQL \c Int scalar (signed 32-bit)
+        const Int32Max = 2147483647;
     }
 
     private {
@@ -259,6 +275,8 @@ class ExecutionState {
         int selection_depth = 0;
         #! the current input-value nesting depth (bounded by @ref MaxDepth)
         int input_depth = 0;
+        #! custom-scalar coercers, keyed by scalar type name
+        hash<auto> scalar_coercers;
         #! the owning executor
         GraphQLExecutor executor;
         #! the schema
@@ -280,13 +298,15 @@ class ExecutionState {
     #! creates the execution state
     constructor(GraphQLExecutor n_executor, GraphQLSchema n_schema,
             hash<string, hash<GraphQLTypeDef>> n_all_types, hash<auto> n_resolvers,
-            hash<string, hash<GraphQLFragmentDefinition>> n_fragments, auto n_ctx) {
+            hash<string, hash<GraphQLFragmentDefinition>> n_fragments, auto n_ctx,
+            hash<auto> n_scalar_coercers) {
         executor = n_executor;
         schema = n_schema;
         all_types = n_all_types;
         resolvers = n_resolvers;
         fragments = n_fragments;
         ctx = n_ctx;
+        scalar_coercers = n_scalar_coercers;
     }
 
     #! returns the accumulated execution errors
@@ -414,14 +434,22 @@ class ExecutionState {
     #! coerces a value to a built-in or custom scalar
     private auto coerceScalar(auto value, string tname, string ctx) {
         switch (tname) {
-            case "Int":
+            case "Int": {
+                int iv;
                 if (value.typeCode() == NT_INT) {
-                    return value;
+                    iv = value;
+                } else if (value.typeCode() == NT_STRING && value =~ /^-?[0-9]+$/) {
+                    iv = value.toInt();
+                } else {
+                    throw GRAPHQL_VALIDATION_ERROR, sprintf("%s must be an integer", ctx);
                 }
-                if (value.typeCode() == NT_STRING && value =~ /^-?[0-9]+$/) {
-                    return value.toInt();
+                # the GraphQL Int scalar is a signed 32-bit value
+                if (iv < Int32Min || iv > Int32Max) {
+                    throw GRAPHQL_VALIDATION_ERROR, sprintf("%s value %d is outside the 32-bit "
+                        "range of the Int scalar", ctx, iv);
                 }
-                throw GRAPHQL_VALIDATION_ERROR, sprintf("%s must be an integer", ctx);
+                return iv;
+            }
             case "Float":
                 if (value.typeCode() == NT_FLOAT || value.typeCode() == NT_INT) {
                     return value.toFloat();
@@ -441,9 +469,11 @@ class ExecutionState {
                     return value.toString();
                 }
                 throw GRAPHQL_VALIDATION_ERROR, sprintf("%s must be a string", ctx);
-            default:
-                # custom scalar: pass through
-                return value;
+            default: {
+                # custom scalar: use a registered input coercer if present, else pass through
+                *code coercer = scalar_coercers{tname}.input;
+                return exists coercer ? coercer(value) : value;
+            }
         }
     }
 
@@ -627,8 +657,15 @@ class ExecutionState {
     #! coerces a leaf scalar result value to its serialized form
     private auto completeLeafScalar(auto result, string tname, list<auto> path) {
         switch (tname) {
-            case "Int":
-                return int(result);
+            case "Int": {
+                int iv = int(result);
+                # the GraphQL Int scalar is a signed 32-bit value; an out-of-range result is an error
+                if (iv < Int32Min || iv > Int32Max) {
+                    throw GRAPHQL_EXECUTION_ERROR, sprintf("Int field at path %s cannot represent "
+                        "the value %d (outside the 32-bit range)", pathToString(path), iv);
+                }
+                return iv;
+            }
             case "Float":
                 return float(result);
             case "Boolean":
@@ -636,9 +673,11 @@ class ExecutionState {
             case "String":
             case "ID":
                 return result.toString();
-            default:
-                # custom scalar: serialize as-is
-                return result;
+            default: {
+                # custom scalar: use a registered output coercer if present, else serialize as-is
+                *code coercer = scalar_coercers{tname}.output;
+                return exists coercer ? coercer(result) : result;
+            }
         }
     }
 

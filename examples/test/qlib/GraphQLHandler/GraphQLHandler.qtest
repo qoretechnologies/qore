@@ -605,6 +605,30 @@ class GraphQLHandlerTest inherits QUnit::Test {
         # a provider with two fields that sanitize to the same GraphQL name is rejected
         assertThrows("GRAPHQL-SCHEMA-ERROR", "map to the GraphQL field name",
             sub () { new DataProviderGraphQLSchema(new CollisionProvider()); });
+
+        # the GraphQL Int scalar is a signed 32-bit value: out-of-range input is rejected
+        GraphQLExecutor iex(new GraphQLSchema("type Query { add(a: Int!, b: Int!): Int! }"), {
+            "Query": {"add": int sub (auto p, hash<auto> a, auto c) { return a.a + a.b; }},
+        });
+        assertRegex("32-bit range",
+            iex.execute("{ add(a: 3000000000, b: 1) }").errors[0].message);
+        # an out-of-range Int result is a field error
+        assertRegex("32-bit",
+            iex.execute("{ add(a: 2000000000, b: 200000000) }").errors[0].message);
+        # in-range still works
+        assertEq(3, iex.execute("{ add(a: 1, b: 2) }").data.add);
+
+        # custom-scalar coercers are applied on input then output
+        hash<auto> coercers = {
+            "Upper": {
+                "input": auto sub (auto v) { return "in:" + v; },
+                "output": auto sub (auto v) { return "out:" + v; },
+            },
+        };
+        GraphQLExecutor cex(new GraphQLSchema("scalar Upper\ntype Query { shout(text: Upper): Upper }"), {
+            "Query": {"shout": auto sub (auto p, hash<auto> a, auto c) { return a.text; }},
+        }, coercers);
+        assertEq("out:in:hi", cex.execute("{ shout(text: \"hi\") }").data.shout);
     }
 
     bridgePhaseCTest() {

@@ -69,13 +69,16 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
     /** @param sdl the schema definition language source
         @param resolvers the resolver map (type name -> field name -> resolver code)
         @param auth an optional authenticator for the handler
+        @param scalar_coercers optional custom-scalar coercers keyed by scalar type name (see
+        @ref GraphQLExecutor::constructor())
 
         @throw GRAPHQL-SYNTAX-ERROR the SDL is syntactically invalid
         @throw GRAPHQL-SCHEMA-ERROR the SDL is semantically invalid
     */
-    constructor(string sdl, hash<auto> resolvers, *HttpServer::AbstractAuthenticator auth)
+    constructor(string sdl, hash<auto> resolvers, *HttpServer::AbstractAuthenticator auth,
+            *hash<auto> scalar_coercers)
             : HttpServer::AbstractHttpRequestHandler(auth) {
-        executor = new GraphQLExecutor(new GraphQLSchema(sdl), resolvers);
+        executor = new GraphQLExecutor(new GraphQLSchema(sdl), resolvers, scalar_coercers);
     }
 
     #! creates the handler from a pre-built executor
