@@ -451,7 +451,8 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
             std::string class_ref = qore_aot_encode_class_ref(qc);
             ctx.writer.writeStringRef(class_ref.c_str());
         } else {
-            ctx.writer.writeStringRef("");
+            std::string class_ref = call->getClassPath();
+            ctx.writer.writeStringRef(class_ref.c_str());
         }
         ctx.writer.writeStringRef(call->getName());
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
@@ -459,14 +460,16 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
         }
         // Serialize method args
         const QoreListNode* args = call->getArgs();
-        size_t nargs = args ? args->size() : 0;
+        const QoreParseListNode* pargs = call->getParseArgs();
+        size_t nargs = args ? args->size() : (pargs ? pargs->size() : 0);
         if (nargs > 255) {
             return false;
         }
         if (nargs > 0) {
             ctx.writer.writeU8(static_cast<uint8_t>(nargs));
-            for (size_t j = 0; j < args->size(); ++j) {
-                if (!::classifyAndWriteExpr(ctx.writer, args->retrieveEntry(j),
+            for (size_t j = 0; j < nargs; ++j) {
+                const QoreValue arg = args ? args->retrieveEntry(j) : pargs->get(j);
+                if (!::classifyAndWriteExpr(ctx.writer, arg,
                         ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
                     return false;
                 }

@@ -13810,6 +13810,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             if (qc) {
                 id.ref1 = qore_aot_encode_class_ref(qc);
             }
+        } else {
+            id.ref1 = call->getClassPath();
         }
         id.ref2 = call->getName();
         id.ref3 = qore_get_aot_serializable_type_path(call->getReceiverTypeInfo());

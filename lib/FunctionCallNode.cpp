@@ -1448,6 +1448,13 @@ AbstractQoreNode* StaticMethodCallNode::makeReferenceNodeAndDeref() {
    return rv;
 }
 
+std::string StaticMethodCallNode::getClassPath() const {
+    if (method) {
+        return method->getClass()->getNamespacePath();
+    }
+    return scope && scope->size() >= 2 ? get_static_scope_class_path(*scope) : std::string();
+}
+
 int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     int err = 0;
     if (!method) {
@@ -1618,31 +1625,13 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     return dynamic_call->parseInitFinalizedCall(val, parse_context);
                 }
 
-                if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
-                    qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
-                }
+                if (defer_source_static_receiver) {
+                    if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                        qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+                    }
 
-                const FunctionEntry* call_static_method_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
-                    "call_static_method");
-                if (!call_static_method_fe) {
-                    return -1;
+                    return parseArgs(parse_context, nullptr, nullptr);
                 }
-
-                QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
-                dynamic_args->add(new QoreStringNode(get_static_scope_class_path(*scope)), loc);
-                dynamic_args->add(new QoreStringNode(scope->getIdentifier()), loc);
-                QoreParseListNode* old_args = takeParseArgs();
-                if (old_args) {
-                    dynamic_args->appendFrom(old_args);
-                    old_args->deref();
-                }
-
-                FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_static_method_fe, dynamic_args);
-                val = dynamic_call;
-                delete scope;
-                scope = nullptr;
-                deref();
-                return dynamic_call->parseInitFinalizedCall(val, parse_context);
             }
 
             {
@@ -1718,13 +1707,23 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     assert(!parse_args || args || tmp_args
         || !"StaticMethodCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
+    if (!method) {
+        xsink->raiseException("METHOD-CALL-ERROR", "cannot evaluate unresolved static method call '%s::%s()'",
+            getClassPath().c_str(), getName());
+        return QoreValue();
+    }
     // Pass the class context so that private static methods called from within the same class are visible
-    const qore_class_private* cctx = method ? qore_class_private::get(*qore_method_private::get(*method)->parent_class) : nullptr;
-    return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info,
-            getExplicitTypeParamInstantiation())
+    const qore_class_private* cctx = qore_class_private::get(*qore_method_private::get(*method)->parent_class);
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    if (tmp_args) {
+        return qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info,
+            explicit_inst);
+    }
+    return variant
+        ? qore_method_private::evalNormalVariant(*method, xsink, rc, nullptr,
+            reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst)
         : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx, nullptr, receiver_type_info,
-            getExplicitTypeParamInstantiation());
+            explicit_inst);
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {

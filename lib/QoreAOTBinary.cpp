@@ -8933,7 +8933,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             std::string class_ref = qore_aot_encode_class_ref(qc);
             writer.writeStringRef(class_ref.c_str());
         } else {
-            writer.writeStringRef("");
+            std::string class_ref = call->getClassPath();
+            writer.writeStringRef(class_ref.c_str());
         }
         writer.writeStringRef(call->getName());
         if ((writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
@@ -8941,7 +8942,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
         // Serialize method args (must match read_expr_static_method_call format)
         const QoreListNode* args = call->getArgs();
-        if (!write_qore_arg_list(args)) {
+        const QoreParseListNode* pargs = call->getParseArgs();
+        if (!write_args_prefer_qore(args, pargs)) {
             return false;
         }
         return true;

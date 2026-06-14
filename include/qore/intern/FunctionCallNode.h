@@ -717,8 +717,11 @@ public:
         return method;
     }
 
+    DLLLOCAL std::string getClassPath() const;
+
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const {
-        str.sprintf("static method call %s::%s() (%p)", method->getClass()->getName(), method->getName(), this);
+        std::string class_path = getClassPath();
+        str.sprintf("static method call %s::%s() (%p)", class_path.c_str(), getName(), this);
         return 0;
     }
 
@@ -730,7 +733,7 @@ public:
     }
 
     DLLLOCAL virtual const char* getName() const {
-        return method->getName();
+        return method ? method->getName() : (scope ? scope->getIdentifier() : "");
     }
 
     // returns the type name as a c string
