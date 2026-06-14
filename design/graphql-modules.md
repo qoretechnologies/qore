@@ -568,3 +568,162 @@ Phase A is comparable to the existing `create`+`search` work plus the validation
 and the field-name map — a single contained change to `GraphQLDataProviderBridge.qc` and the
 bridge test. Phase B is a separate subproject (filter-type generation + DPQL compilation + a
 per-operator test matrix). Phase C is incremental.
+
+---
+
+# Gap-closure plan (Phases D–H)
+
+This section is the detailed plan to close every documented limitation. Each gap (numbered as in
+the review) maps to a phase below; phases are ordered by value and dependency and are independent
+unless noted.
+
+| Gap | Limitation | Phase |
+|----:|------------|-------|
+| 4 | non-scalar Qore types flattened to `String` | D |
+| 5 | bridge maps one flat record, no child-provider traversal | D |
+| 8 | typed-filter operators gated at runtime, not in the schema | D |
+| 2 | execution-time validation, not a full pre-execution pass | E |
+| 3 | depth bounded but no complexity/cost budget | E |
+| 6 | client-side search paging (no limit/offset pushdown) | F |
+| 9 | `doc_cache` is clear-on-full, not LRU | F |
+| 10 | no persisted queries (APQ) / request batching | F |
+| 7 | `return_records` is non-atomic | F |
+| 11 | one module; `json` + `DataProvider` hard deps | G |
+| 1 | no streaming subscriptions | H |
+
+Verified API basis: `AbstractDataProviderType::getFields()` (`AbstractDataProviderType.qc:815`,
+object fields), `getElementType()` (`:812`, list element), `isList()` (`:546`),
+`getBaseTypeCode()` (`NT_DATE` etc.); `AbstractDataProvider::getChildProviderNames()`
+(`AbstractDataProvider.qc:4269`) + `getChildProvider()` (`:4294`); `getSearchOptions()` (`:6399`);
+`info.expressions` (`:1191`); transaction support `requiresTransactionManagement()` (`:4445`) +
+`beginTransaction()`/`commit()`/`rollback()` (`:4458`+); `WebSocketHandler.qm` for subscriptions.
+
+## Phase D — bridge type-system depth (gaps 4, 5, 8) — highest value
+
+Turns the bridge from flat single-record CRUD into a relational graph. This is the largest
+value-add and is one cohesive change to `GraphQLDataProviderBridge.qc`.
+
+### D1 — recurse the record type into a GraphQL type graph (gap 4)
+- Replace the flat `mapScalarType()` with a recursive `mapType(AbstractDataProviderType): typeRef`:
+  - scalar base types → `Int`/`Float`/`Boolean`/`String`/`ID` as today
+  - `NT_DATE` → a custom `DateTime` scalar serialized/parsed as ISO-8601 via the
+    @ref GraphQLExecutor scalar-coercer hook (already implemented): register
+    `{"DateTime": {"input": parse ISO-8601, "output": render ISO-8601}}` on the generated executor
+  - `isList()` types → GraphQL list `[Inner]`, recursing on `getElementType()`
+  - object/hash types with `getFields()` → a generated nested GraphQL object type
+    `<Record>_<fieldPath>` (deduplicated by a structural key), recursing into its fields
+  - binary → a `Base64` custom scalar (base64 in/out coercer)
+- Emit the generated nested object types and custom scalar definitions into the SDL.
+- The default field resolver already reads nested values from the parent hash, so nested objects
+  resolve without extra resolver code; only the custom scalars need coercers.
+- **Cycle/decision:** bound nested-type generation depth (records can be deeply/recursively
+  typed); past a limit, fall back to a `JSON` custom scalar. Add an option `max_type_depth`.
+
+### D2 — child-provider traversal (gap 5)
+- For each name in `provider.getChildProviderNames()`, fetch `getChildProvider(name)`, generate its
+  record object type (reusing D1), and add a field on the parent record type (or on `Query`) that
+  resolves to the child provider's records.
+- Resolver: navigate to the child provider and run a (filterable) search, mirroring the top-level
+  `search`. Recurse to a bounded depth (`max_provider_depth`) to avoid unbounded expansion on
+  providers with deep/cyclic child graphs; log what was truncated.
+- **Decision:** child fields are read-only initially (search/read); child mutations are a later
+  increment.
+
+### D3 — schema-level operator gating (gap 8)
+- When generating each scalar field's `*Filter` input type, emit only the operators the provider
+  advertises in `info.expressions` (map DPQL operator names → filter fields: `==`→`eq`, `>`→`gt`,
+  `like`→`like`, `in`→`in`, …). A provider that doesn't support `like` won't expose a `like` field.
+- Keep the runtime `validateDpqlExpression` gate as defense-in-depth.
+
+### Tests / effort
+- New `bridgeTypeGraphTest`: a provider whose record has a date field, a nested record field, and a
+  list field → assert the generated `DateTime`/nested-object/list SDL, round-trip an ISO-8601 date
+  filter, query nested fields, and traverse a child provider. Assert operator gating (a provider
+  advertising a reduced `expressions` set omits the ungated filter fields).
+- Effort: large — the recursive type mapping + nested-type deduplication + child traversal is the
+  bulk. Self-contained to the bridge + its test.
+
+## Phase E — full validation pass + complexity budget (gaps 2, 3)
+
+A dedicated pre-execution validation phase in a new `GraphQLValidator` class, run by
+`GraphQLExecutor.executeDocument` before execution; on any error it returns the `errors` envelope
+with all diagnostics and does not execute.
+
+### E1 — spec validation rules (gap 2)
+Implement the executable-document validation rules not already enforced inline:
+- operation name uniqueness; lone-anonymous-operation; subscription single-root
+- variable uniqueness, all variables defined-and-used, variable usages are type-compatible
+- fragment name uniqueness, fragment spread targets exist, **no fragment cycles** (global, not the
+  current per-path guard), fragment type conditions are valid object/interface/union types
+- field existence on the type in scope, leaf vs selection-set correctness, argument names valid +
+  no duplicate arguments, required arguments present
+- directives valid at their location; `@skip`/`@include` argument types
+- field-merging conflict detection (same response key must have compatible shapes)
+Reuse the AST and schema model; emit `GraphQLError` entries with positions.
+
+### E2 — complexity/cost budget (gap 3)
+- During validation, compute a query cost (node count, with list-field multipliers) and reject past
+  a configurable `max_complexity`; also a `max_aliases`/`max_fields` cap to stop fragment-diamond
+  amplification. Configurable on the executor/handler.
+
+### Tests / effort
+- One negative test per rule; a fragment-cycle test; an amplification test that trips the budget.
+- Effort: medium-large (the rule set is broad but mechanical); independent of Phase D.
+
+## Phase F — performance, scale, and atomicity (gaps 6, 9, 10, 7)
+
+### F1 — search limit/offset pushdown (gap 6)
+- Add the provider's `keys getSearchOptions()` to the resolver spec; in `execSearch`, if the
+  provider advertises `limit`/`offset`, pass them in `search_options` and skip in-memory paging;
+  otherwise keep the current client-side paging. Cap `collectMatching` (return-records) with a
+  configurable maximum and `log()` truncation.
+
+### F2 — LRU document cache (gap 9)
+- Replace the clear-on-full `doc_cache` with a bounded LRU (track access order; evict the
+  least-recently-used entry at the cap) in `GraphQLHandlerImpl.qc`.
+
+### F3 — persisted queries (APQ) + batching (gap 10)
+- Implement the Automatic Persisted Queries protocol: accept `extensions.persistedQuery.sha256Hash`;
+  on a hash-only request, look up the cached document (return `PersistedQueryNotFound` if absent);
+  on a hash+query request, validate the hash and cache. Reuses the existing cache keyed by hash.
+- Accept a JSON array body as a batch of operations, executing each and returning an array of
+  envelopes (bounded by a `max_batch` limit).
+
+### F4 — atomic return_records (gap 7)
+- When `return_records` is set **and** `provider.requiresTransactionManagement()` is true, wrap the
+  mutate + re-read in `beginTransaction()` / `commit()` (rollback on error) so the returned records
+  reflect this operation atomically; otherwise document the best-effort non-atomic behavior (as now).
+
+### Tests / effort
+- Pushdown test with a provider advertising limit/offset; LRU eviction test; APQ hit/miss/mismatch
+  + batch test; transactional return-records test with a transaction-capable fixture.
+- Effort: medium; each item is independent.
+
+## Phase G — module split (gap 11)
+
+- Extract a `GraphQL` module (lexer, AST, parser, schema, executor, introspection, value,
+  validator) with no `json`/`HttpServer`/`DataProvider` dependency. `GraphQLHandler` then `%requires`
+  `GraphQL` + `json` + `HttpServerUtil`; the DataProvider bridge moves to a `GraphQLDataProvider`
+  module requiring `GraphQL` + `DataProvider`.
+- Register all three in `CMakeLists.txt`; move tests; update docs/module-list/release-notes.
+- **Decision:** do this only once the engine API is stable (after D/E), since the split freezes the
+  public engine surface. Effort: medium (mechanical, but touches registration/docs/tests broadly).
+
+## Phase H — streaming subscriptions (gap 1) — largest
+
+- Add a subscription transport on top of `WebSocketHandler.qm` implementing the
+  `graphql-transport-ws` protocol (connection_init/ack, subscribe, next, complete, error).
+- Subscription resolvers return an event source (an `AbstractIterator`/async stream); the engine
+  executes the selection set per emitted event and pushes a `next` message per result.
+- Reuse the engine unchanged for per-event execution; the new work is the WS protocol handler and
+  the subscription resolver contract.
+- **Dependency:** WebSocket server support (see [[project_ws_server_async_io]] in the broader
+  effort). Effort: large; sequence last.
+
+## Sequencing summary
+
+D (bridge graph) and E (validation) are independent and the highest value — do them first, in
+either order. F is incremental refinement. G (module split) should follow D/E once the engine API
+is stable. H (subscriptions) is the largest and depends on WS transport — do it last. Gap 7 is
+closed within F4 only where the provider supports transactions; otherwise it remains a documented
+best-effort behavior bounded by the DataProvider API.
