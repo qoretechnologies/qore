@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class CMakeBuildHelpersTest
+
+class CMakeBuildHelpersTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qore_build_dir;
+        string qore_dir;
+    }
+
+    constructor() : QUnit::Test("CMakeBuildHelpersTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? dirname(qore_bin));
+        qore_dir = qore_build_dir + "/cmake";
+
+        addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string read(string path) {
+        return ReadOnlyFile::readTextFile(path) ?? "";
+    }
+
+    testExportedHelpers() {
+        TmpDir tmp("qore-cmake-build-helpers-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        mkdir(src_dir);
+
+        string input = src_dir + "/input.txt";
+        string cmakelists = src_dir + "/CMakeLists.txt";
+        write(input, "stable content\n");
+        write(cmakelists,
+"cmake_minimum_required(VERSION 3.5)
+project(QoreCMakeHelperSmoke NONE)
+find_package(Qore REQUIRED)
+
+set(INPUT_FILE \"${CMAKE_SOURCE_DIR}/input.txt\")
+set(DIGEST_FILE \"${CMAKE_BINARY_DIR}/input.sha256\")
+qore_content_digest_target(input-digest
+    OUTPUT \"${DIGEST_FILE}\"
+    INPUTS \"${INPUT_FILE}\")
+
+qore_get_qcc_command(QCC_CMD)
+qore_get_qcc_deps(QCC_DEPS QCC_COMMAND \"${QCC_CMD}\")
+qore_qcc_sidecar_paths(\"${CMAKE_BINARY_DIR}/sample.qo\"
+    DEPFILE SAMPLE_DEPFILE
+    INDEX_JSON SAMPLE_INDEX
+    STATUS_JSON SAMPLE_STATUS
+    SUCCESS_STAMP SAMPLE_STAMP
+    CONTENT_STAMP SAMPLE_CONTENT_STAMP
+    MANIFEST_JSON SAMPLE_MANIFEST)
+qore_qcc_sidecar_flags(SAMPLE_FLAGS \"${CMAKE_BINARY_DIR}/sample.qo\" ALL)
+file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
+    \"qcc=${QCC_CMD}\\n\"
+    \"deps=${QCC_DEPS}\\n\"
+    \"depfile=${SAMPLE_DEPFILE}\\n\"
+    \"status=${SAMPLE_STATUS}\\n\"
+    \"flags=${SAMPLE_FLAGS}\\n\")
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s",
+            src_dir, build_dir, qore_dir));
+        assertTrue(is_file(build_dir + "/helper-vars.txt"),
+            "configured with build-tree Qore package: " + configure);
+
+        string vars = read(build_dir + "/helper-vars.txt");
+        assertTrue(vars.find("qcc=") != -1, "qcc command exported: " + vars);
+        assertTrue(vars.find("qcc-format.stamp") != -1,
+            "qcc deps use semantic format stamp: " + vars);
+        assertEq(-1, vars.find("deps=" + qore_build_dir + "/qcc\n"),
+            "qcc deps do not mtime-track qcc when format stamp is available: " + vars);
+        assertTrue(vars.find("depfile=" + build_dir + "/sample.qo.d") != -1,
+            "sidecar depfile path exported: " + vars);
+        assertTrue(vars.find("--content-stamp=" + build_dir + "/sample.qo.content.stamp") != -1,
+            "sidecar content-stamp flag exported: " + vars);
+        assertTrue(vars.find("--skip-if-manifest-current") != -1,
+            "sidecar manifest skip flag exported: " + vars);
+
+        string build1 = run(sprintf("cmake --build %s --target input-digest", build_dir));
+        assertTrue(is_file(build_dir + "/input.sha256"),
+            "content digest target built: " + build1);
+        string digest1 = read(build_dir + "/input.sha256");
+        assertTrue(digest1.find("format=1\n") == 0, "digest has stable format header: " + digest1);
+        assertTrue(digest1.find("input.txt") != -1, "digest names input: " + digest1);
+
+        write(input, "stable content\n");
+        string build2 = run(sprintf("cmake --build %s --target input-digest", build_dir));
+        assertEq(digest1, read(build_dir + "/input.sha256"),
+            "same-content rebuild does not change digest content: " + build2);
+
+        write(input, "changed content\n");
+        string build3 = run(sprintf("cmake --build %s --target input-digest", build_dir));
+        assertNeq(digest1, read(build_dir + "/input.sha256"),
+            "changed content updates digest: " + build3);
+    }
+}

@@ -4,6 +4,10 @@
 
 include(CMakeParseArguments)
 
+if (NOT DEFINED QORE_CMAKE_DIR)
+    get_filename_component(QORE_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
+endif ()
+
 # Global list to collect user module names for documentation cross-referencing
 set(QORE_USER_MODULE_NAMES "" CACHE INTERNAL "List of user module names for doc cross-referencing")
 
@@ -56,6 +60,188 @@ if (NOT DEFINED QORE_DOCS_ENV)
         set(QORE_DOCS_ENV QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
     endif ()
 endif ()
+
+function(QORE_WRITE_IF_CHANGED _path _content)
+    get_filename_component(_qore_write_if_changed_dir "${_path}" DIRECTORY)
+    if (_qore_write_if_changed_dir)
+        file(MAKE_DIRECTORY "${_qore_write_if_changed_dir}")
+    endif ()
+
+    set(_current)
+    if (EXISTS "${_path}")
+        file(READ "${_path}" _current)
+    endif ()
+    if (NOT "${_current}" STREQUAL "${_content}")
+        file(WRITE "${_path}" "${_content}")
+    endif ()
+endfunction()
+
+function(QORE_CONTENT_DIGEST_TARGET _target)
+    set(options ALL)
+    set(oneValueArgs OUTPUT STAMP INPUT_LIST)
+    set(multiValueArgs INPUTS DEPENDS)
+    cmake_parse_arguments(_QORE_CDT "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if (NOT _QORE_CDT_OUTPUT)
+        message(FATAL_ERROR "QORE_CONTENT_DIGEST_TARGET(${_target}) requires OUTPUT")
+    endif ()
+    if (_QORE_CDT_INPUT_LIST AND _QORE_CDT_INPUTS)
+        message(FATAL_ERROR "QORE_CONTENT_DIGEST_TARGET(${_target}) accepts INPUT_LIST or INPUTS, not both")
+    endif ()
+    if (NOT _QORE_CDT_INPUT_LIST AND NOT _QORE_CDT_INPUTS)
+        message(FATAL_ERROR "QORE_CONTENT_DIGEST_TARGET(${_target}) requires INPUT_LIST or INPUTS")
+    endif ()
+
+    if (_QORE_CDT_STAMP)
+        set(_qore_cdt_stamp "${_QORE_CDT_STAMP}")
+    else ()
+        set(_qore_cdt_stamp "${_QORE_CDT_OUTPUT}.stamp")
+    endif ()
+
+    if (_QORE_CDT_INPUT_LIST)
+        set(_qore_cdt_input_list "${_QORE_CDT_INPUT_LIST}")
+        set(_qore_cdt_input_deps "${_qore_cdt_input_list}")
+    else ()
+        set(_qore_cdt_input_list "${CMAKE_CURRENT_BINARY_DIR}/${_target}-inputs.txt")
+        set(_qore_cdt_input_content)
+        foreach(_qore_cdt_input ${_QORE_CDT_INPUTS})
+            string(APPEND _qore_cdt_input_content "${_qore_cdt_input}\n")
+        endforeach()
+        QORE_WRITE_IF_CHANGED("${_qore_cdt_input_list}" "${_qore_cdt_input_content}")
+        set(_qore_cdt_input_deps "${_qore_cdt_input_list}" ${_QORE_CDT_INPUTS})
+    endif ()
+
+    set(_qore_cdt_script "${QORE_CMAKE_DIR}/QoreWriteContentDigest.cmake")
+    add_custom_command(
+        OUTPUT ${_qore_cdt_stamp}
+        BYPRODUCTS ${_QORE_CDT_OUTPUT}
+        COMMAND ${CMAKE_COMMAND}
+            -DINPUT_LIST=${_qore_cdt_input_list}
+            -DOUTPUT=${_QORE_CDT_OUTPUT}
+            -DSUCCESS_STAMP=${_qore_cdt_stamp}
+            -P ${_qore_cdt_script}
+        DEPENDS
+            ${_qore_cdt_script}
+            ${_qore_cdt_input_deps}
+            ${_QORE_CDT_DEPENDS}
+        COMMENT "Checking ${_target} input content"
+        VERBATIM
+    )
+
+    if (_QORE_CDT_ALL)
+        add_custom_target(${_target} ALL DEPENDS ${_qore_cdt_stamp})
+    else ()
+        add_custom_target(${_target} DEPENDS ${_qore_cdt_stamp})
+    endif ()
+endfunction()
+
+function(QORE_GET_QCC_COMMAND _out_var)
+    if (TARGET qcc)
+        set(_qore_qcc_command $<TARGET_FILE:qcc>)
+    elseif (DEFINED QORE_QCC_EXECUTABLE AND NOT "${QORE_QCC_EXECUTABLE}" STREQUAL "")
+        set(_qore_qcc_command ${QORE_QCC_EXECUTABLE})
+    else ()
+        message(FATAL_ERROR "qcc is required but neither target qcc nor QORE_QCC_EXECUTABLE is available")
+    endif ()
+    set(${_out_var} ${_qore_qcc_command} PARENT_SCOPE)
+endfunction()
+
+function(QORE_GET_QCC_DEPS _out_var)
+    set(options TRACK_BINARY)
+    set(oneValueArgs QCC_COMMAND)
+    cmake_parse_arguments(_QORE_GQD "${options}" "${oneValueArgs}" "" ${ARGN})
+
+    if (_QORE_GQD_QCC_COMMAND)
+        set(_qore_qcc_command "${_QORE_GQD_QCC_COMMAND}")
+    else ()
+        QORE_GET_QCC_COMMAND(_qore_qcc_command)
+    endif ()
+
+    set(_deps)
+    if (DEFINED QORE_QCC_FORMAT_STAMP AND NOT "${QORE_QCC_FORMAT_STAMP}" STREQUAL "")
+        list(APPEND _deps ${QORE_QCC_FORMAT_STAMP})
+    elseif (DEFINED QCC_FORMAT_STAMP AND NOT "${QCC_FORMAT_STAMP}" STREQUAL "")
+        list(APPEND _deps ${QCC_FORMAT_STAMP})
+    elseif (IS_ABSOLUTE "${_qore_qcc_command}" AND EXISTS "${_qore_qcc_command}")
+        get_filename_component(_qore_qcc_dir "${_qore_qcc_command}" DIRECTORY)
+        set(_qore_qcc_candidate_stamp "${_qore_qcc_dir}/qcc-format.stamp")
+        if (EXISTS "${_qore_qcc_candidate_stamp}")
+            list(APPEND _deps ${_qore_qcc_candidate_stamp})
+        endif ()
+    endif ()
+
+    if (_QORE_GQD_TRACK_BINARY OR NOT _deps)
+        if (IS_ABSOLUTE "${_qore_qcc_command}" AND EXISTS "${_qore_qcc_command}")
+            list(APPEND _deps ${_qore_qcc_command})
+        endif ()
+    endif ()
+    set(${_out_var} ${_deps} PARENT_SCOPE)
+endfunction()
+
+function(QORE_QCC_SIDECAR_PATHS _output)
+    set(options)
+    set(oneValueArgs DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP MANIFEST_JSON)
+    cmake_parse_arguments(_QORE_QSP "${options}" "${oneValueArgs}" "" ${ARGN})
+
+    if (_QORE_QSP_DEPFILE)
+        set(${_QORE_QSP_DEPFILE} "${_output}.d" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSP_INDEX_JSON)
+        set(${_QORE_QSP_INDEX_JSON} "${_output}.idx.json" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSP_STATUS_JSON)
+        set(${_QORE_QSP_STATUS_JSON} "${_output}.status.json" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSP_SUCCESS_STAMP)
+        set(${_QORE_QSP_SUCCESS_STAMP} "${_output}.stamp" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSP_CONTENT_STAMP)
+        set(${_QORE_QSP_CONTENT_STAMP} "${_output}.content.stamp" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSP_MANIFEST_JSON)
+        set(${_QORE_QSP_MANIFEST_JSON} "${_output}.source.manifest.json" PARENT_SCOPE)
+    endif ()
+endfunction()
+
+function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
+    set(options ALL DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP MANIFEST_JSON SKIP_IF_MANIFEST_CURRENT)
+    cmake_parse_arguments(_QORE_QSF "${options}" "" "" ${ARGN})
+
+    if (_QORE_QSF_ALL)
+        set(_QORE_QSF_DEPFILE TRUE)
+        set(_QORE_QSF_INDEX_JSON TRUE)
+        set(_QORE_QSF_STATUS_JSON TRUE)
+        set(_QORE_QSF_SUCCESS_STAMP TRUE)
+        set(_QORE_QSF_CONTENT_STAMP TRUE)
+        set(_QORE_QSF_MANIFEST_JSON TRUE)
+        set(_QORE_QSF_SKIP_IF_MANIFEST_CURRENT TRUE)
+    endif ()
+
+    set(_flags)
+    if (_QORE_QSF_DEPFILE)
+        list(APPEND _flags "--depfile=${_output}.d")
+    endif ()
+    if (_QORE_QSF_INDEX_JSON)
+        list(APPEND _flags "--write-index-json=${_output}.idx.json")
+    endif ()
+    if (_QORE_QSF_STATUS_JSON)
+        list(APPEND _flags "--write-status-json=${_output}.status.json")
+    endif ()
+    if (_QORE_QSF_SUCCESS_STAMP)
+        list(APPEND _flags "--success-stamp=${_output}.stamp")
+    endif ()
+    if (_QORE_QSF_CONTENT_STAMP)
+        list(APPEND _flags "--content-stamp=${_output}.content.stamp")
+    endif ()
+    if (_QORE_QSF_MANIFEST_JSON)
+        list(APPEND _flags "--write-manifest=${_output}.source.manifest.json")
+    endif ()
+    if (_QORE_QSF_SKIP_IF_MANIFEST_CURRENT)
+        list(APPEND _flags "--skip-if-manifest-current")
+    endif ()
+
+    set(${_out_var} ${_flags} PARENT_SCOPE)
+endfunction()
 
 #
 # Create C++ code using the new value API from the QPP files
