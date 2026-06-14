@@ -92,6 +92,12 @@ public class DataProviderGraphQLSchema {
         bool allow_templates = False;
         #! whether update/delete mutations return the affected records (instead of a count)
         bool return_records = False;
+        #! the maximum nested-type generation depth before falling back to a JSON scalar
+        int max_type_depth = 8;
+        #! generated nested object type definitions, keyed by type name (de-duplicated)
+        hash<string, string> extra_type_defs();
+        #! custom scalar names that must be declared and coerced (DateTime, Base64, JSON)
+        hash<string, bool> needed_scalars();
         #! the generated SDL
         string sdl;
         #! the generated resolver map
@@ -124,6 +130,9 @@ public class DataProviderGraphQLSchema {
         if (exists opts.return_records) {
             return_records = opts.return_records;
         }
+        if (exists opts.max_type_depth) {
+            max_type_depth = opts.max_type_depth;
+        }
         generate();
     }
 
@@ -137,9 +146,9 @@ public class DataProviderGraphQLSchema {
         return resolvers;
     }
 
-    #! returns a @ref GraphQLExecutor built from the generated schema and resolvers
+    #! returns a @ref GraphQLExecutor built from the generated schema, resolvers, and scalar coercers
     GraphQLExecutor getExecutor() {
-        return new GraphQLExecutor(new GraphQLSchema(sdl), resolvers);
+        return new GraphQLExecutor(new GraphQLSchema(sdl), resolvers, buildScalarCoercers());
     }
 
     #! builds a @ref GraphQLHandler that serves the given data provider over HTTP
@@ -182,13 +191,16 @@ public class DataProviderGraphQLSchema {
                     "over GraphQL", provider.getName(), field_name_map{gqlName}, fname, gqlName);
             }
             field_name_map{gqlName} = fname;
-            push fieldLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, False));
+            string nameHint = record_type_name + capitalize(gqlName);
+            push fieldLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, nameHint, False));
             # SetInput fields are always optional (a partial update assigns only supplied columns)
-            push setLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, True));
-            # WhereInput: each scalar field gets a typed per-scalar filter
-            string fkind = scalarFilterKind(record_type{fname}.getType());
-            usedFilterKinds{fkind} = True;
-            push whereLines, sprintf("  %s: %sFilter", gqlName, fkind);
+            push setLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, nameHint, True));
+            # WhereInput: only simple scalar fields get a typed per-scalar filter
+            *string fkind = scalarFilterKind(record_type{fname}.getType());
+            if (exists fkind) {
+                usedFilterKinds{fkind} = True;
+                push whereLines, sprintf("  %s: %sFilter", gqlName, fkind);
+            }
         }
 
         # DPQL where-filtering requires the provider to support advanced search expressions;
@@ -270,6 +282,15 @@ public class DataProviderGraphQLSchema {
             push defs, sprintf("input %s {\n%s\n}", whereInputName, whereLines.join("\n"));
         }
 
+        # nested object types generated from non-scalar record fields
+        foreach string nested in (extra_type_defs.values()) {
+            push defs, nested;
+        }
+        # custom scalar declarations (DateTime, Base64, JSON) used by the generated types
+        foreach string sc in (keys needed_scalars) {
+            push defs, sprintf("scalar %s", sc);
+        }
+
         sdl = defs.join("\n\n");
 
         # Build resolvers as closures over an immutable "spec" value (NOT over the bridge object):
@@ -333,7 +354,9 @@ public class DataProviderGraphQLSchema {
     private string createArgList() {
         list<string> argLines();
         foreach string fname in (keys record_type) {
-            argLines += sprintf("%s: %s", sanitizeName(fname), mapFieldType(record_type{fname}, False));
+            string gqlName = sanitizeName(fname);
+            argLines += sprintf("%s: %s", gqlName,
+                mapFieldType(record_type{fname}, record_type_name + capitalize(gqlName), False));
         }
         return argLines.join(", ");
     }
@@ -563,8 +586,17 @@ public class DataProviderGraphQLSchema {
         return "@\"" + e + "\"";
     }
 
-    #! returns the per-scalar filter input-type kind name for a data provider type (\c Int, \c Float, ...)
-    private string scalarFilterKind(AbstractDataProviderType t) {
+    #! returns the per-scalar filter input-type kind for a type, or @ref NOTHING if not filterable
+    /** Only simple scalar fields get a typed filter. Object, list, binary, and free-form hash
+        fields are not typed-filterable; date fields are filtered through the raw DPQL \c where
+        argument (which supports proper date literals), not a string filter.
+    */
+    private *string scalarFilterKind(AbstractDataProviderType t) {
+        # real lists (element type present) and object types are not typed-filterable; "soft"
+        # scalars report isList() but have no element type and ARE filterable
+        if ((t.isList() && exists t.getElementType()) || t.getFields()) {
+            return NOTHING;
+        }
         switch (t.getBaseTypeCode()) {
             case NT_INT:
                 return "Int";
@@ -573,9 +605,11 @@ public class DataProviderGraphQLSchema {
                 return "Float";
             case NT_BOOLEAN:
                 return "Boolean";
-            default:
-                # strings, dates, hashes, binary, etc. are filtered as strings
+            case NT_STRING:
                 return "String";
+            default:
+                # dates, binary, hashes: no typed filter (use the raw DPQL where for dates)
+                return NOTHING;
         }
     }
 
@@ -679,22 +713,42 @@ public class DataProviderGraphQLSchema {
         @param force_optional if @ref True, the type is never marked non-null (used for the
         \c SetInput type where every field is optional)
     */
-    private string mapFieldType(AbstractDataField field, bool force_optional) {
-        string base = mapScalarType(field.getType());
-        if (field.getType().isList()) {
-            base = sprintf("[%s]", base);
-        }
+    private string mapFieldType(AbstractDataField field, string name_hint, bool force_optional) {
+        return mapFieldTypeAtDepth(field, name_hint, 0, force_optional);
+    }
+
+    #! maps a field to a GraphQL type reference at the given nesting depth
+    private string mapFieldTypeAtDepth(AbstractDataField field, string name_hint, int depth,
+            bool force_optional) {
+        string base = mapType(field.getType(), name_hint, depth);
         if (!force_optional && field.isMandatory()) {
             base += "!";
         }
         return base;
     }
 
-    #! maps a data provider type to a GraphQL scalar type name
-    /** Non-scalar Qore types (hashes, lists of objects, dates, etc.) are mapped to \c String;
-        resolvers serialize such values via their default string representation.
+    #! recursively maps a data provider type to a GraphQL type reference, generating nested object
+    #! types and registering custom scalars (\c DateTime, \c Base64, \c JSON) as needed
+    /** @param t the data provider type
+        @param name_hint the name to use if a nested object type must be generated
+        @param depth the current nesting depth; past @ref max_type_depth the type collapses to the
+        \c JSON custom scalar (guards against unbounded/recursive types)
     */
-    private string mapScalarType(AbstractDataProviderType t) {
+    private string mapType(AbstractDataProviderType t, string name_hint, int depth) {
+        if (depth > max_type_depth) {
+            registerScalar("JSON");
+            return "JSON";
+        }
+        # a real list type has a single element type; "soft" scalar types also report isList()
+        # (they accept list input) but have no element type, so check for the element type
+        *AbstractDataProviderType et = t.getElementType();
+        if (t.isList() && exists et) {
+            return sprintf("[%s!]", mapType(et, name_hint + "Item", depth + 1));
+        }
+        *hash<string, AbstractDataField> fields = t.getFields();
+        if (fields) {
+            return buildObjectType(name_hint, fields, depth);
+        }
         switch (t.getBaseTypeCode()) {
             case NT_INT:
                 return "Int";
@@ -705,10 +759,71 @@ public class DataProviderGraphQLSchema {
                 return "Boolean";
             case NT_STRING:
                 return "String";
+            case NT_DATE:
+                registerScalar("DateTime");
+                return "DateTime";
+            case NT_BINARY:
+                registerScalar("Base64");
+                return "Base64";
+            case NT_HASH:
+                # a free-form hash with no declared fields
+                registerScalar("JSON");
+                return "JSON";
             default:
-                # dates, hashes, binary, and anything else are exposed as String
                 return "String";
         }
+    }
+
+    #! generates (once) a nested GraphQL object type for a hash of fields and returns its name
+    private string buildObjectType(string type_name, hash<string, AbstractDataField> fields, int depth) {
+        if (!exists extra_type_defs{type_name}) {
+            # register a placeholder first so a recursive type does not loop indefinitely
+            extra_type_defs{type_name} = "";
+            list<string> lines();
+            foreach string fn in (keys fields) {
+                string gqlfn = sanitizeName(fn);
+                lines += sprintf("  %s: %s", gqlfn,
+                    mapFieldTypeAtDepth(fields{fn}, type_name + capitalize(gqlfn), depth + 1, False));
+            }
+            extra_type_defs{type_name} = sprintf("type %s {\n%s\n}", type_name, lines.join("\n"));
+        }
+        return type_name;
+    }
+
+    #! records that a custom scalar must be declared in the SDL and coerced at runtime
+    private registerScalar(string name) {
+        needed_scalars{name} = True;
+    }
+
+    #! capitalizes the first character of a string
+    static string capitalize(string s) {
+        return s.empty() ? s : s[0].upr() + s.substr(1);
+    }
+
+    #! builds the custom-scalar coercer map for the scalars used by the generated schema
+    private hash<auto> buildScalarCoercers() {
+        hash<auto> c();
+        if (needed_scalars.DateTime) {
+            c.DateTime = {
+                # input: ISO-8601 string -> Qore date; output: Qore date -> ISO-8601 string
+                "input": auto sub (auto v) { return v.typeCode() == NT_DATE ? v : date(v); },
+                "output": auto sub (auto v) {
+                    return v.typeCode() == NT_DATE ? v.format("YYYY-MM-DDTHH:mm:SS") : v;
+                },
+            };
+        }
+        if (needed_scalars.Base64) {
+            c.Base64 = {
+                "input": auto sub (auto v) {
+                    return v.typeCode() == NT_BINARY ? v : parse_base64_string(v);
+                },
+                "output": auto sub (auto v) {
+                    return v.typeCode() == NT_BINARY ? make_base64_string(v) : v;
+                },
+            };
+        }
+        # the JSON scalar passes structured values through unchanged (no coercer)
+        return c;
     }
 
     #! converts an arbitrary name to a valid GraphQL name (\c /[_A-Za-z][_0-9A-Za-z]*/)

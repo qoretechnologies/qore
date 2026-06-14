@@ -171,6 +171,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("dataprovider bridge", \bridgeTest());
         addTestCase("bridge bulk and return-records", \bridgePhaseCTest());
         addTestCase("review hardening", \hardeningTest());
+        addTestCase("bridge type graph", \typeGraphTest());
 
         set_return_value(main());
     }
@@ -631,6 +632,35 @@ class GraphQLHandlerTest inherits QUnit::Test {
         assertEq("out:in:hi", cex.execute("{ shout(text: \"hi\") }").data.shout);
     }
 
+    typeGraphTest() {
+        # the bridge recurses non-scalar record types into GraphQL types: dates -> DateTime scalar,
+        # binary -> Base64 scalar, lists -> list types, nested records -> nested object types
+        TypeGraphProvider tp();
+        DataProviderGraphQLSchema bridge(tp);
+        string sdl = bridge.getSdl();
+        assertRegex("created: DateTime!", sdl);
+        assertRegex("blob: Base64!", sdl);
+        assertRegex("tags: \\[String!\\]!", sdl);
+        assertRegex("address: thingRecordAddress!", sdl);
+        assertRegex("type thingRecordAddress", sdl);
+        assertRegex("scalar DateTime", sdl);
+        assertRegex("scalar Base64", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+        hash<auto> r = ex.execute(
+            "{ search { id created blob tags address { street zip } } }").data.search[0];
+        # date serialized as ISO-8601, binary as base64, list and nested object resolved
+        assertEq("2026-01-15T10:30:00", r.created);
+        assertEq("aGk=", r.blob);
+        assertEq(("a", "b"), r.tags);
+        assertEq("Main", r.address.street);
+        assertEq(12345, r.address.zip);
+
+        # a date round-trips through the DateTime coercer (input ISO string -> Qore date for the
+        # raw DPQL filter is exercised separately); here verify the output coercer produced ISO
+        assertRegex("T", r.created);
+    }
+
     bridgePhaseCTest() {
         # bulk operations (Phase C)
         MemProvider bp(());
@@ -724,5 +754,40 @@ class CollisionProvider inherits DataProvider::AbstractDataProvider {
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         return new DefaultRecordIterator(().iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+}
+
+#! a provider whose record has date, binary, list, and nested-object fields, to test type recursion
+class TypeGraphProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = (
+            {"id": 1, "created": 2026-01-15T10:30:00, "blob": binary("hi"), "tags": ("a", "b"),
+                "address": {"street": "Main", "zip": 12345}},
+        );
+    }
+
+    string getName() {
+        return "thing";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        HashDataType addr("Addr");
+        addr.addField(new QoreDataField("street", "the street", StringType));
+        addr.addField(new QoreDataField("zip", "the zip", IntType));
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "created": new QoreDataField("created", "creation date", DateType),
+            "blob": new QoreDataField("blob", "binary blob", BinaryType),
+            "tags": new QoreDataField("tags", "tag list", new SoftListDataType(StringType)),
+            "address": new QoreDataField("address", "nested address", addr),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
     }
 }
