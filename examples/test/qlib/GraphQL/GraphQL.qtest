@@ -131,6 +131,10 @@ class GraphQLTest inherits QUnit::Test {
         # lexer
         list<hash<GraphQLToken>> toks = GraphQLLexer::tokenize("{ hero { name } }");
         assertEq(GraphQLLexer::TK_BRACE_L, toks[0].kind);
+        # ignored tokens (leading BOM, commas, whitespace) are skipped per the GraphQL spec; the
+        # U+FEFF BOM in particular must be recognized as a single character, not a literal escape
+        assertEq((map $1.kind, toks),
+            (map $1.kind, GraphQLLexer::tokenize("\u{feff}{ hero, { name } }")));
         # parser
         hash<GraphQLDocument> doc = GraphQLParser::parse("query Q($n: String) { hello(name: $n) }");
         assertEq(1, doc.definitions.size());
