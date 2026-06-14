@@ -21,6 +21,7 @@ from collections import defaultdict
 IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
 QUAL_IDENT = rf"{IDENT}(?:::{IDENT})*"
 TYPE_TOKEN = r"[A-Za-z_][A-Za-z0-9_:]*"
+TYPE_EXPR = r"[A-Za-z_][A-Za-z0-9_:]*(?:[ \t]*<[A-Za-z0-9_:<>,* \t]+>)?"
 
 
 CLASS_RE = re.compile(rf"\b(?:public\s+|private\s+|abstract\s+|final\s+)*class\s+({IDENT})\b")
@@ -40,6 +41,7 @@ CALL_REF_RE = re.compile(rf"\\[ \t]*({QUAL_IDENT})[ \t]*\(")
 STATIC_CALL_RE = re.compile(rf"\b({QUAL_IDENT})::({IDENT})[ \t]*\(")
 STATIC_REF_RE = re.compile(rf"\b({QUAL_IDENT})::({IDENT})\b(?![ \t]*\()")
 NEW_OBJECT_RE = re.compile(rf"\bnew[ \t]+({QUAL_IDENT})[ \t]*\(")
+NEW_HASH_RE = re.compile(r"\bnew[ \t]+hash\b")
 CREATE_OBJECT_RE = re.compile(rf"\bcreate_object[ \t]*\([ \t]*[\"']({QUAL_IDENT})[\"']")
 CLASS_FOR_NAME_RE = re.compile(rf"\b(?:Reflection::)?Class::forName[ \t]*\([ \t]*[\"']({QUAL_IDENT})[\"']")
 QUAL_RE = re.compile(rf"\b({QUAL_IDENT})\b")
@@ -47,13 +49,14 @@ TOKEN_RE = re.compile(rf"\b({IDENT})\b")
 CASE_RE = re.compile(r"\bcase\b")
 DECL_TYPE_RE = re.compile(rf"^[ \t]*(?:public|private|internal|static|our|thread_local)?[ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
 CONSTRUCTED_DECL_TYPE_RE = re.compile(
-    rf"^(?:(?:public|private|internal|static|our|thread_local)[ \t]+)*\*?[ \t]*"
-    rf"({TYPE_TOKEN})[ \t]+{IDENT}[ \t]*\([ \t]*\)[ \t]*(?:;|=)"
+    rf"^(?:(?:public|private|internal)[ \t]*\{{[ \t]*)?"
+    rf"(?:(?:public|private|internal|static|our|thread_local)[ \t]+)*\*?[ \t]*"
+    rf"({TYPE_EXPR})[ \t]+{IDENT}[ \t]*\([ \t]*\)[ \t]*(?:;|=)"
 )
 PARAM_TYPE_RE = re.compile(rf"[(,][ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
 QUALIFIED_REF_RE = re.compile(rf"\b{IDENT}(?:::{IDENT})+\b")
 DECL_LINE_CHARS = frozenset("(;=")
-CACHE_VERSION = 21
+CACHE_VERSION = 30
 KNOWN_TRUE_PARSE_DEFINES = {"QoreStandaloneQo", "QorusStandaloneQo"}
 
 
@@ -341,6 +344,30 @@ def collect_hash_type_mentions(code: str) -> set[str]:
     return mentions
 
 
+def collect_new_hash_type_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for m in NEW_HASH_RE.finditer(code):
+        pos = m.end()
+        while pos < len(code) and code[pos].isspace():
+            pos += 1
+        if pos >= len(code) or code[pos] != "<":
+            continue
+        pos += 1
+        start = pos
+        depth = 1
+        while pos < len(code):
+            c = code[pos]
+            if c == "<":
+                depth += 1
+            elif c == ">":
+                depth -= 1
+                if depth == 0:
+                    mentions.update(collect_mentions(code[start:pos]))
+                    break
+            pos += 1
+    return mentions
+
+
 def collect_enum_type_mentions(code: str) -> set[str]:
     mentions: set[str] = set()
     for args in iter_angle_args(code, "enum"):
@@ -368,7 +395,7 @@ def collect_constructed_decl_type_mentions(code: str) -> set[str]:
             continue
         m = CONSTRUCTED_DECL_TYPE_RE.match(line.strip())
         if m:
-            mentions.add(simple_name(m.group(1)))
+            mentions.update(collect_mentions(m.group(1)))
     return mentions
 
 
@@ -392,6 +419,13 @@ def collect_static_call_mentions(code: str) -> set[str]:
 
 def collect_static_ref_mentions(code: str) -> set[str]:
     return {simple_name(m.group(1)) for m in STATIC_REF_RE.finditer(code)}
+
+
+def collect_const_init_static_call_mentions(code: str) -> set[str]:
+    mentions: set[str] = set()
+    for m in CONST_INIT_RE.finditer(code):
+        mentions.update(collect_static_call_mentions(m.group(1)))
+    return mentions
 
 
 def collect_new_object_mentions(code: str) -> set[str]:
@@ -560,19 +594,36 @@ def build_hard_graph(inputs: list[str],
             provider = unique_provider[symbol]
             if symbol in provides_by_source[consumer]:
                 continue
-            add_edge(provider, consumer)
+            # Enum type annotations (`enum<Foo>`) must resolve while parsing
+            # the consumer; unlike class/hashdecl type imports, unresolved enum
+            # types are not link-deferred today.
+            add_edge(provider, consumer, required=True)
         call_ref_classes, call_ref_functions = collect_call_ref_mentions(code)
-        mentions.update(call_ref_functions & unique_function_symbols)
+        for symbol in call_ref_functions & unique_function_symbols:
+            provider = unique_provider[symbol]
+            if symbol in provides_by_source[consumer]:
+                continue
+            # Function call references require the target function during
+            # parse/commit today; direct calls can be deferred to the linker.
+            add_edge(provider, consumer, required=True)
         for symbol in call_ref_classes & unique_class_symbols:
             provider = unique_provider[symbol]
             if symbol in provides_by_source[consumer]:
                 continue
             add_edge(provider, consumer)
-        for symbol in collect_constructed_decl_type_mentions(code) & unique_class_symbols:
+        for symbol in collect_const_init_static_call_mentions(code) & unique_class_symbols:
             provider = unique_provider[symbol]
-            if provider == consumer or symbol in provides_by_source[consumer]:
+            if symbol in provides_by_source[consumer]:
                 continue
-            add_edge(provider, consumer)
+            # Constant initializers are evaluated during parse/commit today.
+            # Static method calls inside them therefore require the provider
+            # .qo to be loaded before the consumer compiles.  Static constant
+            # and var references stay linkable to preserve cycles such as
+            # mutually-referenced class-constant tables.
+            add_edge(provider, consumer, required=True)
+        mentions.update(collect_constructed_decl_type_mentions(code)
+            & (unique_class_symbols | unique_hashdecl_symbols))
+        mentions.update(collect_new_hash_type_mentions(code) & unique_hashdecl_symbols)
         for symbol in collect_new_object_mentions(code) & unique_class_symbols:
             provider = unique_provider[symbol]
             if provider == consumer or symbol in provides_by_source[consumer]:
@@ -590,7 +641,10 @@ def build_hard_graph(inputs: list[str],
             provider = unique_provider[symbol]
             if provider == consumer or symbol in provides_by_source[consumer]:
                 continue
-            add_edge(provider, consumer)
+            # Enum members (`Foo::Bar`) are compile-time constants and require
+            # the enum declaration during parse/commit so switch/case and enum
+            # value checks see the real enum.
+            add_edge(provider, consumer, required=True)
         for symbol in mentions:
             provider = unique_provider[symbol]
             if provider == consumer or symbol in provides_by_source[consumer]:

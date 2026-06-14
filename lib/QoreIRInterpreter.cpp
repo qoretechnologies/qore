@@ -3244,6 +3244,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::NewHashDeclFromHash: {
             QoreValue hash_val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             const TypedHashDecl* hd = nullptr;
+            std::string hd_path;
             bool runtime_check = false;
             if (inv->expr.hasNode()) {
                 auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
@@ -3253,10 +3254,27 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
                     runtime_check = vrn->getRuntimeCheck();
                 } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(inv->expr.getInternalNode())) {
-                    const QoreTypeInfo* runtime_type_info
-                        = qore_substitute_type_params_if_needed(nhd->hd->getTypeInfo());
-                    hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
+                    if (nhd->hd) {
+                        const QoreTypeInfo* runtime_type_info
+                            = qore_substitute_type_params_if_needed(nhd->hd->getTypeInfo());
+                        hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
+                    } else if (nhd->isDynamicHashDeclConstruct()) {
+                        hd_path = nhd->getDynamicHashDeclName();
+                    }
                     runtime_check = nhd->runtime_check;
+                }
+            }
+            if (!hd && !hd_path.empty()) {
+                QoreProgram* pgm = getProgram();
+                if (pgm) {
+                    hd = qore_aot_resolve_hashdecl_path(pgm, hd_path.c_str());
+                    if (!hd) {
+                        std::string error;
+                        QoreAOTTypeResolver resolver(pgm);
+                        const QoreTypeInfo* ti = resolver.resolve(hd_path.c_str(), error);
+                        ti = qore_substitute_type_params_if_needed(ti);
+                        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+                    }
                 }
             }
             if (hd) {

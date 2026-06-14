@@ -374,9 +374,12 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_QCC_APPEND_CONTEXT(_qore_qcc_context manifest_input ${_QORE_QCO_MANIFEST_INPUTS})
     QORE_WRITE_IF_CHANGED("${_qore_qcc_context_path}" "${_qore_qcc_context}")
 
+    set(_qore_qcc_source_symbols "${_QORE_QCO_SCRIPT_DIR}/source-symbols.manifest")
+
     set(_qore_qcc_manifest_input_flags)
     foreach(_qore_qcc_manifest_input
             ${_qore_qcc_context_path}
+            ${_qore_qcc_source_symbols}
             ${_qore_qcc_incremental_helper}
             ${_qore_qcc_source_order_helper}
             ${_qore_qcc_deps}
@@ -402,25 +405,23 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_WRITE_IF_CHANGED("${_qore_qcc_direct_deps_cmake}" "${_qore_qcc_direct_deps_cmake_content}")
     include("${_qore_qcc_direct_deps_cmake}")
 
-    set(_qore_qcc_source_symbols "${_QORE_QCO_SCRIPT_DIR}/source-symbols.manifest")
-    set(_qore_qcc_source_symbols_target "qore_qcc_${_qore_qcc_group_id}_source_symbols")
-    add_custom_command(OUTPUT ${_qore_qcc_source_symbols}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_SCRIPT_DIR}
+    execute_process(
         COMMAND ${_qore_qcc_source_order_helper}
             --source-symbol-manifest
             ${_qore_qcc_source_symbols}
             ${_qore_qcc_context_path}
-        DEPENDS
-            ${_qore_qcc_context_path}
-            ${_qore_qcc_source_order_helper}
-            ${_qore_qcc_abs_sources}
-        COMMENT "qcc: scanning ${_QORE_QCO_GROUP} source symbols"
-        VERBATIM)
-    add_custom_target(${_qore_qcc_source_symbols_target}
-        DEPENDS ${_qore_qcc_source_symbols})
+        ERROR_VARIABLE _qore_qcc_source_symbols_error
+        RESULT_VARIABLE _qore_qcc_source_symbols_result
+    )
+    if (NOT _qore_qcc_source_symbols_result EQUAL 0)
+        message(FATAL_ERROR
+            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_source_symbols_error}")
+    endif ()
 
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-        ${_qore_qcc_source_order_helper})
+        ${_qore_qcc_source_order_helper}
+        ${_qore_qcc_abs_sources}
+        ${_QORE_QCO_MANIFEST_INPUTS})
 
     set(_qore_qcc_stub_flags)
     foreach(_qore_qcc_stub ${_QORE_QCO_STUBS})
@@ -509,7 +510,6 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_single_script}
                 DEPENDS
                     ${_qore_qcc_source}
-                    ${_qore_qcc_source_symbols_target}
                     ${_qore_qcc_source_symbols}
                     ${_qore_qcc_single_script}
                     ${_qore_qcc_context_path}

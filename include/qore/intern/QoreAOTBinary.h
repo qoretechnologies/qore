@@ -1675,6 +1675,11 @@ class QoreAOTBinaryDeserializer {
     std::vector<std::string> class_signature_hashes;
     std::vector<std::string> class_injected_paths;
 
+    //! Batch-wide class lookup map installed by QoreAOTBinaryMultiDeserializer.
+    //! Pending defaults can reference classes from sibling .qo sessions; the
+    //! per-session class_list map is not sufficient for those references.
+    const std::unordered_map<std::string, QoreClass*>* batch_class_lookup_map = nullptr;
+
     // Embedded source data (from FUNC_SOURCES section)
     const char* fallback_source = nullptr;       //!< embedded source text
     size_t fallback_source_len = 0;              //!< length of embedded source text
@@ -1938,6 +1943,9 @@ private:
     bool deserializeMethods(std::string& error);
     bool deserializeFallbackSources(std::string& error);
     bool commitDeserializedClasses(std::string& error);
+    const QoreClass* resolveClassRefForSession(const char* class_ref,
+        const std::unordered_map<std::string, QoreClass*>* local_class_map = nullptr,
+        bool pseudo = false) const;
     const QoreProgramLocation* getBlobLocation(int16_t start_line = 0, int16_t end_line = 0) const;
     bool deserializeShellsFromOpenReader(std::string& error);
 
@@ -1973,6 +1981,16 @@ public:
         if (type_resolver) {
             type_resolver->setSharedCache(shared);
         }
+    }
+
+    //! Add this session's class shells to a caller-owned lookup map, including
+    //! anchored/unanchored aliases used by serialized class references.
+    void appendClassesToLookupMap(std::unordered_map<std::string, QoreClass*>& map) const;
+
+    //! Install/clear a caller-owned batch class map for the duration of a
+    //! multi-blob resolution pass.
+    void setBatchClassLookupMap(const std::unordered_map<std::string, QoreClass*>* map) {
+        batch_class_lookup_map = map;
     }
 
     //! Phase 4 slice 10: phase-2 entry point — run all resolution
@@ -2402,6 +2420,22 @@ public:
             return true;
         };
 
+        std::unordered_map<std::string, QoreClass*> batch_class_lookup_map;
+        for (auto& sess : sessions) {
+            sess->appendClassesToLookupMap(batch_class_lookup_map);
+        }
+        for (auto& sess : sessions) {
+            sess->setBatchClassLookupMap(&batch_class_lookup_map);
+        }
+        struct BatchClassLookupScope {
+            std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions;
+            ~BatchClassLookupScope() {
+                for (auto& sess : sessions) {
+                    sess->setBatchClassLookupMap(nullptr);
+                }
+            }
+        } batch_class_lookup_scope{sessions};
+
         // Shell creation may add namespace/class/hashdecl declarations before
         // the root lookup indexes are rebuilt.  Cross-blob type and base-class
         // resolution below uses those indexes, so publish the full shell set
@@ -2561,6 +2595,22 @@ public:
             return true;
         };
 
+        std::unordered_map<std::string, QoreClass*> batch_class_lookup_map;
+        for (auto& sess : sessions) {
+            sess->appendClassesToLookupMap(batch_class_lookup_map);
+        }
+        for (auto& sess : sessions) {
+            sess->setBatchClassLookupMap(&batch_class_lookup_map);
+        }
+        struct BatchClassLookupScope {
+            std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions;
+            ~BatchClassLookupScope() {
+                for (auto& sess : sessions) {
+                    sess->setBatchClassLookupMap(nullptr);
+                }
+            }
+        } batch_class_lookup_scope{sessions};
+
         // Publish all preloaded shell declarations before resolving sibling
         // types and bases.  The source parser also needs this when it runs
         // before resolveForSourceParse(), so compileScriptFile() calls
@@ -2674,6 +2724,22 @@ public:
             }
             return true;
         };
+
+        std::unordered_map<std::string, QoreClass*> batch_class_lookup_map;
+        for (auto& sess : sessions) {
+            sess->appendClassesToLookupMap(batch_class_lookup_map);
+        }
+        for (auto& sess : sessions) {
+            sess->setBatchClassLookupMap(&batch_class_lookup_map);
+        }
+        struct BatchClassLookupScope {
+            std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions;
+            ~BatchClassLookupScope() {
+                for (auto& sess : sessions) {
+                    sess->setBatchClassLookupMap(nullptr);
+                }
+            }
+        } batch_class_lookup_scope{sessions};
 
         if (!runSessionPhase("AOT abstract import",
                 [&error](QoreAOTBinaryDeserializer& sess) {

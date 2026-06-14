@@ -429,6 +429,24 @@ static const QoreClass* qoreAOTFindClassInMap(
     return nullptr;
 }
 
+static void qoreAOTAddClassLookupAliases(
+        std::unordered_map<std::string, QoreClass*>& class_map,
+        QoreClass* qc) {
+    if (!qc) {
+        return;
+    }
+    const char* cpath = qc->getPath();
+    if (!cpath || !*cpath) {
+        return;
+    }
+    class_map[cpath] = qc;
+    if (!strncmp(cpath, "::", 2)) {
+        class_map[std::string(cpath + 2)] = qc;
+    } else {
+        class_map[std::string("::") + cpath] = qc;
+    }
+}
+
 static const QoreClass* qoreAOTResolveClassRefForDeserialization(
         QoreProgram* pgm,
         const char* class_ref,
@@ -438,6 +456,29 @@ static const QoreClass* qoreAOTResolveClassRefForDeserialization(
         return qc;
     }
     if (const QoreClass* qc = qoreAOTFindClassInMap(g_aot_pending_class_map, class_ref)) {
+        return qc;
+    }
+    return qore_aot_resolve_class_ref(pgm, class_ref, pseudo);
+}
+
+void QoreAOTBinaryDeserializer::appendClassesToLookupMap(
+        std::unordered_map<std::string, QoreClass*>& map) const {
+    for (QoreClass* qc : class_list) {
+        qoreAOTAddClassLookupAliases(map, qc);
+    }
+}
+
+const QoreClass* QoreAOTBinaryDeserializer::resolveClassRefForSession(
+        const char* class_ref,
+        const std::unordered_map<std::string, QoreClass*>* local_class_map,
+        bool pseudo) const {
+    if (const QoreClass* qc = qoreAOTFindClassInMap(local_class_map, class_ref)) {
+        return qc;
+    }
+    if (const QoreClass* qc = qoreAOTFindClassInMap(g_aot_pending_class_map, class_ref)) {
+        return qc;
+    }
+    if (const QoreClass* qc = qoreAOTFindClassInMap(batch_class_lookup_map, class_ref)) {
         return qc;
     }
     return qore_aot_resolve_class_ref(pgm, class_ref, pseudo);
@@ -1714,7 +1755,7 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
         bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
         std::string rv = or_nothing ? "*object<" : "object<";
-        rv += pti->getBaseClass() ? pti->getBaseClass()->getPath() : "";
+        rv += pti->getBaseClass() ? pti->getBaseClass()->getNamespacePath(true) : "";
         rv += "<";
         const std::vector<const QoreTypeInfo*>& args = pti->getTypeArgs();
         for (size_t i = 0; i < args.size(); ++i) {
@@ -1810,6 +1851,16 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     const char* raw_path = QoreTypeInfo::getPath(ti);
     bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
 
+    const QoreClass* qc = QoreTypeInfo::returnsSingle(ti)
+        ? QoreTypeInfo::getUniqueReturnClass(ti)
+        : (or_nothing ? QoreTypeInfo::getReturnClass(ti) : nullptr);
+    if (qc) {
+        std::string class_path = qc->getNamespacePath(true);
+        if (!class_path.empty()) {
+            return std::string(or_nothing ? "*object<" : "object<") + class_path + ">";
+        }
+    }
+
     if (QoreTypeInfo::isReference(ti) && raw_path && strchr(raw_path, '<')) {
         const QoreTypeInfo* ref_ti = QoreTypeInfo::getReferenceTarget(ti);
         if (ref_ti) {
@@ -1856,6 +1907,9 @@ std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_
     return getAOTSerializableTypePath(ti, no_narrow);
 }
 
+static bool extract_aot_type_args(const char* path, const char* type_name, bool& or_nothing,
+        std::vector<std::string>& args);
+
 const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path) {
     if (!pgm || !path || !*path) {
         return nullptr;
@@ -1893,6 +1947,67 @@ const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char
         return nullptr;
     }
     return QoreTypeInfo::getTypedHash(ti);
+}
+
+static std::string qoreAOTHashDeclDefaultDynamicName(const std::string& path, bool& or_nothing) {
+    or_nothing = false;
+
+    std::vector<std::string> args;
+    if (extract_aot_type_args(path.c_str(), "hash", or_nothing, args) && args.size() == 1) {
+        return args[0];
+    }
+
+    std::string rv = path;
+    if (!rv.empty() && rv[0] == '*') {
+        or_nothing = true;
+        rv.erase(0, 1);
+    }
+    while (rv.rfind("::", 0) == 0) {
+        rv.erase(0, 2);
+    }
+    return rv;
+}
+
+static QoreValue qoreAOTMakeHashDeclDefaultNode(QoreProgram* pgm, const std::string& path,
+        QoreParseListNode* parse_args) {
+    if (const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, path.c_str())) {
+        return QoreValue(new NewHashDeclNode(&loc_builtin, hd, parse_args, false));
+    }
+
+    bool or_nothing = false;
+    std::string dynamic_name = qoreAOTHashDeclDefaultDynamicName(path, or_nothing);
+    const QoreTypeInfo* ti = qore_get_aot_deferred_type_info(&loc_builtin, dynamic_name.c_str(), or_nothing, true);
+    return QoreValue(new NewHashDeclNode(&loc_builtin, dynamic_name.c_str(), ti, parse_args));
+}
+
+static QoreParseListNode* qoreAOTTakeParseArgs(std::vector<QoreValue>& args) {
+    if (args.empty()) {
+        return nullptr;
+    }
+
+    QoreParseListNode* parse_args = new QoreParseListNode(&loc_builtin);
+    for (auto& v : args) {
+        parse_args->add(v, &loc_builtin);
+    }
+    args.clear();
+    return parse_args;
+}
+
+static QoreValue qoreAOTMakeObjectDefaultNode(const QoreClass* qc,
+        const std::string& class_path, std::vector<QoreValue>& args) {
+    QoreParseListNode* parse_args = qoreAOTTakeParseArgs(args);
+    ScopedObjectCallNode* socn = nullptr;
+    if (qc) {
+        socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args, qc->getTypeInfo());
+    } else {
+        const QoreTypeInfo* object_type_info = qore_get_aot_deferred_type_info(
+            &loc_builtin, class_path.c_str(), false, false);
+        socn = new ScopedObjectCallNode(&loc_builtin, class_path.c_str(), parse_args, object_type_info);
+    }
+    if (parse_args) {
+        socn->resolveParseArgs();
+    }
+    return QoreValue(socn);
 }
 
 static void qoreAOTWriteContainerValueType(QoreAOTBinaryWriter& writer,
@@ -2347,7 +2462,8 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             // NewHashDeclNode: `<MyHashdecl> m();` default-constructed hashdecl
             if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
                 const TypedHashDecl* hd = nhd->hd;
-                std::string ns_path = hd ? hd->getNamespacePath() : std::string();
+                std::string ns_path = hd ? hd->getNamespacePath()
+                    : (nhd->isDynamicHashDeclConstruct() ? nhd->getDynamicHashDeclName() : std::string());
                 uint32_t nargs = nhd->args ? static_cast<uint32_t>(nhd->args->size()) : 0;
                 writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
                 writeU8(2); // kind: 2 = hashdecl
@@ -4171,13 +4287,11 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
         const char* end = strrchr(start, '>');
         if (end && end > start) {
             std::string class_path(start, end - start);
-            // Look up the class in the program's namespace tree
             qore_program_private* pp = qore_program_private::get(*pgm);
-            qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
             // runtimeFindClass searches the namespace tree directly
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str());
             if (qc) {
-                return qc->getOrNothingTypeInfo();
+                return qc->getTypeInfo();
             }
             return qore_get_aot_deferred_type_info(nullptr, class_path.c_str(), false, false);
         }
@@ -7383,7 +7497,8 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 
         // name and path
         writer.writeStringRef(priv->name.c_str());
-        writer.writeStringRef(priv->path.c_str());
+        std::string class_path = priv->cls ? priv->cls->getNamespacePath(true) : std::string();
+        writer.writeStringRef(class_path.empty() ? priv->path.c_str() : class_path.c_str());
         writer.writeU32(ci.ns_idx);
 
         // flags: bit 0 = pub, bit 1 = final, bit 2 = injected import,
@@ -9612,9 +9727,14 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (nhd->hd) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
             writer.writeStringRef(nhd->hd->getNamespacePath().c_str());
-            // Serialize constructor args (typically a single hash initializer)
-            return write_parse_arg_list(nhd->args);
+        } else if (nhd->isDynamicHashDeclConstruct()) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
+            writer.writeStringRef(nhd->getDynamicHashDeclName().c_str());
+        } else {
+            return false;
         }
+        // Serialize constructor args (typically a single hash initializer)
+        return write_parse_arg_list(nhd->args);
     }
 
     // NewComplexHashNode: complex typed hash construction
@@ -11967,7 +12087,7 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
     {
         for (const auto& pd : pending_smd) {
             const QoreClass* qc = !pd.class_path.empty()
-                ? qoreAOTResolveClassRefForDeserialization(pgm, pd.class_path.c_str())
+                ? resolveClassRefForSession(pd.class_path.c_str())
                 : nullptr;
             const QoreMethod* m = nullptr;
             if (qc && !pd.method_name.empty()) {
@@ -12503,19 +12623,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 error = "AOT class injection map build cancelled";
                 return false;
             }
-            if (!class_list[i]) {
-                continue;
-            }
-            const char* cpath = class_list[i]->getPath();
-            if (!cpath || !*cpath) {
-                continue;
-            }
-            all_class_map[cpath] = class_list[i];
-            if (!strncmp(cpath, "::", 2)) {
-                all_class_map[std::string(cpath + 2)] = class_list[i];
-            } else {
-                all_class_map[std::string("::") + cpath] = class_list[i];
-            }
+            qoreAOTAddClassLookupAliases(all_class_map, class_list[i]);
         }
 
         for (uint32_t i = 0; i < class_injected_paths.size(); ++i) {
@@ -12526,8 +12634,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             if (preexisting_classes.count(i) || !class_list[i] || class_injected_paths[i].empty()) {
                 continue;
             }
-            const QoreClass* injected = qoreAOTResolveClassRefForDeserialization(
-                pgm, class_injected_paths[i].c_str(), &all_class_map);
+            const QoreClass* injected = resolveClassRefForSession(
+                class_injected_paths[i].c_str(), &all_class_map);
             if (!injected) {
                 error = "cannot resolve injected target class '" + class_injected_paths[i] + "' for class '"
                     + std::string(class_list[i]->getName()) + "'";
@@ -12619,8 +12727,7 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
         QoreClass* qc = class_list[idx];
 
         for (auto& pbc : pending_bases[idx]) {
-            const QoreClass* base = qoreAOTResolveClassRefForDeserialization(
-                pgm, pbc.base_path.c_str());
+            const QoreClass* base = resolveClassRefForSession(pbc.base_path.c_str());
             if (base) {
                 // Add base class to this class with proper access level
                 qc->addBaseClass(const_cast<QoreClass*>(base),
@@ -12677,18 +12784,11 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
     // after every class has been registered.
     std::unordered_map<std::string, QoreClass*> all_class_map;
     for (uint32_t i = 0; i < class_list.size(); ++i) {
-        if (!class_list[i]) {
-            continue;
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT instance member class lookup map build")) {
+            error = "AOT instance member class lookup map build cancelled";
+            return false;
         }
-        const char* cpath = class_list[i]->getPath();
-        if (cpath && *cpath) {
-            all_class_map[cpath] = class_list[i];
-            if (strncmp(cpath, "::", 2) == 0) {
-                all_class_map[std::string(cpath + 2)] = class_list[i];
-            } else {
-                all_class_map[std::string("::") + cpath] = class_list[i];
-            }
-        }
+        qoreAOTAddClassLookupAliases(all_class_map, class_list[i]);
     }
 
     for (uint32_t i = 0; i < class_list.size() && i < pending_instance_members.size(); ++i) {
@@ -12717,34 +12817,10 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
 
             // Resolve a pending forward-referenced NewObject default if any.
             if (!pim.pending_new_class_path.empty()) {
-                const QoreClass* target = qoreAOTResolveClassRefForDeserialization(
-                    getProgram(), pim.pending_new_class_path.c_str(), &all_class_map);
-                if (target) {
-                    QoreParseListNode* parse_args = nullptr;
-                    if (!pim.pending_new_args.empty()) {
-                        parse_args = new QoreParseListNode(&loc_builtin);
-                        for (auto& v : pim.pending_new_args) {
-                            parse_args->add(v, &loc_builtin);
-                        }
-                        pim.pending_new_args.clear();
-                    }
-                    ScopedObjectCallNode* socn = new ScopedObjectCallNode(
-                        &loc_builtin, target, parse_args);
-                    if (parse_args) {
-                        socn->resolveParseArgs();
-                    }
-                    pim.default_val = QoreValue(socn);
-                } else {
-                    std::string class_desc = qoreAOTDescribeClassRef(
-                        pim.pending_new_class_path.c_str());
-                    for (auto& v : pim.pending_new_args) {
-                        v.discard(nullptr);
-                    }
-                    pim.pending_new_args.clear();
-                    return setAOTDeferredMemberResolutionError(error,
-                        "new-object default class", class_desc.c_str(), "class",
-                        qc->getName(), pim.name.c_str());
-                }
+                const QoreClass* target = resolveClassRefForSession(
+                    pim.pending_new_class_path.c_str(), &all_class_map);
+                pim.default_val = qoreAOTMakeObjectDefaultNode(target,
+                    pim.pending_new_class_path, pim.pending_new_args);
                 pim.pending_new_class_path.clear();
             }
 
@@ -12788,22 +12864,11 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                     pim.pending_complex_default_args.clear();
                 }
                 if (pim.pending_complex_default_kind == 2) {
-                    // Hashdecl: resolve by namespace path
-                    const QoreNamespace* pns = nullptr;
-                    const TypedHashDecl* hd = getProgram()->findHashDecl(
-                        pim.pending_complex_default_path.c_str(), pns);
-                    if (hd) {
-                        NewHashDeclNode* nhd = new NewHashDeclNode(
-                            &loc_builtin, hd, parse_args, false);
-                        pim.default_val = QoreValue(nhd);
-                    } else {
-                        if (parse_args) {
-                            parse_args->deref(nullptr);
-                        }
-                        return setAOTDeferredMemberResolutionError(error,
-                            "hashdecl default", pim.pending_complex_default_path.c_str(),
-                            "class", qc->getName(), pim.name.c_str());
-                    }
+                    // Hashdecl: resolve now when possible, otherwise keep a
+                    // dynamic node so source-parse preloads do not force the
+                    // provider .qo into the compile graph.
+                    pim.default_val = qoreAOTMakeHashDeclDefaultNode(getProgram(),
+                        pim.pending_complex_default_path, parse_args);
                 } else {
                     // kind 0 (complex list) or kind 1 (complex hash)
                     std::string type_error;
@@ -12904,18 +12969,11 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
     // resolution (mirrors resolveInstanceMembers).
     std::unordered_map<std::string, QoreClass*> all_class_map;
     for (uint32_t i = 0; i < class_list.size(); ++i) {
-        if (!class_list[i]) {
-            continue;
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT static member class lookup map build")) {
+            error = "AOT static member class lookup map build cancelled";
+            return false;
         }
-        const char* cpath = class_list[i]->getPath();
-        if (cpath && *cpath) {
-            all_class_map[cpath] = class_list[i];
-            if (strncmp(cpath, "::", 2) == 0) {
-                all_class_map[std::string(cpath + 2)] = class_list[i];
-            } else {
-                all_class_map[std::string("::") + cpath] = class_list[i];
-            }
-        }
+        qoreAOTAddClassLookupAliases(all_class_map, class_list[i]);
     }
 
     for (uint32_t i = 0; i < class_list.size() && i < pending_static_members.size(); ++i) {
@@ -12945,34 +13003,10 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
 
             // Resolve a pending forward-referenced NewObject default if any
             if (!psm.pending_new_class_path.empty()) {
-                const QoreClass* target = qoreAOTResolveClassRefForDeserialization(
-                    getProgram(), psm.pending_new_class_path.c_str(), &all_class_map);
-                if (target) {
-                    QoreParseListNode* parse_args = nullptr;
-                    if (!psm.pending_new_args.empty()) {
-                        parse_args = new QoreParseListNode(&loc_builtin);
-                        for (auto& v : psm.pending_new_args) {
-                            parse_args->add(v, &loc_builtin);
-                        }
-                        psm.pending_new_args.clear();
-                    }
-                    ScopedObjectCallNode* socn = new ScopedObjectCallNode(
-                        &loc_builtin, target, parse_args);
-                    if (parse_args) {
-                        socn->resolveParseArgs();
-                    }
-                    psm.default_val = QoreValue(socn);
-                } else {
-                    std::string class_desc = qoreAOTDescribeClassRef(
-                        psm.pending_new_class_path.c_str());
-                    for (auto& v : psm.pending_new_args) {
-                        v.discard(nullptr);
-                    }
-                    psm.pending_new_args.clear();
-                    return setAOTDeferredMemberResolutionError(error,
-                        "new-object default class", class_desc.c_str(), "class",
-                        qc->getName(), psm.name.c_str());
-                }
+                const QoreClass* target = resolveClassRefForSession(
+                    psm.pending_new_class_path.c_str(), &all_class_map);
+                psm.default_val = qoreAOTMakeObjectDefaultNode(target,
+                    psm.pending_new_class_path, psm.pending_new_args);
                 psm.pending_new_class_path.clear();
             }
 
@@ -13015,21 +13049,8 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                     psm.pending_complex_default_args.clear();
                 }
                 if (psm.pending_complex_default_kind == 2) {
-                    const QoreNamespace* pns = nullptr;
-                    const TypedHashDecl* hd = getProgram()->findHashDecl(
-                        psm.pending_complex_default_path.c_str(), pns);
-                    if (hd) {
-                        NewHashDeclNode* nhd = new NewHashDeclNode(
-                            &loc_builtin, hd, parse_args, false);
-                        psm.default_val = QoreValue(nhd);
-                    } else {
-                        if (parse_args) {
-                            parse_args->deref(nullptr);
-                        }
-                        return setAOTDeferredMemberResolutionError(error,
-                            "hashdecl default", psm.pending_complex_default_path.c_str(),
-                            "class", qc->getName(), psm.name.c_str());
-                    }
+                    psm.default_val = qoreAOTMakeHashDeclDefaultNode(getProgram(),
+                        psm.pending_complex_default_path, parse_args);
                 } else {
                     std::string type_error;
                     const QoreTypeInfo* cti = type_resolver->resolve(
@@ -13411,30 +13432,10 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             // Resolve deferred VT_NEW_OBJECT: build the ScopedObjectCallNode
             // for `Class(args)` defaults now that the class is registered.
             if (!phm.pending_new_class_path.empty()) {
-                const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(
-                    pgm, phm.pending_new_class_path.c_str());
-                if (qc) {
-                    QoreParseListNode* parse_args = nullptr;
-                    if (!phm.pending_new_args.empty()) {
-                        parse_args = new QoreParseListNode(&loc_builtin);
-                        for (auto& a : phm.pending_new_args) {
-                            parse_args->add(a, &loc_builtin);
-                        }
-                        phm.pending_new_args.clear();
-                    }
-                    phm.default_val = QoreValue(new ScopedObjectCallNode(
-                        &loc_builtin, qc, parse_args));
-                } else {
-                    std::string class_desc = qoreAOTDescribeClassRef(
-                        phm.pending_new_class_path.c_str());
-                    for (auto& a : phm.pending_new_args) {
-                        a.discard(nullptr);
-                    }
-                    phm.pending_new_args.clear();
-                    return setAOTDeferredMemberResolutionError(error,
-                        "new-object default class", class_desc.c_str(),
-                        "hashdecl", hd->getName(), phm.name.c_str());
-                }
+                const QoreClass* target = resolveClassRefForSession(
+                    phm.pending_new_class_path.c_str());
+                phm.default_val = qoreAOTMakeObjectDefaultNode(target,
+                    phm.pending_new_class_path, phm.pending_new_args);
                 phm.pending_new_class_path.clear();
             }
 
@@ -13451,20 +13452,8 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     phm.pending_complex_default_args.clear();
                 }
                 if (phm.pending_complex_default_kind == 2) {
-                    const QoreNamespace* pns = nullptr;
-                    const TypedHashDecl* default_hd = getProgram()->findHashDecl(
-                        phm.pending_complex_default_path.c_str(), pns);
-                    if (default_hd) {
-                        phm.default_val = QoreValue(new NewHashDeclNode(
-                            &loc_builtin, default_hd, parse_args, false));
-                    } else {
-                        if (parse_args) {
-                            parse_args->deref(nullptr);
-                        }
-                        return setAOTDeferredMemberResolutionError(error,
-                            "hashdecl default", phm.pending_complex_default_path.c_str(),
-                            "hashdecl", hd->getName(), phm.name.c_str());
-                    }
+                    phm.default_val = qoreAOTMakeHashDeclDefaultNode(getProgram(),
+                        phm.pending_complex_default_path, parse_args);
                 } else {
                     std::string type_error;
                     const QoreTypeInfo* cti = type_resolver->resolve(

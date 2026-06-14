@@ -13944,6 +13944,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.parse_args = nhd->args;
             return id;
         }
+        if (nhd->isDynamicHashDeclConstruct()) {
+            id.kind = AOTExprKind::HASHDECL_NEW;
+            id.ref1 = nhd->getDynamicHashDeclName();
+            id.parse_args = nhd->args;
+            return id;
+        }
     }
 
     // NewComplexHashNode: complex typed hash construction (new hash<string, int>(...))

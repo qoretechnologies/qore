@@ -391,6 +391,9 @@ static std::string aotDeferredTypePath(const std::string& qore_path, bool hashde
         rv += '*';
     }
     rv += hashdecl ? "hash<" : "object<";
+    if (!hashdecl) {
+        rv += "::";
+    }
     rv += qore_path;
     rv += '>';
     return rv;
@@ -5618,6 +5621,13 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         max_result = QTI_WILDCARD;
         return QTI_WILDCARD;
     }
+    bool aot_deferred_result = false;
+    if (qore_type_info_aot_deferred_compare(first, second, aot_deferred_result) && aot_deferred_result) {
+        may_not_match = false;
+        may_need_filter = false;
+        max_result = QTI_IDENT;
+        return QTI_IDENT;
+    }
     if (!hasType(first)) {
         if (!may_need_filter && isComplex(second))
             may_need_filter = true;
@@ -5689,6 +5699,11 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
 
 qore_type_result_e QoreTypeInfo::runtimeTypeMatch(const QoreTypeInfo* typeInfo) const {
     //printd(5, "QoreTypeInfo::runtimeTypeMatch() '%s' <=> '%s'\n", tname.c_str(), typeInfo->tname.c_str());
+    bool aot_deferred_result = false;
+    if (qore_type_info_aot_deferred_compare(this, typeInfo, aot_deferred_result) && aot_deferred_result) {
+        return QTI_IDENT;
+    }
+
     if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->getAcceptVecSize() != getAcceptVecSize()) {
         return QTI_NOT_EQUAL;
     }

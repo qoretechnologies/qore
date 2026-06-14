@@ -9060,6 +9060,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Hashdecl construction from pre-lowered hash operand
                 // Extract TypedHashDecl and runtime_check from the typed construction expression.
                 const TypedHashDecl* hd = nullptr;
+                std::string hd_path;
                 bool runtime_check = false;
                 if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                         inv->expr.getInternalNode())) {
@@ -9067,10 +9068,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     runtime_check = vrn->getRuntimeCheck();
                 } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(
                         inv->expr.getInternalNode())) {
-                    hd = QoreTypeInfo::getUniqueReturnHashDecl(specializeType(nhd->hd->getTypeInfo()));
+                    if (nhd->hd) {
+                        hd = QoreTypeInfo::getUniqueReturnHashDecl(specializeType(nhd->hd->getTypeInfo()));
+                    } else if (nhd->isDynamicHashDeclConstruct()) {
+                        hd_path = nhd->getDynamicHashDeclName();
+                    }
                     runtime_check = nhd->runtime_check;
                 }
-                if (!hd) {
+                if (!hd && hd_path.empty()) {
                     error = "NewHashDeclFromHash invoke is missing hashdecl metadata";
                     return false;
                 }
@@ -9081,7 +9086,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         runtime_check ? 1 : 0);
                 if (aot_mode) {
                     // AOT: resolve hashdecl by namespace path at runtime
-                    std::string hd_path = qore_get_aot_serializable_type_path(hd->getTypeInfo());
+                    if (hd_path.empty()) {
+                        hd_path = qore_get_aot_serializable_type_path(hd->getTypeInfo());
+                    }
                     llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
                     auto helper = module.getOrInsertFunction(
                             "qore_rt_new_hash_decl_from_hash_by_path_cached",
@@ -9091,6 +9098,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {aot_ctx_arg, hd_path_str, hash_boxed, rtcheck, xsink_arg});
                 } else {
                     // JIT: direct pointer is valid within the same process
+                    if (!hd) {
+                        error = "NewHashDeclFromHash JIT invoke cannot resolve deferred hashdecl metadata";
+                        return false;
+                    }
                     llvm::Value* hd_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(hd));
                     llvm::Value* hd_as_ptr = builder->CreateIntToPtr(hd_ptr, ptr_type);

@@ -37,10 +37,14 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("standalone class type import resolves at link time", \testStandaloneClassTypeImport());
         addTestCase("source symbol manifest defers shadowed loaded classes",
             \testSourceSymbolManifestDefersShadowedLoadedClasses());
+        addTestCase("standalone abstract returns match deferred class types",
+            \testStandaloneDeferredAbstractReturnTypes());
         addTestCase("standalone deferred class overload types stay distinct",
             \testStandaloneDeferredClassOverloadTypes());
         addTestCase("standalone static complex defaults preserve nested object types",
             \testStandaloneStaticComplexDefaultTypeImport());
+        addTestCase("sibling object defaults resolve during source preload",
+            \testSiblingObjectDefaultPreloadImport());
         addTestCase("sibling namespaced object type import resolves at link time",
             \testSiblingNamespacedObjectTypeImport());
         addTestCase("standalone hashdecl type import resolves at link time", \testStandaloneHashdeclTypeImport());
@@ -705,6 +709,70 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "linked executable resolves the source-local shadowed class: " + out);
     }
 
+    testStandaloneDeferredAbstractReturnTypes() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-abstract-return";
+        mkdir(qo_dir);
+        string parent_src = tmp_dir + "/abstract-parent.qc";
+        string child_src = tmp_dir + "/abstract-child.qc";
+        string main_src = tmp_dir + "/abstract-main.qr";
+        string parent_qo = qo_dir + "/abstract-parent.qo";
+        string child_qo = qo_dir + "/abstract-child.qo";
+        string main_qo = qo_dir + "/abstract-main.qo";
+        string app = tmp_dir + "/abstract-return-app";
+
+        write(parent_src,
+            "%new-style\n"
+            "%require-types\n"
+            "class AOTDeferredAbstractParent {\n"
+            "    AOTDeferredAbstractReturn make() { return makeImpl(); }\n"
+            "    private abstract AOTDeferredAbstractReturn makeImpl();\n"
+            "}\n"
+            "class AOTDeferredAbstractReturn {\n"
+            "    string value() { return \"linked\"; }\n"
+            "}\n");
+        write(child_src,
+            "%new-style\n"
+            "%require-types\n"
+            "class AOTDeferredAbstractChild inherits AOTDeferredAbstractParent {\n"
+            "    private AOTDeferredAbstractReturn makeImpl() {\n"
+            "        return new AOTDeferredAbstractReturn();\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTDeferredAbstractChild c();\n"
+            "    printf(\"%s\\n\", c.make().value());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string parent_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, parent_qo, parent_src));
+        assertTrue(is_file(parent_qo),
+            "abstract parent compiles with a later sibling return type: " + parent_out);
+
+        string child_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, child_qo, child_src));
+        assertTrue(is_file(child_qo),
+            "child override resolves the deferred abstract return type: " + child_out);
+        assertEq(-1, child_out.find("ABSTRACT-CLASS-ERROR"),
+            "child is concrete after matching the deferred return type: " + child_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against abstract return classes: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, parent_qo, child_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred abstract return classes: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("linked\n", out,
+            "linked executable dispatches the concrete abstract-return override: " + out);
+    }
+
     testSiblingNamespacedObjectTypeImport() {
         TmpDir tmp = initDirs();
         string qo_dir = tmp_dir + "/qo-ns-object-type";
@@ -874,6 +942,73 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         assertEq("0\n", out, "static complex default initializes an empty typed hash: " + out);
     }
 
+    testSiblingObjectDefaultPreloadImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-sibling-object-default";
+        mkdir(qo_dir);
+        string target_src = tmp_dir + "/z-target.qc";
+        string holder_src = tmp_dir + "/a-holder.qc";
+        string trigger_src = tmp_dir + "/m-trigger.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string target_qo = qo_dir + "/z-target.qo";
+        string holder_qo = qo_dir + "/a-holder.qo";
+        string trigger_qo = qo_dir + "/m-trigger.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string app = tmp_dir + "/sibling-object-default-app";
+
+        write(target_src,
+            "%new-style\n"
+            "class AOTSiblingObjectDefaultTarget {\n"
+            "    string value() { return \"target\"; }\n"
+            "}\n");
+        write(holder_src,
+            "%new-style\n"
+            "class AOTSiblingObjectDefaultHolder {\n"
+            "    private { AOTSiblingObjectDefaultTarget target(); }\n"
+            "    object getTarget() { return target; }\n"
+            "}\n");
+        write(trigger_src,
+            "%new-style\n"
+            "class AOTSiblingObjectDefaultTrigger {\n"
+            "    int run() { return 1; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTSiblingObjectDefaultHolder h = new AOTSiblingObjectDefaultHolder();\n"
+            "    h.getTarget();\n"
+            "    printf(\"ok\\n\");\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string target_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, target_qo, target_src));
+        assertTrue(is_file(target_qo), "object-default target compiles: " + target_out);
+
+        string holder_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, holder_qo, holder_src));
+        assertTrue(is_file(holder_qo), "object-default holder compiles against target metadata: " + holder_out);
+
+        string trigger_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, trigger_qo, trigger_src));
+        assertTrue(is_file(trigger_qo),
+            "sibling preload resolves holder object default through target metadata: " + trigger_out);
+        assertEq(-1, trigger_out.find("new-object default class"),
+            "preload did not report an unresolved object-default class: " + trigger_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against sibling object-default metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s %s",
+            env, qcc_bin, app, holder_qo, target_qo, trigger_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts sibling object defaults: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("ok\n", out, "linked executable constructs holder object default: " + out);
+    }
+
     testStandaloneHashdeclTypeImport() {
         TmpDir tmp = initDirs();
         string qo_dir = tmp_dir + "/qo-hashdecl-type";
@@ -1027,16 +1162,19 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "%new-style\n"
             "class AOTStaticConsumer {\n"
             "    auto run() { return AOTStaticProvider::message(\"call\"); }\n"
+            "    nothing runNoop() { return AOTStaticProvider::noop(); }\n"
             "}\n");
         write(provider_src,
             "%new-style\n"
             "class AOTStaticProvider {\n"
             "    static string message(string value) { return \"static-\" + value; }\n"
+            "    static noop() {}\n"
             "}\n");
         write(main_src,
             "%new-style\n"
             "int sub main() {\n"
             "    AOTStaticConsumer c = new AOTStaticConsumer();\n"
+            "    c.runNoop();\n"
             "    printf(\"%s\\n\", c.run());\n"
             "    return 0;\n"
             "}\n"

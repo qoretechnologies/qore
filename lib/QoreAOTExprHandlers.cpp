@@ -1880,24 +1880,29 @@ static bool write_expr_hashdecl_new(AOTExprWriteCtx& ctx) {
         if (nhd->hd) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
             ctx.writer.writeStringRef(nhd->hd->getNamespacePath().c_str());
-            // Serialize constructor args (typically a single hash initializer)
-            size_t nargs = nhd->args ? nhd->args->size() : 0;
-            if (nargs > 255) {
-                return false;
-            }
-            if (nargs > 0) {
-                ctx.writer.writeU8(static_cast<uint8_t>(nargs));
-                for (size_t j = 0; j < nhd->args->size(); ++j) {
-                    if (!::classifyAndWriteExpr(ctx.writer, nhd->args->get(j),
-                            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
-                        return false;
-                    }
-                }
-            } else {
-                ctx.writer.writeU8(0);
-            }
-            return true;
+        } else if (nhd->isDynamicHashDeclConstruct()) {
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
+            ctx.writer.writeStringRef(nhd->getDynamicHashDeclName().c_str());
+        } else {
+            return false;
         }
+        // Serialize constructor args (typically a single hash initializer)
+        size_t nargs = nhd->args ? nhd->args->size() : 0;
+        if (nargs > 255) {
+            return false;
+        }
+        if (nargs > 0) {
+            ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+            for (size_t j = 0; j < nhd->args->size(); ++j) {
+                if (!::classifyAndWriteExpr(ctx.writer, nhd->args->get(j),
+                        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+                    return false;
+                }
+            }
+        } else {
+            ctx.writer.writeU8(0);
+        }
+        return true;
     }
     if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
         if (vrn->isDynamicHashDeclConstruct()) {

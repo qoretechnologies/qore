@@ -129,6 +129,18 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         string consumer = snippets_dir + "/consumer.qc";
         string base = snippets_dir + "/base.qc";
         string child = snippets_dir + "/child.qc";
+        string default_target = snippets_dir + "/defaulttarget.qc";
+        string default_holder = snippets_dir + "/defaultholder.qc";
+        string hashdecl_provider = snippets_dir + "/hashdeclprovider.qc";
+        string hashdecl_consumer = snippets_dir + "/hashdeclconsumer.qc";
+        string status_provider = snippets_dir + "/statusprovider.qc";
+        string status_holder = snippets_dir + "/statusholder.qc";
+        string enum_provider = snippets_dir + "/enumprovider.qc";
+        string enum_consumer = snippets_dir + "/enumconsumer.qc";
+        string callref_provider = snippets_dir + "/callrefprovider.qc";
+        string callref_consumer = snippets_dir + "/callrefconsumer.qc";
+        string constinit_provider = snippets_dir + "/constinitprovider.qc";
+        string constinit_consumer = snippets_dir + "/constinitconsumer.qc";
         write(provider,
 "%new-style
 class CMakeQoProvider {
@@ -164,6 +176,94 @@ class CMakeQoChild inherits CMakeQoBase {
     string child() { return base(); }
 }
 ");
+        write(default_target,
+"%new-style
+class CMakeQoDefaultTarget {
+}
+");
+        write(default_holder,
+"%new-style
+class CMakeQoDefaultHolder {
+    private {
+        CMakeQoDefaultTarget target();
+    }
+}
+");
+        write(hashdecl_provider,
+"%new-style
+hashdecl CMakeQoHashInfo {
+    string label;
+}
+");
+        write(hashdecl_consumer,
+"%new-style
+class CMakeQoHashConsumer {
+    hash<CMakeQoHashInfo> get() {
+        return new hash<CMakeQoHashInfo>({\"label\": \"hash\"});
+    }
+}
+");
+        write(status_provider,
+"%new-style
+hashdecl CMakeQoStatus {
+    string status = \"queued\";
+}
+");
+        write(status_holder,
+"%new-style
+class CMakeQoStatusHolder {
+    private {
+        hash<CMakeQoStatus> status();
+    }
+}
+");
+        write(enum_provider,
+"%new-style
+public enum CMakeQoMode : string {
+    Fast = \"fast\",
+    Slow = \"slow\",
+}
+");
+        write(enum_consumer,
+"%new-style
+class CMakeQoEnumConsumer {
+    enum<CMakeQoMode> get() {
+        enum<CMakeQoMode> mode = CMakeQoMode::Slow;
+        switch (mode) {
+            case CMakeQoMode::Fast:
+                return CMakeQoMode::Fast;
+            default:
+                return mode;
+        }
+    }
+}
+");
+        write(callref_provider,
+"%new-style
+string sub cmakeQoCallRefFunction() { return \"callref\"; }
+");
+        write(callref_consumer,
+"%new-style
+class CMakeQoCallRefConsumer {
+    callref get() {
+        return \\cmakeQoCallRefFunction();
+    }
+}
+");
+        write(constinit_provider,
+"%new-style
+class CMakeQoConstInitProvider {
+    static int limit() { return 42; }
+}
+");
+        write(constinit_consumer,
+"%new-style
+class CMakeQoConstInitConsumer {
+    public {
+        const Limit = CMakeQoConstInitProvider::limit();
+    }
+}
+");
 
         write(src_dir + "/CMakeLists.txt",
 "cmake_minimum_required(VERSION 3.16)
@@ -179,7 +279,19 @@ set(QO_SOURCES
     \"${CMAKE_SOURCE_DIR}/srcs/provider.qc\"
     \"${CMAKE_SOURCE_DIR}/srcs/consumer.qc\"
     \"${CMAKE_SOURCE_DIR}/srcs/base.qc\"
-    \"${CMAKE_SOURCE_DIR}/srcs/child.qc\")
+    \"${CMAKE_SOURCE_DIR}/srcs/child.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/defaulttarget.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/defaultholder.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/hashdeclprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/hashdeclconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/statusprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/statusholder.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/enumprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/enumconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/callrefprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/callrefconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/constinitprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/constinitconsumer.qc\")
 
 qore_qcc_compile_objects(QO_OBJECTS
     GROUP cmake-smoke
@@ -242,6 +354,18 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             "linkable provider references do not become consumer build deps: " + direct);
         assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_3.*base_qc\\.qo"),
             "inheritance remains a source-scanned build prerequisite: " + direct);
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_5 \"\"\\)"),
+            "constructed class member defaults remain linkable: " + direct);
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_7 \"\"\\)"),
+            "new hash<HashDecl> constructors remain linkable: " + direct);
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_9 \"\"\\)"),
+            "constructed typed-hash defaults remain linkable: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_11.*enumprovider_qc\\.qo"),
+            "enum annotations and members become source-scanned build prerequisites: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_13.*callrefprovider_qc\\.qo"),
+            "function call references become source-scanned build prerequisites: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_15.*constinitprovider_qc\\.qo"),
+            "static calls in constant initializers become source-scanned build prerequisites: " + direct);
 
         string build1 = run(sprintf("cmake --build %s -- -j17", build_dir));
         assertTrue(is_file(build_dir + "/linked.qo"), "linked .qo aggregate built: " + build1);
@@ -251,7 +375,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             "script aggregate .qo built: " + build1);
         string source_symbols = read(build_dir + "/qo-scripts/source-symbols.manifest");
         assertTrue(source_symbols.find("class\tCMakeQoProvider\t") != -1
-                && source_symbols.find("function\tcmakeQoFreeFunction\t") != -1,
+                && source_symbols.find("function\tcmakeQoFreeFunction\t") != -1
+                && source_symbols.find("function\tcmakeQoCallRefFunction\t") != -1,
             "qcc object helper writes a source-symbol manifest: " + source_symbols);
 
         string link_map = read(build_dir + "/linked.qo.qolink.json");
@@ -262,6 +387,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
 
         string no_op = run(sprintf("cmake --build %s -- -j17", build_dir));
         assertTrue(no_op.find("qcc -c:") == -1
+                && no_op.find("qcc: scanning") == -1
                 && no_op.find("qcc --link-qo:") == -1
                 && no_op.find("qcc --script-aggregate:") == -1,
             "no-op rebuild does not rerun qcc helper targets: " + no_op);

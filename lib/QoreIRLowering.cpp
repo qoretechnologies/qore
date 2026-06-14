@@ -4630,9 +4630,14 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             hash_val = builder.createMakeHashConstKeys(std::move(empty_keys), empty_vals, new_hd->loc, nullptr)
                 ->result;
         }
-        const QoreTypeInfo* hd_type_info = qore_substitute_type_params_if_needed(new_hd->hd->getTypeInfo());
+        const QoreTypeInfo* hd_type_info = new_hd->hd
+            ? qore_substitute_type_params_if_needed(new_hd->hd->getTypeInfo()) : nullptr;
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hd_type_info);
-        if (!hd) {
+        const char* hd_path = nullptr;
+        if (!hd && new_hd->isDynamicHashDeclConstruct()) {
+            hd_path = new_hd->getDynamicHashDeclName().c_str();
+        }
+        if (!hd && (!hd_path || !*hd_path)) {
             error = "hashdecl construction target could not be resolved after generic type substitution";
             return QoreIRValue();
         }
@@ -4648,7 +4653,10 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             builder.setBlock(normal_block);
             return inst->result;
         }
-        return builder.createNewHashDeclFromHash(hd, new_hd->runtime_check, hash_val, new_hd->loc)->result;
+        return hd
+            ? builder.createNewHashDeclFromHash(hd, new_hd->runtime_check, hash_val, new_hd->loc)->result
+            : builder.createNewHashDeclFromHash(hd_path, nullptr, new_hd->runtime_check,
+                hash_val, new_hd->loc)->result;
     }
     if (auto* new_ch = dynamic_cast<const NewComplexHashNode*>(node)) {
         if (!exception_stack.empty()) {
