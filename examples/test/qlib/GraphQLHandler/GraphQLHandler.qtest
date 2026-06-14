@@ -45,6 +45,8 @@ class MemProvider inherits DataProvider::AbstractDataProvider {
             "supports_update": mutable,
             "supports_delete": mutable,
             "supports_upsert": mutable,
+            "supports_bulk_create": mutable,
+            "supports_bulk_upsert": mutable,
             # advertise advanced search expressions so DPQL where-filters are generated; the
             # generic expression implementations evaluate them in memory
             "supports_search_expressions": mutable,
@@ -73,6 +75,31 @@ class MemProvider inherits DataProvider::AbstractDataProvider {
     private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
         push data, rec;
         return rec.id.toString();
+    }
+
+    # converts a columnar bulk block (hash of lists) to a list of row hashes
+    private list<hash<auto>> columnarToRows(hash<auto> recs) {
+        list<hash<auto>> rows = ();
+        int n = recs.firstValue().size();
+        for (int i = 0; i < n; ++i) {
+            hash<auto> row;
+            foreach string col in (keys recs) {
+                row{col} = recs{col}[i];
+            }
+            rows += row;
+        }
+        return rows;
+    }
+
+    private *hash<auto> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
+        data += columnarToRows(recs);
+        return recs;
+    }
+
+    private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
+        list<hash<auto>> rows = columnarToRows(recs);
+        data += rows;
+        return map $1.id.toString(), rows;
     }
 
     # reuses the generic expression matcher (via DefaultRecordIterator) to find matching ids
@@ -142,6 +169,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("http handler", \httpHandlerTest());
         addTestCase("http errors", \httpErrorTest());
         addTestCase("dataprovider bridge", \bridgeTest());
+        addTestCase("bridge bulk and return-records", \bridgePhaseCTest());
 
         set_return_value(main());
     }
@@ -520,6 +548,47 @@ class GraphQLHandlerTest inherits QUnit::Test {
         DataProviderGraphQLSchema roBridge(ro);
         assertFalse(roBridge.getSdl() =~ /type Mutation/);
         assertRegex("search\\(limit: Int, offset: Int\\)", roBridge.getSdl());
+    }
+
+    bridgePhaseCTest() {
+        # bulk operations (Phase C)
+        MemProvider bp(());
+        DataProviderGraphQLSchema bulkBridge(bp);
+        string sdl = bulkBridge.getSdl();
+        assertRegex("createMany\\(records: \\[peopleRecordInput!\\]!\\): Int!", sdl);
+        assertRegex("upsertMany\\(records: \\[peopleRecordInput!\\]!\\): \\[String!\\]!", sdl);
+        assertRegex("input peopleRecordInput", sdl);
+
+        GraphQLExecutor bex = bulkBridge.getExecutor();
+        assertEq(2, bex.execute(
+            "mutation { createMany(records: [{id: 10, name: \"X\", active: true}, "
+            "{id: 11, name: \"Y\", active: false}]) }").data.createMany);
+        assertEq(("12",), bex.execute(
+            "mutation { upsertMany(records: [{id: 12, name: \"Z\", active: true}]) }").data.upsertMany);
+        assertEq((10, 11, 12), (map $1.id, bex.execute("{ search { id } }").data.search));
+
+        # return_records option (Phase C): update/delete return the affected records
+        MemProvider rp((
+            {"id": 1, "name": "Ada", "active": True},
+            {"id": 2, "name": "Bob", "active": False},
+        ));
+        DataProviderGraphQLSchema rrBridge(rp, {"return_records": True});
+        # the SDL return type switches from Int! to [<R>!]!
+        assertRegex("update\\(set: peopleRecordSetInput!, filter: peopleRecordWhereInput, where: String\\): \\[peopleRecord!\\]!",
+            rrBridge.getSdl());
+        assertRegex("delete\\(filter: peopleRecordWhereInput, where: String\\): \\[peopleRecord!\\]!",
+            rrBridge.getSdl());
+
+        GraphQLExecutor rex = rrBridge.getExecutor();
+        # update returns the updated record(s)
+        hash<auto> u = rex.execute("mutation { update(set: {active: false}, filter: {id: {eq: 1}}) { id name active } }");
+        assertEq(1, u.data.update.size());
+        assertEq("Ada", u.data.update[0].name);
+        assertEq(False, u.data.update[0].active);
+        # delete returns the deleted record(s)
+        hash<auto> d = rex.execute("mutation { delete(filter: {active: {eq: false}}) { id name } }");
+        assertEq(("Ada", "Bob"), (map $1.name, d.data.delete));
+        assertEq(0, rex.execute("{ search { id } }").data.search.size());
     }
 }
 

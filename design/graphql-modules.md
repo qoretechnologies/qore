@@ -555,8 +555,12 @@ schema still has a query root.
   schema-level non-null-`where` mass-mutation guard became a **runtime guard** (update/delete with
   no selector → error). Operator gating relies on `validateDpqlExpression` rejecting operators the
   provider does not support at runtime.
-- **Phase C (optional, later):** return affected *records* (non-atomic re-read), and bulk
-  operations from `supports_bulk_create` / `supports_bulk_upsert`.
+- **Phase C — DONE:** a `return_records` constructor option switches `update`/`delete` to return
+  the affected records (read via a non-atomic follow-up search; for `delete` the matching records
+  are captured before deletion) instead of the affected-row count; and `createMany` /
+  `upsertMany` bulk mutations (with a shared `<R>Input` type) are generated when the provider
+  advertises `supports_bulk_create` / `supports_bulk_upsert` (each also requires the
+  corresponding single-record capability). Bulk impls receive the DataProvider columnar block.
 
 ## Effort
 

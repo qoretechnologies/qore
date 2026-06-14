@@ -53,9 +53,12 @@ public namespace GraphQLHandler {
     \c {"allow_templates": True} to the constructor only when filter input is fully trusted, and
     never register permissive template callbacks for a client-facing deployment.
 
-    @note Update and delete operate via the provider's native DPQL where-condition support;
-    bulk operations and returning the affected records (rather than a count) are not yet
-    generated. The @ref getSdl() output documents exactly what was generated.
+    @note Update and delete operate via the provider's native DPQL where-condition support. Bulk
+    \c createMany / \c upsertMany operations are generated when the provider advertises
+    \c supports_bulk_create / \c supports_bulk_upsert. By default \c update and \c delete return
+    the affected-row count; pass \c {"return_records": True} to the constructor to instead return
+    the affected records (read via a non-atomic follow-up search). The @ref getSdl() output
+    documents exactly what was generated.
 
     @par Example:
     @code{.py}
@@ -81,6 +84,8 @@ public class DataProviderGraphQLSchema {
         hash<string, string> field_name_map();
         #! whether DPQL template references are permitted in filter expressions
         bool allow_templates = False;
+        #! whether update/delete mutations return the affected records (instead of a count)
+        bool return_records = False;
         #! the generated SDL
         string sdl;
         #! the generated resolver map
@@ -92,6 +97,9 @@ public class DataProviderGraphQLSchema {
         @param opts optional options:
         - \c allow_templates (bool): permit DPQL template references in filter expressions
           (default @ref False)
+        - \c return_records (bool): generate \c update and \c delete mutations that return the
+          affected records (instead of an affected-row count); the records are read via a
+          non-atomic follow-up search (default @ref False)
 
         @throw GRAPHQL-SCHEMA-ERROR the provider does not expose a record type
     */
@@ -106,6 +114,9 @@ public class DataProviderGraphQLSchema {
         record_type_name = sanitizeName(provider.getName()) + "Record";
         if (exists opts.allow_templates) {
             allow_templates = opts.allow_templates;
+        }
+        if (exists opts.return_records) {
+            return_records = opts.return_records;
         }
         generate();
     }
@@ -192,20 +203,33 @@ public class DataProviderGraphQLSchema {
         }
         push defs, sprintf("type Query {\n%s\n}", queryFields.join("\n"));
 
+        # update/delete return the affected records when requested, otherwise the affected count
+        string mutationReturn = return_records ? sprintf("[%s!]!", record_type_name) : "Int!";
+        # bulk operations (bulk create/upsert build on the corresponding single-record capability)
+        bool gen_bulk_create = info.supports_create && info.supports_bulk_create;
+        bool gen_bulk_upsert = info.supports_upsert && info.supports_bulk_upsert;
+        string recordInputName = record_type_name + "Input";
+
         # Mutation
         list<string> mutationFields();
         if (info.supports_create) {
             mutationFields += sprintf("  create(%s): %s", createArgList(), record_type_name);
         }
         if (gen_update) {
-            mutationFields += sprintf("  update(set: %sSetInput!, %s): Int!",
-                record_type_name, filterArgs);
+            mutationFields += sprintf("  update(set: %sSetInput!, %s): %s",
+                record_type_name, filterArgs, mutationReturn);
         }
         if (gen_delete) {
-            mutationFields += sprintf("  delete(%s): Int!", filterArgs);
+            mutationFields += sprintf("  delete(%s): %s", filterArgs, mutationReturn);
         }
         if (info.supports_upsert) {
             mutationFields += sprintf("  upsert(%s): String!", createArgList());
+        }
+        if (gen_bulk_create) {
+            mutationFields += sprintf("  createMany(records: [%s!]!): Int!", recordInputName);
+        }
+        if (gen_bulk_upsert) {
+            mutationFields += sprintf("  upsertMany(records: [%s!]!): [String!]!", recordInputName);
         }
         if (mutationFields) {
             push defs, sprintf("type Mutation {\n%s\n}", mutationFields.join("\n"));
@@ -214,6 +238,10 @@ public class DataProviderGraphQLSchema {
         # the SetInput type is only referenced by update
         if (gen_update) {
             push defs, sprintf("input %sSetInput {\n%s\n}", record_type_name, setLines.join("\n"));
+        }
+        # the record Input type is referenced by the bulk operations
+        if (gen_bulk_create || gen_bulk_upsert) {
+            push defs, sprintf("input %s {\n%s\n}", recordInputName, fieldLines.join("\n"));
         }
 
         # the typed filter input types (only when filtering is available)
@@ -241,6 +269,7 @@ public class DataProviderGraphQLSchema {
             "expressions": info.expressions,
             "name_map": field_name_map,
             "allow_templates": allow_templates,
+            "return_records": return_records,
         };
 
         hash<auto> queryResolvers();
@@ -270,6 +299,16 @@ public class DataProviderGraphQLSchema {
         if (info.supports_upsert) {
             mutationResolvers.upsert = auto sub (auto parent, hash<auto> args, auto ctx) {
                 return DataProviderGraphQLSchema::execUpsert(spec, args);
+            };
+        }
+        if (gen_bulk_create) {
+            mutationResolvers.createMany = auto sub (auto parent, hash<auto> args, auto ctx) {
+                return DataProviderGraphQLSchema::execCreateMany(spec, args);
+            };
+        }
+        if (gen_bulk_upsert) {
+            mutationResolvers.upsertMany = auto sub (auto parent, hash<auto> args, auto ctx) {
+                return DataProviderGraphQLSchema::execUpsertMany(spec, args);
             };
         }
         if (mutationResolvers) {
@@ -321,18 +360,48 @@ public class DataProviderGraphQLSchema {
         return p.createRecord(DataProviderGraphQLSchema::toProviderRec(spec, args));
     }
 
-    #! updates records matching the filter, returning the number affected
-    static int execUpdate(hash<auto> spec, hash<auto> args) {
+    #! updates records matching the filter; returns the affected records or the affected count
+    static auto execUpdate(hash<auto> spec, hash<auto> args) {
         string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "update");
         AbstractDataProvider p = spec.provider;
-        return p.updateRecords(DataProviderGraphQLSchema::toProviderRec(spec, args.set), dpql, {});
+        int n = p.updateRecords(DataProviderGraphQLSchema::toProviderRec(spec, args.set), dpql, {});
+        # when returning records, re-read the (now updated) matching records (non-atomic)
+        return spec.return_records ? DataProviderGraphQLSchema::collectMatching(p, dpql) : n;
     }
 
-    #! deletes records matching the filter, returning the number affected
-    static int execDelete(hash<auto> spec, hash<auto> args) {
+    #! deletes records matching the filter; returns the affected records or the affected count
+    static auto execDelete(hash<auto> spec, hash<auto> args) {
         string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "delete");
         AbstractDataProvider p = spec.provider;
-        return p.deleteRecords(dpql, {});
+        # when returning records, capture the matching records before deleting them (non-atomic)
+        *list<auto> captured = spec.return_records
+            ? DataProviderGraphQLSchema::collectMatching(p, dpql)
+            : NOTHING;
+        int n = p.deleteRecords(dpql, {});
+        return spec.return_records ? captured : n;
+    }
+
+    #! creates a batch of records, returning the number created
+    static int execCreateMany(hash<auto> spec, hash<auto> args) {
+        AbstractDataProvider p = spec.provider;
+        list<auto> rows = map DataProviderGraphQLSchema::toProviderRec(spec, $1), args.records;
+        p.createRecordsBulk(rows);
+        return rows.size();
+    }
+
+    #! upserts a batch of records, returning the list of record ids
+    static list<auto> execUpsertMany(hash<auto> spec, hash<auto> args) {
+        AbstractDataProvider p = spec.provider;
+        list<auto> rows = map DataProviderGraphQLSchema::toProviderRec(spec, $1), args.records;
+        return p.upsertRecordsBulk(rows) ?? ();
+    }
+
+    #! materializes all records matching a DPQL filter (used when returning affected records)
+    static list<auto> collectMatching(AbstractDataProvider p, string dpql) {
+        list<auto> out();
+        AbstractDataProviderRecordIterator it = p.searchRecords(dpql, {});
+        map out += $1, it;
+        return out;
     }
 
     #! builds the effective DPQL for a mutation, requiring at least one selector (mass-mutation guard)
