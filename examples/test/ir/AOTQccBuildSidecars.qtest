@@ -184,6 +184,8 @@ public class QccSidecarConsumer {
         string consumer = tmp.path + "/consumer.qc";
         string provider_qo = tmp.path + "/provider.qo";
         string consumer_qo = tmp.path + "/consumer.qo";
+        string provider_content_stamp = provider_qo + ".content.stamp";
+        string consumer_content_stamp = consumer_qo + ".content.stamp";
         string aggregate = tmp.path + "/aggregate.qo";
         string dep = aggregate + ".d";
         string idx = aggregate + ".idx.json";
@@ -208,16 +210,23 @@ public class QccSidecarConsumer {
 }
 ");
 
-        string provider_out = run(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s",
-            env, qcc_bin, provider_qo, provider));
+        string provider_out = run(sprintf(
+            "%s %s -c --parse-option=PO_MODERN --content-stamp=%s -o %s %s",
+            env, qcc_bin, provider_content_stamp, provider_qo, provider));
         assertTrue(is_file(provider_qo), "compiled provider .qo: " + provider_out);
-        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
-            env, qcc_bin, tmp.path, consumer_qo, consumer));
+        assertTrue(is_file(provider_content_stamp),
+            "compiled provider content stamp: " + provider_out);
+        string consumer_out = run(sprintf(
+            "%s %s -c -L %s --parse-option=PO_MODERN --content-stamp=%s -o %s %s",
+            env, qcc_bin, tmp.path, consumer_content_stamp, consumer_qo, consumer));
         assertTrue(is_file(consumer_qo), "compiled consumer .qo: " + consumer_out);
+        assertTrue(is_file(consumer_content_stamp),
+            "compiled consumer content stamp: " + consumer_out);
 
         string cmd = sprintf(
             "%s %s -v --link-qo --aggregate-symbol=QCC_SIDECAR_LINK"
-            " --qolink-map=%s --depfile=%s --depfile-target=%s --write-index-json=%s"
+            " --qolink-map=%s --depfile=%s --depfile-target=%s"
+            " --depfile-qo-input-content-stamps --write-index-json=%s"
             " --write-manifest=%s --skip-if-manifest-current"
             " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
             " -o %s %s %s",
@@ -236,8 +245,10 @@ public class QccSidecarConsumer {
         string dep_text = File::readTextFile(dep);
         assertTrue(dep_text.find(success_stamp + ":") == 0,
             "qo-link depfile target names success stamp: " + dep_text);
-        assertContains(dep_text, "provider.qo", "qo-link depfile names provider");
-        assertContains(dep_text, "consumer.qo", "qo-link depfile names consumer");
+        assertContains(dep_text, provider_content_stamp,
+            "qo-link depfile names provider content stamp");
+        assertContains(dep_text, consumer_content_stamp,
+            "qo-link depfile names consumer content stamp");
         assertTrue(dep_text.find("<builtin>") == -1, "qo-link depfile excludes non-file sentinels");
         string map_text = File::readTextFile(link_map);
         assertContains(map_text, "\"resolved_call_relocations\"", "link map records relocations");
