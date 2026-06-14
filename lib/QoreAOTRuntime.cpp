@@ -570,30 +570,12 @@ QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* nam
     return QoreValue(call);
 }
 
-static QoreValue makeDeferredCreateObjectSlotCall(QoreProgram* pgm, const char* class_path,
-        QoreParseListNode* args) {
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, "create_object");
-    if (!fe) {
-        if (args) {
-            args->deref();
-        }
-        return QoreValue();
-    }
-
-    QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
-    pln->add(QoreValue::makeStringValue(class_path ? class_path : ""), &loc_builtin);
+static QoreValue makeDeferredObjectSlotCall(const char* class_path, QoreParseListNode* args,
+        const QoreTypeInfo* object_type_info) {
+    ScopedObjectCallNode* call = new ScopedObjectCallNode(&loc_builtin, class_path, args, object_type_info);
     if (args) {
-        size_t nargs = args->size();
-        for (size_t i = 0; i < nargs; ++i) {
-            QoreValue v = args->get(i);
-            v.refSelf();
-            pln->add(v, &loc_builtin);
-        }
-        args->deref();
+        call->resolveParseArgs();
     }
-
-    FunctionCallNode* call = new FunctionCallNode(&loc_builtin, fe, pln);
-    call->resolveParseArgs();
     return QoreValue(call);
 }
 
@@ -2343,6 +2325,30 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                     ref3 = reader.readStringRef(ptr);
                 }
+                const QoreTypeInfo* object_type_info = nullptr;
+                if (ref3 && *ref3) {
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    std::string type_error;
+                    object_type_info = type_resolver.resolve(ref3, type_error);
+                    if (!object_type_info || !type_error.empty()) {
+                        std::string msg = "cannot resolve new-object type path '";
+                        msg += ref3;
+                        msg += "'";
+                        if (!type_error.empty()) {
+                            msg += ": ";
+                            msg += type_error;
+                        }
+                        if (trace_slot_reg) {
+                            fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s cannot resolve "
+                                "object type '%s'%s%s\n", name, i, expr_kind_name, ref3,
+                                type_error.empty() ? "" : ": ", type_error.c_str());
+                        }
+                        setBuildError(msg);
+                        has_unsupported = true;
+                        ctx->exprs[i] = toBitsNB(QoreValue());
+                        continue;
+                    }
+                }
                 if (ref2 && !strcmp(ref2, QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT)) {
                     uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                     QoreParseListNode* args = nullptr;
@@ -2377,7 +2383,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (deferred_error) {
                         continue;
                     }
-                    QoreValue call = makeDeferredCreateObjectSlotCall(pgm, ref1, args);
+                    if (ref1 && *ref1) {
+                        ctx->owned_call_target_strings.emplace_back(ref1);
+                        ctx->call_targets[i].class_path = ctx->owned_call_target_strings.back().c_str();
+                    }
+                    ctx->call_targets[i].object_type_info = object_type_info;
+                    QoreValue call = makeDeferredObjectSlotCall(ref1, args, object_type_info);
                     if (!call) {
                         std::string msg = "cannot create deferred constructor call for class '";
                         msg += ref1 ? ref1 : "";
@@ -2389,7 +2400,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                     if (trace_slot_reg) {
                         fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s defers constructor class '%s' "
-                            "to create_object()\n", name, i, expr_kind_name, ref1 ? ref1 : "");
+                            "to dynamic object resolution\n", name, i, expr_kind_name, ref1 ? ref1 : "");
                     }
                     ctx->exprs[i] = toBitsNB(call);
                     continue;
@@ -2401,30 +2412,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref2 && *ref2) {
                     ctx->owned_call_target_strings.emplace_back(ref2);
                     ctx->call_targets[i].variant_sig = ctx->owned_call_target_strings.back().c_str();
-                }
-                const QoreTypeInfo* object_type_info = nullptr;
-                if (ref3 && *ref3) {
-                    QoreAOTTypeResolver type_resolver(pgm);
-                    std::string type_error;
-                    object_type_info = type_resolver.resolve(ref3, type_error);
-                    if (!object_type_info || !type_error.empty()) {
-                        std::string msg = "cannot resolve new-object type path '";
-                        msg += ref3;
-                        msg += "'";
-                        if (!type_error.empty()) {
-                            msg += ": ";
-                            msg += type_error;
-                        }
-                        if (trace_slot_reg) {
-                            fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s cannot resolve "
-                                "object type '%s'%s%s\n", name, i, expr_kind_name, ref3,
-                                type_error.empty() ? "" : ": ", type_error.c_str());
-                        }
-                        setBuildError(msg);
-                        has_unsupported = true;
-                        ctx->exprs[i] = toBitsNB(QoreValue());
-                        continue;
-                    }
                 }
                 const QoreClass* qc = nullptr;
                 const AbstractQoreFunctionVariant* resolved_variant = nullptr;

@@ -14489,8 +14489,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::SCOPED_NEW_OBJECT;
         if (sc->oc) {
             id.ref1 = qore_aot_encode_class_ref(sc->oc);
+        } else if (sc->isDynamicObjectConstruct()) {
+            id.ref1 = sc->getDynamicClassName();
+            id.ref2 = QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT;
+            id.call_args = sc->getArgs();
+            id.parse_args = sc->getParseArgs();
+        } else {
+            return AOTExprSlotId();
         }
-        const auto* variant = sc->getVariant();
+        const auto* variant = sc->oc ? sc->getVariant() : nullptr;
         if (variant && variant->getSignature()) {
             auto* sig = variant->getSignature();
             id.ref2 = "(";
@@ -14504,7 +14511,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
             id.ref2.append(")");
         }
-        id.reloc_qore_path = aotRelocConstructorDisplayKey(sc->oc, variant);
+        if (sc->oc) {
+            id.reloc_qore_path = aotRelocConstructorDisplayKey(sc->oc, variant);
+        }
         if (const QoreTypeInfo* object_type_info = sc->getObjectTypeInfo()) {
             id.ref3 = getSlotTypePath(object_type_info);
         }

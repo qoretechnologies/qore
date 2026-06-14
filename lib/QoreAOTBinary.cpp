@@ -2242,8 +2242,10 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             // NewComplexListNode, NewComplexHashNode — must use dynamic_cast
             const AbstractQoreNode* node = v.getInternalNode();
             const ScopedObjectCallNode* socn = dynamic_cast<const ScopedObjectCallNode*>(node);
-            if (socn && socn->oc) {
-                std::string class_path = qore_aot_encode_class_ref(socn->oc);
+            if (socn && (socn->oc || socn->isDynamicObjectConstruct())) {
+                std::string class_path = socn->oc
+                    ? qore_aot_encode_class_ref(socn->oc)
+                    : socn->getDynamicClassName();
                 const QoreListNode* args = socn->getArgs();
                 const QoreParseListNode* parse_args = socn->getParseArgs();
                 if (parse_args && !parse_args->empty() && (!args || args->empty())) {
@@ -9033,9 +9035,11 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // Used in inline IR context where the QoreIRNewObjectInstruction::expr holds this node.
     // Must come BEFORE NewObjectCallNode since they have different class hierarchies.
     if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
-        if (socn->oc) {
+        if (socn->oc || socn->isDynamicObjectConstruct()) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
-            std::string class_ref = qore_aot_encode_class_ref(socn->oc);
+            std::string class_ref = socn->oc
+                ? qore_aot_encode_class_ref(socn->oc)
+                : socn->getDynamicClassName();
             writer.writeStringRef(class_ref.c_str());
             if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 writeTypePathRef(writer, socn->getObjectTypeInfo());

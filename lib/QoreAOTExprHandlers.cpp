@@ -731,8 +731,8 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
     return false;
 }
 
-static QoreValue make_deferred_create_object_call(AOTExprReadCtx& ctx, const char* class_path,
-        QoreListNode* args_list) {
+static QoreValue make_deferred_object_call(AOTExprReadCtx& ctx, const char* class_path,
+        QoreListNode* args_list, const QoreTypeInfo* object_type_info = nullptr) {
     if (!class_path || !*class_path) {
         if (args_list) {
             args_list->deref(nullptr);
@@ -740,30 +740,22 @@ static QoreValue make_deferred_create_object_call(AOTExprReadCtx& ctx, const cha
         return QoreValue();
     }
 
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, "create_object");
-    if (!fe) {
-        if (args_list) {
-            args_list->deref(nullptr);
-        }
-        ctx.error = "cannot resolve create_object() for deferred constructor class '";
-        ctx.error += class_path;
-        ctx.error += "'";
-        return QoreValue();
-    }
-
     QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
-    pln->add(QoreValue::makeStringValue(class_path), &loc_builtin);
     if (args_list) {
-        size_t nargs = args_list->size();
-        for (size_t i = 0; i < nargs; ++i) {
-            pln->add(args_list->getReferencedEntry(i), &loc_builtin);
+        ConstListIterator li(args_list);
+        while (li.next()) {
+            QoreValue v = li.getValue();
+            v.refSelf();
+            pln->add(v, &loc_builtin);
         }
         args_list->deref(nullptr);
     }
 
-    FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, pln);
-    fcn->resolveParseArgs();
-    return QoreValue(fcn);
+    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, class_path, pln, object_type_info);
+    if (pln) {
+        socn->resolveParseArgs();
+    }
+    return QoreValue(socn);
 }
 
 static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
@@ -811,7 +803,7 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
     }
     const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
-        return make_deferred_create_object_call(ctx, class_path, args_list);
+        return make_deferred_object_call(ctx, class_path, args_list, object_type_info);
     }
     std::string variant_err;
     const AbstractQoreFunctionVariant* variant = resolve_expr_constructor_variant(qc, args_list, class_path,
@@ -1765,9 +1757,11 @@ static QoreValue read_expr_static_varref(AOTExprReadCtx& ctx) {
 static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
-        if (socn->oc) {
+        if (socn->oc || socn->isDynamicObjectConstruct()) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
-            std::string class_ref = qore_aot_encode_class_ref(socn->oc);
+            std::string class_ref = socn->oc
+                ? qore_aot_encode_class_ref(socn->oc)
+                : socn->getDynamicClassName();
             ctx.writer.writeStringRef(class_ref.c_str());
             if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
                 ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(socn->getObjectTypeInfo()).c_str());
@@ -1841,7 +1835,7 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
     }
     const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
-        return make_deferred_create_object_call(ctx, class_path, args_list);
+        return make_deferred_object_call(ctx, class_path, args_list, object_type_info);
     }
     std::string variant_err;
     const AbstractQoreFunctionVariant* variant = resolve_expr_constructor_variant(qc, args_list, class_path,

@@ -6799,6 +6799,7 @@ static bool qore_is_deferred_static_init_exception(ExceptionSink* xsink) {
     QoreStringValueHelper ex_err_str(ex_err);
     return !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
         || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
+        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CLASS")
         || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
 }
 

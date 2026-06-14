@@ -64,6 +64,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             \testPendingStaticConstantBaseConstructorArgs());
         addTestCase("static member variable initializer resolves at link time",
             \testStaticMemberVariableInitializerImport());
+        addTestCase("static member object initializer resolves at link time",
+            \testStaticMemberObjectInitializerImport());
         addTestCase("standalone namespaced suffix imports resolve at link time",
             \testStandaloneNamespacedSuffixImports());
         addTestCase("standalone function import resolves at link time", \testStandaloneFunctionImport());
@@ -1671,6 +1673,74 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string out = run(sprintf("%s %s", env, app));
         assertEq("const-seed:var-seed\n", out,
             "linked executable resolves deferred static-var initializer: " + out);
+    }
+
+    testStaticMemberObjectInitializerImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-object-init";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-static-object-init-provider.qo";
+        string app = tmp_dir + "/static-object-init-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTStaticObjectInitConsumer {\n"
+            "    private { static AOTStaticObjectInitProvider provider(); }\n"
+            "    string get() { return provider.value(); }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTStaticObjectInitProvider {\n"
+            "    string value() { return \"object-init\"; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTStaticObjectInitConsumer c = new AOTStaticObjectInitConsumer();\n"
+            "    printf(\"%s\\n\", c.get());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo), "static-object initializer consumer compiles before provider exists: "
+            + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticObjectInitProvider\"") != -1,
+            "static-object initializer index records deferred class import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_STATIC_OBJECT_INIT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without static-object initializer provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTStaticObjectInitProvider") != -1,
+            "qo-link diagnostic names missing static-object initializer provider: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static-object initializer provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against static-object initializer metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred static-object initializer: "
+            + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("object-init\n", out,
+            "linked executable resolves deferred static-object initializer: " + out);
     }
 
     testStandaloneConstructorImport() {

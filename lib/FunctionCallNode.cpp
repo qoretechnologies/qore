@@ -1269,27 +1269,9 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     false);
             }
 
-            const FunctionEntry* create_object_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
-                "create_object");
-            if (!create_object_fe) {
-                return -1;
-            }
-
-            QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
-            dynamic_args->add(new QoreStringNode(name->ostr), loc);
-            QoreParseListNode* old_args = parse_args;
-            parse_args = nullptr;
-            if (old_args) {
-                dynamic_args->appendFrom(old_args);
-                old_args->deref();
-            }
-
-            FunctionCallNode* dynamic_call = new FunctionCallNode(loc, create_object_fe, dynamic_args);
-            val = dynamic_call;
+            dynamic_class_name = name->ostr;
             delete name;
             name = nullptr;
-            deref();
-            return dynamic_call->parseInitFinalizedCall(val, parse_context);
         }
         delete name;
         name = nullptr;
@@ -1327,6 +1309,10 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
         parse_context.analysis.known_type = parse_context.typeInfo;
         desc.sprintf("new %s", oc->getName());
+    } else if (!dynamic_class_name.empty()) {
+        parse_context.typeInfo = objectTypeInfo;
+        parse_context.analysis.clear();
+        desc.sprintf("new %s", dynamic_class_name.c_str());
     } else {
         parse_context.typeInfo = nullptr;
         parse_context.analysis.clear();
@@ -1367,6 +1353,31 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     assert(!parse_args || args || tmp_args
         || !"ScopedObjectCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
+    if (!oc) {
+        if (dynamic_class_name.empty()) {
+            xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class for instantiation");
+            return QoreValue();
+        }
+        const QoreClass* qc = qore_program_private::runtimeFindClass(*getProgram(), dynamic_class_name.c_str(),
+            xsink);
+        if (!qc) {
+            if (!*xsink) {
+                xsink->raiseException("AOT-PENDING-CLASS",
+                    "class '%s' is pending AOT source linking for instantiation", dynamic_class_name.c_str());
+            }
+            return QoreValue();
+        }
+        if (getProgram()->getParseOptions() & qc->getDomain()) {
+            xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
+                "access to the '%s' class", qc->getName());
+            return QoreValue();
+        }
+        if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+            return QoreValue();
+        }
+        const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
+        return qore_class_private::execConstructor(*qc, rc, variant, args, xsink, oti);
+    }
     const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
     return qore_class_private::execConstructor(*oc, rc, variant, args, xsink, oti);
 }
