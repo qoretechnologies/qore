@@ -127,6 +127,13 @@ class GraphQLHandlerTest inherits QUnit::Test {
         list<hash<GraphQLToken>> b = GraphQLLexer::tokenize("\"\"\"\n    Hello\n      World\n    \"\"\"");
         assertEq("Hello\n  World", b[0].value);
 
+        # CRLF line terminators inside a block string count once (not twice): the token after a
+        # 3-line CRLF block string is on line 5, not over-counted
+        list<hash<GraphQLToken>> crlf = GraphQLLexer::tokenize("\"\"\"\r\na\r\nb\r\n\"\"\"\nlater");
+        assertEq(GraphQLLexer::TK_STRING, crlf[0].kind);
+        assertEq("later", crlf[1].value);
+        assertEq(5, crlf[1].line);
+
         # line/column tracking
         list<hash<GraphQLToken>> p = GraphQLLexer::tokenize("a\n  b");
         assertEq(1, p[0].line);
@@ -344,6 +351,11 @@ class GraphQLHandlerTest inherits QUnit::Test {
         assertRegex("not permitted", gm.body.errors[0].message);
         # the same mutation over POST still works
         assertEq({"echo": "x"}, rc.post("/graphql", {"query": "mutation { echo(msg: \"x\") }"}).body.data);
+
+        # malformed JSON in a GET "variables" parameter -> a clean 400 GRAPHQL-REQUEST-ERROR
+        hash<auto> bv = rc.get("/graphql?query={ hello }&variables=notjson");
+        assertEq(400, bv.status_code);
+        assertRegex("variables", bv.body.errors[0].message);
     }
 
     hardeningTest() {
@@ -590,6 +602,20 @@ class GraphQLHandlerTest inherits QUnit::Test {
             wsc.send(make_json({"type": "subscribe", "id": "b",
                 "payload": {"query": "subscription { feed }"}}));
             assertRegex("subscription limit", parse_json(mq.get()).payload[0].message);
+        }
+
+        # --- an unrecognized message type is reported as an error (not silently ignored) ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "connection_init"}));
+            assertEq("connection_ack", parse_json(mq.get()).type);
+            wsc.send(make_json({"type": "bogus", "id": "z"}));
+            hash<auto> em = parse_json(mq.get());
+            assertEq("error", em.type);
+            assertRegex("unsupported message type", em.payload[0].message);
         }
     }
 

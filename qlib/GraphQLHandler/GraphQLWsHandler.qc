@@ -155,6 +155,12 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
             case "complete":
                 stopSubscription(m.id);
                 break;
+            default:
+                # an unrecognized message type is a client protocol error; report it (with the id
+                # if one was supplied) rather than silently ignoring it
+                sendMsg({"type": "error", "id": m.id,
+                    "payload": ({"message": sprintf("unsupported message type %y", m.type)},)});
+                break;
         }
     }
 
@@ -186,49 +192,57 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
     }
 
     #! starts a query/mutation (one-shot) or subscription (streamed) operation
+    /** any exception from the engine (operation classification, validation, execution) is reported
+        as a graphql-transport-ws \c error frame for this \c id rather than being allowed to escape
+        the worker callback and tear the connection down
+    */
     private handleSubscribe(string id, hash<auto> payload) {
         *string query = payload.query;
         if (!query.val()) {
             sendMsg({"type": "error", "id": id, "payload": ({"message": "no query provided"},)});
             return;
         }
-        *string opType = executor.getOperationType(query, payload.operationName);
-        if (opType == "subscription") {
-            {
-                AutoLock al(sub_lock);
-                # graphql-transport-ws: a subscribe with an id already in use closes the connection
-                if (exists active{id}) {
-                    sendMsg({"type": "error", "id": id,
-                        "payload": ({"message": sprintf("subscriber for id %y already exists", id)},)});
-                    stop();
+        try {
+            *string opType = executor.getOperationType(query, payload.operationName);
+            if (opType == "subscription") {
+                {
+                    AutoLock al(sub_lock);
+                    # graphql-transport-ws: a subscribe with an id already in use closes the connection
+                    if (exists active{id}) {
+                        sendMsg({"type": "error", "id": id,
+                            "payload": ({"message": sprintf("subscriber for id %y already exists", id)},)});
+                        stop();
+                        return;
+                    }
+                    # enforce the per-connection concurrent-subscription cap
+                    if (active.size() >= max_subscriptions) {
+                        sendMsg({"type": "error", "id": id, "payload": ({"message":
+                            sprintf("the per-connection subscription limit (%d) has been reached",
+                                max_subscriptions)},)});
+                        return;
+                    }
+                }
+                hash<auto> subr = executor.executeSubscription(query, payload.variables,
+                    payload.operationName, gctx);
+                if (exists subr.errors) {
+                    sendMsg({"type": "error", "id": id, "payload": subr.errors});
                     return;
                 }
-                # enforce the per-connection concurrent-subscription cap
-                if (active.size() >= max_subscriptions) {
-                    sendMsg({"type": "error", "id": id, "payload": ({"message":
-                        sprintf("the per-connection subscription limit (%d) has been reached",
-                            max_subscriptions)},)});
-                    return;
+                {
+                    AutoLock al(sub_lock);
+                    active{id} = True;
                 }
+                # the event source is created and consumed in the stream thread (iterators are
+                # thread-bound)
+                background streamLoop(id, subr.subscription);
+            } else {
+                # query or mutation: execute once, then complete
+                hash<auto> result = executor.execute(query, payload.variables, payload.operationName, gctx);
+                sendMsg({"type": "next", "id": id, "payload": result});
+                sendMsg({"type": "complete", "id": id});
             }
-            hash<auto> subr = executor.executeSubscription(query, payload.variables,
-                payload.operationName, gctx);
-            if (exists subr.errors) {
-                sendMsg({"type": "error", "id": id, "payload": subr.errors});
-                return;
-            }
-            {
-                AutoLock al(sub_lock);
-                active{id} = True;
-            }
-            # the event source is created and consumed in the stream thread (iterators are
-            # thread-bound)
-            background streamLoop(id, subr.subscription);
-        } else {
-            # query or mutation: execute once, then complete
-            hash<auto> result = executor.execute(query, payload.variables, payload.operationName, gctx);
-            sendMsg({"type": "next", "id": id, "payload": result});
-            sendMsg({"type": "complete", "id": id});
+        } catch (hash<ExceptionInfo> ex) {
+            sendMsg({"type": "error", "id": id, "payload": ({"message": ex.desc},)});
         }
     }
 

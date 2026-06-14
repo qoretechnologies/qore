@@ -90,6 +90,10 @@ public class GraphQLValidator {
         fragments = {};
         used_fragments = {};
         complexity = 0;
+        # reset the recursion-tracking state so a prior validation that hit MaxDepth does not
+        # suppress the depth check on this (independent) document
+        depth = 0;
+        depth_exceeded = False;
 
         # collect operations and fragments, checking name uniqueness
         list<hash<GraphQLOperationDefinition>> operations();

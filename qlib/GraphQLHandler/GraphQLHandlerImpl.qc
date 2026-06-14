@@ -251,9 +251,10 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpSocketHandler {
         }
         string query = qr.query;
 
-        # a syntax error becomes a single next {errors} + complete
+        # parse once (LRU cached); a syntax error becomes a single next {errors} + complete
+        hash<GraphQLDocument> doc;
         try {
-            getDocument(query);
+            doc = getDocument(query);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == GRAPHQL_SYNTAX_ERROR) {
                 return new GraphQLSseStream(executor, NOTHING,
@@ -261,7 +262,6 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpSocketHandler {
             }
             rethrow;
         }
-        hash<GraphQLDocument> doc = getDocument(query);
 
         *string opType = executor.getOperationType(query, req.operationName);
         if (opType == "subscription") {
@@ -371,11 +371,21 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpSocketHandler {
                 hash<auto> params = parseQueryString(cx);
                 *hash<auto> vars;
                 if (params.variables.val()) {
-                    vars = parse_json(params.variables);
+                    try {
+                        vars = parse_json(params.variables);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "GRAPHQL-REQUEST-ERROR",
+                            sprintf("invalid JSON in the \"variables\" query parameter: %s", ex.desc);
+                    }
                 }
                 *hash<auto> ext;
                 if (params.extensions.val()) {
-                    ext = parse_json(params.extensions);
+                    try {
+                        ext = parse_json(params.extensions);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "GRAPHQL-REQUEST-ERROR",
+                            sprintf("invalid JSON in the \"extensions\" query parameter: %s", ex.desc);
+                    }
                 }
                 return {
                     "query": params.query,

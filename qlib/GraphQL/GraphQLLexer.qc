@@ -422,7 +422,8 @@ public class GraphQLLexer {
             if (src[pos] == "\n") {
                 ++line;
                 line_start = pos + 1;
-            } else if (src[pos] == "\r") {
+            } else if (src[pos] == "\r" && (pos + 1 >= len || src[pos + 1] != "\n")) {
+                # a lone CR is one line terminator; a CRLF sequence is counted once, on the LF
                 ++line;
                 line_start = pos + 1;
             }

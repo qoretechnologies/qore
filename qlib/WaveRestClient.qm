@@ -218,7 +218,8 @@ WaveRestClient wave({"token": "your_oauth2_token"});
         @param variables optional variables for the query
         @param info optional reference to return request/response info
 
-        @return the parsed response body with data and/or errors
+        @return the full response hash; the GraphQL response envelope (with \c data and/or \c errors)
+        is in the \c body key
 
         @throw GRAPHQL-ERROR if the GraphQL response contains errors and
         @ref GraphQLClient::GraphQLClientBase::getRaiseGraphQLErrors() "error raising" is enabled
@@ -234,7 +235,7 @@ WaveRestClient wave({"token": "your_oauth2_token"});
         @param variables optional variables for the query
         @param info optional reference to return request/response info
 
-        @return the parsed response body
+        @return the full response hash; the GraphQL envelope is in the \c body key
 
         @see graphql()
     */
@@ -248,7 +249,7 @@ WaveRestClient wave({"token": "your_oauth2_token"});
         @param variables optional variables for the mutation
         @param info optional reference to return request/response info
 
-        @return the parsed response body
+        @return the full response hash; the GraphQL envelope is in the \c body key
 
         @see graphql()
     */
@@ -460,7 +461,8 @@ public class WaveRestClientIo inherits RestClientIo::RestClientIo, WaveRestClien
         @param variables optional variables for the query
         @param hdr optional headers to send with the request
 
-        @return the parsed response body with data and/or errors
+        @return the full response hash; the GraphQL response envelope (with \c data and/or \c errors)
+        is in the \c body key
 
         @throw GRAPHQL-ERROR if the GraphQL response contains errors and
         @ref GraphQLClient::GraphQLClientBase::getRaiseGraphQLErrors() "error raising" is enabled
