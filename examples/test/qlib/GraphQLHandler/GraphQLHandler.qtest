@@ -173,6 +173,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("review hardening", \hardeningTest());
         addTestCase("bridge type graph", \typeGraphTest());
         addTestCase("bridge child providers and operator gating", \childGatingTest());
+        addTestCase("document validation", \validationTest());
 
         set_return_value(main());
     }
@@ -686,6 +687,55 @@ class GraphQLHandlerTest inherits QUnit::Test {
         GraphQLExecutor hex = (new DataProviderGraphQLSchema(hp)).getExecutor();
         hex.execute("mutation { create(id: 1, full_name: \"Ada Lovelace\") { id } }");
         assertEq("Ada Lovelace", hex.execute("{ search { full_name } }").data.search[0].full_name);
+    }
+
+    validationTest() {
+        string sdl = "type Query { me: String greet(name: String): String hero: Character } "
+            "type Character { id: ID! name: String! }";
+        GraphQLExecutor ex(new GraphQLSchema(sdl), {});
+
+        # leaf field must not have a selection set
+        assertRegex("must not have a selection set", ex.execute("{ me { x } }").errors[0].message);
+        # composite field must have a selection set
+        assertRegex("must have a selection set", ex.execute("{ hero }").errors[0].message);
+        # unknown field
+        assertRegex("cannot query field", ex.execute("{ nope }").errors[0].message);
+        # unknown argument
+        assertRegex("unknown argument", ex.execute("{ greet(bad: 1) }").errors[0].message);
+        # unsupported directive
+        assertRegex("directive", ex.execute("{ me @foo }").errors[0].message);
+        # duplicate operation name
+        assertRegex("only one operation named",
+            ex.execute("query A { me } query A { me }").errors[0].message);
+        # the lone-anonymous-operation rule
+        assertRegex("only operation", ex.execute("{ me } query B { me }").errors[0].message);
+        # a declared-but-unused variable
+        assertRegex("declared but never used", ex.execute("query(\$x: Int) { me }").errors[0].message);
+        # a used-but-undeclared variable
+        assertRegex("used but not declared", ex.execute("{ greet(name: \$x) }").errors[0].message);
+        # an unused fragment
+        assertRegex("never used",
+            ex.execute("{ me } fragment F on Query { me }").errors[0].message);
+        # an unknown fragment spread
+        assertRegex("unknown fragment", ex.execute("{ ...Nope }").errors[0].message);
+        # a fragment cycle
+        assertRegex("cycle",
+            ex.execute("{ ...A } fragment A on Query { ...B } fragment B on Query { ...A }").errors[0].message);
+
+        # a valid query still executes (validation does not reject good documents)
+        GraphQLExecutor vex(new GraphQLSchema(sdl), {
+            "Query": {"me": string sub (auto p, hash<auto> a, auto c) { return "hi"; }},
+        });
+        assertEq("hi", vex.execute("{ me }").data.me);
+
+        # the complexity budget rejects over-large queries
+        GraphQLExecutor cex(new GraphQLSchema(sdl), {});
+        cex.setValidation(True, 2);
+        assertRegex("complexity", cex.execute("{ me hero { id } }").errors[0].message);
+        # disabling validation lets a document through to execution
+        GraphQLExecutor nex(new GraphQLSchema(sdl), {});
+        nex.setValidation(False);
+        assertRegex("cannot query field", nex.execute("{ nope }").errors[0].message);
     }
 
     bridgePhaseCTest() {

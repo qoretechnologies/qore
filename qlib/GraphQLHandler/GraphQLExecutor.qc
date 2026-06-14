@@ -60,6 +60,10 @@ public class GraphQLExecutor {
         hash<string, hash<GraphQLTypeDef>> all_types;
         #! custom-scalar coercers, keyed by scalar type name
         hash<auto> scalar_coercers;
+        #! whether to validate documents before execution
+        bool validate_documents = True;
+        #! the maximum query complexity (total field count); @ref NOTHING uses the validator default
+        *int max_complexity;
     }
 
     #! creates the executor for the given schema and resolver map
@@ -107,6 +111,16 @@ public class GraphQLExecutor {
         return schema;
     }
 
+    #! enables or disables pre-execution document validation and sets the complexity budget
+    /** @param enable if @ref True (the default), documents are validated before execution
+        @param n_max_complexity the maximum query complexity (total field count); @ref NOTHING uses
+        the validator default
+    */
+    setValidation(bool enable = True, *int n_max_complexity) {
+        validate_documents = enable;
+        max_complexity = n_max_complexity;
+    }
+
     #! parses, validates, and executes a GraphQL request, returning the response envelope
     /** @param query the GraphQL document source
         @param variable_values the input variable values (as received from the client), if any
@@ -145,6 +159,14 @@ public class GraphQLExecutor {
     */
     hash<auto> executeDocument(hash<GraphQLDocument> doc, *hash<auto> variable_values,
             *string operation_name, auto ctx, *string require_operation_type) {
+        # validate the document before execution; on any validation error, return all errors
+        # together without executing (a fresh validator per call -- it holds per-call state)
+        if (validate_documents) {
+            list<auto> verrs = (new GraphQLValidator(schema, all_types, max_complexity)).validate(doc);
+            if (verrs) {
+                return {"errors": verrs};
+            }
+        }
         # collect fragment definitions and operations
         hash<string, hash<GraphQLFragmentDefinition>> fragments();
         list<hash<GraphQLOperationDefinition>> operations();

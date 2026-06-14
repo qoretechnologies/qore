@@ -652,7 +652,18 @@ value-add and is one cohesive change to `GraphQLDataProviderBridge.qc`.
 - Effort: large — the recursive type mapping + nested-type deduplication + child traversal is the
   bulk. Self-contained to the bridge + its test.
 
-## Phase E — full validation pass + complexity budget (gaps 2, 3)
+## Phase E — full validation pass + complexity budget (gaps 2, 3) — DONE
+
+Implemented as `GraphQLValidator` (run by `executeDocument` before execution; returns all errors
+together; toggleable via `GraphQLExecutor::setValidation()`): operation-name uniqueness +
+lone-anonymous rule; fragment-name uniqueness, spread-target existence, global cycle detection,
+unused-fragment detection, valid type conditions; variable uniqueness + input-type check +
+defined-and-used + used-are-defined; field existence, leaf/composite selection correctness, valid
++ required + non-duplicate arguments, valid directive locations; and a configurable
+query-complexity (field-count) budget plus a recursion-depth guard. Field-merge-conflict detection
+is the one spec rule left out (most complex, lowest impact). Original plan retained below.
+
+
 
 A dedicated pre-execution validation phase in a new `GraphQLValidator` class, run by
 `GraphQLExecutor.executeDocument` before execution; on any error it returns the `errors` envelope
