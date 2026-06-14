@@ -819,11 +819,16 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     const bool defer_source_static_receiver = !source_receiver_path.empty()
         && qore_aot_should_defer_source_symbol(loc, source_receiver_path.c_str(),
             QoreAOTSourceSymbolKind::Class);
-    const bool defer_source_function = !defer_source_static_receiver && scope->size() >= 2
-        && (qore_aot_should_defer_source_symbol(loc, scope->ostr, QoreAOTSourceSymbolKind::Function)
-            || qore_aot_should_defer_source_symbol(loc, scope->getIdentifier(),
-                QoreAOTSourceSymbolKind::Function));
-    if (defer_source_static_receiver) {
+    bool defer_source_function = false;
+    if (scope->size() >= 2) {
+        defer_source_function = qore_aot_should_defer_source_symbol(loc, scope->ostr,
+            QoreAOTSourceSymbolKind::Function);
+        if (!defer_source_function && !defer_source_static_receiver) {
+            defer_source_function = qore_aot_should_defer_source_symbol(loc, scope->getIdentifier(),
+                QoreAOTSourceSymbolKind::Function);
+        }
+    }
+    if (defer_source_static_receiver && !defer_source_function) {
         if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
             qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
         }

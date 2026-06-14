@@ -1476,11 +1476,13 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             std::string source_receiver_path = get_static_scope_class_path(*scope);
             defer_source_static_receiver = qore_aot_should_defer_source_symbol(loc, source_receiver_path.c_str(),
                 QoreAOTSourceSymbolKind::Class);
-            if (!defer_source_static_receiver && scope->size() >= 2) {
+            if (scope->size() >= 2) {
                 defer_source_function = qore_aot_should_defer_source_symbol(loc, scope->ostr,
-                    QoreAOTSourceSymbolKind::Function)
-                    || qore_aot_should_defer_source_symbol(loc, scope->getIdentifier(),
+                    QoreAOTSourceSymbolKind::Function);
+                if (!defer_source_function && !defer_source_static_receiver) {
+                    defer_source_function = qore_aot_should_defer_source_symbol(loc, scope->getIdentifier(),
                         QoreAOTSourceSymbolKind::Function);
+                }
             }
             if (!defer_source_static_receiver) {
                 qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
@@ -1583,7 +1585,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             }
 
             if (qore_aot_source_parse_active() && scope->size() >= 2) {
-                if (defer_source_function && !defer_source_static_receiver) {
+                if (defer_source_function) {
                     if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
                         qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
                     }
