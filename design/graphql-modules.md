@@ -163,6 +163,13 @@ generated nested GraphQL object types. Recursion is bounded (`max_type_depth`) w
 fallback for unbounded/recursive types. (Note: "soft" Qore types report `isList()` true but have no
 element type, so a real list is detected by the presence of an element type.)
 
+GraphQL forbids using an output object type in input position, so a non-scalar field appearing in a
+mutation argument (`create`/`update`-`set`/`upsert`, the record `Input`) gets a *parallel* `input`
+type generated alongside its output `type` (recursively, including lists of objects). On input these
+sanitized nested field names round-trip back to the provider's native names structurally — driven by
+the provider record type, not a precomputed map — so arbitrarily deep nested objects and
+lists-of-objects map back correctly.
+
 **Capabilities → operations**, gated on `DataProviderInfo` flags:
 - `supports_read` → a `search` query field;
 - `supports_create` → `create`; `supports_update` → `update`; `supports_delete` → `delete`;

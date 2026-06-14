@@ -112,6 +112,11 @@ public class DataProviderGraphQLSchema {
         int max_type_depth = 8;
         #! generated nested object type definitions, keyed by type name (de-duplicated)
         hash<string, string> extra_type_defs();
+        #! generated nested input-object type definitions, keyed by type name (de-duplicated)
+        /** GraphQL forbids using an output object type in input position, so non-scalar fields
+            appearing in create/update/upsert arguments get a parallel \c input type generated here
+        */
+        hash<string, string> extra_input_defs();
         #! custom scalar names that must be declared and coerced (DateTime, Base64, JSON)
         hash<string, bool> needed_scalars();
         #! output field resolvers for fields whose GraphQL name differs from the provider field
@@ -189,6 +194,9 @@ public class DataProviderGraphQLSchema {
     private generate() {
         # map record fields to GraphQL field definitions, building the gql-name -> provider-name map
         list<string> fieldLines();
+        # input field lines (for create arguments, the record Input type, and bulk operations):
+        # non-scalar fields here map to generated input-object types, never output object types
+        list<string> inputFieldLines();
         list<string> setLines();
         list<string> whereLines();
         hash<string, bool> usedFilterKinds();
@@ -209,8 +217,10 @@ public class DataProviderGraphQLSchema {
             }
             string nameHint = record_type_name + capitalize(gqlName);
             push fieldLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, nameHint, False));
+            push inputFieldLines, sprintf("  %s: %s", gqlName,
+                mapInputFieldType(record_type{fname}, nameHint, False));
             # SetInput fields are always optional (a partial update assigns only supplied columns)
-            push setLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, nameHint, True));
+            push setLines, sprintf("  %s: %s", gqlName, mapInputFieldType(record_type{fname}, nameHint, True));
             # WhereInput: only simple scalar fields get a typed per-scalar filter
             *string fkind = scalarFilterKind(record_type{fname}.getType());
             if (exists fkind) {
@@ -218,6 +228,8 @@ public class DataProviderGraphQLSchema {
                 push whereLines, sprintf("  %s: %sFilter", gqlName, fkind);
             }
         }
+        # the comma-separated argument list for create/upsert (shares the input field mapping)
+        string createArgs = inputFieldLines.join(", ");
 
         # DPQL where-filtering requires the provider to support advanced search expressions;
         # update/delete are only generated when filtering is available
@@ -274,7 +286,7 @@ public class DataProviderGraphQLSchema {
         # Mutation
         list<string> mutationFields();
         if (info.supports_create) {
-            mutationFields += sprintf("  create(%s): %s", createArgList(), record_type_name);
+            mutationFields += sprintf("  create(%s): %s", createArgs, record_type_name);
         }
         if (gen_update) {
             mutationFields += sprintf("  update(set: %sSetInput!, %s): %s",
@@ -284,7 +296,7 @@ public class DataProviderGraphQLSchema {
             mutationFields += sprintf("  delete(%s): %s", filterArgs, mutationReturn);
         }
         if (info.supports_upsert) {
-            mutationFields += sprintf("  upsert(%s): String!", createArgList());
+            mutationFields += sprintf("  upsert(%s): String!", createArgs);
         }
         if (gen_bulk_create) {
             mutationFields += sprintf("  createMany(records: [%s!]!): Int!", recordInputName);
@@ -300,9 +312,10 @@ public class DataProviderGraphQLSchema {
         if (gen_update) {
             push defs, sprintf("input %sSetInput {\n%s\n}", record_type_name, setLines.join("\n"));
         }
-        # the record Input type is referenced by the bulk operations
+        # the record Input type is referenced by the bulk operations (uses the input field mapping
+        # so non-scalar fields reference generated input types, not output object types)
         if (gen_bulk_create || gen_bulk_upsert) {
-            push defs, sprintf("input %s {\n%s\n}", recordInputName, fieldLines.join("\n"));
+            push defs, sprintf("input %s {\n%s\n}", recordInputName, inputFieldLines.join("\n"));
         }
 
         # the typed filter input types (only when filtering is available)
@@ -321,6 +334,10 @@ public class DataProviderGraphQLSchema {
 
         # nested object types generated from non-scalar record fields
         foreach string nested in (extra_type_defs.values()) {
+            push defs, nested;
+        }
+        # nested input-object types generated from non-scalar create/update/upsert argument fields
+        foreach string nested in (extra_input_defs.values()) {
             push defs, nested;
         }
         # custom scalar declarations (DateTime, Base64, JSON) used by the generated types
@@ -400,17 +417,6 @@ public class DataProviderGraphQLSchema {
         if (mutationResolvers) {
             resolvers.Mutation = mutationResolvers;
         }
-    }
-
-    #! builds the comma-separated argument list for the create/upsert mutation fields
-    private string createArgList() {
-        list<string> argLines();
-        foreach string fname in (keys record_type) {
-            string gqlName = sanitizeName(fname);
-            argLines += sprintf("%s: %s", gqlName,
-                mapFieldType(record_type{fname}, record_type_name + capitalize(gqlName), False));
-        }
-        return argLines.join(", ");
     }
 
     #! executes a search against the provider, applying the optional filter and limit/offset paging
@@ -825,14 +831,53 @@ public class DataProviderGraphQLSchema {
         }
     }
 
-    #! rekeys a hash of GraphQL argument names to the provider's native field names
+    #! converts a hash of GraphQL argument values to a provider record, recursively round-tripping
+    #! sanitized GraphQL field names back to the provider's native names (including nested objects
+    #! and lists of objects)
     static hash<auto> toProviderRec(hash<auto> spec, hash<auto> gqlArgs) {
-        hash<auto> name_map = spec.name_map;
+        return DataProviderGraphQLSchema::toProviderRecFields(spec.record_type, gqlArgs);
+    }
+
+    #! recursively maps GraphQL input values to provider field names, driven by the provider's field
+    #! schema (so nested object and list-of-object arguments round-trip their sanitized names too)
+    /** @param fields the provider field schema (gql names are derived from these via
+        @ref sanitizeName()); if @ref NOTHING the input is passed through unchanged
+        @param gqlArgs the coerced GraphQL input hash (keyed by sanitized GraphQL names)
+
+        @return a hash keyed by the provider's native field names
+    */
+    static hash<auto> toProviderRecFields(*hash<string, AbstractDataField> fields, hash<auto> gqlArgs) {
+        if (!fields) {
+            return gqlArgs;
+        }
         hash<auto> out();
-        foreach string k in (keys gqlArgs) {
-            out{name_map{k} ?? k} = gqlArgs{k};
+        foreach string fname in (keys fields) {
+            string gqlName = DataProviderGraphQLSchema::sanitizeName(fname);
+            if (!gqlArgs.hasKey(gqlName)) {
+                continue;
+            }
+            out{fname} = DataProviderGraphQLSchema::convertInputValue(fields{fname}.getType(),
+                gqlArgs{gqlName});
         }
         return out;
+    }
+
+    #! recursively converts a single GraphQL input value to its provider representation, descending
+    #! into nested object types and lists of objects to round-trip field names
+    static auto convertInputValue(AbstractDataProviderType t, auto v) {
+        if (!exists v) {
+            return v;
+        }
+        # a real list type has an element type; recurse into each element
+        *AbstractDataProviderType et = t.getElementType();
+        if (t.isList() && exists et && v.typeCode() == NT_LIST) {
+            return map DataProviderGraphQLSchema::convertInputValue(et, $1), v;
+        }
+        *hash<string, AbstractDataField> fields = t.getFields();
+        if (fields && v.typeCode() == NT_HASH) {
+            return DataProviderGraphQLSchema::toProviderRecFields(fields, v);
+        }
+        return v;
     }
 
     #! recursively determines whether a parsed DPQL expression contains a template reference
@@ -909,6 +954,12 @@ public class DataProviderGraphQLSchema {
         if (fields) {
             return buildObjectType(name_hint, fields, depth);
         }
+        return mapScalarType(t);
+    }
+
+    #! maps a leaf (scalar) data provider type to a GraphQL scalar name, registering any required
+    #! custom scalar (\c DateTime, \c Base64, \c JSON); shared by the output and input type mappers
+    private string mapScalarType(AbstractDataProviderType t) {
         switch (t.getBaseTypeCode()) {
             case NT_INT:
                 return "Int";
@@ -934,6 +985,43 @@ public class DataProviderGraphQLSchema {
         }
     }
 
+    #! maps a data provider field to a GraphQL type string for use in input position (create/update/
+    #! upsert arguments), generating nested \c input types for non-scalar fields
+    private string mapInputFieldType(AbstractDataField field, string name_hint, bool force_optional) {
+        return mapInputFieldTypeAtDepth(field, name_hint, 0, force_optional);
+    }
+
+    #! maps a field to a GraphQL input type reference at the given nesting depth
+    private string mapInputFieldTypeAtDepth(AbstractDataField field, string name_hint, int depth,
+            bool force_optional) {
+        string base = mapInputType(field.getType(), name_hint, depth);
+        if (!force_optional && field.isMandatory()) {
+            base += "!";
+        }
+        return base;
+    }
+
+    #! recursively maps a data provider type to a GraphQL input type reference, generating nested
+    #! \c input object types (rather than output object types) and registering custom scalars
+    /** GraphQL requires a distinct \c input type for object values used as arguments; this mirrors
+        @ref mapType() but emits \c input types so create/update/upsert arguments are valid.
+    */
+    private string mapInputType(AbstractDataProviderType t, string name_hint, int depth) {
+        if (depth > max_type_depth) {
+            registerScalar("JSON");
+            return "JSON";
+        }
+        *AbstractDataProviderType et = t.getElementType();
+        if (t.isList() && exists et) {
+            return sprintf("[%s!]", mapInputType(et, name_hint + "Item", depth + 1));
+        }
+        *hash<string, AbstractDataField> fields = t.getFields();
+        if (fields) {
+            return buildInputType(name_hint + "Input", fields, depth);
+        }
+        return mapScalarType(t);
+    }
+
     #! generates (once) a nested GraphQL object type for a hash of fields and returns its name
     private string buildObjectType(string type_name, hash<string, AbstractDataField> fields, int depth) {
         if (!exists extra_type_defs{type_name}) {
@@ -951,6 +1039,26 @@ public class DataProviderGraphQLSchema {
                 }
             }
             extra_type_defs{type_name} = sprintf("type %s {\n%s\n}", type_name, lines.join("\n"));
+        }
+        return type_name;
+    }
+
+    #! generates (once) a nested GraphQL \c input object type for a hash of fields and returns its
+    #! name; nested non-scalar fields recurse into further \c input types
+    /** Input-side field-name round-tripping is handled structurally by @ref toProviderRecFields()
+        (driven by the provider record type), so no per-field resolver registration is needed here.
+    */
+    private string buildInputType(string type_name, hash<string, AbstractDataField> fields, int depth) {
+        if (!exists extra_input_defs{type_name}) {
+            # register a placeholder first so a recursive type does not loop indefinitely
+            extra_input_defs{type_name} = "";
+            list<string> lines();
+            foreach string fn in (keys fields) {
+                string gqlfn = sanitizeName(fn);
+                lines += sprintf("  %s: %s", gqlfn,
+                    mapInputFieldTypeAtDepth(fields{fn}, type_name + capitalize(gqlfn), depth + 1, False));
+            }
+            extra_input_defs{type_name} = sprintf("input %s {\n%s\n}", type_name, lines.join("\n"));
         }
         return type_name;
     }

@@ -382,6 +382,69 @@ class TxProvider inherits DataProvider::AbstractDataProvider {
     }
 }
 
+#! a mutable provider with nested-object and list-of-object fields, to test nested-input mutations
+class NestedProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data;
+    }
+
+    string getName() {
+        return "nested";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_create": True,
+            "supports_update": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        # a nested object with a hyphenated field that must round-trip on input
+        HashDataType addr("Addr");
+        addr.addField(new QoreDataField("street", "the street", StringType));
+        addr.addField(new QoreDataField("postal-code", "the postal code", StringType));
+        # a list of nested objects, also with a hyphenated field
+        HashDataType contact("Contact");
+        contact.addField(new QoreDataField("contact-type", "the contact type", StringType));
+        contact.addField(new QoreDataField("value", "the value", StringType));
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+            "address": new QoreDataField("address", "nested address", addr),
+            "tags": new QoreDataField("tags", "tag list", new SoftListDataType(StringType)),
+            "contacts": new QoreDataField("contacts", "contact list", new SoftListDataType(contact)),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+}
+
 class GraphQLDataProviderTest inherits QUnit::Test {
     constructor() : Test("GraphQLDataProviderTest", "1.0") {
         addTestCase("dataprovider bridge", \bridgeTest());
@@ -390,8 +453,65 @@ class GraphQLDataProviderTest inherits QUnit::Test {
         addTestCase("bridge child providers and operator gating", \childGatingTest());
         addTestCase("bridge paging and transactions", \pagingTxTest());
         addTestCase("bridge name collision detection", \collisionTest());
+        addTestCase("bridge nested-input mutations", \nestedMutationTest());
 
         set_return_value(main());
+    }
+
+    nestedMutationTest() {
+        NestedProvider np();
+        DataProviderGraphQLSchema bridge(np);
+        string sdl = bridge.getSdl();
+
+        # non-scalar create/update arguments generate distinct GraphQL "input" types (an output
+        # "type" cannot be used in input position), recursing into lists of objects
+        assertRegex("input nestedRecordAddressInput", sdl);
+        assertRegex("input nestedRecordContactsItemInput", sdl);
+        # nested hyphenated field names are sanitized in the input type
+        assertRegex("postal_code: String", sdl);
+        assertRegex("contact_type: String", sdl);
+        # the create argument references the input types (lists of objects -> list of input type)
+        assertRegex("address: nestedRecordAddressInput", sdl);
+        assertRegex("contacts: \\[nestedRecordContactsItemInput!\\]", sdl);
+        # the output object types are separate
+        assertRegex("type nestedRecordAddress \\{", sdl);
+        assertRegex("type nestedRecordContactsItem \\{", sdl);
+
+        # building the executor validates the SDL (input/output type separation must be correct)
+        GraphQLExecutor ex = bridge.getExecutor();
+
+        # create with nested object + list-of-object input; sanitized nested names must round-trip
+        # to the provider's native (hyphenated) field names
+        hash<auto> c = ex.execute(
+            "mutation { create(id: 1, name: \"Ada\", "
+            "address: {street: \"Main\", postal_code: \"12345\"}, tags: [\"x\", \"y\"], "
+            "contacts: [{contact_type: \"email\", value: \"a@b.com\"}, "
+            "{contact_type: \"phone\", value: \"555\"}]) { id name } }");
+        assertEq("Ada", c.data.create.name);
+
+        # verify the stored record uses the provider's native nested field names
+        hash<auto> stored = np.data[0];
+        assertEq("Main", stored.address.street);
+        assertEq("12345", stored.address."postal-code");
+        assertEq(("x", "y"), stored.tags);
+        assertEq("email", stored.contacts[0]."contact-type");
+        assertEq("a@b.com", stored.contacts[0].value);
+        assertEq("phone", stored.contacts[1]."contact-type");
+
+        # read back through GraphQL: nested output names round-trip back to sanitized GraphQL names
+        hash<auto> r = ex.execute(
+            "{ search { id name tags address { street postal_code } "
+            "contacts { contact_type value } } }").data.search[0];
+        assertEq("12345", r.address.postal_code);
+        assertEq(("x", "y"), r.tags);
+        assertEq("email", r.contacts[0].contact_type);
+        assertEq("phone", r.contacts[1].contact_type);
+
+        # a nested object in an update SetInput also round-trips
+        assertEq(1, ex.execute(
+            "mutation { update(set: {address: {street: \"Second\", postal_code: \"99999\"}}, "
+            "filter: {id: {eq: 1}}) }").data.update);
+        assertEq("99999", np.data[0].address."postal-code");
     }
 
     bridgeTest() {
