@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires GraphQLClient
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class GraphQLClientTest
+
+#! Minimal GraphQL client built from the GraphQLClientBase mixin and the RestClient transport
+class TestGraphQLClient inherits RestClient::RestClient, GraphQLClient::GraphQLClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(opts, do_not_connect) {
+    }
+
+    hash<auto> graphql(string query, *hash<auto> variables, *reference<hash<auto>> info) {
+        return checkGraphQLResponse(post("", GraphQLClientBase::makeGraphQLBody(query, variables), \info));
+    }
+
+    hash<auto> query(string query, *hash<auto> variables, *reference<hash<auto>> info) {
+        return graphql(query, variables, \info);
+    }
+
+    hash<auto> mutate(string mutation, *hash<auto> variables, *reference<hash<auto>> info) {
+        return graphql(mutation, variables, \info);
+    }
+}
+
+#! Stub GraphQL endpoint: echoes the query in \c data, or returns an \c errors envelope on demand
+/** The response shape is driven by the request \c variables:
+    - \c {"mode": "error"}: returns only an \c errors array
+    - \c {"mode": "partial"}: returns both \c data and an \c errors array
+    - otherwise: returns a \c data envelope echoing the query and variables
+*/
+class StubGraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+%ifndef NoJson
+        hash<auto> req = body.val() ? parse_json(body.toString()) : {};
+        *string mode = req.variables.mode;
+        hash<auto> envelope;
+        switch (mode) {
+            case "error":
+                envelope = {
+                    "errors": (
+                        {"message": "stub error one", "path": ("viewer",)},
+                        {"message": "stub error two"},
+                    ),
+                };
+                break;
+            case "partial":
+                envelope = {
+                    "data": {"viewer": {"id": "u1"}},
+                    "errors": ({"message": "partial failure"},),
+                };
+                break;
+            default:
+                envelope = {
+                    "data": {
+                        "echoQuery": req.query,
+                        "echoVariables": req.variables,
+                    },
+                };
+                break;
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": make_json(envelope),
+            "hdr": {"Content-Type": MimeTypeJson},
+        };
+%else
+        return <HttpResponseInfo>{"code": 500, "body": "json module not available"};
+%endif
+    }
+}
+
+class GraphQLClientTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int port;
+    }
+
+    constructor() : Test("GraphQLClientTest", "1.0") {
+        # unit tests that do not require a server or the json module
+        addTestCase("makeGraphQLBody", \makeGraphQLBodyTest());
+        addTestCase("raise flag accessors", \raiseFlagTest());
+        addTestCase("checkGraphQLErrors static", \checkGraphQLErrorsStaticTest());
+        addTestCase("checkGraphQLResponse", \checkGraphQLResponseTest());
+
+        # server-backed integration tests
+        addTestCase("query success", \querySuccessTest());
+        addTestCase("error raises by default", \errorRaisesTest());
+        addTestCase("error opt-out", \errorOptOutTest());
+        addTestCase("partial data with errors", \partialTest());
+        addTestCase("mutate delegates", \mutateTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoJson
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        mServer = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        StubGraphQLHandler handler();
+        mServer.setDefaultHandler("graphql", handler);
+        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+%endif
+    }
+
+    globalTearDown() {
+        if (mServer) {
+            mServer.stop();
+        }
+    }
+
+    private TestGraphQLClient getClient() {
+        return new TestGraphQLClient({"url": "http://localhost:" + port, "data": "json"});
+    }
+
+    makeGraphQLBodyTest() {
+        hash<auto> b = GraphQLClient::GraphQLClientBase::makeGraphQLBody("query { x }", {"a": 1});
+        assertEq("query { x }", b.query);
+        assertEq({"a": 1}, b.variables);
+
+        # variables are optional and default to NOTHING
+        hash<auto> b2 = GraphQLClient::GraphQLClientBase::makeGraphQLBody("mutation { y }");
+        assertEq("mutation { y }", b2.query);
+        assertNothing(b2.variables);
+        assertTrue(b2.hasKey("variables"), "variables key is always present in the body");
+    }
+
+    raiseFlagTest() {
+        TestGraphQLClient c({"url": "http://localhost:1", "data": "json"}, True);
+        assertTrue(c.getRaiseGraphQLErrors(), "error raising is enabled by default");
+        c.setRaiseGraphQLErrors(False);
+        assertFalse(c.getRaiseGraphQLErrors());
+        c.setRaiseGraphQLErrors();
+        assertTrue(c.getRaiseGraphQLErrors(), "no-arg setRaiseGraphQLErrors() re-enables raising");
+    }
+
+    checkGraphQLErrorsStaticTest() {
+        # clean body: no throw
+        GraphQLClient::GraphQLClientBase::checkGraphQLErrors({"data": {"x": 1}});
+        # empty errors list: no throw
+        GraphQLClient::GraphQLClientBase::checkGraphQLErrors({"data": {}, "errors": ()});
+        # non-hash body: no throw
+        GraphQLClient::GraphQLClientBase::checkGraphQLErrors(NOTHING);
+        GraphQLClient::GraphQLClientBase::checkGraphQLErrors("not a hash");
+
+        # populated errors: throws GRAPHQL-ERROR with the first message and the full list as arg
+        hash<auto> body = {"errors": ({"message": "boom"}, {"message": "second"})};
+        assertThrows("GRAPHQL-ERROR", "boom",
+            \GraphQLClient::GraphQLClientBase::checkGraphQLErrors(), body);
+        try {
+            GraphQLClient::GraphQLClientBase::checkGraphQLErrors(body);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(body.errors, ex.arg, "exception argument carries the full errors list");
+        }
+
+        # errors present but no message: falls back to a default description
+        assertThrows("GRAPHQL-ERROR", "Unknown GraphQL error",
+            \GraphQLClient::GraphQLClientBase::checkGraphQLErrors(), {"errors": ({"path": ("x",)},)});
+    }
+
+    checkGraphQLResponseTest() {
+        TestGraphQLClient c({"url": "http://localhost:1", "data": "json"}, True);
+
+        # error body throws when raising is enabled (the default)
+        hash<auto> errResp = {"body": {"errors": ({"message": "nope"},)}};
+        assertThrows("GRAPHQL-ERROR", "nope", \c.checkGraphQLResponse(), errResp);
+
+        # with raising disabled, the response is returned unchanged
+        c.setRaiseGraphQLErrors(False);
+        hash<auto> rv = c.checkGraphQLResponse(errResp);
+        assertEq(errResp, rv, "response returned unchanged when raising is disabled");
+
+        # clean response is always returned unchanged
+        c.setRaiseGraphQLErrors(True);
+        hash<auto> ok = {"body": {"data": {"x": 1}}};
+        assertEq(ok, c.checkGraphQLResponse(ok));
+    }
+
+    querySuccessTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        TestGraphQLClient c = getClient();
+        hash<auto> resp = c.query("query { viewer { id } }", {"first": 10});
+        assertEq("query { viewer { id } }", resp.body.data.echoQuery);
+        assertEq({"first": 10}, resp.body.data.echoVariables);
+        assertNothing(resp.body.errors);
+    }
+
+    errorRaisesTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        TestGraphQLClient c = getClient();
+        try {
+            c.query("query { viewer { id } }", {"mode": "error"});
+            fail("expected GRAPHQL-ERROR to be thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("GRAPHQL-ERROR", ex.err);
+            assertEq("stub error one", ex.desc, "description taken from the first error message");
+            assertEq(2, ex.arg.size(), "exception argument carries all errors");
+            assertEq("stub error two", ex.arg[1].message);
+        }
+    }
+
+    errorOptOutTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        TestGraphQLClient c = getClient();
+        c.setRaiseGraphQLErrors(False);
+        hash<auto> resp = c.query("query { viewer { id } }", {"mode": "error"});
+        assertEq(2, resp.body.errors.size(), "errors returned to caller when raising is disabled");
+        assertEq("stub error one", resp.body.errors[0].message);
+    }
+
+    partialTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        # by default a partial result (data + errors) still raises
+        TestGraphQLClient c = getClient();
+        assertThrows("GRAPHQL-ERROR", "partial failure",
+            sub () { c.query("query { viewer { id } }", {"mode": "partial"}); });
+
+        # with raising disabled the caller sees both data and errors
+        c.setRaiseGraphQLErrors(False);
+        hash<auto> resp = c.query("query { viewer { id } }", {"mode": "partial"});
+        assertEq("u1", resp.body.data.viewer.id);
+        assertEq("partial failure", resp.body.errors[0].message);
+    }
+
+    mutateTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        TestGraphQLClient c = getClient();
+        hash<auto> resp = c.mutate("mutation { createIssue { id } }", {"title": "t"});
+        assertEq("mutation { createIssue { id } }", resp.body.data.echoQuery);
+        assertEq({"title": "t"}, resp.body.data.echoVariables);
+    }
+}

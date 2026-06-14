@@ -38,6 +38,7 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+%requires(reexport) GraphQLClient >= 1.0
 
 module WaveRestClient {
     version = "1.0";
@@ -188,7 +189,8 @@ public class WaveRestClientBase {
     @par Rate Limits:
     - 60 requests per minute per token
 */
-public class WaveRestClient inherits RestClient::RestClient, WaveRestClientBase {
+public class WaveRestClient inherits RestClient::RestClient, WaveRestClientBase,
+        GraphQLClient::GraphQLClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -218,15 +220,12 @@ WaveRestClient wave({"token": "your_oauth2_token"});
 
         @return the parsed response body with data and/or errors
 
-        @throw GRAPHQL-ERROR if the GraphQL response contains errors
+        @throw GRAPHQL-ERROR if the GraphQL response contains errors and
+        @ref GraphQLClient::GraphQLClientBase::getRaiseGraphQLErrors() "error raising" is enabled
+        (the default)
     */
     hash<auto> graphql(string query, *hash<auto> variables, *reference<hash<auto>> info) {
-        hash<auto> body = {
-            "query": query,
-            "variables": variables,
-        };
-        hash<auto> response = post("", body, \info);
-        return response;
+        return checkGraphQLResponse(post("", GraphQLClientBase::makeGraphQLBody(query, variables), \info));
     }
 
     #! Executes a GraphQL query
@@ -446,7 +445,8 @@ public class WaveRestConnection inherits RestClient::RestConnection {
 }
 
 #! Wave REST client for non-blocking I/O
-public class WaveRestClientIo inherits RestClientIo::RestClientIo, WaveRestClientBase {
+public class WaveRestClientIo inherits RestClientIo::RestClientIo, WaveRestClientBase,
+        GraphQLClient::GraphQLClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
@@ -461,9 +461,13 @@ public class WaveRestClientIo inherits RestClientIo::RestClientIo, WaveRestClien
         @param hdr optional headers to send with the request
 
         @return the parsed response body with data and/or errors
+
+        @throw GRAPHQL-ERROR if the GraphQL response contains errors and
+        @ref GraphQLClient::GraphQLClientBase::getRaiseGraphQLErrors() "error raising" is enabled
+        (the default)
     */
     hash<auto> graphql(string query, *hash<auto> variables, *hash<auto> hdr) {
-        return restPost("", {"query": query, "variables": variables}, hdr);
+        return checkGraphQLResponse(restPost("", GraphQLClientBase::makeGraphQLBody(query, variables), hdr));
     }
 }
 }

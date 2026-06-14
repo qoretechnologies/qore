@@ -1,0 +1,353 @@
+# GraphQL Client and Server Modules — Implementation Plan
+
+This document is the implementation plan for two related deliverables:
+
+1. **`GraphQLClient`** — a reusable GraphQL client base/mixin consumed by `LinearRestClient`,
+   `WaveRestClient`, and future GraphQL API wrappers (client side).
+2. **`GraphQLHandler`** — a full-spec GraphQL execution engine exposed through Qore's
+   `HttpServer`, with a **DataProvider bridge** that auto-generates a GraphQL schema and
+   resolvers from registered Qore data providers (server side).
+
+These are independent efforts and are sequenced accordingly: deliverable 1 is a contained,
+test-validated refactor; deliverable 2 is a multi-phase subproject built on top of a new
+GraphQL execution engine.
+
+## Status
+
+- **Planning** — not yet started. This document is the plan; no code has been written.
+
+## Background and motivation
+
+### Client side (real, mechanical duplication)
+
+`LinearRestClient.qm` and `WaveRestClient.qm` both wrap a GraphQL-over-HTTP API on top of
+`RestClient`/`RestClientIo`. Their GraphQL methods are byte-for-byte identical and are
+copied **four times** total (sync + `Io` variant, in each of the two modules):
+
+```qore
+hash<auto> graphql(string query, *hash<auto> variables, *reference<hash<auto>> info) {
+    hash<auto> body = {"query": query, "variables": variables};
+    return post("", body, \info);
+}
+hash<auto> query(string q, *hash<auto> v, *reference<hash<auto>> i)  { return graphql(q, v, \i); }
+hash<auto> mutate(string m, *hash<auto> v, *reference<hash<auto>> i) { return graphql(m, v, \i); }
+```
+
+Reference sites:
+- `qlib/LinearRestClient.qm:212` (`graphql`), `:231` (`query`), `:245` (`mutate`), `:452` (`Io::graphql`)
+- `qlib/WaveRestClient.qm:223` (`graphql`), `:242` (`query`), `:256` (`mutate`), `:465` (`Io::graphql`)
+
+The DataProvider layers funnel everything through a single per-module `doGraphQL()` wrapper,
+so the consumer surface is small and well-defined:
+- `qlib/LinearDataProvider/LinearDataProviderBase.qc:140` — `rest.graphql(query, variables)`
+- `qlib/WaveDataProvider/WaveDataProviderBase.qc:140` — `rest.graphql(query, variables)`
+- `qlib/WaveDataProvider/WaveCustomersDataProvider.qc:141` — direct `rest.graphql(...)` in a
+  pagination loop
+
+**Correctness gap that argues for consolidation:** both modules' doc comments promise
+`@throw GRAPHQL-ERROR if the GraphQL response contains errors`
+(`qlib/LinearRestClient.qm:210`, `qlib/WaveRestClient.qm:221`), but **neither inspects the
+`errors` array**. GraphQL returns HTTP 200 with a top-level `errors` array on failure, so both
+clients currently hand error responses back to callers as if they succeeded. This logic must
+live in exactly one place.
+
+### Server side (no prior art; new capability)
+
+Qore has no GraphQL server capability today. A `GraphQLHandler` slots into the existing
+`AbstractHttpRequestHandler` framework (`qlib/HttpServerUtil.qm:2448`), but the HTTP plumbing
+is ~10% of the work — the other 90% is a GraphQL execution engine (parser, type system,
+validation, execution, introspection). The DataProvider bridge then sits on top of that engine
+as one resolver *source*, mirroring (in reverse) the existing schema↔DataProvider mapping done
+by `RestSchemaDataProvider`/`Swagger`/`OpenApi3`.
+
+## Architectural decisions (settled)
+
+### D1 — Parser: pure-Qore recursive descent
+
+The GraphQL grammar (executable documents + SDL) is small and stable. A pure-Qore
+recursive-descent parser keeps the entire engine in `qlib/` with **no build/packaging changes**
+and avoids coupling a server module to a binary dependency.
+
+AOT compilation (`qcc`, AST→IR→LLVM→native) removes interpreter dispatch overhead, so parser
+control flow runs native. AOT does **not** eliminate refcounting, per-node heap allocation, or
+encoding-aware string access — but for realistic GraphQL workloads this does not matter:
+documents are small (hundreds of bytes to a few KB), resolution dominates parse time, and
+parsed documents are cached (see D4). tree-sitter remains an escape hatch only if profiling
+ever shows a genuine parse-bound workload.
+
+Mitigations baked in from the start (cheap insurance):
+- strict-typed `hashdecl` AST/token nodes (static layout, no `auto` boxing), **not** `hash<auto>`
+- offset-based tokenizer: track `(start, len)` into the source, slice once — no per-char substrings
+- byte-oriented scanning of the (UTF-8) source in the tokenizer hot loop
+
+### D2 — Client shape: mixin base class, not a new client hierarchy
+
+The existing clients already inherit `RestClient`/`RestClientIo`. Qore multiple inheritance
+lets a shared `GraphQLClientBase` be mixed in alongside the transport class
+(`class LinearRestClient inherits RestClient, GraphQLClientBase`). The base owns the GraphQL
+*protocol* (body construction, `errors`→exception handling); the transport class owns HTTP.
+This avoids forking the client class tree and works for both sync and `Io` variants.
+
+### D3 — Engine is transport-agnostic
+
+The execution engine takes a parsed/validated document + variables + a resolver interface and
+returns the `{data, errors}` envelope. It does not know about HTTP. `GraphQLHandler` is a thin
+adapter from `handleRequest()` to the engine; the engine is independently unit-testable and
+could later back a non-HTTP transport.
+
+### D4 — Document caching keyed by query hash
+
+The handler caches parsed+validated documents keyed by a hash of the query text (the standard
+"automatic persisted queries" pattern). This removes repeat parsing/validation from the hot
+path and makes parser performance a non-issue for steady-state operation.
+
+### D5 — DataProvider bridge maps capability flags → operations
+
+The bridge reads `DataProviderInfo` capability flags and record types to generate schema:
+- record type fields → GraphQL object type fields
+- `supports_read`/search → `Query` fields (search options → GraphQL arguments)
+- `supports_create`/`supports_update`/`supports_delete` → `Mutation` fields
+- `supports_request` (`doRequest`) → `Query` or `Mutation` field depending on declared side effects
+- child providers (`getChildProviderNames()`) → nested types / namespaced fields
+
+This mirrors the inverse mapping already implemented in `Swagger.qm:getTypeIntern()`
+(`qlib/Swagger.qm:1182`) and `RestSchemaValidator.qm:getDataTypeIntern()`
+(`qlib/RestSchemaValidator.qm:1236`).
+
+## Open questions (resolve during the relevant phase)
+
+- **OQ1 (Phase 1):** Should `errors`→`GRAPHQL-ERROR` throwing be the default, or opt-in via a
+  client option? Default-throw is the least-surprising behavior and matches the existing
+  (unimplemented) doc contract, but it changes behavior for any current caller relying on the
+  silent pass-through. Proposal: default-throw, with a `graphql_raise_errors` option (default
+  `True`) to restore the old behavior. Decide after auditing the Linear/Wave DataProvider call
+  sites for code that already inspects `errors` itself.
+- **OQ2 (Phase 5):** GraphQL `subscription` support (long-lived, over WebSocket/SSE). Out of
+  scope for the initial engine; the type model should reserve the operation type so it can be
+  added without a schema-model rewrite.
+- **OQ3 (Phase 6):** Custom scalar mapping policy for DataProvider types with no GraphQL
+  primitive (e.g. Qore `date` → custom `DateTime` scalar vs ISO-8601 `String`).
+- **OQ4 (Phase 6):** How to represent DataProvider search *expressions* (DPQL-style) as GraphQL
+  input types vs flat argument lists.
+
+---
+
+# Deliverable 1 — `GraphQLClient` module
+
+A small module providing the GraphQL protocol layer, plus a refactor of the two existing
+consumers onto it.
+
+### Phase 1.1 — Create `qlib/GraphQLClient.qm`
+
+New module with these public members:
+
+- `class GraphQLClientBase` — the mixin. Provides:
+  - `hash<auto> graphqlExecute(code poster, string query, *hash<auto> variables, *reference<hash<auto>> info)`
+    — builds the `{query, variables}` body, calls the supplied `poster` closure (so the base is
+    transport-agnostic: sync `post()` vs `Io::restPost()`), inspects the response for a
+    top-level `errors` array, and throws `GRAPHQL-ERROR` (with the `errors` payload as exception
+    arg) when present and `graphql_raise_errors` is set.
+  - thin `query()`/`mutate()` semantics documented as aliases of the execute path.
+- `const GRAPHQL_ERROR = "GRAPHQL-ERROR";` and documented exception shape.
+- `hashdecl GraphQLResponseInfo { *hash<auto> data; *list<hash<auto>> errors; *hash<auto> extensions; }`
+  for typed access to the envelope.
+
+Module metadata mirrors the existing clients (`version = "1.0"`, MIT, Qore Technologies),
+`%requires Mime`, `RestClient`, `RestClientIo` only if needed by helper signatures — keep
+`requires` minimal; the base should not force a transport dependency on consumers.
+
+### Phase 1.2 — Refactor `LinearRestClient` / `WaveRestClient`
+
+- Add `GraphQLClientBase` to the inheritance list of `LinearRestClient`, `LinearRestClientIo`,
+  `WaveRestClient`, `WaveRestClientIo`.
+- Replace the four duplicated method bodies with delegations to `graphqlExecute()`, passing the
+  appropriate `post`/`restPost` closure.
+- Add `%requires GraphQLClient` to both modules.
+- Remove the now-shared boilerplate; keep module-specific URL/auth/ping config untouched
+  (`DefaultUrl`, `getOptions()`, connection classes).
+- Wire the `errors`→exception behavior (OQ1) and confirm the Linear/Wave DataProvider
+  `doGraphQL()` wrappers still behave correctly (they currently assume success-shaped
+  responses; centralized throwing actually *improves* them).
+
+### Phase 1.3 — Build registration
+
+- Add `qore_user_module("qlib/GraphQLClient.qm")` to `CMakeLists.txt` near the other client
+  modules (cf. `CMakeLists.txt:3187`).
+- Add the equivalent entry to `Makefile.am` (required for docs + install per repo conventions).
+
+### Phase 1.4 — Tests
+
+New `examples/test/qlib/GraphQLClient/GraphQLClient.qtest`:
+- Unit: body construction (`{query, variables}` shape), `query()`/`mutate()` delegation.
+- Negative: response with `errors` array → `GRAPHQL-ERROR` thrown; `graphql_raise_errors=False`
+  → errors returned in the envelope, no throw.
+- Corner: `errors` present *and* partial `data` present (GraphQL allows both) — verify the
+  exception carries both.
+- Use a local in-process `HttpServer` with a stub handler returning canned GraphQL envelopes
+  (no external network); follow the `RestHandler.qtest:413` server-setup pattern.
+- Re-run existing `LinearDataProvider.qtest` and `WaveDataProvider.qtest` (their non-integration
+  test groups run without `LINEAR_TOKEN`/`WAVE_TOKEN`) to confirm the refactor is behavior-
+  preserving.
+
+### Phase 1.5 — Validation
+
+- `qore --enable-debug` for all new/changed tests.
+- No C++ changes → no valgrind required.
+- Docs build (`cmake --build build --target docs`) must be warning-free for the new module.
+
+**Deliverable 1 is complete and shippable on its own.** Deliverable 2 does not depend on it
+beyond shared `GRAPHQL-ERROR` naming conventions.
+
+---
+
+# Deliverable 2 — `GraphQLHandler` (engine + DataProvider bridge)
+
+Built bottom-up: language → engine → HTTP → bridge. Each phase has its own conformance tests
+and must pass before the next begins.
+
+### Phase 2.1 — Lexer + AST model
+
+- `hashdecl` token and AST node types (per D1: strict-typed, offset-based).
+- Tokenizer for GraphQL executable documents and SDL: names, ints/floats, strings (incl. block
+  strings `"""`), punctuators, comments, commas-as-whitespace.
+- Define the AST node `hashdecl`s for: `Document`, `OperationDefinition`
+  (query/mutation/subscription), `FragmentDefinition`, `SelectionSet`, `Field`, `Argument`,
+  `Directive`, `VariableDefinition`, `FragmentSpread`, `InlineFragment`, value nodes
+  (scalars, lists, objects, enums, variables, null).
+- Tests: tokenizer corpus (valid + malformed), exact span/offset assertions.
+
+### Phase 2.2 — Parser (executable documents)
+
+- Recursive-descent parser producing the Phase 2.1 AST from a query/mutation document.
+- Variables, aliases, fragments (named + inline), directives, default values.
+- Precise error reporting with line/column derived from token offsets.
+- Tests: parse the GraphQL spec example documents; negative tests with positional error
+  assertions.
+
+### Phase 2.3 — SDL parser + schema model
+
+- Parser for the Schema Definition Language: `type`, `interface`, `union`, `enum`, `input`,
+  `scalar`, `schema`, directives, field args, non-null (`!`) and list (`[]`) wrappers,
+  descriptions.
+- In-memory schema model (`hashdecl`s) with name resolution over the type graph and the
+  built-in scalars (`Int`, `Float`, `String`, `Boolean`, `ID`).
+- Tests: round-trip SDL → model → introspection consistency (see 2.6).
+
+### Phase 2.4 — Validation
+
+- Implement the spec validation rules needed for a correct server: operation/field existence,
+  argument types, variable usage/coercion, fragment type conditions, no unused
+  variables/fragments, leaf/selection-set correctness.
+- Tests: spec validation examples, one negative test per rule.
+
+### Phase 2.5 — Execution engine
+
+- Resolver interface (Qore `code`/abstract class): `resolve(field, parent, args, context)`.
+- Field execution: selection-set traversal, argument coercion against schema, value completion
+  (non-null, list, object), alias handling, fragment inlining, error collection into the
+  `errors` array with `path` (partial `data` + `errors` per spec), `extensions` pass-through.
+- `@skip`/`@include` directive handling.
+- Transport-agnostic (D3): returns `hash<GraphQLResponseInfo>` (reuse the Deliverable 1
+  hashdecl if available, else define locally).
+- Tests: end-to-end execution against a hand-written in-memory schema + resolver map covering
+  nesting, lists, aliases, fragments, partial errors.
+
+### Phase 2.6 — Introspection
+
+- Implement `__schema`, `__type`, `__typename` and the `__Type`/`__Field`/`__InputValue`/
+  `__EnumValue`/`__Directive` meta-types so GraphiQL/Apollo tooling and codegen work.
+- Tests: introspection query returns a structure that re-derives the input SDL; verify against
+  the canonical introspection query used by client tooling.
+
+### Phase 2.7 — `qlib/GraphQLHandler.qm` (HTTP adapter)
+
+- `class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler` implementing
+  `handleRequest(cx, hdr, *body)` (`qlib/HttpServerUtil.qm:2921`), following the
+  `RestHandler.handleRequest` pattern (`qlib/RestHandler.qm:1473`).
+- Accept `POST` `application/json` (`{query, operationName, variables, extensions}`) and `GET`
+  (query in query-string) per the GraphQL-over-HTTP spec.
+- Document cache keyed by query hash (D4); on miss: parse → validate → cache.
+- Build `HttpResponseInfo` (`qlib/HttpServerUtil.qm:386`) with `code` 200 and the JSON envelope;
+  use `AbstractHttpRequestHandler::makeResponse()` for serialization/encoding.
+- Map engine/validation failures to the correct HTTP + GraphQL error shapes (validation errors
+  are HTTP 200 with `errors`; malformed request bodies are HTTP 400).
+- Authentication via the standard `AbstractAuthenticator` constructor arg.
+- Tests: register on an in-process `HttpServer` (`HttpServer.setHandler`,
+  `qlib/HttpServer.qm:1804`; setup pattern at `RestHandler.qtest:413`); drive with `RestClient`;
+  cover query/mutation/introspection/error/auth.
+
+### Phase 2.8 — DataProvider bridge
+
+- `class DataProviderGraphQLSchema` (or similar) that, given one or more registered
+  `AbstractDataProvider`s, generates a GraphQL schema model + resolver map (D5):
+  - `getRecordType()` → object type; walk fields via `getFields()` →
+    `AbstractDataField::getName()/getType()/isMandatory()` (`qlib/DataProvider/AbstractDataField.qc:514`).
+  - Qore-type → GraphQL-type mapping function modeled on `Swagger.qm:getTypeIntern()`
+    (`qlib/Swagger.qm:1182`) and the `TypeCodeMap`/`DataTypeMap` in
+    `qlib/DataProvider/AbstractDataProviderType.qc:49`. Custom scalar policy per OQ3.
+  - capability flags from `getInfo(): hash<DataProviderInfo>`
+    (`qlib/DataProvider/AbstractDataProvider.qc:2130`) → `Query`/`Mutation` fields per D5.
+  - search options (`getSearchOptions()`) / create options → GraphQL field arguments (OQ4).
+  - child providers (`getChildProviderNames()`) → nested fields/types.
+  - resolvers translate GraphQL field invocations into `searchRecords`/`doRequest`/
+    `createRecord`/`updateRecords`/`deleteRecords` calls.
+- `GraphQLHandler` gains a constructor/factory that takes a `DataProviderGraphQLSchema` so a
+  data provider tree is exposed over GraphQL with zero hand-written schema.
+- Tests: build a synthetic in-memory DataProvider with a known record type + capability flags;
+  assert generated SDL/introspection; execute query + mutation through the bridge and verify the
+  underlying DataProvider methods are invoked with coerced arguments.
+
+### Phase 2.9 — Build registration, docs, examples
+
+- `qore_user_module("qlib/GraphQLHandler.qm")` in `CMakeLists.txt` (cf. `RestHandler` at
+  `CMakeLists.txt:3147`) and the matching `Makefile.am` entry.
+- Doxygen module docs with a worked example (define schema + resolvers; serve via `HttpServer`;
+  and the DataProvider-bridge one-liner).
+- `examples/` sample program exposing a DataProvider tree over GraphQL.
+
+### Phase 2.10 — Full validation
+
+- All engine + handler + bridge tests under `qore --enable-debug`.
+- `./run_tests.sh -d <dir>` for the new test directories green with no warnings.
+- Docs build warning-free.
+- No C++ changes expected (pure-Qore engine) → no valgrind; if any C++ is touched, run valgrind
+  on affected tests at the end.
+
+## Testing strategy (both deliverables)
+
+- Use `FsUtil` `TmpFile`/`TmpDir` for any on-disk fixtures; never hand-roll `/tmp` paths.
+- Use `%prepend-module-path` to load the local development modules under test.
+- In-process `HttpServer` for all client↔server tests; no external network dependency.
+- Conformance: drive the engine with the GraphQL specification's own example documents and
+  introspection query as the correctness oracle.
+- Meaningful assertions only (no identity tests); include negative + corner cases per phase.
+
+## Sequencing summary
+
+| Order | Work | Depends on | Shippable alone |
+|------:|------|-----------|-----------------|
+| 1 | Deliverable 1 (`GraphQLClient` + Linear/Wave refactor) | — | Yes |
+| 2 | Phases 2.1–2.6 (language + engine + introspection) | — | Engine library only |
+| 3 | Phase 2.7 (`GraphQLHandler` HTTP adapter) | 2.1–2.6 | Yes (hand-written schemas) |
+| 4 | Phase 2.8 (DataProvider bridge) | 2.7 | Yes |
+| 5 | Phases 2.9–2.10 (docs, examples, validation) | 2.8 | — |
+
+Deliverable 1 should land first as an immediately useful, low-risk cleanup. Deliverable 2 is a
+distinct subproject and should not be folded into the same change set.
+
+## Key repository references
+
+| Concern | Location |
+|---------|----------|
+| Duplicated client GraphQL methods | `qlib/LinearRestClient.qm:212`, `qlib/WaveRestClient.qm:223` |
+| `*Io` client variants | `qlib/LinearRestClient.qm:452`, `qlib/WaveRestClient.qm:465` |
+| DataProvider consumer wrappers | `qlib/LinearDataProvider/LinearDataProviderBase.qc:140`, `qlib/WaveDataProvider/WaveDataProviderBase.qc:140` |
+| HTTP handler base / request entrypoint | `qlib/HttpServerUtil.qm:2448`, `:2921` |
+| `HttpResponseInfo` hashdecl | `qlib/HttpServerUtil.qm:386` |
+| Example handler (parse body, dispatch, respond) | `qlib/RestHandler.qm:1473` |
+| Handler registration with HttpServer | `qlib/HttpServer.qm:1804`; setup at `examples/test/qlib/RestHandler/RestHandler.qtest:413` |
+| DataProvider info / capabilities | `qlib/DataProvider/AbstractDataProvider.qc:2130` |
+| Record type / field introspection | `qlib/DataProvider/AbstractDataProvider.qc:6264`, `qlib/DataProvider/AbstractDataField.qc:514` |
+| Type → external-schema prior art (inverse mapping) | `qlib/Swagger.qm:1182`, `qlib/RestSchemaValidator.qm:1236` |
+| Qore type maps | `qlib/DataProvider/AbstractDataProviderType.qc:49` |
+| Module build registration | `CMakeLists.txt:3147` (`RestHandler`), `:3187` (REST clients); `Makefile.am` |

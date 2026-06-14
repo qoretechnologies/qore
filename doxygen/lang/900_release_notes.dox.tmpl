@@ -2066,6 +2066,9 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref gorgiasrestclientintro "GorgiasRestClient" module
       - new module providing a REST client for <a href="https://www.gorgias.com/">Gorgias</a>'s customer support API
 
+    - @ref graphqlclientintro "GraphQLClient" module
+      - new module providing a reusable <a href="https://graphql.org">GraphQL</a> client protocol layer (request body construction and \c errors-array handling) to be mixed in to REST client transports such as @ref restclientintro "RestClient" and @ref restclientiointro "RestClientIo"
+
     - @ref groqdataproviderintro "GroqDataProvider" module
       - new module providing a data provider API for <a href="https://groq.com">Groq</a> LPU-accelerated open-weight LLM inference
 
