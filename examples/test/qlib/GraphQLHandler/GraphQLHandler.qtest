@@ -1,0 +1,759 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# GraphQLHandler.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+# tests for the GraphQLHandler module: lexer, parser, schema, execution, introspection,
+# the HTTP handler, and WebSocket subscriptions
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires WebSocketClient
+%requires json
+%requires GraphQLHandler
+
+%exec-class GraphQLHandlerTest
+
+class GraphQLHandlerTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int port;
+
+        const StarWarsSdl = "
+            schema { query: Query mutation: Mutation }
+            \"\"\"the root query\"\"\"
+            type Query {
+                hello(name: String): String
+                add(a: Int!, b: Int!): Int!
+                hero(episode: Episode = JEDI): Character
+                numbers: [Int!]!
+                nonNull: String!
+            }
+            type Mutation { echo(msg: String!): String! }
+            interface Character { id: ID! name: String! }
+            type Droid implements Character { id: ID! name: String! primaryFunction: String }
+            type Human implements Character { id: ID! name: String! homePlanet: String }
+            enum Episode { NEWHOPE EMPIRE JEDI }
+        ";
+    }
+
+    constructor() : Test("GraphQLHandlerTest", "1.0") {
+        addTestCase("lexer", \lexerTest());
+        addTestCase("parser", \parserTest());
+        addTestCase("parser errors", \parserErrorTest());
+        addTestCase("schema model", \schemaTest());
+        addTestCase("schema validation errors", \schemaErrorTest());
+        addTestCase("execution basics", \executionTest());
+        addTestCase("execution variables", \variablesTest());
+        addTestCase("fragments and interfaces", \fragmentTest());
+        addTestCase("directives", \directiveTest());
+        addTestCase("error propagation", \errorPropagationTest());
+        addTestCase("mutation", \mutationTest());
+        addTestCase("introspection", \introspectionTest());
+        addTestCase("http handler", \httpHandlerTest());
+        addTestCase("http errors", \httpErrorTest());
+        addTestCase("review hardening", \hardeningTest());
+        addTestCase("document validation", \validationTest());
+        addTestCase("http persisted queries and batching", \apqBatchTest());
+        addTestCase("websocket subscriptions", \subscriptionTest());
+        addTestCase("websocket subscription robustness", \subscriptionRobustnessTest());
+        addTestCase("http sse subscriptions", \sseTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        mServer = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        GraphQLHandler gh(StarWarsSdl, getStarWarsResolvers());
+        mServer.setDefaultHandler("graphql", gh);
+        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        if (mServer) {
+            mServer.stop();
+        }
+    }
+
+    private hash<auto> getStarWarsResolvers() {
+        return {
+            "Query": {
+                "hello": string sub (auto p, hash<auto> a, auto c) {
+                    return sprintf("Hello, %s!", a.name ?? "world");
+                },
+                "add": int sub (auto p, hash<auto> a, auto c) { return a.a + a.b; },
+                "hero": auto sub (auto p, hash<auto> a, auto c) {
+                    return {"__typename": "Droid", "id": "2001", "name": "R2-D2",
+                        "primaryFunction": "Astromech"};
+                },
+                "numbers": auto sub (auto p, hash<auto> a, auto c) { return (1, 2, 3); },
+                "nonNull": auto sub (auto p, hash<auto> a, auto c) { return NOTHING; },
+            },
+            "Mutation": {
+                "echo": string sub (auto p, hash<auto> a, auto c) { return a.msg; },
+            },
+        };
+    }
+
+    private GraphQLExecutor getExecutor() {
+        return new GraphQLExecutor(new GraphQLSchema(StarWarsSdl), getStarWarsResolvers());
+    }
+
+    lexerTest() {
+        list<hash<GraphQLToken>> toks = GraphQLLexer::tokenize("{ hero(id: 1) }");
+        assertEq(GraphQLLexer::TK_BRACE_L, toks[0].kind);
+        assertEq(GraphQLLexer::TK_NAME, toks[1].kind);
+        assertEq("hero", toks[1].value);
+        assertEq(GraphQLLexer::TK_EOF, toks[toks.size() - 1].kind);
+
+        # numbers, escapes, unicode (commas are ignored, not emitted as tokens)
+        list<hash<GraphQLToken>> n = GraphQLLexer::tokenize("[-42, 3.14e2, \"a\\nb\", \"\\u0041\"]");
+        assertEq(GraphQLLexer::TK_INT, n[1].kind);
+        assertEq(-42, n[1].value);
+        assertEq(GraphQLLexer::TK_FLOAT, n[2].kind);
+        assertEq(314.0, n[2].value);
+        assertEq("a\nb", n[3].value);
+        assertEq("A", n[4].value);
+
+        # block string dedent
+        list<hash<GraphQLToken>> b = GraphQLLexer::tokenize("\"\"\"\n    Hello\n      World\n    \"\"\"");
+        assertEq("Hello\n  World", b[0].value);
+
+        # CRLF line terminators inside a block string count once (not twice): the token after a
+        # 3-line CRLF block string is on line 5, not over-counted
+        list<hash<GraphQLToken>> crlf = GraphQLLexer::tokenize("\"\"\"\r\na\r\nb\r\n\"\"\"\nlater");
+        assertEq(GraphQLLexer::TK_STRING, crlf[0].kind);
+        assertEq("later", crlf[1].value);
+        assertEq(5, crlf[1].line);
+
+        # line/column tracking
+        list<hash<GraphQLToken>> p = GraphQLLexer::tokenize("a\n  b");
+        assertEq(1, p[0].line);
+        assertEq(2, p[1].line);
+        assertEq(3, p[1].column);
+
+        assertThrows("GRAPHQL-SYNTAX-ERROR", \GraphQLLexer::tokenize(), "{ ~ }");
+    }
+
+    parserTest() {
+        hash<GraphQLDocument> doc = GraphQLParser::parse(
+            "query Hero(\$ep: Episode = JEDI) { hero(episode: \$ep) { name ...F } } "
+            "fragment F on Character { id }");
+        assertEq(2, doc.definitions.size());
+        hash<GraphQLOperationDefinition> op = cast<hash<GraphQLOperationDefinition>>(doc.definitions[0]);
+        assertEq("query", op.operation);
+        assertEq("Hero", op.name);
+        assertEq(1, op.variableDefinitions.size());
+        hash<GraphQLVariableDefinition> vd = cast<hash<GraphQLVariableDefinition>>(op.variableDefinitions[0]);
+        assertEq("ep", vd.name);
+        assertEq("Episode", GraphQLSchema::typeRefToString(vd.type));
+
+        hash<GraphQLSelectionSet> ss = cast<hash<GraphQLSelectionSet>>(op.selectionSet);
+        hash<GraphQLField> hero = cast<hash<GraphQLField>>(ss.selections[0]);
+        assertEq("hero", hero.name);
+        assertEq(1, hero.arguments.size());
+
+        hash<GraphQLFragmentDefinition> fd = cast<hash<GraphQLFragmentDefinition>>(doc.definitions[1]);
+        assertEq("F", fd.name);
+        assertEq("Character", fd.typeCondition);
+
+        # anonymous shorthand query with alias
+        hash<GraphQLDocument> doc2 = GraphQLParser::parse("{ a: hello }");
+        hash<GraphQLOperationDefinition> op2 = cast<hash<GraphQLOperationDefinition>>(doc2.definitions[0]);
+        assertEq("query", op2.operation);
+        hash<GraphQLField> f = cast<hash<GraphQLField>>(
+            cast<hash<GraphQLSelectionSet>>(op2.selectionSet).selections[0]);
+        assertEq("a", f.alias);
+        assertEq("hello", f.name);
+    }
+
+    parserErrorTest() {
+        assertThrows("GRAPHQL-SYNTAX-ERROR", "selection set", \GraphQLParser::parse(), "query { }");
+        assertThrows("GRAPHQL-SYNTAX-ERROR", \GraphQLParser::parse(), "query {");
+        assertThrows("GRAPHQL-SYNTAX-ERROR", \GraphQLParser::parse(), "mutation");
+        assertThrows("GRAPHQL-SYNTAX-ERROR", "fragment name cannot be",
+            \GraphQLParser::parse(), "fragment on on T { x }");
+    }
+
+    schemaTest() {
+        GraphQLSchema schema(StarWarsSdl);
+        assertEq("Query", schema.getQueryType().name);
+        assertEq("Mutation", schema.getMutationType().name);
+        assertNothing(schema.getSubscriptionType());
+        assertEq(("id", "name"), keys schema.getType("Character").fields);
+        assertEq(TYPE_INTERFACE, schema.getType("Character").kind);
+        assertEq(("Character",), schema.getType("Droid").interfaces);
+        assertEq(("NEWHOPE", "EMPIRE", "JEDI"), schema.getType("Episode").enumValues);
+        assertEq("[Int!]!", GraphQLSchema::typeRefToString(schema.getType("Query").fields.numbers.type));
+        # built-in scalars present
+        assertEq(TYPE_SCALAR, schema.getType("Int").kind);
+    }
+
+    schemaErrorTest() {
+        assertThrows("GRAPHQL-SCHEMA-ERROR", "undefined type",
+            sub () { new GraphQLSchema("type Query { x: Nope }"); });
+        assertThrows("GRAPHQL-SCHEMA-ERROR", "query root type",
+            sub () { new GraphQLSchema("type Foo { x: Int }"); });
+        assertThrows("GRAPHQL-SCHEMA-ERROR", "more than once",
+            sub () { new GraphQLSchema("type Query { x: Int } type Query { y: Int }"); });
+    }
+
+    executionTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq({"data": {"hello": "Hello, world!"}}, ex.execute("{ hello }"));
+        assertEq({"data": {"hello": "Hello, Ada!"}}, ex.execute("{ hello(name: \"Ada\") }"));
+        assertEq({"data": {"sum": 7}}, ex.execute("{ sum: add(a: 3, b: 4) }"));
+        assertEq({"data": {"numbers": (1, 2, 3)}}, ex.execute("{ numbers }"));
+
+        # unknown field is reported as an error
+        hash<auto> r = ex.execute("{ nope }");
+        assertEq("cannot query field \"nope\" on type \"Query\"", r.errors[0].message);
+    }
+
+    variablesTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq({"data": {"add": 42}},
+            ex.execute("query(\$x: Int!, \$y: Int!) { add(a: \$x, b: \$y) }", {"x": 20, "y": 22}));
+
+        # missing required variable
+        hash<auto> r = ex.execute("query(\$x: Int!, \$y: Int!) { add(a: \$x, b: \$y) }", {"x": 1});
+        assertEq(0, r.data.size() ?? 0);
+        assertRegex("required variable", r.errors[0].message);
+
+        # invalid variable type
+        hash<auto> r2 = ex.execute("query(\$x: Int!, \$y: Int!) { add(a: \$x, b: \$y) }",
+            {"x": "notint", "y": 2});
+        assertRegex("must be an integer", r2.errors[0].message);
+    }
+
+    fragmentTest() {
+        GraphQLExecutor ex = getExecutor();
+        # inline fragment on the concrete type + __typename + alias
+        hash<auto> r = ex.execute(
+            "{ h: hero { __typename id name ... on Droid { primaryFunction } } }");
+        assertEq("Droid", r.data.h.__typename);
+        assertEq("R2-D2", r.data.h.name);
+        assertEq("Astromech", r.data.h.primaryFunction);
+
+        # named fragment spread
+        hash<auto> r2 = ex.execute("{ hero { ...CharFields } } fragment CharFields on Character { id name }");
+        assertEq("2001", r2.data.hero.id);
+        assertEq("R2-D2", r2.data.hero.name);
+    }
+
+    directiveTest() {
+        GraphQLExecutor ex = getExecutor();
+        # @skip(if: true) omits the field
+        hash<auto> r = ex.execute("{ a: hello @skip(if: true) b: hello(name: \"x\") }");
+        assertFalse(r.data.hasKey("a"));
+        assertEq("Hello, x!", r.data.b);
+
+        # @include(if: false) omits the field
+        hash<auto> r2 = ex.execute("{ a: hello @include(if: false) b: hello(name: \"y\") }");
+        assertFalse(r2.data.hasKey("a"));
+        assertEq("Hello, y!", r2.data.b);
+
+        # @skip with a variable
+        hash<auto> r3 = ex.execute("query(\$s: Boolean!) { a: hello @skip(if: \$s) }", {"s": True});
+        assertFalse(r3.data.hasKey("a"));
+    }
+
+    errorPropagationTest() {
+        GraphQLExecutor ex = getExecutor();
+        # a non-null field resolving to null nulls the data and reports an error with a path
+        hash<auto> r = ex.execute("{ nonNull }");
+        assertNothing(r.data);
+        assertRegex("non-nullable", r.errors[0].message);
+        assertEq(("nonNull",), r.errors[0].path);
+    }
+
+    mutationTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq({"data": {"echo": "hi"}}, ex.execute("mutation { echo(msg: \"hi\") }"));
+    }
+
+    introspectionTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq("Query", ex.execute("{ __typename }").data.__typename);
+
+        hash<auto> s = ex.execute("{ __schema { queryType { name } mutationType { name } } }");
+        assertEq("Query", s.data.__schema.queryType.name);
+        assertEq("Mutation", s.data.__schema.mutationType.name);
+
+        # __type with nested ofType
+        hash<auto> t = ex.execute(
+            "{ __type(name: \"Droid\") { kind name fields { name type { kind ofType { kind name } } } "
+            "interfaces { name } } }");
+        assertEq("OBJECT", t.data.__type.kind);
+        assertEq("Droid", t.data.__type.name);
+        # the "id" field has type ID! -> NON_NULL wrapping SCALAR ID
+        hash<auto> idField = (select t.data.__type.fields, $1.name == "id")[0];
+        assertEq("NON_NULL", idField.type.kind);
+        assertEq("ID", idField.type.ofType.name);
+        assertEq(("Character",), (map $1.name, t.data.__type.interfaces));
+
+        # enum introspection
+        hash<auto> e = ex.execute("{ __type(name: \"Episode\") { kind enumValues { name } } }");
+        assertEq("ENUM", e.data.__type.kind);
+        assertEq(("NEWHOPE", "EMPIRE", "JEDI"), (map $1.name, e.data.__type.enumValues));
+    }
+
+    httpHandlerTest() {
+        RestClient rc({"url": "http://localhost:" + port, "data": "json"});
+        # POST query
+        assertEq({"hello": "Hello, Ada!"},
+            rc.post("/graphql", {"query": "{ hello(name: \"Ada\") }"}).body.data);
+        # POST with variables
+        assertEq({"add": 42},
+            rc.post("/graphql", {"query": "query(\$a: Int!, \$b: Int!) { add(a: \$a, b: \$b) }",
+                "variables": {"a": 20, "b": 22}}).body.data);
+        # GET query (RestClient URL-encodes the path once; the server decodes it once)
+        assertEq({"hello": "Hello, world!"},
+            rc.get("/graphql?query={ hello }").body.data);
+        # introspection over HTTP
+        assertEq("Query",
+            rc.post("/graphql", {"query": "{ __schema { queryType { name } } }"}).body.data.__schema.queryType.name);
+        # mutation over HTTP
+        assertEq({"echo": "yo"},
+            rc.post("/graphql", {"query": "mutation { echo(msg: \"yo\") }"}).body.data);
+    }
+
+    httpErrorTest() {
+        RestClient rc({"url": "http://localhost:" + port, "data": "json"});
+        rc.setErrorPassthru(True);
+
+        # missing query -> 400
+        hash<auto> r = rc.post("/graphql", {"notquery": "x"});
+        assertEq(400, r.status_code);
+        assertRegex("no GraphQL query", r.body.errors[0].message);
+
+        # syntax error -> 200 with errors envelope
+        hash<auto> r2 = rc.post("/graphql", {"query": "{ broken"});
+        assertEq(200, r2.status_code);
+        assertRegex("syntax error", r2.body.errors[0].message);
+
+        # field error -> 200 with data + errors
+        hash<auto> r3 = rc.post("/graphql", {"query": "{ unknownField }"});
+        assertEq(200, r3.status_code);
+        assertRegex("cannot query field", r3.body.errors[0].message);
+
+        # a mutation over GET is rejected (GET is query-only; CSRF defense)
+        hash<auto> gm = rc.get("/graphql?query=mutation { echo(msg: \"x\") }");
+        assertEq(200, gm.status_code);
+        assertRegex("not permitted", gm.body.errors[0].message);
+        # the same mutation over POST still works
+        assertEq({"echo": "x"}, rc.post("/graphql", {"query": "mutation { echo(msg: \"x\") }"}).body.data);
+
+        # malformed JSON in a GET "variables" parameter -> a clean 400 GRAPHQL-REQUEST-ERROR
+        hash<auto> bv = rc.get("/graphql?query={ hello }&variables=notjson");
+        assertEq(400, bv.status_code);
+        assertRegex("variables", bv.body.errors[0].message);
+    }
+
+    hardeningTest() {
+        # an abstract-type resolver that omits __typename produces a field error, not a crash
+        string asdl = "type Query { hero: Character } interface Character { id: ID! } "
+            "type Droid implements Character { id: ID! }";
+        GraphQLExecutor aex(new GraphQLSchema(asdl), {
+            "Query": {"hero": auto sub (auto p, hash<auto> a, auto c) { return {"id": "1"}; }},
+        });
+        hash<auto> ar = aex.execute("{ hero { id } }");
+        assertNothing(ar.data.hero);
+        assertRegex("__typename", ar.errors[0].message);
+
+        # an ill-typed leaf value produces a field error, not a crash
+        GraphQLExecutor lex(new GraphQLSchema("type Query { n: Int }"), {
+            "Query": {"n": auto sub (auto p, hash<auto> a, auto c) { return {"not": "an int"}; }},
+        });
+        assertTrue(exists lex.execute("{ n }").errors, "ill-typed leaf becomes an error, not a crash");
+
+        # a query exceeding the maximum nesting depth is rejected
+        string nsdl = "type Query { root: Node } type Node { value: Int child: Node }";
+        auto deep = {"value": 0};
+        for (int i = 0; i < 70; ++i) {
+            deep = {"value": i, "child": deep};
+        }
+        GraphQLExecutor dex(new GraphQLSchema(nsdl), {
+            "Query": {"root": auto sub (auto p, hash<auto> a, auto c) { return deep; }},
+        });
+        string q = "{ root { value ";
+        for (int i = 0; i < 70; ++i) {
+            q += "child { value ";
+        }
+        for (int i = 0; i < 70; ++i) {
+            q += "} ";
+        }
+        q += "} }";
+        assertRegex("nesting depth", dex.execute(q).errors[0].message);
+
+        # the GraphQL Int scalar is a signed 32-bit value: out-of-range input is rejected
+        GraphQLExecutor iex(new GraphQLSchema("type Query { add(a: Int!, b: Int!): Int! }"), {
+            "Query": {"add": int sub (auto p, hash<auto> a, auto c) { return a.a + a.b; }},
+        });
+        assertRegex("32-bit range",
+            iex.execute("{ add(a: 3000000000, b: 1) }").errors[0].message);
+        # an out-of-range Int result is a field error
+        assertRegex("32-bit",
+            iex.execute("{ add(a: 2000000000, b: 200000000) }").errors[0].message);
+        # in-range still works
+        assertEq(3, iex.execute("{ add(a: 1, b: 2) }").data.add);
+
+        # custom-scalar coercers are applied on input then output
+        hash<auto> coercers = {
+            "Upper": {
+                "input": auto sub (auto v) { return "in:" + v; },
+                "output": auto sub (auto v) { return "out:" + v; },
+            },
+        };
+        GraphQLExecutor cex(new GraphQLSchema("scalar Upper\ntype Query { shout(text: Upper): Upper }"), {
+            "Query": {"shout": auto sub (auto p, hash<auto> a, auto c) { return a.text; }},
+        }, coercers);
+        assertEq("out:in:hi", cex.execute("{ shout(text: \"hi\") }").data.shout);
+    }
+
+    apqBatchTest() {
+        RestClient rc({"url": "http://localhost:" + port, "data": "json"});
+        rc.setErrorPassthru(True);
+
+        # Automatic Persisted Queries: a hash-only request before registration is not found
+        string q = "{ hello }";
+        string h = SHA256(q);
+        hash<auto> ext = {"extensions": {"persistedQuery": {"sha256Hash": h}}};
+        assertRegex("PersistedQueryNotFound", rc.post("/graphql", ext).body.errors[0].message);
+        # registering with the query+hash executes and caches it
+        assertEq("Hello, world!", rc.post("/graphql", ext + {"query": q}).body.data.hello);
+        # a subsequent hash-only request now resolves from the cache
+        assertEq("Hello, world!", rc.post("/graphql", ext).body.data.hello);
+        # a hash that does not match the supplied query is rejected
+        assertRegex("PersistedQueryHashMismatch",
+            rc.post("/graphql", {"query": q, "extensions": {"persistedQuery": {"sha256Hash": "bad"}}})
+                .body.errors[0].message);
+
+        # request batching: an array body returns an array of envelopes, one per operation
+        auto batch = rc.post("/graphql", (
+            {"query": "{ hello(name: \"A\") }"},
+            {"query": "{ add(a: 2, b: 3) }"},
+            {"query": "{ nope }"},
+        )).body;
+        assertEq("Hello, A!", batch[0].data.hello);
+        assertEq(5, batch[1].data.add);
+        assertRegex("cannot query field", batch[2].errors[0].message);
+    }
+
+    subscriptionTest() {
+        # a subscription server over the graphql-transport-ws protocol
+        GraphQLExecutor ex(new GraphQLSchema("type Query { x: Int } type Subscription { ticks: Int }"), {
+            "Query": {"x": int sub (auto p, hash<auto> a, auto c) { return 0; }},
+            "Subscription": {
+                # the event source is an iterator yielding three values
+                "ticks": auto sub (auto p, hash<auto> a, auto c) { return (1, 2, 3).iterator(); },
+            },
+        });
+        GraphQLWsHandler ws(ex);
+        HttpServer s(<HttpServerOptionInfo>{});
+        s.setDefaultHandler("graphql-ws", ws);
+        int p = s.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit s.stop();
+
+        # the client callback pushes received messages to a Queue; the test reads them with
+        # blocking gets (deterministic, no polling)
+        Queue q();
+        WebSocketClient wsc(sub (*data m) { if (exists m) { q.push(m.toString()); } },
+            {"url": "ws://localhost:" + p});
+        wsc.connect();
+        on_exit wsc.disconnect();
+
+        # connection_init -> connection_ack
+        wsc.send(make_json({"type": "connection_init"}));
+        assertEq("connection_ack", parse_json(q.get()).type);
+
+        # a subscription streams a next per event, then complete
+        wsc.send(make_json({"type": "subscribe", "id": "1",
+            "payload": {"query": "subscription { ticks }"}}));
+        list<int> vals = ();
+        while (True) {
+            hash<auto> m = parse_json(q.get());
+            if (m.type == "next") {
+                vals += m.payload.data.ticks;
+            } else if (m.type == "complete") {
+                break;
+            } else {
+                fail(sprintf("unexpected message: %y", m));
+            }
+        }
+        assertEq((1, 2, 3), vals);
+
+        # a query sent over subscribe executes once: a single next then complete
+        wsc.send(make_json({"type": "subscribe", "id": "2", "payload": {"query": "{ x }"}}));
+        hash<auto> nm = parse_json(q.get());
+        assertEq("next", nm.type);
+        assertEq(0, nm.payload.data.x);
+        assertEq("complete", parse_json(q.get()).type);
+
+        # ping -> pong
+        wsc.send(make_json({"type": "ping"}));
+        assertEq("pong", parse_json(q.get()).type);
+    }
+
+    #! creates a connected WebSocket client whose messages are pushed to the returned Queue
+    private hash<auto> wsConnect(int port) {
+        Queue mq();
+        WebSocketClient wsc(sub (*data m) { if (exists m) { mq.push(m.toString()); } },
+            {"url": "ws://localhost:" + port});
+        wsc.connect();
+        return {"client": wsc, "queue": mq};
+    }
+
+    subscriptionRobustnessTest() {
+        # a subscription server whose source is a cancellable GraphQLEventQueue, created per
+        # subscription and handed back to the test via a Queue (deterministic, no polling); the
+        # per-connection subscription cap is set to 1
+        Queue created();
+        GraphQLExecutor ex(new GraphQLSchema("type Query { x: Int } type Subscription { feed: Int }"), {
+            "Query": {"x": int sub (auto p, hash<auto> a, auto c) { return 0; }},
+            "Subscription": {
+                "feed": auto sub (auto p, hash<auto> a, auto c) {
+                    GraphQLEventQueue evq();
+                    created.push(evq);
+                    return evq;
+                },
+            },
+        });
+        GraphQLWsHandler ws(ex, NOTHING, {"max_subscriptions": 1});
+        HttpServer s(<HttpServerOptionInfo>{});
+        s.setDefaultHandler("graphql-ws", ws);
+        int p = s.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit s.stop();
+
+        # --- a GraphQLEventQueue source streams posted events, then completes ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "connection_init"}));
+            assertEq("connection_ack", parse_json(mq.get()).type);
+            wsc.send(make_json({"type": "subscribe", "id": "ev",
+                "payload": {"query": "subscription { feed }"}}));
+            # the resolver (in the stream thread) created the event queue; fetch it deterministically
+            GraphQLEventQueue evq = created.get();
+            evq.post(10);
+            evq.post(20);
+            evq.complete();
+            list<int> vals = ();
+            while (True) {
+                hash<auto> m = parse_json(mq.get());
+                if (m.type == "next") {
+                    vals += m.payload.data.feed;
+                } else if (m.type == "complete") {
+                    break;
+                } else {
+                    fail(sprintf("unexpected message: %y", m));
+                }
+            }
+            assertEq((10, 20), vals);
+        }
+
+        # --- a subscribe before connection_init is rejected ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "subscribe", "id": "early",
+                "payload": {"query": "subscription { feed }"}}));
+            assertRegex("connection_init must be sent", parse_json(mq.get()).payload[0].message);
+        }
+
+        # --- a duplicate connection_init is rejected ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "connection_init"}));
+            assertEq("connection_ack", parse_json(mq.get()).type);
+            wsc.send(make_json({"type": "connection_init"}));
+            assertRegex("too many initialisation", parse_json(mq.get()).payload[0].message);
+        }
+
+        # --- the per-connection subscription cap (1) rejects a second concurrent subscription ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "connection_init"}));
+            assertEq("connection_ack", parse_json(mq.get()).type);
+            # the first subscription occupies the only slot; its source never completes (it blocks)
+            wsc.send(make_json({"type": "subscribe", "id": "a",
+                "payload": {"query": "subscription { feed }"}}));
+            GraphQLEventQueue qa = created.get();
+            on_exit qa.cancel();
+            # a second subscription exceeds the cap and is rejected
+            wsc.send(make_json({"type": "subscribe", "id": "b",
+                "payload": {"query": "subscription { feed }"}}));
+            assertRegex("subscription limit", parse_json(mq.get()).payload[0].message);
+        }
+
+        # --- an unrecognized message type is reported as an error (not silently ignored) ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "connection_init"}));
+            assertEq("connection_ack", parse_json(mq.get()).type);
+            wsc.send(make_json({"type": "bogus", "id": "z"}));
+            hash<auto> em = parse_json(mq.get());
+            assertEq("error", em.type);
+            assertRegex("unsupported message type", em.payload[0].message);
+        }
+    }
+
+    validationTest() {
+        string sdl = "type Query { me: String greet(name: String): String hero: Character } "
+            "type Character { id: ID! name: String! }";
+        GraphQLExecutor ex(new GraphQLSchema(sdl), {});
+
+        # leaf field must not have a selection set
+        assertRegex("must not have a selection set", ex.execute("{ me { x } }").errors[0].message);
+        # composite field must have a selection set
+        assertRegex("must have a selection set", ex.execute("{ hero }").errors[0].message);
+        # unknown field
+        assertRegex("cannot query field", ex.execute("{ nope }").errors[0].message);
+        # unknown argument
+        assertRegex("unknown argument", ex.execute("{ greet(bad: 1) }").errors[0].message);
+        # unsupported directive
+        assertRegex("directive", ex.execute("{ me @foo }").errors[0].message);
+        # duplicate operation name
+        assertRegex("only one operation named",
+            ex.execute("query A { me } query A { me }").errors[0].message);
+        # the lone-anonymous-operation rule
+        assertRegex("only operation", ex.execute("{ me } query B { me }").errors[0].message);
+        # a declared-but-unused variable
+        assertRegex("declared but never used", ex.execute("query(\$x: Int) { me }").errors[0].message);
+        # a used-but-undeclared variable
+        assertRegex("used but not declared", ex.execute("{ greet(name: \$x) }").errors[0].message);
+        # an unused fragment
+        assertRegex("never used",
+            ex.execute("{ me } fragment F on Query { me }").errors[0].message);
+        # an unknown fragment spread
+        assertRegex("unknown fragment", ex.execute("{ ...Nope }").errors[0].message);
+        # a fragment cycle
+        assertRegex("cycle",
+            ex.execute("{ ...A } fragment A on Query { ...B } fragment B on Query { ...A }").errors[0].message);
+
+        # a valid query still executes (validation does not reject good documents)
+        GraphQLExecutor vex(new GraphQLSchema(sdl), {
+            "Query": {"me": string sub (auto p, hash<auto> a, auto c) { return "hi"; }},
+        });
+        assertEq("hi", vex.execute("{ me }").data.me);
+
+        # the complexity budget rejects over-large queries
+        GraphQLExecutor cex(new GraphQLSchema(sdl), {});
+        cex.setValidation(True, 2);
+        assertRegex("complexity", cex.execute("{ me hero { id } }").errors[0].message);
+        # disabling validation lets a document through to execution
+        GraphQLExecutor nex(new GraphQLSchema(sdl), {});
+        nex.setValidation(False);
+        assertRegex("cannot query field", nex.execute("{ nope }").errors[0].message);
+    }
+
+    #! issues a GraphQL operation over HTTP requesting an SSE response, returning the parsed events
+    /** the raw query is passed in the path; HTTPClient percent-encodes it once (the server decodes
+        it once via parse_uri_query)
+    */
+    private list<auto> sseGet(HTTPClient hc, string query) {
+        hash<auto> resp = hc.send(NOTHING, "GET", "/graphql?query=" + query,
+            {"Accept": "text/event-stream"});
+        return parseSse(resp.body.toString());
+    }
+
+    #! parses an SSE response body into a list of {event, data} hashes (data JSON-decoded)
+    private list<auto> parseSse(string body) {
+        list<auto> out();
+        foreach string block in (body.split("\n\n")) {
+            if (!block.val()) {
+                continue;
+            }
+            hash<auto> ev();
+            string dataRaw = "";
+            foreach string line in (block.split("\n")) {
+                if (line =~ /^event: /) {
+                    ev.event = (line =~ x/^event: (.*)$/)[0];
+                } else if (line =~ /^data: /) {
+                    dataRaw += (line =~ x/^data: (.*)$/)[0];
+                }
+            }
+            if (dataRaw.val()) {
+                ev.data = parse_json(dataRaw);
+            }
+            out += ev;
+        }
+        return out;
+    }
+
+    sseTest() {
+        # a GraphQL-over-HTTP SSE server: a Query, a Mutation, and a Subscription whose event source
+        # is a GraphQLEventQueue handed back to the test via a Queue (deterministic, no polling)
+        Queue created();
+        GraphQLExecutor ex(new GraphQLSchema(
+            "type Query { ping: String } type Mutation { noop: String } type Subscription { feed: Int }"), {
+            "Query": {"ping": string sub (auto p, hash<auto> a, auto c) { return "pong"; }},
+            "Mutation": {"noop": string sub (auto p, hash<auto> a, auto c) { return "ok"; }},
+            "Subscription": {
+                "feed": auto sub (auto p, hash<auto> a, auto c) {
+                    GraphQLEventQueue evq();
+                    created.push(evq);
+                    return evq;
+                },
+            },
+        });
+        GraphQLHandler gh(ex);
+        HttpServer s(<HttpServerOptionInfo>{});
+        s.setDefaultHandler("graphql", gh);
+        int sport = s.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit s.stop();
+
+        HTTPClient hc({"url": "http://localhost:" + sport});
+        on_exit hc.disconnect();
+
+        # a query over SSE: a single "next" with the result, then "complete"
+        list<auto> ev1 = sseGet(hc, "{ ping }");
+        assertEq("next", ev1[0].event);
+        assertEq("pong", ev1[0].data.data.ping);
+        assertEq("complete", ev1[ev1.size() - 1].event);
+
+        # a subscription over SSE: a background producer posts three events then completes the stream
+        background sub () {
+            GraphQLEventQueue evq = created.get();
+            evq.post(1);
+            evq.post(2);
+            evq.post(3);
+            evq.complete();
+        }();
+        list<auto> ev2 = sseGet(hc, "subscription { feed }");
+        list<int> vals = ();
+        foreach hash<auto> e in (ev2) {
+            if (e.event == "next") {
+                vals += e.data.data.feed;
+            }
+        }
+        assertEq((1, 2, 3), vals);
+        assertEq("complete", ev2[ev2.size() - 1].event);
+
+        # a mutation over SSE GET is rejected (GET stays query/subscription-only)
+        list<auto> ev3 = sseGet(hc, "mutation { noop }");
+        assertEq("next", ev3[0].event);
+        assertRegex("not permitted over GET", ev3[0].data.errors[0].message);
+    }
+}

@@ -1,0 +1,99 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GraphQLDataProvider.qm Qore user module generating a GraphQL schema from a DataProvider
+
+/*  GraphQLDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) GraphQL >= 1.0
+%requires(reexport) DataProvider
+
+module GraphQLDataProvider {
+    version = "1.0";
+    desc = "User module generating a GraphQL schema and resolvers automatically from a DataProvider";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage GraphQLDataProvider Module
+
+    @tableofcontents
+
+    @section graphqldataproviderintro GraphQLDataProvider Introduction
+
+    The %GraphQLDataProvider module bridges Qore's @ref dataproviderintro "DataProvider" API and the
+    pure-Qore <a href="https://graphql.org">GraphQL</a> execution engine (provided by the
+    @ref graphqlintro "GraphQL" module, which this module re-exports): it generates a GraphQL schema
+    and a matching resolver map automatically from any
+    @ref DataProvider::AbstractDataProvider "AbstractDataProvider", mapping the provider's record
+    type to GraphQL object types and its capabilities (read/create/update/delete/upsert/bulk) to
+    GraphQL query and mutation fields.
+
+    The generated executor is transport-agnostic; to expose it over HTTP or WebSocket, pass it to a
+    @ref GraphQLHandler::GraphQLHandler "GraphQLHandler" (from the @ref graphqlhandlerintro
+    "GraphQLHandler" module).
+
+    To use this module, use \c "%requires GraphQLDataProvider" in your code.
+
+    All the public symbols are defined in the GraphQLHandler namespace.
+
+    @section graphqldataprovidercomponents Components
+
+    - @ref GraphQLHandler::DataProviderGraphQLSchema "DataProviderGraphQLSchema": generates a schema
+      and resolvers automatically from a @ref dataproviderintro "DataProvider"
+    - the engine classes (@ref GraphQLHandler::GraphQLExecutor "GraphQLExecutor",
+      @ref GraphQLHandler::GraphQLSchema "GraphQLSchema", etc.) come from the
+      @ref graphqlintro "GraphQL" module
+
+    @section graphqldataproviderexample Example
+
+    @code{.py}
+%requires GraphQLDataProvider
+%requires GraphQLHandler
+%requires HttpServer
+
+# generate an executor from any data provider
+GraphQLExecutor executor = DataProviderGraphQLSchema::createExecutor(my_data_provider);
+
+# expose it over HTTP
+GraphQLHandler gh(executor);
+HttpServer server(<HttpServerOptionInfo>{});
+server.setHandler("graphql", "/graphql", MimeTypeJson, gh, NOTHING, False);
+    @endcode
+
+    @section graphqldataproviderrelnotes Release Notes
+
+    @subsection graphqldataproviderv1_0 GraphQLDataProvider v1.0
+    - the initial version of the %GraphQLDataProvider module
+*/
+
+#! the GraphQLHandler namespace contains all the objects in the GraphQL-related modules
+/** the GraphQL engine classes and the \c GRAPHQL-* exception-code constants are provided by the
+    re-exported @ref graphqlintro "GraphQL" module
+*/
+public namespace GraphQLHandler {
+}

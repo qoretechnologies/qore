@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# GraphQL.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+# tests for the standalone GraphQL engine module (no HTTP / DataProvider dependency)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+# only the engine module: proves it is self-contained (no json/HttpServerUtil/DataProvider)
+%requires GraphQL
+
+%exec-class GraphQLTest
+
+class GraphQLTest inherits QUnit::Test {
+    private {
+        const Sdl = "
+            type Query {
+                hello(name: String): String
+                add(a: Int!, b: Int!): Int!
+                hero: Character
+                nonNull: String!
+            }
+            interface Character { id: ID! name: String! }
+            type Droid implements Character { id: ID! name: String! primaryFunction: String }
+        ";
+    }
+
+    constructor() : Test("GraphQLTest", "1.0") {
+        addTestCase("lexer/parser/schema", \parseTest());
+        addTestCase("execution", \executionTest());
+        addTestCase("introspection", \introspectionTest());
+        addTestCase("validation", \validationTest());
+        addTestCase("field merging", \fieldMergingTest());
+        addTestCase("event queue source", \eventQueueTest());
+        set_return_value(main());
+    }
+
+    fieldMergingTest() {
+        GraphQLExecutor ex = getExecutor();
+
+        # same field, conflicting arguments -> conflict
+        assertRegex("different arguments",
+            ex.execute("{ a: hello(name: \"x\") a: hello(name: \"y\") }").errors[0].message);
+        # same response key, different fields with conflicting (leaf) types -> conflict
+        assertRegex("conflicting types",
+            ex.execute("{ x: hello x: add(a: 1, b: 2) }").errors[0].message);
+        # differing nullability is also a response-shape conflict (String vs String!)
+        assertRegex("conflicting types",
+            ex.execute("{ x: hello x: nonNull }").errors[0].message);
+        # same response key, different fields with the same shape -> conflict (different fields on
+        # the same object type)
+        GraphQLExecutor dex(new GraphQLSchema("type Query { a: String b: String }"), {});
+        assertRegex("different fields", dex.execute("{ x: a x: b }").errors[0].message);
+        # a conflict inside a merged sub-selection set (recursion): id (ID!) vs name (String)
+        assertRegex("conflicting types",
+            ex.execute("{ hero { y: id } hero { y: name } }").errors[0].message);
+
+        # identical repeated selections merge cleanly (no conflict)
+        hash<auto> ok = ex.execute("{ hero { id name } hero { id name } }");
+        assertEq(NOTHING, ok.errors);
+        assertEq("R2-D2", ok.data.hero.name);
+        # same field with identical arguments is mergeable
+        assertEq(NOTHING, ex.execute("{ a: hello(name: \"x\") a: hello(name: \"x\") }").errors);
+
+        # across different object types under an interface: same response key with compatible shapes
+        # is allowed (they can never apply to the same concrete object)
+        string isdl = "type Query { hero: Character } interface Character { id: ID! } "
+            "type Droid implements Character { id: ID! name: String } "
+            "type Human implements Character { id: ID! info: String }";
+        GraphQLExecutor iex(new GraphQLSchema(isdl), {});
+        assertEq(NOTHING,
+            iex.execute("{ hero { ... on Droid { v: name } ... on Human { v: info } } }").errors);
+        # but incompatible shapes across different object types still conflict
+        assertRegex("conflicting types",
+            iex.execute("{ hero { ... on Droid { v: id } ... on Human { v: info } } }").errors[0].message);
+    }
+
+    eventQueueTest() {
+        # buffered events drain in order, then complete() ends the stream
+        GraphQLEventQueue q();
+        q.post(1);
+        q.post("two");
+        q.complete();
+        list<auto> vals = ();
+        while (q.next()) {
+            vals += q.getValue();
+        }
+        assertEq((1, "two"), vals);
+        assertFalse(q.valid());
+        # next() past completion stays False
+        assertFalse(q.next());
+
+        # cancel() unblocks a thread blocked in next() (from another thread), which returns False;
+        # deterministic: the cancel sentinel is queued, so next() observes it regardless of timing
+        GraphQLEventQueue q2();
+        q2.post("first");
+        assertTrue(q2.next());
+        assertEq("first", q2.getValue());
+        Queue result();
+        background sub () { result.push(q2.next()); }();
+        q2.cancel();
+        assertEq(False, result.get());
+
+        # GraphQLEventQueue is a cancellable source
+        assertTrue(q instanceof GraphQLCancellableSource);
+    }
+
+    private hash<auto> resolvers() {
+        return {
+            "Query": {
+                "hello": string sub (auto p, hash<auto> a, auto c) {
+                    return sprintf("Hello, %s!", a.name ?? "world");
+                },
+                "add": int sub (auto p, hash<auto> a, auto c) { return a.a + a.b; },
+                "hero": auto sub (auto p, hash<auto> a, auto c) {
+                    return {"__typename": "Droid", "id": "1", "name": "R2-D2",
+                        "primaryFunction": "Astromech"};
+                },
+                "nonNull": auto sub (auto p, hash<auto> a, auto c) { return NOTHING; },
+            },
+        };
+    }
+
+    private GraphQLExecutor getExecutor() {
+        return new GraphQLExecutor(new GraphQLSchema(Sdl), resolvers());
+    }
+
+    parseTest() {
+        # lexer
+        list<hash<GraphQLToken>> toks = GraphQLLexer::tokenize("{ hero { name } }");
+        assertEq(GraphQLLexer::TK_BRACE_L, toks[0].kind);
+        # parser
+        hash<GraphQLDocument> doc = GraphQLParser::parse("query Q($n: String) { hello(name: $n) }");
+        assertEq(1, doc.definitions.size());
+        assertEq("Q", cast<hash<GraphQLOperationDefinition>>(doc.definitions[0]).name);
+        # schema
+        GraphQLSchema schema(Sdl);
+        assertEq("Query", schema.getQueryType().name);
+        assertEq("[Int!]!", GraphQLSchema::typeRefToString(
+            (new GraphQLSchema("type Query { ns: [Int!]! }")).getType("Query").fields.ns.type));
+        assertThrows("GRAPHQL-SCHEMA-ERROR", sub () { new GraphQLSchema("type Foo { x: Int }"); });
+    }
+
+    executionTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq({"data": {"hello": "Hello, Ada!"}}, ex.execute("{ hello(name: \"Ada\") }"));
+        assertEq({"data": {"sum": 42}},
+            ex.execute("query(\$x: Int!, \$y: Int!) { sum: add(a: \$x, b: \$y) }", {"x": 20, "y": 22}));
+        # interface + inline fragment + __typename
+        hash<auto> r = ex.execute("{ hero { __typename id ... on Droid { primaryFunction } } }");
+        assertEq("Droid", r.data.hero.__typename);
+        assertEq("Astromech", r.data.hero.primaryFunction);
+        # non-null error propagation
+        hash<auto> nn = ex.execute("{ nonNull }");
+        assertNothing(nn.data);
+        assertRegex("non-nullable", nn.errors[0].message);
+    }
+
+    introspectionTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq("Query", ex.execute("{ __schema { queryType { name } } }").data.__schema.queryType.name);
+        hash<auto> t = ex.execute("{ __type(name: \"Droid\") { kind interfaces { name } } }");
+        assertEq("OBJECT", t.data.__type.kind);
+        assertEq(("Character",), (map $1.name, t.data.__type.interfaces));
+    }
+
+    validationTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertRegex("cannot query field", ex.execute("{ nope }").errors[0].message);
+        assertRegex("must have a selection set", ex.execute("{ hero }").errors[0].message);
+        assertRegex("declared but never used", ex.execute("query(\$x: Int) { hello }").errors[0].message);
+        assertRegex("cycle",
+            ex.execute("{ ...A } fragment A on Query { ...B } fragment B on Query { ...A }").errors[0].message);
+    }
+}

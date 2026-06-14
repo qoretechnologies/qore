@@ -1,0 +1,1086 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# GraphQLDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+# tests for the GraphQLDataProvider module: the DataProvider -> GraphQL schema bridge
+# (type graph, child providers, DPQL filters, CRUD, bulk, return-records, paging, transactions)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires GraphQLDataProvider
+
+%exec-class GraphQLDataProviderTest
+
+#! a minimal in-memory data provider used to exercise the DataProvider bridge
+class MemProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data;
+        # when False, the provider advertises read-only (no create/update/delete/upsert)
+        bool mutable;
+    }
+
+    constructor(list<hash<auto>> d, bool n_mutable = True) {
+        data = d;
+        mutable = n_mutable;
+    }
+
+    string getName() {
+        return "people";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_create": mutable,
+            "supports_update": mutable,
+            "supports_delete": mutable,
+            "supports_upsert": mutable,
+            "supports_bulk_create": mutable,
+            "supports_bulk_upsert": mutable,
+            # advertise advanced search expressions so DPQL where-filters are generated; the
+            # generic expression implementations evaluate them in memory
+            "supports_search_expressions": mutable,
+            "expressions": mutable ? DataProviderGenericExpressions : NOTHING,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+            "active": new QoreDataField("active", "active flag", SoftBoolType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
+    }
+
+    private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        push data, rec;
+        return rec.id.toString();
+    }
+
+    # converts a columnar bulk block (hash of lists) to a list of row hashes
+    private list<hash<auto>> columnarToRows(hash<auto> recs) {
+        list<hash<auto>> rows = ();
+        int n = recs.firstValue().size();
+        for (int i = 0; i < n; ++i) {
+            hash<auto> row;
+            foreach string col in (keys recs) {
+                row{col} = recs{col}[i];
+            }
+            rows += row;
+        }
+        return rows;
+    }
+
+    private *hash<auto> createRecordsBulkImpl(hash<auto> recs, *hash<auto> create_options) {
+        data += columnarToRows(recs);
+        return recs;
+    }
+
+    private *list<string> upsertRecordsBulkImpl(hash<auto> recs, *hash<auto> upsert_options) {
+        list<hash<auto>> rows = columnarToRows(recs);
+        data += rows;
+        return map $1.id.toString(), rows;
+    }
+
+    # reuses the generic expression matcher (via DefaultRecordIterator) to find matching ids
+    private hash<string, bool> matchedIds(*hash<auto> where_cond, *hash<auto> opts) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, opts, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        return ids;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int before = data.size();
+        data = select data, !ids{$1.id.toString()};
+        return before - data.size();
+    }
+}
+
+#! a provider with a field name requiring GraphQL-name sanitization, to test name round-tripping
+class HyphenProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data;
+    }
+
+    string getName() {
+        return "hyphen";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "supports_create": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "full-name": new QoreDataField("full-name", "the full name", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
+    }
+}
+
+#! a provider with two field names that sanitize to the same GraphQL name, to test collision detection
+class CollisionProvider inherits DataProvider::AbstractDataProvider {
+    string getName() {
+        return "collision";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        # both "a-b" and "a.b" sanitize to the GraphQL name "a_b"
+        return {
+            "a-b": new QoreDataField("a-b", "field one", StringType),
+            "a.b": new QoreDataField("a.b", "field two", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(().iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+}
+
+#! a provider whose record has date, binary, list, and nested-object fields, to test type recursion
+class TypeGraphProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = (
+            {"id": 1, "created": 2026-01-15T10:30:00, "blob": binary("hi"), "tags": ("a", "b"),
+                "address": {"street": "Main", "zip": 12345}},
+        );
+    }
+
+    string getName() {
+        return "thing";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        HashDataType addr("Addr");
+        addr.addField(new QoreDataField("street", "the street", StringType));
+        addr.addField(new QoreDataField("zip", "the zip", IntType));
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "created": new QoreDataField("created", "creation date", DateType),
+            "blob": new QoreDataField("blob", "binary blob", BinaryType),
+            "tags": new QoreDataField("tags", "tag list", new SoftListDataType(StringType)),
+            "address": new QoreDataField("address", "nested address", addr),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+}
+
+#! a child provider exposed via a parent's getChildProvider(), to test child traversal
+class OrdersProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> rows = ({"oid": 100, "total": 9.99}, {"oid": 101, "total": 5.0});
+    }
+
+    string getName() {
+        return "orders";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "oid": new QoreDataField("oid", "order id", IntType),
+            "total": new QoreDataField("total", "order total", FloatType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(rows.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+}
+
+#! a provider with a reduced operator set and a child provider, to test gating + child traversal
+class ParentChildProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"id": 1, "name": "Ada"},);
+        OrdersProvider child();
+    }
+
+    string getName() {
+        return "customer";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        # advertise only the "==" and ">" operators
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions{("==", ">")},
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return ("orders",);
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        return name == "orders" ? child : NOTHING;
+    }
+}
+
+#! a provider advertising limit/offset search options, to test server-side paging pushdown
+class PagingProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"id": 1}, {"id": 2}, {"id": 3}, {"id": 4});
+        *hash<auto> last_options;
+    }
+
+    string getName() {
+        return "page";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "has_record": True,
+            "search_options": {
+                "limit": <DataProviderOptionInfo>{
+                    "display_name": "Limit", "short_desc": "limit", "desc": "limit",
+                    "type": AbstractDataProviderTypeMap."int",
+                },
+                "offset": <DataProviderOptionInfo>{
+                    "display_name": "Offset", "short_desc": "offset", "desc": "offset",
+                    "type": AbstractDataProviderTypeMap."int",
+                },
+            },
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {"id": new QoreDataField("id", "the id", IntType)};
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        last_options = search_options;
+        list<hash<auto>> sliced = data;
+        if (exists search_options.offset && search_options.offset < sliced.size()) {
+            sliced = sliced[search_options.offset..];
+        }
+        if (exists search_options.limit && search_options.limit < sliced.size()) {
+            sliced = sliced[0..(search_options.limit - 1)];
+        }
+        return new DefaultRecordIterator(sliced.iterator(), where_cond, {}, getRecordTypeImpl());
+    }
+}
+
+#! a transaction-capable provider, to test atomic return_records update/delete
+class TxProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"id": 1, "name": "A"},);
+        bool began = False;
+        bool committed = False;
+    }
+
+    string getName() {
+        return "tx";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_update": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "transaction_management": True,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    beginTransaction() {
+        began = True;
+    }
+
+    commit() {
+        committed = True;
+    }
+}
+
+#! a mutable provider with nested-object and list-of-object fields, to test nested-input mutations
+class NestedProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data;
+    }
+
+    string getName() {
+        return "nested";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_create": True,
+            "supports_update": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        # a nested object with a hyphenated field that must round-trip on input
+        HashDataType addr("Addr");
+        addr.addField(new QoreDataField("street", "the street", StringType));
+        addr.addField(new QoreDataField("postal-code", "the postal code", StringType));
+        # a list of nested objects, also with a hyphenated field
+        HashDataType contact("Contact");
+        contact.addField(new QoreDataField("contact-type", "the contact type", StringType));
+        contact.addField(new QoreDataField("value", "the value", StringType));
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+            "address": new QoreDataField("address", "nested address", addr),
+            "tags": new QoreDataField("tags", "tag list", new SoftListDataType(StringType)),
+            "contacts": new QoreDataField("contacts", "contact list", new SoftListDataType(contact)),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+}
+
+#! a mutable child provider, to test child-provider mutations
+class WritableOrdersProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"oid": 1, "total": 9.99},);
+    }
+
+    string getName() {
+        return "orders";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_create": True,
+            "supports_update": True,
+            "supports_delete": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "oid": new QoreDataField("oid", "order id", IntType),
+            "total": new QoreDataField("total", "order total", FloatType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
+    }
+
+    private hash<string, bool> matchedIds(*hash<auto> where_cond, *hash<auto> opts) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, opts, getRecordTypeImpl());
+        map ids{$1.oid.toString()} = True, it;
+        return ids;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].oid.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int before = data.size();
+        data = select data, !ids{$1.oid.toString()};
+        return before - data.size();
+    }
+}
+
+#! a parent provider exposing a mutable child, to test child-provider mutation generation
+class ShopProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        WritableOrdersProvider orders();
+    }
+
+    string getName() {
+        return "shop";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {"sid": new QoreDataField("sid", "shop id", IntType)};
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(().iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return ("orders",);
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        return name == "orders" ? orders : NOTHING;
+    }
+}
+
+#! a provider with a date field, to test date-typed filters
+class DatedProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = (
+            {"id": 1, "created": 2026-01-05T00:00:00},
+            {"id": 2, "created": 2026-01-15T00:00:00},
+            {"id": 3, "created": 2026-01-25T00:00:00},
+        );
+    }
+
+    string getName() {
+        return "event";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "created": new QoreDataField("created", "creation date", DateType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+}
+
+#! a transaction-capable provider that snapshots/restores on rollback, to test atomic batches
+class TxBatchProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"id": 1, "name": "A"}, {"id": 2, "name": "B"});
+        *list<hash<auto>> snapshot;
+        bool rolled_back = False;
+    }
+
+    string getName() {
+        return "txbatch";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_update": True,
+            "supports_delete": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "transaction_management": True,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private hash<string, bool> matchedIds(*hash<auto> where_cond, *hash<auto> opts) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, opts, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        return ids;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        # a sentinel value triggers a mid-batch failure to exercise rollback
+        if (set.name == "BOOM") {
+            throw "BOOM-ERROR", "simulated update failure";
+        }
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int before = data.size();
+        data = select data, !ids{$1.id.toString()};
+        return before - data.size();
+    }
+
+    beginTransaction() {
+        snapshot = data;
+    }
+
+    commit() {
+        remove snapshot;
+    }
+
+    rollback() {
+        data = snapshot;
+        rolled_back = True;
+        remove snapshot;
+    }
+}
+
+class GraphQLDataProviderTest inherits QUnit::Test {
+    constructor() : Test("GraphQLDataProviderTest", "1.0") {
+        addTestCase("dataprovider bridge", \bridgeTest());
+        addTestCase("bridge bulk and return-records", \bridgePhaseCTest());
+        addTestCase("bridge type graph", \typeGraphTest());
+        addTestCase("bridge child providers and operator gating", \childGatingTest());
+        addTestCase("bridge paging and transactions", \pagingTxTest());
+        addTestCase("bridge name collision detection", \collisionTest());
+        addTestCase("bridge nested-input mutations", \nestedMutationTest());
+        addTestCase("bridge child-provider mutations", \childMutationTest());
+        addTestCase("bridge date-typed filters", \dateFilterTest());
+        addTestCase("bridge bulk update and delete", \bulkUpdateDeleteTest());
+
+        set_return_value(main());
+    }
+
+    bulkUpdateDeleteTest() {
+        MemProvider mp((
+            {"id": 1, "name": "Ada", "active": True},
+            {"id": 2, "name": "Bob", "active": False},
+            {"id": 3, "name": "Cy", "active": True},
+        ));
+        DataProviderGraphQLSchema bridge(mp);
+        string sdl = bridge.getSdl();
+
+        # batched update/delete mutations and their per-operation input types
+        assertRegex("updateMany\\(ops: \\[peopleRecordUpdateOp!\\]!\\): \\[Int!\\]!", sdl);
+        assertRegex("deleteMany\\(ops: \\[peopleRecordDeleteOp!\\]!\\): \\[Int!\\]!", sdl);
+        assertRegex("input peopleRecordUpdateOp", sdl);
+        assertRegex("input peopleRecordDeleteOp", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+        # a batch of two distinct (set, selector) updates -> a per-operation count list
+        assertEq((1, 1), ex.execute(
+            "mutation { updateMany(ops: ["
+            "{set: {name: \"Ada2\"}, filter: {id: {eq: 1}}}, "
+            "{set: {name: \"Bob2\"}, where: \"@id == 2\"}]) }").data.updateMany);
+        assertEq("Ada2", ex.execute("{ search(filter: {id: {eq: 1}}) { name } }").data.search[0].name);
+        assertEq("Bob2", ex.execute("{ search(filter: {id: {eq: 2}}) { name } }").data.search[0].name);
+
+        # the per-operation mass-mutation guard: an op with no selector errors the whole batch
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { updateMany(ops: [{set: {name: \"x\"}}]) }").errors[0].message);
+
+        # a batch of two deletes
+        assertEq((1, 1), ex.execute(
+            "mutation { deleteMany(ops: [{filter: {id: {eq: 1}}}, {where: \"@id == 3\"}]) }").data.deleteMany);
+        assertEq((2,), (map $1.id, ex.execute("{ search { id } }").data.search));
+
+        # transactional atomicity: a failure mid-batch rolls back the whole batch
+        TxBatchProvider tb();
+        GraphQLExecutor tex = (new DataProviderGraphQLSchema(tb)).getExecutor();
+        hash<auto> r = tex.execute(
+            "mutation { updateMany(ops: ["
+            "{set: {name: \"X\"}, filter: {id: {eq: 1}}}, "
+            "{set: {name: \"BOOM\"}, filter: {id: {eq: 2}}}]) }");
+        assertRegex("BOOM", r.errors[0].message);
+        assertTrue(tb.rolled_back, "the batch transaction was rolled back");
+        # the first operation's change was reverted
+        assertEq("A", (select tb.data, $1.id == 1)[0].name);
+        assertEq("B", (select tb.data, $1.id == 2)[0].name);
+    }
+
+    dateFilterTest() {
+        DatedProvider dp();
+        DataProviderGraphQLSchema bridge(dp);
+        string sdl = bridge.getSdl();
+
+        # a date field gets a DateTimeFilter with ordered-comparison operators over the DateTime
+        # custom scalar (not a string filter, and "like" is not generated for dates)
+        assertRegex("created: DateTimeFilter", sdl);
+        assertRegex("input DateTimeFilter \\{", sdl);
+        assertRegex("gt: DateTime", sdl);
+        assertRegex("in: \\[DateTime!\\]", sdl);
+        assertFalse(sdl =~ /DateTimeFilter \{[^}]*like:/s, "no 'like' operator for a date filter");
+        assertRegex("scalar DateTime", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+        # typed date filters: the ISO-8601 input is coerced to a Qore date, compiled to a native
+        # DPQL date literal, and evaluated by the provider
+        assertEq((2, 3),
+            (map $1.id, ex.execute(
+                "{ search(filter: {created: {gt: \"2026-01-10T00:00:00\"}}) { id } }").data.search));
+        assertEq((1, 2),
+            (map $1.id, ex.execute(
+                "{ search(filter: {created: {lt: \"2026-01-20T00:00:00\"}}) { id } }").data.search));
+        assertEq((2,),
+            (map $1.id, ex.execute(
+                "{ search(filter: {created: {eq: \"2026-01-15T00:00:00\"}}) { id } }").data.search));
+        assertEq((1, 3),
+            (map $1.id, ex.execute(
+                "{ search(filter: {created: {in: [\"2026-01-05T00:00:00\", \"2026-01-25T00:00:00\"]}}) "
+                "{ id } }").data.search));
+
+        # a raw DPQL where with a native date literal still works (and agrees with the typed filter)
+        assertEq((3,),
+            (map $1.id, ex.execute(
+                "{ search(where: \"@created > 2026-01-20T00:00:00\") { id } }").data.search));
+    }
+
+    childMutationTest() {
+        ShopProvider shop();
+        DataProviderGraphQLSchema bridge(shop);
+        string sdl = bridge.getSdl();
+
+        # the read-only child Query field is still generated
+        assertRegex("orders\\(limit: Int, offset: Int\\): \\[shopRecordChildOrders!\\]!", sdl);
+        # child mutations are generated, gated on the child's capabilities, with prefixed names
+        assertRegex("ordersCreate\\(", sdl);
+        assertRegex("ordersUpdate\\(set: shopRecordChildOrdersSetInput!, where: String\\): Int!", sdl);
+        assertRegex("ordersDelete\\(where: String\\): Int!", sdl);
+        # upsert is not generated for a child that does not advertise it
+        assertFalse(sdl =~ /ordersUpsert/, "no upsert mutation for a non-upsert child");
+        assertRegex("input shopRecordChildOrdersSetInput", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+
+        # create a child record; it persists in the shared child provider instance
+        hash<auto> c = ex.execute("mutation { ordersCreate(oid: 2, total: 5.5) { oid total } }");
+        assertEq(2, c.data.ordersCreate.oid);
+        assertEq(5.5, c.data.ordersCreate.total);
+        assertEq((1, 2), (map $1.oid, ex.execute("{ orders { oid } }").data.orders));
+
+        # update via the raw DPQL where selector
+        assertEq(1, ex.execute(
+            "mutation { ordersUpdate(set: {total: 7.25}, where: \"@oid == 2\") }").data.ordersUpdate);
+        assertEq(7.25, shop.orders.data[1].total);
+
+        # a child update without a selector hits the mass-mutation guard
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { ordersUpdate(set: {total: 0.0}) }").errors[0].message);
+
+        # delete via the raw DPQL where selector
+        assertEq(1, ex.execute(
+            "mutation { ordersDelete(where: \"@oid == 1\") }").data.ordersDelete);
+        assertEq((2,), (map $1.oid, ex.execute("{ orders { oid } }").data.orders));
+    }
+
+    nestedMutationTest() {
+        NestedProvider np();
+        DataProviderGraphQLSchema bridge(np);
+        string sdl = bridge.getSdl();
+
+        # non-scalar create/update arguments generate distinct GraphQL "input" types (an output
+        # "type" cannot be used in input position), recursing into lists of objects
+        assertRegex("input nestedRecordAddressInput", sdl);
+        assertRegex("input nestedRecordContactsItemInput", sdl);
+        # nested hyphenated field names are sanitized in the input type
+        assertRegex("postal_code: String", sdl);
+        assertRegex("contact_type: String", sdl);
+        # the create argument references the input types (lists of objects -> list of input type)
+        assertRegex("address: nestedRecordAddressInput", sdl);
+        assertRegex("contacts: \\[nestedRecordContactsItemInput!\\]", sdl);
+        # the output object types are separate
+        assertRegex("type nestedRecordAddress \\{", sdl);
+        assertRegex("type nestedRecordContactsItem \\{", sdl);
+
+        # building the executor validates the SDL (input/output type separation must be correct)
+        GraphQLExecutor ex = bridge.getExecutor();
+
+        # create with nested object + list-of-object input; sanitized nested names must round-trip
+        # to the provider's native (hyphenated) field names
+        hash<auto> c = ex.execute(
+            "mutation { create(id: 1, name: \"Ada\", "
+            "address: {street: \"Main\", postal_code: \"12345\"}, tags: [\"x\", \"y\"], "
+            "contacts: [{contact_type: \"email\", value: \"a@b.com\"}, "
+            "{contact_type: \"phone\", value: \"555\"}]) { id name } }");
+        assertEq("Ada", c.data.create.name);
+
+        # verify the stored record uses the provider's native nested field names
+        hash<auto> stored = np.data[0];
+        assertEq("Main", stored.address.street);
+        assertEq("12345", stored.address."postal-code");
+        assertEq(("x", "y"), stored.tags);
+        assertEq("email", stored.contacts[0]."contact-type");
+        assertEq("a@b.com", stored.contacts[0].value);
+        assertEq("phone", stored.contacts[1]."contact-type");
+
+        # read back through GraphQL: nested output names round-trip back to sanitized GraphQL names
+        hash<auto> r = ex.execute(
+            "{ search { id name tags address { street postal_code } "
+            "contacts { contact_type value } } }").data.search[0];
+        assertEq("12345", r.address.postal_code);
+        assertEq(("x", "y"), r.tags);
+        assertEq("email", r.contacts[0].contact_type);
+        assertEq("phone", r.contacts[1].contact_type);
+
+        # a nested object in an update SetInput also round-trips
+        assertEq(1, ex.execute(
+            "mutation { update(set: {address: {street: \"Second\", postal_code: \"99999\"}}, "
+            "filter: {id: {eq: 1}}) }").data.update);
+        assertEq("99999", np.data[0].address."postal-code");
+    }
+
+    bridgeTest() {
+        MemProvider mp((
+            {"id": 1, "name": "Ada", "active": True},
+            {"id": 2, "name": "Bob", "active": False},
+        ));
+        DataProviderGraphQLSchema bridge(mp);
+
+        # generated SDL contains the record type and the search/create/update/delete/upsert operations
+        string sdl = bridge.getSdl();
+        assertRegex("type peopleRecord", sdl);
+        assertRegex("search\\(filter: peopleRecordWhereInput, where: String, limit: Int, offset: Int\\): \\[peopleRecord!\\]!", sdl);
+        assertRegex("create\\(", sdl);
+        assertRegex("update\\(set: peopleRecordSetInput!, filter: peopleRecordWhereInput, where: String\\): Int!", sdl);
+        assertRegex("delete\\(filter: peopleRecordWhereInput, where: String\\): Int!", sdl);
+        assertRegex("upsert\\(.*\\): String!", sdl);
+        assertRegex("input peopleRecordSetInput", sdl);
+        # typed filter input types (Phase B)
+        assertRegex("input peopleRecordWhereInput", sdl);
+        assertRegex("_and: \\[peopleRecordWhereInput!\\]", sdl);
+        assertRegex("input IntFilter", sdl);
+        assertRegex("input StringFilter", sdl);
+        assertRegex("input BooleanFilter", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+        # search (no filter)
+        hash<auto> r = ex.execute("{ search { id name active } }");
+        assertEq(2, r.data.search.size());
+        assertEq("Ada", r.data.search[0].name);
+        # limit / offset
+        assertEq(1, ex.execute("{ search(limit: 1) { name } }").data.search.size());
+        assertEq("Bob", ex.execute("{ search(offset: 1) { name } }").data.search[0].name);
+
+        # DPQL filtered search (raw where string)
+        hash<auto> f = ex.execute("{ search(where: \"@active == true\") { name } }");
+        assertEq(("Ada",), (map $1.name, f.data.search));
+        # compound DPQL filter
+        hash<auto> f2 = ex.execute("{ search(where: \"@id >= 1 && @name like \\\"A%\\\"\") { name } }");
+        assertEq(("Ada",), (map $1.name, f2.data.search));
+
+        # typed filters (Phase B) compiled to DPQL
+        assertEq(("Ada",),
+            (map $1.name, ex.execute("{ search(filter: {active: {eq: true}}) { name } }").data.search));
+        assertEq(("Ada", "Bob"),
+            (map $1.name, ex.execute("{ search(filter: {id: {in: [1, 2]}}) { name } }").data.search));
+        # logical combinators
+        assertEq(("Bob",),
+            (map $1.name, ex.execute("{ search(filter: {_not: {active: {eq: true}}}) { name } }").data.search));
+        assertEq(("Ada", "Bob"),
+            (map $1.name, ex.execute("{ search(filter: {_or: [{name: {eq: \"Ada\"}}, {name: {eq: \"Bob\"}}]}) { name } }").data.search));
+        # a typed filter combined with a raw where (AND-ed)
+        assertEq(("Bob",),
+            (map $1.name, ex.execute("{ search(filter: {id: {gte: 1}}, where: \"@active == false\") { name } }").data.search));
+
+        # create
+        hash<auto> c = ex.execute("mutation { create(id: 3, name: \"Cy\", active: true) { id name } }");
+        assertEq("Cy", c.data.create.name);
+        assertEq(3, ex.execute("{ search { id } }").data.search.size());
+
+        # update with set + raw where -> affected count, then verify
+        assertEq(1, ex.execute("mutation { update(set: {name: \"Adita\"}, where: \"@id == 1\") }").data.update);
+        assertEq("Adita", ex.execute("{ search(where: \"@id == 1\") { name } }").data.search[0].name);
+
+        # update with a typed filter
+        assertEq(1, ex.execute("mutation { update(set: {name: \"Bobby\"}, filter: {id: {eq: 2}}) }").data.update);
+        assertEq("Bobby", ex.execute("{ search(filter: {id: {eq: 2}}) { name } }").data.search[0].name);
+
+        # delete with a typed filter -> affected count, then verify
+        assertEq(1, ex.execute("mutation { delete(filter: {active: {eq: false}}) }").data.delete);
+        assertFalse((map $1.name, ex.execute("{ search { name } }").data.search).contains("Bobby"));
+
+        # upsert -> record id
+        assertEq("4", ex.execute("mutation { upsert(id: 4, name: \"Dee\", active: true) }").data.upsert);
+
+        # invalid filter (unknown field) -> field error from validateDpqlExpression
+        assertRegex("Unknown field", ex.execute("{ search(where: \"@nope == 1\") { id } }").errors[0].message);
+
+        # template references are rejected by default
+        assertRegex("template references are not permitted",
+            ex.execute("{ search(where: \"@name == \$env:HOME\") { id } }").errors[0].message);
+
+        # safety: an update/delete with no selector (neither filter nor where) is a runtime error
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { delete }").errors[0].message);
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { update(set: {name: \"x\"}) }").errors[0].message);
+
+        # name sanitization transform
+        assertEq("first_name", DataProviderGraphQLSchema::sanitizeName("first-name"));
+
+        # field-name round-tripping: an arg whose GraphQL name was sanitized maps back to the
+        # provider's native field name when creating a record
+        HyphenProvider hp();
+        GraphQLExecutor hex = (new DataProviderGraphQLSchema(hp)).getExecutor();
+        # the provider field is "full-name"; the GraphQL arg is the sanitized "full_name"
+        assertRegex("full_name", hex.getSchema().getType("hyphenRecord").fields.full_name.name);
+        hex.execute("mutation { create(id: 1, full_name: \"Ada Lovelace\") { id } }");
+        # the stored record uses the provider's native field name
+        assertEq("Ada Lovelace", hp.data[0]."full-name");
+
+        # a read-only provider generates no Mutation type and no where-filtered search
+        MemProvider ro((), False);
+        DataProviderGraphQLSchema roBridge(ro);
+        assertFalse(roBridge.getSdl() =~ /type Mutation/);
+        assertRegex("search\\(limit: Int, offset: Int\\)", roBridge.getSdl());
+
+        # an empty _not filter must not compile to a match-everything "!()" that bypasses the
+        # mass-mutation guard
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { delete(filter: {_not: {}}) }").errors[0].message);
+        # an unknown filter field is rejected (input-object coercion rejects undefined fields)
+        assertRegex("unknown input field",
+            ex.execute("{ search(filter: {nosuchfield: {eq: 1}}) { id } }").errors[0].message);
+    }
+
+    typeGraphTest() {
+        # the bridge recurses non-scalar record types into GraphQL types: dates -> DateTime scalar,
+        # binary -> Base64 scalar, lists -> list types, nested records -> nested object types
+        TypeGraphProvider tp();
+        DataProviderGraphQLSchema bridge(tp);
+        string sdl = bridge.getSdl();
+        assertRegex("created: DateTime!", sdl);
+        assertRegex("blob: Base64!", sdl);
+        assertRegex("tags: \\[String!\\]!", sdl);
+        assertRegex("address: thingRecordAddress!", sdl);
+        assertRegex("type thingRecordAddress", sdl);
+        assertRegex("scalar DateTime", sdl);
+        assertRegex("scalar Base64", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+        hash<auto> r = ex.execute(
+            "{ search { id created blob tags address { street zip } } }").data.search[0];
+        # date serialized as ISO-8601, binary as base64, list and nested object resolved
+        assertEq("2026-01-15T10:30:00", r.created);
+        assertEq("aGk=", r.blob);
+        assertEq(("a", "b"), r.tags);
+        assertEq("Main", r.address.street);
+        assertEq(12345, r.address.zip);
+
+        # a date round-trips through the DateTime coercer (input ISO string -> Qore date for the
+        # raw DPQL filter is exercised separately); here verify the output coercer produced ISO
+        assertRegex("T", r.created);
+    }
+
+    childGatingTest() {
+        # operator gating (gap 8): a provider advertising only "==" and ">" generates filter
+        # types with only the corresponding operators
+        ParentChildProvider pc();
+        DataProviderGraphQLSchema bridge(pc);
+        string sdl = bridge.getSdl();
+        assertRegex("input IntFilter \\{\\n  eq: Int\\n  gt: Int\\n\\}", sdl);
+        assertRegex("input StringFilter \\{\\n  eq: String\\n\\}", sdl);
+        assertFalse(sdl =~ /like:/, "unsupported 'like' operator is not generated");
+
+        # child-provider traversal (gap 5): a Query field for the direct child provider
+        assertRegex("orders\\(limit: Int, offset: Int\\): \\[customerRecordChildOrders!\\]!", sdl);
+        assertRegex("type customerRecordChildOrders", sdl);
+        GraphQLExecutor ex = bridge.getExecutor();
+        hash<auto> o = ex.execute("{ orders { oid total } }");
+        assertEq((100, 101), (map $1.oid, o.data.orders));
+        assertEq(9.99, o.data.orders[0].total);
+
+        # output field-name mapping: a field whose GraphQL name was sanitized resolves correctly
+        # on output (reads the provider's native field name)
+        HyphenProvider hp();
+        GraphQLExecutor hex = (new DataProviderGraphQLSchema(hp)).getExecutor();
+        hex.execute("mutation { create(id: 1, full_name: \"Ada Lovelace\") { id } }");
+        assertEq("Ada Lovelace", hex.execute("{ search { full_name } }").data.search[0].full_name);
+    }
+
+    pagingTxTest() {
+        # limit/offset pushdown (F1): a provider advertising limit/offset receives them as search
+        # options instead of the bridge paging client-side
+        PagingProvider pp();
+        GraphQLExecutor pex = (new DataProviderGraphQLSchema(pp)).getExecutor();
+        assertEq((2, 3), (map $1.id, pex.execute("{ search(limit: 2, offset: 1) { id } }").data.search));
+        assertEq(2, pp.last_options.limit);
+        assertEq(1, pp.last_options.offset);
+
+        # transactional return_records (F4): a transaction-capable provider wraps the mutate+re-read
+        TxProvider tp();
+        GraphQLExecutor tex = (new DataProviderGraphQLSchema(tp, {"return_records": True})).getExecutor();
+        hash<auto> u = tex.execute("mutation { update(set: {name: \"Z\"}, filter: {id: {eq: 1}}) { id name } }");
+        assertEq("Z", u.data.update[0].name);
+        assertTrue(tp.began, "beginTransaction was called");
+        assertTrue(tp.committed, "commit was called");
+    }
+
+    collisionTest() {
+        # a provider with two fields that sanitize to the same GraphQL name is rejected
+        assertThrows("GRAPHQL-SCHEMA-ERROR", "map to the GraphQL field name",
+            sub () { new DataProviderGraphQLSchema(new CollisionProvider()); });
+    }
+
+    bridgePhaseCTest() {
+        # bulk operations (Phase C)
+        MemProvider bp(());
+        DataProviderGraphQLSchema bulkBridge(bp);
+        string sdl = bulkBridge.getSdl();
+        assertRegex("createMany\\(records: \\[peopleRecordInput!\\]!\\): Int!", sdl);
+        assertRegex("upsertMany\\(records: \\[peopleRecordInput!\\]!\\): \\[String!\\]!", sdl);
+        assertRegex("input peopleRecordInput", sdl);
+
+        GraphQLExecutor bex = bulkBridge.getExecutor();
+        assertEq(2, bex.execute(
+            "mutation { createMany(records: [{id: 10, name: \"X\", active: true}, "
+            "{id: 11, name: \"Y\", active: false}]) }").data.createMany);
+        assertEq(("12",), bex.execute(
+            "mutation { upsertMany(records: [{id: 12, name: \"Z\", active: true}]) }").data.upsertMany);
+        assertEq((10, 11, 12), (map $1.id, bex.execute("{ search { id } }").data.search));
+
+        # return_records option (Phase C): update/delete return the affected records
+        MemProvider rp((
+            {"id": 1, "name": "Ada", "active": True},
+            {"id": 2, "name": "Bob", "active": False},
+        ));
+        DataProviderGraphQLSchema rrBridge(rp, {"return_records": True});
+        # the SDL return type switches from Int! to [<R>!]!
+        assertRegex("update\\(set: peopleRecordSetInput!, filter: peopleRecordWhereInput, where: String\\): \\[peopleRecord!\\]!",
+            rrBridge.getSdl());
+        assertRegex("delete\\(filter: peopleRecordWhereInput, where: String\\): \\[peopleRecord!\\]!",
+            rrBridge.getSdl());
+
+        GraphQLExecutor rex = rrBridge.getExecutor();
+        # update returns the updated record(s)
+        hash<auto> u = rex.execute("mutation { update(set: {active: false}, filter: {id: {eq: 1}}) { id name active } }");
+        assertEq(1, u.data.update.size());
+        assertEq("Ada", u.data.update[0].name);
+        assertEq(False, u.data.update[0].active);
+        # delete returns the deleted record(s)
+        hash<auto> d = rex.execute("mutation { delete(filter: {active: {eq: false}}) { id name } }");
+        assertEq(("Ada", "Bob"), (map $1.name, d.data.delete));
+        assertEq(0, rex.execute("{ search { id } }").data.search.size());
+    }
+}

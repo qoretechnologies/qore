@@ -38,6 +38,7 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+%requires(reexport) GraphQLClient >= 1.0
 
 module LinearRestClient {
     version = "1.0";
@@ -177,7 +178,8 @@ public class LinearRestClientBase {
     - API key: 1,500 requests per hour per user
     - OAuth2: 500 requests per hour per user/app
 */
-public class LinearRestClient inherits RestClient::RestClient, LinearRestClientBase {
+public class LinearRestClient inherits RestClient::RestClient, LinearRestClientBase,
+        GraphQLClient::GraphQLClientBase {
     #! creates the object with the given options
     /**
         @par Example:
@@ -205,17 +207,15 @@ LinearRestClient linear({"token": "lin_api_xxxxx"});
         @param variables optional variables for the query
         @param info optional reference to return request/response info
 
-        @return the parsed response body with data and/or errors
+        @return the full response hash; the GraphQL response envelope (with \c data and/or \c errors)
+        is in the \c body key
 
-        @throw GRAPHQL-ERROR if the GraphQL response contains errors
+        @throw GRAPHQL-ERROR if the GraphQL response contains errors and
+        @ref GraphQLClient::GraphQLClientBase::getRaiseGraphQLErrors() "error raising" is enabled
+        (the default)
     */
     hash<auto> graphql(string query, *hash<auto> variables, *reference<hash<auto>> info) {
-        hash<auto> body = {
-            "query": query,
-            "variables": variables,
-        };
-        hash<auto> response = post("", body, \info);
-        return response;
+        return checkGraphQLResponse(post("", GraphQLClientBase::makeGraphQLBody(query, variables), \info));
     }
 
     #! Executes a GraphQL query
@@ -224,7 +224,7 @@ LinearRestClient linear({"token": "lin_api_xxxxx"});
         @param variables optional variables for the query
         @param info optional reference to return request/response info
 
-        @return the parsed response body
+        @return the full response hash; the GraphQL envelope is in the \c body key
 
         @see graphql()
     */
@@ -238,7 +238,7 @@ LinearRestClient linear({"token": "lin_api_xxxxx"});
         @param variables optional variables for the mutation
         @param info optional reference to return request/response info
 
-        @return the parsed response body
+        @return the full response hash; the GraphQL envelope is in the \c body key
 
         @see graphql()
     */
@@ -433,7 +433,8 @@ public class LinearRestConnection inherits RestClient::RestConnection {
 }
 
 #! Linear REST client for non-blocking I/O
-public class LinearRestClientIo inherits RestClientIo::RestClientIo, LinearRestClientBase {
+public class LinearRestClientIo inherits RestClientIo::RestClientIo, LinearRestClientBase,
+        GraphQLClient::GraphQLClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
@@ -447,10 +448,15 @@ public class LinearRestClientIo inherits RestClientIo::RestClientIo, LinearRestC
         @param variables optional variables for the query
         @param hdr optional headers to send with the request
 
-        @return the parsed response body with data and/or errors
+        @return the full response hash; the GraphQL response envelope (with \c data and/or \c errors)
+        is in the \c body key
+
+        @throw GRAPHQL-ERROR if the GraphQL response contains errors and
+        @ref GraphQLClient::GraphQLClientBase::getRaiseGraphQLErrors() "error raising" is enabled
+        (the default)
     */
     hash<auto> graphql(string query, *hash<auto> variables, *hash<auto> hdr) {
-        return restPost("", {"query": query, "variables": variables}, hdr);
+        return checkGraphQLResponse(restPost("", GraphQLClientBase::makeGraphQLBody(query, variables), hdr));
     }
 }
 }

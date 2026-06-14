@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file graphqldataprovider.qr example exposing a DataProvider as a GraphQL service
+
+/*  graphqldataprovider.qr Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    This example generates a GraphQL schema and resolvers automatically from a DataProvider (here a
+    tiny in-memory "tasks" provider) using the GraphQLDataProvider module, and serves it over HTTP
+    with a GraphQLHandler. Run it, then try:
+
+    # list all records
+    curl -s localhost:8088/graphql -d '{"query": "{ search { id title done } }"}'
+
+    # a typed filter (compiled to DPQL)
+    curl -s localhost:8088/graphql -d '{"query": "{ search(filter: {done: {eq: false}}) { title } }"}'
+
+    # a raw DPQL where filter
+    curl -s localhost:8088/graphql -d '{"query": "{ search(where: \"@title like \\\"%report%\\\"\") { id } }"}'
+
+    # create a record
+    curl -s localhost:8088/graphql -d '{"query": "mutation { create(id: 3, title: \"new task\", done: false) { id } }"}'
+
+    # update / delete (a selector is required)
+    curl -s localhost:8088/graphql -d '{"query": "mutation { update(set: {done: true}, filter: {id: {eq: 1}}) }"}'
+
+    # the generated schema (introspection)
+    curl -s localhost:8088/graphql -d '{"query": "{ __schema { mutationType { fields { name } } } }"}'
+*/
+
+%requires GraphQLDataProvider
+%requires GraphQLHandler
+%requires HttpServer
+%requires DataProvider
+
+#! a minimal in-memory data provider exposing a "tasks" record type with full CRUD
+class TaskProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = (
+            {"id": 1, "title": "write report", "done": False},
+            {"id": 2, "title": "review PR", "done": True},
+        );
+    }
+
+    string getName() {
+        return "task";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_create": True,
+            "supports_update": True,
+            "supports_delete": True,
+            # advertise advanced search expressions so DPQL where-filters and typed filters are
+            # generated; the generic expression implementations evaluate them in memory
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the task id", IntType),
+            "title": new QoreDataField("title", "the task title", StringType),
+            "done": new QoreDataField("done", "whether the task is complete", SoftBoolType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
+    }
+
+    private hash<string, bool> matchedIds(*hash<auto> where_cond, *hash<auto> opts) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, opts, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        return ids;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int before = data.size();
+        data = select data, !ids{$1.id.toString()};
+        return before - data.size();
+    }
+}
+
+int port = (ARGV[0] ?? "8088").toInt();
+
+# generate a GraphQL executor (schema + resolvers + scalar coercers) from the data provider
+GraphQLExecutor executor = DataProviderGraphQLSchema::createExecutor(new TaskProvider());
+
+# expose it over HTTP
+GraphQLHandler handler(executor);
+HttpServer server(<HttpServerOptionInfo>{});
+server.setHandler("graphql", "/graphql", MimeTypeJson, handler, NOTHING, False);
+server.setDefaultHandler("graphql", handler);
+int listening = server.addListener(<HttpListenerOptionInfo>{"service": port}).port;
+
+printf("GraphQL DataProvider service on http://localhost:%d/graphql\n", listening);
+printf("try: curl -s localhost:%d/graphql -d '{\"query\": \"{ search { id title done } }\"}'\n",
+    listening);
+
+# run until interrupted
+server.waitStop();

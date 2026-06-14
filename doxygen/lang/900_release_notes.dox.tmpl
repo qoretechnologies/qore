@@ -2066,6 +2066,18 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref gorgiasrestclientintro "GorgiasRestClient" module
       - new module providing a REST client for <a href="https://www.gorgias.com/">Gorgias</a>'s customer support API
 
+    - @ref graphqlintro "GraphQL" module
+      - new module providing a pure-Qore, transport-agnostic <a href="https://graphql.org">GraphQL</a> execution engine: lexer, executable-document parser, SDL schema model, pre-execution validation, execution with non-null error propagation and introspection
+
+    - @ref graphqlclientintro "GraphQLClient" module
+      - new module providing a reusable <a href="https://graphql.org">GraphQL</a> client protocol layer (request body construction and \c errors-array handling) to be mixed in to REST client transports such as @ref restclientintro "RestClient" and @ref restclientiointro "RestClientIo"
+
+    - @ref graphqldataproviderintro "GraphQLDataProvider" module
+      - new module generating a <a href="https://graphql.org">GraphQL</a> schema and resolvers automatically from a @ref dataproviderintro "DataProvider", mapping the provider's record type to GraphQL object types and its capabilities (read/create/update/delete/upsert/bulk) to GraphQL query and mutation fields
+
+    - @ref graphqlhandlerintro "GraphQLHandler" module
+      - new module providing a pure-Qore <a href="https://graphql.org">GraphQL</a> execution engine (lexer, parser, SDL schema model, validation, execution, and introspection) together with HTTP and WebSocket server handlers for exposing GraphQL queries, mutations, and subscriptions through the @ref httpserverintro "HttpServer"
+
     - @ref groqdataproviderintro "GroqDataProvider" module
       - new module providing a data provider API for <a href="https://groq.com">Groq</a> LPU-accelerated open-weight LLM inference
 

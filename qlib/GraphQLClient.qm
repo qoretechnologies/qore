@@ -1,0 +1,198 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GraphQLClient.qm Qore user module providing a reusable GraphQL client protocol layer
+
+/*  GraphQLClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+module GraphQLClient {
+    version = "1.0";
+    desc = "User module providing a reusable GraphQL client protocol layer";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage GraphQLClient Module
+
+    @tableofcontents
+
+    @section graphqlclientintro GraphQLClient Introduction
+
+    The %GraphQLClient module provides a transport-agnostic GraphQL protocol layer that can be
+    mixed in to REST client classes to add GraphQL query and mutation support.
+
+    GraphQL APIs communicate over HTTP POST requests with a JSON body of the form:
+    @code{.json}
+{"query": "...", "variables": {...}}
+    @endcode
+
+    A successful GraphQL response is returned with HTTP status code 200 even when the operation
+    fails; failures are reported in a top-level \c errors array in the response body. The
+    @ref GraphQLClient::GraphQLClientBase "GraphQLClientBase" mixin centralizes both the request
+    body construction and the inspection of the \c errors array so that every GraphQL client
+    handles errors consistently.
+
+    To use this module, use \c "%requires GraphQLClient" in your code.
+
+    All the public symbols in the module are defined in the GraphQLClient namespace.
+
+    @section graphqlclientusage Using GraphQLClientBase
+
+    @ref GraphQLClient::GraphQLClientBase "GraphQLClientBase" is designed to be inherited
+    alongside a transport class (such as \c RestClient or \c RestClientIo) using multiple
+    inheritance. The transport class provides the HTTP request method; the mixin provides the
+    GraphQL protocol semantics.
+
+    @par Example:
+    @code{.py}
+public class MyGraphQLClient inherits RestClient::RestClient, GraphQLClient::GraphQLClientBase {
+    constructor(hash<auto> opts) : RestClient(opts) {
+    }
+
+    hash<auto> graphql(string query, *hash<auto> variables, *reference<hash<auto>> info) {
+        return checkGraphQLResponse(post("", GraphQLClientBase::makeGraphQLBody(query, variables), \info));
+    }
+}
+    @endcode
+
+    By default, a GraphQL response containing a non-empty \c errors array causes a
+    @ref GraphQLClient::GraphQLClientBase::GRAPHQL_ERROR "GRAPHQL-ERROR" exception to be thrown.
+    This can be disabled per-instance with
+    @ref GraphQLClient::GraphQLClientBase::setRaiseGraphQLErrors() "setRaiseGraphQLErrors(False)",
+    in which case the full response (including the \c errors array) is returned to the caller.
+
+    @section graphqlclientrelnotes Release Notes
+
+    @subsection graphqlclientv1_0 GraphQLClient v1.0
+    - the initial version of the %GraphQLClient module
+*/
+
+#! the GraphQLClient namespace contains all the objects in the GraphQLClient module
+public namespace GraphQLClient {
+#! Describes the structure of a GraphQL response body
+/** GraphQL responses always use HTTP status code 200; operation failures are reported in the
+    @ref errors member. A response may contain both @ref data and @ref errors (a partial result).
+
+    @see @ref GraphQLClient::GraphQLClientBase "GraphQLClientBase"
+*/
+public hashdecl GraphQLResponseInfo {
+    #! the result data for the executed operation, if any
+    *hash<auto> data;
+
+    #! the list of errors that occurred while executing the operation, if any
+    *list<hash<auto>> errors;
+
+    #! implementation-specific extension data, if any
+    *hash<auto> extensions;
+}
+
+#! GraphQL client protocol mixin to be inherited alongside a transport class
+/** This class centralizes the GraphQL-over-HTTP protocol: request body construction and
+    inspection of the response \c errors array. It does not perform any I/O itself; the inheriting
+    transport class is responsible for issuing the HTTP request (for example, by calling
+    \c RestClient::post() or \c RestClientIo::restPost()) and passing the result to
+    @ref checkGraphQLResponse().
+
+    @see the @ref graphqlclientusage "module usage section" for an example
+*/
+public class GraphQLClientBase {
+    public {
+        #! the exception code thrown when a GraphQL response contains errors
+        const GRAPHQL_ERROR = "GRAPHQL-ERROR";
+    }
+
+    private {
+        #! if @ref True (the default), a GraphQL response containing errors raises an exception
+        bool graphql_raise_errors = True;
+    }
+
+    #! Sets whether a GraphQL response containing an \c errors array raises an exception
+    /** @param raise if @ref True (the default), responses containing a non-empty \c errors array
+        cause a @ref GRAPHQL_ERROR exception to be thrown by @ref checkGraphQLResponse(); if
+        @ref False, such responses are returned to the caller unchanged
+
+        @see @ref getRaiseGraphQLErrors()
+    */
+    setRaiseGraphQLErrors(bool raise = True) {
+        graphql_raise_errors = raise;
+    }
+
+    #! Returns whether a GraphQL response containing an \c errors array raises an exception
+    /** @return @ref True if responses containing a non-empty \c errors array cause a
+        @ref GRAPHQL_ERROR exception to be thrown; @ref False if they are returned unchanged
+
+        @see @ref setRaiseGraphQLErrors()
+    */
+    bool getRaiseGraphQLErrors() {
+        return graphql_raise_errors;
+    }
+
+    #! Builds the GraphQL request body for the given query/mutation and optional variables
+    /** @param query the GraphQL query or mutation string
+        @param variables optional variables for the operation
+
+        @return a hash suitable for use as the JSON request body, with \c query and \c variables keys
+    */
+    static hash<auto> makeGraphQLBody(string query, *hash<auto> variables) {
+        return {
+            "query": query,
+            "variables": variables,
+        };
+    }
+
+    #! Inspects a transport response for GraphQL errors and optionally raises an exception
+    /** @param response the response hash returned by the transport request method; the GraphQL
+        response body is expected in the \c body member (as returned by \c RestClient::post() and
+        \c RestClientIo::restPost())
+
+        @return the \a response argument unchanged, to allow this method to wrap the request call
+
+        @throw GRAPHQL-ERROR the response body contained a non-empty \c errors array and
+        @ref getRaiseGraphQLErrors() is @ref True; the exception argument is the full \c errors list
+    */
+    hash<auto> checkGraphQLResponse(hash<auto> response) {
+        if (graphql_raise_errors) {
+            GraphQLClientBase::checkGraphQLErrors(response.body);
+        }
+        return response;
+    }
+
+    #! Raises a @ref GRAPHQL_ERROR exception if the given GraphQL response body contains errors
+    /** @param body the parsed GraphQL response body
+
+        @throw GRAPHQL-ERROR the body contained a non-empty \c errors array; the exception
+        description is taken from the first error's \c message and the exception argument is the
+        full \c errors list
+    */
+    static checkGraphQLErrors(auto body) {
+        if (body.typeCode() == NT_HASH && body.errors) {
+            string err_msg = body.errors[0].message ?? "Unknown GraphQL error";
+            throw GraphQLClientBase::GRAPHQL_ERROR, err_msg, body.errors;
+        }
+    }
+}
+}

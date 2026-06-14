@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file graphqlsubscriptions.qr example GraphQL subscriptions over WebSocket
+
+/*  graphqlsubscriptions.qr Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    This self-contained example starts a GraphQL subscription server over the graphql-transport-ws
+    WebSocket protocol (GraphQLWsHandler) and a matching client (WebSocketClient) that subscribes to
+    a "ticks" subscription. The subscription's event source is a GraphQLEventQueue fed by a
+    background producer thread; the client prints each event and exits after the stream completes.
+
+    Run it with no arguments:
+
+        qore examples/graphqlsubscriptions.qr
+
+    A real client (e.g. the graphql-ws JavaScript library) speaks the same protocol:
+    connection_init -> connection_ack, then subscribe -> next* -> complete.
+*/
+
+%requires GraphQLHandler
+%requires HttpServer
+%requires WebSocketClient
+
+# the schema: a single "ticks" subscription emitting integers
+const SDL = "
+    type Query { _empty: Boolean }
+    type Subscription { ticks: Int }
+";
+
+# how many events the producer emits before completing the stream
+const NumTicks = 5;
+
+# resolvers: the subscription field returns a cancellable event source (GraphQLEventQueue) and
+# starts a background producer that posts events and then completes the stream
+const Resolvers = {
+    "Subscription": {
+        "ticks": auto sub (auto parent, hash<auto> args, auto cx) {
+            GraphQLEventQueue events();
+            # the producer runs independently of the consuming (stream) thread
+            background sub () {
+                for (int i = 1; i <= NumTicks; ++i) {
+                    events.post(i);
+                }
+                # end the stream; the client receives a "complete" message
+                events.complete();
+            }();
+            return events;
+        },
+    },
+};
+
+# --- start the subscription server ---
+GraphQLExecutor executor(new GraphQLSchema(SDL), Resolvers);
+GraphQLWsHandler wshandler(executor);
+HttpServer server(<HttpServerOptionInfo>{});
+server.setDefaultHandler("graphql-ws", wshandler);
+int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+on_exit server.stop();
+printf("graphql-transport-ws server listening on ws://localhost:%d/\n", port);
+
+# --- connect a client and drive the protocol ---
+# received messages are pushed to a Queue so the main thread can read them with blocking gets
+Queue messages();
+WebSocketClient wsc(sub (*data msg) { if (exists msg) { messages.push(msg.toString()); } },
+    {"url": "ws://localhost:" + port});
+wsc.connect();
+on_exit wsc.disconnect();
+
+# connection_init -> connection_ack
+wsc.send(make_json({"type": "connection_init"}));
+printf("server replied: %s\n", parse_json(messages.get()).type);
+
+# subscribe; read a "next" per event until "complete"
+wsc.send(make_json({"type": "subscribe", "id": "1", "payload": {"query": "subscription { ticks }"}}));
+while (True) {
+    hash<auto> m = parse_json(messages.get());
+    switch (m.type) {
+        case "next":
+            printf("tick: %d\n", m.payload.data.ticks);
+            break;
+        case "complete":
+            printf("subscription complete\n");
+            return;
+        case "error":
+            printf("error: %y\n", m.payload);
+            return;
+    }
+}
