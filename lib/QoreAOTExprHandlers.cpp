@@ -1403,6 +1403,12 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
         ctx.writer.writeStringRef(method ? method->getName() : "");
         return true;
     }
+    if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DEFERRED_STATIC_METHOD_REF));
+        ctx.writer.writeStringRef(dscr->getClassPath().c_str());
+        ctx.writer.writeStringRef(dscr->getMethodName().c_str());
+        return true;
+    }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
         QoreFunction* f = fcr->getFunction();
@@ -1623,6 +1629,28 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_static_method_ref(AOTExprReadCtx& ctx) {
     const QoreMethod* method = read_aot_method_ref_target(ctx, "static", true);
     return method ? QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, method)) : QoreValue();
+}
+
+static bool write_expr_deferred_static_method_ref(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node);
+    if (!dscr) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DEFERRED_STATIC_METHOD_REF));
+    ctx.writer.writeStringRef(dscr->getClassPath().c_str());
+    ctx.writer.writeStringRef(dscr->getMethodName().c_str());
+    return true;
+}
+
+static QoreValue read_expr_deferred_static_method_ref(AOTExprReadCtx& ctx) {
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    if (!class_path || !*class_path || !method_name || !*method_name) {
+        ctx.error = "empty deferred static method call reference";
+        return QoreValue();
+    }
+    return QoreValue(new DeferredStaticMethodCallReferenceNode(&loc_builtin, class_path, method_name));
 }
 
 static bool write_expr_self_method_ref(AOTExprWriteCtx& ctx) {
@@ -1873,6 +1901,32 @@ static bool write_expr_hashdecl_new(AOTExprWriteCtx& ctx) {
                 }
             } else {
                 ctx.writer.writeU8(0);
+            }
+            return true;
+        }
+    }
+    if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+        if (vrn->isDynamicHashDeclConstruct()) {
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
+            ctx.writer.writeStringRef(vrn->getDynamicHashDeclName().c_str());
+            const QoreListNode* args = vrn->getArgs();
+            const QoreParseListNode* parse_args = vrn->getParseArgs();
+            bool use_args = args && !args->empty();
+            size_t nargs = use_args ? args->size() : (parse_args ? parse_args->size() : 0);
+            if (nargs > 255) {
+                return false;
+            }
+            ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+            for (size_t j = 0; j < nargs; ++j) {
+                if (j && !(j % 100) && qore_check_cancel(nullptr,
+                        "AOT deferred hashdecl argument serialization")) {
+                    return false;
+                }
+                QoreValue arg = use_args ? args->retrieveEntry(j) : parse_args->get(j);
+                if (!::classifyAndWriteExpr(ctx.writer, arg,
+                        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+                    return false;
+                }
             }
             return true;
         }

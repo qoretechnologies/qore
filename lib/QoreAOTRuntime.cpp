@@ -2852,6 +2852,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::DEFERRED_STATIC_METHOD_REF: {
+                ref1 = reader.readStringRef(ptr);   // class_path
+                ref2 = reader.readStringRef(ptr);   // method_name
+                if (ref1 && *ref1 && ref2 && *ref2) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new DeferredStaticMethodCallReferenceNode(&loc_builtin, ref1, ref2)));
+                } else {
+                    printd(0, "AOT v2: empty deferred static method ref '%s::%s'\n",
+                        ref1 ? ref1 : "", ref2 ? ref2 : "");
+                    has_unsupported = true;
+                }
+                continue;
+            }
             case AOTExprKind::SELF_METHOD_REF: {
                 // Self method reference: just needs method name
                 ref1 = reader.readStringRef(ptr);   // method_name

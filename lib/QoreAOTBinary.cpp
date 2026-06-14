@@ -8906,6 +8906,11 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             }
             return write_args_prefer_qore(vrn->getArgs(), vrn->getParseArgs());
         }
+        if (vrn->isDynamicHashDeclConstruct()) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
+            writer.writeStringRef(vrn->getDynamicHashDeclName().c_str());
+            return write_parse_arg_list(vrn->getParseArgs());
+        }
         qoreAOTSetExprSerializationError("unsupported VarRefNewObjectNode constructor in "
             + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
         return false;
@@ -9878,6 +9883,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         std::string class_path = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_path.c_str());
         writer.writeStringRef(method ? method->getName() : "");
+        return true;
+    }
+    if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::DEFERRED_STATIC_METHOD_REF));
+        writer.writeStringRef(dscr->getClassPath().c_str());
+        writer.writeStringRef(dscr->getMethodName().c_str());
         return true;
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {

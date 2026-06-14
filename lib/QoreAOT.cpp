@@ -13899,6 +13899,13 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.parse_args = vrn->getParseArgs();
             return id;
         }
+        if (vrn->isDynamicHashDeclConstruct()) {
+            id.kind = AOTExprKind::HASHDECL_NEW;
+            id.ref1 = vrn->getDynamicHashDeclName();
+            id.call_args = vrn->getArgs();
+            id.parse_args = vrn->getParseArgs();
+            return id;
+        }
         // Complex list construction (e.g., list<string> l())
         if (QoreTypeInfo::getUniqueReturnComplexList(vrn->getTypeInfo())) {
             id.kind = AOTExprKind::COMPLEX_LIST_NEW;
@@ -14637,6 +14644,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const QoreClass* qc = method ? method->getClass() : nullptr;
         id.ref1 = qore_aot_encode_class_ref(qc);
         id.ref2 = method ? method->getName() : "";
+        return id;
+    }
+    if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+        id.kind = AOTExprKind::DEFERRED_STATIC_METHOD_REF;
+        id.ref1 = dscr->getClassPath();
+        id.ref2 = dscr->getMethodName();
         return id;
     }
     if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {

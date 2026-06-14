@@ -60,6 +60,26 @@ static std::string qore_aot_deferred_object_type_class_path(const QoreTypeInfo* 
     return end && end > start ? std::string(start, end - start) : std::string();
 }
 
+static std::string qore_aot_deferred_hashdecl_type_path(const QoreTypeInfo* typeInfo) {
+    if (!qore_type_info_is_aot_deferred(typeInfo)
+            || QoreTypeInfo::parseReturns(typeInfo, NT_HASH) == QTI_NOT_EQUAL) {
+        return std::string();
+    }
+
+    std::string path = qore_get_aot_serializable_type_path(typeInfo);
+    const char* start = nullptr;
+    if (path.rfind("hash<", 0) == 0) {
+        start = path.c_str() + 5;
+    } else if (path.rfind("*hash<", 0) == 0) {
+        start = path.c_str() + 6;
+    }
+    if (!start) {
+        return std::string();
+    }
+    const char* end = strrchr(start, '>');
+    return end && end > start ? std::string(start, end - start) : std::string();
+}
+
 bool VarRefNode::parseEqualTo(const VarRefNode& other) const {
     if (type != other.type) {
         return false;
@@ -563,6 +583,14 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                         ref.id->parseAssigned();
                     }
                 } else if (qore_aot_source_parse_active()
+                        && !(dynamic_hashdecl_name = qore_aot_deferred_hashdecl_type_path(typeInfo)).empty()) {
+                    setReceiverTypeInfo(typeInfo);
+                    err = parseArgsVariant(loc, parse_context, nullptr, nullptr);
+                    vrn_type = VRN_DYNAMIC_HASHDECL;
+                    if (!err && is_local_type && ref.id) {
+                        ref.id->parseAssigned();
+                    }
+                } else if (qore_aot_source_parse_active()
                         && !(dynamic_class_name = qore_aot_deferred_object_type_class_path(typeInfo)).empty()) {
                     setReceiverTypeInfo(typeInfo);
                     err = parseArgsVariant(loc, parse_context, nullptr, nullptr);
@@ -628,6 +656,26 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
             return qc->execConstructor(args, xsink);
         }
 
+        case VRN_DYNAMIC_HASHDECL: {
+            QoreProgram* pgm = getProgram();
+            if (!pgm) {
+                xsink->raiseException("HASHDECL-ERROR",
+                    "cannot resolve hashdecl '%s' for instantiation: no program context",
+                    dynamic_hashdecl_name.c_str());
+                return QoreValue();
+            }
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            const qore_ns_private* found_ns = nullptr;
+            const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS,
+                dynamic_hashdecl_name.c_str(), found_ns);
+            if (!hd) {
+                xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s' for instantiation",
+                    dynamic_hashdecl_name.c_str());
+                return QoreValue();
+            }
+            return typed_hash_decl_private::get(*hd)->newHash(parse_args, runtime_check, xsink);
+        }
+
         default:
             assert(false);
             return QoreValue();
@@ -684,6 +732,27 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
                 return QoreValue();
             }
             value = qc->execConstructor(args, xsink);
+            break;
+        }
+
+        case VRN_DYNAMIC_HASHDECL: {
+            QoreProgram* pgm = getProgram();
+            if (!pgm) {
+                xsink->raiseException("HASHDECL-ERROR",
+                    "cannot resolve hashdecl '%s' for instantiation: no program context",
+                    dynamic_hashdecl_name.c_str());
+                break;
+            }
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            const qore_ns_private* found_ns = nullptr;
+            const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS,
+                dynamic_hashdecl_name.c_str(), found_ns);
+            if (!hd) {
+                xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s' for instantiation",
+                    dynamic_hashdecl_name.c_str());
+                break;
+            }
+            value = typed_hash_decl_private::get(*hd)->newHash(parse_args, runtime_check, xsink);
             break;
         }
 

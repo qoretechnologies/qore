@@ -8711,6 +8711,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int
         if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(expr.getInternalNode())) {
             return toBits(vrn->constructValue(xsink));
         }
+        if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(expr.getInternalNode())) {
+            return qore_rt_new_hash_decl(nhd, xsink);
+        }
         if (dynamic_cast<const NewObjectCallNode*>(expr.getInternalNode())
                 || dynamic_cast<const ScopedObjectCallNode*>(expr.getInternalNode())) {
             bool needs_deref = false;

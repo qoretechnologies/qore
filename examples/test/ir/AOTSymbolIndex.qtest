@@ -44,11 +44,15 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("sibling namespaced object type import resolves at link time",
             \testSiblingNamespacedObjectTypeImport());
         addTestCase("standalone hashdecl type import resolves at link time", \testStandaloneHashdeclTypeImport());
+        addTestCase("standalone hashdecl implied constructor resolves at link time",
+            \testStandaloneHashdeclImpliedConstructorImport());
         addTestCase("standalone constructor import resolves at link time", \testStandaloneConstructorImport());
         addTestCase("standalone cast import resolves at link time", \testStandaloneCastImport());
         addTestCase("standalone implied constructor import resolves at link time",
             \testStandaloneImpliedConstructorImport());
         addTestCase("standalone static method import resolves at link time", \testStandaloneStaticMethodImport());
+        addTestCase("standalone static method call reference resolves at link time",
+            \testStandaloneStaticMethodCallReferenceImport());
         addTestCase("standalone static member import resolves at link time", \testStandaloneStaticMemberImport());
         addTestCase("inherited static class members are linkable aliases",
             \testInheritedStaticMemberAliases());
@@ -928,6 +932,75 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         assertEq("hashdecl\n", out, "linked executable resolves hashdecl type import: " + out);
     }
 
+    testStandaloneHashdeclImpliedConstructorImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-hashdecl-constructor";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-hashdecl-constructor-provider.qo";
+        string app = tmp_dir + "/hashdecl-constructor-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "hash<AOTDeferredConstructInfo> sub aot_make_hashdecl_constructor() {\n"
+            "    hash<AOTDeferredConstructInfo> h();\n"
+            "    h.name = \"constructed\";\n"
+            "    return h;\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "hashdecl AOTDeferredConstructInfo {\n"
+            "    string name;\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    printf(\"%s\\n\", aot_make_hashdecl_constructor().name);\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "hashdecl implied-constructor consumer compiles before provider exists: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTDeferredConstructInfo\"") != -1,
+            "consumer index records the deferred hashdecl import: " + consumer_index);
+        assertTrue(consumer_index.find("\"kind\": \"hashdecl\"") != -1,
+            "consumer index marks the deferred hashdecl import as hashdecl: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_HASHDECL_CTOR_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required hashdecl constructor provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTDeferredConstructInfo") != -1,
+            "qo-link diagnostic names the missing hashdecl constructor provider: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "hashdecl constructor provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded hashdecl constructor metadata: "
+            + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts deferred hashdecl implied constructor: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("constructed\n", out, "linked executable resolves deferred hashdecl constructor: " + out);
+    }
+
     testStandaloneStaticMethodImport() {
         TmpDir tmp = initDirs();
         string qo_dir = tmp_dir + "/qo-static-method";
@@ -990,6 +1063,75 @@ class AOTSymbolIndexTest inherits QUnit::Test {
 
         string out = run(sprintf("%s %s", env, app));
         assertEq("static-call\n", out, "linked executable resolves deferred static method call: " + out);
+    }
+
+    testStandaloneStaticMethodCallReferenceImport() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-static-method-callref";
+        mkdir(qo_dir);
+        string consumer_src = tmp_dir + "/consumer.qc";
+        string provider_src = tmp_dir + "/provider.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string missing_agg = tmp_dir + "/missing-static-callref-provider.qo";
+        string app = tmp_dir + "/static-callref-import-app";
+
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTStaticCallRefConsumer {\n"
+            "    string run() {\n"
+            "        code c = \\AOTStaticCallRefProvider::message();\n"
+            "        return c(\"ref\");\n"
+            "    }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTStaticCallRefProvider {\n"
+            "    static string message(string value) { return \"callref-\" + value; }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTStaticCallRefConsumer c = new AOTStaticCallRefConsumer();\n"
+            "    printf(\"%s\\n\", c.run());\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "static-method callref consumer compiles before provider exists: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTStaticCallRefProvider::message\"") != -1,
+            "consumer index records the deferred static method callref import: " + consumer_index);
+
+        string missing_out = run(sprintf("%s %s --link-qo --aggregate-symbol=AOT_STATIC_CALLREF_IMPORT_MISSING"
+            " -o %s %s", env, qcc_bin, missing_agg, consumer_qo));
+        assertTrue(!is_file(missing_agg), "qo-link fails without required static callref provider: "
+            + missing_out);
+        assertTrue(missing_out.find("unresolved import") != -1
+                && missing_out.find("AOTStaticCallRefProvider::message") != -1,
+            "qo-link diagnostic names the missing static callref method: " + missing_out);
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo), "static callref provider compiles: " + provider_out);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against preloaded static callref metadata: "
+            + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts standalone static method callref: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("callref-ref\n", out, "linked executable resolves deferred static method callref: " + out);
     }
 
     testStandaloneStaticMemberImport() {

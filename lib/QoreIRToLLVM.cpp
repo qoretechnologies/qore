@@ -8650,6 +8650,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                             result = emitMaybeInvoke(helper, helper_throwing,
                                     {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                        } else if (auto* dcr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+                            llvm::Value* class_path = builder->CreateGlobalStringPtr(
+                                    dcr->getClassPath(), "deferred_static_call_ref_class_path");
+                            llvm::Value* method_name = builder->CreateGlobalStringPtr(
+                                    dcr->getMethodName(), "deferred_static_call_ref_method_name");
+                            auto cr_ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_static_method_call_ref_aot", cr_ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {class_path, method_name, xsink_arg}, module, llvm_func, inst);
                         } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
                             QoreFunction* func = fcr->getFunction();
                             if (!func) {
@@ -12516,6 +12529,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 qc->getNamespacePath(), "static_call_ref_class_path");
                         llvm::Value* method_name = builder->CreateGlobalStringPtr(
                                 method->getName(), "static_call_ref_method_name");
+                        auto cr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_static_method_call_ref_aot", cr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                    } else if (auto* dcr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+                        llvm::Value* class_path = builder->CreateGlobalStringPtr(
+                                dcr->getClassPath(), "deferred_static_call_ref_class_path");
+                        llvm::Value* method_name = builder->CreateGlobalStringPtr(
+                                dcr->getMethodName(), "deferred_static_call_ref_method_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(

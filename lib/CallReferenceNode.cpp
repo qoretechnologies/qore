@@ -36,6 +36,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -694,6 +695,80 @@ QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, Exc
     return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm);
 }
 
+DeferredStaticMethodCallReferenceNode::DeferredStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
+        const char* n_class_path, const char* n_method_name)
+        : ResolvedCallReferenceNodeIntern(loc, true), class_path(n_class_path ? n_class_path : ""),
+        method_name(n_method_name ? n_method_name : "") {
+}
+
+bool DeferredStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    const DeferredStaticMethodCallReferenceNode* d = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(v);
+    return d && class_path == d->class_path && method_name == d->method_name;
+}
+
+StaticMethodCallReferenceNode* DeferredStaticMethodCallReferenceNode::resolve(RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    if (class_path.empty() || method_name.empty()) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve static method call reference '%s::%s()'",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+
+    QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
+    if (!pgm) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve static method call reference '%s::%s()': no program context",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+
+    const char* resolved_class_path = (class_path.size() >= 2 && class_path[0] == ':' && class_path[1] == ':')
+        ? class_path.c_str() + 2 : class_path.c_str();
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, resolved_class_path, found_ns);
+    if (!qc) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve class '%s' for static method call reference '%s()'",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+
+    const QoreMethod* method = qc->findStaticMethod(method_name.c_str());
+    if (!method) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve static method call reference '%s::%s()'",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+
+    QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
+    const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
+    return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
+}
+
+QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref,
+        ExceptionSink* xsink) const {
+    assert(needs_deref);
+    return resolve(rc, xsink);
+}
+
+QoreValue DeferredStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    StaticMethodCallReferenceNode* ref = resolve(rc, xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    QoreValue rv = ref->execValue(args, xsink);
+    ref->deref(xsink);
+    return rv;
+}
+
 MethodCallReferenceNode::MethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
         QoreProgram* n_pgm) : LocalMethodCallReferenceNode(loc, n_method, false), obj(runtime_get_stack_object()) {
     assert(obj);
@@ -732,6 +807,27 @@ UnresolvedStaticMethodCallReferenceNode::~UnresolvedStaticMethodCallReferenceNod
 int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.typeInfo = callReferenceTypeInfo;
 
+    std::string source_receiver_path;
+    if (scope->size() >= 2) {
+        for (unsigned i = 0; i < (scope->size() - 1); ++i) {
+            if (i) {
+                source_receiver_path += "::";
+            }
+            source_receiver_path += (*scope)[i];
+        }
+    }
+    const bool defer_source_static_receiver = !source_receiver_path.empty()
+        && qore_aot_should_defer_source_symbol(loc, source_receiver_path.c_str(),
+            QoreAOTSourceSymbolKind::Class);
+    if (defer_source_static_receiver) {
+        if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+            qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+        }
+        val = new DeferredStaticMethodCallReferenceNode(loc, source_receiver_path.c_str(), scope->getIdentifier());
+        deref();
+        return 0;
+    }
+
     QoreClass* qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
     if (!qc) {
         // see if this is a function call to a function defined in a namespace
@@ -741,6 +837,15 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
             deref();
             val = fr;
             return fr->parseInit(val, parse_context);
+        }
+        if (qore_aot_source_parse_active() && scope->size() >= 2) {
+            if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+            }
+            val = new DeferredStaticMethodCallReferenceNode(loc, source_receiver_path.c_str(),
+                scope->getIdentifier());
+            deref();
+            return 0;
         }
         parse_error(*loc, "reference to undefined class '%s' in '%s()'", scope->get(scope->size() - 2), scope->ostr);
         return -1;

@@ -1257,6 +1257,7 @@ enum class AOTExprKind : uint8_t {
     COMPLEX_BUFFER_NEW = 107, //!< Complex buffer construction: type_path + init kind in expr streams; ref1=type_path, flags=init kind in slot maps
     ITERATE            = 108, //!< Iterate operator: source expression
     STREAMING          = 109, //!< Streaming operator: kind byte + predicate/count expression + source expression
+    DEFERRED_STATIC_METHOD_REF = 110, //!< Deferred static method reference: ref1=class_path, ref2=method_name
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
