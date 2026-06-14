@@ -78,13 +78,23 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
 ");
         f.close();
 
+        # the macOS linker rejects undefined symbols in shared libraries by default; allow them to be
+        # left for runtime resolution (which the RTLD_NOW reopen then rejects, which is what we test).
+        # GNU/musl linkers permit undefined symbols in shared objects by default, so no flag is needed.
+        string undefined_flag = PlatformOS == "Darwin" ? " -Wl,-undefined,dynamic_lookup" : "";
+
         string build_out = backquote(sprintf(
-            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore 2>&1",
+            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore%s 2>&1",
             shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
-            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir)));
+            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir), undefined_flag));
         assertTrue(is_file(qmod_path), "compiled unresolved-symbol qmod: " + build_out);
 
-        assertThrows("LOAD-MODULE-ERROR", "undefined symbol.*qore_missing_lazy_symbol_for_aot_loader_test",
+        # different dynamic linkers report the unresolved symbol differently: glibc -> "undefined symbol:
+        # <sym>", musl -> "<sym>: symbol not found", macOS dyld -> "symbol not found ... _<sym>"
+        assertThrows("LOAD-MODULE-ERROR",
+            "undefined symbol.*qore_missing_lazy_symbol_for_aot_loader_test"
+            "|qore_missing_lazy_symbol_for_aot_loader_test.*not found"
+            "|not found.*qore_missing_lazy_symbol_for_aot_loader_test",
             sub () {
                 Program p(PO_NEW_STYLE);
                 p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
