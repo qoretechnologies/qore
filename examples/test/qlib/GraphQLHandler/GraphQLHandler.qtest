@@ -170,6 +170,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("http errors", \httpErrorTest());
         addTestCase("dataprovider bridge", \bridgeTest());
         addTestCase("bridge bulk and return-records", \bridgePhaseCTest());
+        addTestCase("review hardening", \hardeningTest());
 
         set_return_value(main());
     }
@@ -442,6 +443,13 @@ class GraphQLHandlerTest inherits QUnit::Test {
         hash<auto> r3 = rc.post("/graphql", {"query": "{ unknownField }"});
         assertEq(200, r3.status_code);
         assertRegex("cannot query field", r3.body.errors[0].message);
+
+        # a mutation over GET is rejected (GET is query-only; CSRF defense)
+        hash<auto> gm = rc.get("/graphql?query=mutation { echo(msg: \"x\") }");
+        assertEq(200, gm.status_code);
+        assertRegex("not permitted", gm.body.errors[0].message);
+        # the same mutation over POST still works
+        assertEq({"echo": "x"}, rc.post("/graphql", {"query": "mutation { echo(msg: \"x\") }"}).body.data);
     }
 
     bridgeTest() {
@@ -548,6 +556,55 @@ class GraphQLHandlerTest inherits QUnit::Test {
         DataProviderGraphQLSchema roBridge(ro);
         assertFalse(roBridge.getSdl() =~ /type Mutation/);
         assertRegex("search\\(limit: Int, offset: Int\\)", roBridge.getSdl());
+
+        # an empty _not filter must not compile to a match-everything "!()" that bypasses the
+        # mass-mutation guard
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { delete(filter: {_not: {}}) }").errors[0].message);
+        # an unknown filter field is rejected (input-object coercion rejects undefined fields)
+        assertRegex("unknown input field",
+            ex.execute("{ search(filter: {nosuchfield: {eq: 1}}) { id } }").errors[0].message);
+    }
+
+    hardeningTest() {
+        # an abstract-type resolver that omits __typename produces a field error, not a crash
+        string asdl = "type Query { hero: Character } interface Character { id: ID! } "
+            "type Droid implements Character { id: ID! }";
+        GraphQLExecutor aex(new GraphQLSchema(asdl), {
+            "Query": {"hero": auto sub (auto p, hash<auto> a, auto c) { return {"id": "1"}; }},
+        });
+        hash<auto> ar = aex.execute("{ hero { id } }");
+        assertNothing(ar.data.hero);
+        assertRegex("__typename", ar.errors[0].message);
+
+        # an ill-typed leaf value produces a field error, not a crash
+        GraphQLExecutor lex(new GraphQLSchema("type Query { n: Int }"), {
+            "Query": {"n": auto sub (auto p, hash<auto> a, auto c) { return {"not": "an int"}; }},
+        });
+        assertTrue(exists lex.execute("{ n }").errors, "ill-typed leaf becomes an error, not a crash");
+
+        # a query exceeding the maximum nesting depth is rejected
+        string nsdl = "type Query { root: Node } type Node { value: Int child: Node }";
+        auto deep = {"value": 0};
+        for (int i = 0; i < 70; ++i) {
+            deep = {"value": i, "child": deep};
+        }
+        GraphQLExecutor dex(new GraphQLSchema(nsdl), {
+            "Query": {"root": auto sub (auto p, hash<auto> a, auto c) { return deep; }},
+        });
+        string q = "{ root { value ";
+        for (int i = 0; i < 70; ++i) {
+            q += "child { value ";
+        }
+        for (int i = 0; i < 70; ++i) {
+            q += "} ";
+        }
+        q += "} }";
+        assertRegex("nesting depth", dex.execute(q).errors[0].message);
+
+        # a provider with two fields that sanitize to the same GraphQL name is rejected
+        assertThrows("GRAPHQL-SCHEMA-ERROR", "map to the GraphQL field name",
+            sub () { new DataProviderGraphQLSchema(new CollisionProvider()); });
     }
 
     bridgePhaseCTest() {
@@ -620,5 +677,28 @@ class HyphenProvider inherits DataProvider::AbstractDataProvider {
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
         push data, rec;
         return rec;
+    }
+}
+
+#! a provider with two field names that sanitize to the same GraphQL name, to test collision detection
+class CollisionProvider inherits DataProvider::AbstractDataProvider {
+    string getName() {
+        return "collision";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        # both "a-b" and "a.b" sanitize to the GraphQL name "a_b"
+        return {
+            "a-b": new QoreDataField("a-b", "field one", StringType),
+            "a.b": new QoreDataField("a.b", "field two", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(().iterator(), where_cond, search_options, getRecordTypeImpl());
     }
 }

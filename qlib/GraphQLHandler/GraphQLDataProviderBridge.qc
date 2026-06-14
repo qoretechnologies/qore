@@ -60,6 +60,12 @@ public namespace GraphQLHandler {
     the affected records (read via a non-atomic follow-up search). The @ref getSdl() output
     documents exactly what was generated.
 
+    @note \c search applies the \c limit and \c offset arguments client-side (the bridge stops
+    iterating after \c offset + \c limit records) rather than pushing them into the provider's
+    search options, because not all providers accept those options. For very large result sets a
+    provider that supports server-side paging should be queried through a more specific interface;
+    a DPQL \c where filter still narrows the result set at the provider.
+
     @par Example:
     @code{.py}
 GraphQLHandler gh = DataProviderGraphQLSchema::createHandler(my_data_provider);
@@ -168,6 +174,13 @@ public class DataProviderGraphQLSchema {
         hash<string, bool> usedFilterKinds();
         foreach string fname in (keys record_type) {
             string gqlName = sanitizeName(fname);
+            # distinct provider field names must not collide to the same GraphQL name, or one
+            # would silently shadow the other in the generated schema and field-name round-trip
+            if (exists field_name_map{gqlName} && field_name_map{gqlName} != fname) {
+                throw GRAPHQL_SCHEMA_ERROR, sprintf("data provider %y has fields %y and %y that "
+                    "both map to the GraphQL field name %y; rename one to expose this provider "
+                    "over GraphQL", provider.getName(), field_name_map{gqlName}, fname, gqlName);
+            }
             field_name_map{gqlName} = fname;
             push fieldLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, False));
             # SetInput fields are always optional (a partial update assigns only supplied columns)
@@ -453,23 +466,39 @@ public class DataProviderGraphQLSchema {
         foreach string key in (keys filter) {
             switch (key) {
                 case "_and": {
-                    list<string> subs = map "(" + DataProviderGraphQLSchema::whereInputToDpql(spec, $1) + ")",
-                        filter._and;
-                    clauses += subs.join(" && ");
+                    # combine non-empty sub-clauses with AND; empty sub-filters contribute nothing
+                    # (so that {_and: [{}]} does NOT degenerate to "()" and bypass the guard)
+                    list<string> subs = select
+                        (map DataProviderGraphQLSchema::whereInputToDpql(spec, $1), filter._and),
+                        $1.val();
+                    if (subs) {
+                        clauses += subs.size() == 1 ? subs[0] : "(" + subs.join(") && (") + ")";
+                    }
                     break;
                 }
                 case "_or": {
-                    list<string> subs = map "(" + DataProviderGraphQLSchema::whereInputToDpql(spec, $1) + ")",
-                        filter._or;
-                    clauses += "(" + subs.join(" || ") + ")";
+                    list<string> subs = select
+                        (map DataProviderGraphQLSchema::whereInputToDpql(spec, $1), filter._or),
+                        $1.val();
+                    if (subs) {
+                        clauses += "(" + subs.join(") || (") + ")";
+                    }
                     break;
                 }
-                case "_not":
-                    clauses += "!(" + DataProviderGraphQLSchema::whereInputToDpql(spec, filter._not) + ")";
+                case "_not": {
+                    string not_dpql = DataProviderGraphQLSchema::whereInputToDpql(spec, filter._not);
+                    # an empty inner filter contributes nothing (avoids a match-everything "!()")
+                    if (not_dpql.val()) {
+                        clauses += "!(" + not_dpql + ")";
+                    }
                     break;
+                }
                 default: {
-                    # a per-field filter
-                    string provName = name_map{key} ?? key;
+                    # a per-field filter; the field must be a known (mapped) record field
+                    *string provName = name_map{key};
+                    if (!exists provName) {
+                        throw GRAPHQL_EXECUTION_ERROR, sprintf("unknown filter field %y", key);
+                    }
                     clauses += DataProviderGraphQLSchema::filterFieldToDpql(provName, filter{key});
                     break;
                 }
@@ -581,15 +610,20 @@ public class DataProviderGraphQLSchema {
         or (unless \c allow_templates is set) contains a template reference
     */
     static validateWhere(hash<auto> spec, string dpql_where) {
-        list<hash<DpqlDiagnostic>> diags =
-            DataProvider::validateDpqlExpression(dpql_where, spec.record_type, spec.expressions);
+        # validate against the record fields (3rd arg) AND gate operators against the provider's
+        # advertised server-side search expressions (4th arg, server_expressions) so a filter
+        # cannot use an operator the provider does not actually support
+        list<hash<DpqlDiagnostic>> diags = DataProvider::validateDpqlExpression(dpql_where,
+            spec.record_type, spec.expressions, spec.expressions);
         list<auto> errs = select diags, $1.severity == "error";
         if (errs) {
             throw GRAPHQL_EXECUTION_ERROR, sprintf("invalid filter expression: %s",
                 (map $1.message, errs).join("; "));
         }
         if (!spec.allow_templates) {
-            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql_where);
+            # parse with the same expression set used for validation, then walk the entire tree
+            hash<DataProviderExpression> exp =
+                DataProvider::parseDpqlExpression(dpql_where, spec.expressions);
             if (DataProviderGraphQLSchema::containsTemplateRef(exp)) {
                 throw GRAPHQL_EXECUTION_ERROR, "template references are not permitted in filter "
                     "expressions";
@@ -614,23 +648,30 @@ public class DataProviderGraphQLSchema {
         @return @ref True if a template reference appears anywhere in the expression tree
     */
     static bool containsTemplateRef(auto node) {
-        if (node.typeCode() != NT_HASH) {
-            return False;
-        }
-        list<string> k = keys node;
-        # a DataProviderTemplateReference is identified by its "tmpl_context" member
-        if (inlist("tmpl_context", k)) {
-            return True;
-        }
-        # a DataProviderExpression has "exp" + "args"; recurse into the arguments
-        if (inlist("exp", k) && inlist("args", k)) {
-            foreach auto arg in (node.args) {
-                if (containsTemplateRef(arg)) {
+        switch (node.typeCode()) {
+            case NT_HASH:
+                # a DataProviderTemplateReference is identified by its "tmpl_context" member
+                if (inlist("tmpl_context", keys node)) {
                     return True;
                 }
-            }
+                # recurse into every member value (not just expression args) so a template
+                # reference nested in any node shape is detected
+                foreach auto v in (node.values()) {
+                    if (containsTemplateRef(v)) {
+                        return True;
+                    }
+                }
+                return False;
+            case NT_LIST:
+                foreach auto v in (node) {
+                    if (containsTemplateRef(v)) {
+                        return True;
+                    }
+                }
+                return False;
+            default:
+                return False;
         }
-        return False;
     }
 
     #! maps a data provider field to a GraphQL type string

@@ -60,6 +60,11 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         Qore::Thread::Mutex cache_lock();
     }
 
+    public {
+        #! the maximum number of parsed documents to cache (bounds memory growth from distinct queries)
+        const MaxCacheSize = 1024;
+    }
+
     #! creates the handler from SDL schema text and a resolver map
     /** @param sdl the schema definition language source
         @param resolvers the resolver map (type name -> field name -> resolver code)
@@ -128,7 +133,18 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
             rethrow;
         }
 
-        hash<auto> result = executor.executeDocument(doc, req.variables, req.operationName, cx);
+        # per the GraphQL-over-HTTP convention, GET requests may only execute query operations
+        # (this prevents state-changing mutations from being triggered by a simple GET / CSRF)
+        *string require_op = hdr.method == "GET" ? "query" : NOTHING;
+
+        # any unexpected exception escaping execution is converted to an error envelope rather than
+        # leaking as a raw HTTP 500 with internal details
+        hash<auto> result;
+        try {
+            result = executor.executeDocument(doc, req.variables, req.operationName, cx, require_op);
+        } catch (hash<ExceptionInfo> ex) {
+            return makeJsonResponse(200, {"errors": ({"message": ex.desc},)});
+        }
         return makeJsonResponse(200, result);
     }
 
@@ -187,11 +203,13 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
 
     #! returns the parsed document for a query, using the cache when enabled
     private hash<GraphQLDocument> getDocument(string query) {
-        if (!cache_enabled) {
-            return GraphQLParser::parse(query);
-        }
         {
             AutoLock al(cache_lock);
+            # read cache_enabled and look up under the lock so a concurrent setCacheEnabled() /
+            # cache reset cannot race with the lookup
+            if (!cache_enabled) {
+                return GraphQLParser::parse(query);
+            }
             if (exists doc_cache{query}) {
                 return doc_cache{query};
             }
@@ -200,7 +218,14 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         hash<GraphQLDocument> doc = GraphQLParser::parse(query);
         {
             AutoLock al(cache_lock);
-            doc_cache{query} = doc;
+            # bound cache growth: an unbounded stream of distinct queries must not exhaust memory.
+            # when the cap is reached, clear the cache (simple, allocation-cheap eviction)
+            if (cache_enabled) {
+                if (doc_cache.size() >= MaxCacheSize) {
+                    doc_cache = {};
+                }
+                doc_cache{query} = doc;
+            }
         }
         return doc;
     }

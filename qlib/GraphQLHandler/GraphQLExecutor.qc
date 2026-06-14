@@ -126,11 +126,14 @@ public class GraphQLExecutor {
         @param variable_values the input variable values, if any
         @param operation_name the operation to execute, if the document has more than one
         @param ctx an arbitrary ctx value passed to every resolver
+        @param require_operation_type if set (e.g. \c "query"), the selected operation must be of
+        this type, otherwise an error envelope is returned; used to enforce query-only semantics
+        for HTTP GET requests
 
         @return the GraphQL response envelope
     */
     hash<auto> executeDocument(hash<GraphQLDocument> doc, *hash<auto> variable_values,
-            *string operation_name, auto ctx) {
+            *string operation_name, auto ctx, *string require_operation_type) {
         # collect fragment definitions and operations
         hash<string, hash<GraphQLFragmentDefinition>> fragments();
         list<hash<GraphQLOperationDefinition>> operations();
@@ -160,6 +163,12 @@ public class GraphQLExecutor {
             op = selectOperation(operations, operation_name);
         } catch (hash<ExceptionInfo> ex) {
             return {"errors": (makeError(ex.desc),)};
+        }
+
+        # optionally restrict the allowed operation type (e.g. queries only over HTTP GET)
+        if (exists require_operation_type && op.operation != require_operation_type) {
+            return {"errors": (makeError(sprintf("%s operations are not permitted here; only %s "
+                "operations are allowed", op.operation, require_operation_type)),)};
         }
 
         # establish the execution state
@@ -240,7 +249,16 @@ public class GraphQLExecutor {
     non-null error-propagation semantics.
 */
 class ExecutionState {
+    public {
+        #! the maximum selection-set / input-value nesting depth (DoS guard against deeply nested queries)
+        const MaxDepth = 64;
+    }
+
     private {
+        #! the current selection-set nesting depth (bounded by @ref MaxDepth)
+        int selection_depth = 0;
+        #! the current input-value nesting depth (bounded by @ref MaxDepth)
+        int input_depth = 0;
         #! the owning executor
         GraphQLExecutor executor;
         #! the schema
@@ -317,6 +335,13 @@ class ExecutionState {
         @throw GRAPHQL-VALIDATION-ERROR the value is not valid for the type
     */
     auto coerceInputValue(auto value, hash<GraphQLNode> typeref, string ctx) {
+        # bound input nesting depth to guard against deeply nested input objects/lists
+        if (++input_depth > MaxDepth) {
+            --input_depth;
+            throw GRAPHQL_VALIDATION_ERROR, sprintf("%s exceeds the maximum input nesting depth of %d",
+                ctx, MaxDepth);
+        }
+        on_exit --input_depth;
         if (typeref.kind == NK_NON_NULL_TYPE) {
             if (!exists value) {
                 throw GRAPHQL_VALIDATION_ERROR, sprintf("%s must not be null", ctx);
@@ -358,6 +383,13 @@ class ExecutionState {
                 if (value.typeCode() != NT_HASH) {
                     throw GRAPHQL_VALIDATION_ERROR, sprintf("%s must be an input object for type %y",
                         ctx, tname);
+                }
+                # reject input-object fields not defined on the type (per the GraphQL spec)
+                foreach string k in (keys value) {
+                    if (!td.inputFields{k}) {
+                        throw GRAPHQL_VALIDATION_ERROR, sprintf("%s contains unknown input field %y "
+                            "for type %y", ctx, k, tname);
+                    }
                 }
                 hash<auto> out();
                 foreach hash<GraphQLInputValueDef> ivd in (td.inputFields.iterator()) {
@@ -427,6 +459,13 @@ class ExecutionState {
     */
     hash<auto> executeSelectionSet(hash<GraphQLTypeDef> objectType,
             hash<GraphQLSelectionSet> selectionSet, auto objectValue, list<auto> path) {
+        # bound nesting depth to guard against stack exhaustion from deeply nested queries
+        if (++selection_depth > MaxDepth) {
+            --selection_depth;
+            throw GRAPHQL_VALIDATION_ERROR, sprintf("query exceeds the maximum nesting depth of %d",
+                MaxDepth);
+        }
+        on_exit --selection_depth;
         hash<auto> grouped = collectFields(objectType, selectionSet, {});
         hash<auto> resultMap();
         foreach string responseKey in (keys grouped) {
@@ -473,23 +512,26 @@ class ExecutionState {
             list<hash<GraphQLField>> fieldGroup, auto objectValue, list<auto> path) {
         hash<GraphQLField> field = fieldGroup[0];
 
-        auto resolved;
         try {
-            # argument coercion (e.g. a missing required argument) and the resolver itself can
-            # raise; either becomes a field error rather than aborting the whole operation
+            # argument coercion, the resolver, and value completion can all raise; any such error
+            # becomes a field error rather than aborting the whole operation
             hash<auto> args = coerceArgumentValues(fieldDef, field, path);
-            resolved = resolveFieldValue(objectType, fieldDef, field.name, objectValue, args);
+            auto resolved = resolveFieldValue(objectType, fieldDef, field.name, objectValue, args);
+            return completeValue(fieldDef.type, fieldGroup, resolved, path);
         } catch (hash<ExceptionInfo> ex) {
+            # a non-null violation below this field must keep propagating untouched (the error was
+            # already recorded at its origin)
+            if (ex.err == GRAPHQL_NULL_BUBBLE) {
+                rethrow;
+            }
             recordError(ex.desc, path);
-            # the error is recorded; for a non-null field the null must propagate, but without
-            # adding a redundant "cannot return null" message, so bubble directly
+            # for a non-null field the null must propagate, but without adding a redundant
+            # "cannot return null" message, so bubble directly
             if (fieldDef.type.kind == NK_NON_NULL_TYPE) {
                 throw GRAPHQL_NULL_BUBBLE, "field error";
             }
             return NOTHING;
         }
-
-        return completeValue(fieldDef.type, fieldGroup, resolved, path);
     }
 
     #! resolves a field value by invoking the registered resolver or the default resolver
@@ -535,6 +577,7 @@ class ExecutionState {
                 return NOTHING;
             }
             hash<GraphQLNode> inner = cast<hash<GraphQLListType>>(typeref).type;
+            bool inner_non_null = inner.kind == NK_NON_NULL_TYPE;
             list<auto> out();
             int i = 0;
             foreach auto item in (result) {
@@ -542,18 +585,27 @@ class ExecutionState {
                 try {
                     push out, completeValue(inner, fieldGroup, item, itemPath);
                 } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == GRAPHQL_NULL_BUBBLE) {
-                        # a non-null list item became null: the whole list bubbles
-                        rethrow;
+                    if (ex.err != GRAPHQL_NULL_BUBBLE) {
+                        # an unexpected error completing the item becomes an error at the item path
+                        recordError(ex.desc, itemPath);
                     }
-                    rethrow;
+                    # if the element type is non-null, the error propagates and the whole list
+                    # becomes null; otherwise the offending element is nulled and the list continues
+                    if (inner_non_null) {
+                        throw GRAPHQL_NULL_BUBBLE, "list item error";
+                    }
+                    push out, NOTHING;
                 }
             }
             return out;
         }
         # named type
         string tname = cast<hash<GraphQLNamedType>>(typeref).name;
-        hash<GraphQLTypeDef> td = all_types{tname};
+        *hash<GraphQLTypeDef> td = all_types{tname};
+        if (!td) {
+            recordError(sprintf("no type named %y in the schema", tname), path);
+            return NOTHING;
+        }
         switch (td.kind) {
             case TYPE_SCALAR:
                 return completeLeafScalar(result, tname, path);
@@ -770,6 +822,11 @@ class ExecutionState {
                         coerced{argDef.name} = variables{vname};
                     } else if (exists argDef.defaultValue) {
                         coerced{argDef.name} = GraphQLValue::valueFromAst(argDef.defaultValue, {});
+                    } else if (argDef.type.kind == NK_NON_NULL_TYPE) {
+                        # the argument is bound to a variable that was not provided (or was null)
+                        # and the argument is non-null with no default
+                        throw GRAPHQL_EXECUTION_ERROR, sprintf("required argument %y of field %y was "
+                            "supplied the unset variable %y", argDef.name, fieldDef.name, vname);
                     }
                 } else {
                     auto raw = GraphQLValue::valueFromAst(valueNode, variables);
