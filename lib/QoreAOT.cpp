@@ -290,6 +290,13 @@ void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
     }
 }
 
+void qore_aot_record_source_parse_type_import(QoreProgram* pgm, const QoreProgramLocation* loc,
+        const char* qore_path, const char* type_path, bool hashdecl, bool or_nothing) {
+    if (pgm) {
+        qore_program_private::recordSourceParseTypeImport(pgm, loc, qore_path, type_path, hashdecl, or_nothing);
+    }
+}
+
 // thread-local sink for resolved file paths of dependency modules loaded during
 // an AOT module compile (see qore_aot_deps.h).  Inactive (nullptr) for every
 // normal program, so the record hook is a single pointer test.

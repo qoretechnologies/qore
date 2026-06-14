@@ -64,6 +64,36 @@ static std::string get_static_scope_receiver_type_path(const NamedScope& scope) 
     return rv;
 }
 
+static void record_source_parse_reflection_class_for_name_import(QoreProgram* pgm, const QoreProgramLocation* loc,
+        const QoreMethod* method, const QoreParseListNode* parse_args) {
+    if (!qore_aot_source_parse_active() || !pgm || !method || strcmp(method->getName(), "forName") || !parse_args
+            || parse_args->size() != 1) {
+        return;
+    }
+
+    const QoreClass* qc = method->getClass();
+    if (!qc || qc->getNamespacePath(false) != "Qore::Reflection::Class") {
+        return;
+    }
+
+    QoreValue arg = parse_args->get(0);
+    if (arg.getType() != NT_STRING) {
+        return;
+    }
+
+    const QoreStringNode* class_name = arg.get<const QoreStringNode>();
+    if (!class_name || !class_name->size()) {
+        return;
+    }
+
+    std::string type_path = "object<";
+    type_path += class_name->c_str();
+    type_path += '>';
+    const QoreProgramLocation* arg_loc = parse_args->getLocation(0);
+    qore_program_private::recordSourceParseTypeImport(pgm, arg_loc ? arg_loc : loc, class_name->c_str(),
+        type_path.c_str(), false, false);
+}
+
 static const QoreTypeInfo* resolve_static_scope_receiver_type(const QoreProgramLocation* loc, const NamedScope& scope,
         int& err) {
     std::string type_path = get_static_scope_receiver_type_path(scope);
@@ -1624,6 +1654,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     receiver_inference_call_desc += "::";
     receiver_inference_call_desc += method->getName();
     receiver_inference_call_desc += "()'";
+    record_source_parse_reflection_class_for_name_import(parse_context.pgm, loc, method, parse_args);
     if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr, true,
             receiver_inference_call_desc.c_str()) && !err) {
         err = -1;

@@ -87,7 +87,7 @@ DLLLOCAL bool qore_aot_set_source_parse_active(bool active);
 
 //! Returns true while a single-file AOT compile is parsing/committing source
 //! with sibling `.qo` metadata preloaded.
-DLLLOCAL bool qore_aot_source_parse_active();
+DLLEXPORT bool qore_aot_source_parse_active();
 
 //! Set the active build-group source-symbol manifest for the current thread.
 /** The manifest lets standalone source compiles prefer declarations provided by
@@ -107,6 +107,13 @@ DLLLOCAL bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc
 /** No-op if no sink is active, the location is null, or the file is synthetic
     (e.g. "<builtin>").  Cheap (one thread-local load) on the inactive path. */
 DLLLOCAL void qore_aot_note_referenced_decl(const QoreProgramLocation* loc);
+
+//! Record a source-parse type import for the active single-file AOT compile.
+/** This is a narrow wrapper around Program-private import tracking for modules
+    that need to report a link-time class/hashdecl dependency without including
+    parser-private headers. */
+DLLEXPORT void qore_aot_record_source_parse_type_import(QoreProgram* pgm, const QoreProgramLocation* loc,
+        const char* qore_path, const char* type_path, bool hashdecl, bool or_nothing);
 
 //! AOT module-dependency sink for the module compiler.
 /** When compiling a `.qm`/split-module to a `.qmod`, qcc's `--depfile` records
