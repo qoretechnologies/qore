@@ -5452,7 +5452,7 @@ static const QoreClass* aotFindBCAClass(const QoreMethod* method, const BCANode*
     }
 
     if (bca->classid) {
-        ClassAccess access;
+        ClassAccess access = Public;
         if (const QoreClass* base_cls = cls_priv->scl->getClass(bca->classid, access, true)) {
             return base_cls;
         }
