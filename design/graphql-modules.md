@@ -1,8 +1,8 @@
 # GraphQL Modules — Design
 
 This document describes the architecture of Qore's GraphQL support: the `GraphQL` execution
-engine, the `GraphQLClient` client mixin, and the `GraphQLHandler` server module (HTTP/WebSocket
-handler plus a DataProvider schema bridge).
+engine, the `GraphQLClient` client mixin, the `GraphQLDataProvider` schema bridge, and the
+`GraphQLHandler` server module (HTTP/WebSocket handler).
 
 ## Overview
 
@@ -10,12 +10,17 @@ handler plus a DataProvider schema bridge).
 |--------|------|--------------|
 | `GraphQL` | transport-agnostic GraphQL execution engine | `qore` only |
 | `GraphQLClient` | reusable GraphQL client protocol mixin for REST transports | `Mime` |
-| `GraphQLHandler` | exposes the engine over HTTP/WebSocket; DataProvider schema bridge | `GraphQL`, `json`, `HttpServerUtil`, `DataProvider`, `WebSocketHandler` |
+| `GraphQLDataProvider` | generates a schema and resolvers from a DataProvider | `GraphQL`, `DataProvider` |
+| `GraphQLHandler` | exposes the engine over HTTP/WebSocket | `GraphQL`, `json`, `HttpServerUtil`, `WebSocketHandler` |
 
 All public symbols live in the `GraphQLHandler` namespace. The `GraphQL` module contributes the
-engine classes (and the `GRAPHQL-*` exception-code constants) to that namespace; `GraphQLHandler`
-re-exports `GraphQL`, so `%requires GraphQLHandler` exposes everything while `%requires GraphQL`
-gives the engine alone with no HTTP/DataProvider dependency.
+engine classes (and the `GRAPHQL-*` exception-code constants) to that namespace; both
+`GraphQLDataProvider` and `GraphQLHandler` re-export `GraphQL`. The dependencies are deliberately
+disjoint: `GraphQLHandler` does **not** depend on `DataProvider`, and `GraphQLDataProvider` does
+**not** depend on the HTTP/WebSocket stack — so an HTTP GraphQL service with hand-written resolvers
+pulls in no DataProvider machinery, and a DataProvider-backed executor can be consumed over any
+transport (or none). A service that wants both `%requires` both modules and composes them:
+`GraphQLHandler gh(DataProviderGraphQLSchema::createExecutor(provider))`.
 
 ## GraphQLClient (client side)
 
@@ -143,10 +148,13 @@ single `next` then `complete`); a subscription streams a `next` per event from a
 (the event-source iterator is created in that thread). A subscription stops when its source is
 exhausted, or after its next event once the client sends `complete` or disconnects.
 
-## DataProvider bridge
+## DataProvider bridge (GraphQLDataProvider)
 
-`DataProviderGraphQLSchema` generates a GraphQL schema and resolvers from an `AbstractDataProvider`,
-mirroring (in reverse) the type↔schema mapping done by `Swagger`/`OpenApi3`/`RestSchemaValidator`.
+`DataProviderGraphQLSchema` (in the `GraphQLDataProvider` module) generates a GraphQL schema and
+resolvers from an `AbstractDataProvider`, mirroring (in reverse) the type↔schema mapping done by
+`Swagger`/`OpenApi3`/`RestSchemaValidator`. It produces a transport-agnostic `GraphQLExecutor`
+(`getExecutor()` / the `createExecutor()` static); exposing that over HTTP is the caller's job (pass
+it to a `GraphQLHandler`), which is why the bridge has no HTTP/WebSocket dependency.
 
 **Type mapping** recurses the DataProvider type tree: scalar base types map to GraphQL scalars;
 dates to a `DateTime` custom scalar (ISO-8601 via the executor coercer hook), binary to `Base64`,
@@ -189,10 +197,12 @@ resolvers on read. Distinct provider fields that sanitize to the same GraphQL na
 
 - `examples/test/qlib/GraphQL/GraphQL.qtest` — the engine alone (requires only `GraphQL`, proving no
   hidden HTTP/DataProvider dependency).
-- `examples/test/qlib/GraphQLHandler/GraphQLHandler.qtest` — the full stack: lexer, parser, schema,
-  validation, execution, introspection, HTTP handler (POST/GET/errors/APQ/batching), WebSocket
-  subscriptions, and the DataProvider bridge (type graph, child providers, filters, CRUD, bulk,
-  return-records, paging, transactions).
+- `examples/test/qlib/GraphQLHandler/GraphQLHandler.qtest` — lexer, parser, schema, validation,
+  execution, introspection, the HTTP handler (POST/GET/errors/APQ/batching), and WebSocket
+  subscriptions (requires only `GraphQLHandler`, proving no hidden DataProvider dependency).
+- `examples/test/qlib/GraphQLDataProvider/GraphQLDataProvider.qtest` — the DataProvider bridge (type
+  graph, child providers, filters, CRUD, bulk, return-records, paging, transactions); requires only
+  `GraphQLDataProvider`, proving no hidden HTTP dependency.
 - `examples/test/qlib/GraphQLClient/GraphQLClient.qtest` — the client mixin.
 
 ## Build note

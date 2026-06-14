@@ -32,12 +32,11 @@
 %requires(reexport) Mime >= 1.3
 %requires(reexport) HttpServerUtil >= 1.0
 %requires(reexport) json >= 1.5
-%requires(reexport) DataProvider
 %requires(reexport) WebSocketHandler >= 1.0
 
 module GraphQLHandler {
     version = "1.0";
-    desc = "User module exposing the GraphQL engine over HTTP, with a DataProvider schema bridge";
+    desc = "User module exposing the GraphQL engine over HTTP and WebSocket";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
     license = "MIT";
@@ -51,15 +50,16 @@ module GraphQLHandler {
 
     The %GraphQLHandler module exposes the pure-Qore <a href="https://graphql.org">GraphQL</a>
     execution engine (provided by the @ref graphqlintro "GraphQL" module, which this module
-    re-exports) over HTTP through the @ref httpserverintro "HttpServer", and provides a bridge that
-    generates a GraphQL schema and resolvers automatically from a
-    @ref dataproviderintro "DataProvider".
+    re-exports) over HTTP through the @ref httpserverintro "HttpServer" and over WebSocket
+    (subscriptions via the \c graphql-transport-ws protocol).
 
     The HTTP handler implements the GraphQL-over-HTTP conventions (POST and GET), document caching,
     persisted queries, and request batching.
 
     To use this module, use \c "%requires GraphQLHandler" in your code. To use just the engine
-    (no HTTP / DataProvider dependency), use \c "%requires GraphQL" instead.
+    (no HTTP dependency), use \c "%requires GraphQL" instead. To generate a schema automatically
+    from a @ref dataproviderintro "DataProvider", use the @ref graphqldataproviderintro
+    "GraphQLDataProvider" module.
 
     All the public symbols are defined in the GraphQLHandler namespace.
 
@@ -69,8 +69,8 @@ module GraphQLHandler {
       @ref GraphQLHandler::GraphQLSchema "GraphQLSchema", etc.) come from the
       @ref graphqlintro "GraphQL" module
     - @ref GraphQLHandler::GraphQLHandler "GraphQLHandler": exposes a schema + resolvers over HTTP
-    - @ref GraphQLHandler::DataProviderGraphQLSchema "DataProviderGraphQLSchema": generates a
-      schema and resolvers automatically from a @ref dataproviderintro "DataProvider"
+    - @ref GraphQLHandler::GraphQLWsHandler "GraphQLWsHandler": exposes GraphQL operations (including
+      subscriptions) over WebSocket
 
     @section graphqlhandlerexample Example
 

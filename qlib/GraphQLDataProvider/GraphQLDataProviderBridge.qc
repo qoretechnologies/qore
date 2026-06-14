@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file GraphQLDataProviderBridge.qc generates a GraphQL schema and resolvers from a DataProvider
 
-/*  GraphQLHandler Copyright (C) 2026 Qore Technologies, s.r.o.
+/*  GraphQLDataProvider Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -68,7 +68,10 @@ public namespace GraphQLHandler {
 
     @par Example:
     @code{.py}
-GraphQLHandler gh = DataProviderGraphQLSchema::createHandler(my_data_provider);
+# generate a transport-agnostic executor from any data provider
+GraphQLExecutor executor = DataProviderGraphQLSchema::createExecutor(my_data_provider);
+# expose it over HTTP with a GraphQLHandler (from the GraphQLHandler module)
+GraphQLHandler gh(executor);
     @endcode
 */
 public class DataProviderGraphQLSchema {
@@ -170,19 +173,6 @@ public class DataProviderGraphQLSchema {
     #! returns a @ref GraphQLExecutor built from the generated schema, resolvers, and scalar coercers
     GraphQLExecutor getExecutor() {
         return new GraphQLExecutor(new GraphQLSchema(sdl), resolvers, buildScalarCoercers());
-    }
-
-    #! builds a @ref GraphQLHandler that serves the given data provider over HTTP
-    /** @param provider the data provider to expose
-        @param auth an optional authenticator for the handler
-        @param opts optional bridge options (see the constructor)
-
-        @return a ready-to-use @ref GraphQLHandler
-    */
-    static GraphQLHandler createHandler(DataProvider::AbstractDataProvider provider,
-            *HttpServer::AbstractAuthenticator auth, *hash<auto> opts) {
-        DataProviderGraphQLSchema bridge(provider, opts);
-        return new GraphQLHandler(bridge.getExecutor(), auth);
     }
 
     #! builds a @ref GraphQLExecutor that executes against the given data provider
