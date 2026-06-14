@@ -60,7 +60,7 @@ static std::string qore_aot_deferred_object_type_class_path(const QoreTypeInfo* 
     return end && end > start ? std::string(start, end - start) : std::string();
 }
 
-static std::string qore_aot_deferred_hashdecl_type_path(const QoreTypeInfo* typeInfo) {
+static std::string qore_var_ref_aot_deferred_hashdecl_type_path(const QoreTypeInfo* typeInfo) {
     if (!qore_type_info_is_aot_deferred(typeInfo)
             || QoreTypeInfo::parseReturns(typeInfo, NT_HASH) == QTI_NOT_EQUAL) {
         return std::string();
@@ -583,7 +583,8 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                         ref.id->parseAssigned();
                     }
                 } else if (qore_aot_source_parse_active()
-                        && !(dynamic_hashdecl_name = qore_aot_deferred_hashdecl_type_path(typeInfo)).empty()) {
+                        && !(dynamic_hashdecl_name = qore_var_ref_aot_deferred_hashdecl_type_path(typeInfo))
+                            .empty()) {
                     setReceiverTypeInfo(typeInfo);
                     err = parseArgsVariant(loc, parse_context, nullptr, nullptr);
                     vrn_type = VRN_DYNAMIC_HASHDECL;

@@ -50,7 +50,7 @@ static void set_binary_analysis_minus(QoreParseContext& parse_context,
     }
 }
 
-static bool qore_parse_fold_exception_is_deferred(ParseExceptionSink& xsink) {
+static bool qore_minus_parse_fold_exception_is_deferred(ParseExceptionSink& xsink) {
     ExceptionSink* es = *xsink;
     if (!es->isException()) {
         return false;
@@ -67,7 +67,7 @@ static bool qore_parse_fold_exception_is_deferred(ParseExceptionSink& xsink) {
         || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
 }
 
-static bool qore_parse_type_is_unknown(const QoreTypeInfo* ti) {
+static bool qore_minus_parse_type_is_unknown(const QoreTypeInfo* ti) {
     return !QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo;
 }
 
@@ -187,7 +187,7 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder rv(this, *xsink);
         QoreValue result = rv.takeReferencedValue();
-        if (**xsink && qore_parse_fold_exception_is_deferred(xsink)) {
+        if (**xsink && qore_minus_parse_fold_exception_is_deferred(xsink)) {
             result.discard(nullptr);
             (*xsink)->clear();
         } else if (!result.isNothing() || **xsink) {
@@ -250,7 +250,8 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
                     && (QoreTypeInfo::isType(rightTypeInfo, NT_STRING)
                     || QoreTypeInfo::isType(rightTypeInfo, NT_LIST))) {
                 returnTypeInfo = autoHashTypeInfo;
-            } else if (!qore_parse_type_is_unknown(leftTypeInfo) && !qore_parse_type_is_unknown(rightTypeInfo)
+            } else if (!qore_minus_parse_type_is_unknown(leftTypeInfo)
+                    && !qore_minus_parse_type_is_unknown(rightTypeInfo)
                     && QoreTypeInfo::returnsSingle(leftTypeInfo) && QoreTypeInfo::returnsSingle(rightTypeInfo)) {
                 QoreStringNode* edesc = new QoreStringNode("subtracting ");
                 QoreTypeInfo::getThisType(rightTypeInfo, *edesc);

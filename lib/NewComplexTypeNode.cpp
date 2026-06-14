@@ -39,7 +39,7 @@
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/qore_program_private.h"
 
-static std::string qore_aot_deferred_hashdecl_type_path(const QoreTypeInfo* typeInfo) {
+static std::string qore_new_complex_aot_deferred_hashdecl_type_path(const QoreTypeInfo* typeInfo) {
     if (!qore_type_info_is_aot_deferred(typeInfo)
             || QoreTypeInfo::parseReturns(typeInfo, NT_HASH) == QTI_NOT_EQUAL) {
         return std::string();
@@ -114,7 +114,8 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     {
         std::string hashdecl_path;
         if (qore_aot_source_parse_active()
-                && !(hashdecl_path = qore_aot_deferred_hashdecl_type_path(parse_context.typeInfo)).empty()) {
+                && !(hashdecl_path = qore_new_complex_aot_deferred_hashdecl_type_path(
+                    parse_context.typeInfo)).empty()) {
             ReferenceHolder<> holder(this, nullptr);
             const QoreTypeInfo* returnTypeInfo = parse_context.typeInfo;
             if (qore_parse_init_hashdecl_args(args, parse_context) && !err) {

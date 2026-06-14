@@ -53,7 +53,7 @@ static void set_binary_analysis_plus(QoreParseContext& parse_context,
     }
 }
 
-static bool qore_parse_fold_exception_is_deferred(ParseExceptionSink& xsink) {
+static bool qore_plus_parse_fold_exception_is_deferred(ParseExceptionSink& xsink) {
     ExceptionSink* es = *xsink;
     if (!es->isException()) {
         return false;
@@ -70,7 +70,7 @@ static bool qore_parse_fold_exception_is_deferred(ParseExceptionSink& xsink) {
         || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
 }
 
-static bool qore_parse_type_is_unknown(const QoreTypeInfo* ti) {
+static bool qore_plus_parse_type_is_unknown(const QoreTypeInfo* ti) {
     return !QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo;
 }
 
@@ -259,7 +259,7 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder rv(this, *xsink);
         QoreValue result = rv.takeReferencedValue();
-        if (**xsink && qore_parse_fold_exception_is_deferred(xsink)) {
+        if (**xsink && qore_plus_parse_fold_exception_is_deferred(xsink)) {
             result.discard(nullptr);
             (*xsink)->clear();
         } else if (!result.isNothing() || **xsink) {
@@ -350,7 +350,8 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             returnTypeInfo = objectTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_BINARY) || QoreTypeInfo::isType(rightTypeInfo, NT_BINARY)) {
             returnTypeInfo = binaryTypeInfo;
-        } else if (!qore_parse_type_is_unknown(leftTypeInfo) && !qore_parse_type_is_unknown(rightTypeInfo)
+        } else if (!qore_plus_parse_type_is_unknown(leftTypeInfo)
+                && !qore_plus_parse_type_is_unknown(rightTypeInfo)
                 && QoreTypeInfo::returnsSingle(leftTypeInfo) && QoreTypeInfo::returnsSingle(rightTypeInfo)) {
             // only return type nothing if both types are available and return a single type
             returnTypeInfo = nothingTypeInfo;
