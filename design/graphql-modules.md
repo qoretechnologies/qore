@@ -546,10 +546,15 @@ schema still has a query root.
   (and populating `info.expressions`); the generated resolvers delegate to the provider's
   `searchRecords`/`updateRecords`/`deleteRecords` DPQL overloads, so the provider's
   `updateRecordsImpl`/`deleteRecordsImpl` are responsible for applying the where-expression.
-- **Phase B (optional, later):** typed, introspectable GraphQL filter input types
-  (`<R>WhereInput`, per-scalar `*Filter`, `_and`/`_or`/`_not`) that **compile to DPQL** — DPQL
-  stays the canonical IR, so there is never a second where-condition model. Justified only if
-  GraphQL-native filter tooling/introspection is required.
+- **Phase B — DONE:** typed, introspectable GraphQL filter input types (`<R>WhereInput`,
+  per-scalar `IntFilter`/`FloatFilter`/`StringFilter`/`BooleanFilter` with
+  `eq`/`ne`/`gt`/`gte`/`lt`/`lte`/`in`/`nin`/`like`, and recursive `_and`/`_or`/`_not`) that
+  **compile to DPQL** — DPQL stays the canonical IR. A typed `filter` argument is offered on
+  `search`/`update`/`delete` alongside the raw `where` DPQL string (both optional, AND-combined).
+  Because GraphQL cannot express "exactly one of filter/where is required", the Phase A
+  schema-level non-null-`where` mass-mutation guard became a **runtime guard** (update/delete with
+  no selector → error). Operator gating relies on `validateDpqlExpression` rejecting operators the
+  provider does not support at runtime.
 - **Phase C (optional, later):** return affected *records* (non-atomic re-read), and bulk
   operations from `supports_bulk_create` / `supports_bulk_upsert`.
 

@@ -153,29 +153,38 @@ public class DataProviderGraphQLSchema {
         # map record fields to GraphQL field definitions, building the gql-name -> provider-name map
         list<string> fieldLines();
         list<string> setLines();
+        list<string> whereLines();
+        hash<string, bool> usedFilterKinds();
         foreach string fname in (keys record_type) {
             string gqlName = sanitizeName(fname);
             field_name_map{gqlName} = fname;
             push fieldLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, False));
             # SetInput fields are always optional (a partial update assigns only supplied columns)
             push setLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, True));
+            # WhereInput: each scalar field gets a typed per-scalar filter
+            string fkind = scalarFilterKind(record_type{fname}.getType());
+            usedFilterKinds{fkind} = True;
+            push whereLines, sprintf("  %s: %sFilter", gqlName, fkind);
         }
 
         # DPQL where-filtering requires the provider to support advanced search expressions;
-        # update/delete are only generated when filtering is available, since their where argument
-        # is mandatory (an unfiltered whole-table update/delete is intentionally not generated)
+        # update/delete are only generated when filtering is available
         bool can_filter = info.supports_search_expressions;
         bool gen_update = info.supports_update && can_filter;
         bool gen_delete = info.supports_delete && can_filter;
+        string whereInputName = record_type_name + "WhereInput";
 
         list<string> defs();
         push defs, sprintf("type %s {\n%s\n}", record_type_name, fieldLines.join("\n"));
+
+        # the filter argument fragment (typed WhereInput + raw DPQL string escape hatch)
+        string filterArgs = sprintf("filter: %s, where: String", whereInputName);
 
         # Query
         list<string> queryFields();
         if (info.supports_read) {
             queryFields += can_filter
-                ? sprintf("  search(where: String, limit: Int, offset: Int): [%s!]!", record_type_name)
+                ? sprintf("  search(%s, limit: Int, offset: Int): [%s!]!", filterArgs, record_type_name)
                 : sprintf("  search(limit: Int, offset: Int): [%s!]!", record_type_name);
         }
         if (!queryFields) {
@@ -189,11 +198,11 @@ public class DataProviderGraphQLSchema {
             mutationFields += sprintf("  create(%s): %s", createArgList(), record_type_name);
         }
         if (gen_update) {
-            mutationFields += sprintf("  update(set: %sSetInput!, where: String!): Int!",
-                record_type_name);
+            mutationFields += sprintf("  update(set: %sSetInput!, %s): Int!",
+                record_type_name, filterArgs);
         }
         if (gen_delete) {
-            mutationFields += "  delete(where: String!): Int!";
+            mutationFields += sprintf("  delete(%s): Int!", filterArgs);
         }
         if (info.supports_upsert) {
             mutationFields += sprintf("  upsert(%s): String!", createArgList());
@@ -205,6 +214,19 @@ public class DataProviderGraphQLSchema {
         # the SetInput type is only referenced by update
         if (gen_update) {
             push defs, sprintf("input %sSetInput {\n%s\n}", record_type_name, setLines.join("\n"));
+        }
+
+        # the typed filter input types (only when filtering is available)
+        if (can_filter) {
+            # per-scalar filter input types actually used by the record's fields
+            foreach string fkind in (keys usedFilterKinds) {
+                push defs, scalarFilterTypeSdl(fkind);
+            }
+            # the record's WhereInput, with recursive logical combinators
+            push whereLines, sprintf("  _and: [%s!]", whereInputName);
+            push whereLines, sprintf("  _or: [%s!]", whereInputName);
+            push whereLines, sprintf("  _not: %s", whereInputName);
+            push defs, sprintf("input %s {\n%s\n}", whereInputName, whereLines.join("\n"));
         }
 
         sdl = defs.join("\n\n");
@@ -268,9 +290,10 @@ public class DataProviderGraphQLSchema {
     static list<auto> execSearch(hash<auto> spec, hash<auto> args) {
         AbstractDataProvider p = spec.provider;
         AbstractDataProviderRecordIterator it;
-        if (args.where.val()) {
-            DataProviderGraphQLSchema::validateWhere(spec, args.where);
-            it = p.searchRecords(args.where, {});
+        *string dpql = DataProviderGraphQLSchema::buildEffectiveDpql(spec, args);
+        if (dpql.val()) {
+            DataProviderGraphQLSchema::validateWhere(spec, dpql);
+            it = p.searchRecords(dpql, {});
         } else {
             it = p.searchRecords();
         }
@@ -298,18 +321,181 @@ public class DataProviderGraphQLSchema {
         return p.createRecord(DataProviderGraphQLSchema::toProviderRec(spec, args));
     }
 
-    #! updates records matching the DPQL filter, returning the number affected
+    #! updates records matching the filter, returning the number affected
     static int execUpdate(hash<auto> spec, hash<auto> args) {
-        DataProviderGraphQLSchema::validateWhere(spec, args.where);
+        string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "update");
         AbstractDataProvider p = spec.provider;
-        return p.updateRecords(DataProviderGraphQLSchema::toProviderRec(spec, args.set), args.where, {});
+        return p.updateRecords(DataProviderGraphQLSchema::toProviderRec(spec, args.set), dpql, {});
     }
 
-    #! deletes records matching the DPQL filter, returning the number affected
+    #! deletes records matching the filter, returning the number affected
     static int execDelete(hash<auto> spec, hash<auto> args) {
-        DataProviderGraphQLSchema::validateWhere(spec, args.where);
+        string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "delete");
         AbstractDataProvider p = spec.provider;
-        return p.deleteRecords(args.where, {});
+        return p.deleteRecords(dpql, {});
+    }
+
+    #! builds the effective DPQL for a mutation, requiring at least one selector (mass-mutation guard)
+    /** @throw GRAPHQL-EXECUTION-ERROR no \c filter or \c where selector was provided, or the
+        resulting filter is invalid
+    */
+    static string requireSelector(hash<auto> spec, hash<auto> args, string op) {
+        *string dpql = DataProviderGraphQLSchema::buildEffectiveDpql(spec, args);
+        if (!dpql.val()) {
+            throw GRAPHQL_EXECUTION_ERROR, sprintf("%s requires a \"filter\" or \"where\" condition "
+                "to select the records to affect", op);
+        }
+        DataProviderGraphQLSchema::validateWhere(spec, dpql);
+        return dpql;
+    }
+
+    #! combines the typed \c filter argument (compiled to DPQL) and the raw \c where DPQL string
+    /** @return the effective DPQL expression, or @ref NOTHING if no selector was provided
+    */
+    static *string buildEffectiveDpql(hash<auto> spec, hash<auto> args) {
+        list<string> parts();
+        if (args.filter.typeCode() == NT_HASH) {
+            string fdpql = DataProviderGraphQLSchema::whereInputToDpql(spec, args.filter);
+            if (fdpql.val()) {
+                parts += fdpql;
+            }
+        }
+        if (args.where.val()) {
+            parts += args.where;
+        }
+        if (!parts) {
+            return NOTHING;
+        }
+        if (parts.size() == 1) {
+            return parts[0];
+        }
+        return "(" + parts.join(") && (") + ")";
+    }
+
+    #! compiles a WhereInput value to a DPQL expression string
+    /** @param spec the resolver spec (for the gql->provider name map)
+        @param filter the coerced WhereInput hash
+
+        @return the DPQL expression (empty string if the filter is empty)
+    */
+    static string whereInputToDpql(hash<auto> spec, hash<auto> filter) {
+        hash<auto> name_map = spec.name_map;
+        list<string> clauses();
+        foreach string key in (keys filter) {
+            switch (key) {
+                case "_and": {
+                    list<string> subs = map "(" + DataProviderGraphQLSchema::whereInputToDpql(spec, $1) + ")",
+                        filter._and;
+                    clauses += subs.join(" && ");
+                    break;
+                }
+                case "_or": {
+                    list<string> subs = map "(" + DataProviderGraphQLSchema::whereInputToDpql(spec, $1) + ")",
+                        filter._or;
+                    clauses += "(" + subs.join(" || ") + ")";
+                    break;
+                }
+                case "_not":
+                    clauses += "!(" + DataProviderGraphQLSchema::whereInputToDpql(spec, filter._not) + ")";
+                    break;
+                default: {
+                    # a per-field filter
+                    string provName = name_map{key} ?? key;
+                    clauses += DataProviderGraphQLSchema::filterFieldToDpql(provName, filter{key});
+                    break;
+                }
+            }
+        }
+        return (select clauses, $1.val()).join(" && ");
+    }
+
+    #! compiles a single field's per-scalar filter to DPQL conditions (AND-ed)
+    static string filterFieldToDpql(string provName, hash<auto> ops) {
+        string ref = DataProviderGraphQLSchema::quoteFieldRef(provName);
+        list<string> conds();
+        foreach string op in (keys ops) {
+            switch (op) {
+                case "eq": conds += sprintf("%s == %s", ref, renderDpqlValue(ops.eq)); break;
+                case "ne": conds += sprintf("%s != %s", ref, renderDpqlValue(ops.ne)); break;
+                case "gt": conds += sprintf("%s > %s", ref, renderDpqlValue(ops.gt)); break;
+                case "gte": conds += sprintf("%s >= %s", ref, renderDpqlValue(ops.gte)); break;
+                case "lt": conds += sprintf("%s < %s", ref, renderDpqlValue(ops.lt)); break;
+                case "lte": conds += sprintf("%s <= %s", ref, renderDpqlValue(ops.lte)); break;
+                case "in": conds += sprintf("%s in %s", ref, renderDpqlValue(ops.in)); break;
+                case "nin": conds += sprintf("%s not in %s", ref, renderDpqlValue(ops.nin)); break;
+                case "like": conds += sprintf("%s like %s", ref, renderDpqlValue(ops.like)); break;
+            }
+        }
+        return conds.join(" && ");
+    }
+
+    #! renders a runtime value as a DPQL literal
+    static string renderDpqlValue(auto v) {
+        switch (v.typeCode()) {
+            case NT_STRING: {
+                string s = v;
+                s =~ s/\\/\\\\/g;
+                s =~ s/"/\\"/g;
+                return "\"" + s + "\"";
+            }
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return v.toString();
+            case NT_BOOLEAN:
+                return v ? "true" : "false";
+            case NT_LIST:
+                return "(" + (map renderDpqlValue($1), v).join(", ") + ")";
+            case NT_NOTHING:
+            case NT_NULL:
+                return "null";
+            default:
+                return renderDpqlValue(v.toString());
+        }
+    }
+
+    #! renders a DPQL field reference, quoting names that are not simple identifiers
+    static string quoteFieldRef(string name) {
+        if (name =~ /^[A-Za-z_][A-Za-z0-9_.]*$/) {
+            return "@" + name;
+        }
+        string e = name;
+        e =~ s/\\/\\\\/g;
+        e =~ s/"/\\"/g;
+        return "@\"" + e + "\"";
+    }
+
+    #! returns the per-scalar filter input-type kind name for a data provider type (\c Int, \c Float, ...)
+    private string scalarFilterKind(AbstractDataProviderType t) {
+        switch (t.getBaseTypeCode()) {
+            case NT_INT:
+                return "Int";
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return "Float";
+            case NT_BOOLEAN:
+                return "Boolean";
+            default:
+                # strings, dates, hashes, binary, etc. are filtered as strings
+                return "String";
+        }
+    }
+
+    #! returns the SDL definition of the per-scalar filter input type for the given kind
+    static string scalarFilterTypeSdl(string kind) {
+        switch (kind) {
+            case "Int":
+            case "Float":
+                return sprintf("input %sFilter {\n  eq: %s\n  ne: %s\n  gt: %s\n  gte: %s\n  lt: %s\n"
+                    "  lte: %s\n  in: [%s!]\n  nin: [%s!]\n}", kind, kind, kind, kind, kind, kind,
+                    kind, kind, kind);
+            case "Boolean":
+                return "input BooleanFilter {\n  eq: Boolean\n  ne: Boolean\n}";
+            default:
+                # String (and anything mapped to String)
+                return "input StringFilter {\n  eq: String\n  ne: String\n  in: [String!]\n"
+                    "  nin: [String!]\n  like: String\n}";
+        }
     }
 
     #! upserts a record from the GraphQL arguments, returning the record id

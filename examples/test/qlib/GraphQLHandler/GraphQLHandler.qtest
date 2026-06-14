@@ -426,12 +426,18 @@ class GraphQLHandlerTest inherits QUnit::Test {
         # generated SDL contains the record type and the search/create/update/delete/upsert operations
         string sdl = bridge.getSdl();
         assertRegex("type peopleRecord", sdl);
-        assertRegex("search\\(where: String, limit: Int, offset: Int\\): \\[peopleRecord!\\]!", sdl);
+        assertRegex("search\\(filter: peopleRecordWhereInput, where: String, limit: Int, offset: Int\\): \\[peopleRecord!\\]!", sdl);
         assertRegex("create\\(", sdl);
-        assertRegex("update\\(set: peopleRecordSetInput!, where: String!\\): Int!", sdl);
-        assertRegex("delete\\(where: String!\\): Int!", sdl);
+        assertRegex("update\\(set: peopleRecordSetInput!, filter: peopleRecordWhereInput, where: String\\): Int!", sdl);
+        assertRegex("delete\\(filter: peopleRecordWhereInput, where: String\\): Int!", sdl);
         assertRegex("upsert\\(.*\\): String!", sdl);
         assertRegex("input peopleRecordSetInput", sdl);
+        # typed filter input types (Phase B)
+        assertRegex("input peopleRecordWhereInput", sdl);
+        assertRegex("_and: \\[peopleRecordWhereInput!\\]", sdl);
+        assertRegex("input IntFilter", sdl);
+        assertRegex("input StringFilter", sdl);
+        assertRegex("input BooleanFilter", sdl);
 
         GraphQLExecutor ex = bridge.getExecutor();
         # search (no filter)
@@ -442,25 +448,43 @@ class GraphQLHandlerTest inherits QUnit::Test {
         assertEq(1, ex.execute("{ search(limit: 1) { name } }").data.search.size());
         assertEq("Bob", ex.execute("{ search(offset: 1) { name } }").data.search[0].name);
 
-        # DPQL filtered search
+        # DPQL filtered search (raw where string)
         hash<auto> f = ex.execute("{ search(where: \"@active == true\") { name } }");
         assertEq(("Ada",), (map $1.name, f.data.search));
         # compound DPQL filter
         hash<auto> f2 = ex.execute("{ search(where: \"@id >= 1 && @name like \\\"A%\\\"\") { name } }");
         assertEq(("Ada",), (map $1.name, f2.data.search));
 
+        # typed filters (Phase B) compiled to DPQL
+        assertEq(("Ada",),
+            (map $1.name, ex.execute("{ search(filter: {active: {eq: true}}) { name } }").data.search));
+        assertEq(("Ada", "Bob"),
+            (map $1.name, ex.execute("{ search(filter: {id: {in: [1, 2]}}) { name } }").data.search));
+        # logical combinators
+        assertEq(("Bob",),
+            (map $1.name, ex.execute("{ search(filter: {_not: {active: {eq: true}}}) { name } }").data.search));
+        assertEq(("Ada", "Bob"),
+            (map $1.name, ex.execute("{ search(filter: {_or: [{name: {eq: \"Ada\"}}, {name: {eq: \"Bob\"}}]}) { name } }").data.search));
+        # a typed filter combined with a raw where (AND-ed)
+        assertEq(("Bob",),
+            (map $1.name, ex.execute("{ search(filter: {id: {gte: 1}}, where: \"@active == false\") { name } }").data.search));
+
         # create
         hash<auto> c = ex.execute("mutation { create(id: 3, name: \"Cy\", active: true) { id name } }");
         assertEq("Cy", c.data.create.name);
         assertEq(3, ex.execute("{ search { id } }").data.search.size());
 
-        # update with set + DPQL where -> affected count, then verify
+        # update with set + raw where -> affected count, then verify
         assertEq(1, ex.execute("mutation { update(set: {name: \"Adita\"}, where: \"@id == 1\") }").data.update);
         assertEq("Adita", ex.execute("{ search(where: \"@id == 1\") { name } }").data.search[0].name);
 
-        # delete with DPQL where -> affected count, then verify
-        assertEq(1, ex.execute("mutation { delete(where: \"@active == false\") }").data.delete);
-        assertFalse((map $1.name, ex.execute("{ search { name } }").data.search).contains("Bob"));
+        # update with a typed filter
+        assertEq(1, ex.execute("mutation { update(set: {name: \"Bobby\"}, filter: {id: {eq: 2}}) }").data.update);
+        assertEq("Bobby", ex.execute("{ search(filter: {id: {eq: 2}}) { name } }").data.search[0].name);
+
+        # delete with a typed filter -> affected count, then verify
+        assertEq(1, ex.execute("mutation { delete(filter: {active: {eq: false}}) }").data.delete);
+        assertFalse((map $1.name, ex.execute("{ search { name } }").data.search).contains("Bobby"));
 
         # upsert -> record id
         assertEq("4", ex.execute("mutation { upsert(id: 4, name: \"Dee\", active: true) }").data.upsert);
@@ -472,9 +496,11 @@ class GraphQLHandlerTest inherits QUnit::Test {
         assertRegex("template references are not permitted",
             ex.execute("{ search(where: \"@name == \$env:HOME\") { id } }").errors[0].message);
 
-        # safety: the non-null where argument means an unconditional delete is a schema-level error
-        hash<auto> nd = ex.execute("mutation { delete }");
-        assertTrue(exists nd.errors, "delete without a where argument is rejected");
+        # safety: an update/delete with no selector (neither filter nor where) is a runtime error
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { delete }").errors[0].message);
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { update(set: {name: \"x\"}) }").errors[0].message);
 
         # name sanitization transform
         assertEq("first_name", DataProviderGraphQLSchema::sanitizeName("first-name"));
