@@ -1,0 +1,196 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTQccBuildSidecarsTest
+
+class AOTQccBuildSidecarsTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTQccBuildSidecarsTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("single source qo sidecars and manifest skip", \testSingleSourceSidecars());
+        addTestCase("qo link sidecars and manifest skip", \testQoLinkSidecars());
+        addTestCase("script aggregate sidecars and manifest skip", \testScriptAggregateSidecars());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private assertContains(string haystack, string needle, string msg) {
+        assertTrue(haystack.find(needle) != -1, msg + ": " + haystack);
+    }
+
+    testSingleSourceSidecars() {
+        TmpDir tmp("qore-aot-qcc-sidecars-");
+        string src = tmp.path + "/single.qc";
+        string qo = tmp.path + "/single.qo";
+        string dep = qo + ".d";
+        string idx = qo + ".idx.json";
+        string manifest = qo + ".manifest.json";
+
+        write(src, "%new-style
+public class QccSidecarSingle {
+    public {
+        const C = 41;
+    }
+
+    static int f() {
+        return C + 1;
+    }
+}
+");
+
+        string cmd = sprintf(
+            "%s %s -v -c --parse-option=PO_MODERN --depfile=%s"
+            " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
+            " -o %s %s",
+            env, qcc_bin, dep, idx, manifest, qo, src);
+        string first = run(cmd);
+        assertTrue(is_file(qo), "compiled single source .qo: " + first);
+        assertTrue(is_file(dep), "wrote single source depfile: " + first);
+        assertTrue(is_file(idx), "wrote single source index sidecar: " + first);
+        assertTrue(is_file(manifest), "wrote single source manifest: " + first);
+
+        assertContains(File::readTextFile(dep), "single.qc", "depfile names source");
+        string index_json = File::readTextFile(idx);
+        assertContains(index_json, "\"provides\"", "index JSON has provides");
+        assertContains(index_json, "QccSidecarSingle::C", "index JSON has class constant");
+        string manifest_json = File::readTextFile(manifest);
+        assertContains(manifest_json, "\"kind\": \"script-file\"", "manifest records mode");
+        assertContains(manifest_json, "\"inputs\"", "manifest records inputs");
+
+        string second = run(cmd);
+        assertContains(second, "manifest current, skipped script-file",
+            "second identical command skips from qcc manifest");
+    }
+
+    testQoLinkSidecars() {
+        TmpDir tmp("qore-aot-qcc-link-sidecars-");
+        string provider = tmp.path + "/provider.qc";
+        string consumer = tmp.path + "/consumer.qc";
+        string provider_qo = tmp.path + "/provider.qo";
+        string consumer_qo = tmp.path + "/consumer.qo";
+        string aggregate = tmp.path + "/aggregate.qo";
+        string dep = aggregate + ".d";
+        string idx = aggregate + ".idx.json";
+        string link_map = aggregate + ".qolink.json";
+        string manifest = aggregate + ".manifest.json";
+
+        write(provider, "%new-style
+public class QccSidecarProvider {
+    static int f() {
+        return 42;
+    }
+}
+");
+        write(consumer, "%new-style
+public class QccSidecarConsumer {
+    static int g() {
+        return QccSidecarProvider::f();
+    }
+}
+");
+
+        string provider_out = run(sprintf("%s %s -c --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, provider_qo, provider));
+        assertTrue(is_file(provider_qo), "compiled provider .qo: " + provider_out);
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, tmp.path, consumer_qo, consumer));
+        assertTrue(is_file(consumer_qo), "compiled consumer .qo: " + consumer_out);
+
+        string cmd = sprintf(
+            "%s %s -v --link-qo --aggregate-symbol=QCC_SIDECAR_LINK"
+            " --qolink-map=%s --depfile=%s --write-index-json=%s"
+            " --write-manifest=%s --skip-if-manifest-current -o %s %s %s",
+            env, qcc_bin, link_map, dep, idx, manifest, aggregate, provider_qo, consumer_qo);
+        string first = run(cmd);
+        assertTrue(is_file(aggregate), "linked aggregate .qo: " + first);
+        assertTrue(is_file(link_map), "wrote link map: " + first);
+        assertTrue(is_file(dep), "wrote qo-link depfile: " + first);
+        assertTrue(is_file(idx), "wrote qo-link index sidecar: " + first);
+        assertTrue(is_file(manifest), "wrote qo-link manifest: " + first);
+
+        string dep_text = File::readTextFile(dep);
+        assertContains(dep_text, "provider.qo", "qo-link depfile names provider");
+        assertContains(dep_text, "consumer.qo", "qo-link depfile names consumer");
+        string map_text = File::readTextFile(link_map);
+        assertContains(map_text, "\"resolved_call_relocations\"", "link map records relocations");
+        assertContains(File::readTextFile(manifest), "\"kind\": \"link-qo\"",
+            "manifest records qo-link mode");
+
+        string second = run(cmd);
+        assertContains(second, "manifest current, skipped qo link aggregate",
+            "second identical qo-link command skips from qcc manifest");
+    }
+
+    testScriptAggregateSidecars() {
+        TmpDir tmp("qore-aot-qcc-script-agg-sidecars-");
+        string provider = tmp.path + "/provider.qr";
+        string consumer = tmp.path + "/consumer.qr";
+        string aggregate = tmp.path + "/script-aggregate.qo";
+        string dep = aggregate + ".d";
+        string idx = aggregate + ".idx.json";
+        string manifest = aggregate + ".manifest.json";
+
+        write(provider, "%modern
+public class QccScriptAggProvider {
+    static int f() {
+        return 42;
+    }
+}
+");
+        write(consumer, "%modern
+int sub main() {
+    return QccScriptAggProvider::f();
+}
+");
+
+        string cmd = sprintf(
+            "%s %s -v -c --script-aggregate=QCC_SCRIPT_AGG"
+            " --depfile=%s --write-index-json=%s --write-manifest=%s"
+            " --skip-if-manifest-current -o %s %s %s",
+            env, qcc_bin, dep, idx, manifest, aggregate, provider, consumer);
+        string first = run(cmd);
+        assertTrue(is_file(aggregate), "compiled script aggregate .qo: " + first);
+        assertTrue(is_file(dep), "wrote script aggregate depfile: " + first);
+        assertTrue(is_file(idx), "wrote script aggregate index sidecar: " + first);
+        assertTrue(is_file(manifest), "wrote script aggregate manifest: " + first);
+
+        string dep_text = File::readTextFile(dep);
+        assertContains(dep_text, "provider.qr", "script aggregate depfile names provider source");
+        assertContains(dep_text, "consumer.qr", "script aggregate depfile names consumer source");
+        assertContains(File::readTextFile(idx), "QccScriptAggProvider",
+            "script aggregate index includes provider class");
+        assertContains(File::readTextFile(manifest), "\"kind\": \"script-aggregate\"",
+            "manifest records script aggregate mode");
+
+        string second = run(cmd);
+        assertContains(second, "manifest current, skipped script aggregate",
+            "second identical script aggregate command skips from qcc manifest");
+    }
+}

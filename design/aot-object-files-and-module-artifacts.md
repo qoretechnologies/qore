@@ -132,15 +132,19 @@ Optional flags:
 - `--dump-symbols`: print an nm-like symbol table.
 - `--dump-sections`: print object and AOT section tables.
 - `--dump-index-json`: print build-consumable JSON for the AOT symbol index.
+- `--write-index-json=<path>`: write the same JSON sidecar after a successful
+  single-output build.
 
 With `--dump-symbols`, AOT metadata dumps also include `SYMBOL_INDEX` defined,
 imported, native, and context records when the section is present.
 
 Build tools can materialize the JSON output next to an object as
-`<object>.idx.json`. The sidecar mirrors the binary index with `defines`,
-`provides`, `requires`, `native`, `source_text`, and `native_body_hash` fields
-so planners can distinguish source/API/value rebuilds from relink-only native
-body changes without parsing the human dump format.
+`<object>.idx.json` by passing `--write-index-json=<object>.idx.json` in the
+same qcc invocation that produces the object. The sidecar mirrors the binary
+index with `defines`, `provides`, `requires`, `native`, `source_text`, and
+`native_body_hash` fields so planners can distinguish source/API/value rebuilds
+from relink-only native body changes without parsing the human dump format or
+starting a second qcc process.
 
 The dump path is for diagnostics only; runtimes ignore `BUILD_INFO` and do not
 require `SYMBOL_INDEX`.
@@ -175,3 +179,24 @@ default.
 
 The `qcc-format` stamp controls mass qmod rebuilds. Only changes that can alter
 qmod output or qcc compile semantics should update that stamp.
+
+`qcc` owns the reusable build-sidecar contract for `.qo` and aggregate outputs.
+Build systems should prefer qcc options over external scanners when the needed
+information comes from parsed Qore metadata:
+
+- `--depfile=<path>` emits Make/Ninja dependencies for single-source compile,
+  `--script-aggregate`, and `--link-qo` single-output commands.
+- `--write-index-json=<path>` emits the AOT symbol index JSON for the generated
+  object or aggregate.
+- `--write-manifest=<path>` emits a deterministic manifest containing qcc
+  options, selected environment, sidecar paths, output hash/size, and hashes of
+  all known inputs.
+- `--manifest-input=<path>` adds build-system-owned files, such as response
+  files or ABI stamps, to the manifest.
+- `--skip-if-manifest-current` exits successfully without rebuilding when the
+  manifest content already matches current output/input state.
+
+The manifest skip check intentionally runs before Qore initialization when the
+output and sidecars are current. This makes no-op delta builds cheap and keeps
+the correctness decision close to the compiler state that can affect generated
+artifacts.
