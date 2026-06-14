@@ -327,6 +327,13 @@ static bool has_qo_extension(const char* path) {
     return has_extension(path, ".qo");
 }
 
+static bool qcc_check_cancel(const char* operation) {
+    // qcc deliberately performs manifest-current checks before qore_init() so
+    // no-op builds can skip without starting the Qore runtime.  The normal
+    // qore_check_cancel() path needs initialized thread-local Qore state.
+    return q_libqore_initalized() && qore_check_cancel(nullptr, operation);
+}
+
 // Write a Make-format dependency file at `path`.
 // Target (LHS) is `output`; deps are `source` plus, when `context` is
 // non-null, every `.qm`/`.qc`/`.ql` under it — the set the parser actually
@@ -373,7 +380,7 @@ static bool write_depfile(const char* path, const std::string& output,
         size_t dep_i = 0;
         while ((ent = readdir(d)) != nullptr) {
             if (dep_i && !(dep_i % 100)
-                    && qore_check_cancel(nullptr, "qcc depfile context scan")) {
+                    && qcc_check_cancel("qcc depfile context scan")) {
                 fprintf(stderr, "error: operation cancelled during qcc depfile context scan\n");
                 closedir(d);
                 return false;
@@ -405,7 +412,7 @@ static bool write_depfile(const char* path, const std::string& output,
     if (extra_deps) {
         for (size_t i = 0; i < extra_deps->size(); ++i) {
             if (i && !(i % 100)
-                    && qore_check_cancel(nullptr, "qcc depfile extra dependency scan")) {
+                    && qcc_check_cancel("qcc depfile extra dependency scan")) {
                 fprintf(stderr,
                     "error: operation cancelled during qcc depfile extra dependency scan\n");
                 return false;
@@ -488,7 +495,7 @@ static bool write_depfile_list(const char* path, const std::string& output,
     };
     fprintf(f, "%s:", escape(output).c_str());
     for (size_t i = 0; i < deps.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "qcc depfile emission")) {
+        if (i && !(i % 100) && qcc_check_cancel("qcc depfile emission")) {
             fclose(f);
             fprintf(stderr, "error: operation cancelled during qcc depfile emission\n");
             return false;
@@ -2755,7 +2762,7 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint32_t j = 0; j < type_param_count; ++j) {
-                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT class type parameter dump")) {
+                if (j && !(j % 100) && qcc_check_cancel("AOT class type parameter dump")) {
                     error = "operation cancelled during AOT class type parameter dump";
                     return false;
                 }
@@ -2905,7 +2912,7 @@ static bool dump_scan_hashdecl_defaults(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint16_t j = 0; j < type_param_count; ++j) {
-                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT hashdecl type parameter dump")) {
+                if (j && !(j % 100) && qcc_check_cancel("AOT hashdecl type parameter dump")) {
                     error = "operation cancelled during AOT hashdecl type parameter dump";
                     return false;
                 }
@@ -3098,7 +3105,7 @@ static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool na
 }
 
 static bool dump_aot_symbol_index_check_cancel(size_t ordinal, const char* operation) {
-    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+    if (ordinal && !(ordinal % 100) && qcc_check_cancel(operation)) {
         printf("      cancelled during %s\n", operation ? operation : "AOT symbol-index dump");
         return false;
     }
@@ -3161,7 +3168,7 @@ static void print_aot_symbol_index(const QoreAOTBinaryReader& reader) {
 }
 
 static bool dump_aot_call_relocations_check_cancel(size_t ordinal, const char* operation) {
-    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+    if (ordinal && !(ordinal % 100) && qcc_check_cancel(operation)) {
         printf("      cancelled during %s\n", operation ? operation : "AOT call-relocation dump");
         return false;
     }
@@ -3442,7 +3449,7 @@ static void add_unique_string(std::vector<std::string>& out, std::set<std::strin
 }
 
 static bool qo_link_check_cancel(size_t ordinal, const char* operation, std::string& error) {
-    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+    if (ordinal && !(ordinal % 100) && qcc_check_cancel(operation)) {
         error = "operation cancelled during ";
         error += operation ? operation : "AOT qo-link processing";
         return false;
@@ -3532,7 +3539,7 @@ static bool collect_qo_link_input(const char* path, QOLinkInputInfo& input,
     input.index.version = QORE_AOT_SYMBOL_INDEX_VERSION;
 
     for (size_t i = 0; i < blobs.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link metadata scan")) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT qo-link metadata scan")) {
             error = "operation cancelled during AOT qo-link metadata scan";
             return false;
         }
@@ -3911,7 +3918,7 @@ static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
     std::set<std::string> module_cmd_seen;
 
     for (size_t i = 0; i < inputs.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link provider collection")) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT qo-link provider collection")) {
             error = "operation cancelled during AOT qo-link provider collection";
             return false;
         }
@@ -4500,7 +4507,7 @@ static bool write_qo_link_map(const std::string& path, const std::string& output
 
 static void print_qo_link_issues(const char* label, const std::vector<QOLinkIssue>& issues) {
     for (size_t i = 0; i < issues.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link issue reporting")) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT qo-link issue reporting")) {
             fprintf(stderr, "error: operation cancelled during AOT qo-link issue reporting\n");
             return;
         }
@@ -4513,7 +4520,7 @@ static void print_qo_link_issues(const char* label, const std::vector<QOLinkIssu
         if (!issue.providers.empty()) {
             fprintf(stderr, " providers=");
             for (size_t j = 0; j < issue.providers.size(); ++j) {
-                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT qo-link issue provider reporting")) {
+                if (j && !(j % 100) && qcc_check_cancel("AOT qo-link issue provider reporting")) {
                     fprintf(stderr, "\nerror: operation cancelled during AOT qo-link issue provider reporting\n");
                     return;
                 }
@@ -4527,7 +4534,7 @@ static void print_qo_link_issues(const char* label, const std::vector<QOLinkIssu
 static void print_qo_link_call_relocation_issues(const char* label,
         const std::vector<QOLinkCallRelocation>& relocs) {
     for (size_t i = 0; i < relocs.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link call-relocation issue reporting")) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT qo-link call-relocation issue reporting")) {
             fprintf(stderr, "error: operation cancelled during AOT qo-link call-relocation issue reporting\n");
             return;
         }
@@ -4544,7 +4551,7 @@ static void print_qo_link_call_relocation_issues(const char* label,
             fprintf(stderr, " providers=");
             for (size_t j = 0; j < reloc.providers.size(); ++j) {
                 if (j && !(j % 100)
-                        && qore_check_cancel(nullptr, "AOT qo-link call-relocation provider reporting")) {
+                        && qcc_check_cancel("AOT qo-link call-relocation provider reporting")) {
                     fprintf(stderr,
                         "\nerror: operation cancelled during AOT qo-link call-relocation provider reporting\n");
                     return;
@@ -4670,7 +4677,7 @@ static void json_print_string(const std::string& value) {
     putchar('"');
     size_t i = 0;
     for (unsigned char c : value) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT symbol-index JSON string dump")) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT symbol-index JSON string dump")) {
             fprintf(stderr, "error: operation cancelled during AOT symbol-index JSON string dump\n");
             json_output_cancelled = true;
             return;
@@ -4730,7 +4737,7 @@ static void json_print_u64_field(const char* key, uint64_t value,
 }
 
 static bool json_dump_check_cancel(size_t ordinal, const char* operation) {
-    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+    if (ordinal && !(ordinal % 100) && qcc_check_cancel(operation)) {
         fprintf(stderr, "error: operation cancelled during %s\n",
             operation ? operation : "AOT symbol-index JSON dump");
         return false;
@@ -4963,7 +4970,7 @@ static int dump_aot_index_json_for_file(const char* path) {
     std::vector<std::string> source_text;
     std::set<std::string> source_seen;
     for (size_t i = 0; i < blobs.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT symbol-index JSON dump")) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT symbol-index JSON dump")) {
             fprintf(stderr, "error: operation cancelled during AOT symbol-index JSON dump\n");
             return 1;
         }
