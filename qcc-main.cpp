@@ -2427,6 +2427,8 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
 
         const size_t local_slot_extra_bytes =
             (reader.getHeader().feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0 ? 7 : 3;
+        const size_t global_slot_extra_bytes =
+            (reader.getHeader().feature_flags & QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS) != 0 ? 2 : 1;
         bool malformed = false;
         for (uint16_t i = 0; i < num_locals && !malformed; ++i) {
             malformed = !dump_skip_string_ref(reader, p, entry_end)
@@ -2436,7 +2438,7 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
         for (uint16_t i = 0; i < num_globals && !malformed; ++i) {
             malformed = !dump_skip_string_ref(reader, p, entry_end)
                 || !dump_skip_string_ref(reader, p, entry_end)
-                || !dump_skip_bytes(p, entry_end, 1);
+                || !dump_skip_bytes(p, entry_end, global_slot_extra_bytes);
         }
         for (uint16_t i = 0; i < num_exprs && !malformed; ++i) {
             uint8_t kind = 0;

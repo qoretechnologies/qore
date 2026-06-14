@@ -426,6 +426,104 @@ static std::string makeAOTVariantSignature(const AbstractQoreFunctionVariant* v)
     return rv;
 }
 
+static std::string trimAOTSignatureParam(const std::string& str) {
+    size_t start = str.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+        return {};
+    }
+    size_t end = str.find_last_not_of(" \t\r\n");
+    return str.substr(start, end - start + 1);
+}
+
+static std::vector<std::string> splitAOTSignatureParams(const std::string& sig) {
+    std::vector<std::string> out;
+    if (sig.size() < 2 || sig.front() != '(' || sig.back() != ')') {
+        return out;
+    }
+
+    std::string cur;
+    int angle_depth = 0;
+    int paren_depth = 0;
+    for (size_t i = 1; i + 1 < sig.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT signature parameter splitting")) {
+            return {};
+        }
+        char c = sig[i];
+        if (c == '<' && paren_depth == 0) {
+            ++angle_depth;
+        } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+            --angle_depth;
+        } else if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && paren_depth > 0) {
+            --paren_depth;
+        }
+
+        if (c == ',' && angle_depth == 0 && paren_depth == 0) {
+            out.push_back(trimAOTSignatureParam(cur));
+            cur.clear();
+            continue;
+        }
+        cur.push_back(c);
+    }
+
+    std::string trimmed = trimAOTSignatureParam(cur);
+    if (!trimmed.empty()) {
+        out.push_back(std::move(trimmed));
+    }
+    return out;
+}
+
+static bool isAOTAutoSignatureParam(const std::string& param) {
+    std::string normalized = normalizeTypePaths(param);
+    return normalized == "auto";
+}
+
+static bool aotVariantSignatureMatches(const AbstractQoreFunctionVariant* v,
+        const std::string& target_sig, QoreAOTTypeResolver* type_resolver) {
+    std::string var_sig = normalizeTypePaths(makeAOTVariantSignature(v));
+    std::string normalized_target_sig = normalizeTypePaths(target_sig);
+    if (var_sig == normalized_target_sig) {
+        return true;
+    }
+
+    std::vector<std::string> var_params = splitAOTSignatureParams(var_sig);
+    std::vector<std::string> target_params = splitAOTSignatureParams(normalized_target_sig);
+    if (var_params.size() != target_params.size()) {
+        return false;
+    }
+
+    AbstractFunctionSignature* sig = v ? v->getSignature() : nullptr;
+    const type_vec_t* types = sig ? &sig->getTypeList() : nullptr;
+    if (!types || types->size() != target_params.size()) {
+        return target_params.empty();
+    }
+
+    for (size_t i = 0; i < target_params.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT variant signature semantic matching")) {
+            return false;
+        }
+        if (isAOTAutoSignatureParam(var_params[i]) || isAOTAutoSignatureParam(target_params[i])) {
+            continue;
+        }
+        if (var_params[i] == target_params[i]) {
+            continue;
+        }
+        if (!type_resolver) {
+            return false;
+        }
+        std::string error;
+        const QoreTypeInfo* target_ti = type_resolver->resolve(target_params[i].c_str(), error);
+        if (!target_ti || !error.empty()) {
+            return false;
+        }
+        if (!QoreTypeInfo::isInputIdentical((*types)[i], target_ti)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static const AbstractQoreFunctionVariant* findAOTVariantBySignatureText(MethodFunctionBase* mfb,
         const char* sig_text) {
     if (!mfb || !sig_text || !*sig_text) {
@@ -6761,6 +6859,7 @@ static void registerAOTFunctionsFromSlotMaps(
     // namespace walk.
     std::string last_class_name;
     const QoreClass* last_qc = nullptr;
+    const char* trace_slot_reg_env = getenv("QORE_AOT_TRACE_SLOT_REG");
 
     for (uint32_t f = 0; f < num_funcs; ++f) {
         const uint8_t* entry_start = ptr;
@@ -6792,6 +6891,8 @@ static void registerAOTFunctionsFromSlotMaps(
             skipSlotMapEntry(reader, ptr, end);
             continue;
         }
+        const bool trace_slot_reg = trace_slot_reg_env
+            && (!*trace_slot_reg_env || std::strstr(func_name, trace_slot_reg_env));
 
         // Debug: print init function slot map entries
         if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
@@ -6803,6 +6904,10 @@ static void registerAOTFunctionsFromSlotMaps(
         // Find matching AOT function
         auto it = func_map.find(func_name);
         if (it == func_map.end()) {
+            if (trace_slot_reg) {
+                fprintf(stderr, "[aot-slot-reg] slot entry '%s' has no native function table entry\n",
+                    func_name);
+            }
             // No AOT function for this entry — skip it
             // ptr is already positioned after the size field, so reset to entry_start
             ptr = entry_start;
@@ -6869,6 +6974,12 @@ static void registerAOTFunctionsFromSlotMaps(
             }
             printd(5, "AOT slot-reg: method '%s'::'%s' class=%p\n",
                 class_name.c_str(), method_name.c_str(), (void*)qc);
+            if (trace_slot_reg) {
+                fprintf(stderr, "[aot-slot-reg] lookup method func='%s' class='%s' method='%s' "
+                    "key_static=%s class_ptr=%p\n", func_name, class_name.c_str(),
+                    method_name.c_str(), key_is_static ? "true" : "false",
+                    static_cast<const void*>(qc));
+            }
             if (qc && !skip_special_method) {
                 // Use parse-time lookup instead of findMethod/findStaticMethod;
                 // runtime lookup checks committedEmpty(), which returns true for
@@ -6903,6 +7014,10 @@ static void registerAOTFunctionsFromSlotMaps(
                 }
                 printd(5, "AOT slot-reg: method lookup '%s' m=%p\n",
                     method_name.c_str(), (void*)m);
+                if (trace_slot_reg) {
+                    fprintf(stderr, "[aot-slot-reg] method lookup func='%s' primary=%p secondary_static=%p\n",
+                        func_name, static_cast<const void*>(m), static_cast<const void*>(m_static));
+                }
                 if (m) {
                     qualified_method_found = true;
                     // Extract signature from the full func_name to match the correct
@@ -6945,8 +7060,19 @@ static void registerAOTFunctionsFromSlotMaps(
                         }
                         var_sig.append(")");
 
-                        if (normalizeTypePaths(var_sig) == target_sig) {
+                        if (trace_slot_reg) {
+                            fprintf(stderr, "[aot-slot-reg] candidate func='%s' variant[%d] sig='%s' "
+                                "normalized='%s' target='%s' candidate=%p\n",
+                                func_name, var_count, var_sig.c_str(),
+                                normalizeTypePaths(var_sig).c_str(), target_sig.c_str(),
+                                static_cast<const void*>(candidate));
+                        }
+                        if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver)) {
                             uvb = candidate;
+                            if (trace_slot_reg) {
+                                fprintf(stderr, "[aot-slot-reg] matched func='%s' variant[%d]\n",
+                                    func_name, var_count);
+                            }
                             break;
                         }
                     }
@@ -7010,6 +7136,12 @@ static void registerAOTFunctionsFromSlotMaps(
                             }
                             var_sig.append(")");
                             std::vector<std::string> var_params = splitParams(normalizeTypePaths(var_sig));
+                            if (trace_slot_reg) {
+                                fprintf(stderr, "[aot-slot-reg] wildcard candidate func='%s' sig='%s' "
+                                    "normalized='%s' target='%s' candidate=%p\n",
+                                    func_name, var_sig.c_str(), normalizeTypePaths(var_sig).c_str(),
+                                    target_sig.c_str(), static_cast<const void*>(candidate));
+                            }
                             if (var_params.size() != target_params.size()) {
                                 continue;
                             }
@@ -7027,6 +7159,10 @@ static void registerAOTFunctionsFromSlotMaps(
                             }
                             if (ok) {
                                 uvb = candidate;
+                                if (trace_slot_reg) {
+                                    fprintf(stderr, "[aot-slot-reg] matched func='%s' with auto wildcard\n",
+                                        func_name);
+                                }
                                 break;
                             }
                         }
@@ -7054,8 +7190,18 @@ static void registerAOTFunctionsFromSlotMaps(
                                 }
                             }
                             var_sig.append(")");
-                            if (normalizeTypePaths(var_sig) == target_sig) {
+                            if (trace_slot_reg) {
+                                fprintf(stderr, "[aot-slot-reg] secondary static candidate func='%s' sig='%s' "
+                                    "normalized='%s' target='%s' candidate=%p\n",
+                                    func_name, var_sig.c_str(), normalizeTypePaths(var_sig).c_str(),
+                                    target_sig.c_str(), static_cast<const void*>(candidate));
+                            }
+                            if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver)) {
                                 uvb = candidate;
+                                if (trace_slot_reg) {
+                                    fprintf(stderr, "[aot-slot-reg] matched func='%s' static variant\n",
+                                        func_name);
+                                }
                                 break;
                             }
                         }
@@ -7064,8 +7210,15 @@ static void registerAOTFunctionsFromSlotMaps(
                         printd(2, "AOT slot-reg: no matching variant for '%s' "
                             "sig='%s' in %d variants\n",
                             func_name, target_sig.c_str(), var_count);
+                        if (trace_slot_reg) {
+                            fprintf(stderr, "[aot-slot-reg] no matching variant func='%s' target='%s' "
+                                "primary_variants=%d\n", func_name, target_sig.c_str(), var_count);
+                        }
                     }
                 }
+            } else if (trace_slot_reg && !qc) {
+                fprintf(stderr, "[aot-slot-reg] class lookup failed for func='%s' class='%s'\n",
+                    func_name, class_name.c_str());
             }
         }
 
@@ -7147,7 +7300,7 @@ static void registerAOTFunctionsFromSlotMaps(
                                 }
                             }
                             var_sig.append(")");
-                            if (normalizeTypePaths(var_sig) == target_sig) {
+                            if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver)) {
                                 return candidate;
                             }
                         }
@@ -7184,6 +7337,11 @@ static void registerAOTFunctionsFromSlotMaps(
 
             uvb = qualified_function ? findFuncInNamespace(search_ns) : findFuncInTree(root_ns);
             printd(5, "AOT slot-reg: function '%s' uvb=%p\n", fname_str.c_str(), (void*)uvb);
+            if (trace_slot_reg) {
+                fprintf(stderr, "[aot-slot-reg] function lookup func='%s' name='%s' uvb=%p qualified=%s\n",
+                    func_name, fname_str.c_str(), static_cast<const void*>(uvb),
+                    qualified_function ? "true" : "false");
+            }
         }
 
         // If the variant already has a cached AOT context (e.g., registered during
@@ -7266,6 +7424,9 @@ static void registerAOTFunctionsFromSlotMaps(
                 delete ctx;
                 printd(2, "AOT slot-reg: context built for '%s' but no variant (uvb=%p)\n",
                     func_name, (void*)uvb);
+                if (trace_slot_reg) {
+                    fprintf(stderr, "[aot-slot-reg] context built but no variant func='%s'\n", func_name);
+                }
             }
         } else {
             // buildContextFromSlotMap failed or returned null — ensure ptr is at entry boundary
@@ -8193,6 +8354,7 @@ static void registerFallbackFunctionsOnMainVariants(
         }
         return nullptr;
     };
+    QoreAOTTypeResolver type_resolver(main_pgm);
 
     // Walk functions in fallback namespace
     for (auto i = fallback_ns->func_list.begin(), e = fallback_ns->func_list.end(); i != e; ++i) {
@@ -8360,7 +8522,7 @@ static void registerFallbackFunctionsOnMainVariants(
                                 }
                             }
                             var_sig.append(")");
-                            if (normalizeTypePaths(var_sig) == target_sig) {
+                            if (aotVariantSignatureMatches(mv, target_sig, &type_resolver)) {
                                 main_uvb = candidate;
                                 break;
                             }
