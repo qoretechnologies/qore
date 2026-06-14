@@ -79,6 +79,9 @@ public class DataProviderGraphQLSchema {
         #! the default maximum number of records returned by a generated \c search field
         const DefaultSearchLimit = 1000;
 
+        #! the maximum number of operations accepted by a \c updateMany / \c deleteMany mutation
+        const MaxMutationBatchSize = 1000;
+
         #! maps a typed-filter operator field to the DPQL operator it requires the provider to support
         const FilterOpToDpql = {
             "eq": "==",
@@ -323,6 +326,16 @@ public class DataProviderGraphQLSchema {
         if (gen_delete) {
             mutationFields += sprintf("  delete(%s): %s", filterArgs, mutationReturn);
         }
+        # batched update/delete: each operation carries its own selector (and set); the result is a
+        # list of per-operation results (counts, or affected records when return_records is set)
+        if (gen_update) {
+            mutationFields += sprintf("  updateMany(ops: [%sUpdateOp!]!): [%s]!",
+                record_type_name, mutationReturn);
+        }
+        if (gen_delete) {
+            mutationFields += sprintf("  deleteMany(ops: [%sDeleteOp!]!): [%s]!",
+                record_type_name, mutationReturn);
+        }
         if (info.supports_upsert) {
             mutationFields += sprintf("  upsert(%s): String!", createArgs);
         }
@@ -341,6 +354,14 @@ public class DataProviderGraphQLSchema {
         # the SetInput type is only referenced by update
         if (gen_update) {
             push defs, sprintf("input %sSetInput {\n%s\n}", record_type_name, setLines.join("\n"));
+            # the UpdateOp type carries a per-operation set + selector for updateMany
+            push defs, sprintf("input %sUpdateOp {\n  set: %sSetInput!\n  filter: %s\n  where: String\n}",
+                record_type_name, record_type_name, whereInputName);
+        }
+        # the DeleteOp type carries a per-operation selector for deleteMany
+        if (gen_delete) {
+            push defs, sprintf("input %sDeleteOp {\n  filter: %s\n  where: String\n}",
+                record_type_name, whereInputName);
         }
         # the record Input type is referenced by the bulk operations (uses the input field mapping
         # so non-scalar fields reference generated input types, not output object types)
@@ -429,6 +450,16 @@ public class DataProviderGraphQLSchema {
                 return DataProviderGraphQLSchema::execDelete(spec, args);
             };
         }
+        if (gen_update) {
+            mutationResolvers.updateMany = auto sub (auto parent, hash<auto> args, auto ctx) {
+                return DataProviderGraphQLSchema::execUpdateMany(spec, args);
+            };
+        }
+        if (gen_delete) {
+            mutationResolvers.deleteMany = auto sub (auto parent, hash<auto> args, auto ctx) {
+                return DataProviderGraphQLSchema::execDeleteMany(spec, args);
+            };
+        }
         if (info.supports_upsert) {
             mutationResolvers.upsert = auto sub (auto parent, hash<auto> args, auto ctx) {
                 return DataProviderGraphQLSchema::execUpsert(spec, args);
@@ -498,19 +529,13 @@ public class DataProviderGraphQLSchema {
 
     #! updates records matching the filter; returns the affected records or the affected count
     static auto execUpdate(hash<auto> spec, hash<auto> args) {
-        string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "update");
-        AbstractDataProvider p = spec.provider;
-        hash<auto> set = DataProviderGraphQLSchema::toProviderRec(spec, args.set);
-        if (!spec.return_records) {
-            return p.updateRecords(set, dpql, {});
-        }
-        # returning records: re-read the matching records after the update. When the provider
-        # supports transactions, wrap mutate + re-read so the returned records are atomic
-        if (spec.requires_tx) {
+        # returning records is non-atomic (mutate + re-read); wrap it in a transaction when the
+        # provider supports transaction management so the returned records are consistent
+        if (spec.return_records && spec.requires_tx) {
+            AbstractDataProvider p = spec.provider;
             p.beginTransaction();
             try {
-                p.updateRecords(set, dpql, {});
-                list<auto> rv = DataProviderGraphQLSchema::collectMatching(p, dpql);
+                auto rv = DataProviderGraphQLSchema::updateRecordsCore(spec, args);
                 p.commit();
                 return rv;
             } catch (hash<ExceptionInfo> ex) {
@@ -518,34 +543,115 @@ public class DataProviderGraphQLSchema {
                 rethrow;
             }
         }
+        return DataProviderGraphQLSchema::updateRecordsCore(spec, args);
+    }
+
+    #! performs a single update (no transaction handling); returns the affected count or, when
+    #! \c return_records is set, the affected records (re-read after the update)
+    static auto updateRecordsCore(hash<auto> spec, hash<auto> args) {
+        string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "update");
+        AbstractDataProvider p = spec.provider;
+        hash<auto> set = DataProviderGraphQLSchema::toProviderRec(spec, args.set);
+        if (!spec.return_records) {
+            return p.updateRecords(set, dpql, {});
+        }
         p.updateRecords(set, dpql, {});
         return DataProviderGraphQLSchema::collectMatching(p, dpql);
     }
 
     #! deletes records matching the filter; returns the affected records or the affected count
     static auto execDelete(hash<auto> spec, hash<auto> args) {
-        string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "delete");
-        AbstractDataProvider p = spec.provider;
-        if (!spec.return_records) {
-            return p.deleteRecords(dpql, {});
-        }
-        # returning records: capture the matching records before deleting. When the provider
-        # supports transactions, wrap capture + delete so the returned records are atomic
-        if (spec.requires_tx) {
+        if (spec.return_records && spec.requires_tx) {
+            AbstractDataProvider p = spec.provider;
             p.beginTransaction();
             try {
-                list<auto> captured = DataProviderGraphQLSchema::collectMatching(p, dpql);
-                p.deleteRecords(dpql, {});
+                auto rv = DataProviderGraphQLSchema::deleteRecordsCore(spec, args);
                 p.commit();
-                return captured;
+                return rv;
             } catch (hash<ExceptionInfo> ex) {
                 p.rollback();
                 rethrow;
             }
         }
+        return DataProviderGraphQLSchema::deleteRecordsCore(spec, args);
+    }
+
+    #! performs a single delete (no transaction handling); returns the affected count or, when
+    #! \c return_records is set, the affected records (captured before the delete)
+    static auto deleteRecordsCore(hash<auto> spec, hash<auto> args) {
+        string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "delete");
+        AbstractDataProvider p = spec.provider;
+        if (!spec.return_records) {
+            return p.deleteRecords(dpql, {});
+        }
         list<auto> captured = DataProviderGraphQLSchema::collectMatching(p, dpql);
         p.deleteRecords(dpql, {});
         return captured;
+    }
+
+    #! applies a batch of update operations, each with its own selector and \c set; returns a list
+    #! of per-operation results (affected counts, or affected records when \c return_records is set)
+    /** @note The DataProvider API has no native bulk update primitive, so this performs one
+        @ref DataProvider::AbstractDataProvider::updateRecords() "updateRecords()" call per
+        operation. When the provider supports transaction management the whole batch is wrapped in a
+        single transaction, so a failure in any operation rolls back the entire batch.
+
+        @throw GRAPHQL-EXECUTION-ERROR the batch exceeds @ref MaxMutationBatchSize, or an operation
+        is missing a selector
+    */
+    static list<auto> execUpdateMany(hash<auto> spec, hash<auto> args) {
+        list<auto> ops = args.ops;
+        DataProviderGraphQLSchema::checkBatchSize(ops, "updateMany");
+        if (spec.requires_tx) {
+            AbstractDataProvider p = spec.provider;
+            p.beginTransaction();
+            try {
+                list<auto> rv = map DataProviderGraphQLSchema::updateRecordsCore(spec, $1), ops;
+                p.commit();
+                return rv;
+            } catch (hash<ExceptionInfo> ex) {
+                p.rollback();
+                rethrow;
+            }
+        }
+        return map DataProviderGraphQLSchema::updateRecordsCore(spec, $1), ops;
+    }
+
+    #! applies a batch of delete operations, each with its own selector; returns a list of
+    #! per-operation results (affected counts, or affected records when \c return_records is set)
+    /** @note As with @ref execUpdateMany(), there is no native bulk delete; this performs one
+        @ref DataProvider::AbstractDataProvider::deleteRecords() "deleteRecords()" call per
+        operation, wrapped in a single transaction when the provider supports transaction management.
+
+        @throw GRAPHQL-EXECUTION-ERROR the batch exceeds @ref MaxMutationBatchSize, or an operation
+        is missing a selector
+    */
+    static list<auto> execDeleteMany(hash<auto> spec, hash<auto> args) {
+        list<auto> ops = args.ops;
+        DataProviderGraphQLSchema::checkBatchSize(ops, "deleteMany");
+        if (spec.requires_tx) {
+            AbstractDataProvider p = spec.provider;
+            p.beginTransaction();
+            try {
+                list<auto> rv = map DataProviderGraphQLSchema::deleteRecordsCore(spec, $1), ops;
+                p.commit();
+                return rv;
+            } catch (hash<ExceptionInfo> ex) {
+                p.rollback();
+                rethrow;
+            }
+        }
+        return map DataProviderGraphQLSchema::deleteRecordsCore(spec, $1), ops;
+    }
+
+    #! enforces the maximum mutation-batch size
+    /** @throw GRAPHQL-EXECUTION-ERROR the batch exceeds @ref MaxMutationBatchSize
+    */
+    static checkBatchSize(list<auto> ops, string op) {
+        if (ops.size() > MaxMutationBatchSize) {
+            throw GRAPHQL_EXECUTION_ERROR, sprintf("%s batch of %d operations exceeds the maximum "
+                "of %d", op, ops.size(), MaxMutationBatchSize);
+        }
     }
 
     #! creates a batch of records, returning the number created

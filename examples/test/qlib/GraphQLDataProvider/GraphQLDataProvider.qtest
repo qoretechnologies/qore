@@ -576,6 +576,86 @@ class DatedProvider inherits DataProvider::AbstractDataProvider {
     }
 }
 
+#! a transaction-capable provider that snapshots/restores on rollback, to test atomic batches
+class TxBatchProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"id": 1, "name": "A"}, {"id": 2, "name": "B"});
+        *list<hash<auto>> snapshot;
+        bool rolled_back = False;
+    }
+
+    string getName() {
+        return "txbatch";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_update": True,
+            "supports_delete": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "transaction_management": True,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private hash<string, bool> matchedIds(*hash<auto> where_cond, *hash<auto> opts) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, opts, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        return ids;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        # a sentinel value triggers a mid-batch failure to exercise rollback
+        if (set.name == "BOOM") {
+            throw "BOOM-ERROR", "simulated update failure";
+        }
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int before = data.size();
+        data = select data, !ids{$1.id.toString()};
+        return before - data.size();
+    }
+
+    beginTransaction() {
+        snapshot = data;
+    }
+
+    commit() {
+        remove snapshot;
+    }
+
+    rollback() {
+        data = snapshot;
+        rolled_back = True;
+        remove snapshot;
+    }
+}
+
 class GraphQLDataProviderTest inherits QUnit::Test {
     constructor() : Test("GraphQLDataProviderTest", "1.0") {
         addTestCase("dataprovider bridge", \bridgeTest());
@@ -587,8 +667,56 @@ class GraphQLDataProviderTest inherits QUnit::Test {
         addTestCase("bridge nested-input mutations", \nestedMutationTest());
         addTestCase("bridge child-provider mutations", \childMutationTest());
         addTestCase("bridge date-typed filters", \dateFilterTest());
+        addTestCase("bridge bulk update and delete", \bulkUpdateDeleteTest());
 
         set_return_value(main());
+    }
+
+    bulkUpdateDeleteTest() {
+        MemProvider mp((
+            {"id": 1, "name": "Ada", "active": True},
+            {"id": 2, "name": "Bob", "active": False},
+            {"id": 3, "name": "Cy", "active": True},
+        ));
+        DataProviderGraphQLSchema bridge(mp);
+        string sdl = bridge.getSdl();
+
+        # batched update/delete mutations and their per-operation input types
+        assertRegex("updateMany\\(ops: \\[peopleRecordUpdateOp!\\]!\\): \\[Int!\\]!", sdl);
+        assertRegex("deleteMany\\(ops: \\[peopleRecordDeleteOp!\\]!\\): \\[Int!\\]!", sdl);
+        assertRegex("input peopleRecordUpdateOp", sdl);
+        assertRegex("input peopleRecordDeleteOp", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+        # a batch of two distinct (set, selector) updates -> a per-operation count list
+        assertEq((1, 1), ex.execute(
+            "mutation { updateMany(ops: ["
+            "{set: {name: \"Ada2\"}, filter: {id: {eq: 1}}}, "
+            "{set: {name: \"Bob2\"}, where: \"@id == 2\"}]) }").data.updateMany);
+        assertEq("Ada2", ex.execute("{ search(filter: {id: {eq: 1}}) { name } }").data.search[0].name);
+        assertEq("Bob2", ex.execute("{ search(filter: {id: {eq: 2}}) { name } }").data.search[0].name);
+
+        # the per-operation mass-mutation guard: an op with no selector errors the whole batch
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { updateMany(ops: [{set: {name: \"x\"}}]) }").errors[0].message);
+
+        # a batch of two deletes
+        assertEq((1, 1), ex.execute(
+            "mutation { deleteMany(ops: [{filter: {id: {eq: 1}}}, {where: \"@id == 3\"}]) }").data.deleteMany);
+        assertEq((2,), (map $1.id, ex.execute("{ search { id } }").data.search));
+
+        # transactional atomicity: a failure mid-batch rolls back the whole batch
+        TxBatchProvider tb();
+        GraphQLExecutor tex = (new DataProviderGraphQLSchema(tb)).getExecutor();
+        hash<auto> r = tex.execute(
+            "mutation { updateMany(ops: ["
+            "{set: {name: \"X\"}, filter: {id: {eq: 1}}}, "
+            "{set: {name: \"BOOM\"}, filter: {id: {eq: 2}}}]) }");
+        assertRegex("BOOM", r.errors[0].message);
+        assertTrue(tb.rolled_back, "the batch transaction was rolled back");
+        # the first operation's change was reverted
+        assertEq("A", (select tb.data, $1.id == 1)[0].name);
+        assertEq("B", (select tb.data, $1.id == 2)[0].name);
     }
 
     dateFilterTest() {

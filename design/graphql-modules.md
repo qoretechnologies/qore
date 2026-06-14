@@ -189,6 +189,11 @@ lists-of-objects map back correctly.
 - `supports_create` → `create`; `supports_update` → `update`; `supports_delete` → `delete`;
   `supports_upsert` → `upsert`; `supports_bulk_create`/`supports_bulk_upsert` → `createMany`/
   `upsertMany`;
+- `update`/`delete` also yield batched `updateMany(ops: [<R>UpdateOp!]!)` / `deleteMany(ops:
+  [<R>DeleteOp!]!)`, each op carrying its own selector (and `set`) and returning a per-op result.
+  The DataProvider API has **no** native bulk update/delete, so these loop the single-selector
+  `updateRecords`/`deleteRecords` (one call per op, bounded by `MaxMutationBatchSize`); when the
+  provider supports transaction management the whole batch runs in one transaction (all-or-nothing);
 - direct child providers (`getChildProviderNames()`) → a read-only `<child>` Query field, plus
   prefixed `<child>Create`/`<child>Update`/`<child>Delete`/`<child>Upsert` mutations gated on the
   *child's* own capability flags. Child `update`/`delete` use the raw DPQL `where` selector (not a
