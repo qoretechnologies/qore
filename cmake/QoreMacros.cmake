@@ -204,8 +204,11 @@ function(QORE_QCC_SIDECAR_PATHS _output)
 endfunction()
 
 function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
-    set(options ALL DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP MANIFEST_JSON SKIP_IF_MANIFEST_CURRENT)
-    cmake_parse_arguments(_QORE_QSF "${options}" "" "" ${ARGN})
+    set(options ALL DEPFILE INDEX_JSON STATUS_JSON SUCCESS_STAMP CONTENT_STAMP
+        MANIFEST_JSON SKIP_IF_MANIFEST_CURRENT QO_INPUT_CONTENT_STAMPS
+        SCRIPT_AGGREGATE_NATIVE_REGISTERS)
+    set(oneValueArgs DEPFILE_TARGET QOLINK_MAP AGGREGATE_SYMBOL SCRIPT_AGGREGATE)
+    cmake_parse_arguments(_QORE_QSF "${options}" "${oneValueArgs}" "" ${ARGN})
 
     if (_QORE_QSF_ALL)
         set(_QORE_QSF_DEPFILE TRUE)
@@ -220,6 +223,9 @@ function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
     set(_flags)
     if (_QORE_QSF_DEPFILE)
         list(APPEND _flags "--depfile=${_output}.d")
+    endif ()
+    if (_QORE_QSF_DEPFILE_TARGET)
+        list(APPEND _flags "--depfile-target=${_QORE_QSF_DEPFILE_TARGET}")
     endif ()
     if (_QORE_QSF_INDEX_JSON)
         list(APPEND _flags "--write-index-json=${_output}.idx.json")
@@ -239,8 +245,547 @@ function(QORE_QCC_SIDECAR_FLAGS _out_var _output)
     if (_QORE_QSF_SKIP_IF_MANIFEST_CURRENT)
         list(APPEND _flags "--skip-if-manifest-current")
     endif ()
+    if (_QORE_QSF_QO_INPUT_CONTENT_STAMPS)
+        list(APPEND _flags "--depfile-qo-input-content-stamps")
+    endif ()
+    if (_QORE_QSF_QOLINK_MAP)
+        list(APPEND _flags "--qolink-map=${_QORE_QSF_QOLINK_MAP}")
+    endif ()
+    if (_QORE_QSF_AGGREGATE_SYMBOL)
+        list(APPEND _flags "--aggregate-symbol=${_QORE_QSF_AGGREGATE_SYMBOL}")
+    endif ()
+    if (_QORE_QSF_SCRIPT_AGGREGATE)
+        list(APPEND _flags "--script-aggregate=${_QORE_QSF_SCRIPT_AGGREGATE}")
+    endif ()
+    if (_QORE_QSF_SCRIPT_AGGREGATE_NATIVE_REGISTERS)
+        list(APPEND _flags "--script-aggregate-native-registers")
+    endif ()
 
     set(${_out_var} ${_flags} PARENT_SCOPE)
+endfunction()
+
+function(QORE_QCC_SOURCE_ID _out_var _path)
+    get_filename_component(_qore_qcc_source_id_abs "${_path}" ABSOLUTE)
+    get_filename_component(_qore_qcc_source_id_real "${_qore_qcc_source_id_abs}" REALPATH)
+    string(REGEX REPLACE "[^A-Za-z0-9_]" "_" _qore_qcc_source_id "${_qore_qcc_source_id_real}")
+    set(${_out_var} "${_qore_qcc_source_id}" PARENT_SCOPE)
+endfunction()
+
+function(QORE_QCC_HELPER_PATH _out_var _name)
+    if ("${_name}" STREQUAL "qore-qo-incremental"
+            AND DEFINED QORE_QCC_INCREMENTAL_HELPER
+            AND NOT "${QORE_QCC_INCREMENTAL_HELPER}" STREQUAL "")
+        set(_qore_qcc_helper "${QORE_QCC_INCREMENTAL_HELPER}")
+    elseif ("${_name}" STREQUAL "qore-qo-source-order"
+            AND DEFINED QORE_QCC_SOURCE_ORDER_HELPER
+            AND NOT "${QORE_QCC_SOURCE_ORDER_HELPER}" STREQUAL "")
+        set(_qore_qcc_helper "${QORE_QCC_SOURCE_ORDER_HELPER}")
+    elseif (DEFINED QORE_CMAKE_DIR AND EXISTS "${QORE_CMAKE_DIR}/${_name}")
+        set(_qore_qcc_helper "${QORE_CMAKE_DIR}/${_name}")
+    elseif (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../tools/${_name}")
+        get_filename_component(_qore_qcc_helper "${CMAKE_CURRENT_LIST_DIR}/../tools/${_name}" REALPATH)
+    elseif (EXISTS "${CMAKE_CURRENT_LIST_DIR}/${_name}")
+        set(_qore_qcc_helper "${CMAKE_CURRENT_LIST_DIR}/${_name}")
+    else ()
+        message(FATAL_ERROR "cannot find Qore qcc helper ${_name}")
+    endif ()
+    set(${_out_var} "${_qore_qcc_helper}" PARENT_SCOPE)
+endfunction()
+
+function(QORE_QCC_APPEND_CONTEXT _out_var _key)
+    set(_qore_qcc_context "${${_out_var}}")
+    foreach(_qore_qcc_context_value ${ARGN})
+        string(APPEND _qore_qcc_context "${_key}=${_qore_qcc_context_value}\n")
+    endforeach()
+    set(${_out_var} "${_qore_qcc_context}" PARENT_SCOPE)
+endfunction()
+
+function(QORE_QCC_COMPILE_OBJECTS _out_var)
+    set(options WARNINGS_ARE_ERRORS)
+    set(oneValueArgs GROUP OUTPUT_DIR SCRIPT_DIR INCLUDE_DIR MODULE_DIR METADATA_COMPRESSION
+        STAMPS_VAR CONTENT_STAMPS_VAR ORDER_TARGETS_VAR CONTEXT_VAR)
+    set(multiValueArgs SOURCES STUBS LOAD_MODULES PARSE_DEFINES PARSE_OPTIONS
+        MANIFEST_INPUTS DEPENDS)
+    cmake_parse_arguments(_QORE_QCO "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if (NOT _QORE_QCO_GROUP)
+        message(FATAL_ERROR "QORE_QCC_COMPILE_OBJECTS(${_out_var}) requires GROUP")
+    endif ()
+    string(REGEX REPLACE "[^A-Za-z0-9_]" "_" _qore_qcc_group_id "${_QORE_QCO_GROUP}")
+    if (_qore_qcc_group_id MATCHES "^[0-9]")
+        set(_qore_qcc_group_id "qcc_${_qore_qcc_group_id}")
+    endif ()
+    if ("${_qore_qcc_group_id}" STREQUAL "")
+        set(_qore_qcc_group_id "qcc_group")
+    endif ()
+    if (NOT _QORE_QCO_OUTPUT_DIR)
+        set(_QORE_QCO_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/qo/${_qore_qcc_group_id}")
+    endif ()
+    if (NOT _QORE_QCO_SCRIPT_DIR)
+        set(_QORE_QCO_SCRIPT_DIR "${CMAKE_CURRENT_BINARY_DIR}/qo-scripts/${_qore_qcc_group_id}")
+    endif ()
+    if (NOT _QORE_QCO_INCLUDE_DIR)
+        set(_QORE_QCO_INCLUDE_DIR "$ENV{QORE_INCLUDE_DIR}")
+    endif ()
+    if (NOT _QORE_QCO_MODULE_DIR)
+        set(_QORE_QCO_MODULE_DIR "$ENV{QORE_MODULE_DIR}")
+    endif ()
+
+    file(MAKE_DIRECTORY "${_QORE_QCO_OUTPUT_DIR}")
+    file(MAKE_DIRECTORY "${_QORE_QCO_SCRIPT_DIR}")
+
+    QORE_GET_QCC_COMMAND(_qore_qcc_command)
+    QORE_GET_QCC_DEPS(_qore_qcc_deps QCC_COMMAND "${_qore_qcc_command}")
+    QORE_QCC_HELPER_PATH(_qore_qcc_incremental_helper qore-qo-incremental)
+    QORE_QCC_HELPER_PATH(_qore_qcc_source_order_helper qore-qo-source-order)
+
+    set(_qore_qcc_outputs)
+    set(_qore_qcc_stamps)
+    set(_qore_qcc_content_stamps)
+    set(_qore_qcc_order_targets)
+    set(_qore_qcc_abs_sources)
+    set(_qore_qcc_index 0)
+    foreach(_qore_qcc_source ${_QORE_QCO_SOURCES})
+        get_filename_component(_qore_qcc_abs_source "${_qore_qcc_source}" ABSOLUTE)
+        get_filename_component(_qore_qcc_real_source "${_qore_qcc_abs_source}" REALPATH)
+        QORE_QCC_SOURCE_ID(_qore_qcc_source_id "${_qore_qcc_real_source}")
+        set(_qore_qcc_output "${_QORE_QCO_OUTPUT_DIR}/${_qore_qcc_source_id}.qo")
+        set(_qore_qcc_order_target "qore_qcc_${_qore_qcc_group_id}_${_qore_qcc_index}")
+        list(APPEND _qore_qcc_abs_sources "${_qore_qcc_real_source}")
+        list(APPEND _qore_qcc_outputs "${_qore_qcc_output}")
+        list(APPEND _qore_qcc_stamps "${_qore_qcc_output}.stamp")
+        list(APPEND _qore_qcc_content_stamps "${_qore_qcc_output}.content.stamp")
+        list(APPEND _qore_qcc_order_targets "${_qore_qcc_order_target}")
+        math(EXPR _qore_qcc_index "${_qore_qcc_index} + 1")
+    endforeach()
+
+    set(_qore_qcc_context_path "${_QORE_QCO_SCRIPT_DIR}/.qcc-context")
+    set(_qore_qcc_context "format=1\nkind=qcc-object-group\ngroup=${_QORE_QCO_GROUP}\nqcc=${_qore_qcc_command}\n")
+    string(APPEND _qore_qcc_context "qore_include_dir=${_QORE_QCO_INCLUDE_DIR}\n")
+    string(APPEND _qore_qcc_context "qore_module_dir=${_QORE_QCO_MODULE_DIR}\n")
+    string(APPEND _qore_qcc_context "metadata_compression=${_QORE_QCO_METADATA_COMPRESSION}\n")
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context qcc_dep ${_qore_qcc_deps})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context stub ${_QORE_QCO_STUBS})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context load_module ${_QORE_QCO_LOAD_MODULES})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context parse_define ${_QORE_QCO_PARSE_DEFINES})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context parse_option ${_QORE_QCO_PARSE_OPTIONS})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context input ${_qore_qcc_abs_sources})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context output ${_qore_qcc_outputs})
+    QORE_QCC_APPEND_CONTEXT(_qore_qcc_context manifest_input ${_QORE_QCO_MANIFEST_INPUTS})
+    QORE_WRITE_IF_CHANGED("${_qore_qcc_context_path}" "${_qore_qcc_context}")
+
+    set(_qore_qcc_manifest_input_flags)
+    foreach(_qore_qcc_manifest_input
+            ${_qore_qcc_context_path}
+            ${_qore_qcc_incremental_helper}
+            ${_qore_qcc_source_order_helper}
+            ${_qore_qcc_deps}
+            ${_QORE_QCO_MANIFEST_INPUTS})
+        list(APPEND _qore_qcc_manifest_input_flags "--manifest-input=${_qore_qcc_manifest_input}")
+    endforeach()
+
+    set(_qore_qcc_direct_deps_prefix "QORE_QCC_DIRECT_DEPS_${_qore_qcc_group_id}")
+    set(_qore_qcc_direct_deps_cmake "${_QORE_QCO_SCRIPT_DIR}/direct-deps.cmake")
+    execute_process(
+        COMMAND ${_qore_qcc_source_order_helper}
+            --direct-map-cmake
+            ${_qore_qcc_direct_deps_prefix}
+            ${_qore_qcc_context_path}
+        OUTPUT_VARIABLE _qore_qcc_direct_deps_cmake_content
+        ERROR_VARIABLE _qore_qcc_direct_deps_error
+        RESULT_VARIABLE _qore_qcc_direct_deps_result
+    )
+    if (NOT _qore_qcc_direct_deps_result EQUAL 0)
+        message(FATAL_ERROR
+            "qore-qo-source-order failed for ${_QORE_QCO_GROUP}: ${_qore_qcc_direct_deps_error}")
+    endif ()
+    QORE_WRITE_IF_CHANGED("${_qore_qcc_direct_deps_cmake}" "${_qore_qcc_direct_deps_cmake_content}")
+    include("${_qore_qcc_direct_deps_cmake}")
+
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        ${_qore_qcc_source_order_helper})
+
+    set(_qore_qcc_stub_flags)
+    foreach(_qore_qcc_stub ${_QORE_QCO_STUBS})
+        list(APPEND _qore_qcc_stub_flags "--stub=${_qore_qcc_stub}")
+    endforeach()
+    set(_qore_qcc_load_flags)
+    foreach(_qore_qcc_module ${_QORE_QCO_LOAD_MODULES})
+        list(APPEND _qore_qcc_load_flags -l ${_qore_qcc_module})
+    endforeach()
+    set(_qore_qcc_define_flags)
+    foreach(_qore_qcc_define ${_QORE_QCO_PARSE_DEFINES})
+        list(APPEND _qore_qcc_define_flags "--define=${_qore_qcc_define}")
+    endforeach()
+    set(_qore_qcc_parse_option_flags)
+    foreach(_qore_qcc_parse_option ${_QORE_QCO_PARSE_OPTIONS})
+        list(APPEND _qore_qcc_parse_option_flags "--parse-option=${_qore_qcc_parse_option}")
+    endforeach()
+    set(_qore_qcc_metadata_compression_flags)
+    if (_QORE_QCO_METADATA_COMPRESSION)
+        list(APPEND _qore_qcc_metadata_compression_flags
+            "--aot-metadata-compression=${_QORE_QCO_METADATA_COMPRESSION}")
+    endif ()
+    set(_qore_qcc_warning_flags)
+    if (_QORE_QCO_WARNINGS_ARE_ERRORS)
+        list(APPEND _qore_qcc_warning_flags --warnings-are-errors)
+    endif ()
+
+    set(_qore_qcc_single_script "${_QORE_QCO_SCRIPT_DIR}/qcc-single.sh")
+    set(_qore_qcc_single_cmd "#!/bin/sh\nset -e\nsrc=$1\nout=$2\npreload_dir=$3\nif [ -z \"$preload_dir\" ]; then\n    preload_dir='${_QORE_QCO_OUTPUT_DIR}'\nfi\nextra_parse_define_file=\${QORE_QCC_SOURCE_PARSE_DEFINE_FILE:-\${QORUS_QO_SOURCE_PARSE_DEFINE_FILE:-}}\nmanifest_input_file=\${QORE_QCC_SOURCE_MANIFEST_INPUT_FILE:-\${QORUS_QO_SOURCE_MANIFEST_INPUT_FILE:-}}\nset --\nif [ -n \"$extra_parse_define_file\" ] && [ -f \"$extra_parse_define_file\" ]; then\n    set -- \"$@\" \"--manifest-input=$extra_parse_define_file\"\n    while IFS= read -r def; do\n        [ -n \"$def\" ] || continue\n        set -- \"$@\" \"--define=$def\"\n    done < \"$extra_parse_define_file\"\nfi\nif [ -n \"$manifest_input_file\" ] && [ -f \"$manifest_input_file\" ]; then\n    while IFS= read -r dep; do\n        [ -n \"$dep\" ] || continue\n        set -- \"$@\" \"--manifest-input=$dep\"\n    done < \"$manifest_input_file\"\nfi\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' '${_qore_qcc_command}'")
+    foreach(_qore_qcc_arg
+            ${_qore_qcc_warning_flags}
+            ${_qore_qcc_stub_flags}
+            ${_qore_qcc_load_flags}
+            ${_qore_qcc_define_flags}
+            ${_qore_qcc_parse_option_flags}
+            ${_qore_qcc_metadata_compression_flags}
+            ${_qore_qcc_manifest_input_flags})
+        set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} '${_qore_qcc_arg}'")
+    endforeach()
+    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
+    QORE_WRITE_IF_CHANGED("${_qore_qcc_single_script}" "${_qore_qcc_single_cmd}")
+
+    list(LENGTH _qore_qcc_abs_sources _qore_qcc_count)
+    if (_qore_qcc_count GREATER 0)
+        math(EXPR _qore_qcc_last "${_qore_qcc_count} - 1")
+        foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
+            list(GET _qore_qcc_order_targets ${_qore_qcc_idx} _qore_qcc_order_target)
+            list(GET _qore_qcc_stamps ${_qore_qcc_idx} _qore_qcc_stamp)
+            add_custom_target(${_qore_qcc_order_target}
+                DEPENDS ${_qore_qcc_stamp})
+        endforeach()
+        foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
+            list(GET _qore_qcc_abs_sources ${_qore_qcc_idx} _qore_qcc_source)
+            list(GET _qore_qcc_outputs ${_qore_qcc_idx} _qore_qcc_output)
+            set(_qore_qcc_stamp "${_qore_qcc_output}.stamp")
+            set(_qore_qcc_direct_deps_var "${_qore_qcc_direct_deps_prefix}_${_qore_qcc_idx}")
+            set(_qore_qcc_direct_deps ${${_qore_qcc_direct_deps_var}})
+            set(_qore_qcc_direct_dep_content_stamps)
+            set(_qore_qcc_direct_dep_order_targets)
+            foreach(_qore_qcc_direct_dep ${_qore_qcc_direct_deps})
+                list(APPEND _qore_qcc_direct_dep_content_stamps
+                    "${_qore_qcc_direct_dep}.content.stamp")
+                list(FIND _qore_qcc_outputs "${_qore_qcc_direct_dep}" _qore_qcc_direct_dep_idx)
+                if (NOT _qore_qcc_direct_dep_idx EQUAL -1)
+                    list(GET _qore_qcc_order_targets ${_qore_qcc_direct_dep_idx}
+                        _qore_qcc_direct_dep_order_target)
+                    list(APPEND _qore_qcc_direct_dep_order_targets
+                        ${_qore_qcc_direct_dep_order_target})
+                endif ()
+            endforeach()
+            add_custom_command(OUTPUT ${_qore_qcc_stamp}
+                BYPRODUCTS
+                    ${_qore_qcc_output}
+                    ${_qore_qcc_output}.d
+                    ${_qore_qcc_output}.idx.json
+                    ${_qore_qcc_output}.status.json
+                    ${_qore_qcc_output}.content.stamp
+                    ${_qore_qcc_output}.source.manifest.json
+                    ${_qore_qcc_output}.source-parse-defines
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
+                COMMAND ${_qore_qcc_incremental_helper}
+                    ${_qore_qcc_output}
+                    ${_qore_qcc_source}
+                    ${_qore_qcc_single_script}
+                DEPENDS
+                    ${_qore_qcc_source}
+                    ${_qore_qcc_single_script}
+                    ${_qore_qcc_context_path}
+                    ${_QORE_QCO_STUBS}
+                    ${_QORE_QCO_DEPENDS}
+                    ${_qore_qcc_deps}
+                    ${_qore_qcc_direct_dep_order_targets}
+                    ${_qore_qcc_direct_dep_content_stamps}
+                    ${_qore_qcc_incremental_helper}
+                    ${_qore_qcc_source_order_helper}
+                    ${_QORE_QCO_MANIFEST_INPUTS}
+                DEPFILE ${_qore_qcc_output}.d
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                COMMENT "qcc -c: compiling ${_QORE_QCO_GROUP} ${_qore_qcc_source} (.qo)"
+                VERBATIM)
+        endforeach()
+    endif ()
+
+    set_source_files_properties(${_qore_qcc_outputs}
+        PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+    set_source_files_properties(${_qore_qcc_stamps} ${_qore_qcc_content_stamps}
+        PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
+
+    set(${_out_var} ${_qore_qcc_outputs} PARENT_SCOPE)
+    if (_QORE_QCO_STAMPS_VAR)
+        set(${_QORE_QCO_STAMPS_VAR} ${_qore_qcc_stamps} PARENT_SCOPE)
+    endif ()
+    if (_QORE_QCO_CONTENT_STAMPS_VAR)
+        set(${_QORE_QCO_CONTENT_STAMPS_VAR} ${_qore_qcc_content_stamps} PARENT_SCOPE)
+    endif ()
+    if (_QORE_QCO_ORDER_TARGETS_VAR)
+        set(${_QORE_QCO_ORDER_TARGETS_VAR} ${_qore_qcc_order_targets} PARENT_SCOPE)
+    endif ()
+    if (_QORE_QCO_CONTEXT_VAR)
+        set(${_QORE_QCO_CONTEXT_VAR} "${_qore_qcc_context_path}" PARENT_SCOPE)
+    endif ()
+endfunction()
+
+function(QORE_QCC_LINK_OBJECTS _out_var)
+    set(options WARNINGS_ARE_ERRORS ALLOW_UNRESOLVED_IMPORTS)
+    set(oneValueArgs OUTPUT INCLUDE_DIR MODULE_DIR AGGREGATE_SYMBOL STAMP_VAR
+        CONTENT_STAMP_VAR LINK_MAP_VAR INDEX_JSON_VAR STATUS_JSON_VAR MANIFEST_JSON_VAR)
+    set(multiValueArgs INPUTS INPUT_CONTENT_STAMPS INPUT_ORDER_TARGETS MANIFEST_INPUTS DEPENDS)
+    cmake_parse_arguments(_QORE_QLO "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if (NOT _QORE_QLO_OUTPUT)
+        message(FATAL_ERROR "QORE_QCC_LINK_OBJECTS(${_out_var}) requires OUTPUT")
+    endif ()
+    if (NOT _QORE_QLO_AGGREGATE_SYMBOL)
+        message(FATAL_ERROR "QORE_QCC_LINK_OBJECTS(${_out_var}) requires AGGREGATE_SYMBOL")
+    endif ()
+    if (NOT _QORE_QLO_INCLUDE_DIR)
+        set(_QORE_QLO_INCLUDE_DIR "$ENV{QORE_INCLUDE_DIR}")
+    endif ()
+    if (NOT _QORE_QLO_MODULE_DIR)
+        set(_QORE_QLO_MODULE_DIR "$ENV{QORE_MODULE_DIR}")
+    endif ()
+    get_filename_component(_qore_qlo_dir "${_QORE_QLO_OUTPUT}" DIRECTORY)
+    file(MAKE_DIRECTORY "${_qore_qlo_dir}")
+    QORE_GET_QCC_COMMAND(_qore_qcc_command)
+    QORE_GET_QCC_DEPS(_qore_qcc_deps QCC_COMMAND "${_qore_qcc_command}")
+
+    set(_qore_qlo_link_map "${_QORE_QLO_OUTPUT}.qolink.json")
+    set(_qore_qlo_context "${_QORE_QLO_OUTPUT}.qolink-context")
+    set(_qore_qlo_manifest "${_QORE_QLO_OUTPUT}.qolink.manifest.json")
+    set(_qore_qlo_idx "${_QORE_QLO_OUTPUT}.idx.json")
+    set(_qore_qlo_status "${_QORE_QLO_OUTPUT}.status.json")
+    set(_qore_qlo_content_stamp "${_QORE_QLO_OUTPUT}.content.stamp")
+    set(_qore_qlo_stamp "${_QORE_QLO_OUTPUT}.stamp")
+    set(_qore_qlo_depfile "${_QORE_QLO_OUTPUT}.d")
+    set(_qore_qlo_link_flags)
+    if (_QORE_QLO_ALLOW_UNRESOLVED_IMPORTS)
+        list(APPEND _qore_qlo_link_flags --allow-unresolved-imports)
+    endif ()
+    set(_qore_qlo_warning_flags)
+    if (_QORE_QLO_WARNINGS_ARE_ERRORS)
+        list(APPEND _qore_qlo_warning_flags --warnings-are-errors)
+    endif ()
+    set(_qore_qlo_aggregate_symbol "${_QORE_QLO_AGGREGATE_SYMBOL}")
+
+    set(_qore_qlo_context_content "format=1\nkind=qcc-link-qo\nqcc=${_qore_qcc_command}\n")
+    string(APPEND _qore_qlo_context_content "aggregate_symbol=${_qore_qlo_aggregate_symbol}\n")
+    QORE_QCC_APPEND_CONTEXT(_qore_qlo_context_content link_flag ${_qore_qlo_link_flags})
+    QORE_QCC_APPEND_CONTEXT(_qore_qlo_context_content input ${_QORE_QLO_INPUTS})
+    QORE_QCC_APPEND_CONTEXT(_qore_qlo_context_content manifest_input ${_QORE_QLO_MANIFEST_INPUTS})
+    QORE_WRITE_IF_CHANGED("${_qore_qlo_context}" "${_qore_qlo_context_content}")
+    set(_qore_qlo_manifest_input_flags "--manifest-input=${_qore_qlo_context}")
+    foreach(_qore_qlo_manifest_input ${_qore_qcc_deps} ${_QORE_QLO_MANIFEST_INPUTS})
+        list(APPEND _qore_qlo_manifest_input_flags "--manifest-input=${_qore_qlo_manifest_input}")
+    endforeach()
+
+    add_custom_command(OUTPUT ${_qore_qlo_stamp}
+        BYPRODUCTS
+            ${_QORE_QLO_OUTPUT}
+            ${_qore_qlo_link_map}
+            ${_qore_qlo_manifest}
+            ${_qore_qlo_depfile}
+            ${_qore_qlo_idx}
+            ${_qore_qlo_status}
+            ${_qore_qlo_content_stamp}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_qore_qlo_dir}
+        COMMAND ${CMAKE_COMMAND} -E env
+            "QORE_INCLUDE_DIR=${_QORE_QLO_INCLUDE_DIR}"
+            "QORE_MODULE_DIR=${_QORE_QLO_MODULE_DIR}"
+            ${_qore_qcc_command}
+                ${_qore_qlo_warning_flags}
+                --link-qo
+                ${_qore_qlo_link_flags}
+                -o ${_QORE_QLO_OUTPUT}
+                --aggregate-symbol=${_qore_qlo_aggregate_symbol}
+                --qolink-map=${_qore_qlo_link_map}
+                --depfile=${_qore_qlo_depfile}
+                --depfile-target=${_qore_qlo_stamp}
+                --depfile-qo-input-content-stamps
+                --write-index-json=${_qore_qlo_idx}
+                --write-status-json=${_qore_qlo_status}
+                --success-stamp=${_qore_qlo_stamp}
+                --content-stamp=${_qore_qlo_content_stamp}
+                ${_qore_qlo_manifest_input_flags}
+                --write-manifest=${_qore_qlo_manifest}
+                --skip-if-manifest-current
+                ${_QORE_QLO_INPUTS}
+        DEPENDS
+            ${_QORE_QLO_INPUT_ORDER_TARGETS}
+            ${_QORE_QLO_INPUT_CONTENT_STAMPS}
+            ${_qore_qlo_context}
+            ${_qore_qcc_deps}
+            ${_QORE_QLO_DEPENDS}
+            ${_QORE_QLO_MANIFEST_INPUTS}
+        DEPFILE ${_qore_qlo_depfile}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "qcc --link-qo: ${_QORE_QLO_OUTPUT}"
+        VERBATIM)
+    set_source_files_properties(${_QORE_QLO_OUTPUT}
+        PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+    set_source_files_properties(${_qore_qlo_stamp}
+        PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
+    set(${_out_var} "${_QORE_QLO_OUTPUT}" PARENT_SCOPE)
+    if (_QORE_QLO_STAMP_VAR)
+        set(${_QORE_QLO_STAMP_VAR} "${_qore_qlo_stamp}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QLO_CONTENT_STAMP_VAR)
+        set(${_QORE_QLO_CONTENT_STAMP_VAR} "${_qore_qlo_content_stamp}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QLO_LINK_MAP_VAR)
+        set(${_QORE_QLO_LINK_MAP_VAR} "${_qore_qlo_link_map}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QLO_INDEX_JSON_VAR)
+        set(${_QORE_QLO_INDEX_JSON_VAR} "${_qore_qlo_idx}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QLO_STATUS_JSON_VAR)
+        set(${_QORE_QLO_STATUS_JSON_VAR} "${_qore_qlo_status}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QLO_MANIFEST_JSON_VAR)
+        set(${_QORE_QLO_MANIFEST_JSON_VAR} "${_qore_qlo_manifest}" PARENT_SCOPE)
+    endif ()
+endfunction()
+
+function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
+    set(options WARNINGS_ARE_ERRORS NATIVE_REGISTERS)
+    set(oneValueArgs OUTPUT AGGREGATE INCLUDE_DIR MODULE_DIR METADATA_COMPRESSION
+        STAMP_VAR CONTENT_STAMP_VAR INDEX_JSON_VAR STATUS_JSON_VAR MANIFEST_JSON_VAR)
+    set(multiValueArgs SOURCES INPUT_CONTENT_STAMPS INPUT_ORDER_TARGETS STUBS LOAD_MODULES
+        PARSE_DEFINES PARSE_OPTIONS MANIFEST_INPUTS DEPENDS)
+    cmake_parse_arguments(_QORE_QSA "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if (NOT _QORE_QSA_OUTPUT)
+        message(FATAL_ERROR "QORE_QCC_SCRIPT_AGGREGATE(${_out_var}) requires OUTPUT")
+    endif ()
+    if (NOT _QORE_QSA_AGGREGATE)
+        message(FATAL_ERROR "QORE_QCC_SCRIPT_AGGREGATE(${_out_var}) requires AGGREGATE")
+    endif ()
+    if (NOT _QORE_QSA_INCLUDE_DIR)
+        set(_QORE_QSA_INCLUDE_DIR "$ENV{QORE_INCLUDE_DIR}")
+    endif ()
+    if (NOT _QORE_QSA_MODULE_DIR)
+        set(_QORE_QSA_MODULE_DIR "$ENV{QORE_MODULE_DIR}")
+    endif ()
+    get_filename_component(_qore_qsa_dir "${_QORE_QSA_OUTPUT}" DIRECTORY)
+    file(MAKE_DIRECTORY "${_qore_qsa_dir}")
+    QORE_GET_QCC_COMMAND(_qore_qcc_command)
+    QORE_GET_QCC_DEPS(_qore_qcc_deps QCC_COMMAND "${_qore_qcc_command}")
+
+    set(_qore_qsa_manifest "${_QORE_QSA_OUTPUT}.script-aggregate.manifest.json")
+    set(_qore_qsa_context "${_QORE_QSA_OUTPUT}.script-aggregate-context")
+    set(_qore_qsa_idx "${_QORE_QSA_OUTPUT}.idx.json")
+    set(_qore_qsa_status "${_QORE_QSA_OUTPUT}.status.json")
+    set(_qore_qsa_content_stamp "${_QORE_QSA_OUTPUT}.content.stamp")
+    set(_qore_qsa_stamp "${_QORE_QSA_OUTPUT}.stamp")
+    set(_qore_qsa_stub_flags)
+    foreach(_qore_qsa_stub ${_QORE_QSA_STUBS})
+        list(APPEND _qore_qsa_stub_flags "--stub=${_qore_qsa_stub}")
+    endforeach()
+    set(_qore_qsa_load_flags)
+    foreach(_qore_qsa_module ${_QORE_QSA_LOAD_MODULES})
+        list(APPEND _qore_qsa_load_flags -l ${_qore_qsa_module})
+    endforeach()
+    set(_qore_qsa_define_flags)
+    foreach(_qore_qsa_define ${_QORE_QSA_PARSE_DEFINES})
+        list(APPEND _qore_qsa_define_flags "--define=${_qore_qsa_define}")
+    endforeach()
+    set(_qore_qsa_parse_option_flags)
+    foreach(_qore_qsa_parse_option ${_QORE_QSA_PARSE_OPTIONS})
+        list(APPEND _qore_qsa_parse_option_flags "--parse-option=${_qore_qsa_parse_option}")
+    endforeach()
+    set(_qore_qsa_metadata_flags)
+    if (_QORE_QSA_METADATA_COMPRESSION)
+        list(APPEND _qore_qsa_metadata_flags
+            "--aot-metadata-compression=${_QORE_QSA_METADATA_COMPRESSION}")
+    endif ()
+    set(_qore_qsa_warning_flags)
+    if (_QORE_QSA_WARNINGS_ARE_ERRORS)
+        list(APPEND _qore_qsa_warning_flags --warnings-are-errors)
+    endif ()
+    set(_qore_qsa_native_flags)
+    if (_QORE_QSA_NATIVE_REGISTERS)
+        list(APPEND _qore_qsa_native_flags --script-aggregate-native-registers)
+    endif ()
+
+    set(_qore_qsa_context_content "format=1\nkind=qcc-script-aggregate\nqcc=${_qore_qcc_command}\n")
+    string(APPEND _qore_qsa_context_content "aggregate=${_QORE_QSA_AGGREGATE}\n")
+    string(APPEND _qore_qsa_context_content "qore_include_dir=${_QORE_QSA_INCLUDE_DIR}\n")
+    string(APPEND _qore_qsa_context_content "qore_module_dir=${_QORE_QSA_MODULE_DIR}\n")
+    QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content stub ${_QORE_QSA_STUBS})
+    QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content load_module ${_QORE_QSA_LOAD_MODULES})
+    QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content parse_define ${_QORE_QSA_PARSE_DEFINES})
+    QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content parse_option ${_QORE_QSA_PARSE_OPTIONS})
+    QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content input ${_QORE_QSA_SOURCES})
+    QORE_QCC_APPEND_CONTEXT(_qore_qsa_context_content manifest_input ${_QORE_QSA_MANIFEST_INPUTS})
+    QORE_WRITE_IF_CHANGED("${_qore_qsa_context}" "${_qore_qsa_context_content}")
+    set(_qore_qsa_manifest_input_flags "--manifest-input=${_qore_qsa_context}")
+    foreach(_qore_qsa_manifest_input ${_qore_qcc_deps} ${_QORE_QSA_MANIFEST_INPUTS})
+        list(APPEND _qore_qsa_manifest_input_flags "--manifest-input=${_qore_qsa_manifest_input}")
+    endforeach()
+
+    add_custom_command(OUTPUT ${_qore_qsa_stamp}
+        BYPRODUCTS
+            ${_QORE_QSA_OUTPUT}
+            ${_qore_qsa_manifest}
+            ${_qore_qsa_idx}
+            ${_qore_qsa_status}
+            ${_qore_qsa_content_stamp}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_qore_qsa_dir}
+        COMMAND ${CMAKE_COMMAND} -E env
+            "QORE_INCLUDE_DIR=${_QORE_QSA_INCLUDE_DIR}"
+            "QORE_MODULE_DIR=${_QORE_QSA_MODULE_DIR}"
+            ${_qore_qcc_command}
+                ${_qore_qsa_warning_flags}
+                -c
+                -o ${_QORE_QSA_OUTPUT}
+                --script-aggregate=${_QORE_QSA_AGGREGATE}
+                ${_qore_qsa_native_flags}
+                --write-index-json=${_qore_qsa_idx}
+                --write-status-json=${_qore_qsa_status}
+                --success-stamp=${_qore_qsa_stamp}
+                --content-stamp=${_qore_qsa_content_stamp}
+                --write-manifest=${_qore_qsa_manifest}
+                --skip-if-manifest-current
+                ${_qore_qsa_stub_flags}
+                ${_qore_qsa_load_flags}
+                ${_qore_qsa_define_flags}
+                ${_qore_qsa_parse_option_flags}
+                ${_qore_qsa_metadata_flags}
+                ${_qore_qsa_manifest_input_flags}
+                ${_QORE_QSA_SOURCES}
+        DEPENDS
+            ${_QORE_QSA_INPUT_ORDER_TARGETS}
+            ${_QORE_QSA_INPUT_CONTENT_STAMPS}
+            ${_QORE_QSA_STUBS}
+            ${_qore_qsa_context}
+            ${_qore_qcc_deps}
+            ${_QORE_QSA_DEPENDS}
+            ${_QORE_QSA_MANIFEST_INPUTS}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "qcc --script-aggregate: ${_QORE_QSA_AGGREGATE}"
+        VERBATIM)
+
+    set_source_files_properties(${_QORE_QSA_OUTPUT}
+        PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+    set_source_files_properties(${_qore_qsa_stamp}
+        PROPERTIES GENERATED TRUE HEADER_FILE_ONLY TRUE)
+    set(${_out_var} "${_QORE_QSA_OUTPUT}" PARENT_SCOPE)
+    if (_QORE_QSA_STAMP_VAR)
+        set(${_QORE_QSA_STAMP_VAR} "${_qore_qsa_stamp}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSA_CONTENT_STAMP_VAR)
+        set(${_QORE_QSA_CONTENT_STAMP_VAR} "${_qore_qsa_content_stamp}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSA_INDEX_JSON_VAR)
+        set(${_QORE_QSA_INDEX_JSON_VAR} "${_qore_qsa_idx}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSA_STATUS_JSON_VAR)
+        set(${_QORE_QSA_STATUS_JSON_VAR} "${_qore_qsa_status}" PARENT_SCOPE)
+    endif ()
+    if (_QORE_QSA_MANIFEST_JSON_VAR)
+        set(${_QORE_QSA_MANIFEST_JSON_VAR} "${_qore_qsa_manifest}" PARENT_SCOPE)
+    endif ()
 endfunction()
 
 #

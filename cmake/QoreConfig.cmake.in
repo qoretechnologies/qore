@@ -11,6 +11,8 @@
 # QORE_QPP_EXECUTABLE - qore qpp executable
 # QORE_QCC_EXECUTABLE - qore AOT compiler (qcc) executable
 # QORE_QCC_FORMAT_STAMP - dependency file updated when qcc AOT output can change
+# QORE_QCC_INCREMENTAL_HELPER - helper for incremental standalone .qo builds
+# QORE_QCC_SOURCE_ORDER_HELPER - helper for source-scanned .qo build prerequisites
 # QORE_AOT_MODULES_DIR - install location for AOT-compiled user module .qmod artifacts
 # QORE_CMAKE_DIR - directory containing exported Qore CMake helper files
 
@@ -27,6 +29,8 @@ set(_qore_build_cmake_dir "@CMAKE_BINARY_DIR@/cmake")
 # output layouts may need explicit Qore_DIR or manual overrides.
 if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
     set(QORE_CMAKE_DIR "@CMAKE_SOURCE_DIR@/cmake")
+    set(QORE_QCC_INCREMENTAL_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-incremental")
+    set(QORE_QCC_SOURCE_ORDER_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-source-order")
     set(QORE_INCLUDE_DIR "@CMAKE_SOURCE_DIR@/include")
     set(QORE_INCLUDE_DIRS "${QORE_INCLUDE_DIR};@CMAKE_BINARY_DIR@/include")
     set(QORE_LIBRARY "@CMAKE_BINARY_DIR@/@CMAKE_SHARED_LIBRARY_PREFIX@qore@CMAKE_SHARED_LIBRARY_SUFFIX@")
@@ -34,6 +38,8 @@ if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
     set(QORE_BUILDTREE_USER_MODULE_PATH "@CMAKE_BINARY_DIR@/qlib-qmod:@CMAKE_SOURCE_DIR@/qlib")
 else()
     set(QORE_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
+    set(QORE_QCC_INCREMENTAL_HELPER "${CMAKE_CURRENT_LIST_DIR}/qore-qo-incremental")
+    set(QORE_QCC_SOURCE_ORDER_HELPER "${CMAKE_CURRENT_LIST_DIR}/qore-qo-source-order")
     set(QORE_INCLUDE_DIR @CMAKE_INSTALL_FULL_INCLUDEDIR@)
     set(QORE_INCLUDE_DIRS ${QORE_INCLUDE_DIR})
     find_library(QORE_LIBRARY NAMES qore libqore HINTS "@CMAKE_INSTALL_FULL_LIBDIR@/")

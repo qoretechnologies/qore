@@ -23,6 +23,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         qore_dir = qore_build_dir + "/cmake";
 
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
+        addTestCase("generic qcc object helper builds standalone .qo files",
+            \testGenericQccObjectHelpers());
 
         set_return_value(main());
     }
@@ -113,5 +115,158 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         string build3 = run(sprintf("cmake --build %s --target input-digest", build_dir));
         assertNeq(digest1, read(build_dir + "/input.sha256"),
             "changed content updates digest: " + build3);
+    }
+
+    testGenericQccObjectHelpers() {
+        TmpDir tmp("qore-cmake-qcc-helpers-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        string provider = snippets_dir + "/provider.qc";
+        string consumer = snippets_dir + "/consumer.qc";
+        string base = snippets_dir + "/base.qc";
+        string child = snippets_dir + "/child.qc";
+        write(provider,
+"%new-style
+class CMakeQoProvider {
+    public {
+        const StaticConst = \"provider\";
+        static string StaticText = \"state\";
+    }
+    constructor() {}
+    static string label() { return StaticConst + \":\" + StaticText; }
+    string get() { return label(); }
+}
+string sub cmakeQoFreeFunction() { return CMakeQoProvider::label(); }
+");
+        write(consumer,
+"%new-style
+class CMakeQoConsumer {
+    string run() {
+        object p = new CMakeQoProvider();
+        return p.get() + \":\" + CMakeQoProvider::StaticConst + \":\" + CMakeQoProvider::StaticText
+            + \":\" + CMakeQoProvider::label() + \":\" + cmakeQoFreeFunction();
+    }
+}
+");
+        write(base,
+"%new-style
+class CMakeQoBase {
+    string base() { return \"base\"; }
+}
+");
+        write(child,
+"%new-style
+class CMakeQoChild inherits CMakeQoBase {
+    string child() { return base(); }
+}
+");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoHelperSmoke NONE)
+find_package(Qore REQUIRED)
+
+set(QORE_QCC_MODULE_PATH \"${QORE_BUILDTREE_USER_MODULE_PATH}\")
+if(NOT QORE_QCC_MODULE_PATH)
+    set(QORE_QCC_MODULE_PATH \"${QORE_MODULES_DIR}\")
+endif()
+
+set(QO_SOURCES
+    \"${CMAKE_SOURCE_DIR}/srcs/provider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/consumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/base.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/child.qc\")
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP cmake-smoke
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    INCLUDE_DIR \"${QORE_INCLUDE_DIR}\"
+    MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
+    SOURCES ${QO_SOURCES}
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    CONTENT_STAMPS_VAR QO_CONTENT_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS
+    CONTEXT_VAR QO_CONTEXT)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+
+qore_qcc_link_objects(QO_LINK
+    OUTPUT \"${CMAKE_BINARY_DIR}/linked.qo\"
+    AGGREGATE_SYMBOL QORE_CMAKE_QO_SMOKE
+    INPUTS ${QO_OBJECTS}
+    INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
+    INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    WARNINGS_ARE_ERRORS
+    STAMP_VAR QO_LINK_STAMP
+    LINK_MAP_VAR QO_LINK_MAP)
+add_custom_target(qo-link ALL DEPENDS ${QO_LINK_STAMP})
+
+qore_qcc_script_aggregate(QO_SCRIPT_AGG
+    OUTPUT \"${CMAKE_BINARY_DIR}/script-aggregate.qo\"
+    AGGREGATE QORE_CMAKE_SCRIPT_SMOKE
+    SOURCES ${QO_SOURCES}
+    INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
+    INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    NATIVE_REGISTERS
+    STAMP_VAR QO_SCRIPT_AGG_STAMP)
+add_custom_target(qo-script-aggregate ALL DEPENDS ${QO_SCRIPT_AGG_STAMP})
+
+file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
+    \"objects=${QO_OBJECTS}\\n\"
+    \"stamps=${QO_STAMPS}\\n\"
+    \"content_stamps=${QO_CONTENT_STAMPS}\\n\"
+    \"order_targets=${QO_ORDER_TARGETS}\\n\"
+    \"context=${QO_CONTEXT}\\n\"
+    \"link=${QO_LINK}\\n\"
+    \"link_stamp=${QO_LINK_STAMP}\\n\"
+    \"link_map=${QO_LINK_MAP}\\n\"
+    \"script_aggregate=${QO_SCRIPT_AGG}\\n\"
+    \"script_aggregate_stamp=${QO_SCRIPT_AGG_STAMP}\\n\")
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s",
+            src_dir, build_dir, qore_dir));
+        assertTrue(is_file(build_dir + "/qo-vars.txt"),
+            "configured generic qcc helper project: " + configure);
+
+        string direct = read(build_dir + "/qo-scripts/direct-deps.cmake");
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_1 \"\"\\)"),
+            "linkable provider references do not become consumer build deps: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_3.*base_qc\\.qo"),
+            "inheritance remains a source-scanned build prerequisite: " + direct);
+
+        string build1 = run(sprintf("cmake --build %s -- -j17", build_dir));
+        assertTrue(is_file(build_dir + "/linked.qo"), "linked .qo aggregate built: " + build1);
+        assertTrue(is_file(build_dir + "/linked.qo.qolink.json"),
+            "linked .qo map built: " + build1);
+        assertTrue(is_file(build_dir + "/script-aggregate.qo"),
+            "script aggregate .qo built: " + build1);
+
+        string link_map = read(build_dir + "/linked.qo.qolink.json");
+        assertTrue(link_map.find("\"resolution\": \"resolved\"") != -1,
+            "qo-link map resolves standalone imports: " + link_map);
+        assertTrue(link_map.find("CMakeQoProvider::label") != -1,
+            "qo-link map records static method resolution: " + link_map);
+
+        string no_op = run(sprintf("cmake --build %s -- -j17", build_dir));
+        assertTrue(no_op.find("qcc -c:") == -1
+                && no_op.find("qcc --link-qo:") == -1
+                && no_op.find("qcc --script-aggregate:") == -1,
+            "no-op rebuild does not rerun qcc helper targets: " + no_op);
+
+        string link_content_stamp = read(build_dir + "/linked.qo.content.stamp");
+        string provider_body = read(provider);
+        write(provider, provider_body);
+        string same_content = run(sprintf("cmake --build %s -- -j17", build_dir));
+        assertEq(link_content_stamp, read(build_dir + "/linked.qo.content.stamp"),
+            "same-content source mtime rebuild does not relink aggregate: " + same_content);
     }
 }
