@@ -25,6 +25,8 @@ class AOTQccBuildSidecarsTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
 
         addTestCase("single source qo sidecars and manifest skip", \testSingleSourceSidecars());
+        addTestCase("script preload qo libraries can be omitted from manifest",
+            \testScriptPreloadManifestInputs());
         addTestCase("qo link sidecars and manifest skip", \testQoLinkSidecars());
         addTestCase("script aggregate sidecars and manifest skip", \testScriptAggregateSidecars());
 
@@ -112,6 +114,61 @@ public class QccSidecarSingle {
         assertTrue(is_file(content_stamp), "manifest skip recreated missing content stamp: " + third);
         assertContains(File::readTextFile(status), "\"output_changed\": false",
             "status still records no content change when baseline stamp is recreated");
+    }
+
+    testScriptPreloadManifestInputs() {
+        TmpDir tmp("qore-aot-qcc-preload-manifest-");
+        string provider_src = tmp.path + "/provider.qc";
+        string consumer_src = tmp.path + "/consumer.qc";
+        string provider_qo = tmp.path + "/provider.qo";
+        string consumer_qo = tmp.path + "/consumer.qo";
+        string dep = consumer_qo + ".d";
+        string idx = consumer_qo + ".idx.json";
+        string manifest = consumer_qo + ".manifest.json";
+
+        write(provider_src, "%new-style
+public class QccSidecarProvider {
+    public static int value() {
+        return 7;
+    }
+}
+");
+
+        write(consumer_src, "%new-style
+public class QccSidecarConsumer {
+    static int value() {
+        return QccSidecarProvider::value();
+    }
+}
+");
+
+        string provider_cmd = sprintf(
+            "%s %s -c --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, provider_qo, provider_src);
+        string provider_out = run(provider_cmd);
+        assertTrue(is_file(provider_qo), "compiled provider preload .qo: " + provider_out);
+
+        string consumer_cmd = sprintf(
+            "%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s"
+            " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
+            " --manifest-skip-qo-library-inputs -o %s %s",
+            env, qcc_bin, tmp.path, dep, idx, manifest, consumer_qo, consumer_src);
+        string consumer_out = run(consumer_cmd);
+        assertTrue(is_file(consumer_qo), "compiled consumer with preload .qo: " + consumer_out);
+        string manifest_json = File::readTextFile(manifest);
+        assertTrue(manifest_json.find(provider_qo) == -1,
+            "preloaded provider .qo omitted from manifest: " + manifest_json);
+
+        string explicit_cmd = sprintf(
+            "%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s"
+            " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
+            " --manifest-skip-qo-library-inputs --manifest-input=%s -o %s %s",
+            env, qcc_bin, tmp.path, dep, idx, manifest, provider_qo, consumer_qo, consumer_src);
+        string explicit_out = run(explicit_cmd);
+        assertTrue(is_file(consumer_qo), "compiled consumer with explicit manifest input: " + explicit_out);
+        manifest_json = File::readTextFile(manifest);
+        assertContains(manifest_json, provider_qo,
+            "explicit manifest input records provider .qo");
     }
 
     testQoLinkSidecars() {
