@@ -11588,6 +11588,7 @@ extern "C" DLLEXPORT void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
     mod_info->init = reinterpret_cast<qore_module_init_t>(init_fn);
     mod_info->ns_init = reinterpret_cast<qore_module_ns_init_t>(ns_init_fn);
     mod_info->del = reinterpret_cast<qore_module_delete_t>(del_fn);
+    mod_info->is_aot = true;
     for (int i = 0; i < num_deps; ++i) {
         if (deps[i]) {
             mod_info->dependencies.push_back(deps[i]);
