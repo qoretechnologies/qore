@@ -174,6 +174,8 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("bridge type graph", \typeGraphTest());
         addTestCase("bridge child providers and operator gating", \childGatingTest());
         addTestCase("document validation", \validationTest());
+        addTestCase("http persisted queries and batching", \apqBatchTest());
+        addTestCase("bridge paging and transactions", \pagingTxTest());
 
         set_return_value(main());
     }
@@ -689,6 +691,53 @@ class GraphQLHandlerTest inherits QUnit::Test {
         assertEq("Ada Lovelace", hex.execute("{ search { full_name } }").data.search[0].full_name);
     }
 
+    apqBatchTest() {
+        RestClient rc({"url": "http://localhost:" + port, "data": "json"});
+        rc.setErrorPassthru(True);
+
+        # Automatic Persisted Queries: a hash-only request before registration is not found
+        string q = "{ hello }";
+        string h = SHA256(q);
+        hash<auto> ext = {"extensions": {"persistedQuery": {"sha256Hash": h}}};
+        assertRegex("PersistedQueryNotFound", rc.post("/graphql", ext).body.errors[0].message);
+        # registering with the query+hash executes and caches it
+        assertEq("Hello, world!", rc.post("/graphql", ext + {"query": q}).body.data.hello);
+        # a subsequent hash-only request now resolves from the cache
+        assertEq("Hello, world!", rc.post("/graphql", ext).body.data.hello);
+        # a hash that does not match the supplied query is rejected
+        assertRegex("PersistedQueryHashMismatch",
+            rc.post("/graphql", {"query": q, "extensions": {"persistedQuery": {"sha256Hash": "bad"}}})
+                .body.errors[0].message);
+
+        # request batching: an array body returns an array of envelopes, one per operation
+        auto batch = rc.post("/graphql", (
+            {"query": "{ hello(name: \"A\") }"},
+            {"query": "{ add(a: 2, b: 3) }"},
+            {"query": "{ nope }"},
+        )).body;
+        assertEq("Hello, A!", batch[0].data.hello);
+        assertEq(5, batch[1].data.add);
+        assertRegex("cannot query field", batch[2].errors[0].message);
+    }
+
+    pagingTxTest() {
+        # limit/offset pushdown (F1): a provider advertising limit/offset receives them as search
+        # options instead of the bridge paging client-side
+        PagingProvider pp();
+        GraphQLExecutor pex = (new DataProviderGraphQLSchema(pp)).getExecutor();
+        assertEq((2, 3), (map $1.id, pex.execute("{ search(limit: 2, offset: 1) { id } }").data.search));
+        assertEq(2, pp.last_options.limit);
+        assertEq(1, pp.last_options.offset);
+
+        # transactional return_records (F4): a transaction-capable provider wraps the mutate+re-read
+        TxProvider tp();
+        GraphQLExecutor tex = (new DataProviderGraphQLSchema(tp, {"return_records": True})).getExecutor();
+        hash<auto> u = tex.execute("mutation { update(set: {name: \"Z\"}, filter: {id: {eq: 1}}) { id name } }");
+        assertEq("Z", u.data.update[0].name);
+        assertTrue(tp.began, "beginTransaction was called");
+        assertTrue(tp.committed, "commit was called");
+    }
+
     validationTest() {
         string sdl = "type Query { me: String greet(name: String): String hero: Character } "
             "type Character { id: ID! name: String! }";
@@ -933,5 +982,107 @@ class ParentChildProvider inherits DataProvider::AbstractDataProvider {
 
     private *AbstractDataProvider getChildProviderImpl(string name) {
         return name == "orders" ? child : NOTHING;
+    }
+}
+
+#! a provider advertising limit/offset search options, to test server-side paging pushdown
+class PagingProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"id": 1}, {"id": 2}, {"id": 3}, {"id": 4});
+        *hash<auto> last_options;
+    }
+
+    string getName() {
+        return "page";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "has_record": True,
+            "search_options": {
+                "limit": <DataProviderOptionInfo>{
+                    "display_name": "Limit", "short_desc": "limit", "desc": "limit",
+                    "type": AbstractDataProviderTypeMap."int",
+                },
+                "offset": <DataProviderOptionInfo>{
+                    "display_name": "Offset", "short_desc": "offset", "desc": "offset",
+                    "type": AbstractDataProviderTypeMap."int",
+                },
+            },
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {"id": new QoreDataField("id", "the id", IntType)};
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        last_options = search_options;
+        list<hash<auto>> sliced = data;
+        if (exists search_options.offset && search_options.offset < sliced.size()) {
+            sliced = sliced[search_options.offset..];
+        }
+        if (exists search_options.limit && search_options.limit < sliced.size()) {
+            sliced = sliced[0..(search_options.limit - 1)];
+        }
+        return new DefaultRecordIterator(sliced.iterator(), where_cond, {}, getRecordTypeImpl());
+    }
+}
+
+#! a transaction-capable provider, to test atomic return_records update/delete
+class TxProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"id": 1, "name": "A"},);
+        bool began = False;
+        bool committed = False;
+    }
+
+    string getName() {
+        return "tx";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_update": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "transaction_management": True,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    beginTransaction() {
+        began = True;
+    }
+
+    commit() {
+        committed = True;
     }
 }

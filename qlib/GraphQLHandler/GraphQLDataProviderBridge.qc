@@ -344,6 +344,13 @@ public class DataProviderGraphQLSchema {
         # the bridge instance may be a temporary (e.g. from createExecutor()) destroyed at scope
         # exit, so the resolvers must not depend on its lifetime. The spec holds the provider
         # reference and the metadata the static resolver helpers need.
+        # determine whether the provider supports server-side limit/offset paging
+        *hash<auto> searchOpts;
+        try {
+            searchOpts = provider.getSearchOptions();
+        } catch (hash<ExceptionInfo> ex) {
+            # provider does not support search options; fall back to client-side paging
+        }
         hash<auto> spec = {
             "provider": provider,
             "record_type": record_type,
@@ -351,6 +358,8 @@ public class DataProviderGraphQLSchema {
             "name_map": field_name_map,
             "allow_templates": allow_templates,
             "return_records": return_records,
+            "push_paging": exists searchOpts.limit && exists searchOpts.offset,
+            "requires_tx": info.transaction_management,
         };
 
         hash<auto> queryResolvers();
@@ -417,16 +426,26 @@ public class DataProviderGraphQLSchema {
     #! executes a search against the provider, applying the optional filter and limit/offset paging
     static list<auto> execSearch(hash<auto> spec, hash<auto> args) {
         AbstractDataProvider p = spec.provider;
-        AbstractDataProviderRecordIterator it;
+        int limit = args.limit ?? DefaultSearchLimit;
+        int offset = args.offset ?? 0;
         *string dpql = DataProviderGraphQLSchema::buildEffectiveDpql(spec, args);
         if (dpql.val()) {
             DataProviderGraphQLSchema::validateWhere(spec, dpql);
-            it = p.searchRecords(dpql, {});
-        } else {
-            it = p.searchRecords();
         }
-        int limit = args.limit ?? DefaultSearchLimit;
-        int offset = args.offset ?? 0;
+
+        # if the provider supports server-side paging, push limit/offset into the search options and
+        # return all returned records; otherwise page client-side
+        if (spec.push_paging) {
+            hash<auto> sopts = {"limit": limit, "offset": offset};
+            AbstractDataProviderRecordIterator pit = dpql.val()
+                ? p.searchRecords(dpql, sopts)
+                : p.searchRecords(NOTHING, sopts);
+            list<auto> pout();
+            map pout += $1, pit;
+            return pout;
+        }
+
+        AbstractDataProviderRecordIterator it = dpql.val() ? p.searchRecords(dpql, {}) : p.searchRecords();
         list<auto> out();
         int idx = 0;
         int taken = 0;
@@ -453,21 +472,52 @@ public class DataProviderGraphQLSchema {
     static auto execUpdate(hash<auto> spec, hash<auto> args) {
         string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "update");
         AbstractDataProvider p = spec.provider;
-        int n = p.updateRecords(DataProviderGraphQLSchema::toProviderRec(spec, args.set), dpql, {});
-        # when returning records, re-read the (now updated) matching records (non-atomic)
-        return spec.return_records ? DataProviderGraphQLSchema::collectMatching(p, dpql) : n;
+        hash<auto> set = DataProviderGraphQLSchema::toProviderRec(spec, args.set);
+        if (!spec.return_records) {
+            return p.updateRecords(set, dpql, {});
+        }
+        # returning records: re-read the matching records after the update. When the provider
+        # supports transactions, wrap mutate + re-read so the returned records are atomic
+        if (spec.requires_tx) {
+            p.beginTransaction();
+            try {
+                p.updateRecords(set, dpql, {});
+                list<auto> rv = DataProviderGraphQLSchema::collectMatching(p, dpql);
+                p.commit();
+                return rv;
+            } catch (hash<ExceptionInfo> ex) {
+                p.rollback();
+                rethrow;
+            }
+        }
+        p.updateRecords(set, dpql, {});
+        return DataProviderGraphQLSchema::collectMatching(p, dpql);
     }
 
     #! deletes records matching the filter; returns the affected records or the affected count
     static auto execDelete(hash<auto> spec, hash<auto> args) {
         string dpql = DataProviderGraphQLSchema::requireSelector(spec, args, "delete");
         AbstractDataProvider p = spec.provider;
-        # when returning records, capture the matching records before deleting them (non-atomic)
-        *list<auto> captured = spec.return_records
-            ? DataProviderGraphQLSchema::collectMatching(p, dpql)
-            : NOTHING;
-        int n = p.deleteRecords(dpql, {});
-        return spec.return_records ? captured : n;
+        if (!spec.return_records) {
+            return p.deleteRecords(dpql, {});
+        }
+        # returning records: capture the matching records before deleting. When the provider
+        # supports transactions, wrap capture + delete so the returned records are atomic
+        if (spec.requires_tx) {
+            p.beginTransaction();
+            try {
+                list<auto> captured = DataProviderGraphQLSchema::collectMatching(p, dpql);
+                p.deleteRecords(dpql, {});
+                p.commit();
+                return captured;
+            } catch (hash<ExceptionInfo> ex) {
+                p.rollback();
+                rethrow;
+            }
+        }
+        list<auto> captured = DataProviderGraphQLSchema::collectMatching(p, dpql);
+        p.deleteRecords(dpql, {});
+        return captured;
     }
 
     #! creates a batch of records, returning the number created

@@ -690,7 +690,16 @@ Reuse the AST and schema model; emit `GraphQLError` entries with positions.
 - One negative test per rule; a fragment-cycle test; an amplification test that trips the budget.
 - Effort: medium-large (the rule set is broad but mechanical); independent of Phase D.
 
-## Phase F — performance, scale, and atomicity (gaps 6, 9, 10, 7)
+## Phase F — performance, scale, and atomicity (gaps 6, 9, 10, 7) — DONE
+
+Implemented: F1 search limit/offset pushdown into the provider's search options when it advertises
+them (else client-side paging); F2 LRU `doc_cache` (and an LRU APQ cache); F3 Automatic Persisted
+Queries (`extensions.persistedQuery.sha256Hash`, with NotFound/HashMismatch handling) plus request
+batching (a JSON array body returns an array of envelopes, bounded by `MaxBatchSize`); F4
+transactional `return_records` (update/delete wrap mutate + re-read in
+`beginTransaction`/`commit`/`rollback` when `requiresTransactionManagement()`). Original plan below.
+
+
 
 ### F1 — search limit/offset pushdown (gap 6)
 - Add the provider's `keys getSearchOptions()` to the resolver spec; in `execSearch`, if the

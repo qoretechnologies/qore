@@ -54,15 +54,19 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         GraphQLExecutor executor;
         #! whether to cache parsed query documents
         bool cache_enabled = True;
-        #! the parsed-document cache, keyed by query text
+        #! the parsed-document cache (LRU), keyed by query text
         hash<string, hash<GraphQLDocument>> doc_cache;
-        #! protects @ref doc_cache against concurrent access
+        #! the automatic-persisted-query cache (LRU): SHA-256 hash -> query text
+        hash<string, string> apq_cache;
+        #! protects @ref doc_cache and @ref apq_cache against concurrent access
         Qore::Thread::Mutex cache_lock();
     }
 
     public {
         #! the maximum number of parsed documents to cache (bounds memory growth from distinct queries)
         const MaxCacheSize = 1024;
+        #! the maximum number of operations permitted in a single batched request
+        const MaxBatchSize = 50;
     }
 
     #! creates the handler from SDL schema text and a resolver map
@@ -98,6 +102,7 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         cache_enabled = enable;
         if (!enable) {
             doc_cache = {};
+            apq_cache = {};
         }
     }
 
@@ -114,67 +119,101 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         @return an @ref HttpServer::HttpResponseInfo hash with the JSON GraphQL response envelope
     */
     hash<HttpServer::HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        hash<auto> req;
+        auto parsed;
         try {
-            req = parseHttpRequest(cx, hdr, body);
+            parsed = parseHttpRequest(cx, hdr, body);
         } catch (hash<ExceptionInfo> ex) {
             return makeJsonResponse(400, {"errors": ({"message": ex.desc},)});
         }
-        if (!req.query.val()) {
-            return makeJsonResponse(400, {"errors": ({"message": "no GraphQL query was provided"},)});
+
+        # a JSON array body is a batch of operations: execute each and return an array of envelopes
+        if (parsed.typeCode() == NT_LIST) {
+            if (parsed.size() > MaxBatchSize) {
+                return makeJsonResponse(400,
+                    {"errors": ({"message": sprintf("batch exceeds the maximum of %d operations",
+                        MaxBatchSize)},)});
+            }
+            list<auto> envelopes = map executeSingle(cx, hdr, $1), parsed;
+            return makeJsonResponse(200, envelopes);
         }
 
-        # parse (with caching); a syntax error is returned as a 200 errors envelope
+        # single operation: a request with neither a query nor a persisted-query hash is malformed
+        if (!parsed.query.val() && !exists parsed.extensions.persistedQuery.sha256Hash) {
+            return makeJsonResponse(400, {"errors": ({"message": "no GraphQL query was provided"},)});
+        }
+        return makeJsonResponse(200, executeSingle(cx, hdr, parsed));
+    }
+
+    #! executes a single GraphQL request (query/operationName/variables/extensions), returning the envelope
+    private hash<auto> executeSingle(hash<auto> cx, hash<auto> hdr, hash<auto> req) {
+        # Automatic Persisted Queries: resolve the query text from the SHA-256 hash if present
+        string query;
+        *string apqHash = req.extensions.persistedQuery.sha256Hash;
+        if (exists apqHash) {
+            if (req.query.val()) {
+                if (SHA256(req.query) != apqHash) {
+                    return {"errors": ({"message": "PersistedQueryHashMismatch"},)};
+                }
+                apqPut(apqHash, req.query);
+                query = req.query;
+            } else {
+                *string cached = apqGet(apqHash);
+                if (!exists cached) {
+                    return {"errors": ({"message": "PersistedQueryNotFound"},)};
+                }
+                query = cached;
+            }
+        } else if (req.query.val()) {
+            query = req.query;
+        } else {
+            return {"errors": ({"message": "no GraphQL query was provided"},)};
+        }
+
+        # parse (LRU cached); a syntax error is a 200 errors envelope
         hash<GraphQLDocument> doc;
         try {
-            doc = getDocument(req.query);
+            doc = getDocument(query);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == GRAPHQL_SYNTAX_ERROR) {
-                return makeJsonResponse(200,
-                    {"errors": (GraphQLExecutor::makeError(ex.desc, ex.arg),)});
+                return {"errors": (GraphQLExecutor::makeError(ex.desc, ex.arg),)};
             }
             rethrow;
         }
 
-        # per the GraphQL-over-HTTP convention, GET requests may only execute query operations
-        # (this prevents state-changing mutations from being triggered by a simple GET / CSRF)
+        # per the GraphQL-over-HTTP convention, GET may only execute query operations (CSRF defense)
         *string require_op = hdr.method == "GET" ? "query" : NOTHING;
-
-        # any unexpected exception escaping execution is converted to an error envelope rather than
-        # leaking as a raw HTTP 500 with internal details
-        hash<auto> result;
+        # any unexpected exception becomes an error envelope rather than leaking as an HTTP 500
         try {
-            result = executor.executeDocument(doc, req.variables, req.operationName, cx, require_op);
+            return executor.executeDocument(doc, req.variables, req.operationName, cx, require_op);
         } catch (hash<ExceptionInfo> ex) {
-            return makeJsonResponse(200, {"errors": ({"message": ex.desc},)});
+            return {"errors": ({"message": ex.desc},)};
         }
-        return makeJsonResponse(200, result);
     }
 
-    #! extracts the GraphQL request (query, operation name, variables) from the HTTP request
+    #! extracts the GraphQL request(s) from the HTTP request: a single request hash, or for a
+    #! batched POST (JSON array body) a list of request hashes
     /** @throw GRAPHQL-REQUEST-ERROR the request body or parameters could not be parsed
     */
-    private hash<auto> parseHttpRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+    private auto parseHttpRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         switch (hdr.method) {
             case "POST": {
                 if (!body.val()) {
                     throw "GRAPHQL-REQUEST-ERROR", "the POST request has no body";
                 }
-                string text = body.toString();
                 auto parsed;
                 try {
-                    parsed = parse_json(text);
+                    parsed = parse_json(body.toString());
                 } catch (hash<ExceptionInfo> ex) {
                     throw "GRAPHQL-REQUEST-ERROR", sprintf("invalid JSON request body: %s", ex.desc);
                 }
-                if (parsed.typeCode() != NT_HASH) {
-                    throw "GRAPHQL-REQUEST-ERROR", "the JSON request body must be an object";
+                # a list is a batch; a hash is a single operation
+                if (parsed.typeCode() == NT_LIST) {
+                    return parsed;
                 }
-                return {
-                    "query": parsed.query,
-                    "operationName": parsed.operationName,
-                    "variables": parsed.variables,
-                };
+                if (parsed.typeCode() != NT_HASH) {
+                    throw "GRAPHQL-REQUEST-ERROR", "the JSON request body must be an object or array";
+                }
+                return parsed{"query", "operationName", "variables", "extensions"};
             }
             case "GET": {
                 hash<auto> params = parseQueryString(cx);
@@ -182,10 +221,15 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
                 if (params.variables.val()) {
                     vars = parse_json(params.variables);
                 }
+                *hash<auto> ext;
+                if (params.extensions.val()) {
+                    ext = parse_json(params.extensions);
+                }
                 return {
                     "query": params.query,
                     "operationName": params.operationName,
                     "variables": vars,
+                    "extensions": ext,
                 };
             }
             default:
@@ -204,7 +248,7 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         return parse_uri_query(orig).params ?? {};
     }
 
-    #! returns the parsed document for a query, using the cache when enabled
+    #! returns the parsed document for a query, using an LRU cache when enabled
     private hash<GraphQLDocument> getDocument(string query) {
         {
             AutoLock al(cache_lock);
@@ -214,18 +258,21 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
                 return GraphQLParser::parse(query);
             }
             if (exists doc_cache{query}) {
-                return doc_cache{query};
+                # LRU touch: move the entry to the most-recently-used position (end)
+                hash<GraphQLDocument> doc = doc_cache{query};
+                delete doc_cache{query};
+                doc_cache{query} = doc;
+                return doc;
             }
         }
         # parse outside the lock; a concurrent parse of the same query is harmless (idempotent)
         hash<GraphQLDocument> doc = GraphQLParser::parse(query);
         {
             AutoLock al(cache_lock);
-            # bound cache growth: an unbounded stream of distinct queries must not exhaust memory.
-            # when the cap is reached, clear the cache (simple, allocation-cheap eviction)
             if (cache_enabled) {
-                if (doc_cache.size() >= MaxCacheSize) {
-                    doc_cache = {};
+                # evict the least-recently-used entry (the first key) when at capacity
+                while (doc_cache.size() >= MaxCacheSize && doc_cache) {
+                    delete doc_cache{doc_cache.firstKey()};
                 }
                 doc_cache{query} = doc;
             }
@@ -233,11 +280,32 @@ public class GraphQLHandler inherits HttpServer::AbstractHttpRequestHandler {
         return doc;
     }
 
-    #! builds an HTTP response with a JSON body
-    private hash<HttpServer::HttpResponseInfo> makeJsonResponse(int code, hash<auto> envelope) {
+    #! returns the cached query text for a persisted-query hash, touching its LRU position
+    private *string apqGet(string h) {
+        AutoLock al(cache_lock);
+        if (!exists apq_cache{h}) {
+            return NOTHING;
+        }
+        string query = apq_cache{h};
+        delete apq_cache{h};
+        apq_cache{h} = query;
+        return query;
+    }
+
+    #! caches a persisted query (hash -> query text) with LRU eviction
+    private apqPut(string h, string query) {
+        AutoLock al(cache_lock);
+        while (apq_cache.size() >= MaxCacheSize && apq_cache) {
+            delete apq_cache{apq_cache.firstKey()};
+        }
+        apq_cache{h} = query;
+    }
+
+    #! builds an HTTP response with a JSON body (a single envelope hash or a batch list of envelopes)
+    private hash<HttpServer::HttpResponseInfo> makeJsonResponse(int code, auto data) {
         return <HttpServer::HttpResponseInfo>{
             "code": code,
-            "body": make_json(envelope),
+            "body": make_json(data),
             "hdr": {"Content-Type": MimeTypeJson},
         };
     }
