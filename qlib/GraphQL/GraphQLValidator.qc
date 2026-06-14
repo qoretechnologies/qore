@@ -28,8 +28,9 @@ public namespace GraphQLHandler {
     lone-anonymous-operation rule; fragment-name uniqueness, fragment-spread target existence,
     fragment cycles, unused fragments, and valid type conditions; variable uniqueness, all
     variables defined-and-used and used-are-defined; field existence on the type in scope,
-    leaf/composite selection correctness, valid and present arguments, and valid directive
-    locations. It also enforces a configurable query-complexity (total field count) budget.
+    leaf/composite selection correctness, valid and present arguments, valid directive locations,
+    and field-selection merging (selections sharing a response key must be mergeable). It also
+    enforces a configurable query-complexity (total field count) budget.
 
     Validation collects all errors and returns them together (rather than aborting at the first),
     so a single request reports every problem at once.
@@ -180,7 +181,12 @@ public class GraphQLValidator {
 
         # walk the selection set, collecting used variables into the used_vars member
         used_vars = {};
-        validateSelectionSet(rootType, cast<hash<GraphQLSelectionSet>>(op.selectionSet), {});
+        hash<GraphQLSelectionSet> ss = cast<hash<GraphQLSelectionSet>>(op.selectionSet);
+        validateSelectionSet(rootType, ss, {});
+
+        # field-selection-merging rule (spec 5.3.2): selections sharing a response key must be
+        # mergeable (compatible response shapes; same field+arguments when on the same object type)
+        fieldsInSetCanMerge(collectMergeFields(rootType.name, ss, {}), 0);
 
         # all used variables must be declared, and all declared variables must be used
         foreach string uv in (keys used_vars) {
@@ -402,6 +408,257 @@ public class GraphQLValidator {
             }
         }
         return typeDef.fields{fieldName};
+    }
+
+    #! flattens a selection set into per-field merge entries, expanding fragments and inline
+    #! fragments and tracking the type each field is selected on
+    /** @param parentTypeName the name of the composite type the selection set is scoped to
+        @param selectionSet the selection set
+        @param visited fragment names on the current spread path (cycle guard)
+
+        @return a list of \c {key, field, parentType, fieldDef} hashes, one per field occurrence
+    */
+    private list<auto> collectMergeFields(string parentTypeName, hash<GraphQLSelectionSet> selectionSet,
+            hash<string, bool> visited) {
+        list<auto> out();
+        *hash<GraphQLTypeDef> parentType = all_types{parentTypeName};
+        foreach hash<GraphQLNode> sel in (selectionSet.selections) {
+            switch (sel.kind) {
+                case NK_FIELD: {
+                    hash<GraphQLField> f = cast<hash<GraphQLField>>(sel);
+                    *hash<GraphQLFieldDef> fd = parentType ? getFieldDef(parentType, f.name) : NOTHING;
+                    out += {
+                        "key": f.alias ?? f.name,
+                        "field": f,
+                        "parentType": parentTypeName,
+                        "fieldDef": fd,
+                    };
+                    break;
+                }
+                case NK_INLINE_FRAGMENT: {
+                    hash<GraphQLInlineFragment> inf = cast<hash<GraphQLInlineFragment>>(sel);
+                    string scope = inf.typeCondition ?? parentTypeName;
+                    out += collectMergeFields(scope,
+                        cast<hash<GraphQLSelectionSet>>(inf.selectionSet), visited);
+                    break;
+                }
+                case NK_FRAGMENT_SPREAD: {
+                    hash<GraphQLFragmentSpread> fs = cast<hash<GraphQLFragmentSpread>>(sel);
+                    if (visited{fs.name}) {
+                        break;
+                    }
+                    *hash<GraphQLFragmentDefinition> frag = fragments{fs.name};
+                    if (!frag) {
+                        break;
+                    }
+                    out += collectMergeFields(frag.typeCondition,
+                        cast<hash<GraphQLSelectionSet>>(frag.selectionSet), visited + {fs.name: True});
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    #! verifies that all fields sharing a response key in a (flattened) selection set can be merged,
+    #! recursing into their merged sub-selection sets
+    private fieldsInSetCanMerge(list<auto> entries, int mdepth) {
+        if (mdepth > MaxDepth) {
+            return;
+        }
+        # group the entries by response key, preserving insertion order
+        hash<string, list<auto>> groups();
+        foreach hash<auto> e in (entries) {
+            groups{e.key} = (groups{e.key} ?? ()) + e;
+        }
+        foreach string key in (keys groups) {
+            list<auto> group = groups{key};
+            bool mergeable = True;
+            # pairwise comparison of all members sharing this response key
+            for (int i = 0; i < group.size() && mergeable; ++i) {
+                for (int j = i + 1; j < group.size(); ++j) {
+                    if (!sameResponseShape(group[i], group[j])) {
+                        addError(sprintf("fields %y conflict because they return conflicting types; "
+                            "use different aliases on the fields to fetch both", key));
+                        mergeable = False;
+                        break;
+                    }
+                    # when the fields are on the same object type (or either parent is not an object
+                    # type, so they could apply to the same object), they must be the same field
+                    # with the same arguments
+                    if (canBeSameObject(group[i].parentType, group[j].parentType)) {
+                        hash<GraphQLField> fa = group[i].field;
+                        hash<GraphQLField> fb = group[j].field;
+                        if (fa.name != fb.name) {
+                            addError(sprintf("fields %y conflict because %y and %y are different "
+                                "fields; use different aliases to fetch both", key, fa.name, fb.name));
+                            mergeable = False;
+                            break;
+                        }
+                        if (!sameArguments(fa, fb)) {
+                            addError(sprintf("fields %y conflict because they are given different "
+                                "arguments; use different aliases to fetch both", key));
+                            mergeable = False;
+                            break;
+                        }
+                    }
+                }
+            }
+            # recurse into the merged sub-selection sets of a mergeable group
+            if (mergeable) {
+                list<auto> merged();
+                foreach hash<auto> e in (group) {
+                    if (exists e.field.selectionSet && exists e.fieldDef) {
+                        merged += collectMergeFields(GraphQLSchema::getNamedTypeName(e.fieldDef.type),
+                            cast<hash<GraphQLSelectionSet>>(e.field.selectionSet), {});
+                    }
+                }
+                if (merged) {
+                    fieldsInSetCanMerge(merged, mdepth + 1);
+                }
+            }
+        }
+    }
+
+    #! returns @ref True if two merge entries have compatible response shapes (spec SameResponseShape)
+    private bool sameResponseShape(hash<auto> a, hash<auto> b) {
+        # a meta-field/unknown field has no field definition; the field-existence rule reports that
+        # separately, so treat the shape as compatible here
+        if (!exists a.fieldDef || !exists b.fieldDef) {
+            return True;
+        }
+        return typeShapesCompatible(a.fieldDef.type, b.fieldDef.type);
+    }
+
+    #! recursively compares two type references for response-shape compatibility
+    private bool typeShapesCompatible(hash<GraphQLNode> ta, hash<GraphQLNode> tb) {
+        # unwrap non-null wrappers in lockstep
+        while (ta.kind == NK_NON_NULL_TYPE || tb.kind == NK_NON_NULL_TYPE) {
+            if (ta.kind != tb.kind) {
+                return False;
+            }
+            ta = cast<hash<GraphQLNonNullType>>(ta).type;
+            tb = cast<hash<GraphQLNonNullType>>(tb).type;
+        }
+        # unwrap list wrappers in lockstep
+        if (ta.kind == NK_LIST_TYPE || tb.kind == NK_LIST_TYPE) {
+            if (ta.kind != tb.kind) {
+                return False;
+            }
+            return typeShapesCompatible(cast<hash<GraphQLListType>>(ta).type,
+                cast<hash<GraphQLListType>>(tb).type);
+        }
+        # named types: leaf (scalar/enum) types must be identical; two composite types are
+        # shape-compatible (their fields are checked by the recursive merge of the merged subset)
+        string na = GraphQLSchema::getNamedTypeName(ta);
+        string nb = GraphQLSchema::getNamedTypeName(tb);
+        *hash<GraphQLTypeDef> tda = all_types{na};
+        *hash<GraphQLTypeDef> tdb = all_types{nb};
+        bool leafA = tda && (tda.kind == TYPE_SCALAR || tda.kind == TYPE_ENUM);
+        bool leafB = tdb && (tdb.kind == TYPE_SCALAR || tdb.kind == TYPE_ENUM);
+        if (leafA || leafB) {
+            return na == nb;
+        }
+        return True;
+    }
+
+    #! returns @ref True if two parent types could be the same concrete object at runtime
+    /** True when the type names are equal, or when either is not an object type (so a field on an
+        interface/union could resolve to the same object as a field declared elsewhere)
+    */
+    private bool canBeSameObject(string a, string b) {
+        if (a == b) {
+            return True;
+        }
+        *hash<GraphQLTypeDef> ta = all_types{a};
+        *hash<GraphQLTypeDef> tb = all_types{b};
+        return !(ta && ta.kind == TYPE_OBJECT) || !(tb && tb.kind == TYPE_OBJECT);
+    }
+
+    #! returns @ref True if two fields have identical argument sets (names and values)
+    private bool sameArguments(hash<GraphQLField> fa, hash<GraphQLField> fb) {
+        hash<auto> ma = argumentMap(fa.arguments);
+        hash<auto> mb = argumentMap(fb.arguments);
+        if (ma.size() != mb.size()) {
+            return False;
+        }
+        foreach string name in (keys ma) {
+            if (!exists mb{name} || !valuesEqual(ma{name}, mb{name})) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    #! maps argument names to their value AST nodes
+    private hash<auto> argumentMap(list<hash<GraphQLNode>> arguments) {
+        hash<auto> m();
+        foreach hash<GraphQLNode> an in (arguments) {
+            hash<GraphQLArgument> a = cast<hash<GraphQLArgument>>(an);
+            m{a.name} = a.value;
+        }
+        return m;
+    }
+
+    #! structurally compares two value AST nodes for equality (variables by name, literals by value,
+    #! lists element-wise, input objects by field set)
+    private bool valuesEqual(hash<GraphQLNode> a, hash<GraphQLNode> b) {
+        if (a.kind != b.kind) {
+            return False;
+        }
+        switch (a.kind) {
+            case NK_VARIABLE:
+                return cast<hash<GraphQLVariable>>(a).name == cast<hash<GraphQLVariable>>(b).name;
+            case NK_INT:
+                return cast<hash<GraphQLIntValue>>(a).value == cast<hash<GraphQLIntValue>>(b).value;
+            case NK_FLOAT:
+                return cast<hash<GraphQLFloatValue>>(a).value == cast<hash<GraphQLFloatValue>>(b).value;
+            case NK_STRING:
+                return cast<hash<GraphQLStringValue>>(a).value == cast<hash<GraphQLStringValue>>(b).value;
+            case NK_BOOLEAN:
+                return cast<hash<GraphQLBooleanValue>>(a).value == cast<hash<GraphQLBooleanValue>>(b).value;
+            case NK_ENUM:
+                return cast<hash<GraphQLEnumValue>>(a).value == cast<hash<GraphQLEnumValue>>(b).value;
+            case NK_NULL:
+                return True;
+            case NK_LIST: {
+                list<hash<GraphQLNode>> la = cast<hash<GraphQLListValue>>(a).values;
+                list<hash<GraphQLNode>> lb = cast<hash<GraphQLListValue>>(b).values;
+                if (la.size() != lb.size()) {
+                    return False;
+                }
+                for (int i = 0; i < la.size(); ++i) {
+                    if (!valuesEqual(la[i], lb[i])) {
+                        return False;
+                    }
+                }
+                return True;
+            }
+            case NK_OBJECT: {
+                hash<auto> ma = objectFieldMap(cast<hash<GraphQLObjectValue>>(a));
+                hash<auto> mb = objectFieldMap(cast<hash<GraphQLObjectValue>>(b));
+                if (ma.size() != mb.size()) {
+                    return False;
+                }
+                foreach string name in (keys ma) {
+                    if (!exists mb{name} || !valuesEqual(ma{name}, mb{name})) {
+                        return False;
+                    }
+                }
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! maps an object value's field names to their value AST nodes
+    private hash<auto> objectFieldMap(hash<GraphQLObjectValue> obj) {
+        hash<auto> m();
+        foreach hash<GraphQLNode> fn in (obj.fields) {
+            hash<GraphQLObjectField> f = cast<hash<GraphQLObjectField>>(fn);
+            m{f.name} = f.value;
+        }
+        return m;
     }
 
     #! records a validation error

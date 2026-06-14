@@ -86,9 +86,11 @@ returns all errors together. It enforces operation-name uniqueness and the lone-
 fragment-name uniqueness, spread-target existence, cycle detection, unused-fragment detection, and
 valid type conditions; variable uniqueness, input-type checks, defined-and-used, and
 used-are-defined; field existence, leaf/composite selection correctness, valid/required/
-non-duplicate arguments, and valid directive locations. It also enforces a query-complexity
-(field-count) budget and a recursion-depth bound. (Field-merge-conflict detection is not
-implemented.)
+non-duplicate arguments, valid directive locations, and field-selection merging (spec §5.3.2
+`fieldsInSetCanMerge`: selections sharing a response key must have compatible response shapes, and
+must be the same field with identical arguments when they can apply to the same object type;
+checked recursively through merged sub-selection sets). It also enforces a query-complexity
+(field-count) budget and a recursion-depth bound.
 
 ### Executor
 

@@ -32,8 +32,49 @@ class GraphQLTest inherits QUnit::Test {
         addTestCase("execution", \executionTest());
         addTestCase("introspection", \introspectionTest());
         addTestCase("validation", \validationTest());
+        addTestCase("field merging", \fieldMergingTest());
         addTestCase("event queue source", \eventQueueTest());
         set_return_value(main());
+    }
+
+    fieldMergingTest() {
+        GraphQLExecutor ex = getExecutor();
+
+        # same field, conflicting arguments -> conflict
+        assertRegex("different arguments",
+            ex.execute("{ a: hello(name: \"x\") a: hello(name: \"y\") }").errors[0].message);
+        # same response key, different fields with conflicting (leaf) types -> conflict
+        assertRegex("conflicting types",
+            ex.execute("{ x: hello x: add(a: 1, b: 2) }").errors[0].message);
+        # differing nullability is also a response-shape conflict (String vs String!)
+        assertRegex("conflicting types",
+            ex.execute("{ x: hello x: nonNull }").errors[0].message);
+        # same response key, different fields with the same shape -> conflict (different fields on
+        # the same object type)
+        GraphQLExecutor dex(new GraphQLSchema("type Query { a: String b: String }"), {});
+        assertRegex("different fields", dex.execute("{ x: a x: b }").errors[0].message);
+        # a conflict inside a merged sub-selection set (recursion): id (ID!) vs name (String)
+        assertRegex("conflicting types",
+            ex.execute("{ hero { y: id } hero { y: name } }").errors[0].message);
+
+        # identical repeated selections merge cleanly (no conflict)
+        hash<auto> ok = ex.execute("{ hero { id name } hero { id name } }");
+        assertEq(NOTHING, ok.errors);
+        assertEq("R2-D2", ok.data.hero.name);
+        # same field with identical arguments is mergeable
+        assertEq(NOTHING, ex.execute("{ a: hello(name: \"x\") a: hello(name: \"x\") }").errors);
+
+        # across different object types under an interface: same response key with compatible shapes
+        # is allowed (they can never apply to the same concrete object)
+        string isdl = "type Query { hero: Character } interface Character { id: ID! } "
+            "type Droid implements Character { id: ID! name: String } "
+            "type Human implements Character { id: ID! info: String }";
+        GraphQLExecutor iex(new GraphQLSchema(isdl), {});
+        assertEq(NOTHING,
+            iex.execute("{ hero { ... on Droid { v: name } ... on Human { v: info } } }").errors);
+        # but incompatible shapes across different object types still conflict
+        assertRegex("conflicting types",
+            iex.execute("{ hero { ... on Droid { v: id } ... on Human { v: info } } }").errors[0].message);
     }
 
     eventQueueTest() {
