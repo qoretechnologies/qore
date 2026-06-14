@@ -34,12 +34,14 @@ GraphQL execution engine.
   `context`/`in`/`sub` identifiers.)
 - **OQ1 resolved**: the client raises `GRAPHQL-ERROR` by default with a `graphql_raise_errors`
   opt-out (matches the previously-unimplemented doc contract).
-- **OQ4 (bridge update/delete) — resolved: use DPQL**: rather than generating a bespoke GraphQL
-  filter-input grammar, expose where-conditions as a DPQL string argument forwarded to the
-  DataProvider's native DPQL overloads. The current build still ships read+create only; the full
-  plan to close update/delete/upsert is in
+- **OQ4 (bridge update/delete) — resolved: use DPQL; Phase A implemented**: where-conditions are
+  exposed as a DPQL string argument forwarded to the DataProvider's native DPQL overloads. The
+  bridge now generates a `where`-filtered `search` plus `update`/`delete`/`upsert` mutations
+  (gated on `supports_search_expressions` + the per-op capability flags), with DPQL validation
+  against the record schema, template-reference rejection by default, and GraphQL→provider
+  field-name round-tripping (which also fixed a latent `create` bug). See
   [§ DPQL integration & closing update/delete](#dpql-integration--closing-updatedelete-resolves-oq4)
-  below.
+  below; Phase B/C remain optional follow-ups.
 - **Build-system fix** (`cmake/QoreMacros.cmake`): the qmod dependency finalizer wired a
   build-order edge to *any* CMake target whose name matched a `%requires` dependency, including
   third-party FetchContent targets. The external `json` qore module collided with nghttp2's
@@ -537,9 +539,13 @@ schema still has a query root.
 
 ## Phasing
 
-- **Phase A (this plan):** DPQL-backed `search` filter + `update`/`delete`/`upsert` + `SetInput`
-  + validation + template defense + field-name round-trip + capability gating + tests. Closes
-  the functional gap with full filter power for a contained amount of code.
+- **Phase A (this plan) — DONE:** DPQL-backed `search` filter + `update`/`delete`/`upsert` +
+  `SetInput` + validation + template defense + field-name round-trip + capability gating + tests.
+  Closes the functional gap with full filter power for a contained amount of code. Note: DPQL
+  filtering and update/delete are gated on the provider advertising `supports_search_expressions`
+  (and populating `info.expressions`); the generated resolvers delegate to the provider's
+  `searchRecords`/`updateRecords`/`deleteRecords` DPQL overloads, so the provider's
+  `updateRecordsImpl`/`deleteRecordsImpl` are responsible for applying the where-expression.
 - **Phase B (optional, later):** typed, introspectable GraphQL filter input types
   (`<R>WhereInput`, per-scalar `*Filter`, `_and`/`_or`/`_not`) that **compile to DPQL** — DPQL
   stays the canonical IR, so there is never a second where-condition model. Justified only if

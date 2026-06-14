@@ -472,15 +472,21 @@ class ExecutionState {
     private auto executeField(hash<GraphQLTypeDef> objectType, hash<GraphQLFieldDef> fieldDef,
             list<hash<GraphQLField>> fieldGroup, auto objectValue, list<auto> path) {
         hash<GraphQLField> field = fieldGroup[0];
-        hash<auto> args = coerceArgumentValues(fieldDef, field, path);
 
         auto resolved;
         try {
+            # argument coercion (e.g. a missing required argument) and the resolver itself can
+            # raise; either becomes a field error rather than aborting the whole operation
+            hash<auto> args = coerceArgumentValues(fieldDef, field, path);
             resolved = resolveFieldValue(objectType, fieldDef, field.name, objectValue, args);
         } catch (hash<ExceptionInfo> ex) {
-            # a resolver raised: record the error and treat the resolved value as null
             recordError(ex.desc, path);
-            resolved = NOTHING;
+            # the error is recorded; for a non-null field the null must propagate, but without
+            # adding a redundant "cannot return null" message, so bubble directly
+            if (fieldDef.type.kind == NK_NON_NULL_TYPE) {
+                throw GRAPHQL_NULL_BUBBLE, "field error";
+            }
+            return NOTHING;
         }
 
         return completeValue(fieldDef.type, fieldGroup, resolved, path);

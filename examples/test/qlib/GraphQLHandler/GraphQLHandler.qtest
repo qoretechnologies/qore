@@ -25,12 +25,13 @@
 class MemProvider inherits DataProvider::AbstractDataProvider {
     public {
         list<hash<auto>> data;
-        bool can_create;
+        # when False, the provider advertises read-only (no create/update/delete/upsert)
+        bool mutable;
     }
 
-    constructor(list<hash<auto>> d, bool n_can_create = True) {
+    constructor(list<hash<auto>> d, bool n_mutable = True) {
         data = d;
-        can_create = n_can_create;
+        mutable = n_mutable;
     }
 
     string getName() {
@@ -40,7 +41,14 @@ class MemProvider inherits DataProvider::AbstractDataProvider {
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return <DataProviderInfo>{
             "supports_read": True,
-            "supports_create": can_create,
+            "supports_create": mutable,
+            "supports_update": mutable,
+            "supports_delete": mutable,
+            "supports_upsert": mutable,
+            # advertise advanced search expressions so DPQL where-filters are generated; the
+            # generic expression implementations evaluate them in memory
+            "supports_search_expressions": mutable,
+            "expressions": mutable ? DataProviderGenericExpressions : NOTHING,
             "has_record": True,
         };
     }
@@ -60,6 +68,38 @@ class MemProvider inherits DataProvider::AbstractDataProvider {
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
         push data, rec;
         return rec;
+    }
+
+    private string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
+        push data, rec;
+        return rec.id.toString();
+    }
+
+    # reuses the generic expression matcher (via DefaultRecordIterator) to find matching ids
+    private hash<string, bool> matchedIds(*hash<auto> where_cond, *hash<auto> opts) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, opts, getRecordTypeImpl());
+        map ids{$1.id.toString()} = True, it;
+        return ids;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].id.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int before = data.size();
+        data = select data, !ids{$1.id.toString()};
+        return before - data.size();
     }
 }
 
@@ -383,28 +423,107 @@ class GraphQLHandlerTest inherits QUnit::Test {
         ));
         DataProviderGraphQLSchema bridge(mp);
 
-        # generated SDL contains the record type and the search/create operations
-        assertRegex("type peopleRecord", bridge.getSdl());
-        assertRegex("search\\(limit: Int, offset: Int\\): \\[peopleRecord!\\]!", bridge.getSdl());
-        assertRegex("create\\(", bridge.getSdl());
+        # generated SDL contains the record type and the search/create/update/delete/upsert operations
+        string sdl = bridge.getSdl();
+        assertRegex("type peopleRecord", sdl);
+        assertRegex("search\\(where: String, limit: Int, offset: Int\\): \\[peopleRecord!\\]!", sdl);
+        assertRegex("create\\(", sdl);
+        assertRegex("update\\(set: peopleRecordSetInput!, where: String!\\): Int!", sdl);
+        assertRegex("delete\\(where: String!\\): Int!", sdl);
+        assertRegex("upsert\\(.*\\): String!", sdl);
+        assertRegex("input peopleRecordSetInput", sdl);
 
         GraphQLExecutor ex = bridge.getExecutor();
-        # search
+        # search (no filter)
         hash<auto> r = ex.execute("{ search { id name active } }");
         assertEq(2, r.data.search.size());
         assertEq("Ada", r.data.search[0].name);
-        # limit
+        # limit / offset
         assertEq(1, ex.execute("{ search(limit: 1) { name } }").data.search.size());
-        # offset
         assertEq("Bob", ex.execute("{ search(offset: 1) { name } }").data.search[0].name);
-        # create mutation
+
+        # DPQL filtered search
+        hash<auto> f = ex.execute("{ search(where: \"@active == true\") { name } }");
+        assertEq(("Ada",), (map $1.name, f.data.search));
+        # compound DPQL filter
+        hash<auto> f2 = ex.execute("{ search(where: \"@id >= 1 && @name like \\\"A%\\\"\") { name } }");
+        assertEq(("Ada",), (map $1.name, f2.data.search));
+
+        # create
         hash<auto> c = ex.execute("mutation { create(id: 3, name: \"Cy\", active: true) { id name } }");
         assertEq("Cy", c.data.create.name);
         assertEq(3, ex.execute("{ search { id } }").data.search.size());
 
-        # a read-only provider generates no Mutation type
+        # update with set + DPQL where -> affected count, then verify
+        assertEq(1, ex.execute("mutation { update(set: {name: \"Adita\"}, where: \"@id == 1\") }").data.update);
+        assertEq("Adita", ex.execute("{ search(where: \"@id == 1\") { name } }").data.search[0].name);
+
+        # delete with DPQL where -> affected count, then verify
+        assertEq(1, ex.execute("mutation { delete(where: \"@active == false\") }").data.delete);
+        assertFalse((map $1.name, ex.execute("{ search { name } }").data.search).contains("Bob"));
+
+        # upsert -> record id
+        assertEq("4", ex.execute("mutation { upsert(id: 4, name: \"Dee\", active: true) }").data.upsert);
+
+        # invalid filter (unknown field) -> field error from validateDpqlExpression
+        assertRegex("Unknown field", ex.execute("{ search(where: \"@nope == 1\") { id } }").errors[0].message);
+
+        # template references are rejected by default
+        assertRegex("template references are not permitted",
+            ex.execute("{ search(where: \"@name == \$env:HOME\") { id } }").errors[0].message);
+
+        # safety: the non-null where argument means an unconditional delete is a schema-level error
+        hash<auto> nd = ex.execute("mutation { delete }");
+        assertTrue(exists nd.errors, "delete without a where argument is rejected");
+
+        # name sanitization transform
+        assertEq("first_name", DataProviderGraphQLSchema::sanitizeName("first-name"));
+
+        # field-name round-tripping: an arg whose GraphQL name was sanitized maps back to the
+        # provider's native field name when creating a record
+        HyphenProvider hp();
+        GraphQLExecutor hex = (new DataProviderGraphQLSchema(hp)).getExecutor();
+        # the provider field is "full-name"; the GraphQL arg is the sanitized "full_name"
+        assertRegex("full_name", hex.getSchema().getType("hyphenRecord").fields.full_name.name);
+        hex.execute("mutation { create(id: 1, full_name: \"Ada Lovelace\") { id } }");
+        # the stored record uses the provider's native field name
+        assertEq("Ada Lovelace", hp.data[0]."full-name");
+
+        # a read-only provider generates no Mutation type and no where-filtered search
         MemProvider ro((), False);
         DataProviderGraphQLSchema roBridge(ro);
         assertFalse(roBridge.getSdl() =~ /type Mutation/);
+        assertRegex("search\\(limit: Int, offset: Int\\)", roBridge.getSdl());
+    }
+}
+
+#! a provider with a field name requiring GraphQL-name sanitization, to test name round-tripping
+class HyphenProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data;
+    }
+
+    string getName() {
+        return "hyphen";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "supports_create": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "full-name": new QoreDataField("full-name", "the full name", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
     }
 }
