@@ -445,6 +445,102 @@ class NestedProvider inherits DataProvider::AbstractDataProvider {
     }
 }
 
+#! a mutable child provider, to test child-provider mutations
+class WritableOrdersProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"oid": 1, "total": 9.99},);
+    }
+
+    string getName() {
+        return "orders";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_create": True,
+            "supports_update": True,
+            "supports_delete": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "oid": new QoreDataField("oid", "order id", IntType),
+            "total": new QoreDataField("total", "order total", FloatType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
+    }
+
+    private hash<string, bool> matchedIds(*hash<auto> where_cond, *hash<auto> opts) {
+        hash<string, bool> ids;
+        DefaultRecordIterator it(data.iterator(), where_cond, opts, getRecordTypeImpl());
+        map ids{$1.oid.toString()} = True, it;
+        return ids;
+    }
+
+    private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int n = 0;
+        for (int i = 0; i < data.size(); ++i) {
+            if (ids{data[i].oid.toString()}) {
+                data[i] += set;
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        hash<string, bool> ids = matchedIds(where_cond, search_options);
+        int before = data.size();
+        data = select data, !ids{$1.oid.toString()};
+        return before - data.size();
+    }
+}
+
+#! a parent provider exposing a mutable child, to test child-provider mutation generation
+class ShopProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        WritableOrdersProvider orders();
+    }
+
+    string getName() {
+        return "shop";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {"sid": new QoreDataField("sid", "shop id", IntType)};
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(().iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return ("orders",);
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        return name == "orders" ? orders : NOTHING;
+    }
+}
+
 class GraphQLDataProviderTest inherits QUnit::Test {
     constructor() : Test("GraphQLDataProviderTest", "1.0") {
         addTestCase("dataprovider bridge", \bridgeTest());
@@ -454,8 +550,47 @@ class GraphQLDataProviderTest inherits QUnit::Test {
         addTestCase("bridge paging and transactions", \pagingTxTest());
         addTestCase("bridge name collision detection", \collisionTest());
         addTestCase("bridge nested-input mutations", \nestedMutationTest());
+        addTestCase("bridge child-provider mutations", \childMutationTest());
 
         set_return_value(main());
+    }
+
+    childMutationTest() {
+        ShopProvider shop();
+        DataProviderGraphQLSchema bridge(shop);
+        string sdl = bridge.getSdl();
+
+        # the read-only child Query field is still generated
+        assertRegex("orders\\(limit: Int, offset: Int\\): \\[shopRecordChildOrders!\\]!", sdl);
+        # child mutations are generated, gated on the child's capabilities, with prefixed names
+        assertRegex("ordersCreate\\(", sdl);
+        assertRegex("ordersUpdate\\(set: shopRecordChildOrdersSetInput!, where: String\\): Int!", sdl);
+        assertRegex("ordersDelete\\(where: String\\): Int!", sdl);
+        # upsert is not generated for a child that does not advertise it
+        assertFalse(sdl =~ /ordersUpsert/, "no upsert mutation for a non-upsert child");
+        assertRegex("input shopRecordChildOrdersSetInput", sdl);
+
+        GraphQLExecutor ex = bridge.getExecutor();
+
+        # create a child record; it persists in the shared child provider instance
+        hash<auto> c = ex.execute("mutation { ordersCreate(oid: 2, total: 5.5) { oid total } }");
+        assertEq(2, c.data.ordersCreate.oid);
+        assertEq(5.5, c.data.ordersCreate.total);
+        assertEq((1, 2), (map $1.oid, ex.execute("{ orders { oid } }").data.orders));
+
+        # update via the raw DPQL where selector
+        assertEq(1, ex.execute(
+            "mutation { ordersUpdate(set: {total: 7.25}, where: \"@oid == 2\") }").data.ordersUpdate);
+        assertEq(7.25, shop.orders.data[1].total);
+
+        # a child update without a selector hits the mass-mutation guard
+        assertRegex("requires a \"filter\" or \"where\" condition",
+            ex.execute("mutation { ordersUpdate(set: {total: 0.0}) }").errors[0].message);
+
+        # delete via the raw DPQL where selector
+        assertEq(1, ex.execute(
+            "mutation { ordersDelete(where: \"@oid == 1\") }").data.ordersDelete);
+        assertEq((2,), (map $1.oid, ex.execute("{ orders { oid } }").data.orders));
     }
 
     nestedMutationTest() {

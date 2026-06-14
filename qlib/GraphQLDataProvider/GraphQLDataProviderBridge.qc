@@ -252,14 +252,32 @@ public class DataProviderGraphQLSchema {
                 : sprintf("  search(limit: Int, offset: Int): [%s!]!", record_type_name);
         }
         # child-provider traversal (gap 5): each direct child provider with a record type is
-        # exposed as a read-only Query field returning its records
+        # exposed as a read-only Query field returning its records; if the child advertises write
+        # capabilities, prefixed create/update/delete/upsert mutations are also generated
         hash<auto> child_resolvers();
+        hash<auto> child_mut_resolvers();
+        list<string> child_mutation_fields();
         if (max_provider_depth >= 1) {
             foreach string cn in (provider.getChildProviderNames() ?? ()) {
-                *hash<string, AbstractDataField> crt = getChildRecordType(cn);
+                *AbstractDataProvider cp;
+                try {
+                    cp = provider.getChildProvider(cn);
+                } catch (hash<ExceptionInfo> ex) {
+                    # inaccessible child provider; skip it
+                }
+                if (!cp) {
+                    continue;
+                }
+                *hash<string, AbstractDataField> crt;
+                try {
+                    crt = cp.getRecordType();
+                } catch (hash<ExceptionInfo> ex) {
+                    # child without a record type; skip it
+                }
                 if (!crt) {
                     continue;
                 }
+                hash<DataProviderInfo> cinfo = cp.getInfo();
                 string childField = sanitizeName(cn);
                 string childTypeName = record_type_name + "Child" + capitalize(childField);
                 buildObjectType(childTypeName, crt, 0);
@@ -269,6 +287,16 @@ public class DataProviderGraphQLSchema {
                 child_resolvers{childField} = auto sub (auto parent, hash<auto> args, auto ctx) {
                     return DataProviderGraphQLSchema::searchChild(parentP, cnCapture, args);
                 };
+                # child mutations (gated on the child provider's own capabilities). The child
+                # provider is re-fetched per call (it may be request-scoped), so the resolvers
+                # build a fresh child spec via makeChildSpec(). update/delete use the raw DPQL
+                # "where" selector (validated against the child schema) rather than a typed filter,
+                # keeping the per-provider filter-operator gating unambiguous.
+                hash<auto> cm = generateChildMutations(cn, childField, childTypeName, crt, cinfo,
+                    parentP, allow_templates, return_records);
+                child_mutation_fields += cm.fields;
+                child_mut_resolvers += cm.resolvers;
+                defs += cm.defs;
             }
         }
         if (!queryFields) {
@@ -304,6 +332,8 @@ public class DataProviderGraphQLSchema {
         if (gen_bulk_upsert) {
             mutationFields += sprintf("  upsertMany(records: [%s!]!): [String!]!", recordInputName);
         }
+        # child-provider mutations (generated above during child traversal)
+        mutationFields += child_mutation_fields;
         if (mutationFields) {
             push defs, sprintf("type Mutation {\n%s\n}", mutationFields.join("\n"));
         }
@@ -414,6 +444,8 @@ public class DataProviderGraphQLSchema {
                 return DataProviderGraphQLSchema::execUpsertMany(spec, args);
             };
         }
+        # child-provider mutation resolvers (each builds its own child spec at call time)
+        mutationResolvers += child_mut_resolvers;
         if (mutationResolvers) {
             resolvers.Mutation = mutationResolvers;
         }
@@ -539,22 +571,99 @@ public class DataProviderGraphQLSchema {
         return out;
     }
 
-    #! returns a child provider's record type, or @ref NOTHING if the child has none or is inaccessible
-    private *hash<string, AbstractDataField> getChildRecordType(string name) {
-        *AbstractDataProvider cp;
+    #! generates the create/update/delete/upsert mutation fields and resolvers for a child provider
+    /** Child write operations are gated on the child provider's own capability flags. \c update and
+        \c delete take the raw DPQL \c where selector (validated against the child schema), not a
+        typed filter, so per-provider filter-operator gating stays unambiguous. Each resolver builds
+        a fresh child spec at call time via @ref makeChildSpec() (the child provider may be
+        request-scoped).
+
+        @return a hash with \c fields (the Mutation field SDL lines), \c resolvers (keyed by field
+        name), and \c defs (any generated \c input type SDL, e.g. the child \c SetInput)
+    */
+    private hash<auto> generateChildMutations(string cn, string childField, string childTypeName,
+            hash<string, AbstractDataField> crt, hash<DataProviderInfo> cinfo,
+            AbstractDataProvider parentP, bool c_allow_templates, bool c_return_records) {
+        list<string> mut_fields();
+        hash<auto> mut_resolvers();
+        list<string> set_defs();
+
+        bool c_can_filter = cinfo.supports_search_expressions;
+        string cMutReturn = c_return_records ? sprintf("[%s!]!", childTypeName) : "Int!";
+
+        # child input field lines (create/upsert args) and set lines (update); non-scalar fields
+        # reuse the shared input-type generation (nested input types are de-duplicated globally)
+        list<string> cInputLines();
+        list<string> cSetLines();
+        foreach string cfn in (keys crt) {
+            string cgql = sanitizeName(cfn);
+            string hint = childTypeName + capitalize(cgql);
+            cInputLines += sprintf("%s: %s", cgql, mapInputFieldType(crt{cfn}, hint, False));
+            cSetLines += sprintf("  %s: %s", cgql, mapInputFieldType(crt{cfn}, hint, True));
+        }
+        string cCreateArgs = cInputLines.join(", ");
+
+        string cnCapture = cn;
+        if (cinfo.supports_create) {
+            mut_fields += sprintf("  %sCreate(%s): %s", childField, cCreateArgs, childTypeName);
+            mut_resolvers{childField + "Create"} = auto sub (auto parent, hash<auto> args, auto ctx) {
+                return DataProviderGraphQLSchema::execCreate(DataProviderGraphQLSchema::makeChildSpec(
+                    parentP, cnCapture, c_allow_templates, c_return_records), args);
+            };
+        }
+        if (cinfo.supports_update && c_can_filter) {
+            mut_fields += sprintf("  %sUpdate(set: %sSetInput!, where: String): %s",
+                childField, childTypeName, cMutReturn);
+            set_defs += sprintf("input %sSetInput {\n%s\n}", childTypeName, cSetLines.join("\n"));
+            mut_resolvers{childField + "Update"} = auto sub (auto parent, hash<auto> args, auto ctx) {
+                return DataProviderGraphQLSchema::execUpdate(DataProviderGraphQLSchema::makeChildSpec(
+                    parentP, cnCapture, c_allow_templates, c_return_records), args);
+            };
+        }
+        if (cinfo.supports_delete && c_can_filter) {
+            mut_fields += sprintf("  %sDelete(where: String): %s", childField, cMutReturn);
+            mut_resolvers{childField + "Delete"} = auto sub (auto parent, hash<auto> args, auto ctx) {
+                return DataProviderGraphQLSchema::execDelete(DataProviderGraphQLSchema::makeChildSpec(
+                    parentP, cnCapture, c_allow_templates, c_return_records), args);
+            };
+        }
+        if (cinfo.supports_upsert) {
+            mut_fields += sprintf("  %sUpsert(%s): String!", childField, cCreateArgs);
+            mut_resolvers{childField + "Upsert"} = auto sub (auto parent, hash<auto> args, auto ctx) {
+                return DataProviderGraphQLSchema::execUpsert(DataProviderGraphQLSchema::makeChildSpec(
+                    parentP, cnCapture, c_allow_templates, c_return_records), args);
+            };
+        }
+        return {"fields": mut_fields, "resolvers": mut_resolvers, "defs": set_defs};
+    }
+
+    #! builds a resolver spec for a child provider, re-fetched fresh from its parent
+    /** @param parentP the parent data provider
+        @param childName the child provider name
+        @param allow_templates whether DPQL template references are permitted
+        @param return_records whether update/delete return the affected records
+
+        @return a spec hash compatible with the static exec* resolver helpers
+    */
+    static hash<auto> makeChildSpec(AbstractDataProvider parentP, string childName,
+            bool allow_templates, bool return_records) {
+        AbstractDataProvider cp = parentP.getChildProvider(childName);
+        hash<DataProviderInfo> cinfo = cp.getInfo();
+        *hash<auto> searchOpts;
         try {
-            cp = provider.getChildProvider(name);
+            searchOpts = cp.getSearchOptions();
         } catch (hash<ExceptionInfo> ex) {
-            return NOTHING;
+            # child does not support search options; fall back to client-side paging
         }
-        if (!cp) {
-            return NOTHING;
-        }
-        try {
-            return cp.getRecordType();
-        } catch (hash<ExceptionInfo> ex) {
-            return NOTHING;
-        }
+        return {
+            "provider": cp,
+            "record_type": cp.getRecordType(),
+            "expressions": cinfo.expressions,
+            "allow_templates": allow_templates,
+            "return_records": return_records,
+            "push_paging": exists searchOpts.limit && exists searchOpts.offset,
+            "requires_tx": cinfo.transaction_management,
+        };
     }
 
     #! searches a child provider's records, applying limit/offset paging

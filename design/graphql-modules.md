@@ -175,7 +175,11 @@ lists-of-objects map back correctly.
 - `supports_create` → `create`; `supports_update` → `update`; `supports_delete` → `delete`;
   `supports_upsert` → `upsert`; `supports_bulk_create`/`supports_bulk_upsert` → `createMany`/
   `upsertMany`;
-- direct child providers (`getChildProviderNames()`) → read-only Query fields.
+- direct child providers (`getChildProviderNames()`) → a read-only `<child>` Query field, plus
+  prefixed `<child>Create`/`<child>Update`/`<child>Delete`/`<child>Upsert` mutations gated on the
+  *child's* own capability flags. Child `update`/`delete` use the raw DPQL `where` selector (not a
+  typed filter) so per-provider operator gating stays unambiguous; each child resolver re-fetches
+  the child provider and builds a fresh spec at call time (the child may be request-scoped).
 
 **Filtering** uses DPQL (Data Provider Query Language) as the where-condition mechanism, since the
 DataProvider layer consumes DPQL natively. Two forms are offered and combined (AND-ed): a raw `where`
