@@ -598,7 +598,16 @@ object fields), `getElementType()` (`:812`, list element), `isList()` (`:546`),
 `info.expressions` (`:1191`); transaction support `requiresTransactionManagement()` (`:4445`) +
 `beginTransaction()`/`commit()`/`rollback()` (`:4458`+); `WebSocketHandler.qm` for subscriptions.
 
-## Phase D — bridge type-system depth (gaps 4, 5, 8) — highest value
+## Phase D — bridge type-system depth (gaps 4, 5, 8) — DONE
+
+Implemented: D1 recursive type mapping (DateTime/Base64/JSON custom scalars, list types, nested
+object types; soft-type list-detection fix; `max_type_depth` JSON fallback); D2 direct
+child-provider traversal as read-only Query fields (`max_provider_depth`, default 1); D3
+operator-gated filter input types from `info.expressions`. Also fixed a latent output bug:
+record/nested fields whose GraphQL name was sanitized now resolve via the provider's native field
+name (output field resolvers). Original plan retained below.
+
+
 
 Turns the bridge from flat single-record CRUD into a relational graph. This is the largest
 value-add and is one cohesive change to `GraphQLDataProviderBridge.qc`.

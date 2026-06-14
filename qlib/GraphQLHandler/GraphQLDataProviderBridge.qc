@@ -75,6 +75,19 @@ public class DataProviderGraphQLSchema {
     public {
         #! the default maximum number of records returned by a generated \c search field
         const DefaultSearchLimit = 1000;
+
+        #! maps a typed-filter operator field to the DPQL operator it requires the provider to support
+        const FilterOpToDpql = {
+            "eq": "==",
+            "ne": "!=",
+            "gt": ">",
+            "gte": ">=",
+            "lt": "<",
+            "lte": "<=",
+            "in": "in",
+            "nin": "notIn",
+            "like": "like",
+        };
     }
 
     private {
@@ -98,6 +111,11 @@ public class DataProviderGraphQLSchema {
         hash<string, string> extra_type_defs();
         #! custom scalar names that must be declared and coerced (DateTime, Base64, JSON)
         hash<string, bool> needed_scalars();
+        #! output field resolvers for fields whose GraphQL name differs from the provider field
+        #! name, keyed by object type name then GraphQL field name
+        hash<auto> output_field_resolvers();
+        #! the maximum child-provider traversal depth
+        int max_provider_depth = 1;
         #! the generated SDL
         string sdl;
         #! the generated resolver map
@@ -132,6 +150,9 @@ public class DataProviderGraphQLSchema {
         }
         if (exists opts.max_type_depth) {
             max_type_depth = opts.max_type_depth;
+        }
+        if (exists opts.max_provider_depth) {
+            max_provider_depth = opts.max_provider_depth;
         }
         generate();
     }
@@ -191,6 +212,11 @@ public class DataProviderGraphQLSchema {
                     "over GraphQL", provider.getName(), field_name_map{gqlName}, fname, gqlName);
             }
             field_name_map{gqlName} = fname;
+            # if the GraphQL field name was sanitized, register an output resolver that reads the
+            # provider's native field name from the record hash
+            if (gqlName != fname) {
+                output_field_resolvers{record_type_name}{gqlName} = makeFieldReader(fname);
+            }
             string nameHint = record_type_name + capitalize(gqlName);
             push fieldLines, sprintf("  %s: %s", gqlName, mapFieldType(record_type{fname}, nameHint, False));
             # SetInput fields are always optional (a partial update assigns only supplied columns)
@@ -222,6 +248,26 @@ public class DataProviderGraphQLSchema {
             queryFields += can_filter
                 ? sprintf("  search(%s, limit: Int, offset: Int): [%s!]!", filterArgs, record_type_name)
                 : sprintf("  search(limit: Int, offset: Int): [%s!]!", record_type_name);
+        }
+        # child-provider traversal (gap 5): each direct child provider with a record type is
+        # exposed as a read-only Query field returning its records
+        hash<auto> child_resolvers();
+        if (max_provider_depth >= 1) {
+            foreach string cn in (provider.getChildProviderNames() ?? ()) {
+                *hash<string, AbstractDataField> crt = getChildRecordType(cn);
+                if (!crt) {
+                    continue;
+                }
+                string childField = sanitizeName(cn);
+                string childTypeName = record_type_name + "Child" + capitalize(childField);
+                buildObjectType(childTypeName, crt, 0);
+                queryFields += sprintf("  %s(limit: Int, offset: Int): [%s!]!", childField, childTypeName);
+                string cnCapture = cn;
+                AbstractDataProvider parentP = provider;
+                child_resolvers{childField} = auto sub (auto parent, hash<auto> args, auto ctx) {
+                    return DataProviderGraphQLSchema::searchChild(parentP, cnCapture, args);
+                };
+            }
         }
         if (!queryFields) {
             queryFields += "  _empty: Boolean";
@@ -271,9 +317,10 @@ public class DataProviderGraphQLSchema {
 
         # the typed filter input types (only when filtering is available)
         if (can_filter) {
-            # per-scalar filter input types actually used by the record's fields
+            # per-scalar filter input types actually used by the record's fields, with operators
+            # gated on what the provider supports
             foreach string fkind in (keys usedFilterKinds) {
-                push defs, scalarFilterTypeSdl(fkind);
+                push defs, filterTypeSdl(fkind);
             }
             # the record's WhereInput, with recursive logical combinators
             push whereLines, sprintf("  _and: [%s!]", whereInputName);
@@ -312,7 +359,13 @@ public class DataProviderGraphQLSchema {
                 return DataProviderGraphQLSchema::execSearch(spec, args);
             };
         }
+        # child-provider Query resolvers
+        queryResolvers += child_resolvers;
         resolvers = {"Query": queryResolvers};
+        # output field resolvers for record/nested fields whose GraphQL name was sanitized
+        foreach string tname in (keys output_field_resolvers) {
+            resolvers{tname} = (resolvers{tname} ?? {}) + output_field_resolvers{tname};
+        }
 
         hash<auto> mutationResolvers();
         if (info.supports_create) {
@@ -437,6 +490,46 @@ public class DataProviderGraphQLSchema {
         list<auto> out();
         AbstractDataProviderRecordIterator it = p.searchRecords(dpql, {});
         map out += $1, it;
+        return out;
+    }
+
+    #! returns a child provider's record type, or @ref NOTHING if the child has none or is inaccessible
+    private *hash<string, AbstractDataField> getChildRecordType(string name) {
+        *AbstractDataProvider cp;
+        try {
+            cp = provider.getChildProvider(name);
+        } catch (hash<ExceptionInfo> ex) {
+            return NOTHING;
+        }
+        if (!cp) {
+            return NOTHING;
+        }
+        try {
+            return cp.getRecordType();
+        } catch (hash<ExceptionInfo> ex) {
+            return NOTHING;
+        }
+    }
+
+    #! searches a child provider's records, applying limit/offset paging
+    static list<auto> searchChild(AbstractDataProvider parentP, string childName, hash<auto> args) {
+        AbstractDataProvider cp = parentP.getChildProvider(childName);
+        AbstractDataProviderRecordIterator it = cp.searchRecords();
+        int limit = args.limit ?? DefaultSearchLimit;
+        int offset = args.offset ?? 0;
+        list<auto> out();
+        int idx = 0;
+        int taken = 0;
+        while (it.next()) {
+            if (idx++ < offset) {
+                continue;
+            }
+            if (taken >= limit) {
+                break;
+            }
+            push out, it.getValue();
+            ++taken;
+        }
         return out;
     }
 
@@ -613,21 +706,48 @@ public class DataProviderGraphQLSchema {
         }
     }
 
-    #! returns the SDL definition of the per-scalar filter input type for the given kind
-    static string scalarFilterTypeSdl(string kind) {
+    #! returns the SDL for the per-scalar filter input type, emitting only the operators the
+    #! provider advertises in \c info.expressions (gap 8); the full standard set if unadvertised
+    private string filterTypeSdl(string kind) {
+        # candidate operator fields per scalar kind
+        list<string> candidates;
         switch (kind) {
             case "Int":
             case "Float":
-                return sprintf("input %sFilter {\n  eq: %s\n  ne: %s\n  gt: %s\n  gte: %s\n  lt: %s\n"
-                    "  lte: %s\n  in: [%s!]\n  nin: [%s!]\n}", kind, kind, kind, kind, kind, kind,
-                    kind, kind, kind);
+                candidates = ("eq", "ne", "gt", "gte", "lt", "lte", "in", "nin");
+                break;
             case "Boolean":
-                return "input BooleanFilter {\n  eq: Boolean\n  ne: Boolean\n}";
+                candidates = ("eq", "ne");
+                break;
             default:
                 # String (and anything mapped to String)
-                return "input StringFilter {\n  eq: String\n  ne: String\n  in: [String!]\n"
-                    "  nin: [String!]\n  like: String\n}";
+                candidates = ("eq", "ne", "in", "nin", "like");
+                break;
         }
+        # gate on the provider's advertised operators when present
+        list<string> ops = info.expressions
+            ? (select candidates, info.expressions{FilterOpToDpql{$1}})
+            : candidates;
+        # always keep at least equality so the filter type is non-empty (valid GraphQL input type)
+        if (!ops) {
+            ops = ("eq",);
+        }
+        list<string> lines();
+        foreach string op in (ops) {
+            switch (op) {
+                case "in":
+                case "nin":
+                    lines += sprintf("  %s: [%s!]", op, kind);
+                    break;
+                case "like":
+                    lines += "  like: String";
+                    break;
+                default:
+                    lines += sprintf("  %s: %s", op, kind);
+                    break;
+            }
+        }
+        return sprintf("input %sFilter {\n%s\n}", kind, lines.join("\n"));
     }
 
     #! upserts a record from the GraphQL arguments, returning the record id
@@ -784,10 +904,22 @@ public class DataProviderGraphQLSchema {
                 string gqlfn = sanitizeName(fn);
                 lines += sprintf("  %s: %s", gqlfn,
                     mapFieldTypeAtDepth(fields{fn}, type_name + capitalize(gqlfn), depth + 1, False));
+                # if the GraphQL field name was sanitized, the default resolver would read the wrong
+                # key from the record hash, so register a resolver that reads the provider's name
+                if (gqlfn != fn) {
+                    output_field_resolvers{type_name}{gqlfn} = makeFieldReader(fn);
+                }
             }
             extra_type_defs{type_name} = sprintf("type %s {\n%s\n}", type_name, lines.join("\n"));
         }
         return type_name;
+    }
+
+    #! returns a resolver that reads the given (provider) field name from the parent record
+    static code makeFieldReader(string field_name) {
+        return auto sub (auto parent, hash<auto> args, auto ctx) {
+            return parent.typeCode() == NT_HASH ? parent{field_name} : NOTHING;
+        };
     }
 
     #! records that a custom scalar must be declared in the SDL and coerced at runtime

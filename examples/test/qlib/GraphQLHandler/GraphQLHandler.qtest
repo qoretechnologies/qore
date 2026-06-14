@@ -172,6 +172,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("bridge bulk and return-records", \bridgePhaseCTest());
         addTestCase("review hardening", \hardeningTest());
         addTestCase("bridge type graph", \typeGraphTest());
+        addTestCase("bridge child providers and operator gating", \childGatingTest());
 
         set_return_value(main());
     }
@@ -661,6 +662,32 @@ class GraphQLHandlerTest inherits QUnit::Test {
         assertRegex("T", r.created);
     }
 
+    childGatingTest() {
+        # operator gating (gap 8): a provider advertising only "==" and ">" generates filter
+        # types with only the corresponding operators
+        ParentChildProvider pc();
+        DataProviderGraphQLSchema bridge(pc);
+        string sdl = bridge.getSdl();
+        assertRegex("input IntFilter \\{\\n  eq: Int\\n  gt: Int\\n\\}", sdl);
+        assertRegex("input StringFilter \\{\\n  eq: String\\n\\}", sdl);
+        assertFalse(sdl =~ /like:/, "unsupported 'like' operator is not generated");
+
+        # child-provider traversal (gap 5): a Query field for the direct child provider
+        assertRegex("orders\\(limit: Int, offset: Int\\): \\[customerRecordChildOrders!\\]!", sdl);
+        assertRegex("type customerRecordChildOrders", sdl);
+        GraphQLExecutor ex = bridge.getExecutor();
+        hash<auto> o = ex.execute("{ orders { oid total } }");
+        assertEq((100, 101), (map $1.oid, o.data.orders));
+        assertEq(9.99, o.data.orders[0].total);
+
+        # output field-name mapping: a field whose GraphQL name was sanitized resolves correctly
+        # on output (reads the provider's native field name)
+        HyphenProvider hp();
+        GraphQLExecutor hex = (new DataProviderGraphQLSchema(hp)).getExecutor();
+        hex.execute("mutation { create(id: 1, full_name: \"Ada Lovelace\") { id } }");
+        assertEq("Ada Lovelace", hex.execute("{ search { full_name } }").data.search[0].full_name);
+    }
+
     bridgePhaseCTest() {
         # bulk operations (Phase C)
         MemProvider bp(());
@@ -789,5 +816,72 @@ class TypeGraphProvider inherits DataProvider::AbstractDataProvider {
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+}
+
+#! a child provider exposed via a parent's getChildProvider(), to test child traversal
+class OrdersProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> rows = ({"oid": 100, "total": 9.99}, {"oid": 101, "total": 5.0});
+    }
+
+    string getName() {
+        return "orders";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"supports_read": True, "has_record": True};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "oid": new QoreDataField("oid", "order id", IntType),
+            "total": new QoreDataField("total", "order total", FloatType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(rows.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+}
+
+#! a provider with a reduced operator set and a child provider, to test gating + child traversal
+class ParentChildProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data = ({"id": 1, "name": "Ada"},);
+        OrdersProvider child();
+    }
+
+    string getName() {
+        return "customer";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        # advertise only the "==" and ">" operators
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_search_expressions": True,
+            "expressions": DataProviderGenericExpressions{("==", ">")},
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return ("orders",);
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        return name == "orders" ? child : NOTHING;
     }
 }
