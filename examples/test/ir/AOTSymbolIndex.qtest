@@ -1767,8 +1767,14 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "%new-style\n"
             "%requires reflection\n"
             "class AOTReflectionClassInitConsumer {\n"
-            "    private { static Class provider = Class::forName(\"AOTReflectionClassInitProvider\"); }\n"
-            "    string get() { return provider.getPathName(); }\n"
+            "    private {\n"
+            "        static Class provider = Class::forName(\"AOTReflectionClassInitProvider\");\n"
+            "        const ProviderMap = {\"provider\": Class::forName(\"AOTReflectionClassInitProvider\")};\n"
+            "    }\n"
+            "    string get() {\n"
+            "        Class map_provider = ProviderMap{\"provider\"};\n"
+            "        return provider.getPathName() + \":\" + map_provider.getPathName();\n"
+            "    }\n"
             "}\n");
         write(provider_src,
             "%new-style\n"
@@ -1815,7 +1821,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             + link_out);
 
         string out = run(sprintf("%s %s", env, app));
-        assertEq("AOTReflectionClassInitProvider\n", out,
+        assertEq("AOTReflectionClassInitProvider:AOTReflectionClassInitProvider\n", out,
             "linked executable resolves deferred reflection class initializer: " + out);
     }
 

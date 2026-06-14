@@ -378,13 +378,16 @@ int ConstantEntry::parseCommitRuntimeInit() {
                 // AOT-deserialized shell from a dependency object whose
                 // __const_init function has not run yet (AOT-PENDING-CONSTANT),
                 // or an AOT-deserialized sibling function body that is not
-                // executable during qcc -c -L source parse (AOT-PENDING-FUNCTION).
+                // executable during qcc -c -L source parse (AOT-PENDING-FUNCTION),
+                // or a reflection class lookup that resolves after sibling
+                // classes are linked (AOT-PENDING-CLASS).
                 // These cases are resolved identically: defer this constant to
                 // its own runtime __const_init (the preserved aot_init_expr),
                 // where normal link/load ordering makes the dependency
                 // executable.
                 defer_runtime_init = !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
                     || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
+                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CLASS")
                     || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
             }
             if (!defer_runtime_init) {
