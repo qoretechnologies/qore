@@ -4414,6 +4414,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
             // resolve hashdecl
+            if (qore_aot_should_defer_source_symbol(loc, subtypes[0]->cscope->ostr,
+                    QoreAOTSourceSymbolKind::HashDecl)) {
+                return qore_get_aot_deferred_type_info(loc, subtypes[0]->cscope->ostr, or_nothing, true);
+            }
             const TypedHashDecl* hd = qore_resolve_parse_hashdecl_type(*subtypes[0], loc, err);
             if (hd) {
                 return hd->getTypeInfo(or_nothing);
@@ -4834,6 +4838,13 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
     const QoreTypeInfo* type_param = qore_resolve_parse_type_parameter(cscope, or_nothing);
     if (type_param) {
         return type_param;
+    }
+
+    if (qore_aot_should_defer_source_symbol(loc, cscope.ostr, QoreAOTSourceSymbolKind::Class)) {
+        return qore_get_aot_deferred_type_info(loc, cscope.ostr, or_nothing, false);
+    }
+    if (qore_aot_should_defer_source_symbol(loc, cscope.ostr, QoreAOTSourceSymbolKind::HashDecl)) {
+        return qore_get_aot_deferred_type_info(loc, cscope.ostr, or_nothing, true);
     }
 
     // check for typedef first (both simple names and scoped names)

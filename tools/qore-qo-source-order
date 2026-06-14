@@ -53,7 +53,7 @@ CONSTRUCTED_DECL_TYPE_RE = re.compile(
 PARAM_TYPE_RE = re.compile(rf"[(,][ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
 QUALIFIED_REF_RE = re.compile(rf"\b{IDENT}(?:::{IDENT})+\b")
 DECL_LINE_CHARS = frozenset("(;=")
-CACHE_VERSION = 20
+CACHE_VERSION = 21
 KNOWN_TRUE_PARSE_DEFINES = {"QoreStandaloneQo", "QorusStandaloneQo"}
 
 
@@ -230,6 +230,60 @@ def collect_provides(code: str) -> set[str]:
     for regex in (CLASS_RE, ENUM_RE, HASHDECL_RE, SUB_RE, CONST_RE, OUR_RE):
         provides.update(m.group(1) for m in regex.finditer(code))
     return provides
+
+
+def collect_source_symbol_providers(inputs: list[str],
+        true_parse_defines: set[str] | None = None
+        ) -> dict[str, dict[str, set[str]]]:
+    providers: dict[str, dict[str, set[str]]] = {
+        "class": defaultdict(set),
+        "hashdecl": defaultdict(set),
+        "function": defaultdict(set),
+        "global": defaultdict(set),
+    }
+    for source in inputs:
+        source_path = os.path.realpath(os.path.abspath(source))
+        code = read_masked(source, true_parse_defines)
+        for m in CLASS_RE.finditer(code):
+            providers["class"][m.group(1)].add(source_path)
+        for m in HASHDECL_RE.finditer(code):
+            providers["hashdecl"][m.group(1)].add(source_path)
+        for m in SUB_RE.finditer(code):
+            providers["function"][m.group(1)].add(source_path)
+        for m in OUR_RE.finditer(code):
+            providers["global"][m.group(1)].add(source_path)
+    return providers
+
+
+def build_source_symbol_manifest(context: str, inputs: list[str]) -> str:
+    true_parse_defines = parse_context_parse_defines(context)
+    providers = collect_source_symbol_providers(inputs, true_parse_defines)
+    lines = ["format=1"]
+    for kind in ("class", "hashdecl", "function", "global"):
+        for symbol in sorted(providers[kind]):
+            sources = sorted(providers[kind][symbol])
+            # Ambiguous simple names are not safe to use as precedence hints.
+            if len(sources) != 1:
+                continue
+            lines.append(f"{kind}\t{symbol}\t{sources[0]}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_if_changed(path: str, content: str) -> None:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            if f.read() == content:
+                return
+    except OSError:
+        pass
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.replace(tmp, path)
 
 
 def collect_parse_defines(code: str) -> set[str]:
@@ -863,11 +917,20 @@ def main() -> int:
         metavar="PREFIX",
         help="emit CMake set() statements with all direct prerequisite outputs for the context",
     )
+    parser.add_argument(
+        "--source-symbol-manifest",
+        metavar="FILE",
+        help="write a qcc source-symbol precedence manifest for all context inputs",
+    )
     parser.add_argument("context")
     parser.add_argument("target_output", nargs="?")
     args = parser.parse_args()
 
     inputs, outputs = parse_context(args.context)
+    if args.source_symbol_manifest:
+        write_if_changed(args.source_symbol_manifest, build_source_symbol_manifest(args.context, inputs))
+        return 0
+
     if args.direct_map_cmake:
         try:
             emit_cmake_direct_map(args.direct_map_cmake, args.context, inputs, outputs)

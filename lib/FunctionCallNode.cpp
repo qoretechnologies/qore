@@ -1103,9 +1103,11 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
 
     QoreValue n{};  // value-initialized to NOTHING (bits=0)
+    const bool defer_source_function = qore_aot_should_defer_source_symbol(loc, c_str,
+        QoreAOTSourceSymbolKind::Function);
 
     // try to resolve a global var
-    if (abr) {
+    if (!defer_source_function && abr) {
         Var* v = qore_root_ns_private::parseFindGlobalVar(c_str);
         if (v) {
             n = new GlobalVarRefNode(loc, takeName(), v);
@@ -1115,7 +1117,7 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     bool found = !n.isNothing();
 
     // see if a constant can be resolved
-    if (!found) {
+    if (!found && !defer_source_function) {
         n = qore_root_ns_private::parseFindConstantValue(loc, c_str, parse_context.typeInfo, found, false);
         if (found) {
             n.ref();
@@ -1129,7 +1131,9 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     }
 
     // resolves the function
-    fe = qore_root_ns_private::parseFindFunctionEntry(c_str);
+    if (!defer_source_function) {
+        fe = qore_root_ns_private::parseFindFunctionEntry(c_str);
+    }
     if (!fe && qore_aot_source_parse_active()) {
         if (has_explicit_type_args) {
             parse_error(*loc, "cannot defer unresolved function call '%s()' with explicit type arguments", c_str);
@@ -1162,7 +1166,7 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
         return dynamic_call->parseInitFinalizedCall(val, parse_context);
     }
 
-    if (!fe) {
+    if (!fe && !defer_source_function) {
         fe = qore_root_ns_private::parseResolveFunctionEntry(loc, c_str);
     }
     free(c_str);
@@ -1246,7 +1250,9 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     if (name) {
         assert(!oc);
         // find object class
-        if ((oc = qore_root_ns_private::parseFindScopedClass(loc, *name, false))) {
+        bool defer_source_class = qore_aot_should_defer_source_symbol(loc, name->ostr,
+            QoreAOTSourceSymbolKind::Class);
+        if (!defer_source_class && (oc = qore_root_ns_private::parseFindScopedClass(loc, *name, false))) {
             // check if parse options allow access to this class
             int64 cflags = oc->getDomain();
             if (cflags && qore_program_private::parseAddDomain(parse_context.pgm, cflags)) {
@@ -1402,6 +1408,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
 
         bool parameterized_receiver = static_scope_has_parameterized_receiver(*scope);
+        bool defer_source_static_receiver = false;
         QoreClass* qc = nullptr;
         if (parameterized_receiver) {
             receiver_type_info = resolve_static_scope_receiver_type(loc, *scope, err);
@@ -1424,7 +1431,12 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             assert(pcti);
             qc = const_cast<QoreClass*>(pcti->getBaseClass());
         } else {
-            qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+            std::string source_receiver_path = get_static_scope_class_path(*scope);
+            defer_source_static_receiver = qore_aot_should_defer_source_symbol(loc, source_receiver_path.c_str(),
+                QoreAOTSourceSymbolKind::Class);
+            if (!defer_source_static_receiver) {
+                qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+            }
         }
 
         const QoreClass* pc = parse_context.oflag
@@ -1482,7 +1494,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     "method named '%s'", scope->ostr, qc ? qc->getName() : "(unknown)", scope->getIdentifier());
                 return -1;
             }
-            {
+            if (!defer_source_static_receiver) {
                 // see if this is a function call to a function defined in a namespace
                 const FunctionEntry* f = qore_root_ns_private::parseResolveFunctionEntry(*scope);
                 if (f) {
@@ -1509,8 +1521,10 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             */
 
             bool found = false;
-            QoreValue n = qore_root_ns_private::parseFindReferencedConstantValue(loc, *scope, parse_context.typeInfo,
-                found, false);
+            QoreValue n = defer_source_static_receiver
+                ? QoreValue()
+                : qore_root_ns_private::parseFindReferencedConstantValue(loc, *scope, parse_context.typeInfo,
+                    found, false);
 
             if (found) {
                 val = new CallReferenceCallNode(loc, n, takeParseArgs());

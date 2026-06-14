@@ -35,11 +35,32 @@
 #define _QORE_INTERN_QORE_AOT_DEPS_H
 
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 class QoreProgramLocation;
 class QoreProgram;
+
+enum class QoreAOTSourceSymbolKind : unsigned char {
+    Class,
+    HashDecl,
+    Function,
+    Global,
+};
+
+using QoreAOTSourceSymbolMap = std::unordered_map<std::string, std::unordered_set<std::string>>;
+
+struct QoreAOTSourceSymbolManifest {
+    QoreAOTSourceSymbolMap classes;
+    QoreAOTSourceSymbolMap hashdecls;
+    QoreAOTSourceSymbolMap functions;
+    QoreAOTSourceSymbolMap globals;
+
+    bool empty() const {
+        return classes.empty() && hashdecls.empty() && functions.empty() && globals.empty();
+    }
+};
 
 //! AOT incremental-dependency sink for the single-file compiler.
 /** During a `qcc -c -L <dir>` compile, references to declarations that the
@@ -67,6 +88,20 @@ DLLLOCAL bool qore_aot_set_source_parse_active(bool active);
 //! Returns true while a single-file AOT compile is parsing/committing source
 //! with sibling `.qo` metadata preloaded.
 DLLLOCAL bool qore_aot_source_parse_active();
+
+//! Set the active build-group source-symbol manifest for the current thread.
+/** The manifest lets standalone source compiles prefer declarations provided by
+    the current build group over same-name symbols from already-loaded modules
+    or stubs.  Matching symbols are deferred into the emitted `.qo` instead of
+    being bound to the wrong loaded declaration. */
+DLLLOCAL const QoreAOTSourceSymbolManifest* qore_aot_set_source_symbol_manifest(
+        const QoreAOTSourceSymbolManifest* manifest);
+
+//! Returns true when @p qore_path should be deferred to another source object
+//! in the active build group instead of resolving against currently-loaded
+//! declarations.
+DLLLOCAL bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
+        const char* qore_path, QoreAOTSourceSymbolKind kind);
 
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic

@@ -35,6 +35,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("standalone deferred global lvalue paths resolve at link time",
             \testStandaloneDeferredGlobalLValuePathImport());
         addTestCase("standalone class type import resolves at link time", \testStandaloneClassTypeImport());
+        addTestCase("source symbol manifest defers shadowed loaded classes",
+            \testSourceSymbolManifestDefersShadowedLoadedClasses());
         addTestCase("standalone deferred class overload types stay distinct",
             \testStandaloneDeferredClassOverloadTypes());
         addTestCase("standalone static complex defaults preserve nested object types",
@@ -599,6 +601,95 @@ class AOTSymbolIndexTest inherits QUnit::Test {
 
         string out = run(sprintf("%s %s", env, app));
         assertEq("B\n", out, "linked executable resolves cross-class type call: " + out);
+    }
+
+    testSourceSymbolManifestDefersShadowedLoadedClasses() {
+        TmpDir tmp = initDirs();
+        string qo_dir = tmp_dir + "/qo-source-manifest";
+        mkdir(qo_dir);
+        string stub_src = tmp_dir + "/shadow-stub.qc";
+        string provider_src = tmp_dir + "/shadow-provider.qc";
+        string consumer_src = tmp_dir + "/shadow-consumer.qc";
+        string main_src = tmp_dir + "/main.qr";
+        string manifest = tmp_dir + "/source-symbols.manifest";
+        string bad_consumer_qo = qo_dir + "/bad-consumer.qo";
+        string consumer_qo = qo_dir + "/consumer.qo";
+        string provider_qo = qo_dir + "/provider.qo";
+        string main_qo = qo_dir + "/main.qo";
+        string app = tmp_dir + "/source-manifest-shadow-app";
+
+        write(stub_src,
+            "%new-style\n"
+            "class AOTManifestShadowLogger {\n"
+            "    log(string fmt, ...) {}\n"
+            "    static string staticLabel(string value) { return value; }\n"
+            "}\n");
+        write(provider_src,
+            "%new-style\n"
+            "class AOTManifestShadowLogger {\n"
+            "    log(int level, string fmt, ...) {}\n"
+            "    static string staticLabel(int value) { return sprintf(\"static-%d\", value); }\n"
+            "    string value() { return \"provider\"; }\n"
+            "}\n");
+        write(consumer_src,
+            "%new-style\n"
+            "class AOTManifestShadowConsumer {\n"
+            "    string run(AOTManifestShadowLogger logger) {\n"
+            "        logger.log(1, \"message %s\", \"ok\");\n"
+            "        return AOTManifestShadowLogger::staticLabel(7) + \":\" + logger.value();\n"
+            "    }\n"
+            "}\n");
+        write(main_src,
+            "%new-style\n"
+            "int sub main() {\n"
+            "    AOTManifestShadowConsumer c = new AOTManifestShadowConsumer();\n"
+            "    AOTManifestShadowLogger logger = new AOTManifestShadowLogger();\n"
+            "    printf(\"%s\\n\", c.run(logger));\n"
+            "    return 0;\n"
+            "}\n"
+            "main();\n");
+        write(manifest,
+            "format=1\n"
+            "class\tAOTManifestShadowLogger\t" + provider_src + "\n");
+
+        string bad_out = run(sprintf("%s %s -c -L %s --stub=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, stub_src, bad_consumer_qo, consumer_src));
+        assertTrue(!is_file(bad_consumer_qo),
+            "without source manifest the consumer binds the loaded stub and fails: " + bad_out);
+        assertTrue(bad_out.find("AOTManifestShadowLogger::log") != -1
+                || bad_out.find("PARSE-TYPE-ERROR") != -1,
+            "failure diagnoses the shadowed loaded class overload: " + bad_out);
+
+        string consumer_out = run(sprintf(
+            "%s %s -c -L %s --stub=%s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, stub_src, manifest, consumer_qo, consumer_src));
+        assertTrue(is_file(consumer_qo),
+            "source manifest defers the local class instead of binding the loaded stub: " + consumer_out);
+
+        string consumer_index = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, consumer_qo));
+        assertTrue(consumer_index.find("\"qore_path\": \"AOTManifestShadowLogger\"") != -1,
+            "consumer index records the deferred local class import: " + consumer_index);
+        assertTrue(consumer_index.find("AOTManifestShadowLogger::staticLabel") != -1,
+            "consumer index records the deferred static call import: " + consumer_index);
+
+        string provider_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, provider_qo, provider_src));
+        assertTrue(is_file(provider_qo),
+            "provider source resolves its own class while the manifest is active: " + provider_out);
+
+        string main_out = run(sprintf(
+            "%s %s -c -L %s --source-symbol-manifest=%s --parse-option=PO_MODERN -o %s %s",
+            env, qcc_bin, qo_dir, manifest, main_qo, main_src));
+        assertTrue(is_file(main_qo), "main compiles against linked shadow metadata: " + main_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s %s %s",
+            env, qcc_bin, app, consumer_qo, provider_qo, main_qo));
+        assertTrue(is_file(app), "linked executable accepts source-manifest deferred class: " + link_out);
+
+        string out = run(sprintf("%s %s", env, app));
+        assertEq("static-7:provider\n", out,
+            "linked executable resolves the source-local shadowed class: " + out);
     }
 
     testSiblingNamespacedObjectTypeImport() {

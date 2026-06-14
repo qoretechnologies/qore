@@ -47,6 +47,7 @@
 #include <vector>
 #include <qore/QoreParseOptions.h>
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/qore_aot_deps.h"
 
 class AbstractStatement;
 
@@ -908,6 +909,8 @@ public:
         @param require_modules modules to require before parsing
         @param stub_files source files that provide declarations only
         @param parse_defines parse-time defines to apply to the target
+        @param source_symbols build-group source symbols that should be
+                        deferred instead of binding same-name loaded symbols
         @return true on success, false on failure
     */
     static bool compileScriptFile(const char* target_file,
@@ -921,7 +924,8 @@ public:
                                   const std::vector<std::string>& require_modules = {},
                                   const std::vector<std::string>& stub_files = {},
                                   const std::vector<std::string>& parse_defines = {},
-                                  std::vector<std::string>* parsed_files = nullptr);
+                                  std::vector<std::string>* parsed_files = nullptr,
+                                  const QoreAOTSourceSymbolManifest* source_symbols = nullptr);
 
     //! Package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`

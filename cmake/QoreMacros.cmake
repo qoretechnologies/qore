@@ -402,6 +402,23 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     QORE_WRITE_IF_CHANGED("${_qore_qcc_direct_deps_cmake}" "${_qore_qcc_direct_deps_cmake_content}")
     include("${_qore_qcc_direct_deps_cmake}")
 
+    set(_qore_qcc_source_symbols "${_QORE_QCO_SCRIPT_DIR}/source-symbols.manifest")
+    set(_qore_qcc_source_symbols_target "qore_qcc_${_qore_qcc_group_id}_source_symbols")
+    add_custom_command(OUTPUT ${_qore_qcc_source_symbols}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_SCRIPT_DIR}
+        COMMAND ${_qore_qcc_source_order_helper}
+            --source-symbol-manifest
+            ${_qore_qcc_source_symbols}
+            ${_qore_qcc_context_path}
+        DEPENDS
+            ${_qore_qcc_context_path}
+            ${_qore_qcc_source_order_helper}
+            ${_qore_qcc_abs_sources}
+        COMMENT "qcc: scanning ${_QORE_QCO_GROUP} source symbols"
+        VERBATIM)
+    add_custom_target(${_qore_qcc_source_symbols_target}
+        DEPENDS ${_qore_qcc_source_symbols})
+
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
         ${_qore_qcc_source_order_helper})
 
@@ -421,6 +438,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     foreach(_qore_qcc_parse_option ${_QORE_QCO_PARSE_OPTIONS})
         list(APPEND _qore_qcc_parse_option_flags "--parse-option=${_qore_qcc_parse_option}")
     endforeach()
+    set(_qore_qcc_source_symbol_flags "--source-symbol-manifest=${_qore_qcc_source_symbols}")
     set(_qore_qcc_metadata_compression_flags)
     if (_QORE_QCO_METADATA_COMPRESSION)
         list(APPEND _qore_qcc_metadata_compression_flags
@@ -439,6 +457,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             ${_qore_qcc_load_flags}
             ${_qore_qcc_define_flags}
             ${_qore_qcc_parse_option_flags}
+            ${_qore_qcc_source_symbol_flags}
             ${_qore_qcc_metadata_compression_flags}
             ${_qore_qcc_manifest_input_flags})
         set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} '${_qore_qcc_arg}'")
@@ -490,6 +509,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_single_script}
                 DEPENDS
                     ${_qore_qcc_source}
+                    ${_qore_qcc_source_symbols_target}
+                    ${_qore_qcc_source_symbols}
                     ${_qore_qcc_single_script}
                     ${_qore_qcc_context_path}
                     ${_QORE_QCO_STUBS}

@@ -728,6 +728,10 @@ static std::vector<std::string> manifest_inputs;
 // direct `.qo` set should invalidate the target.  This flag lets such callers
 // provide the exact manifest dependencies with --manifest-input.
 static bool manifest_skip_qo_library_inputs = false;
+// Build-group source-symbol manifest used by script `-c -L DIR` compiles to
+// defer local project symbols instead of binding same-name loaded module/stub
+// declarations.
+static const char* source_symbol_manifest_path = nullptr;
 
 static std::vector<std::string> qcc_depfile_explicit_inputs(
         const std::vector<std::string>& deps) {
@@ -848,6 +852,10 @@ static void print_usage(const char* prog) {
            "                         Do not auto-record .qo files found through -L\n"
            "                         preload dirs in the manifest; use --manifest-input\n"
            "                         for the exact content dependencies instead\n");
+    printf("      --source-symbol-manifest=FILE\n"
+           "                         Script -c mode: defer build-group source symbols\n"
+           "                         listed in FILE instead of binding same-name loaded\n"
+           "                         module or stub declarations\n");
     printf("      --skip-if-manifest-current\n"
            "                         If --write-manifest matches existing output/input\n"
            "                         content, exit successfully without rebuilding\n");
@@ -1007,6 +1015,7 @@ static struct option long_options[] = {
     {"manifest-skip-qo-library-inputs", no_argument, nullptr, 0x11a},
     {"depfile-target",    required_argument, nullptr, 0x11b},
     {"depfile-qo-input-content-stamps", no_argument, nullptr, 0x11c},
+    {"source-symbol-manifest", required_argument, nullptr, 0x11d},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1172,6 +1181,10 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x11c:  // --depfile-qo-input-content-stamps
                 depfile_qo_input_content_stamps = true;
+                break;
+            case 0x11d:  // --source-symbol-manifest
+                source_symbol_manifest_path = optarg;
+                manifest_inputs.emplace_back(optarg);
                 break;
             case 'F':
                 from_objects = true;
@@ -5229,6 +5242,95 @@ static std::string canonical_existing_path(const std::string& path) {
     return rv;
 }
 
+static QoreAOTSourceSymbolMap* source_symbol_map_for_kind(QoreAOTSourceSymbolManifest& manifest,
+        const std::string& kind) {
+    if (kind == "class") {
+        return &manifest.classes;
+    }
+    if (kind == "hashdecl") {
+        return &manifest.hashdecls;
+    }
+    if (kind == "function") {
+        return &manifest.functions;
+    }
+    if (kind == "global") {
+        return &manifest.globals;
+    }
+    return nullptr;
+}
+
+static bool read_source_symbol_manifest(const char* path, QoreAOTSourceSymbolManifest& manifest,
+        std::string& error) {
+    if (!path || !*path) {
+        return true;
+    }
+    std::string contents;
+    if (!read_file(path, contents)) {
+        error = std::string("cannot read source-symbol manifest: ") + path;
+        return false;
+    }
+
+    size_t line_no = 0;
+    size_t pos = 0;
+    bool saw_format = false;
+    while (pos <= contents.size()) {
+        size_t end = contents.find('\n', pos);
+        std::string line = end == std::string::npos
+            ? contents.substr(pos)
+            : contents.substr(pos, end - pos);
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        ++line_no;
+        if (!(line_no % 100) && qore_check_cancel(nullptr, "qcc source-symbol manifest read")) {
+            error = "operation cancelled during qcc source-symbol manifest read";
+            return false;
+        }
+        pos = end == std::string::npos ? contents.size() + 1 : end + 1;
+
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        if (!saw_format) {
+            if (line != "format=1") {
+                error = "invalid source-symbol manifest '" + std::string(path)
+                    + "': expected format=1 on line " + std::to_string(line_no);
+                return false;
+            }
+            saw_format = true;
+            continue;
+        }
+
+        size_t tab1 = line.find('\t');
+        size_t tab2 = tab1 == std::string::npos ? std::string::npos : line.find('\t', tab1 + 1);
+        if (tab1 == std::string::npos || tab2 == std::string::npos || tab2 + 1 >= line.size()) {
+            error = "invalid source-symbol manifest '" + std::string(path)
+                + "': malformed line " + std::to_string(line_no);
+            return false;
+        }
+        std::string kind = line.substr(0, tab1);
+        std::string symbol = line.substr(tab1 + 1, tab2 - tab1 - 1);
+        std::string source = line.substr(tab2 + 1);
+        if (symbol.empty() || source.empty()) {
+            error = "invalid source-symbol manifest '" + std::string(path)
+                + "': empty symbol or source on line " + std::to_string(line_no);
+            return false;
+        }
+        QoreAOTSourceSymbolMap* map = source_symbol_map_for_kind(manifest, kind);
+        if (!map) {
+            error = "invalid source-symbol manifest '" + std::string(path)
+                + "': unknown symbol kind '" + kind + "' on line " + std::to_string(line_no);
+            return false;
+        }
+        (*map)[symbol].insert(canonical_existing_path(source));
+    }
+    if (!saw_format) {
+        error = "invalid source-symbol manifest '" + std::string(path) + "': missing format=1";
+        return false;
+    }
+    return true;
+}
+
 static bool write_json_file_string_field(FILE* f, const char* key,
         const std::string& value, unsigned indent, const char* comma = ",") {
     fprintf(f, "%*s", static_cast<int>(indent), "");
@@ -7301,6 +7403,18 @@ int main(int argc, char** argv) {
         // Compile a single script-style source with
         // optional sibling-.qo decl preload.
         std::vector<std::string> parsed_files;
+        QoreAOTSourceSymbolManifest source_symbols;
+        const QoreAOTSourceSymbolManifest* source_symbol_arg = nullptr;
+        if (source_symbol_manifest_path) {
+            if (!read_source_symbol_manifest(source_symbol_manifest_path, source_symbols, error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            if (!source_symbols.empty()) {
+                source_symbol_arg = &source_symbols;
+            }
+        }
         if (!QoreAOT::compileScriptFile(
                 source_file,
                 script_lib_dirs,
@@ -7313,7 +7427,8 @@ int main(int argc, char** argv) {
                 load_modules,
                 stub_files,
                 parse_defines,
-                depfile_path ? &parsed_files : nullptr)) {
+                depfile_path ? &parsed_files : nullptr,
+                source_symbol_arg)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {

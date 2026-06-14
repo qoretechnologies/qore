@@ -189,6 +189,7 @@
 // test off the hot path.
 static thread_local std::unordered_set<std::string>* aot_dep_sink = nullptr;
 static thread_local bool aot_source_parse_active = false;
+static thread_local const QoreAOTSourceSymbolManifest* aot_source_symbol_manifest = nullptr;
 
 void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink) {
     aot_dep_sink = sink;
@@ -202,6 +203,79 @@ bool qore_aot_set_source_parse_active(bool active) {
 
 bool qore_aot_source_parse_active() {
     return aot_source_parse_active;
+}
+
+const QoreAOTSourceSymbolManifest* qore_aot_set_source_symbol_manifest(
+        const QoreAOTSourceSymbolManifest* manifest) {
+    const QoreAOTSourceSymbolManifest* old = aot_source_symbol_manifest;
+    aot_source_symbol_manifest = manifest;
+    return old;
+}
+
+static const QoreAOTSourceSymbolMap& qore_aot_source_symbol_map(QoreAOTSourceSymbolKind kind) {
+    assert(aot_source_symbol_manifest);
+    switch (kind) {
+        case QoreAOTSourceSymbolKind::Class:
+            return aot_source_symbol_manifest->classes;
+        case QoreAOTSourceSymbolKind::HashDecl:
+            return aot_source_symbol_manifest->hashdecls;
+        case QoreAOTSourceSymbolKind::Function:
+            return aot_source_symbol_manifest->functions;
+        case QoreAOTSourceSymbolKind::Global:
+            return aot_source_symbol_manifest->globals;
+    }
+    return aot_source_symbol_manifest->classes;
+}
+
+static std::string qore_aot_clean_source_symbol_path(const char* qore_path) {
+    if (!qore_path) {
+        return std::string();
+    }
+    while (qore_path[0] == ':' && qore_path[1] == ':') {
+        qore_path += 2;
+    }
+    return qore_path;
+}
+
+static bool qore_aot_loc_is_symbol_provider(const QoreProgramLocation* loc,
+        const std::unordered_set<std::string>& providers) {
+    if (!loc) {
+        return false;
+    }
+    const char* f = loc->getFile();
+    if (!f || !*f) {
+        return false;
+    }
+    if (providers.count(f)) {
+        return true;
+    }
+    char* rp = realpath(f, nullptr);
+    if (!rp) {
+        return false;
+    }
+    bool rv = providers.count(rp) != 0;
+    free(rp);
+    return rv;
+}
+
+bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
+        const char* qore_path, QoreAOTSourceSymbolKind kind) {
+    if (!aot_source_parse_active || !aot_source_symbol_manifest
+            || aot_source_symbol_manifest->empty() || !qore_path || !*qore_path) {
+        return false;
+    }
+
+    std::string path = qore_aot_clean_source_symbol_path(qore_path);
+    if (path.empty()) {
+        return false;
+    }
+
+    const QoreAOTSourceSymbolMap& symbols = qore_aot_source_symbol_map(kind);
+    auto i = symbols.find(path);
+    if (i == symbols.end()) {
+        return false;
+    }
+    return !qore_aot_loc_is_symbol_provider(loc, i->second);
 }
 
 void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
@@ -8649,7 +8723,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                                 const std::vector<std::string>& require_modules,
                                 const std::vector<std::string>& stub_files,
                                 const std::vector<std::string>& parse_defines,
-                                std::vector<std::string>* parsed_files) {
+                                std::vector<std::string>* parsed_files,
+                                const QoreAOTSourceSymbolManifest* source_symbols) {
     if (!target_file || !*target_file) {
         error = "compileScriptFile: target_file is required";
         return false;
@@ -8797,6 +8872,16 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
         bool old;
     };
+    struct AOTSourceSymbolGuard {
+        explicit AOTSourceSymbolGuard(const QoreAOTSourceSymbolManifest* manifest)
+                : old(qore_aot_set_source_symbol_manifest(manifest)) {
+        }
+        ~AOTSourceSymbolGuard() {
+            qore_aot_set_source_symbol_manifest(old);
+        }
+        const QoreAOTSourceSymbolManifest* old;
+    };
+    const bool source_symbol_parse = source_symbols && !source_symbols->empty();
 
     // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
     // Each path is scanned for `*.qo` files (non-recursive).  For
@@ -8980,7 +9065,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // time via parseFindClassIntern's namespace-tree walk over the shells.
     {
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
-        AOTSourceParseGuard source_guard(!library_paths.empty());
+        AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
+        AOTSourceSymbolGuard source_symbol_guard(source_symbols);
         qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
             &wsink, QP_WARN_DEFAULT);
     }
@@ -9013,7 +9099,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
 
     {
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
-        AOTSourceParseGuard source_guard(!library_paths.empty());
+        AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
+        AOTSourceSymbolGuard source_symbol_guard(source_symbols);
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {

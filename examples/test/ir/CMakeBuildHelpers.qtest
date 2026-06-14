@@ -249,6 +249,10 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             "linked .qo map built: " + build1);
         assertTrue(is_file(build_dir + "/script-aggregate.qo"),
             "script aggregate .qo built: " + build1);
+        string source_symbols = read(build_dir + "/qo-scripts/source-symbols.manifest");
+        assertTrue(source_symbols.find("class\tCMakeQoProvider\t") != -1
+                && source_symbols.find("function\tcmakeQoFreeFunction\t") != -1,
+            "qcc object helper writes a source-symbol manifest: " + source_symbols);
 
         string link_map = read(build_dir + "/linked.qo.qolink.json");
         assertTrue(link_map.find("\"resolution\": \"resolved\"") != -1,
