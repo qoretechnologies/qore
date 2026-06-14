@@ -14,7 +14,35 @@ GraphQL execution engine.
 
 ## Status
 
-- **Planning** — not yet started. This document is the plan; no code has been written.
+- **Implemented** on branch `feature/graphql`.
+  - **Deliverable 1 (`GraphQLClient`)**: complete — mixin + Linear/Wave refactor + tests; committed.
+  - **Deliverable 2 (`GraphQLHandler`)**: complete — pure-Qore engine (lexer, parser, SDL/schema,
+    validation, execution with non-null error propagation, `@skip`/`@include`, introspection),
+    HTTP handler (POST/GET, document cache), and DataProvider bridge; full `.qtest` (15 cases),
+    example program, docs.
+
+### Implementation notes / decisions made during the build
+
+- **Single module, not two.** The engine, HTTP handler, and DataProvider bridge ship in one
+  `GraphQLHandler` module rather than a separate `GraphQL` engine module. The engine classes
+  remain HTTP-free (transport-agnostic per D3), so a future split is still possible; it was not
+  worth the extra registration/doc/test surface now. Consequence: the module depends on `json`
+  and `DataProvider` even though the bare engine does not.
+- **AST = base hashdecl + derived nodes** (`GraphQLNode` with a `kind` discriminator; derived
+  node hashdecls). Heterogeneous collections are `list<hash<GraphQLNode>>`; consumers `cast<>`
+  to the derived type after switching on `kind`. (Qore reserved words forced renames: no
+  `context`/`in`/`sub` identifiers.)
+- **OQ1 resolved**: the client raises `GRAPHQL-ERROR` by default with a `graphql_raise_errors`
+  opt-out (matches the previously-unimplemented doc contract).
+- **OQ4 (bridge update/delete) deferred**: the bridge generates `search` (read) and `create`
+  fields; update/delete need GraphQL input-type modeling of where-conditions — documented as
+  future work in `DataProviderGraphQLSchema`.
+- **Build-system fix** (`cmake/QoreMacros.cmake`): the qmod dependency finalizer wired a
+  build-order edge to *any* CMake target whose name matched a `%requires` dependency, including
+  third-party FetchContent targets. The external `json` qore module collided with nghttp2's
+  bundled `json` target (whose doc build is broken), breaking the `GraphQLHandler` qmod build.
+  Fixed by only wiring edges to targets in the source tree (excluding `/_deps/`), which is the
+  first time a qlib module has `%requires json`.
 
 ## Background and motivation
 

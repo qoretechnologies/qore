@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file graphqlserver.qr example GraphQL server using the GraphQLHandler module
+
+/*  graphqlserver.qr Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    This example starts an HTTP server exposing a small GraphQL API. Run it and then issue a
+    query, for example:
+
+        curl -s localhost:8088/graphql -d '{"query": "{ hero { name friends { name } } }"}'
+
+    or an introspection query:
+
+        curl -s localhost:8088/graphql -d '{"query": "{ __schema { queryType { name } } }"}'
+*/
+
+%requires GraphQLHandler
+%requires HttpServer
+
+# the schema, in GraphQL Schema Definition Language (SDL)
+const SDL = "
+    type Query {
+        hero: Character
+        human(id: ID!): Human
+    }
+    interface Character { id: ID! name: String! }
+    type Human implements Character {
+        id: ID!
+        name: String!
+        homePlanet: String
+        friends: [Character!]!
+    }
+    type Droid implements Character {
+        id: ID!
+        name: String!
+        primaryFunction: String
+    }
+";
+
+# a tiny in-memory data set
+const Humans = {
+    "1000": {"__typename": "Human", "id": "1000", "name": "Luke Skywalker", "homePlanet": "Tatooine"},
+    "1001": {"__typename": "Human", "id": "1001", "name": "Darth Vader", "homePlanet": "Tatooine"},
+};
+
+const Droid = {"__typename": "Droid", "id": "2001", "name": "R2-D2", "primaryFunction": "Astromech"};
+
+# resolvers: type name -> field name -> resolver closure (parent, args, context)
+const Resolvers = {
+    "Query": {
+        "hero": auto sub (auto parent, hash<auto> args, auto cx) {
+            return Droid;
+        },
+        "human": auto sub (auto parent, hash<auto> args, auto cx) {
+            return Humans{args.id};
+        },
+    },
+    "Human": {
+        # the hero's friends: return the humans plus the droid
+        "friends": auto sub (auto parent, hash<auto> args, auto cx) {
+            return Humans.values() + Droid;
+        },
+    },
+};
+
+int port = (ARGV[0] ?? "8088").toInt();
+
+GraphQLHandler handler(SDL, Resolvers);
+HttpServer server(<HttpServerOptionInfo>{});
+server.setHandler("graphql", "/graphql", MimeTypeJson, handler, NOTHING, False);
+server.setDefaultHandler("graphql", handler);
+int listening = server.addListener(<HttpListenerOptionInfo>{"service": port}).port;
+
+printf("GraphQL server listening on http://localhost:%d/graphql\n", listening);
+printf("try: curl -s localhost:%d/graphql -d '{\"query\": \"{ human(id: \\\"1000\\\") { name homePlanet } }\"}'\n",
+    listening);
+
+# run until interrupted
+server.waitStop();

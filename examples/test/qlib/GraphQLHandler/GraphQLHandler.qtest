@@ -1,0 +1,410 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# GraphQLHandler.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+# tests for the GraphQLHandler module: lexer, parser, schema, execution, introspection,
+# the HTTP handler, and the DataProvider bridge
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires QUnit
+%requires Mime
+%requires DataProvider
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires json
+%requires GraphQLHandler
+
+%exec-class GraphQLHandlerTest
+
+#! a minimal in-memory data provider used to exercise the DataProvider bridge
+class MemProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        list<hash<auto>> data;
+        bool can_create;
+    }
+
+    constructor(list<hash<auto>> d, bool n_can_create = True) {
+        data = d;
+        can_create = n_can_create;
+    }
+
+    string getName() {
+        return "people";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "supports_read": True,
+            "supports_create": can_create,
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+            "name": new QoreDataField("name", "the name", StringType),
+            "active": new QoreDataField("active", "active flag", SoftBoolType),
+        };
+    }
+
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        return new DefaultRecordIterator(data.iterator(), where_cond, search_options, getRecordTypeImpl());
+    }
+
+    private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        push data, rec;
+        return rec;
+    }
+}
+
+class GraphQLHandlerTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int port;
+
+        const StarWarsSdl = "
+            schema { query: Query mutation: Mutation }
+            \"\"\"the root query\"\"\"
+            type Query {
+                hello(name: String): String
+                add(a: Int!, b: Int!): Int!
+                hero(episode: Episode = JEDI): Character
+                numbers: [Int!]!
+                nonNull: String!
+            }
+            type Mutation { echo(msg: String!): String! }
+            interface Character { id: ID! name: String! }
+            type Droid implements Character { id: ID! name: String! primaryFunction: String }
+            type Human implements Character { id: ID! name: String! homePlanet: String }
+            enum Episode { NEWHOPE EMPIRE JEDI }
+        ";
+    }
+
+    constructor() : Test("GraphQLHandlerTest", "1.0") {
+        addTestCase("lexer", \lexerTest());
+        addTestCase("parser", \parserTest());
+        addTestCase("parser errors", \parserErrorTest());
+        addTestCase("schema model", \schemaTest());
+        addTestCase("schema validation errors", \schemaErrorTest());
+        addTestCase("execution basics", \executionTest());
+        addTestCase("execution variables", \variablesTest());
+        addTestCase("fragments and interfaces", \fragmentTest());
+        addTestCase("directives", \directiveTest());
+        addTestCase("error propagation", \errorPropagationTest());
+        addTestCase("mutation", \mutationTest());
+        addTestCase("introspection", \introspectionTest());
+        addTestCase("http handler", \httpHandlerTest());
+        addTestCase("http errors", \httpErrorTest());
+        addTestCase("dataprovider bridge", \bridgeTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        mServer = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        GraphQLHandler gh(StarWarsSdl, getStarWarsResolvers());
+        mServer.setDefaultHandler("graphql", gh);
+        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        if (mServer) {
+            mServer.stop();
+        }
+    }
+
+    private hash<auto> getStarWarsResolvers() {
+        return {
+            "Query": {
+                "hello": string sub (auto p, hash<auto> a, auto c) {
+                    return sprintf("Hello, %s!", a.name ?? "world");
+                },
+                "add": int sub (auto p, hash<auto> a, auto c) { return a.a + a.b; },
+                "hero": auto sub (auto p, hash<auto> a, auto c) {
+                    return {"__typename": "Droid", "id": "2001", "name": "R2-D2",
+                        "primaryFunction": "Astromech"};
+                },
+                "numbers": auto sub (auto p, hash<auto> a, auto c) { return (1, 2, 3); },
+                "nonNull": auto sub (auto p, hash<auto> a, auto c) { return NOTHING; },
+            },
+            "Mutation": {
+                "echo": string sub (auto p, hash<auto> a, auto c) { return a.msg; },
+            },
+        };
+    }
+
+    private GraphQLExecutor getExecutor() {
+        return new GraphQLExecutor(new GraphQLSchema(StarWarsSdl), getStarWarsResolvers());
+    }
+
+    lexerTest() {
+        list<hash<GraphQLToken>> toks = GraphQLLexer::tokenize("{ hero(id: 1) }");
+        assertEq(GraphQLLexer::TK_BRACE_L, toks[0].kind);
+        assertEq(GraphQLLexer::TK_NAME, toks[1].kind);
+        assertEq("hero", toks[1].value);
+        assertEq(GraphQLLexer::TK_EOF, toks[toks.size() - 1].kind);
+
+        # numbers, escapes, unicode (commas are ignored, not emitted as tokens)
+        list<hash<GraphQLToken>> n = GraphQLLexer::tokenize("[-42, 3.14e2, \"a\\nb\", \"\\u0041\"]");
+        assertEq(GraphQLLexer::TK_INT, n[1].kind);
+        assertEq(-42, n[1].value);
+        assertEq(GraphQLLexer::TK_FLOAT, n[2].kind);
+        assertEq(314.0, n[2].value);
+        assertEq("a\nb", n[3].value);
+        assertEq("A", n[4].value);
+
+        # block string dedent
+        list<hash<GraphQLToken>> b = GraphQLLexer::tokenize("\"\"\"\n    Hello\n      World\n    \"\"\"");
+        assertEq("Hello\n  World", b[0].value);
+
+        # line/column tracking
+        list<hash<GraphQLToken>> p = GraphQLLexer::tokenize("a\n  b");
+        assertEq(1, p[0].line);
+        assertEq(2, p[1].line);
+        assertEq(3, p[1].column);
+
+        assertThrows("GRAPHQL-SYNTAX-ERROR", \GraphQLLexer::tokenize(), "{ ~ }");
+    }
+
+    parserTest() {
+        hash<GraphQLDocument> doc = GraphQLParser::parse(
+            "query Hero(\$ep: Episode = JEDI) { hero(episode: \$ep) { name ...F } } "
+            "fragment F on Character { id }");
+        assertEq(2, doc.definitions.size());
+        hash<GraphQLOperationDefinition> op = cast<hash<GraphQLOperationDefinition>>(doc.definitions[0]);
+        assertEq("query", op.operation);
+        assertEq("Hero", op.name);
+        assertEq(1, op.variableDefinitions.size());
+        hash<GraphQLVariableDefinition> vd = cast<hash<GraphQLVariableDefinition>>(op.variableDefinitions[0]);
+        assertEq("ep", vd.name);
+        assertEq("Episode", GraphQLSchema::typeRefToString(vd.type));
+
+        hash<GraphQLSelectionSet> ss = cast<hash<GraphQLSelectionSet>>(op.selectionSet);
+        hash<GraphQLField> hero = cast<hash<GraphQLField>>(ss.selections[0]);
+        assertEq("hero", hero.name);
+        assertEq(1, hero.arguments.size());
+
+        hash<GraphQLFragmentDefinition> fd = cast<hash<GraphQLFragmentDefinition>>(doc.definitions[1]);
+        assertEq("F", fd.name);
+        assertEq("Character", fd.typeCondition);
+
+        # anonymous shorthand query with alias
+        hash<GraphQLDocument> doc2 = GraphQLParser::parse("{ a: hello }");
+        hash<GraphQLOperationDefinition> op2 = cast<hash<GraphQLOperationDefinition>>(doc2.definitions[0]);
+        assertEq("query", op2.operation);
+        hash<GraphQLField> f = cast<hash<GraphQLField>>(
+            cast<hash<GraphQLSelectionSet>>(op2.selectionSet).selections[0]);
+        assertEq("a", f.alias);
+        assertEq("hello", f.name);
+    }
+
+    parserErrorTest() {
+        assertThrows("GRAPHQL-SYNTAX-ERROR", "selection set", \GraphQLParser::parse(), "query { }");
+        assertThrows("GRAPHQL-SYNTAX-ERROR", \GraphQLParser::parse(), "query {");
+        assertThrows("GRAPHQL-SYNTAX-ERROR", \GraphQLParser::parse(), "mutation");
+        assertThrows("GRAPHQL-SYNTAX-ERROR", "fragment name cannot be",
+            \GraphQLParser::parse(), "fragment on on T { x }");
+    }
+
+    schemaTest() {
+        GraphQLSchema schema(StarWarsSdl);
+        assertEq("Query", schema.getQueryType().name);
+        assertEq("Mutation", schema.getMutationType().name);
+        assertNothing(schema.getSubscriptionType());
+        assertEq(("id", "name"), keys schema.getType("Character").fields);
+        assertEq(TYPE_INTERFACE, schema.getType("Character").kind);
+        assertEq(("Character",), schema.getType("Droid").interfaces);
+        assertEq(("NEWHOPE", "EMPIRE", "JEDI"), schema.getType("Episode").enumValues);
+        assertEq("[Int!]!", GraphQLSchema::typeRefToString(schema.getType("Query").fields.numbers.type));
+        # built-in scalars present
+        assertEq(TYPE_SCALAR, schema.getType("Int").kind);
+    }
+
+    schemaErrorTest() {
+        assertThrows("GRAPHQL-SCHEMA-ERROR", "undefined type",
+            sub () { new GraphQLSchema("type Query { x: Nope }"); });
+        assertThrows("GRAPHQL-SCHEMA-ERROR", "query root type",
+            sub () { new GraphQLSchema("type Foo { x: Int }"); });
+        assertThrows("GRAPHQL-SCHEMA-ERROR", "more than once",
+            sub () { new GraphQLSchema("type Query { x: Int } type Query { y: Int }"); });
+    }
+
+    executionTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq({"data": {"hello": "Hello, world!"}}, ex.execute("{ hello }"));
+        assertEq({"data": {"hello": "Hello, Ada!"}}, ex.execute("{ hello(name: \"Ada\") }"));
+        assertEq({"data": {"sum": 7}}, ex.execute("{ sum: add(a: 3, b: 4) }"));
+        assertEq({"data": {"numbers": (1, 2, 3)}}, ex.execute("{ numbers }"));
+
+        # unknown field is reported as an error
+        hash<auto> r = ex.execute("{ nope }");
+        assertEq("cannot query field \"nope\" on type \"Query\"", r.errors[0].message);
+    }
+
+    variablesTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq({"data": {"add": 42}},
+            ex.execute("query(\$x: Int!, \$y: Int!) { add(a: \$x, b: \$y) }", {"x": 20, "y": 22}));
+
+        # missing required variable
+        hash<auto> r = ex.execute("query(\$x: Int!, \$y: Int!) { add(a: \$x, b: \$y) }", {"x": 1});
+        assertEq(0, r.data.size() ?? 0);
+        assertRegex("required variable", r.errors[0].message);
+
+        # invalid variable type
+        hash<auto> r2 = ex.execute("query(\$x: Int!, \$y: Int!) { add(a: \$x, b: \$y) }",
+            {"x": "notint", "y": 2});
+        assertRegex("must be an integer", r2.errors[0].message);
+    }
+
+    fragmentTest() {
+        GraphQLExecutor ex = getExecutor();
+        # inline fragment on the concrete type + __typename + alias
+        hash<auto> r = ex.execute(
+            "{ h: hero { __typename id name ... on Droid { primaryFunction } } }");
+        assertEq("Droid", r.data.h.__typename);
+        assertEq("R2-D2", r.data.h.name);
+        assertEq("Astromech", r.data.h.primaryFunction);
+
+        # named fragment spread
+        hash<auto> r2 = ex.execute("{ hero { ...CharFields } } fragment CharFields on Character { id name }");
+        assertEq("2001", r2.data.hero.id);
+        assertEq("R2-D2", r2.data.hero.name);
+    }
+
+    directiveTest() {
+        GraphQLExecutor ex = getExecutor();
+        # @skip(if: true) omits the field
+        hash<auto> r = ex.execute("{ a: hello @skip(if: true) b: hello(name: \"x\") }");
+        assertFalse(r.data.hasKey("a"));
+        assertEq("Hello, x!", r.data.b);
+
+        # @include(if: false) omits the field
+        hash<auto> r2 = ex.execute("{ a: hello @include(if: false) b: hello(name: \"y\") }");
+        assertFalse(r2.data.hasKey("a"));
+        assertEq("Hello, y!", r2.data.b);
+
+        # @skip with a variable
+        hash<auto> r3 = ex.execute("query(\$s: Boolean!) { a: hello @skip(if: \$s) }", {"s": True});
+        assertFalse(r3.data.hasKey("a"));
+    }
+
+    errorPropagationTest() {
+        GraphQLExecutor ex = getExecutor();
+        # a non-null field resolving to null nulls the data and reports an error with a path
+        hash<auto> r = ex.execute("{ nonNull }");
+        assertNothing(r.data);
+        assertRegex("non-nullable", r.errors[0].message);
+        assertEq(("nonNull",), r.errors[0].path);
+    }
+
+    mutationTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq({"data": {"echo": "hi"}}, ex.execute("mutation { echo(msg: \"hi\") }"));
+    }
+
+    introspectionTest() {
+        GraphQLExecutor ex = getExecutor();
+        assertEq("Query", ex.execute("{ __typename }").data.__typename);
+
+        hash<auto> s = ex.execute("{ __schema { queryType { name } mutationType { name } } }");
+        assertEq("Query", s.data.__schema.queryType.name);
+        assertEq("Mutation", s.data.__schema.mutationType.name);
+
+        # __type with nested ofType
+        hash<auto> t = ex.execute(
+            "{ __type(name: \"Droid\") { kind name fields { name type { kind ofType { kind name } } } "
+            "interfaces { name } } }");
+        assertEq("OBJECT", t.data.__type.kind);
+        assertEq("Droid", t.data.__type.name);
+        # the "id" field has type ID! -> NON_NULL wrapping SCALAR ID
+        hash<auto> idField = (select t.data.__type.fields, $1.name == "id")[0];
+        assertEq("NON_NULL", idField.type.kind);
+        assertEq("ID", idField.type.ofType.name);
+        assertEq(("Character",), (map $1.name, t.data.__type.interfaces));
+
+        # enum introspection
+        hash<auto> e = ex.execute("{ __type(name: \"Episode\") { kind enumValues { name } } }");
+        assertEq("ENUM", e.data.__type.kind);
+        assertEq(("NEWHOPE", "EMPIRE", "JEDI"), (map $1.name, e.data.__type.enumValues));
+    }
+
+    httpHandlerTest() {
+        RestClient rc({"url": "http://localhost:" + port, "data": "json"});
+        # POST query
+        assertEq({"hello": "Hello, Ada!"},
+            rc.post("/graphql", {"query": "{ hello(name: \"Ada\") }"}).body.data);
+        # POST with variables
+        assertEq({"add": 42},
+            rc.post("/graphql", {"query": "query(\$a: Int!, \$b: Int!) { add(a: \$a, b: \$b) }",
+                "variables": {"a": 20, "b": 22}}).body.data);
+        # GET query (RestClient URL-encodes the path once; the server decodes it once)
+        assertEq({"hello": "Hello, world!"},
+            rc.get("/graphql?query={ hello }").body.data);
+        # introspection over HTTP
+        assertEq("Query",
+            rc.post("/graphql", {"query": "{ __schema { queryType { name } } }"}).body.data.__schema.queryType.name);
+        # mutation over HTTP
+        assertEq({"echo": "yo"},
+            rc.post("/graphql", {"query": "mutation { echo(msg: \"yo\") }"}).body.data);
+    }
+
+    httpErrorTest() {
+        RestClient rc({"url": "http://localhost:" + port, "data": "json"});
+        rc.setErrorPassthru(True);
+
+        # missing query -> 400
+        hash<auto> r = rc.post("/graphql", {"notquery": "x"});
+        assertEq(400, r.status_code);
+        assertRegex("no GraphQL query", r.body.errors[0].message);
+
+        # syntax error -> 200 with errors envelope
+        hash<auto> r2 = rc.post("/graphql", {"query": "{ broken"});
+        assertEq(200, r2.status_code);
+        assertRegex("syntax error", r2.body.errors[0].message);
+
+        # field error -> 200 with data + errors
+        hash<auto> r3 = rc.post("/graphql", {"query": "{ unknownField }"});
+        assertEq(200, r3.status_code);
+        assertRegex("cannot query field", r3.body.errors[0].message);
+    }
+
+    bridgeTest() {
+        MemProvider mp((
+            {"id": 1, "name": "Ada", "active": True},
+            {"id": 2, "name": "Bob", "active": False},
+        ));
+        DataProviderGraphQLSchema bridge(mp);
+
+        # generated SDL contains the record type and the search/create operations
+        assertRegex("type peopleRecord", bridge.getSdl());
+        assertRegex("search\\(limit: Int, offset: Int\\): \\[peopleRecord!\\]!", bridge.getSdl());
+        assertRegex("create\\(", bridge.getSdl());
+
+        GraphQLExecutor ex = bridge.getExecutor();
+        # search
+        hash<auto> r = ex.execute("{ search { id name active } }");
+        assertEq(2, r.data.search.size());
+        assertEq("Ada", r.data.search[0].name);
+        # limit
+        assertEq(1, ex.execute("{ search(limit: 1) { name } }").data.search.size());
+        # offset
+        assertEq("Bob", ex.execute("{ search(offset: 1) { name } }").data.search[0].name);
+        # create mutation
+        hash<auto> c = ex.execute("mutation { create(id: 3, name: \"Cy\", active: true) { id name } }");
+        assertEq("Cy", c.data.create.name);
+        assertEq(3, ex.execute("{ search { id } }").data.search.size());
+
+        # a read-only provider generates no Mutation type
+        MemProvider ro((), False);
+        DataProviderGraphQLSchema roBridge(ro);
+        assertFalse(roBridge.getSdl() =~ /type Mutation/);
+    }
+}

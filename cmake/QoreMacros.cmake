@@ -1132,7 +1132,17 @@ function(QORE_FINALIZE_USER_MODULE_DEPENDENCIES)
 
             if (TARGET ${_mod}-qmod)
                 if (TARGET ${_dep_name})
-                    add_dependencies(${_mod}-qmod ${_dep_name})
+                    # Only wire a build-order edge to a sibling qore module target, not to an
+                    # unrelated third-party target that happens to share the dependency's name
+                    # (e.g. nghttp2's "json" FetchContent target collides with the external qore
+                    # "json" module).  Qore module targets live in the source tree; FetchContent
+                    # targets live under a "/_deps/" build directory -- use SOURCE_DIR to tell
+                    # them apart.
+                    get_target_property(_dep_src_dir ${_dep_name} SOURCE_DIR)
+                    if (NOT _dep_src_dir MATCHES "/_deps/")
+                        add_dependencies(${_mod}-qmod ${_dep_name})
+                    endif()
+                    unset(_dep_src_dir)
                 endif()
                 if (TARGET ${_dep_name}-qmod)
                     add_dependencies(${_mod}-qmod ${_dep_name}-qmod)

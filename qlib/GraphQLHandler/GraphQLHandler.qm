@@ -1,0 +1,123 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file GraphQLHandler.qm Qore user module implementing a GraphQL execution engine and HTTP handler
+
+/*  GraphQLHandler.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) HttpServerUtil >= 1.0
+%requires(reexport) json >= 1.5
+%requires(reexport) DataProvider
+
+module GraphQLHandler {
+    version = "1.0";
+    desc = "User module implementing a GraphQL execution engine and HTTP server handler";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage GraphQLHandler Module
+
+    @tableofcontents
+
+    @section graphqlhandlerintro GraphQLHandler Introduction
+
+    The %GraphQLHandler module provides a pure-Qore <a href="https://graphql.org">GraphQL</a>
+    execution engine together with an HTTP server handler that exposes GraphQL services through
+    the @ref httpserverintro "HttpServer".
+
+    The engine is transport-agnostic: it parses and validates GraphQL documents, executes them
+    against a user-supplied schema and resolvers, and returns the standard
+    <tt>{data, errors}</tt> response envelope. The
+    @ref GraphQLHandler::GraphQLHandler "GraphQLHandler" class adapts this engine to HTTP using
+    the standard GraphQL-over-HTTP conventions.
+
+    To use this module, use \c "%requires GraphQLHandler" in your code.
+
+    All the public symbols in the module are defined in the GraphQLHandler namespace.
+
+    @section graphqlhandlercomponents Components
+
+    - @ref GraphQLHandler::GraphQLLexer "GraphQLLexer": tokenizes GraphQL source text
+    - @ref GraphQLHandler::GraphQLParser "GraphQLParser": parses executable documents into an AST
+    - @ref GraphQLHandler::GraphQLSchema "GraphQLSchema": parses Schema Definition Language (SDL)
+      into an in-memory schema model and provides introspection
+    - @ref GraphQLHandler::GraphQLExecutor "GraphQLExecutor": validates and executes a parsed
+      document against a schema and a resolver map
+    - @ref GraphQLHandler::GraphQLHandler "GraphQLHandler": exposes a schema + resolvers over HTTP
+    - @ref GraphQLHandler::DataProviderGraphQLSchema "DataProviderGraphQLSchema": generates a
+      schema and resolvers automatically from a @ref dataproviderintro "DataProvider"
+
+    @section graphqlhandlerexample Example
+
+    @code{.py}
+%requires GraphQLHandler
+%requires HttpServer
+
+# define a schema in SDL
+string sdl = "
+    type Query {
+        hello(name: String): String
+    }
+";
+
+# define resolvers: a hash keyed by type name, then field name
+hash<auto> resolvers = {
+    "Query": {
+        "hello": string sub (auto parent, hash<auto> args, auto ctx) {
+            return sprintf("Hello, %s!", args.name ?? "world");
+        },
+    },
+};
+
+GraphQLHandler gh(sdl, resolvers);
+HttpServer server(<HttpServerOptionInfo>{});
+server.setHandler("graphql", "/graphql", MimeTypeJson, gh, NOTHING, False);
+int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    @endcode
+
+    @section graphqlhandlerrelnotes Release Notes
+
+    @subsection graphqlhandlerv1_0 GraphQLHandler v1.0
+    - the initial version of the %GraphQLHandler module
+*/
+
+#! the GraphQLHandler namespace contains all the objects in the GraphQLHandler module
+public namespace GraphQLHandler {
+    #! the exception code thrown for GraphQL syntax errors
+    public const GRAPHQL_SYNTAX_ERROR = "GRAPHQL-SYNTAX-ERROR";
+
+    #! the exception code thrown for GraphQL validation errors
+    public const GRAPHQL_VALIDATION_ERROR = "GRAPHQL-VALIDATION-ERROR";
+
+    #! the exception code thrown for GraphQL schema (SDL) errors
+    public const GRAPHQL_SCHEMA_ERROR = "GRAPHQL-SCHEMA-ERROR";
+
+    #! the exception code thrown for GraphQL execution errors
+    public const GRAPHQL_EXECUTION_ERROR = "GRAPHQL-EXECUTION-ERROR";
+}
