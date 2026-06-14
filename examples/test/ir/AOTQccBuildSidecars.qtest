@@ -76,7 +76,9 @@ public class QccSidecarSingle {
         assertTrue(is_file(idx), "wrote single source index sidecar: " + first);
         assertTrue(is_file(manifest), "wrote single source manifest: " + first);
 
-        assertContains(File::readTextFile(dep), "single.qc", "depfile names source");
+        string single_dep_text = File::readTextFile(dep);
+        assertContains(single_dep_text, "single.qc", "depfile names source");
+        assertTrue(single_dep_text.find("<builtin>") == -1, "depfile excludes non-file sentinels");
         string index_json = File::readTextFile(idx);
         assertContains(index_json, "\"provides\"", "index JSON has provides");
         assertContains(index_json, "QccSidecarSingle::C", "index JSON has class constant");
@@ -138,6 +140,7 @@ public class QccSidecarConsumer {
         string dep_text = File::readTextFile(dep);
         assertContains(dep_text, "provider.qo", "qo-link depfile names provider");
         assertContains(dep_text, "consumer.qo", "qo-link depfile names consumer");
+        assertTrue(dep_text.find("<builtin>") == -1, "qo-link depfile excludes non-file sentinels");
         string map_text = File::readTextFile(link_map);
         assertContains(map_text, "\"resolved_call_relocations\"", "link map records relocations");
         assertContains(File::readTextFile(manifest), "\"kind\": \"link-qo\"",
@@ -184,6 +187,7 @@ int sub main() {
         string dep_text = File::readTextFile(dep);
         assertContains(dep_text, "provider.qr", "script aggregate depfile names provider source");
         assertContains(dep_text, "consumer.qr", "script aggregate depfile names consumer source");
+        assertTrue(dep_text.find("<builtin>") == -1, "script aggregate depfile excludes non-file sentinels");
         assertContains(File::readTextFile(idx), "QccScriptAggProvider",
             "script aggregate index includes provider class");
         assertContains(File::readTextFile(manifest), "\"kind\": \"script-aggregate\"",

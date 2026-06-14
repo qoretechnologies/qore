@@ -7369,6 +7369,11 @@ static std::string canonicalizeDepPath(const std::string& path) {
     return out;
 }
 
+static bool depPathIsRegularFile(const std::string& path) {
+    struct stat st;
+    return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
 static std::string escapeMakeDepPath(const std::string& path) {
     std::string out;
     out.reserve(path.size());
@@ -7410,7 +7415,11 @@ static bool writeAOTMakeDepfile(const std::string& depfile_path,
             error = "operation cancelled during AOT depfile emission";
             return false;
         }
-        if (fprintf(f, " \\\n    %s", escapeMakeDepPath(deps[i]).c_str()) < 0) {
+        std::string dep_path = canonicalizeDepPath(deps[i]);
+        if (!depPathIsRegularFile(dep_path)) {
+            continue;
+        }
+        if (fprintf(f, " \\\n    %s", escapeMakeDepPath(dep_path).c_str()) < 0) {
             return fail_write("write");
         }
     }

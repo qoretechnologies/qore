@@ -107,6 +107,12 @@ static int64_t file_size(const std::string& path) {
     return -1;
 }
 
+//! True if a path is suitable as a Make depfile prerequisite.
+static bool depfile_dependency_exists(const std::string& path) {
+    struct stat st;
+    return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
 static const char* source_mode_suffix(bool include_source) {
     return include_source ? ", include-source" : "";
 }
@@ -350,7 +356,10 @@ static bool write_depfile(const char* path, const std::string& output,
 
     std::vector<std::string> deps;
     if (!source.empty()) {
-        deps.push_back(canon(source));
+        std::string full = canon(source);
+        if (depfile_dependency_exists(full)) {
+            deps.push_back(std::move(full));
+        }
     }
 
     if (context) {
@@ -361,7 +370,15 @@ static bool write_depfile(const char* path, const std::string& output,
             return false;
         }
         struct dirent* ent;
+        size_t dep_i = 0;
         while ((ent = readdir(d)) != nullptr) {
+            if (dep_i && !(dep_i % 100)
+                    && qore_check_cancel(nullptr, "qcc depfile context scan")) {
+                fprintf(stderr, "error: operation cancelled during qcc depfile context scan\n");
+                closedir(d);
+                return false;
+            }
+            ++dep_i;
             size_t len = strlen(ent->d_name);
             bool keep = false;
             if (len > 3) {
@@ -374,7 +391,8 @@ static bool write_depfile(const char* path, const std::string& output,
                 continue;
             }
             std::string full = canon(std::string(context) + "/" + ent->d_name);
-            if (std::find(deps.begin(), deps.end(), full) == deps.end()) {
+            if (depfile_dependency_exists(full)
+                    && std::find(deps.begin(), deps.end(), full) == deps.end()) {
                 deps.emplace_back(std::move(full));
             }
         }
@@ -385,12 +403,20 @@ static bool write_depfile(const char* path, const std::string& output,
     // merge any extra dependency files (e.g. the .qmod files of modules loaded
     // for a compiled module's %requires closure), canonicalized and deduped
     if (extra_deps) {
-        for (const std::string& d : *extra_deps) {
+        for (size_t i = 0; i < extra_deps->size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr, "qcc depfile extra dependency scan")) {
+                fprintf(stderr,
+                    "error: operation cancelled during qcc depfile extra dependency scan\n");
+                return false;
+            }
+            const std::string& d = (*extra_deps)[i];
             if (d.empty()) {
                 continue;
             }
             std::string full = canon(d);
-            if (std::find(deps.begin(), deps.end(), full) == deps.end()) {
+            if (depfile_dependency_exists(full)
+                    && std::find(deps.begin(), deps.end(), full) == deps.end()) {
                 deps.emplace_back(std::move(full));
             }
         }
@@ -448,9 +474,31 @@ static bool write_depfile_list(const char* path, const std::string& output,
         }
         return out;
     };
+    auto canon = [](const std::string& s) -> std::string {
+        if (s.empty()) {
+            return s;
+        }
+        char* r = realpath(s.c_str(), nullptr);
+        if (!r) {
+            return s;
+        }
+        std::string out = r;
+        free(r);
+        return out;
+    };
     fprintf(f, "%s:", escape(output).c_str());
-    for (const auto& dep : deps) {
-        fprintf(f, " \\\n    %s", escape(dep).c_str());
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "qcc depfile emission")) {
+            fclose(f);
+            fprintf(stderr, "error: operation cancelled during qcc depfile emission\n");
+            return false;
+        }
+        const std::string& dep = deps[i];
+        std::string full = canon(dep);
+        if (!depfile_dependency_exists(full)) {
+            continue;
+        }
+        fprintf(f, " \\\n    %s", escape(full).c_str());
     }
     fputc('\n', f);
     fclose(f);
