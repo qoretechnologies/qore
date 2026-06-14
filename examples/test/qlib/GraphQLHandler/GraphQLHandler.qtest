@@ -63,6 +63,7 @@ class GraphQLHandlerTest inherits QUnit::Test {
         addTestCase("document validation", \validationTest());
         addTestCase("http persisted queries and batching", \apqBatchTest());
         addTestCase("websocket subscriptions", \subscriptionTest());
+        addTestCase("websocket subscription robustness", \subscriptionRobustnessTest());
 
         set_return_value(main());
     }
@@ -487,6 +488,108 @@ class GraphQLHandlerTest inherits QUnit::Test {
         # ping -> pong
         wsc.send(make_json({"type": "ping"}));
         assertEq("pong", parse_json(q.get()).type);
+    }
+
+    #! creates a connected WebSocket client whose messages are pushed to the returned Queue
+    private hash<auto> wsConnect(int port) {
+        Queue mq();
+        WebSocketClient wsc(sub (*data m) { if (exists m) { mq.push(m.toString()); } },
+            {"url": "ws://localhost:" + port});
+        wsc.connect();
+        return {"client": wsc, "queue": mq};
+    }
+
+    subscriptionRobustnessTest() {
+        # a subscription server whose source is a cancellable GraphQLEventQueue, created per
+        # subscription and handed back to the test via a Queue (deterministic, no polling); the
+        # per-connection subscription cap is set to 1
+        Queue created();
+        GraphQLExecutor ex(new GraphQLSchema("type Query { x: Int } type Subscription { feed: Int }"), {
+            "Query": {"x": int sub (auto p, hash<auto> a, auto c) { return 0; }},
+            "Subscription": {
+                "feed": auto sub (auto p, hash<auto> a, auto c) {
+                    GraphQLEventQueue evq();
+                    created.push(evq);
+                    return evq;
+                },
+            },
+        });
+        GraphQLWsHandler ws(ex, NOTHING, {"max_subscriptions": 1});
+        HttpServer s(<HttpServerOptionInfo>{});
+        s.setDefaultHandler("graphql-ws", ws);
+        int p = s.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit s.stop();
+
+        # --- a GraphQLEventQueue source streams posted events, then completes ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "connection_init"}));
+            assertEq("connection_ack", parse_json(mq.get()).type);
+            wsc.send(make_json({"type": "subscribe", "id": "ev",
+                "payload": {"query": "subscription { feed }"}}));
+            # the resolver (in the stream thread) created the event queue; fetch it deterministically
+            GraphQLEventQueue evq = created.get();
+            evq.post(10);
+            evq.post(20);
+            evq.complete();
+            list<int> vals = ();
+            while (True) {
+                hash<auto> m = parse_json(mq.get());
+                if (m.type == "next") {
+                    vals += m.payload.data.feed;
+                } else if (m.type == "complete") {
+                    break;
+                } else {
+                    fail(sprintf("unexpected message: %y", m));
+                }
+            }
+            assertEq((10, 20), vals);
+        }
+
+        # --- a subscribe before connection_init is rejected ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "subscribe", "id": "early",
+                "payload": {"query": "subscription { feed }"}}));
+            assertRegex("connection_init must be sent", parse_json(mq.get()).payload[0].message);
+        }
+
+        # --- a duplicate connection_init is rejected ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "connection_init"}));
+            assertEq("connection_ack", parse_json(mq.get()).type);
+            wsc.send(make_json({"type": "connection_init"}));
+            assertRegex("too many initialisation", parse_json(mq.get()).payload[0].message);
+        }
+
+        # --- the per-connection subscription cap (1) rejects a second concurrent subscription ---
+        {
+            hash<auto> c = wsConnect(p);
+            WebSocketClient wsc = c.client;
+            Queue mq = c.queue;
+            on_exit wsc.disconnect();
+            wsc.send(make_json({"type": "connection_init"}));
+            assertEq("connection_ack", parse_json(mq.get()).type);
+            # the first subscription occupies the only slot; its source never completes (it blocks)
+            wsc.send(make_json({"type": "subscribe", "id": "a",
+                "payload": {"query": "subscription { feed }"}}));
+            GraphQLEventQueue qa = created.get();
+            on_exit qa.cancel();
+            # a second subscription exceeds the cap and is rejected
+            wsc.send(make_json({"type": "subscribe", "id": "b",
+                "payload": {"query": "subscription { feed }"}}));
+            assertRegex("subscription limit", parse_json(mq.get()).payload[0].message);
+        }
     }
 
     validationTest() {

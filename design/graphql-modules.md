@@ -124,6 +124,12 @@ and returns an opaque per-subscription state without calling the resolver.
 Because Qore iterators are thread-bound, `getSubscriptionStream()` must be called from the thread
 that consumes the events.
 
+A plain iterator cannot be interrupted while blocked, so the engine provides
+`GraphQLEventQueue` — a thread-safe, cancellable event source (`post()` publishes an event,
+`complete()`/`cancel()` ends the stream) implementing the `GraphQLCancellableSource` interface. A
+transport that holds a reference to the source can call `cancel()` from another thread to unblock a
+subscription waiting for an event and end it cleanly.
+
 ## GraphQLHandler (server side)
 
 ### HTTP handler
@@ -145,8 +151,14 @@ that consumes the events.
 `WebSocketHandler`: `connection_init`/`connection_ack`, `subscribe`→`next`*→`complete`, `complete`,
 `ping`/`pong`, and `error`. Query and mutation operations sent over `subscribe` execute once (a
 single `next` then `complete`); a subscription streams a `next` per event from a background thread
-(the event-source iterator is created in that thread). A subscription stops when its source is
-exhausted, or after its next event once the client sends `complete` or disconnects.
+(the event-source iterator is created in that thread). The handler enforces the protocol lifecycle
+(any message before `connection_init` is rejected and the connection closed; a duplicate
+`connection_init` and a duplicate subscription `id` are likewise rejected) and a per-connection
+concurrent-subscription cap (`max_subscriptions`, default 100). A subscription stops when its source
+is exhausted, or when the client sends `complete` or disconnects — and if the source is a
+`GraphQLCancellableSource` it is `cancel()`led so a stream blocked waiting for an event exits
+promptly. Backpressure is inherent: `WebSocketConnection::send()` blocks when the send buffer fills,
+throttling a fast producer.
 
 ## DataProvider bridge (GraphQLDataProvider)
 

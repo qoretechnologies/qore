@@ -37,11 +37,17 @@ public namespace GraphQLHandler {
       \c pong
 
     A subscription field's resolver must return a @ref Qore::AbstractIterator (the event source);
-    the engine executes the subscription's selection set against each yielded event.
+    the engine executes the subscription's selection set against each yielded event. For a
+    long-lived source, return a @ref GraphQLHandler::GraphQLEventQueue "GraphQLEventQueue" (or any
+    @ref GraphQLHandler::GraphQLCancellableSource "GraphQLCancellableSource"): the handler then
+    \c cancel()s it when the client sends \c complete or disconnects, unblocking a stream waiting
+    for an event so it exits promptly.
 
-    @note A subscription stops when its event source is exhausted, or after its next event once the
-    client sends \c complete or disconnects; an event source intended to be cancellable should be
-    finite or support interruption.
+    @note The handler enforces the protocol lifecycle (\c connection_init must precede any other
+    message; a duplicate \c connection_init or a duplicate subscription \c id closes the connection)
+    and a per-connection concurrent-subscription cap (the \c max_subscriptions option). A
+    subscription stops when its event source is exhausted, or when the client sends \c complete or
+    disconnects.
 
     @par Example:
     @code{.py}
@@ -52,23 +58,41 @@ server.setHandler("graphql-ws", "/graphql", NOTHING, ws, ("Sec-WebSocket-Protoco
     @endcode
 */
 public class GraphQLWsHandler inherits WebSocketHandler::WebSocketHandler {
+    public {
+        #! the default maximum number of concurrent subscriptions per connection
+        const DefaultMaxSubscriptions = 100;
+    }
+
     private {
         #! the execution engine
         GraphQLExecutor executor;
+        #! the maximum number of concurrent subscriptions allowed per connection
+        int max_subscriptions = DefaultMaxSubscriptions;
     }
 
     #! creates the handler for the given execution engine
     /** @param n_executor the GraphQL execution engine
         @param auth an optional authenticator for the handler
+        @param opts optional options:
+        - \c max_subscriptions (int): the maximum number of concurrent subscriptions allowed per
+          connection (default @ref DefaultMaxSubscriptions); additional \c subscribe requests are
+          rejected with an \c error message until a subscription completes
     */
-    constructor(GraphQLExecutor n_executor, *HttpServer::AbstractAuthenticator auth)
+    constructor(GraphQLExecutor n_executor, *HttpServer::AbstractAuthenticator auth, *hash<auto> opts)
             : WebSocketHandler::WebSocketHandler(auth) {
         executor = n_executor;
+        if (exists opts.max_subscriptions) {
+            if (opts.max_subscriptions < 1) {
+                throw "GRAPHQL-WS-OPTION-ERROR", sprintf("max_subscriptions must be >= 1 (got %y)",
+                    opts.max_subscriptions);
+            }
+            max_subscriptions = opts.max_subscriptions;
+        }
     }
 
     #! returns a GraphQL WebSocket connection object for a new client connection
     WebSocketHandler::WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
-        return new GraphQLWsConnection(self, executor, cx);
+        return new GraphQLWsConnection(self, executor, cx, max_subscriptions);
     }
 }
 
@@ -81,15 +105,22 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
         auto gctx;
         #! active subscription ids -> running flag
         hash<string, bool> active;
-        #! serializes access to @ref active
+        #! active subscription ids -> their event source (for cross-thread cancellation)
+        hash<string, object> sources;
+        #! @ref True once the client has sent \c connection_init and received \c connection_ack
+        bool initialized = False;
+        #! the maximum number of concurrent subscriptions allowed on this connection
+        int max_subscriptions;
+        #! serializes access to @ref active, @ref sources, and @ref initialized
         Qore::Thread::Mutex sub_lock();
     }
 
     #! creates the connection
-    constructor(GraphQLWsHandler handler, GraphQLExecutor n_executor, auto n_ctx)
+    constructor(GraphQLWsHandler handler, GraphQLExecutor n_executor, auto n_ctx, int n_max_subscriptions)
             : WebSocketHandler::WebSocketConnection(handler) {
         executor = n_executor;
         gctx = n_ctx;
+        max_subscriptions = n_max_subscriptions;
     }
 
     #! handles an incoming text protocol message
@@ -101,9 +132,17 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
             sendMsg({"type": "error", "payload": ({"message": "invalid JSON message"},)});
             return;
         }
+        # per graphql-transport-ws, the only message allowed before connection_init is
+        # connection_init itself; anything else is a protocol violation and the connection is closed
+        if (!isInitialized() && m.type != "connection_init") {
+            sendMsg({"type": "error",
+                "payload": ({"message": "connection_init must be sent before any other message"},)});
+            stop();
+            return;
+        }
         switch (m.type) {
             case "connection_init":
-                sendMsg({"type": "connection_ack"});
+                handleConnectionInit();
                 break;
             case "ping":
                 sendMsg({"type": "pong"});
@@ -117,6 +156,28 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
                 stopSubscription(m.id);
                 break;
         }
+    }
+
+    #! handles \c connection_init: replies with \c connection_ack, or closes on a duplicate
+    private handleConnectionInit() {
+        {
+            AutoLock al(sub_lock);
+            if (initialized) {
+                # graphql-transport-ws: too many initialisation requests -> close the connection
+                sendMsg({"type": "error",
+                    "payload": ({"message": "too many initialisation requests"},)});
+                stop();
+                return;
+            }
+            initialized = True;
+        }
+        sendMsg({"type": "connection_ack"});
+    }
+
+    #! returns @ref True if the connection has completed the connection_init handshake
+    private bool isInitialized() {
+        AutoLock al(sub_lock);
+        return initialized;
     }
 
     #! handles an incoming binary protocol message (decoded as UTF-8 text)
@@ -133,6 +194,23 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
         }
         *string opType = executor.getOperationType(query, payload.operationName);
         if (opType == "subscription") {
+            {
+                AutoLock al(sub_lock);
+                # graphql-transport-ws: a subscribe with an id already in use closes the connection
+                if (exists active{id}) {
+                    sendMsg({"type": "error", "id": id,
+                        "payload": ({"message": sprintf("subscriber for id %y already exists", id)},)});
+                    stop();
+                    return;
+                }
+                # enforce the per-connection concurrent-subscription cap
+                if (active.size() >= max_subscriptions) {
+                    sendMsg({"type": "error", "id": id, "payload": ({"message":
+                        sprintf("the per-connection subscription limit (%d) has been reached",
+                            max_subscriptions)},)});
+                    return;
+                }
+            }
             hash<auto> subr = executor.executeSubscription(query, payload.variables,
                 payload.operationName, gctx);
             if (exists subr.errors) {
@@ -155,11 +233,31 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
     }
 
     #! iterates a subscription's event source, sending a \c next per event then \c complete
-    /** the event source is obtained here (in this thread) because Qore iterators are thread-bound
+    /** the event source is obtained here (in this thread) because Qore iterators are thread-bound;
+        a @ref GraphQLHandler::GraphQLCancellableSource "GraphQLCancellableSource" is registered so
+        @ref stopSubscription() / @ref connectionClosed() can unblock a source waiting for an event
     */
     private streamLoop(string id, hash<auto> subscription) {
+        AbstractIterator it;
         try {
-            AbstractIterator it = executor.getSubscriptionStream(subscription);
+            it = executor.getSubscriptionStream(subscription);
+        } catch (hash<ExceptionInfo> ex) {
+            sendMsg({"type": "error", "id": id, "payload": ({"message": ex.desc},)});
+            AutoLock al(sub_lock);
+            remove active{id};
+            return;
+        }
+        # register a cancellable source so a blocked next() can be interrupted from another thread;
+        # if the subscription was already stopped before registration, cancel immediately
+        if (it instanceof GraphQLCancellableSource) {
+            AutoLock al(sub_lock);
+            if (active{id}) {
+                sources{id} = it;
+            } else {
+                cast<GraphQLCancellableSource>(it).cancel();
+            }
+        }
+        try {
             while (isActive(id) && it.next()) {
                 hash<auto> ev = executor.resolveSubscriptionEvent(subscription, it.getValue());
                 sendMsg({"type": "next", "id": id, "payload": ev});
@@ -172,6 +270,7 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
         }
         AutoLock al(sub_lock);
         remove active{id};
+        remove sources{id};
     }
 
     #! returns @ref True if the given subscription is still active
@@ -180,19 +279,33 @@ public class GraphQLWsConnection inherits WebSocketHandler::WebSocketConnection 
         return active{id} ?? False;
     }
 
-    #! marks a subscription as stopped (its stream thread exits after its current/next event)
+    #! marks a subscription as stopped, cancelling its event source so a blocked stream thread exits
     private stopSubscription(string id) {
         AutoLock al(sub_lock);
         if (exists active{id}) {
             active{id} = False;
+            cancelSourceUnlocked(id);
         }
     }
 
-    #! the connection has closed: stop all active subscriptions
+    #! the connection has closed: stop and cancel all active subscriptions
     connectionClosed() {
         AutoLock al(sub_lock);
         foreach string id in (keys active) {
             active{id} = False;
+            cancelSourceUnlocked(id);
+        }
+    }
+
+    #! cancels a registered cancellable event source (caller must hold @ref sub_lock)
+    private cancelSourceUnlocked(string id) {
+        *object src = sources{id};
+        if (src instanceof GraphQLCancellableSource) {
+            try {
+                cast<GraphQLCancellableSource>(src).cancel();
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore cancellation failures
+            }
         }
     }
 

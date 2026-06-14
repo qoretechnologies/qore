@@ -32,7 +32,38 @@ class GraphQLTest inherits QUnit::Test {
         addTestCase("execution", \executionTest());
         addTestCase("introspection", \introspectionTest());
         addTestCase("validation", \validationTest());
+        addTestCase("event queue source", \eventQueueTest());
         set_return_value(main());
+    }
+
+    eventQueueTest() {
+        # buffered events drain in order, then complete() ends the stream
+        GraphQLEventQueue q();
+        q.post(1);
+        q.post("two");
+        q.complete();
+        list<auto> vals = ();
+        while (q.next()) {
+            vals += q.getValue();
+        }
+        assertEq((1, "two"), vals);
+        assertFalse(q.valid());
+        # next() past completion stays False
+        assertFalse(q.next());
+
+        # cancel() unblocks a thread blocked in next() (from another thread), which returns False;
+        # deterministic: the cancel sentinel is queued, so next() observes it regardless of timing
+        GraphQLEventQueue q2();
+        q2.post("first");
+        assertTrue(q2.next());
+        assertEq("first", q2.getValue());
+        Queue result();
+        background sub () { result.push(q2.next()); }();
+        q2.cancel();
+        assertEq(False, result.get());
+
+        # GraphQLEventQueue is a cancellable source
+        assertTrue(q instanceof GraphQLCancellableSource);
     }
 
     private hash<auto> resolvers() {
