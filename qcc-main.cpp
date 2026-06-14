@@ -689,6 +689,10 @@ static bool big_fn_threshold_cli_explicit = false;
 // affected `.qo`.  GCC's `-MMD -MF <path>` pair maps onto this
 // single long option.
 static const char* depfile_path = nullptr;
+// --depfile-target=FILE overrides the Make depfile target.  This is useful
+// when build systems track a stamp output while the generated artifact is a
+// byproduct.
+static const char* depfile_target_path = nullptr;
 // --depfile-dir=DIR emits one Make-format depfile per generated `.qo`
 // in batch `-c --output-dir=DIR` mode.  Each depfile basename matches
 // the generated object basename with `.d` appended.
@@ -729,6 +733,10 @@ static bool save_temps = false;
 // multi-source executable mode.  Defaults to "main" — hosts that use a
 // different convention override via `-e <fn>`.
 static const char* entry_fn = "main";
+
+static std::string qcc_depfile_target(const std::string& output) {
+    return depfile_target_path ? std::string(depfile_target_path) : output;
+}
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
@@ -791,6 +799,11 @@ static void print_usage(const char* prog) {
            "                         incremental builds retrigger on sibling-file edits.\n"
            "                         With --link-qo and --script-aggregate, lists the\n"
            "                         aggregate object's direct input files.\n");
+    printf("      --depfile-target=FILE\n"
+           "                         Override the Make depfile target written before the\n"
+           "                         colon.  Requires --depfile=FILE and is intended\n"
+           "                         for stamp-output custom commands whose generated\n"
+           "                         artifact is a byproduct.\n");
     printf("      --depfile-dir=DIR  Batch `-c --output-dir` mode only: emit one\n"
            "                         Make-format dependency file per generated `.qo` into\n"
            "                         DIR.  Each depfile is named `<object>.qo.d`.\n");
@@ -963,6 +976,7 @@ static struct option long_options[] = {
     {"success-stamp",     required_argument, nullptr, 0x118},
     {"content-stamp",     required_argument, nullptr, 0x119},
     {"manifest-skip-qo-library-inputs", no_argument, nullptr, 0x11a},
+    {"depfile-target",    required_argument, nullptr, 0x11b},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1045,6 +1059,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x102:  // --depfile
                 depfile_path = optarg;
+                break;
+            case 0x11b:  // --depfile-target
+                depfile_target_path = optarg;
                 break;
             case 0x10b:  // --depfile-dir
                 depfile_dir = optarg;
@@ -6230,6 +6247,11 @@ int main(int argc, char** argv) {
             "error: --depfile and --depfile-dir are mutually exclusive\n");
         return 1;
     }
+    if (depfile_target_path && !depfile_path) {
+        fprintf(stderr,
+            "error: --depfile-target requires --depfile=FILE\n");
+        return 1;
+    }
     if (skip_if_manifest_current && !write_manifest_path) {
         fprintf(stderr,
             "error: --skip-if-manifest-current requires --write-manifest=FILE\n");
@@ -6408,7 +6430,8 @@ int main(int argc, char** argv) {
             qore_cleanup();
             return 1;
         }
-        if (depfile_path && !write_depfile_list(depfile_path, output_path, manifest.inputs)) {
+        if (depfile_path && !write_depfile_list(depfile_path,
+                qcc_depfile_target(output_path), manifest.inputs)) {
             qore_cleanup();
             return 1;
         }
@@ -6775,7 +6798,8 @@ int main(int argc, char** argv) {
         // without a matching `qcc -c` rule would be invisible without
         // this fallback.  Write empty-source + context depfile.
         if (depfile_path
-                && !write_depfile(depfile_path, output, std::string(), context_dir)) {
+                && !write_depfile(depfile_path, qcc_depfile_target(output),
+                    std::string(), context_dir)) {
             qore_cleanup();
             return 1;
         }
@@ -6882,7 +6906,8 @@ int main(int argc, char** argv) {
                 opt_level, compiled_count, source_mode_suffix(include_source),
                 output_path);
         }
-        if (depfile_path && !write_depfile_list(depfile_path, output_path, target_files)) {
+        if (depfile_path && !write_depfile_list(depfile_path,
+                qcc_depfile_target(output_path), target_files)) {
             qore_cleanup();
             return 1;
         }
@@ -7266,7 +7291,8 @@ int main(int argc, char** argv) {
             // reported by compileScriptFile (the same set it used to filter
             // the `-L` preload).  This lets the build rebuild the `.qo` when
             // any `%include`d file changes — not just the target itself.
-            if (depfile_path && !write_depfile_list(depfile_path, output, parsed_files)) {
+            if (depfile_path && !write_depfile_list(depfile_path,
+                    qcc_depfile_target(output), parsed_files)) {
                 rc = 1;
             }
         }
@@ -7298,7 +7324,8 @@ int main(int argc, char** argv) {
             // (matches compileSeparatedModuleFile's dir scan) + the .qmod files
             // of modules loaded for the %requires closure.
             if (depfile_path
-                    && !write_depfile(depfile_path, output, source_file, context_dir,
+                    && !write_depfile(depfile_path, qcc_depfile_target(output),
+                                      source_file, context_dir,
                                       &dep_module_files)) {
                 rc = 1;
             }
@@ -7331,7 +7358,8 @@ int main(int argc, char** argv) {
             // Leave `source` empty so the target dir is not double-listed.
             // dep_module_files adds the .qmod files of the %requires closure.
             if (depfile_path
-                    && !write_depfile(depfile_path, output, std::string(), source_file,
+                    && !write_depfile(depfile_path, qcc_depfile_target(output),
+                                      std::string(), source_file,
                                       &dep_module_files)) {
                 rc = 1;
             }
@@ -7361,7 +7389,8 @@ int main(int argc, char** argv) {
                     source_mode_suffix(include_source), output.c_str());
             }
             // deps = the .qm file + the .qmod files of the %requires closure
-            if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr,
+            if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
+                                               source_file, nullptr,
                                                &dep_module_files)) {
                 rc = 1;
             }

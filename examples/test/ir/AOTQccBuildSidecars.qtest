@@ -71,11 +71,12 @@ public class QccSidecarSingle {
 ");
 
         string cmd = sprintf(
-            "%s %s -v -c --parse-option=PO_MODERN --depfile=%s"
+            "%s %s -v -c --parse-option=PO_MODERN --depfile=%s --depfile-target=%s"
             " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
             " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
             " -o %s %s",
-            env, qcc_bin, dep, idx, manifest, status, success_stamp, content_stamp, qo, src);
+            env, qcc_bin, dep, success_stamp, idx, manifest, status, success_stamp,
+            content_stamp, qo, src);
         string first = run(cmd);
         assertTrue(is_file(qo), "compiled single source .qo: " + first);
         assertTrue(is_file(dep), "wrote single source depfile: " + first);
@@ -86,6 +87,8 @@ public class QccSidecarSingle {
         assertTrue(is_file(content_stamp), "touched single source content stamp: " + first);
 
         string single_dep_text = File::readTextFile(dep);
+        assertTrue(single_dep_text.find(success_stamp + ":") == 0,
+            "depfile target names success stamp: " + single_dep_text);
         assertContains(single_dep_text, "single.qc", "depfile names source");
         assertTrue(single_dep_text.find("<builtin>") == -1, "depfile excludes non-file sentinels");
         string index_json = File::readTextFile(idx);
@@ -123,6 +126,7 @@ public class QccSidecarSingle {
         string provider_qo = tmp.path + "/provider.qo";
         string consumer_qo = tmp.path + "/consumer.qo";
         string dep = consumer_qo + ".d";
+        string dep_target = consumer_qo + ".success.stamp";
         string idx = consumer_qo + ".idx.json";
         string manifest = consumer_qo + ".manifest.json";
 
@@ -149,21 +153,24 @@ public class QccSidecarConsumer {
         assertTrue(is_file(provider_qo), "compiled provider preload .qo: " + provider_out);
 
         string consumer_cmd = sprintf(
-            "%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s"
+            "%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s --depfile-target=%s"
             " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
             " --manifest-skip-qo-library-inputs -o %s %s",
-            env, qcc_bin, tmp.path, dep, idx, manifest, consumer_qo, consumer_src);
+            env, qcc_bin, tmp.path, dep, dep_target, idx, manifest, consumer_qo, consumer_src);
         string consumer_out = run(consumer_cmd);
         assertTrue(is_file(consumer_qo), "compiled consumer with preload .qo: " + consumer_out);
+        assertTrue(File::readTextFile(dep).find(dep_target + ":") == 0,
+            "preload depfile target names override");
         string manifest_json = File::readTextFile(manifest);
         assertTrue(manifest_json.find(provider_qo) == -1,
             "preloaded provider .qo omitted from manifest: " + manifest_json);
 
         string explicit_cmd = sprintf(
-            "%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s"
+            "%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s --depfile-target=%s"
             " --write-index-json=%s --write-manifest=%s --skip-if-manifest-current"
             " --manifest-skip-qo-library-inputs --manifest-input=%s -o %s %s",
-            env, qcc_bin, tmp.path, dep, idx, manifest, provider_qo, consumer_qo, consumer_src);
+            env, qcc_bin, tmp.path, dep, dep_target, idx, manifest, provider_qo, consumer_qo,
+            consumer_src);
         string explicit_out = run(explicit_cmd);
         assertTrue(is_file(consumer_qo), "compiled consumer with explicit manifest input: " + explicit_out);
         manifest_json = File::readTextFile(manifest);
@@ -210,12 +217,12 @@ public class QccSidecarConsumer {
 
         string cmd = sprintf(
             "%s %s -v --link-qo --aggregate-symbol=QCC_SIDECAR_LINK"
-            " --qolink-map=%s --depfile=%s --write-index-json=%s"
+            " --qolink-map=%s --depfile=%s --depfile-target=%s --write-index-json=%s"
             " --write-manifest=%s --skip-if-manifest-current"
             " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
             " -o %s %s %s",
-            env, qcc_bin, link_map, dep, idx, manifest, status, success_stamp, content_stamp,
-            aggregate, provider_qo, consumer_qo);
+            env, qcc_bin, link_map, dep, success_stamp, idx, manifest, status, success_stamp,
+            content_stamp, aggregate, provider_qo, consumer_qo);
         string first = run(cmd);
         assertTrue(is_file(aggregate), "linked aggregate .qo: " + first);
         assertTrue(is_file(link_map), "wrote link map: " + first);
@@ -227,6 +234,8 @@ public class QccSidecarConsumer {
         assertTrue(is_file(content_stamp), "touched qo-link content stamp: " + first);
 
         string dep_text = File::readTextFile(dep);
+        assertTrue(dep_text.find(success_stamp + ":") == 0,
+            "qo-link depfile target names success stamp: " + dep_text);
         assertContains(dep_text, "provider.qo", "qo-link depfile names provider");
         assertContains(dep_text, "consumer.qo", "qo-link depfile names consumer");
         assertTrue(dep_text.find("<builtin>") == -1, "qo-link depfile excludes non-file sentinels");
@@ -271,11 +280,11 @@ int sub main() {
 
         string cmd = sprintf(
             "%s %s -v -c --script-aggregate=QCC_SCRIPT_AGG"
-            " --depfile=%s --write-index-json=%s --write-manifest=%s"
+            " --depfile=%s --depfile-target=%s --write-index-json=%s --write-manifest=%s"
             " --skip-if-manifest-current"
             " --write-status-json=%s --success-stamp=%s --content-stamp=%s"
             " -o %s %s %s",
-            env, qcc_bin, dep, idx, manifest, status, success_stamp, content_stamp,
+            env, qcc_bin, dep, success_stamp, idx, manifest, status, success_stamp, content_stamp,
             aggregate, provider, consumer);
         string first = run(cmd);
         assertTrue(is_file(aggregate), "compiled script aggregate .qo: " + first);
@@ -287,6 +296,8 @@ int sub main() {
         assertTrue(is_file(content_stamp), "touched script aggregate content stamp: " + first);
 
         string dep_text = File::readTextFile(dep);
+        assertTrue(dep_text.find(success_stamp + ":") == 0,
+            "script aggregate depfile target names success stamp: " + dep_text);
         assertContains(dep_text, "provider.qr", "script aggregate depfile names provider source");
         assertContains(dep_text, "consumer.qr", "script aggregate depfile names consumer source");
         assertTrue(dep_text.find("<builtin>") == -1, "script aggregate depfile excludes non-file sentinels");
