@@ -402,7 +402,9 @@ static std::string aotDeferredTypePath(const std::string& qore_path, bool hashde
 
 const QoreTypeInfo* qore_get_aot_deferred_type_info(const QoreProgramLocation* loc, const char* qore_path,
         bool or_nothing, bool hashdecl) {
-    std::string clean_path = aotDeferredTypeQorePath(qore_path);
+    std::string deferred_path = qore_aot_get_deferred_source_symbol_path(loc, qore_path,
+        hashdecl ? QoreAOTSourceSymbolKind::HashDecl : QoreAOTSourceSymbolKind::Class);
+    std::string clean_path = aotDeferredTypeQorePath(deferred_path.empty() ? qore_path : deferred_path.c_str());
     if (clean_path.empty()) {
         return hashdecl
             ? (or_nothing ? hashOrNothingTypeInfo : hashTypeInfo)

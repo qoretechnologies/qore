@@ -359,7 +359,12 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
 
 static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
-    std::string method_name = readStr(ctx.ptr, ctx.end);
+    std::string method_ref = readStr(ctx.ptr, ctx.end);
+    const char* method_name = method_ref.c_str();
+    const char* last_sep = strrchr(method_name, ':');
+    if (last_sep && last_sep > method_name && *(last_sep - 1) == ':') {
+        method_name = last_sep + 1;
+    }
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     QoreListNode* ql = nullptr;
     if (num_children > 0) {
@@ -384,7 +389,7 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
     const QoreClass* qc = en_resolveClass(ctx.pgm, class_name);
     if (!qc) {
         printd(0, "AOT EXPR_TREE: cannot resolve class '%s' for self call '%s'\n",
-            class_name.c_str(), method_name.c_str());
+            class_name.c_str(), method_ref.c_str());
         if (ql) {
             ql->deref(nullptr);
         }
@@ -392,7 +397,7 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
         return QoreValue();
     }
     qore_class_private* qcp = nullptr;
-    if (method_name == "copy") {
+    if (method_ref == "copy") {
         if (ql && !ql->empty()) {
             printd(0, "AOT EXPR_TREE: implicit self copy() call cannot have arguments\n");
             ql->deref(nullptr);
@@ -400,12 +405,12 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
             return QoreValue();
         }
         return QoreValue(new SelfFunctionCallNode(&loc_builtin,
-            strdup(method_name.c_str()), nullptr, qc, true));
+            strdup(method_ref.c_str()), nullptr, qc, true));
     }
-    const QoreMethod* m = en_resolveSelfMethod(qc, method_name.c_str(), qcp);
+    const QoreMethod* m = en_resolveSelfMethod(qc, method_name, qcp);
     if (!m) {
         printd(1, "AOT EXPR_TREE: cannot find method '%s::%s'\n",
-            class_name.c_str(), method_name.c_str());
+            class_name.c_str(), method_name);
         if (ql) {
             ql->deref(nullptr);
         }
@@ -413,13 +418,13 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
         return QoreValue();
     }
     printd(5, "AOT EXPR_TREE: resolved self call '%s::%s' args=%d -> %p\n",
-        class_name.c_str(), method_name.c_str(), (int)num_children, m);
+        class_name.c_str(), method_name, (int)num_children, m);
     if (m->isStatic()) {
         StaticMethodCallNode base(&loc_builtin, m, nullptr);
         return QoreValue(new StaticMethodCallNode(base, ql));
     }
     SelfFunctionCallNode* base = new SelfFunctionCallNode(&loc_builtin,
-        strdup(method_name.c_str()), nullptr, m,
+        strdup(method_ref.c_str()), nullptr, m,
         qc, qcp);
     SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base, ql);
     base->deref(nullptr);

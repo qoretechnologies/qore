@@ -296,9 +296,13 @@ static bool qore_aot_source_provider_is_preloaded(const std::unordered_set<std::
 }
 
 static const std::unordered_set<std::string>* qore_aot_find_source_symbol_providers(
-        const QoreAOTSourceSymbolMap& symbols, const std::string& path, QoreAOTSourceSymbolKind kind) {
+        const QoreAOTSourceSymbolMap& symbols, const std::string& path, QoreAOTSourceSymbolKind kind,
+        std::string* matched_path = nullptr) {
     auto i = symbols.find(path);
     if (i != symbols.end()) {
+        if (matched_path) {
+            *matched_path = i->first;
+        }
         return &i->second;
     }
 
@@ -309,6 +313,7 @@ static const std::unordered_set<std::string>* qore_aot_find_source_symbol_provid
     size_t pos = path.rfind("::");
     if (pos == std::string::npos) {
         const std::unordered_set<std::string>* unique_providers = nullptr;
+        const std::string* unique_path = nullptr;
         for (const auto& symbol : symbols) {
             size_t symbol_pos = symbol.first.rfind("::");
             const std::string& symbol_name = symbol_pos == std::string::npos
@@ -320,6 +325,10 @@ static const std::unordered_set<std::string>* qore_aot_find_source_symbol_provid
                 return nullptr;
             }
             unique_providers = &symbol.second;
+            unique_path = &symbol.first;
+        }
+        if (matched_path && unique_path) {
+            *matched_path = *unique_path;
         }
         return unique_providers;
     }
@@ -333,11 +342,14 @@ static const std::unordered_set<std::string>* qore_aot_find_source_symbol_provid
     if (si == symbols.end() || si->second.size() != 1) {
         return nullptr;
     }
+    if (matched_path) {
+        *matched_path = si->first;
+    }
     return &si->second;
 }
 
-bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
-        const char* qore_path, QoreAOTSourceSymbolKind kind) {
+static bool qore_aot_get_deferred_source_symbol_match(const QoreProgramLocation* loc,
+        const char* qore_path, QoreAOTSourceSymbolKind kind, std::string* matched_path) {
     if (!aot_source_parse_active || !aot_source_symbol_manifest
             || aot_source_symbol_manifest->empty() || !qore_path || !*qore_path) {
         return false;
@@ -349,14 +361,34 @@ bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
     }
 
     const QoreAOTSourceSymbolMap& symbols = qore_aot_source_symbol_map(kind);
-    const std::unordered_set<std::string>* providers = qore_aot_find_source_symbol_providers(symbols, path, kind);
+    std::string match;
+    const std::unordered_set<std::string>* providers = qore_aot_find_source_symbol_providers(symbols, path, kind,
+        matched_path ? &match : nullptr);
     if (!providers) {
         return false;
     }
     if (aot_allow_preloaded_source_symbols && qore_aot_source_provider_is_preloaded(*providers)) {
         return false;
     }
-    return !qore_aot_loc_is_symbol_provider(loc, *providers);
+    if (qore_aot_loc_is_symbol_provider(loc, *providers)) {
+        return false;
+    }
+    if (matched_path) {
+        *matched_path = match.empty() ? path : match;
+    }
+    return true;
+}
+
+bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
+        const char* qore_path, QoreAOTSourceSymbolKind kind) {
+    return qore_aot_get_deferred_source_symbol_match(loc, qore_path, kind, nullptr);
+}
+
+std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramLocation* loc,
+        const char* qore_path, QoreAOTSourceSymbolKind kind) {
+    std::string rv;
+    qore_aot_get_deferred_source_symbol_match(loc, qore_path, kind, &rv);
+    return rv;
 }
 
 void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
@@ -12978,11 +13010,10 @@ class ExprTreeSerializer {
             const QoreMethod* method = sfc->getMethod();
             const QoreClass* qc = method ? method->getClass() : sfc->getClass();
             writeStr(qore_aot_encode_class_ref(qc));
-            // Strip class prefix from method name if present
-            // (e.g., "LoggerWrapper::debug" → "debug")
-            const char* mname = sfc->getName();
-            const char* last_sep = strrchr(mname, ':');
-            writeStr((last_sep && last_sep > mname && *(last_sep - 1) == ':') ? last_sep + 1 : mname);
+            // Keep any explicit class prefix.  Qualified self calls are
+            // non-virtual; stripping the prefix turns them into virtual self
+            // dispatch when the expression tree is deserialized.
+            writeStr(sfc->getName());
             // Args
             size_t count_pos = buf.size();
             writeU16(0);

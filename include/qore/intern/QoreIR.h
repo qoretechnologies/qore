@@ -1667,9 +1667,11 @@ public:
 class QoreIRNewObjectInstruction : public QoreIRInstruction {
 public:
     QoreIRNewObjectInstruction(const QoreClass* n_qc, const AbstractQoreFunctionVariant* n_variant,
-            const QoreValue& n_expr = QoreValue(), const QoreTypeInfo* n_object_type_info = nullptr)
+            const QoreValue& n_expr = QoreValue(), const QoreTypeInfo* n_object_type_info = nullptr,
+            const char* n_class_path = nullptr, const char* n_variant_sig = nullptr)
             : QoreIRInstruction(QoreIROpcode::NewObject), qc(n_qc), variant(n_variant),
-              expr(n_expr), object_type_info(n_object_type_info) {
+              expr(n_expr), object_type_info(n_object_type_info),
+              class_path(n_class_path ? n_class_path : ""), variant_sig(n_variant_sig ? n_variant_sig : "") {
         expr.ref();
     }
 
@@ -1681,6 +1683,11 @@ public:
     const QoreClass* qc;
     const AbstractQoreFunctionVariant* variant;
     const QoreTypeInfo* object_type_info;
+    // Runtime fallback metadata for AOT-deserialized IR.  Class resolution can
+    // be delayed until aggregate metadata is available, so unresolved
+    // deserialization must not discard the serialized constructor target.
+    std::string class_path;
+    std::string variant_sig;
     // Compile-time-only metadata: the original AST node (NewObjectCallNode,
     // ScopedObjectCallNode, or VarRefNewObjectNode).  Used ONLY by the AOT
     // compiler to serialize class_path/variant_sig as slot metadata so the

@@ -1815,8 +1815,9 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
         }
         source_class_path += nscope[i];
     }
-    const bool defer_source_class_member = qore_aot_should_defer_source_symbol(loc, source_class_path.c_str(),
+    std::string deferred_source_class_path = qore_aot_get_deferred_source_symbol_path(loc, source_class_path.c_str(),
         QoreAOTSourceSymbolKind::Class);
+    const bool defer_source_class_member = !deferred_source_class_path.empty();
 
     if (!defer_source_class_member) {
         // try to check in current namespace first
@@ -1874,7 +1875,9 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
     if (qore_aot_source_parse_active() && nscope.size() >= 2) {
         typeInfo = autoTypeInfo;
         found = true;
-        return new DeferredStaticClassMemberRefNode(loc, source_class_path.c_str(), nscope.getIdentifier());
+        return new DeferredStaticClassMemberRefNode(loc,
+            defer_source_class_member ? deferred_source_class_path.c_str() : source_class_path.c_str(),
+            nscope.getIdentifier());
     }
 
     // raise parse exception

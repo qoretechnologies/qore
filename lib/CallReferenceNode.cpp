@@ -834,23 +834,33 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
             source_receiver_path += (*scope)[i];
         }
     }
-    const bool defer_source_static_receiver = !source_receiver_path.empty()
-        && qore_aot_should_defer_source_symbol(loc, source_receiver_path.c_str(),
+    std::string deferred_source_receiver_path;
+    if (!source_receiver_path.empty()) {
+        deferred_source_receiver_path = qore_aot_get_deferred_source_symbol_path(loc, source_receiver_path.c_str(),
             QoreAOTSourceSymbolKind::Class);
+    }
+    const bool defer_source_static_receiver = !deferred_source_receiver_path.empty();
     bool defer_source_function = false;
+    std::string deferred_source_function_path;
     if (scope->size() >= 2) {
-        defer_source_function = qore_aot_should_defer_source_symbol(loc, scope->ostr,
+        deferred_source_function_path = qore_aot_get_deferred_source_symbol_path(loc, scope->ostr,
             QoreAOTSourceSymbolKind::Function);
+        defer_source_function = !deferred_source_function_path.empty();
         if (!defer_source_function && !defer_source_static_receiver) {
-            defer_source_function = qore_aot_should_defer_source_symbol(loc, scope->getIdentifier(),
+            deferred_source_function_path = qore_aot_get_deferred_source_symbol_path(loc, scope->getIdentifier(),
                 QoreAOTSourceSymbolKind::Function);
+            defer_source_function = !deferred_source_function_path.empty();
         }
     }
     if (defer_source_static_receiver && !defer_source_function) {
+        std::string method_path = deferred_source_receiver_path;
+        method_path += "::";
+        method_path += scope->getIdentifier();
         if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
-            qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
+            qore_program_private::recordSourceParseMethodImport(pgm, loc, method_path.c_str());
         }
-        val = new DeferredStaticMethodCallReferenceNode(loc, source_receiver_path.c_str(), scope->getIdentifier());
+        val = new DeferredStaticMethodCallReferenceNode(loc, deferred_source_receiver_path.c_str(),
+            scope->getIdentifier());
         deref();
         return 0;
     }
@@ -868,17 +878,26 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         if (qore_aot_source_parse_active() && scope->size() >= 2) {
             if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
                 if (defer_source_function) {
-                    qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+                    qore_program_private::recordSourceParseFunctionImport(pgm, loc,
+                        deferred_source_function_path.c_str());
                 } else {
-                    qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
+                    if (defer_source_static_receiver) {
+                        std::string method_path = deferred_source_receiver_path;
+                        method_path += "::";
+                        method_path += scope->getIdentifier();
+                        qore_program_private::recordSourceParseMethodImport(pgm, loc, method_path.c_str());
+                    } else {
+                        qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
+                    }
                 }
             }
             if (defer_source_function) {
-                val = new DeferredFunctionCallReferenceNode(loc, scope->ostr);
+                val = new DeferredFunctionCallReferenceNode(loc, deferred_source_function_path.c_str());
                 deref();
                 return 0;
             }
-            val = new DeferredStaticMethodCallReferenceNode(loc, source_receiver_path.c_str(),
+            val = new DeferredStaticMethodCallReferenceNode(loc,
+                defer_source_static_receiver ? deferred_source_receiver_path.c_str() : source_receiver_path.c_str(),
                 scope->getIdentifier());
             deref();
             return 0;

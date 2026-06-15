@@ -71,6 +71,7 @@
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/QoreAOT.h>
+#include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QorePluginRegistry.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/Variable.h>
@@ -11732,6 +11733,64 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
         nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
 }
 
+static std::string qore_rt_make_aot_variant_signature(const AbstractQoreFunctionVariant* variant) {
+    if (!variant || !variant->getSignature()) {
+        return std::string();
+    }
+    std::string rv("(");
+    const type_vec_t& types = variant->getSignature()->getTypeList();
+    for (size_t i = 0; i < types.size(); ++i) {
+        if (i > 0) {
+            rv.append(",");
+        }
+        rv.append(qore_get_aot_serializable_type_path(types[i]));
+    }
+    rv.append(")");
+    return rv;
+}
+
+static const AbstractQoreFunctionVariant* qore_rt_find_constructor_variant_by_aot_signature(
+        const QoreClass* qc, const char* variant_sig) {
+    if (!qc || !variant_sig || !*variant_sig) {
+        return nullptr;
+    }
+    const QoreMethod* cons = qc->getConstructor();
+    if (!cons) {
+        return nullptr;
+    }
+    const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
+    if (!cf) {
+        return nullptr;
+    }
+    if (const AbstractQoreFunctionVariant* v = cf->findVariantBySignatureText(variant_sig)) {
+        return v;
+    }
+    QoreFunctionIterator vi(*cf);
+    while (vi.next()) {
+        const AbstractQoreFunctionVariant* v = vi.getVariant();
+        if (qore_rt_make_aot_variant_signature(v) == variant_sig) {
+            return v;
+        }
+    }
+    return nullptr;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb(const char* class_path,
+        const char* variant_sig, const QoreTypeInfo* object_type_info, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    const QoreClass* qc = class_path && *class_path
+        ? qore_aot_resolve_class_ref(getProgram(), class_path, false) : nullptr;
+    if (!qc) {
+        xsink->raiseException("AOT-ERROR",
+            "cannot resolve class '%s' for AOT new object call",
+            class_path && *class_path ? class_path : "<missing>");
+        return toBits(QoreValue());
+    }
+    const AbstractQoreFunctionVariant* variant =
+        qore_rt_find_constructor_variant_by_aot_signature(qc, variant_sig);
+    return qore_rt_new_object_nb(qc, variant, object_type_info, args, nargs, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         const QoreTypeInfo* object_type_info, uint64_t* args, uint64_t** arg_cleanups, int nargs,
@@ -11752,6 +11811,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
     object_type_info = qore_substitute_type_params_if_needed(object_type_info);
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
         nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb_consume_args(const char* class_path,
+        const char* variant_sig, const QoreTypeInfo* object_type_info, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    const QoreClass* qc = class_path && *class_path
+        ? qore_aot_resolve_class_ref(getProgram(), class_path, false) : nullptr;
+    if (!qc) {
+        xsink->raiseException("AOT-ERROR",
+            "cannot resolve class '%s' for AOT new object call",
+            class_path && *class_path ? class_path : "<missing>");
+        clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
+        return toBits(QoreValue());
+    }
+    const AbstractQoreFunctionVariant* variant =
+        qore_rt_find_constructor_variant_by_aot_signature(qc, variant_sig);
+    return qore_rt_new_object_nb_consume_args(qc, variant, object_type_info, args,
+        arg_cleanups, nargs, xsink);
 }
 
 // AOT variant: resolve qc/variant from the per-function call_targets slot
@@ -12736,6 +12813,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot(QoreAOTContext* ctx
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
     if (target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_method_direct_aot", "method", "use");
+        if (target.is_self_method) {
+            return qore_rt_call_self_method_dispatch_impl(target, args, nullptr, nargs, xsink);
+        }
         return qore_rt_call_method_direct(target.method, args, nargs, xsink);
     }
 
@@ -12757,6 +12837,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot_consume_args(
     if (target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_method_direct_aot_consume_args",
             "method", "use");
+        if (target.is_self_method) {
+            return qore_rt_call_self_method_dispatch_impl(target, args, arg_cleanups, nargs, xsink);
+        }
         return qore_rt_call_method_direct_impl(target.method, args, arg_cleanups,
             nargs, xsink);
     }
@@ -12777,7 +12860,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot(
 
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
     // Use fast path if variant is available and statically eligible for fast calls
-    if (target.method && target.uvb && qore_rt_method_fast_call_eligible(target.variant)) {
+    if (target.method && !target.is_self_method && target.uvb
+            && qore_rt_method_fast_call_eligible(target.variant)) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_method_fast_aot", "method", "use");
         return qore_rt_call_method_fast(target.method, target.variant, args, nargs, xsink);
     }
@@ -12788,6 +12872,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot(
 
     // Fall back to standard method dispatch (with overload resolution)
     qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_method_fast_aot", "method", "use");
+    if (target.is_self_method) {
+        return qore_rt_call_self_method_dispatch_impl(target, args, nullptr, nargs, xsink);
+    }
     return qore_rt_call_method_direct(target.method, args, nargs, xsink);
 }
 
@@ -12802,7 +12889,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot_consume_args(
     }
 
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
-    if (target.method && target.uvb && qore_rt_method_fast_call_eligible(target.variant)) {
+    if (target.method && !target.is_self_method && target.uvb
+            && qore_rt_method_fast_call_eligible(target.variant)) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_method_fast_aot_consume_args",
             "method", "use");
         return qore_rt_call_method_fast_impl(target.method, target.variant, args,
@@ -12812,6 +12900,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot_consume_args(
     if (target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_method_fast_aot_consume_args",
             "method", "use");
+        if (target.is_self_method) {
+            return qore_rt_call_self_method_dispatch_impl(target, args, arg_cleanups, nargs, xsink);
+        }
         return qore_rt_call_method_direct_impl(target.method, args, arg_cleanups,
             nargs, xsink);
     }

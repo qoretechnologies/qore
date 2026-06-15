@@ -438,7 +438,7 @@ static const QoreMethod* findAOTInstanceMethod(const QoreClass* qc, const char* 
     }
 
     ClassAccess access = Public;
-    return qore_class_private::get(*const_cast<QoreClass*>(qc))->runtimeFindCommittedMethod(method_name,
+    return qore_class_private::get(*const_cast<QoreClass*>(qc))->runtimeFindCommittedMethodIntern(method_name,
         access, class_ctx);
 }
 
@@ -6533,7 +6533,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     }
                 }
             }
-            auto* ni = new QoreIRNewObjectInstruction(qc, variant);
+            auto* ni = new QoreIRNewObjectInstruction(qc, variant, QoreValue(), nullptr,
+                class_path, variant_sig);
             ni->opcode = opcode;
             inst.reset(ni);
             break;

@@ -8505,6 +8505,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const QoreClass* qc = nullptr;
                     const AbstractQoreFunctionVariant* variant = nullptr;
                     const QoreTypeInfo* object_type_info = nullptr;
+                    std::string dynamic_class_path;
                     if (auto* new_obj = dynamic_cast<const NewObjectCallNode*>(
                             inv->expr.getInternalNode())) {
                         qc = new_obj->getClass();
@@ -8515,6 +8516,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         qc = scoped_obj->oc;
                         variant = scoped_obj->getVariant();
                         object_type_info = scoped_obj->getObjectTypeInfo();
+                        if (!qc && scoped_obj->isDynamicObjectConstruct()) {
+                            dynamic_class_path = scoped_obj->getDynamicClassName();
+                        }
                     } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                             inv->expr.getInternalNode())) {
                         qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
@@ -8522,30 +8526,55 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         object_type_info = vrn->getTypeInfo();
                     }
                     object_type_info = specializeType(object_type_info);
-                    assert(qc);
-                    llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(qc));
-                    llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
-                    llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(variant));
-                    llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
-                    llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(object_type_info));
-                    llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
-                    if (has_arg_cleanups) {
-                        auto helper = module.getOrInsertFunction(
-                                "qore_rt_new_object_nb_consume_args",
-                                llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                        result = builder->CreateCall(helper,
-                                {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, arg_cleanups,
-                                 nargs_val, xsink_arg});
+                    if (!qc && !dynamic_class_path.empty()) {
+                        llvm::Value* class_path = builder->CreateGlobalStringPtr(dynamic_class_path);
+                        llvm::Value* variant_sig = builder->CreateGlobalStringPtr("");
+                        llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(object_type_info));
+                        llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
+                        if (has_arg_cleanups) {
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_new_object_by_path_nb_consume_args",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                        false));
+                            result = builder->CreateCall(helper,
+                                    {class_path, variant_sig, object_type_as_ptr, args_array, arg_cleanups,
+                                     nargs_val, xsink_arg});
+                        } else {
+                            auto helper = module.getOrInsertFunction("qore_rt_new_object_by_path_nb",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                            result = builder->CreateCall(helper,
+                                    {class_path, variant_sig, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                        }
                     } else {
-                        auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
-                                llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                        result = builder->CreateCall(helper,
-                                {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                        assert(qc);
+                        llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(qc));
+                        llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
+                        llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(variant));
+                        llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
+                        llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(object_type_info));
+                        llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
+                        if (has_arg_cleanups) {
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_new_object_nb_consume_args",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                        false));
+                            result = builder->CreateCall(helper,
+                                    {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, arg_cleanups,
+                                     nargs_val, xsink_arg});
+                        } else {
+                            auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                            result = builder->CreateCall(helper,
+                                    {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                        }
                     }
                 }
                 // Constructor can modify locals through side effects
@@ -12394,29 +12423,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             } else {
                 // JIT mode: bake qc/variant as constants (valid within the same program).
-                llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(noinst->qc));
-                llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
-                llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(noinst->variant));
-                llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
-                llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(noinst->object_type_info));
-                llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
-                if (has_arg_cleanups) {
-                    auto helper = module.getOrInsertFunction(
-                            "qore_rt_new_object_nb_consume_args",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper,
-                            {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, arg_cleanups,
-                             nargs_val, xsink_arg});
+                if (!noinst->qc && !noinst->class_path.empty()) {
+                    llvm::Value* class_path = builder->CreateGlobalStringPtr(noinst->class_path);
+                    llvm::Value* variant_sig = builder->CreateGlobalStringPtr(noinst->variant_sig);
+                    llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(noinst->object_type_info));
+                    llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
+                    if (has_arg_cleanups) {
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_new_object_by_path_nb_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        result = builder->CreateCall(helper,
+                                {class_path, variant_sig, object_type_as_ptr, args_array, arg_cleanups,
+                                 nargs_val, xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_new_object_by_path_nb",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                                {class_path, variant_sig, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                    }
                 } else {
-                    auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper,
-                            {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                    llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(noinst->qc));
+                    llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
+                    llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(noinst->variant));
+                    llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
+                    llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(noinst->object_type_info));
+                    llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
+                    if (has_arg_cleanups) {
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_new_object_nb_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                                {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, arg_cleanups,
+                                 nargs_val, xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                                {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                    }
                 }
             }
             // Constructor runs constructor body; can modify locals through ref params

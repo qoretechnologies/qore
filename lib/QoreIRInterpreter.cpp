@@ -108,6 +108,48 @@ static int qore_ir_check_closure_self_valid(QoreObject* obj, ExceptionSink* xsin
         : 0;
 }
 
+static std::string qore_ir_make_aot_variant_signature(const AbstractQoreFunctionVariant* variant) {
+    if (!variant || !variant->getSignature()) {
+        return std::string();
+    }
+    std::string rv("(");
+    const type_vec_t& types = variant->getSignature()->getTypeList();
+    for (size_t i = 0; i < types.size(); ++i) {
+        if (i > 0) {
+            rv.append(",");
+        }
+        rv.append(qore_get_aot_serializable_type_path(types[i]));
+    }
+    rv.append(")");
+    return rv;
+}
+
+static const AbstractQoreFunctionVariant* qore_ir_find_constructor_variant_by_aot_signature(
+        const QoreClass* qc, const char* variant_sig) {
+    if (!qc || !variant_sig || !*variant_sig) {
+        return nullptr;
+    }
+    const QoreMethod* cons = qc->getConstructor();
+    if (!cons) {
+        return nullptr;
+    }
+    const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
+    if (!cf) {
+        return nullptr;
+    }
+    if (const AbstractQoreFunctionVariant* v = cf->findVariantBySignatureText(variant_sig)) {
+        return v;
+    }
+    QoreFunctionIterator vi(*cf);
+    while (vi.next()) {
+        const AbstractQoreFunctionVariant* v = vi.getVariant();
+        if (qore_ir_make_aot_variant_signature(v) == variant_sig) {
+            return v;
+        }
+    }
+    return nullptr;
+}
+
 static const TypedHashDecl* resolveNewHashDeclFromHashTarget(
         const QoreIRNewHashDeclFromHashInstruction& inst, ExceptionSink* xsink) {
     if (inst.hd) {
@@ -3180,6 +3222,10 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     qc = scoped->oc;
                     variant = scoped->getVariant();
                     object_type_info = scoped->getObjectTypeInfo();
+                    if (!qc && scoped->isDynamicObjectConstruct()) {
+                        qc = qore_aot_resolve_class_ref(getProgram(),
+                            scoped->getDynamicClassName().c_str(), false);
+                    }
                 } else if (auto* nocn = dynamic_cast<const NewObjectCallNode*>(
                         inv->expr.getInternalNode())) {
                     qc = nocn->getClass();
@@ -7536,6 +7582,9 @@ load_local_done:
                         qc = scoped->oc;
                         variant = scoped->getVariant();
                         no_inst->object_type_info = scoped->getObjectTypeInfo();
+                        if (!qc && scoped->isDynamicObjectConstruct()) {
+                            no_inst->class_path = scoped->getDynamicClassName();
+                        }
                     } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
                         qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
                         variant = vrn->getVariant();
@@ -7546,13 +7595,33 @@ load_local_done:
                         no_inst->variant = variant;
                     }
                 }
+                if (!qc && !no_inst->class_path.empty()) {
+                    qc = qore_aot_resolve_class_ref(getProgram(), no_inst->class_path.c_str(), false);
+                    if (qc) {
+                        no_inst->qc = qc;
+                    }
+                }
+                if (qc && !variant && !no_inst->variant_sig.empty()) {
+                    variant = qore_ir_find_constructor_variant_by_aot_signature(
+                        qc, no_inst->variant_sig.c_str());
+                    if (variant) {
+                        no_inst->variant = variant;
+                    }
+                }
                 if (!qc) {
-                    xsink->raiseException("RUNTIME-ERROR",
-                        "cannot construct object: class not resolved");
+                    if (!no_inst->class_path.empty()) {
+                        xsink->raiseException("RUNTIME-ERROR",
+                            "cannot construct object: class '%s' not resolved",
+                            no_inst->class_path.c_str());
+                    } else {
+                        xsink->raiseException("RUNTIME-ERROR",
+                            "cannot construct object: class not resolved");
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
+                no_inst->object_type_info = qore_substitute_type_params_if_needed(no_inst->object_type_info);
                 // Build NaN-boxed arg array from pre-computed IR operand values
                 int nargs = static_cast<int>(no_inst->operands.size());
                 constexpr int SMALL_BUF = 8;

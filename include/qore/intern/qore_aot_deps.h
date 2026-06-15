@@ -110,6 +110,14 @@ DLLLOCAL bool qore_aot_set_allow_preloaded_source_symbols(bool allow);
 DLLLOCAL bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
         const char* qore_path, QoreAOTSourceSymbolKind kind);
 
+//! Returns the canonical manifest path for a deferred source symbol.
+/** Returns an empty string when @p qore_path should not be deferred.  This uses
+    the same matching rules as qore_aot_should_defer_source_symbol(), but gives
+    callers the fully qualified manifest key so serialized AOT objects do not
+    lose namespace context when a source reference was written relatively. */
+DLLLOCAL std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramLocation* loc,
+        const char* qore_path, QoreAOTSourceSymbolKind kind);
+
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic
     (e.g. "<builtin>").  Cheap (one thread-local load) on the inactive path. */

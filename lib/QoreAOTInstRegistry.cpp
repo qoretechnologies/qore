@@ -1925,6 +1925,28 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
         if (class_path[0] == ':' && class_path[1] == ':') {
             class_path += 2;
         }
+    } else if (!ni->class_path.empty()) {
+        class_path = ni->class_path.c_str();
+    } else if (ni->expr.hasNode()) {
+        const AbstractQoreNode* node = ni->expr.getInternalNode();
+        const QoreClass* qc = nullptr;
+        if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
+            qc = no->getClass();
+        } else if (auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+            qc = scoped->oc;
+            if (!qc && scoped->isDynamicObjectConstruct()) {
+                class_path = scoped->getDynamicClassName().c_str();
+            }
+        } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
+        }
+        if (qc) {
+            class_path_storage = qc->getNamespacePath();
+            class_path = class_path_storage.c_str();
+            if (class_path[0] == ':' && class_path[1] == ':') {
+                class_path += 2;
+            }
+        }
     }
     ctx.writer.writeStringRef(class_path);
     // Variant signature for disambiguation (empty string if no variant)
@@ -1939,6 +1961,30 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
                 variant_sig.append(qore_get_aot_serializable_type_path(types[i]));
             }
             variant_sig.append(")");
+        }
+    } else if (!ni->variant_sig.empty()) {
+        variant_sig = ni->variant_sig;
+    } else if (ni->expr.hasNode()) {
+        const AbstractQoreNode* node = ni->expr.getInternalNode();
+        const AbstractQoreFunctionVariant* variant = nullptr;
+        if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
+            variant = no->getVariant();
+        } else if (auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+            variant = scoped->getVariant();
+        } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            variant = vrn->getVariant();
+        }
+        if (variant) {
+            auto* sig = variant->getSignature();
+            if (sig) {
+                variant_sig = "(";
+                const type_vec_t& types = sig->getTypeList();
+                for (size_t i = 0; i < types.size(); ++i) {
+                    if (i > 0) variant_sig.append(",");
+                    variant_sig.append(qore_get_aot_serializable_type_path(types[i]));
+                }
+                variant_sig.append(")");
+            }
         }
     }
     ctx.writer.writeStringRef(variant_sig.c_str());
@@ -2004,7 +2050,8 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
             }
         }
     }
-    auto* ni = new QoreIRNewObjectInstruction(qc, variant, QoreValue(), object_type_info);
+    auto* ni = new QoreIRNewObjectInstruction(qc, variant, QoreValue(), object_type_info,
+        class_path, variant_sig);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
     ni->result = QoreIRValue(result_id);
     ni->operands = operands;
