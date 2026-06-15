@@ -3840,6 +3840,31 @@ public:
         return const_cast<MethodFunctionBase*>(func);
     }
 
+    DLLLOCAL static const QoreMethod* resolveVariantMethod(const QoreMethod& method,
+            const AbstractQoreFunctionVariant* variant) {
+        assert(variant);
+        const QoreMethod* variant_method = METHVB_const(variant)->method();
+        if (variant_method == &method) {
+            return &method;
+        }
+
+        const MethodFunctionBase* owner_func = method.priv->func->findVariantOwnerFunction(variant);
+        if (!owner_func) {
+            return variant_method;
+        }
+
+        const QoreClass* owner_class = owner_func->getClass();
+        if (!owner_class) {
+            return variant_method;
+        }
+
+        const qore_class_private* owner_priv = qore_class_private::get(*owner_class);
+        const QoreMethod* mapped = owner_func->isStatic()
+            ? owner_priv->findLocalCommittedStaticMethod(owner_func->getName())
+            : owner_priv->findLocalCommittedMethod(owner_func->getName());
+        return mapped ? mapped : variant_method;
+    }
+
     DLLLOCAL const char* getName() const {
         return func->getName();
     }

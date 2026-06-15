@@ -563,6 +563,10 @@ public:
         return pgm;
     }
 
+    DLLLOCAL QoreProgram* getExecutionProgram() const {
+        return exec_pgm;
+    }
+
     DLLLOCAL virtual const AbstractStatement* getStatement() const {
         return stmt;
     }
@@ -592,6 +596,7 @@ protected:
     const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
     QoreParseOptions old_runtime_po;
     QoreParseOptions old_rc_po;
+    QoreProgram* exec_pgm = nullptr;
     const QoreTypeInfo* explicit_receiver_type_info = nullptr;
     const QoreTypeInfo* old_receiver_type_info = nullptr;
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
@@ -1095,12 +1100,15 @@ protected:
     const UserVariantBase* uvb;
     ReferenceHolder<QoreListNode> argv;
     ExceptionSink* xsink;
+    QoreProgram* exec_pgm;
 
 public:
+    DLLLOCAL static QoreProgram* getExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh);
+
     DLLLOCAL UserVariantExecHelper(const UserVariantBase* n_uvb, CodeEvaluationHelper* ceh, ExceptionSink* n_xsink) :
-            ProgramThreadCountContextHelper(n_xsink, n_uvb->pgm, true),
+            ProgramThreadCountContextHelper(n_xsink, getExecutionProgram(n_uvb, ceh), true),
             ThreadFrameBoundaryHelper(!*n_xsink),
-            uvb(n_uvb), argv(n_xsink), xsink(n_xsink) {
+            uvb(n_uvb), argv(n_xsink), xsink(n_xsink), exec_pgm(getExecutionProgram(n_uvb, ceh)) {
         assert(xsink);
         if (*xsink || uvb->setupCall(ceh, argv, xsink))
             uvb = nullptr;
@@ -1114,6 +1122,10 @@ public:
 
     DLLLOCAL ReferenceHolder<QoreListNode>& getArgv() {
         return argv;
+    }
+
+    DLLLOCAL QoreProgram* getProgram() const {
+        return exec_pgm;
     }
 };
 
@@ -1794,6 +1806,18 @@ public:
 #endif
             (*i).func = mfb->new_copy;
         }
+    }
+
+    DLLLOCAL const MethodFunctionBase* findVariantOwnerFunction(const AbstractQoreFunctionVariant* variant) const {
+        for (ilist_t::const_iterator ai = ilist.begin(), ae = ilist.end(); ai != ae; ++ai) {
+            const MethodFunctionBase* mfb = METHFB_const((*ai).func);
+            for (vlist_t::const_iterator vi = mfb->vlist.begin(), ve = mfb->vlist.end(); vi != ve; ++vi) {
+                if (*vi == variant) {
+                    return mfb;
+                }
+            }
+        }
+        return nullptr;
     }
 
     DLLLOCAL bool parseHasAmbiguousSignature(const MethodFunctionBase& other, bool relaxed_match) const;

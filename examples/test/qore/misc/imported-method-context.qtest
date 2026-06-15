@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ImportedMethodContextTest
+
+class ImportedMethodContextProbe {
+    public int mask() {
+        return Program::getCapabilityMask();
+    }
+
+    public static int staticMask() {
+        return Program::getCapabilityMask();
+    }
+}
+
+class ImportedMethodContextTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Imported Method Context Test", "1.0") {
+        addTestCase("imported class methods use source program context", \importedClassMethodsUseSourceProgram());
+        set_return_value(main());
+    }
+
+    importedClassMethodsUseSourceProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL | PO_NO_INHERIT_USER_CLASSES);
+        p.importClass("ImportedMethodContextProbe");
+        p.parse("ImportedMethodContextProbe sub make_probe() { return new ImportedMethodContextProbe(); }\n"
+            "int sub direct_mask() { return Program::getCapabilityMask(); }\n"
+            "int sub object_mask() { ImportedMethodContextProbe probe(); return probe.mask(); }\n"
+            "int sub static_mask() { return ImportedMethodContextProbe::staticMask(); }\n"
+            "int sub object_callref_mask() { ImportedMethodContextProbe probe(); code<int()> c = \\probe.mask(); "
+            "return c(); }\n"
+            "int sub static_callref_mask() { code<int()> c = \\ImportedMethodContextProbe::staticMask(); "
+            "return c(); }\n",
+            "imported-method-context");
+
+        int child_expected = p.getCapabilityMask();
+        int source_expected = Program::getCapabilityMask();
+        assertEq(child_expected, p.callFunction("direct_mask"));
+        assertEq(source_expected, p.callFunction("object_mask"));
+        assertEq(source_expected, p.callFunction("static_mask"));
+        assertEq(source_expected, p.callFunction("object_callref_mask"));
+        assertEq(source_expected, p.callFunction("static_callref_mask"));
+
+        object probe = p.callFunction("make_probe");
+        assertEq(source_expected, probe.mask());
+    }
+}

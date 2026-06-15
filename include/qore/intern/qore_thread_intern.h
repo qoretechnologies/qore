@@ -282,6 +282,17 @@ DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, 
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
 
+class RuntimeParseOptionsOverrideHelper {
+public:
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask, const QoreParseOptions& value);
+    DLLLOCAL ~RuntimeParseOptionsOverrideHelper();
+
+private:
+    QoreParseOptions old_mask;
+    QoreParseOptions old_value;
+    QoreParseOptions old_po;
+};
+
 DLLLOCAL RootQoreNamespace* getRootNS();
 DLLLOCAL void updateCVarStack(CVNode* ncvs);
 DLLLOCAL CVNode* getCVarStack();

@@ -867,7 +867,7 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
     }
     // issue #2380 make sure to set the method correctly if resolved from a hierarchy
     if (variant) {
-        method = static_cast<const MethodVariantBase*>(variant)->method();
+        method = qore_method_private::resolveVariantMethod(*method, variant);
     }
     if (method) {
         printd(5, "SelfFunctionCallNode::parseInitCall() this: %p resolved '%s' to %p (abstract: %d)\n", this,
@@ -1714,7 +1714,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     }
     // issue #2380 make sure to set the method correctly if resolved from a hierarchy
     if (variant) {
-        method = static_cast<const MethodVariantBase*>(variant)->method();
+        method = qore_method_private::resolveVariantMethod(*method, variant);
     }
     assert(err || method);
     return err;

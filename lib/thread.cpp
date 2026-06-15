@@ -345,6 +345,8 @@ static int initial_thread = -1;
 class ThreadData {
 public:
     QoreParseOptions runtime_po;
+    QoreParseOptions runtime_po_override_mask;
+    QoreParseOptions runtime_po_override_value;
     int tid;
 
     VLock vlock;     // for deadlock detection
@@ -1695,6 +1697,13 @@ const QoreStackLocation* get_runtime_stack_location() {
     return thread_data.get()->current_stack_location;
 }
 
+static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
+    if (!td->runtime_po_override_mask) {
+        return po;
+    }
+    return (po & ~td->runtime_po_override_mask) | (td->runtime_po_override_value & td->runtime_po_override_mask);
+}
+
 // called when pushing a new location on the stack
 const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm) {
@@ -1769,7 +1778,7 @@ int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatemen
     old_po = td->runtime_po;
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
-    td->runtime_po = po;
+    td->runtime_po = apply_runtime_po_override(td, po);
 
 #ifdef QORE_MANAGE_STACK
     return check_stack_intern(xsink, td);
@@ -1792,7 +1801,7 @@ void update_runtime_statement_location(const AbstractStatement* stmt, const Qore
     ThreadData* td = thread_data.get();
     td->runtime_statement = stmt;
     td->runtime_loc = loc;
-    td->runtime_po = po;
+    td->runtime_po = apply_runtime_po_override(td, po);
 }
 
 void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc) {
@@ -2278,13 +2287,15 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
     QoreProgram* call_program_context;
     if (c && c->spgm) {
         call_program_context = c->spgm;
+    } else if (c && c->ns) {
+        call_program_context = c->ns->getProgram();
     } else if (obj) {
         call_program_context = obj->getProgram();
     } else {
         call_program_context = nullptr;
     }
     if (!call_program_context && c) {
-        call_program_context = c->spgm;
+        call_program_context = c->spgm ? c->spgm : (c->ns ? c->ns->getProgram() : nullptr);
     }
     if (call_program_context) {
         old_call_program_context = td->call_program_context;
@@ -2715,6 +2726,24 @@ QoreParseOptions parse_get_parse_options() {
 
 QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po;
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask,
+        const QoreParseOptions& value) {
+    ThreadData* td = thread_data.get();
+    old_mask = td->runtime_po_override_mask;
+    old_value = td->runtime_po_override_value;
+    old_po = td->runtime_po;
+    td->runtime_po_override_mask = mask;
+    td->runtime_po_override_value = value;
+    td->runtime_po = apply_runtime_po_override(td, td->runtime_po);
+}
+
+RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
+    ThreadData* td = thread_data.get();
+    td->runtime_po_override_mask = old_mask;
+    td->runtime_po_override_value = old_value;
+    td->runtime_po = old_po;
 }
 
 QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
