@@ -131,7 +131,7 @@ public class AzureOpenAiDataProviderCommon inherits DataProvider::AbstractDataPr
     #! Creates the object from a pre-built RestClientIo
     constructor(RestClientIo::RestClientIo rest) {
         self.rest = rest;
-        base_url = rest.getURL();
+        base_url = rest.getUrl();
     }
 
     #! Creates the object from constructor options
@@ -139,7 +139,7 @@ public class AzureOpenAiDataProviderCommon inherits DataProvider::AbstractDataPr
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.restclient) {
             rest = copts.restclient;
-            base_url = rest.getURL();
+            base_url = rest.getUrl();
             return;
         }
         if (!copts.url.val()) {
