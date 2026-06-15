@@ -135,7 +135,7 @@ else()
     if(NOT DEFINED QORE_QCC_EXECUTABLE)
         set(QORE_QCC_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qcc${CMAKE_EXECUTABLE_SUFFIX})
     endif()
-    set(QORE_QCC_FORMAT_STAMP "")
+    set(QORE_QCC_FORMAT_STAMP @CMAKE_INSTALL_FULL_BINDIR@/qcc-format.stamp)
     set(QORE_QDX_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qdx)
     set(QORE_QM_METADATA_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qore-extract-qm-metadata)
     # allow the qjar executable to be overridden
